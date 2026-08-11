@@ -493,7 +493,16 @@ fn computer_use_text_only_model_guidance() -> Vec<String> {
     vec![
         "- The configured primary model does not accept image inputs.".to_string(),
         "- When using `ComputerUse` or `ControlHub` with `domain: \"browser\"`, do not use `screenshot` and avoid `domain:\"browser\" action:\"screenshot\"`; image bytes will be unreadable.".to_string(),
+        // Banning `screenshot` without naming the replacement is what pushes a
+        // text-only agent into improvising `screencapture` + `analyze_image` as
+        // a substitute for eyes — a loop that costs an extra model call per
+        // look, returns prose instead of coordinates, and misreads the screen
+        // often enough to send the run down false paths.
+        "- `describe_screen` is your eyes: it returns the frontmost app, the AX tree (`ax_tree_text`, with `node_idx`s you can click by), `ui_tree_text` and the pointer, as text with no image. Call it when UI state is unknown, and again after an action to confirm `ax_state_digest` changed.".to_string(),
+        "- Do NOT shell out to `screencapture` and feed the file to an image-analysis tool as a substitute for looking. It costs an extra model round-trip per glance and returns descriptions, not clickable coordinates. Use `describe_screen`, `get_app_state`, `locate` and `move_to_text` — they return exact targets.".to_string(),
+        "- If `ax_tree_text` is empty, read `ax_tree_status` / `ax_tree_note` in the same result: they say why (no frontmost app, an app with no window, a WebView that exposes no tree, or a permission failure) and which tactic to switch to. The result is never truncated — re-calling returns the same thing.".to_string(),
         "- Action priority: 1) Terminal/CLI/system commands (`ExecCommand`, or `ComputerUse` `run_script`; use `WriteStdin`/`ExecControl` for running ExecCommand sessions) 2) Keyboard shortcuts (`key_chord`, `type_text`) 3) UI control: `click_element` (AX) -> `locate` -> `move_to_text` (use `move_to_text_match_index` when multiple OCR hits are listed) -> `mouse_move` (`use_screen_coordinates: true` with coordinates from tool JSON) -> `click`. For browser work, prefer `snapshot` then click by `@e*` ref over screenshots.".to_string(),
+        "- To type and send in one step use `paste` with `submit: true` (and `submit_keys` when the app sends on a chord, e.g. `[\"command\",\"return\"]`). `paste` is also the reliable path for CJK and emoji.".to_string(),
         "- Never guess coordinates. Always use precise methods: AX, OCR, system coordinates from tool results, or browser snapshot refs.".to_string(),
     ]
 }

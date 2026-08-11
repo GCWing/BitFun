@@ -431,6 +431,15 @@ pub(super) struct DumpOpts {
     pub max_depth: u32,
     pub max_nodes: usize,
     pub focus_window_only: bool,
+    /// Walk into menus that are currently closed. Off by default.
+    ///
+    /// A closed `AXMenu` still reports its whole item hierarchy, but every item
+    /// comes back collapsed at a zero-size off-screen frame — unclickable until
+    /// the menu is opened, and useless for addressing. They dominate the dump
+    /// anyway: observing a windowless app produced 188 nodes, 180 of them
+    /// closed menu items. `get_app_shortcuts` is the supported way to read menu
+    /// structure (and walks menus itself), so `get_app_state` stops at the menu.
+    pub include_closed_menus: bool,
 }
 
 impl Default for DumpOpts {
@@ -439,7 +448,25 @@ impl Default for DumpOpts {
             max_depth: 32,
             max_nodes: 4_000,
             focus_window_only: false,
+            include_closed_menus: false,
         }
+    }
+}
+
+/// Whether a node is a menu container that is not currently open, and whose
+/// children are therefore off-screen and unclickable.
+///
+/// macOS gives an open menu's items real on-screen frames; a closed one leaves
+/// them at a zero-size origin. Size is the reliable signal here — `AXExpanded`
+/// is not exposed consistently by `AXMenu` across apps.
+fn is_closed_menu_container(role: &str, frame: Option<(f64, f64, f64, f64)>) -> bool {
+    if role != "AXMenu" {
+        return false;
+    }
+    match frame {
+        // No frame at all: treat as closed.
+        None => true,
+        Some((_, _, w, h)) => w < 1.0 || h < 1.0,
     }
 }
 
@@ -501,6 +528,7 @@ pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnap
         depth: 0,
     });
     let mut visited: usize = 0;
+    let mut pruned_menu_subtrees: usize = 0;
 
     while let Some(cur) = queue.pop_front() {
         if cur.depth > opts.max_depth || visited >= opts.max_nodes {
@@ -530,10 +558,13 @@ pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnap
         let frame = unsafe { read_global_frame(cur.elem) };
         let actions = unsafe { read_action_names(cur.elem) };
 
+        let role = role.unwrap_or_default();
+        let is_closed_menu = is_closed_menu_container(&role, frame);
+
         nodes.push(AxNode {
             idx,
             parent_idx: cur.parent_idx,
-            role: role.unwrap_or_default(),
+            role,
             title,
             value,
             description,
@@ -551,6 +582,14 @@ pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnap
         });
         // Cache the retained ref so future actions can look it up.
         refs.push(AxRef(cur.elem));
+
+        // A closed menu is a leaf for our purposes: keep the container node so
+        // the model can see the menu exists (and `AXPress` it), but skip the
+        // subtree of unclickable zero-size items underneath.
+        if is_closed_menu && !opts.include_closed_menus {
+            pruned_menu_subtrees += 1;
+            continue;
+        }
 
         // Enqueue children — but DO NOT release `cur.elem`; the cache owns it.
         // At the application root (parent_idx is None), union `AXChildren`
@@ -600,7 +639,18 @@ pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnap
         unsafe { ax_release(q.elem as CFTypeRef) };
     }
 
-    let tree_text = render_tree_text(&nodes);
+    let mut tree_text = render_tree_text(&nodes);
+    // Say that menus were skipped on purpose, and where to get them. Otherwise
+    // an agent that needs a menu command sees a bare `AXMenu` leaf and has no
+    // way to tell "pruned" from "this app has no menu items".
+    if pruned_menu_subtrees > 0 {
+        tree_text.push_str(&format!(
+            "\n[note] {} closed menu subtree(s) omitted — their items are off-screen and \
+unclickable until the menu opens. Use `get_app_shortcuts` for menu commands and their key \
+equivalents, or AXPress the menu first.\n",
+            pruned_menu_subtrees
+        ));
+    }
     let digest = compute_digest(&nodes);
     let captured_at_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -885,6 +935,28 @@ mod tests {
         assert!(out.contains("frame=(10,20,30x30)"));
         assert!(out.contains("[focused]"));
         assert!(out.contains("actions=[AXShowMenu]"));
+    }
+
+    #[test]
+    fn closed_menus_are_pruned_but_open_ones_are_kept() {
+        // A closed menu reports its items at a zero-size off-screen frame.
+        assert!(is_closed_menu_container(
+            "AXMenu",
+            Some((0.0, 982.0, 0.0, 0.0))
+        ));
+        assert!(is_closed_menu_container("AXMenu", None));
+        // An open menu has a real frame and must still be walked.
+        assert!(!is_closed_menu_container(
+            "AXMenu",
+            Some((100.0, 40.0, 220.0, 380.0))
+        ));
+        // Only menus are ever pruned — a zero-size button is still a node the
+        // model may need to reason about.
+        assert!(!is_closed_menu_container(
+            "AXButton",
+            Some((0.0, 0.0, 0.0, 0.0))
+        ));
+        assert!(!is_closed_menu_container("AXMenuItem", None));
     }
 
     #[test]

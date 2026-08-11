@@ -1131,6 +1131,28 @@ pub struct OpenAppResult {
     pub process_id: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error_message: Option<String>,
+    /// Bundle identifier of the launched app (macOS). The agent needs this to
+    /// address the app afterwards: the name it launched by (`Lark`), the
+    /// executable name (`Feishu`) and the bundle id (`com.electron.lark`) are
+    /// routinely three different strings, and only the bundle id works with
+    /// every follow-up path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_id: Option<String>,
+    /// Process name as the OS reports it — the identity AppleScript's
+    /// `tell process "…"` and `ps` expect, which is often **not** `app_name`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub process_name: Option<String>,
+    /// Windows the app owns once the launch settled. `Some(0)` means the
+    /// process is alive but has nothing on screen — a real state for Electron
+    /// apps whose window was closed while the process stayed resident, and one
+    /// the agent otherwise has no way to distinguish from a healthy launch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window_count: Option<usize>,
+    /// How the app ended up in front. Diagnostic: tells the agent whether a
+    /// plain activate sufficed or the host had to re-open the bundle to force
+    /// a window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_path: Option<String>,
 }
 
 /// Whether the latest screenshot JPEG was the full display, a point crop, or a quadrant-drill region.

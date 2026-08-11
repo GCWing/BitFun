@@ -206,6 +206,56 @@ mod tests {
             .port()
     }
 
+    /// Assert `port` became bindable again, i.e. the host really did drop its
+    /// listener.
+    ///
+    /// A single bind attempt conflates two different things: our host leaking
+    /// the listener, and some other socket on the machine transiently holding
+    /// the port — it came from the ephemeral range, so a busy test run reissues
+    /// it constantly. Retrying separates them: a leaked listener is held until
+    /// the process exits and never frees up, while a transient steal clears in
+    /// milliseconds.
+    async fn assert_port_released(port: u16, what: &str) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut last_err = None;
+        loop {
+            match tokio::net::TcpListener::bind(("0.0.0.0", port)).await {
+                Ok(l) => {
+                    drop(l);
+                    return;
+                }
+                Err(e) => last_err = Some(e),
+            }
+            if std::time::Instant::now() >= deadline {
+                panic!("{what}: port {port} never became bindable again: {last_err:?}");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    }
+
+    /// Start `host` on a port nothing else has taken, returning that port.
+    ///
+    /// `unused_port` can only report a port that was free a moment ago: it
+    /// binds an ephemeral port, reads the number and drops the listener, so
+    /// anything else on the machine may claim it before the caller binds. A
+    /// single attempt is a race that stays invisible on a quiet machine and
+    /// fails most of the time when the rest of the suite is busy enough to
+    /// churn through ephemeral ports. Retry rather than assume.
+    async fn start_on_free_port(
+        host: &DesktopEmbeddedRelayHost,
+        static_dir: Option<String>,
+    ) -> u16 {
+        let mut last_err = String::new();
+        for _ in 0..16 {
+            let port = unused_port().await;
+            match host.start(port, static_dir.clone()).await {
+                Ok(()) => return port,
+                Err(e) => last_err = e.to_string(),
+            }
+        }
+        panic!("could not find a free port for the embedded relay: {last_err}");
+    }
+
     #[tokio::test]
     async fn bind_failure_does_not_create_an_active_runtime() {
         let occupied = tokio::net::TcpListener::bind("0.0.0.0:0")
@@ -241,11 +291,8 @@ mod tests {
         std::fs::write(static_dir.join("assets").join("app.js"), "test asset")
             .expect("test asset should be written");
 
-        let port = unused_port().await;
         let host = DesktopEmbeddedRelayHost::default();
-        host.start(port, Some(static_dir.to_string_lossy().into_owned()))
-            .await
-            .expect("embedded relay should start");
+        let port = start_on_free_port(&host, Some(static_dir.to_string_lossy().into_owned())).await;
 
         let client = reqwest::Client::new();
         let index = client
@@ -290,35 +337,44 @@ mod tests {
             .expect("embedded relay should restart immediately on the same port");
         host.stop().await;
 
-        let released = tokio::net::TcpListener::bind(("0.0.0.0", port))
-            .await
-            .expect("stop must release the listener before returning");
-        drop(released);
+        assert_port_released(port, "stop must release the listener before returning").await;
         std::fs::remove_dir_all(&static_dir).expect("test static directory should be removed");
     }
 
     #[tokio::test]
     async fn cancelled_start_releases_listener_without_committing_runtime() {
-        let port = unused_port().await;
+        // Same port race as `start_on_free_port`, but this test aborts `start`
+        // mid-flight and so cannot use its success as the signal: a port stolen
+        // between reservation and bind shows up here as readiness never firing.
+        // Retry until we get a port `start` could actually take.
         let host = Arc::new(DesktopEmbeddedRelayHost::default());
-        let start_task = tokio::spawn({
-            let host = host.clone();
-            async move { host.start(port, None).await }
-        });
+        let mut acquired: Option<(u16, tokio::task::JoinHandle<_>)> = None;
+        for _ in 0..16 {
+            let port = unused_port().await;
+            let start_task = tokio::spawn({
+                let host = host.clone();
+                async move { host.start(port, None).await }
+            });
+            if tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                host.start_candidate_ready.notified(),
+            )
+            .await
+            .is_ok()
+            {
+                acquired = Some((port, start_task));
+                break;
+            }
+            start_task.abort();
+            let _ = start_task.await;
+        }
+        let (port, start_task) =
+            acquired.expect("start should create the candidate runtime before readiness completes");
 
-        tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            host.start_candidate_ready.notified(),
-        )
-        .await
-        .expect("start should create the candidate runtime before readiness completes");
         start_task.abort();
         let _ = start_task.await;
 
         assert!(host.runtime.lock().await.is_none());
-        let released = tokio::net::TcpListener::bind(("0.0.0.0", port))
-            .await
-            .expect("cancelling start must release the listener");
-        drop(released);
+        assert_port_released(port, "cancelling start must release the listener").await;
     }
 }

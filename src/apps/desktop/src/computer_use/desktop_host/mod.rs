@@ -36,6 +36,37 @@ const STALE_CAPTURE_TOOL_MESSAGE: &str = "Computer use refused: call **`screensh
 
 static SCREENSHOT_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
+/// How long `open_app` waits for a freshly activated app to show up in
+/// LaunchServices before giving up on resolving its pid.
+#[cfg(target_os = "macos")]
+const OPEN_APP_SETTLE_MS: u64 = 3_000;
+/// How long `open_app` waits for the app to put a window on screen. Cold
+/// Electron launches routinely need several seconds; reporting `window_count:
+/// 0` too early would send the agent down a false "app is broken" path.
+#[cfg(target_os = "macos")]
+const OPEN_APP_WINDOW_WAIT_MS: u64 = 8_000;
+#[cfg(target_os = "macos")]
+const OPEN_APP_POLL_INTERVAL_MS: u64 = 150;
+
+/// Quote a string as an AppleScript literal.
+///
+/// App names reach us from the model and can contain quotes or backslashes;
+/// interpolating them raw would let a name break out of the string and change
+/// what the script does.
+#[cfg(target_os = "macos")]
+fn applescript_quote(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for ch in s.chars() {
+        if ch == '"' || ch == '\\' {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out.push('"');
+    out
+}
+
 #[cfg(test)]
 mod visual_grid_tests {
     use super::*;
@@ -109,6 +140,96 @@ mod visual_grid_tests {
     }
 }
 
+#[cfg(all(test, target_os = "macos"))]
+mod macos_applescript_tests {
+    use super::*;
+
+    /// Compile an AppleScript source **without running it**. `osacompile`
+    /// reports the same syntax errors `osascript` would, so this checks that a
+    /// template is valid AppleScript with no side effects.
+    fn compiles(script: &str) -> Result<(), String> {
+        let out = std::process::Command::new("/usr/bin/osacompile")
+            .args(["-o", "/dev/null", "-e", script])
+            .output()
+            .map_err(|e| format!("spawn osacompile: {e}"))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+        }
+    }
+
+    /// The bug that motivated this test: the frontmost-app lookup embedded a
+    /// `try … end try` **block** in expression position. AppleScript rejects
+    /// that at compile time, so the command always exited non-zero and the
+    /// caller silently saw `None` — for every call, forever. Nothing in the
+    /// build or the test suite noticed, because an AppleScript template is just
+    /// a string until something runs it.
+    ///
+    /// Every AppleScript this module generates now has to compile.
+    #[test]
+    fn every_generated_applescript_compiles() {
+        let templates = [
+            format!("id of application {}", applescript_quote("Safari")),
+            format!(
+                "tell application {} to activate",
+                applescript_quote("Safari")
+            ),
+        ];
+        for t in templates {
+            assert!(compiles(&t).is_ok(), "template failed to compile: {t}");
+        }
+    }
+
+    #[test]
+    fn applescript_compile_check_actually_rejects_bad_syntax() {
+        // Guards the guard: if `compiles` ever silently passed everything, the
+        // test above would be worthless. This is the exact broken spelling.
+        let broken = r#"tell application "System Events"
+  return (try (bundle identifier of p as text) on error "" end try)
+end tell"#;
+        assert!(compiles(broken).is_err());
+    }
+
+    #[test]
+    fn applescript_quote_escapes_quotes_and_backslashes() {
+        // App names come from the model, so a name containing a quote must not
+        // be able to terminate the literal and change what the script does.
+        assert_eq!(applescript_quote("Safari"), "\"Safari\"");
+        assert_eq!(applescript_quote("a\"b"), "\"a\\\"b\"");
+        assert_eq!(applescript_quote("a\\b"), "\"a\\\\b\"");
+        assert_eq!(applescript_quote("飞书"), "\"飞书\"");
+    }
+
+    #[test]
+    fn quoted_app_names_stay_inside_the_literal() {
+        // `" to activate` + a payload would otherwise become script code.
+        let hostile = "X\" to activate\ntell application \"Calculator";
+        let script = format!(
+            "tell application {} to activate",
+            applescript_quote(hostile)
+        );
+        assert!(
+            !script.contains("tell application \"Calculator\""),
+            "injected tell survived quoting: {script}"
+        );
+    }
+
+    /// The foreground lookup must return a real app in a GUI session. Ignored
+    /// by default because it needs a logged-in window server.
+    #[test]
+    #[ignore]
+    fn frontmost_application_resolves_in_a_gui_session() {
+        let app = DesktopComputerUseHost::macos_foreground_application()
+            .expect("a GUI session always has a frontmost application");
+        assert!(app.process_id.unwrap_or(0) > 0);
+        assert!(
+            app.name.is_some() || app.bundle_id.is_some(),
+            "frontmost app must be identifiable: {app:?}"
+        );
+    }
+}
+
 #[cfg(all(test, target_os = "windows"))]
 mod windows_foreground_tests {
     use super::*;
@@ -128,8 +249,11 @@ mod windows_foreground_tests {
 
     #[test]
     fn foreground_app_falls_back_to_title_only_when_process_lookup_fails() {
-        let app =
-            DesktopComputerUseHost::windows_foreground_application("Search".to_string(), 4242, None);
+        let app = DesktopComputerUseHost::windows_foreground_application(
+            "Search".to_string(),
+            4242,
+            None,
+        );
 
         assert_eq!(app.name.as_deref(), Some("Search"));
         assert_eq!(app.process_name, None);
@@ -411,33 +535,169 @@ impl DesktopComputerUseHost {
         }
     }
 
+    /// Launch (or re-front) a macOS app and report enough identity for the
+    /// agent to keep working with it.
+    ///
+    /// Three things the previous implementation got wrong, each of which cost
+    /// the agent a long recovery detour:
+    ///
+    /// 1. It reported only a pid. The name the caller launches by, the
+    ///    executable name and the bundle id are frequently three different
+    ///    strings (`Lark` / `Feishu` / `com.electron.lark`), so every follow-up
+    ///    `tell process "…"` or `open -a …` guessed wrong.
+    /// 2. It slept a flat `delay 1` and declared success, whether or not a
+    ///    window ever appeared.
+    /// 3. `activate` does not reopen a window for an app that is already
+    ///    running with none — the usual state for an Electron client the user
+    ///    closed earlier. The result was `success: true` with an empty screen.
+    ///
+    /// So: resolve the bundle id via LaunchServices, activate, poll for a
+    /// window, and re-open the bundle when the poll comes up empty.
+    #[cfg(target_os = "macos")]
+    fn open_app_macos(
+        name: String,
+    ) -> BitFunResult<bitfun_core::agentic::tools::computer_use_host::OpenAppResult> {
+        use crate::computer_use::macos_bg_input::running_app_identity_macos;
+        use bitfun_core::agentic::tools::computer_use_host::OpenAppResult;
+
+        let failure = |err: String| OpenAppResult {
+            app_name: name.clone(),
+            success: false,
+            process_id: None,
+            error_message: Some(err),
+            bundle_id: None,
+            process_name: None,
+            window_count: None,
+            launch_path: None,
+        };
+
+        // `id of application "X"` asks LaunchServices to resolve the name the
+        // same way `tell application "X"` will, so the bundle id we report is
+        // guaranteed to describe the app we are about to activate.
+        let bundle_id = std::process::Command::new("/usr/bin/osascript")
+            .args([
+                "-e",
+                &format!("id of application {}", applescript_quote(&name)),
+            ])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        let activate = std::process::Command::new("/usr/bin/osascript")
+            .args([
+                "-e",
+                &format!("tell application {} to activate", applescript_quote(&name)),
+            ])
+            .output()
+            .map_err(|e| BitFunError::tool(format!("open_app osascript: {}", e)))?;
+        if !activate.status.success() {
+            return Ok(failure(
+                String::from_utf8_lossy(&activate.stderr).trim().to_string(),
+            ));
+        }
+
+        let mut launch_path = "activate";
+        // Resolving by bundle id beats "whoever is frontmost right now" —
+        // activation is asynchronous, so the frontmost app during the first
+        // poll ticks is often still the previous one.
+        let mut pid = Self::poll_for_app_pid(bundle_id.as_deref(), OPEN_APP_SETTLE_MS);
+        let mut window_count = Self::poll_for_window(pid, OPEN_APP_WINDOW_WAIT_MS);
+
+        // Alive but windowless: `open -b` asks the app to reopen its main
+        // window (AppKit `applicationShouldHandleReopen:`), which `activate`
+        // alone never triggers.
+        if window_count == Some(0) {
+            if let Some(bid) = bundle_id.as_deref() {
+                let reopened = std::process::Command::new("/usr/bin/open")
+                    .args(["-b", bid])
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false);
+                if reopened {
+                    launch_path = "reopen_bundle";
+                    pid = Self::poll_for_app_pid(Some(bid), OPEN_APP_WINDOW_WAIT_MS).or(pid);
+                    window_count = Self::poll_for_window(pid, OPEN_APP_WINDOW_WAIT_MS);
+                }
+            }
+        }
+
+        let (localized_name, resolved_bundle) = pid
+            .and_then(running_app_identity_macos)
+            .unwrap_or((None, None));
+
+        Ok(OpenAppResult {
+            app_name: name,
+            success: true,
+            process_id: pid,
+            error_message: None,
+            bundle_id: resolved_bundle.or(bundle_id),
+            process_name: localized_name,
+            window_count,
+            launch_path: Some(launch_path.to_string()),
+        })
+    }
+
+    /// Poll until the app owning `bundle_id` is running (or the frontmost app
+    /// settles, when no bundle id could be resolved). Returns its pid.
+    #[cfg(target_os = "macos")]
+    fn poll_for_app_pid(bundle_id: Option<&str>, budget_ms: u64) -> Option<i32> {
+        use crate::computer_use::macos_bg_input::{frontmost_pid_macos, pid_for_bundle_id_macos};
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(budget_ms);
+        loop {
+            let found = match bundle_id {
+                Some(bid) => pid_for_bundle_id_macos(bid),
+                None => frontmost_pid_macos(),
+            };
+            if found.is_some() {
+                return found;
+            }
+            if std::time::Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(OPEN_APP_POLL_INTERVAL_MS));
+        }
+    }
+
+    /// Poll until the app owns at least one window, or the budget expires.
+    /// Returns the final observed count so callers can report `Some(0)` — a
+    /// windowless-but-alive app is a real state, not a failure to measure.
+    #[cfg(target_os = "macos")]
+    fn poll_for_window(pid: Option<i32>, budget_ms: u64) -> Option<usize> {
+        use crate::computer_use::macos_ax_ui::window_count_for_pid;
+        let pid = pid?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(budget_ms);
+        let mut last = window_count_for_pid(pid);
+        while last.unwrap_or(0) == 0 && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(OPEN_APP_POLL_INTERVAL_MS));
+            last = window_count_for_pid(pid);
+        }
+        last
+    }
+
+    /// Identity of the frontmost macOS application, read from `NSWorkspace`.
+    ///
+    /// This used to shell out to `osascript`. That spelling embedded a
+    /// `try … end try` **block** in expression position, which AppleScript
+    /// rejects at compile time (`-2741`), so the command always exited
+    /// non-zero and this function always returned `None`. Because
+    /// `describe_screen` derives its target app from this value, the text-only
+    /// observation path was permanently blind: it reported
+    /// `foreground_application: null` and `ax_tree_text: null` on every call,
+    /// and the agent could only conclude its own output was being truncated.
     #[cfg(target_os = "macos")]
     fn macos_foreground_application() -> Option<ComputerUseForegroundApplication> {
-        let out = std::process::Command::new("/usr/bin/osascript")
-            .args(["-e", r#"tell application "System Events"
-  set p to first process whose frontmost is true
-  return (unix id of p as text) & "|" & (name of p) & "|" & (try (bundle identifier of p as text) on error "" end try)
-end tell"#])
-            .output()
-            .ok()?;
-        if !out.status.success() {
-            return None;
-        }
-        let s = String::from_utf8_lossy(&out.stdout);
-        let parts: Vec<&str> = s.trim().splitn(3, '|').collect();
-        if parts.len() < 2 {
-            return None;
-        }
-        let pid = parts[0].trim().parse::<i32>().ok()?;
-        let name = parts[1].trim();
-        let bundle = parts.get(2).map(|x| x.trim()).filter(|x| !x.is_empty());
+        let app = crate::computer_use::macos_bg_input::frontmost_app_identity_macos()?;
         Some(ComputerUseForegroundApplication {
-            name: Some(name.to_string()),
-            // `name of p` from System Events is already the process name, not a
-            // window title, so it doubles as the process identity here.
-            process_name: Some(name.to_string()),
-            bundle_id: bundle.map(|b| b.to_string()),
-            process_id: Some(pid),
+            name: app.name.clone(),
+            // `localizedName` is the app's user-visible name ("飞书"), which on
+            // localised or re-branded bundles differs from both the executable
+            // name ("Feishu") and the bundle name ("Lark"). Callers that need
+            // to address the process by name should prefer `bundle_id`.
+            process_name: app.name,
+            bundle_id: app.bundle_id,
+            process_id: Some(app.pid),
         })
     }
 
@@ -477,7 +737,11 @@ end tell"#])
                 } else {
                     crate::computer_use::windows_list_apps::exe_basename_for_pid(pid)
                 };
-                Some(Self::windows_foreground_application(title, pid, exe_basename))
+                Some(Self::windows_foreground_application(
+                    title,
+                    pid,
+                    exe_basename,
+                ))
             };
 
             ComputerUseSessionSnapshot {
@@ -1176,37 +1440,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         #[cfg(target_os = "macos")]
         {
             let result = tokio::task::spawn_blocking(move || -> BitFunResult<OpenAppResult> {
-                let output = std::process::Command::new("/usr/bin/osascript")
-                    .args([
-                        "-e",
-                        &format!(
-                            r#"tell application "{}" to activate
-delay 1
-tell application "System Events" to get unix id of first process whose frontmost is true"#,
-                            name
-                        ),
-                    ])
-                    .output()
-                    .map_err(|e| BitFunError::tool(format!("open_app osascript: {}", e)))?;
-
-                if output.status.success() {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    let pid = stdout.trim().parse::<i32>().ok();
-                    Ok(OpenAppResult {
-                        app_name: name,
-                        success: true,
-                        process_id: pid,
-                        error_message: None,
-                    })
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    Ok(OpenAppResult {
-                        app_name: name,
-                        success: false,
-                        process_id: None,
-                        error_message: Some(stderr.trim().to_string()),
-                    })
-                }
+                Self::open_app_macos(name)
             })
             .await
             .map_err(|e| BitFunError::tool(e.to_string()))??;
@@ -1395,6 +1629,13 @@ tell application "System Events" to get unix id of first process whose frontmost
     fn computer_use_trust_pointer_after_text_input(&self) {
         if let Ok(mut s) = self.state.lock() {
             s.click_needs_fresh_screenshot = false;
+        }
+    }
+
+    fn computer_use_waive_fresh_capture_guard(&self) {
+        if let Ok(mut s) = self.state.lock() {
+            s.click_needs_fresh_screenshot = false;
+            s.pending_verify_screenshot = false;
         }
     }
 

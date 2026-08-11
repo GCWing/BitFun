@@ -446,7 +446,14 @@ The **primary model cannot consume images** in tool results — **do not** use *
     async fn describe_screen(
         host: &dyn ComputerUseHost,
         _input: &Value,
+        text_only: bool,
     ) -> BitFunResult<Vec<ToolResult>> {
+        // For a text-only model this *is* the observation step, so it clears
+        // the same guard a `screenshot` would. Without this the guard can only
+        // ever be cleared by a capture the model cannot consume.
+        if text_only {
+            host.computer_use_waive_fresh_capture_guard();
+        }
         let session_snap = host.computer_use_session_snapshot().await;
         let interaction = host.computer_use_interaction_state();
         let pointer = session_snap.pointer_global.clone();
@@ -469,8 +476,13 @@ The **primary model cannot consume images** in tool results — **do not** use *
         let mut ax_nodes_count: Option<usize> = None;
         let mut ax_digest: Option<String> = None;
         let mut window_title: Option<String> = None;
-        if let Some(app) = selector.as_ref() {
-            match host.get_app_state(app.clone(), 8, true).await {
+        // Why `ax_tree_text` is empty, when it is. A bare `null` here reads as
+        // truncated tool output, and an agent that believes its own results are
+        // being cut off will keep re-issuing the same call instead of switching
+        // tactic — which is exactly what a null `ax_tree_text` used to cause.
+        let ax_tree_status: &str = match selector.as_ref() {
+            None => "no_foreground_app",
+            Some(app) => match host.get_app_state(app.clone(), 8, true).await {
                 Ok(snap) => {
                     // Deliberately drop `snap.screenshot` (JPEG) — describe_screen
                     // never returns image bytes so text-only models are safe.
@@ -478,14 +490,44 @@ The **primary model cannot consume images** in tool results — **do not** use *
                     ax_nodes_count = Some(snap.nodes.len());
                     ax_digest = Some(snap.digest.clone());
                     ax_tree_text = Some(snap.tree_text).filter(|t| !t.trim().is_empty());
+                    if ax_tree_text.is_some() {
+                        "ok"
+                    } else {
+                        "empty_tree"
+                    }
                 }
                 Err(e) => {
                     debug!("describe_screen: get_app_state failed: {}", e);
+                    "query_failed"
                 }
-            }
-        }
+            },
+        };
 
         let ui_tree_text = host.enumerate_ui_tree_text().await;
+
+        // Turn each non-`ok` status into the tactic that actually works there,
+        // so a sparse tree costs one redirect instead of a search.
+        let ax_tree_note = match ax_tree_status {
+            "ok" => None,
+            "no_foreground_app" => Some(
+                "No application is frontmost, so there is no AX tree to read. Use `list_apps` to \
+find the target, then `open_app` (or `app_click` with an explicit `app` selector) to bring it forward."
+                    .to_string(),
+            ),
+            "empty_tree" => Some(
+                "The frontmost app exposes an empty accessibility tree — usual for Electron / \
+WebView apps that have not enabled their web-content AX tree, and for an app running with no \
+window. This is NOT truncated output: re-calling `describe_screen` returns the same thing. \
+Check `window_count` via `open_app`, or target visible text with `move_to_text` / `click_target`."
+                    .to_string(),
+            ),
+            "query_failed" => Some(
+                "The AX query failed (commonly missing Accessibility trust, or the app exited). \
+Grant Accessibility permission, or fall back to `move_to_text` / `click_target` on visible text."
+                    .to_string(),
+            ),
+            _ => None,
+        };
 
         let mut body = json!({
             "success": true,
@@ -496,9 +538,12 @@ The **primary model cannot consume images** in tool results — **do not** use *
             "displays": displays,
             "window_title": window_title,
             "ax_tree_text": ax_tree_text,
+            "ax_tree_status": ax_tree_status,
+            "ax_tree_note": ax_tree_note,
             "ax_nodes_count": ax_nodes_count,
             "ax_state_digest": ax_digest,
             "ui_tree_text": ui_tree_text,
+            "output_is_complete": true,
         });
 
         let input_coords = json!({
@@ -510,8 +555,18 @@ The **primary model cannot consume images** in tool results — **do not** use *
         // pick `node_idx` from `ax_tree_text` for `app_click`/`click_element`, or
         // match visible text via `move_to_text`, and compare `ax_state_digest`
         // before/after an action to verify a mutation.
-        let hint = "describe_screen: text snapshot returned (no image). Use `ax_tree_text` node indices for `app_click`/`click_element`, match visible text with `move_to_text`, and compare `ax_state_digest` across actions to verify state changes.";
-        Ok(vec![ToolResult::ok(body, Some(hint.to_string()))])
+        let hint = format!(
+            "describe_screen: complete text snapshot returned (no image, ax_tree_status={}). \
+Use `ax_tree_text` node indices for `app_click`/`click_element`, match visible text with `move_to_text`, \
+and compare `ax_state_digest` across actions to verify state changes.{}",
+            ax_tree_status,
+            if ax_tree_status == "ok" {
+                ""
+            } else {
+                " No AX tree available — read `ax_tree_note` and switch tactic rather than repeating this call."
+            }
+        );
+        Ok(vec![ToolResult::ok(body, Some(hint))])
     }
 
     /// Screenshot tool results attach JPEGs via `tool_image_attachments`; only providers whose
@@ -1216,7 +1271,8 @@ impl Tool for ComputerUseTool {
             // + pointer + displays) with NO image bytes. This is the observe and
             // verify step that closes the cowork loop for text-only models.
             "describe_screen" => {
-                return Self::describe_screen(host_ref, input).await;
+                let text_only = !context.primary_model_supports_image_understanding();
+                return Self::describe_screen(host_ref, input, text_only).await;
             }
 
             // Unified target resolver: AX first, OCR second, explicit screen
@@ -1715,12 +1771,19 @@ impl Tool for ComputerUseTool {
                 // at the text-only observe action. The model keeps its turn and
                 // switches to `describe_screen` / AX / OCR / keyboard tactics.
                 if !context.primary_model_supports_image_understanding() {
+                    // A text-only `screenshot` never captures anything, so it
+                    // can never clear the stale-capture guard the usual way.
+                    // Waive it here: otherwise the guard's own recovery advice
+                    // ("call `screenshot` first") is an instruction the model
+                    // can follow forever without ever being allowed to click.
+                    host_ref.computer_use_waive_fresh_capture_guard();
                     let body = json!({
                         "success": true,
                         "action": "screenshot",
                         "screenshot_unavailable": true,
                         "reason": "primary_model_is_text_only",
-                        "instruction": "The primary model cannot consume image bytes, so `screenshot` produced nothing. Use `describe_screen` to observe the desktop as text (frontmost app + AX tree + UI tree text + pointer), then act with `click_target`/`click_element`/`move_to_text`/`key_chord`/`paste`. Never retry `screenshot`."
+                        "stale_capture_guard": "waived",
+                        "instruction": "The primary model cannot consume image bytes, so `screenshot` produced nothing. Use `describe_screen` to observe the desktop as text (frontmost app + AX tree + UI tree text + pointer), then act with `click_target`/`click_element`/`move_to_text`/`key_chord`/`paste`. Never retry `screenshot`. The fresh-capture guard has been waived, so `click` and Enter `key_chord` are unblocked."
                     });
                     let input_coords = json!({ "kind": "screenshot", "text_only": true });
                     let body =
@@ -1937,6 +2000,25 @@ impl Tool for ComputerUseTool {
                         BitFunError::tool("open_app requires `app_name` parameter.".to_string())
                     })?;
                 let result = host_ref.open_app(app_name).await?;
+                // A live process with zero windows is the one launch outcome
+                // that looks like success but leaves nothing to act on. Name it
+                // explicitly and say what to do, rather than letting the agent
+                // rediscover it through a chain of failing AX queries.
+                let windowless = result.success && result.window_count == Some(0);
+                let next_step = if windowless {
+                    Some(format!(
+                        "'{}' is running (PID {}) but owns no window, so there is nothing on screen to click. \
+The host already retried via `open -b`. Re-run `open_app`, or ask the user to open the app's main window (e.g. from its Dock icon). \
+Do not fall back to screen-coordinate clicks — there is no window to hit.",
+                        result.app_name,
+                        result
+                            .process_id
+                            .map(|p| p.to_string())
+                            .unwrap_or_else(|| "?".to_string()),
+                    ))
+                } else {
+                    None
+                };
                 let body = computer_use_augment_result_json(
                     host_ref,
                     json!({
@@ -1945,13 +2027,28 @@ impl Tool for ComputerUseTool {
                         "app_name": result.app_name,
                         "process_id": result.process_id,
                         "error_message": result.error_message,
+                        // Address the app by `bundle_id` from here on: the name
+                        // used to launch it, its executable name and its bundle
+                        // id are often three different strings.
+                        "bundle_id": result.bundle_id,
+                        "process_name": result.process_name,
+                        "window_count": result.window_count,
+                        "launch_path": result.launch_path,
+                        "windowless": windowless,
+                        "next_step": next_step,
                     }),
                     None,
                 )
                 .await;
-                let summary = if result.success {
+                let summary = if !result.success {
                     format!(
-                        "Opened app '{}'{}.",
+                        "Failed to open '{}': {}",
+                        result.app_name,
+                        result.error_message.as_deref().unwrap_or("unknown error")
+                    )
+                } else if windowless {
+                    format!(
+                        "Opened '{}'{} but it has NO window — nothing is on screen to act on.",
                         result.app_name,
                         result
                             .process_id
@@ -1960,9 +2057,16 @@ impl Tool for ComputerUseTool {
                     )
                 } else {
                     format!(
-                        "Failed to open '{}': {}",
+                        "Opened app '{}'{}{}.",
                         result.app_name,
-                        result.error_message.as_deref().unwrap_or("unknown error")
+                        result
+                            .process_id
+                            .map(|p| format!(" (PID {})", p))
+                            .unwrap_or_default(),
+                        result
+                            .window_count
+                            .map(|n| format!(", {} window(s)", n))
+                            .unwrap_or_default()
                     )
                 };
                 Ok(vec![ToolResult::ok(body, Some(summary))])
@@ -2358,6 +2462,163 @@ mod tests {
                 pointer_global: None,
             }
         }
+    }
+
+    /// Host that records whether the stale-capture guard was waived, and
+    /// reports no frontmost app so `describe_screen` exercises its
+    /// nothing-to-observe branch.
+    #[derive(Debug, Default)]
+    struct GuardRecordingHost {
+        waived: std::sync::atomic::AtomicBool,
+    }
+
+    #[async_trait::async_trait]
+    impl ComputerUseHost for GuardRecordingHost {
+        async fn permission_snapshot(&self) -> BitFunResult<ComputerUsePermissionSnapshot> {
+            not_expected()
+        }
+        async fn request_accessibility_permission(&self) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn request_screen_capture_permission(&self) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn screenshot_display(
+            &self,
+            _params: ComputerUseScreenshotParams,
+        ) -> BitFunResult<ComputerScreenshot> {
+            not_expected()
+        }
+        fn map_image_coords_to_pointer(&self, _x: i32, _y: i32) -> BitFunResult<(i32, i32)> {
+            not_expected()
+        }
+        fn map_normalized_coords_to_pointer(&self, _x: i32, _y: i32) -> BitFunResult<(i32, i32)> {
+            not_expected()
+        }
+        async fn mouse_move(&self, _x: i32, _y: i32) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn pointer_move_relative(&self, _dx: i32, _dy: i32) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn mouse_click(&self, _button: &str) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn scroll(&self, _delta_x: i32, _delta_y: i32) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn key_chord(&self, _keys: Vec<String>) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn type_text(&self, _text: &str) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn wait_ms(&self, _ms: u64) -> BitFunResult<()> {
+            not_expected()
+        }
+        async fn computer_use_session_snapshot(&self) -> ComputerUseSessionSnapshot {
+            ComputerUseSessionSnapshot::default()
+        }
+        fn computer_use_waive_fresh_capture_guard(&self) {
+            self.waived.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    fn text_only_context(
+        host: std::sync::Arc<GuardRecordingHost>,
+    ) -> (ToolUseContext, std::sync::Arc<GuardRecordingHost>) {
+        let mut context = ToolUseContext::for_tool_listing(None, None);
+        context.primary_model_facts =
+            tool_runtime::context::PrimaryModelFacts::new("m", "m", "anthropic", false);
+        context.computer_use_host = Some(host.clone());
+        (context, host)
+    }
+
+    /// A text-only `screenshot` captures nothing, so it can never clear the
+    /// stale-capture guard through the normal path — yet the guard's own error
+    /// tells the model to "call `screenshot` first". Left as it was, that is a
+    /// closed loop: every `click` and Enter `key_chord` stays refused for the
+    /// rest of the session, and the only way out is to bypass the tool entirely
+    /// (the observed failure was an agent falling back to raw
+    /// `osascript … keystroke return`, which skips every safety check the guard
+    /// exists to enforce).
+    #[tokio::test]
+    async fn text_only_screenshot_waives_the_unsatisfiable_capture_guard() {
+        let (context, host) = text_only_context(std::sync::Arc::new(GuardRecordingHost::default()));
+        let results = ComputerUseTool::new()
+            .call_impl(&json!({ "action": "screenshot" }), &context)
+            .await
+            .expect("text-only screenshot returns a soft envelope");
+        assert!(
+            host.waived.load(std::sync::atomic::Ordering::SeqCst),
+            "text-only screenshot must waive the guard it can never satisfy"
+        );
+        let body = results[0].content();
+        assert_eq!(
+            body.get("stale_capture_guard").and_then(Value::as_str),
+            Some("waived"),
+            "the waiver must be visible to the model: {body}"
+        );
+        // The guard's own error text says "call `screenshot` first"; the
+        // instruction here has to say that path is now open, or the model has
+        // no reason to believe retrying the click will work.
+        let instruction = body
+            .get("instruction")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(
+            instruction.contains("waived"),
+            "instruction must tell the model the guard is cleared: {instruction}"
+        );
+    }
+
+    /// `describe_screen` is the text-only equivalent of taking a look, so it
+    /// clears the same guard a capture would.
+    #[tokio::test]
+    async fn text_only_describe_screen_waives_the_capture_guard() {
+        let (context, host) = text_only_context(std::sync::Arc::new(GuardRecordingHost::default()));
+        let _ = ComputerUseTool::new()
+            .call_impl(&json!({ "action": "describe_screen" }), &context)
+            .await
+            .expect("describe_screen should succeed");
+        assert!(
+            host.waived.load(std::sync::atomic::Ordering::SeqCst),
+            "describe_screen is the text-only observation step and must waive the guard"
+        );
+    }
+
+    /// An empty snapshot must say *why* it is empty. A bare `ax_tree_text:
+    /// null` reads as truncated tool output, and an agent that believes its
+    /// results are being cut off re-issues the same call instead of changing
+    /// tactic.
+    #[tokio::test]
+    async fn describe_screen_explains_an_empty_ax_tree_instead_of_returning_bare_nulls() {
+        let (context, _host) =
+            text_only_context(std::sync::Arc::new(GuardRecordingHost::default()));
+        let results = ComputerUseTool::new()
+            .call_impl(&json!({ "action": "describe_screen" }), &context)
+            .await
+            .expect("describe_screen should succeed");
+        let body = results[0].content();
+        let data = body.get("data").unwrap_or(&body);
+        assert_eq!(
+            data.get("ax_tree_status").and_then(Value::as_str),
+            Some("no_foreground_app"),
+            "status must name the reason the tree is empty: {body}"
+        );
+        assert_eq!(
+            data.get("output_is_complete").and_then(Value::as_bool),
+            Some(true),
+            "result must assert it is not truncated: {body}"
+        );
+        let note = data
+            .get("ax_tree_note")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(
+            note.contains("list_apps") || note.contains("open_app"),
+            "note must offer a concrete next action: {note}"
+        );
     }
 
     /// The browser-boundary guard must be reachable from `call_impl`: a
