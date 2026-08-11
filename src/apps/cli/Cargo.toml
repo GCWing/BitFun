@@ -43,6 +43,7 @@ bitfun-core = { path = "../../crates/assembly/core", features = [
     "lsp",
     "external-sources",
     "plugin-runtime",
+    "opencode-plugin-host",
     "ssh-remote",
     "tools-basic",
     "tools-git",

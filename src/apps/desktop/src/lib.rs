@@ -49,7 +49,7 @@ use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
 use serde::Deserialize;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, OnceLock,
 };
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
@@ -90,6 +90,9 @@ use api::subagent_api::*;
 use api::system_api::*;
 use api::tool_api::*;
 use startup_trace::{DesktopStartupTrace, DesktopStartupTraceSnapshot};
+
+pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: bitfun_core::plugin_host::PluginHostLaunchPolicy =
+    bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled;
 
 /// Agentic Coordinator state
 #[derive(Clone)]
@@ -533,6 +536,22 @@ pub async fn run() {
     }
     startup_timings.record_elapsed("initialize_global_config", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_global_config", step_started);
+
+    let step_started = Instant::now();
+    match bitfun_core::plugin_host::initialize_configured_plugin_host_with_log_file(
+        PLUGIN_HOST_LAUNCH_POLICY,
+        Some(session_log_dir.join("plugin-host.log")),
+    )
+    .await
+    {
+        Ok(bitfun_core::plugin_host::PluginHostStartup::Disabled) => {}
+        Ok(status) => log::info!("Plugin host initialization completed: {:?}", status),
+        Err(error) => {
+            log::error!("Failed to initialize configured plugin host: {}", error);
+        }
+    }
+    startup_timings.record_elapsed("initialize_plugin_host", step_started);
+    startup_trace.record_elapsed_step("native_pre_tauri", "initialize_plugin_host", step_started);
 
     // The three steps below only depend on the global config service (initialized
     // above) and write to disjoint global singletons, so they can run concurrently:
@@ -1933,11 +1952,15 @@ pub async fn run() {
 
     match app {
         Ok(app) => {
-            app.run(|_app_handle, event| match event {
-                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
-                    crash_diagnostics::mark_clean_shutdown("tauri_run_exit");
-                    save_main_window_state(_app_handle);
-                    perform_process_exit_cleanup();
+            app.run(|app_handle, event| match event {
+                tauri::RunEvent::ExitRequested { api, code, .. } => {
+                    if !PROCESS_EXIT_CLEANUP_COMPLETE.load(Ordering::Acquire) {
+                        api.prevent_exit();
+                        request_desktop_exit(app_handle, code.unwrap_or(0), "tauri_exit_requested");
+                    }
+                }
+                tauri::RunEvent::Exit => {
+                    perform_process_exit_cleanup_emergency();
                 }
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen {
@@ -1949,7 +1972,7 @@ pub async fn run() {
                     } else {
                         "dock_reopen_no_visible_windows"
                     };
-                    show_main_window_on_macos(_app_handle, reason);
+                    show_main_window_on_macos(app_handle, reason);
                 }
                 _ => {}
             });
@@ -2228,21 +2251,75 @@ fn setup_panic_hook() {
             return;
         }
 
-        perform_process_exit_cleanup();
+        perform_process_exit_cleanup_emergency();
         std::process::exit(1);
     }));
 }
 
-pub(crate) fn perform_process_exit_cleanup() -> bool {
-    static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
+static PROCESS_EXIT_CLEANUP_STARTED: AtomicBool = AtomicBool::new(false);
+static PROCESS_EXIT_CLEANUP_COMPLETE: AtomicBool = AtomicBool::new(false);
+static DESKTOP_EXIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+static PROCESS_EXIT_CLEANUP_NOTIFY: OnceLock<tokio::sync::Notify> = OnceLock::new();
 
-    if CLEANUP_DONE
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
-        return false;
+pub(crate) async fn perform_process_exit_cleanup() -> bool {
+    let notify = PROCESS_EXIT_CLEANUP_NOTIFY.get_or_init(tokio::sync::Notify::new);
+    if PROCESS_EXIT_CLEANUP_STARTED.swap(true, Ordering::AcqRel) {
+        loop {
+            let notified = notify.notified();
+            if PROCESS_EXIT_CLEANUP_COMPLETE.load(Ordering::Acquire) {
+                return false;
+            }
+            notified.await;
+        }
     }
 
+    log::info!("Desktop process graceful shutdown started");
+    match bitfun_core::plugin_host::shutdown_configured_plugin_host().await {
+        Ok(Some(report)) => log::info!(
+            "Desktop plugin host shutdown completed: generation={}, disposition={:?}, rpc_completed={}, exit_code={:?}, duration_ms={}",
+            report.generation,
+            report.disposition,
+            report.rpc_completed,
+            report.exit_code,
+            report.duration_ms
+        ),
+        Ok(None) => log::debug!("Desktop plugin host shutdown skipped: host not started"),
+        Err(error) => log::warn!("Desktop plugin host shutdown failed: {}", error),
+    }
+    if let Some(search_service) = get_global_workspace_search_service() {
+        search_service.shutdown_blocking();
+    }
+    bitfun_core::util::process_manager::cleanup_all_processes();
+    api::remote_connect_api::cleanup_on_exit();
+    PROCESS_EXIT_CLEANUP_COMPLETE.store(true, Ordering::Release);
+    notify.notify_waiters();
+    log::info!("Desktop process graceful shutdown completed");
+    true
+}
+
+pub(crate) fn request_desktop_exit(app: &tauri::AppHandle, exit_code: i32, reason: &'static str) {
+    if DESKTOP_EXIT_REQUESTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    save_main_window_state(app);
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        perform_process_exit_cleanup().await;
+        crash_diagnostics::mark_clean_shutdown(reason);
+        log::info!(
+            "Desktop exit authorized after graceful shutdown: reason={}, exit_code={}",
+            reason,
+            exit_code
+        );
+        app.exit(exit_code);
+    });
+}
+
+pub(crate) fn perform_process_exit_cleanup_emergency() -> bool {
+    if PROCESS_EXIT_CLEANUP_COMPLETE.load(Ordering::Acquire) {
+        return false;
+    }
+    log::warn!("Desktop emergency process cleanup started");
     if let Some(search_service) = get_global_workspace_search_service() {
         search_service.shutdown_blocking();
     }
@@ -2567,6 +2644,14 @@ fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
                     Ok(ConfigUpdateEvent::LogLevelUpdated { new_level }) => {
                         if let Some(level) = logging::parse_log_level(&new_level) {
                             logging::apply_runtime_log_level(level, "config_update_event");
+                            if let Err(error) =
+                                bitfun_core::plugin_host::set_configured_plugin_host_log_level(
+                                    logging::level_to_str(level),
+                                )
+                                .await
+                            {
+                                log::warn!("Failed to update plugin host log level: {}", error);
+                            }
                         } else {
                             log::warn!(
                                 "Received invalid log level from config update event: {}",
@@ -2577,6 +2662,14 @@ fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
                     Ok(ConfigUpdateEvent::ConfigReloaded) => {
                         let level = resolve_runtime_log_level(default_level).await;
                         logging::apply_runtime_log_level(level, "config_reloaded");
+                        if let Err(error) =
+                            bitfun_core::plugin_host::set_configured_plugin_host_log_level(
+                                logging::level_to_str(level),
+                            )
+                            .await
+                        {
+                            log::warn!("Failed to update plugin host log level: {}", error);
+                        }
                     }
                     Ok(_) => {}
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => {

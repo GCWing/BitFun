@@ -72,6 +72,9 @@ pub struct GlobalConfig {
     /// ACP client configuration (stored as `{ "acpClients": { ... } }`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub acp_clients: Option<serde_json::Value>,
+    /// OpenCode-compatible plugin declarations loaded by the process-wide plugin host.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plugin: Vec<PluginDeclarationConfig>,
     /// Web UI appearance selection. The full package contract is owned by the frontend.
     pub appearance: AppearanceConfig,
     /// Web UI font size preferences (`get_config` / `set_config` path `font`).
@@ -84,6 +87,44 @@ pub struct GlobalConfig {
     pub version: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub last_modified: chrono::DateTime<chrono::Utc>,
+}
+
+impl GlobalConfig {
+    pub fn has_configured_plugins(&self) -> bool {
+        self.plugin
+            .iter()
+            .any(PluginDeclarationConfig::has_non_empty_spec)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PluginDeclarationConfig {
+    Spec(String),
+    Detailed(PluginDeclarationDetails),
+}
+
+impl PluginDeclarationConfig {
+    pub fn spec(&self) -> &str {
+        match self {
+            Self::Spec(spec) => spec,
+            Self::Detailed(details) => &details.spec,
+        }
+    }
+
+    fn has_non_empty_spec(&self) -> bool {
+        !self.spec().trim().is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginDeclarationDetails {
+    pub spec: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub options: Option<serde_json::Map<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_directory: Option<String>,
 }
 
 /// Project-scoped configuration overlay.
@@ -1754,6 +1795,7 @@ impl Default for GlobalConfig {
             tool_permissions: ToolPermissionConfig::default(),
             mcp_servers: None,
             acp_clients: None,
+            plugin: Vec::new(),
             appearance: AppearanceConfig::default(),
             font: None,
             schema_version: CURRENT_CONFIG_SCHEMA_VERSION,
@@ -2243,6 +2285,43 @@ mod tests {
             serde_json::from_value::<AuthConfig>(serialized).expect("Go auth should roundtrip"),
             go
         );
+    }
+
+    #[test]
+    fn plugin_config_defaults_to_empty_when_missing() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("empty global config should default");
+
+        assert!(config.plugin.is_empty());
+        assert!(!config.has_configured_plugins());
+    }
+
+    #[test]
+    fn non_empty_plugin_config_requests_runtime_startup() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "plugin": [
+                "file:///C:/plugins/demo.mjs",
+                {
+                    "spec": "@my-org/custom-plugin",
+                    "options": { "mode": "strict" },
+                    "baseDirectory": "C:/workspace"
+                }
+            ]
+        }))
+        .expect("plugin config should deserialize");
+
+        assert_eq!(config.plugin.len(), 2);
+        assert!(config.has_configured_plugins());
+    }
+
+    #[test]
+    fn empty_plugin_specs_do_not_request_runtime_startup() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "plugin": ["", "   ", { "spec": "" }]
+        }))
+        .expect("empty plugin declarations should deserialize");
+
+        assert!(!config.has_configured_plugins());
     }
 
     #[test]

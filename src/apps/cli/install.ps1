@@ -99,29 +99,47 @@ function Assert-EntrypointPair([string]$Primary, [string]$Legacy) {
     }
 }
 
+function Assert-PluginHostResources([string]$Directory) {
+    foreach ($entry in @('extension-host.js')) {
+        $path = Join-Path $Directory $entry
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Plugin Host resource is missing: $path"
+        }
+    }
+}
+
 function Install-EntrypointPair(
     [string]$PrimarySource,
     [string]$LegacySource,
+    [string]$PluginHostSource,
     [string]$Destination
 ) {
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
     $stageDir = Join-Path $Destination ".bitfun-install-$([guid]::NewGuid().ToString('N'))"
     $stagedPrimary = Join-Path $stageDir 'bitfun.exe'
     $stagedLegacy = Join-Path $stageDir 'bitfun-cli.exe'
+    $stagedPluginHost = Join-Path $stageDir 'ext-host'
     $primaryTarget = Join-Path $Destination 'bitfun.exe'
     $legacyTarget = Join-Path $Destination 'bitfun-cli.exe'
+    $pluginHostTarget = Join-Path $Destination 'resources\ext-host'
     $primaryBackup = Join-Path $stageDir 'previous-bitfun.exe'
     $legacyBackup = Join-Path $stageDir 'previous-bitfun-cli.exe'
+    $pluginHostBackup = Join-Path $stageDir 'previous-ext-host'
     $primaryBackedUp = $false
     $legacyBackedUp = $false
+    $pluginHostBackedUp = $false
     $primaryCommitted = $false
     $legacyCommitted = $false
+    $pluginHostCommitted = $false
 
     New-Item -ItemType Directory -Path $stageDir | Out-Null
     try {
         Copy-Item -LiteralPath $PrimarySource -Destination $stagedPrimary
         Copy-Item -LiteralPath $LegacySource -Destination $stagedLegacy
+        New-Item -ItemType Directory -Path $stagedPluginHost | Out-Null
+        Copy-Item -LiteralPath (Join-Path $PluginHostSource 'extension-host.js') -Destination $stagedPluginHost
         Assert-EntrypointPair $stagedPrimary $stagedLegacy
+        Assert-PluginHostResources $stagedPluginHost
 
         if (Test-Path -LiteralPath $primaryTarget -PathType Leaf) {
             Move-Item -LiteralPath $primaryTarget -Destination $primaryBackup
@@ -131,15 +149,26 @@ function Install-EntrypointPair(
             Move-Item -LiteralPath $legacyTarget -Destination $legacyBackup
             $legacyBackedUp = $true
         }
+        if (Test-Path -LiteralPath $pluginHostTarget -PathType Container) {
+            Move-Item -LiteralPath $pluginHostTarget -Destination $pluginHostBackup
+            $pluginHostBackedUp = $true
+        }
 
         Move-Item -LiteralPath $stagedPrimary -Destination $primaryTarget
         $primaryCommitted = $true
         Move-Item -LiteralPath $stagedLegacy -Destination $legacyTarget
         $legacyCommitted = $true
+        New-Item -ItemType Directory -Path (Split-Path -Parent $pluginHostTarget) -Force | Out-Null
+        Move-Item -LiteralPath $stagedPluginHost -Destination $pluginHostTarget
+        $pluginHostCommitted = $true
         Assert-EntrypointPair $primaryTarget $legacyTarget
+        Assert-PluginHostResources $pluginHostTarget
     }
     catch {
         $installError = $_
+        if ($pluginHostCommitted) {
+            Remove-Item -LiteralPath $pluginHostTarget -Recurse -Force -ErrorAction SilentlyContinue
+        }
         if ($legacyCommitted) {
             Remove-Item -LiteralPath $legacyTarget -Force -ErrorAction SilentlyContinue
         }
@@ -152,6 +181,10 @@ function Install-EntrypointPair(
         if ($primaryBackedUp) {
             Move-Item -LiteralPath $primaryBackup -Destination $primaryTarget -Force
         }
+        if ($pluginHostBackedUp) {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $pluginHostTarget) -Force | Out-Null
+            Move-Item -LiteralPath $pluginHostBackup -Destination $pluginHostTarget -Force
+        }
         throw "CLI installation failed; the previous entrypoint pair was restored. $installError"
     }
     finally {
@@ -163,6 +196,7 @@ $repoRoot = Resolve-RepoRoot
 $releaseDir = Resolve-ReleaseDir $repoRoot
 $primarySource = Join-Path $releaseDir 'bitfun.exe'
 $legacySource = Join-Path $releaseDir 'bitfun-cli.exe'
+$pluginHostSource = Join-Path $repoRoot 'src\apps\extension-host\dist'
 $primaryInstalled = Join-Path $BinDir 'bitfun.exe'
 $legacyInstalled = Join-Path $BinDir 'bitfun-cli.exe'
 $deprecation = 'Warning: `bitfun-cli` is deprecated; use `bitfun` instead.'
@@ -193,11 +227,13 @@ foreach ($source in @($primarySource, $legacySource)) {
         throw "Built executable was not found at $source"
     }
 }
+Assert-PluginHostResources $pluginHostSource
 
 Write-Host '[2/3] Installing executables...'
-Install-EntrypointPair $primarySource $legacySource $BinDir
+Install-EntrypointPair $primarySource $legacySource $pluginHostSource $BinDir
 Write-Host "Installed: $primaryInstalled"
 Write-Host "Installed deprecated compatibility entrypoint: $legacyInstalled"
+Write-Host "Installed plugin Host resources: $(Join-Path $BinDir 'resources\ext-host')"
 
 if (-not $SkipPathUpdate) {
     Add-BinDirToUserPath $BinDir
@@ -208,6 +244,7 @@ else {
 
 Write-Host '[3/3] Verifying both entrypoints...'
 Assert-EntrypointPair $primaryInstalled $legacyInstalled
+Assert-PluginHostResources (Join-Path $BinDir 'resources\ext-host')
 
 Write-Host '=== Install complete ==='
 Write-Host 'Open a new terminal, then run: bitfun'

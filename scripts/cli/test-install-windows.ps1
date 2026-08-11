@@ -21,6 +21,11 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw 'Installed bitfun smoke check failed'
     }
+    foreach ($entry in @('extension-host.js')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $binDir "resources\ext-host\$entry") -PathType Leaf)) {
+            throw "Installed CLI is missing plugin Host resource: $entry"
+        }
+    }
 
     $primary = Join-Path $binDir 'bitfun.exe'
     $legacy = Join-Path $binDir 'bitfun-cli.exe'

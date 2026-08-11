@@ -16,7 +16,7 @@
 
 | 名称 | 唯一含义 |
 |---|---|
-| Plugin Host | 运行 Node/Bun 与第三方 JS/TS 插件的受监督子进程；Host 不在 Rust 主应用进程内 |
+| Plugin Host | 运行 Bun 与第三方 JS/TS 插件的受监督子进程；Host 不在 Rust 主应用进程内 |
 | `PluginRuntimeClient` | Rust 主应用内部现有调用端口；校验请求和响应，管理超时、同一插件的串行调用、重复请求结果缓存、诊断与故障隔离 |
 | `ScriptToolRuntime` / `NodeScriptToolRuntime` | 现有脚本执行端口及 services 实现；当前负责 standalone Tool worker，后续 Plugin Host 的物理进程职责也应沿此边界扩展 |
 | 插件实例 | 由来源、插件身份和当前内容版本确定的已启用插件；启停事实仍由现有来源与能力模块管理 |
@@ -37,7 +37,7 @@ flowchart LR
   Client["PluginRuntimeClient"]
   Adapter["生态适配器"]
   Service["Process service"]
-  Host["Plugin Host\nNode/Bun"]
+  Host["Plugin Host\nBun"]
 
   Owners <--> Client
   Client <--> Adapter

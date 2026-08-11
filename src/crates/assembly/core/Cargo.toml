@@ -104,6 +104,7 @@ fluent-bundle = { workspace = true, optional = true }
 unic-langid = { workspace = true, optional = true }
 
 sha2 = { workspace = true }
+urlencoding = { workspace = true }
 
 # QR code generation
 
@@ -119,6 +120,7 @@ bitfun-runtime-services = { path = "../../execution/runtime-services", optional 
 # Reviewed product-full plugin composition root.
 bitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional = true }
 bitfun-dsh-adapter = { path = "../../adapters/dsh-adapter", optional = true }
+bitfun-opencode-plugin-host = { path = "../../adapters/opencode-plugin-host", optional = true }
 bitfun-claude-code-adapter = { path = "../../adapters/claude-code-adapter", optional = true }
 bitfun-codex-adapter = { path = "../../adapters/codex-adapter", optional = true }
 bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client", optional = true }
@@ -171,6 +173,7 @@ product-full = [
     "canvas-runtime",
     "external-sources",
     "plugin-runtime",
+    "opencode-plugin-host",
     "debug-log",
     "announcement",
     "file-watch",
@@ -368,6 +371,16 @@ plugin-runtime = [
     "external-sources",
     "dep:bitfun-plugin-runtime-client",
     "bitfun-runtime-ports/plugin-runtime",
+]
+# Managed OpenCode Host assembly. Its HTTP compatibility routes consume the
+# Agent lifecycle plus model, Git, Remote Connect, and LSP owners; keep that
+# product-shaped closure separate from the portable plugin client boundary.
+opencode-plugin-host = [
+    "plugin-runtime",
+    "remote-connect",
+    "git",
+    "lsp",
+    "dep:bitfun-opencode-plugin-host",
 ]
 debug-log = [
     "dep:axum",

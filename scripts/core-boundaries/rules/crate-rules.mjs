@@ -64,6 +64,7 @@ export const noCoreDependencyCrates = [
   'codex-adapter',
   'dsh-adapter',
   'opencode-adapter',
+  'opencode-plugin-host',
   'static-hook-support',
   'external-sources',
   'terminal',
@@ -130,6 +131,19 @@ export const forbiddenManifestDependencyRules = [
       'DeepSeek Harness adapter production dependencies are limited to the reviewed product composition root',
     message:
       'only bitfun-core product-full assembly may register bitfun-dsh-adapter through reviewed capability composition roots',
+  },
+  {
+    dependencyNames: ['bitfun-opencode-plugin-host'],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    workspaceManifestPath: 'Cargo.toml',
+    allowManifestPaths: [
+      'src/crates/adapters/opencode-plugin-host/Cargo.toml',
+      'src/crates/assembly/core/Cargo.toml',
+    ],
+    reason:
+      'OpenCode plugin host process dependencies are limited to the reviewed product composition root',
+    message:
+      'only bitfun-core product-full assembly may register bitfun-opencode-plugin-host',
   },
   ...[
     ['bitfun-claude-code-adapter', 'claude-code-adapter'],

@@ -36,6 +36,12 @@ pub mod miniapp; // AI-generated instant apps (Zero-Dialect Runtime)
 pub mod native_hooks;
 #[cfg(all(test, feature = "agent-runtime"))]
 mod native_hooks_tests;
+#[cfg(feature = "opencode-plugin-host")]
+pub mod plugin_host;
+#[cfg(feature = "opencode-plugin-host")]
+mod plugin_host_http;
+#[cfg(feature = "opencode-plugin-host")]
+mod plugin_host_http_routes;
 #[cfg(feature = "plugin-runtime")]
 pub mod plugin_runtime;
 #[cfg(feature = "plugin-source")]

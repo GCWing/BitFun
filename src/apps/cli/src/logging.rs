@@ -3,7 +3,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use chrono::Local;
 use tracing_subscriber::filter::filter_fn;
@@ -28,7 +28,10 @@ pub(crate) struct CliLogPaths {
     pub app_log_path: PathBuf,
     pub ai_log_path: PathBuf,
     pub flashgrep_log_path: PathBuf,
+    pub plugin_host_log_path: PathBuf,
 }
+
+static ACTIVE_LOG_PATHS: OnceLock<CliLogPaths> = OnceLock::new();
 
 struct RotatingFile {
     dir: PathBuf,
@@ -238,7 +241,14 @@ pub(crate) fn build_log_paths(session_log_dir: &Path) -> CliLogPaths {
         app_log_path: session_log_dir.join("app.log"),
         ai_log_path: session_log_dir.join("ai.log"),
         flashgrep_log_path: session_log_dir.join("flashgrep.log"),
+        plugin_host_log_path: session_log_dir.join("plugin-host.log"),
     }
+}
+
+pub(crate) fn active_plugin_host_log_path() -> Option<PathBuf> {
+    ACTIVE_LOG_PATHS
+        .get()
+        .map(|paths| paths.plugin_host_log_path.clone())
 }
 
 fn create_rotating_writer(
@@ -353,6 +363,7 @@ pub(crate) fn init_file_logging_at(
 ) -> CliLogPaths {
     fs::create_dir_all(session_log_dir).ok();
     let paths = build_log_paths(session_log_dir);
+    let _ = ACTIVE_LOG_PATHS.set(paths.clone());
 
     let app_writer = create_rotating_writer(session_log_dir, "app");
     let ai_writer = create_rotating_writer(session_log_dir, "ai");
@@ -410,6 +421,10 @@ mod tests {
         assert_eq!(paths.app_log_path, temp.path().join("app.log"));
         assert_eq!(paths.ai_log_path, temp.path().join("ai.log"));
         assert_eq!(paths.flashgrep_log_path, temp.path().join("flashgrep.log"));
+        assert_eq!(
+            paths.plugin_host_log_path,
+            temp.path().join("plugin-host.log")
+        );
     }
 
     #[test]

@@ -40,6 +40,7 @@ export const crateLayoutRules = [
   { crateName: 'codex-adapter', layer: 'adapters', path: 'src/crates/adapters/codex-adapter' },
   { crateName: 'opencode-adapter', layer: 'adapters', path: 'src/crates/adapters/opencode-adapter' },
   { crateName: 'dsh-adapter', layer: 'adapters', path: 'src/crates/adapters/dsh-adapter' },
+  { crateName: 'opencode-plugin-host', layer: 'adapters', path: 'src/crates/adapters/opencode-plugin-host' },
   { crateName: 'static-hook-support', layer: 'adapters', path: 'src/crates/adapters/static-hook-support' },
   { crateName: 'transport', layer: 'adapters', path: 'src/crates/adapters/transport' },
   { crateName: 'webdriver', layer: 'adapters', path: 'src/crates/adapters/webdriver' },
