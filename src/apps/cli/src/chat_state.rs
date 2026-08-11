@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// This module only maintains transient state needed for TUI rendering.
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use bitfun_agent_runtime::prompt_markup::strip_prompt_markup;
+use bitfun_agent_runtime::prompt_markup::{is_system_reminder_only, strip_prompt_markup};
 use bitfun_agent_runtime::sdk::{
     PermissionRequest, SessionTranscript, TranscriptContent, TranscriptMessage,
 };
@@ -76,6 +76,29 @@ impl From<&str> for MessageRole {
     }
 }
 
+/// Classify a transcript message role for display.
+///
+/// System injections (internal reminders, static/dynamic prepended reminders,
+/// finalize cache anchors) are sent to the model as OpenAI-compatible
+/// `role="user"` messages whose content is wrapped in `<system_reminder>` tags
+/// (see prompt_markup::render_system_reminder). Reusing the tag heuristic here
+/// keeps the CLI transcript statistics from counting those injections as user
+/// messages: only `role="user"` content that is *not* system-reminder-only
+/// counts as a real user prompt.
+fn transcript_message_role(msg: &TranscriptMessage) -> MessageRole {
+    if msg.role == "user" {
+        let text = match &msg.content {
+            TranscriptContent::Text(text) => Some(text.as_str()),
+            TranscriptContent::Multimodal { text, .. } => Some(text.as_str()),
+            _ => None,
+        };
+        if text.is_some_and(is_system_reminder_only) {
+            return MessageRole::System;
+        }
+    }
+    MessageRole::from(msg.role.as_str())
+}
+
 pub(crate) fn transcript_role_label(role: &str) -> &'static str {
     match role {
         "user" => "User",
@@ -112,7 +135,7 @@ pub(crate) fn transcript_message_preview(message: &TranscriptMessage) -> String 
 }
 
 fn display_text_for_role(role: &MessageRole, text: &str) -> String {
-    if *role == MessageRole::User {
+    if *role == MessageRole::User || *role == MessageRole::System {
         strip_prompt_markup(text)
     } else {
         text.to_string()
@@ -184,7 +207,7 @@ pub(crate) struct ChatMessage {
 impl ChatMessage {
     /// Convert a portable session transcript message to UI state.
     fn from_transcript_message(msg: &TranscriptMessage, index: usize) -> Self {
-        let role = MessageRole::from(msg.role.as_str());
+        let role = transcript_message_role(msg);
         let mut flow_items = Vec::new();
 
         match &msg.content {
@@ -779,6 +802,10 @@ impl ChatState {
                 msg.1.role != "tool"
                 // Skip system messages (internal)
                 && msg.1.role != "system"
+                // Skip system-reminder-only user messages (internal injections
+                // such as steering/background notifications/User Context that
+                // travel with role="user" but carry <system_reminder> markup).
+                && transcript_message_role(msg.1) != MessageRole::System
             })
             .map(|(index, msg)| {
                 let mut chat_msg = ChatMessage::from_transcript_message(msg, index);
@@ -1622,7 +1649,8 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChatState, FlowItem, ModelTokenUsageSnapshot, PermissionReconcileOutcome, ToolDisplayStatus,
+        ChatState, FlowItem, MessageRole, ModelTokenUsageSnapshot, PermissionReconcileOutcome,
+        ToolDisplayStatus,
     };
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
@@ -2329,5 +2357,97 @@ mod tests {
             state.messages[1].flow_items.as_slice(),
             [FlowItem::Text { content, .. }] if content == "First chunk"
         ));
+    }
+
+    #[test]
+    fn system_reminder_only_user_messages_are_not_counted_as_user_prompts() {
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![
+                TranscriptMessage {
+                    id: Some("real-user".to_string()),
+                    role: "user".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_000),
+                    content: TranscriptContent::Text("Actual prompt".to_string()),
+                },
+                TranscriptMessage {
+                    id: Some("injected-1".to_string()),
+                    role: "user".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_100),
+                    content: TranscriptContent::Text(
+                        "<system_reminder>\nInternal steering\n</system_reminder>".to_string(),
+                    ),
+                },
+                TranscriptMessage {
+                    id: Some("injected-2".to_string()),
+                    role: "user".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_200),
+                    content: TranscriptContent::Text(
+                        "<system-reminder>\nLegacy internal\n</system-reminder>".to_string(),
+                    ),
+                },
+                TranscriptMessage {
+                    id: Some("assistant-1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_300),
+                    content: TranscriptContent::Text("Answer".to_string()),
+                },
+            ],
+        };
+        let state = ChatState::from_session_transcript(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+            &transcript,
+        );
+
+        // Only the real user prompt and the assistant answer remain as
+        // messages; both injected system-reminder-only messages are skipped.
+        assert_eq!(state.messages.len(), 2);
+        assert_eq!(state.messages[0].role, MessageRole::User);
+        assert!(matches!(
+            state.messages[0].flow_items.as_slice(),
+            [FlowItem::Text { content, .. }] if content == "Actual prompt"
+        ));
+        assert_eq!(state.messages[1].role, MessageRole::Assistant);
+
+        // The injected messages must not appear as fork/timeline user prompts.
+        // Only the real user prompt (with its turn) is a fork/timeline point.
+        let fork_points = state.session_fork_points();
+        assert_eq!(fork_points.len(), 1);
+        assert_eq!(fork_points[0].prompt, "Actual prompt");
+        let timeline_points = state.session_timeline_points();
+        assert_eq!(timeline_points.len(), 1);
+        assert_eq!(timeline_points[0].prompt, "Actual prompt");
+    }
+
+    #[test]
+    fn system_reminder_only_user_message_keeps_text_when_rendered() {
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![TranscriptMessage {
+                id: Some("injected-1".to_string()),
+                role: "user".to_string(),
+                turn_id: None,
+                timestamp_ms: Some(1_000),
+                content: TranscriptContent::Text(
+                    "<system_reminder>\nSteering payload\n</system_reminder>".to_string(),
+                ),
+            }],
+        };
+        let state = ChatState::from_session_transcript(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+            &transcript,
+        );
+
+        assert_eq!(state.messages.len(), 0);
     }
 }

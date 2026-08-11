@@ -9883,10 +9883,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             workspace_services: subagent_services,
             terminal_port: self.terminal_port(),
             remote_exec_port: self.remote_exec_port(),
-            // Subagents are autonomous; user steering is targeted at top-level
-            // dialog turns only. Leave None so we don't intercept buffer entries
-            // that belong to a different (parent) session/turn.
-            round_injection: None,
+            // Subagents consume their own session_id-keyed steering entries. The
+            // round-injection buffer keys entries by session_id and drains by
+            // (session_id, turn_id) (see SessionRoundInjectionBuffer::drain_for_turn),
+            // so a subagent only ever consumes injections targeted at its own
+            // session/turn — parent-session buffer entries are never intercepted.
+            // Previously None left steering permanently un-consumed: the engine
+            // gate at execution_engine.rs:4950 never ran, the pending item never
+            // reached a completed state, and users retried the "continue" action.
+            round_injection: self.round_injection_source.get().cloned(),
             emit_lifecycle_events,
             recover_partial_on_cancel: true,
         };

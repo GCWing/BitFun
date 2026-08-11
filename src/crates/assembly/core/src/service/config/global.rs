@@ -67,10 +67,10 @@ pub(crate) async fn refresh_rbac_enabled_cache() {
 /// Mirrors `ai.external_instruction_sources` in the settings document. Kept as
 /// a process-level cache so synchronous hot paths (instruction context
 /// assembly gates) can read it without awaiting the config service. Refreshed
-/// on config initialize / reload / update; defaults to `true` (load external
-/// CLAUDE.md / OpenCode / Codex user instructions), preserving the historical
-/// behavior.
-static EXTERNAL_INSTRUCTION_SOURCES_ENABLED_CACHE: AtomicBool = AtomicBool::new(true);
+/// on config initialize / reload / update; defaults to `false` (do not load
+/// external CLAUDE.md / OpenCode / Codex user instructions), matching the
+/// taiji 定制版 default of `ai.external_instruction_sources = false`.
+static EXTERNAL_INSTRUCTION_SOURCES_ENABLED_CACHE: AtomicBool = AtomicBool::new(false);
 
 /// Dot-path of the external user instruction sources switch inside the
 /// settings document. Config paths resolve against the serialized
@@ -98,16 +98,63 @@ pub fn set_external_instruction_sources_enabled(enabled: bool) {
 /// config.
 ///
 /// Best-effort: hosts without an initialized config service keep the default
-/// (`true`). Called after config initialize, reload, and service replacement.
+/// (`false`). Called after config initialize, reload, and service replacement.
 pub(crate) async fn refresh_external_instruction_sources_enabled_cache() {
     let enabled = match get_global_config_service().await {
         Ok(service) => service
             .get_config::<bool>(Some(EXTERNAL_INSTRUCTION_SOURCES_CONFIG_PATH))
             .await
-            .unwrap_or(true),
-        Err(_) => true,
+            .unwrap_or(false),
+        Err(_) => false,
     };
     EXTERNAL_INSTRUCTION_SOURCES_ENABLED_CACHE.store(enabled, Ordering::Relaxed);
+}
+
+/// Cached master switch for workspace instruction files.
+///
+/// Mirrors `ai.workspace_instruction_files` in the settings document. Kept as
+/// a process-level cache so synchronous hot paths (User Context assembly
+/// gates) can read it without awaiting the config service. Refreshed on config
+/// initialize / reload / update; defaults to `false` (do not render project
+/// AGENTS.md / CLAUDE.md content), matching the taiji 定制版 default of
+/// `ai.workspace_instruction_files = false`.
+static WORKSPACE_INSTRUCTION_FILES_ENABLED_CACHE: AtomicBool = AtomicBool::new(false);
+
+/// Dot-path of the workspace instruction files switch inside the settings
+/// document. Config paths resolve against the serialized `GlobalConfig`, where
+/// `AIConfig` lives under `ai`.
+pub(crate) const WORKSPACE_INSTRUCTION_FILES_CONFIG_PATH: &str = "ai.workspace_instruction_files";
+
+/// Current value of the workspace instruction files switch (cached,
+/// synchronous).
+///
+/// Hot-path safe: never awaits the config service. The cache is refreshed from
+/// the settings document on config initialize / reload / update.
+pub fn workspace_instruction_files_enabled() -> bool {
+    WORKSPACE_INSTRUCTION_FILES_ENABLED_CACHE.load(Ordering::Relaxed)
+}
+
+/// Override the cached workspace instruction files switch.
+///
+/// Used by the config service when the settings document changes and by tests.
+pub fn set_workspace_instruction_files_enabled(enabled: bool) {
+    WORKSPACE_INSTRUCTION_FILES_ENABLED_CACHE.store(enabled, Ordering::Relaxed);
+}
+
+/// Refresh the cached workspace instruction files switch from the global
+/// config.
+///
+/// Best-effort: hosts without an initialized config service keep the default
+/// (`false`). Called after config initialize, reload, and service replacement.
+pub(crate) async fn refresh_workspace_instruction_files_enabled_cache() {
+    let enabled = match get_global_config_service().await {
+        Ok(service) => service
+            .get_config::<bool>(Some(WORKSPACE_INSTRUCTION_FILES_CONFIG_PATH))
+            .await
+            .unwrap_or(false),
+        Err(_) => false,
+    };
+    WORKSPACE_INSTRUCTION_FILES_ENABLED_CACHE.store(enabled, Ordering::Relaxed);
 }
 
 /// Configuration update events.
@@ -204,6 +251,7 @@ impl GlobalConfigManager {
         info!("Global config service initialized");
         refresh_rbac_enabled_cache().await;
         refresh_external_instruction_sources_enabled_cache().await;
+        refresh_workspace_instruction_files_enabled_cache().await;
 
         #[cfg(feature = "agent-runtime")]
         {
@@ -255,6 +303,7 @@ impl GlobalConfigManager {
         Self::broadcast_update(ConfigUpdateEvent::ConfigReloaded).await;
         refresh_rbac_enabled_cache().await;
         refresh_external_instruction_sources_enabled_cache().await;
+        refresh_workspace_instruction_files_enabled_cache().await;
 
         debug!("Global config service updated");
         Ok(())
@@ -279,6 +328,7 @@ impl GlobalConfigManager {
         Self::broadcast_update(ConfigUpdateEvent::ConfigReloaded).await;
         refresh_rbac_enabled_cache().await;
         refresh_external_instruction_sources_enabled_cache().await;
+        refresh_workspace_instruction_files_enabled_cache().await;
         Ok(())
     }
 

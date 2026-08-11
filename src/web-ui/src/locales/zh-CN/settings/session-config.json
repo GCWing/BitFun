@@ -14,6 +14,12 @@
       "enable": "加载外部用户指令",
       "description": "开启时，BitFun 会把 ~/.claude/CLAUDE.md 与 rules/、OpenCode AGENTS.md、Codex AGENTS.md 读入用户上下文。关闭后完全不再读取这些外部文件。项目内指令文件（工作区中的 AGENTS.md 与 .claude/rules）始终生效。"
     },
+    "workspaceInstructionFiles": {
+      "title": "工作区指令文件",
+      "subtitle": "控制是否将项目内指令文件（AGENTS.md / CLAUDE.md 等）加载到会话上下文。",
+      "enable": "加载工作区指令文件",
+      "description": "开启时，BitFun 会把工作区根目录的 AGENTS.md、AGENTS.override.md、CLAUDE.md、.claude/CLAUDE.md、CLAUDE.local.md 与 opencode 配置引用的指令文件读入用户上下文。关闭后不再读取这些文件（此开关独立于外部指令来源开关）。默认关闭以避免上下文膨胀。"
+    },
     "agentCompanion": {
       "title": "Agent 伙伴",
       "subtitle": "控制 BitFun 伙伴的显示方式。",

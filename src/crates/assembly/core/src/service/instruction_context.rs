@@ -40,7 +40,7 @@ async fn load_user_conditional_instruction_files() -> Vec<LocalInstructionFile> 
         if !crate::service::config::external_instruction_sources_enabled() {
             return Vec::new();
         }
-        return crate::instruction_sources::load_local_user_conditional_instruction_sources().await;
+        crate::instruction_sources::load_local_user_conditional_instruction_sources().await
     }
     #[cfg(not(feature = "external-sources"))]
     {
@@ -58,9 +58,23 @@ pub(crate) async fn build_workspace_instruction_files_context(
     )
 }
 
+/// Gate for the workspace instruction files master switch
+/// (`ai.workspace_instruction_files`). When off, no workspace instruction file
+/// content (project AGENTS.md / CLAUDE.md / opencode config references) is
+/// rendered into the User Context.
+fn workspace_instruction_files_enabled() -> bool {
+    crate::service::config::workspace_instruction_files_enabled()
+}
+
 pub(crate) async fn build_workspace_instruction_files_context_detailed(
     workspace_root: &Path,
 ) -> BitFunResult<InstructionContextBuild> {
+    if !workspace_instruction_files_enabled() {
+        return Ok(InstructionContextBuild {
+            content: None,
+            cacheable: true,
+        });
+    }
     let (user_instruction_files, user_instruction_files_cacheable) =
         load_user_instruction_files(workspace_root).await;
     let workspace_instruction_files =
@@ -82,6 +96,12 @@ pub(crate) async fn build_local_workspace_instruction_files_context_with_fs_deta
     fs: &dyn WorkspaceFileSystem,
     workspace_root_path: &str,
 ) -> BitFunResult<InstructionContextBuild> {
+    if !workspace_instruction_files_enabled() {
+        return Ok(InstructionContextBuild {
+            content: None,
+            cacheable: true,
+        });
+    }
     let (user_instruction_files, user_instruction_files_cacheable) =
         load_user_instruction_files(workspace_root).await;
     let workspace_instruction_files =
@@ -181,18 +201,21 @@ pub(crate) async fn load_workspace_conditional_instruction_files_with_fs(
     fs: &dyn WorkspaceFileSystem,
     workspace_root: &str,
 ) -> BitFunResult<Vec<WorkspaceInstructionFile>> {
-    Ok(bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
-            fs,
-            workspace_root,
-        )
-        .await
-        .map_err(BitFunError::service)?)
+    bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
+        fs,
+        workspace_root,
+    )
+    .await
+    .map_err(BitFunError::service)
 }
 
 pub(crate) async fn build_workspace_instruction_files_context_with_fs(
     fs: &dyn WorkspaceFileSystem,
     workspace_root: &str,
 ) -> BitFunResult<Option<String>> {
+    if !workspace_instruction_files_enabled() {
+        return Ok(None);
+    }
     let instruction_files =
         bitfun_services_core::workspace_instructions::read_workspace_instruction_files_with_fs(
             fs,
@@ -260,7 +283,9 @@ mod tests {
     };
     use super::{render_workspace_instruction_files_section, WorkspaceInstructionFile};
     #[cfg(feature = "external-sources")]
-    use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
+    use crate::instruction_sources::test_support::{
+        lock_environment, EnvironmentGuard, InstructionSwitches,
+    };
     #[cfg(feature = "external-sources")]
     use bitfun_services_core::workspace::LocalWorkspaceFs;
 
@@ -269,6 +294,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn local_user_instructions_precede_workspace_instructions_by_ecosystem_priority() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -312,6 +340,9 @@ mod tests {
     #[tokio::test]
     async fn conditional_instructions_keep_user_then_workspace_precedence() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -358,6 +389,9 @@ mod tests {
     #[tokio::test]
     async fn invalid_user_rule_does_not_hide_project_conditional_instructions() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -400,6 +434,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn opencode_global_config_resolves_relative_instructions_in_the_local_workspace() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -441,6 +478,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn invalid_user_source_does_not_hide_workspace_instructions() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -476,6 +516,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn a_user_configured_workspace_file_is_not_rendered_again_as_a_project_source() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -511,6 +554,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn port_backed_workspace_never_falls_back_to_local_user_sources() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -597,6 +643,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn disabled_external_instruction_sources_skip_all_external_user_files() {
         let _environment = lock_environment();
+        // Workspace instructions on, external user sources off — exactly what
+        // this test asserts. The guard restores the previous values on drop.
+        let _switches = InstructionSwitches::set(Some(true), Some(false));
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -629,8 +678,6 @@ mod tests {
             ("CLAUDE_CONFIG_DIR", &claude),
         ]);
 
-        crate::service::config::set_external_instruction_sources_enabled(false);
-
         let build = build_workspace_instruction_files_context_detailed(&workspace)
             .await
             .expect("workspace instructions survive external switch off");
@@ -652,7 +699,6 @@ mod tests {
             vec![".claude/rules/project.md"]
         );
 
-        crate::service::config::set_external_instruction_sources_enabled(true);
     }
 
     #[cfg(feature = "external-sources")]
@@ -660,6 +706,9 @@ mod tests {
     #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn enabled_external_instruction_sources_still_load_user_files_by_default() {
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -680,8 +729,6 @@ mod tests {
             ("CODEX_HOME", &codex),
             ("CLAUDE_CONFIG_DIR", &claude),
         ]);
-
-        crate::service::config::set_external_instruction_sources_enabled(true);
 
         let rendered = build_workspace_instruction_files_context(&workspace)
             .await
@@ -703,6 +750,9 @@ mod tests {
         // render byte-identical content in a stable order — a drift here would
         // invalidate the provider-side prompt prefix cache.
         let _environment = lock_environment();
+        // Enable both instruction master switches for this test; the
+        // InstructionSwitches guard restores the previous values on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -724,9 +774,7 @@ mod tests {
             ("CLAUDE_CONFIG_DIR", &claude),
         ]);
 
-        // Same stable switch state for both builds.
-        crate::service::config::set_external_instruction_sources_enabled(true);
-
+        // Same stable switch state for both builds (guard already enables both).
         let first = build_workspace_instruction_files_context(&workspace)
             .await
             .expect("first instruction context")

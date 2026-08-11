@@ -14,6 +14,12 @@
       "enable": "Load external user instructions",
       "description": "When enabled, BitFun reads ~/.claude/CLAUDE.md and rules/, OpenCode AGENTS.md, and Codex AGENTS.md into the User Context. Turn this off to stop reading these files entirely. Project instruction files (AGENTS.md and .claude/rules inside the workspace) are always honored."
     },
+    "workspaceInstructionFiles": {
+      "title": "Workspace instruction files",
+      "subtitle": "Control whether project instruction files (AGENTS.md / CLAUDE.md, etc.) are loaded into the conversation context.",
+      "enable": "Load workspace instruction files",
+      "description": "When enabled, BitFun reads workspace instruction files (AGENTS.md, AGENTS.override.md, CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, and opencode config references) into the User Context. Turn this off to stop reading these files entirely. This switch is independent of external instruction sources and defaults to off to avoid context bloat."
+    },
     "agentCompanion": {
       "title": "Agent companion",
       "subtitle": "Control where the BitFun companion appears.",

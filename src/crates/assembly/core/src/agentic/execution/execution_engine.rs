@@ -1129,7 +1129,7 @@ impl ExecutionEngine {
                 reminder_text.to_string(),
             )
             .with_turn_id(turn_id.to_string()),
-            Message::user(Self::FINALIZE_USER_FOLLOWUP.to_string())
+            Message::user(render_system_reminder(Self::FINALIZE_USER_FOLLOWUP))
                 .with_semantic_kind(MessageSemanticKind::InternalReminder)
                 .with_internal_reminder_kind(InternalReminderKind::FinalizeCacheAnchor)
                 .with_turn_id(turn_id.to_string()),
@@ -1495,6 +1495,9 @@ impl ExecutionEngine {
     ///   skipped when off). Without it in the scope key, a session that toggles
     ///   on↔off mid-session would keep hitting the stale cached content,
     ///   because cache hits only check identity + TTL, never content.
+    /// - `winstr:<on|off>` — the `workspace_instruction_files` master switch
+    ///   changes the rendered User Context content (project AGENTS.md / CLAUDE.md
+    ///   skipped when off). Same staleness concern as `extsrc`.
     /// - `|instr:<digest>` (TOKEN-03): the digest of the workspace instruction
     ///   files (workspace-level `AGENTS.md`/`CLAUDE.md` and user-level external
     ///   sources when enabled). Appended AFTER the stable prefix so unchanged
@@ -1514,6 +1517,12 @@ impl ExecutionEngine {
         scope_key = format!(
             "{scope_key}|extsrc:{}",
             if external_sources { "on" } else { "off" }
+        );
+        let workspace_instruction_files =
+            crate::service::config::workspace_instruction_files_enabled();
+        scope_key = format!(
+            "{scope_key}|winstr:{}",
+            if workspace_instruction_files { "on" } else { "off" }
         );
         if let Some(workspace_root) = workspace_root {
             let digest = workspace_instruction_digest(&workspace_root, external_sources).await;
@@ -1693,26 +1702,30 @@ async fn workspace_instruction_digest(workspace_root: &std::path::Path, external
 
     let mut digest_input = String::new();
 
-    // Workspace-level instruction files (startup-context, no path patterns).
-    match bitfun_services_core::workspace_instructions::read_workspace_instruction_files(
-        workspace_root,
-    )
-    .await
-    {
-        Ok(files) => {
-            for file in files {
-                digest_input.push_str(&file.name);
-                digest_input.push('\0');
-                digest_input.push_str(&file.content);
-                digest_input.push('\0');
+    // Workspace-level instruction files (startup-context, no path patterns) —
+    // only when the workspace instruction files master switch is on, mirroring
+    // the render path in service::instruction_context.
+    if crate::service::config::workspace_instruction_files_enabled() {
+        match bitfun_services_core::workspace_instructions::read_workspace_instruction_files(
+            workspace_root,
+        )
+        .await
+        {
+            Ok(files) => {
+                for file in files {
+                    digest_input.push_str(&file.name);
+                    digest_input.push('\0');
+                    digest_input.push_str(&file.content);
+                    digest_input.push('\0');
+                }
             }
-        }
-        Err(error) => {
-            log::warn!(
-                "workspace_instruction_digest: failed to read workspace instruction files: {}",
-                error
-            );
-            return "unreadable".to_string();
+            Err(error) => {
+                log::warn!(
+                    "workspace_instruction_digest: failed to read workspace instruction files: {}",
+                    error
+                );
+                return "unreadable".to_string();
+            }
         }
     }
 
@@ -1899,14 +1912,14 @@ impl ExecutionEngine {
         scaffold.prepended_prompt_reminders.runtime_facts = Some(refreshed);
     }
 
-    /// P-18：按回合级 User Context 注入规则构建本轮动态后置提醒。
+    /// P-18：按会话级 User Context 注入规则构建本轮动态后置提醒。
     /// - Runtime Facts：沿用 scaffold（refresh_runtime_facts_for_round 已按回合标记
     ///   置空或刷新：用户首轮/恢复后首轮 = Some，工具轮 = None）。
-    /// - User Context：每个用户消息回合（turn）首轮注入一次。turn 开始时
-    ///   execute_dialog_turn_impl 清除注入标记（clear_user_context_injected_generation），
-    ///   因此本函数在 round 0 观察到 None != 当前世代 → 注入并记录；
-    ///   同回合工具轮（round >= 1）注入世代 == 当前世代 → 不重复注入；
-    ///   压缩/上下文恢复使缓存世代递增时，恢复后首轮同样重新注入。
+    /// - User Context：整个会话生命周期只注入一次（新建会话首次用户输入注入）。
+    ///   注入世代 == 当前世代 → 已注入过，后续所有回合（含后续用户回合与工具轮）
+    ///   均不重复注入；上下文压缩/恢复使缓存世代递增 → 恢复后首轮重新注入一次。
+    ///   原实现（每回合首轮注入）在 execute_dialog_turn_impl 每次 turn 开始清除
+    ///   注入标记，导致同一会话每个用户回合都重复注入工作区指令全文。
     async fn round_dynamic_reminders<'a>(
         &self,
         session_id: &str,
@@ -2119,7 +2132,7 @@ impl ExecutionEngine {
         )
         .await?;
         final_ai_messages.push(AIMessage::user(render_system_reminder(input.reminder_text)));
-        final_ai_messages.push(AIMessage::user(Self::FINALIZE_USER_FOLLOWUP.to_string()));
+        final_ai_messages.push(AIMessage::user(render_system_reminder(Self::FINALIZE_USER_FOLLOWUP)));
 
         let model_exchange_trace_dir = self
             .session_manager
@@ -3720,14 +3733,13 @@ impl ExecutionEngine {
             dialog_turn_id
         );
 
-        // P-18：每个用户消息回合（turn）开始清除 User Context 注入标记，
-        // 使本回合首轮（round 0）重新注入 User Context；同回合工具轮
-        // （round >= 1）仍由 round_dynamic_reminders 的注入世代抑制，不重复注入。
-        // 这修复了"会话级一次注入"导致第 2+ turn / 工具轮后模型看不到
-        // workspace root、相关路径、项目布局、记忆摘要等关键上下文的回归。
-        self.session_manager
-            .clear_user_context_injected_generation(&context.session_id)
-            .await;
+        // P-18（每会话一次语义）：User Context 注入标记在整个会话生命周期内
+        // 只清除一次——首次执行时注入一次，之后所有用户回合都不再重新注入。
+        // round_dynamic_reminders 通过 user_context_injected_generation 与
+        // user_context_cache_generation 比较：已注入过（标记 == 当前世代）→
+        // 不再注入；上下文压缩/恢复使缓存世代递增 → 恢复后首轮重新注入一次。
+        // 原实现（每回合首轮注入）在 turn 开始时清除标记，导致同一会话每个
+        // 用户回合都重复注入工作区指令全文；现改为会话级一次注入。
 
         // Things that remain constant in a dialog turn: 1.agent, 2.system prompt, 3.tools, 4.ai client
         // 1. Get current agent
@@ -5615,6 +5627,7 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::workspace::{local_workspace_services, WorkspaceBinding};
     use crate::infrastructure::PathManager;
+    use crate::instruction_sources::test_support::InstructionSwitches;
     #[cfg(feature = "external-sources")]
     use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
     use crate::service::config::types::AIConfig;
@@ -5816,6 +5829,8 @@ mod tests {
 
     #[tokio::test]
     async fn workspace_instruction_read_failure_is_not_cacheable_and_can_recover() {
+        // Guard restores the previous switch values on drop.
+        let _switches = InstructionSwitches::set(Some(true), None);
         let fs = InstructionWorkspaceFs::recovering();
         let (workspace, workspace_services) = workspace_with_fs(Arc::new(fs));
         let prompt_context = PromptBuilderContext::new(
@@ -5869,26 +5884,25 @@ mod tests {
         let base = crate::agentic::session::UserContextCacheIdentity::new(
             "workspace_context|workspace_instructions",
         );
-
-        crate::service::config::set_external_instruction_sources_enabled(true);
+        // Start ON; the explicit mid-test flip to OFF is asserted below, and
+        // the guard restores the previous value on drop.
+        let _switches = InstructionSwitches::set(None, Some(true));
         let on = ExecutionEngine::user_context_cache_identity_for(base.clone(), None, None).await;
         crate::service::config::set_external_instruction_sources_enabled(false);
         let off = ExecutionEngine::user_context_cache_identity_for(base.clone(), None, None).await;
 
         assert_eq!(
             on.scope_key,
-            "workspace_context|workspace_instructions|extsrc:on"
+            "workspace_context|workspace_instructions|extsrc:on|winstr:off"
         );
         assert_eq!(
             off.scope_key,
-            "workspace_context|workspace_instructions|extsrc:off"
+            "workspace_context|workspace_instructions|extsrc:off|winstr:off"
         );
         assert_ne!(
             on.scope_key, off.scope_key,
             "switch toggle must change the user context cache identity"
         );
-
-        crate::service::config::set_external_instruction_sources_enabled(true);
     }
 
     #[cfg(feature = "external-sources")]
@@ -5901,15 +5915,13 @@ mod tests {
         let base = crate::agentic::session::UserContextCacheIdentity::new(
             "workspace_instructions",
         );
-
-        crate::service::config::set_external_instruction_sources_enabled(true);
+        // Guard restores the previous switch values on drop.
+        let _switches = InstructionSwitches::set(None, Some(true));
         let identity = ExecutionEngine::user_context_cache_identity_for(base, Some("ssh-host/22"), None).await;
         assert_eq!(
             identity.scope_key,
-            "workspace_instructions|remote:ssh-host/22|extsrc:on"
+            "workspace_instructions|remote:ssh-host/22|extsrc:on|winstr:off"
         );
-
-        crate::service::config::set_external_instruction_sources_enabled(true);
     }
 
     #[cfg(feature = "external-sources")]
@@ -5921,6 +5933,9 @@ mod tests {
         // miss that entry (it queries `|extsrc:off`) and rebuild, instead of
         // serving the stale ON content.
         let _environment = lock_environment();
+        // Start ON; the explicit mid-test flip to OFF is asserted below, and
+        // the guard restores the previous value on drop.
+        let _switches = InstructionSwitches::set(None, Some(true));
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_path = temp.path().join("workspace");
         std::fs::create_dir_all(&workspace_path).expect("workspace directory");
@@ -5993,8 +6008,6 @@ mod tests {
             None,
             "switch toggle must not hit the stale ON content"
         );
-
-        crate::service::config::set_external_instruction_sources_enabled(true);
     }
 
     #[cfg(feature = "external-sources")]
@@ -6002,6 +6015,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn local_workspace_services_still_include_local_user_instruction_sources() {
         let _environment = lock_environment();
+        // Enable both instruction master switches; guard restores on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_root = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -6048,6 +6063,8 @@ mod tests {
     #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn local_workspace_services_remain_the_project_instruction_io_owner() {
         let _environment = lock_environment();
+        // Enable both instruction master switches; guard restores on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_root = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -6738,12 +6755,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn round_dynamic_reminders_injects_user_context_each_turn_first_round() {
-        // P-18: User Context is injected on the first round of every user turn
-        // (round 0), skipped on same-turn tool rounds (round >= 1), and
-        // re-injected on the first round of the next turn after the turn-start
-        // marker reset. Context compaction bumps the cache generation and also
-        // re-injects on the recovery round.
+    async fn round_dynamic_reminders_injects_user_context_once_per_session() {
+        // P-18（每会话一次语义）：User Context 在新会话首轮注入一次，同一会话
+        // 的后续用户回合与工具轮均不再重复注入；上下文压缩使缓存世代递增 →
+        // 恢复后首轮重新注入一次。
         let temp = tempfile::tempdir().expect("tempdir");
         let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
         let session_manager = Arc::new(SessionManager::new(
@@ -6779,7 +6794,7 @@ mod tests {
             ExecutionEngineConfig::default(),
         );
 
-        let session_id = "p18-round-session";
+        let session_id = "p18-session-scoped-session";
         let reminders = PrependedPromptReminders {
             runtime_facts: Some("[Runtime Facts] 当前上下文占比: 35%".to_string()),
             user_context: Some("[User Context] workspace instructions".to_string()),
@@ -6829,17 +6844,16 @@ mod tests {
         );
         assert!(!turn1_tool_round.iter().any(|r| r.contains("[User Context]")));
 
-        // Turn 2: the engine resets the injected marker at turn start, so the
-        // first round of the next user turn sees user context again
-        // (multi-turn visibility regression guard).
-        session_manager
-            .clear_user_context_injected_generation(session_id)
-            .await;
+        // Turn 2: session-scoped semantics — no turn-start marker reset, so the
+        // first round of the next user turn must NOT re-inject user context.
         let turn2_first = engine
             .round_dynamic_reminders(session_id, &reminders)
             .await;
         assert!(turn2_first.iter().any(|r| r.contains("[Runtime Facts]")));
-        assert!(turn2_first.iter().any(|r| r.contains("[User Context]")));
+        assert!(
+            !turn2_first.iter().any(|r| r.contains("[User Context]")),
+            "session-scoped injection: second user turn must not re-inject user context"
+        );
 
         // Context compaction bumps the generation: first round re-injects even
         // without an explicit marker reset.
@@ -7143,6 +7157,24 @@ mod tests {
         );
         assert!(!messages[0].is_actual_user_message());
         assert!(!messages[1].is_actual_user_message());
+
+        // Both finalize anchor messages must carry the system-reminder markup so
+        // downstream CLI statistics can tell them apart from real user prompts.
+        assert!(message_text(&messages[0])
+            .is_some_and(crate::agentic::core::is_system_reminder_only));
+        assert!(message_text(&messages[1])
+            .is_some_and(crate::agentic::core::is_system_reminder_only));
+    }
+
+    #[test]
+    fn finalize_followup_reminder_keeps_system_reminder_markup_in_request_body() {
+        // The FINALIZE_USER_FOLLOWUP text is an internal injection sent as a
+        // role=user message. It must stay wrapped in <system_reminder> so CLI
+        // usage statistics do not count it as a user prompt.
+        assert!(crate::agentic::core::is_system_reminder_only(&format!(
+            "<system_reminder>{}</system_reminder>",
+            ExecutionEngine::FINALIZE_USER_FOLLOWUP
+        )));
     }
 
     #[test]

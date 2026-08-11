@@ -378,7 +378,14 @@ fn build_user_steering_interrupted_result(
             effective_tool_name: persisted_effective_tool_name,
             result: presentation.result_json,
             result_for_assistant: Some(presentation.result_for_assistant),
-            is_error: true,
+            // Skipped-by-steering is not a failure: the tool never executed, so
+            // marking it `is_error: true` would push a fake failure to the model
+            // (provider converters translate it into `tool_result.is_error` /
+            // `[TOOL ERROR]`), causing retry / detour waste on an action that
+            // merely yielded to a user steering message. The `status: "skipped"`
+            // + `category: "user_steering_interrupted"` payload already tells the
+            // model the tool did not run.
+            is_error: false,
             duration_ms: Some(execution_time_ms),
             image_attachments: None,
         },
@@ -4944,10 +4951,17 @@ mod tests {
 
         assert_eq!(result.tool_id, "tool_1");
         assert_eq!(result.tool_name, "Read");
-        assert!(result.result.is_error);
+        // Skipped-by-steering must not surface as a tool failure: the tool
+        // never ran, and `is_error: true` would make the model retry / detour
+        // around a fake error (see build_user_steering_interrupted_result).
+        assert!(!result.result.is_error);
         assert_eq!(
             result.result.result["category"],
             serde_json::Value::String("user_steering_interrupted".to_string())
+        );
+        assert_eq!(
+            result.result.result["status"],
+            serde_json::Value::String("skipped".to_string())
         );
         assert_eq!(
             result.result.result_for_assistant.as_deref(),
@@ -5169,6 +5183,9 @@ mod tests {
             results[1].result.result["category"],
             json!("user_steering_interrupted")
         );
+        // Skipped tools must not surface as failures (no retry / detour bait).
+        assert!(!results[0].result.is_error);
+        assert!(!results[1].result.is_error);
     }
 
     #[tokio::test]

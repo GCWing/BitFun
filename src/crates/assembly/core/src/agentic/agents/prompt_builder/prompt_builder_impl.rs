@@ -393,8 +393,13 @@ impl PromptBuilder {
 
         if policy.includes(UserContextSection::WorkspaceInstructions) {
             if let Some(prompt) = &self.context.workspace_instruction_files_context {
+                // Port-resolved / pre-resolved context: the workspace
+                // instruction files master switch gate ran upstream at the
+                // instruction read point (service::instruction_context), so an
+                // already-resolved context renders as-is.
                 additional_sections.push(prompt.clone());
-            } else if !self.context.workspace_instruction_files_context_resolved
+            } else if crate::service::config::workspace_instruction_files_enabled()
+                && !self.context.workspace_instruction_files_context_resolved
                 && self.context.remote_execution.is_none()
             {
                 let workspace = Path::new(&self.context.workspace_path);

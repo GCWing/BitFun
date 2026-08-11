@@ -125,6 +125,9 @@ impl ConfigService {
         // Keep the cached external user instruction sources switch in sync: it
         // may be toggled via `ai.external_instruction_sources`.
         super::global::refresh_external_instruction_sources_enabled_cache().await;
+        // Keep the cached workspace instruction files switch in sync: it may be
+        // toggled via `ai.workspace_instruction_files`.
+        super::global::refresh_workspace_instruction_files_enabled_cache().await;
 
         Ok(())
     }
@@ -192,6 +195,8 @@ impl ConfigService {
         super::global::refresh_rbac_enabled_cache().await;
         // Keep the cached external user instruction sources switch in sync.
         super::global::refresh_external_instruction_sources_enabled_cache().await;
+        // Keep the cached workspace instruction files switch in sync.
+        super::global::refresh_workspace_instruction_files_enabled_cache().await;
 
         Ok(())
     }
@@ -255,6 +260,8 @@ impl ConfigService {
                 super::global::refresh_rbac_enabled_cache().await;
                 // Keep the cached external user instruction sources switch in sync.
                 super::global::refresh_external_instruction_sources_enabled_cache().await;
+                // Keep the cached workspace instruction files switch in sync.
+                super::global::refresh_workspace_instruction_files_enabled_cache().await;
                 Ok(ConfigImportResult {
                     success: true,
                     errors: Vec::new(),

@@ -3158,14 +3158,16 @@ impl SessionManager {
         stored
     }
 
-    /// P-18：读取该 session 最近一次实际注入 User Context 时的缓存世代。
-    /// None = 从未注入（新对话首轮应注入）。
+    /// P-18（每会话一次）：读取该 session 最近一次实际注入 User Context 时的缓存世代。
+    /// None = 从未注入（新对话首轮应注入；注入后整个会话生命周期不再注入，
+    /// 直到缓存世代因上下文压缩/恢复而递增）。
     pub async fn user_context_injected_generation(&self, session_id: &str) -> Option<u64> {
         self.ensure_prompt_cache_loaded(session_id).await;
         self.prompt_cache_store.user_context_injected_generation(session_id)
     }
 
-    /// P-18：记录该 session 已在指定缓存世代实际注入过 User Context（会话级一次）。
+    /// P-18（每会话一次）：记录该 session 已在指定缓存世代实际注入过 User Context
+    /// （会话级一次：注入后同世代所有后续回合均不再注入）。
     pub async fn remember_user_context_injected_generation(
         &self,
         session_id: &str,
@@ -3176,9 +3178,9 @@ impl SessionManager {
             .remember_user_context_injected_generation(session_id, generation);
     }
 
-    /// P-18：清除该 session 的 User Context 注入标记（回到"从未注入"态）。
-    /// 每个用户消息回合（turn）开始时调用，使该回合首轮重新注入 User Context；
-    /// 同回合工具轮仍由 remember_user_context_injected_generation 抑制。
+    /// P-18（每会话一次）：清除该 session 的 User Context 注入标记（回到"从未
+    /// 注入"态）。会话级语义下仅在会话创建/恢复时调用；原回合级语义在每个用户
+    /// 消息回合（turn）开始时调用，已移除——保留此方法供测试与显式重置使用。
     pub async fn clear_user_context_injected_generation(&self, session_id: &str) {
         self.ensure_prompt_cache_loaded(session_id).await;
         self.prompt_cache_store

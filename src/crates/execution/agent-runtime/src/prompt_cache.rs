@@ -233,7 +233,7 @@ pub struct SessionPromptCacheStore {
     session_caches: Arc<DashMap<String, SessionPromptCache>>,
     user_context_generations: Arc<DashMap<String, u64>>,
     /// P-18：记录每个 session 最近一次实际注入 User Context 时的缓存世代，
-    /// 用于会话级一次注入（新对话/压缩后注入 1 次，同世代后续轮不注入）。
+    /// 用于会话级一次注入（新对话/压缩后注入 1 次，同世代所有后续回合不注入）。
     /// 与 user_context_generations 同生命周期（仅内存态，session 删除即清除）。
     user_context_injected_generations: Arc<DashMap<String, u64>>,
 }
@@ -391,23 +391,23 @@ impl SessionPromptCacheStore {
         true
     }
 
-    /// P-18：读取该 session 最近一次实际注入 User Context 时的缓存世代。
-    /// None = 该 turn 尚未注入（每 turn 首轮应注入）。
+    /// P-18（每会话一次）：读取该 session 最近一次实际注入 User Context 时的缓存世代。
+    /// None = 该会话尚未注入（新对话首轮应注入）。
     pub fn user_context_injected_generation(&self, session_id: &str) -> Option<u64> {
         self.user_context_injected_generations
             .get(session_id)
             .map(|generation| *generation)
     }
 
-    /// P-18：记录该 session 已在指定缓存世代实际注入过 User Context。
+    /// P-18（每会话一次）：记录该 session 已在指定缓存世代实际注入过 User Context。
     pub fn remember_user_context_injected_generation(&self, session_id: &str, generation: u64) {
         self.user_context_injected_generations
             .insert(session_id.to_string(), generation);
     }
 
-    /// P-18：清除该 session 的 User Context 注入标记（回到"从未注入"态）。
-    /// 每个用户消息回合（turn）开始时调用，使该回合首轮重新注入 User Context；
-    /// 同回合工具轮仍被 remember_user_context_injected_generation 抑制，不重复注入。
+    /// P-18（每会话一次）：清除该 session 的 User Context 注入标记（回到"从未
+    /// 注入"态）。会话级语义下仅在会话创建/恢复时调用；原回合级语义在每个用户
+    /// 消息回合（turn）开始时调用，已移除——保留此方法供测试与显式重置使用。
     pub fn clear_user_context_injected_generation(&self, session_id: &str) {
         self.user_context_injected_generations.remove(session_id);
     }

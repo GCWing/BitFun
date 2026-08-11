@@ -841,11 +841,29 @@ pub struct AIConfig {
     ///
     /// When `false`, the runtime does not read any external instruction file:
     /// workspace instruction files (`AGENTS.md` inside the project, project
-    /// `.claude/rules`) are unaffected. Defaults to `true` (load), preserving
-    /// the historical behavior. Users can turn it off in the settings document
-    /// under `ai.external_instruction_sources`.
-    #[serde(default = "default_true")]
+    /// `.claude/rules`) are unaffected.
+    ///
+    /// taiji 定制版默认 `false`（关闭）：外部用户指令文件注入是上下文膨胀
+    /// 与隐私外泄风险源，且与其他外部来源开关（external-sources.json 集成
+    /// 策略）语义独立——「用户未显式开启」即不注入，避免主人关闭操作不生效。
+    /// 用户可在设置文档 `ai.external_instruction_sources` 显式打开。
+    #[serde(default)]
     pub external_instruction_sources: bool,
+
+    /// Master switch for loading workspace instruction files (project-level
+    /// `AGENTS.md` / `AGENTS.override.md` / `CLAUDE.md` / `.claude/CLAUDE.md` /
+    /// `CLAUDE.local.md` / opencode config references) into the User Context.
+    ///
+    /// When `false`, the runtime does not render any workspace instruction
+    /// file content into the User Context. This is independent of
+    /// `external_instruction_sources` (which controls user-level
+    /// `~/.claude/CLAUDE.md` / OpenCode / Codex files).
+    ///
+    /// taiji 定制版默认 `false`（关闭）：工作区指令文件注入是上下文膨胀
+    /// 主源（项目内 AGENTS.md 全文常达数 KB），默认不注入，用户可在设置
+    /// 文档 `ai.workspace_instruction_files` 显式打开。
+    #[serde(default)]
+    pub workspace_instruction_files: bool,
 
     /// Root directory of the knowledge base used by the KnowledgeBaseSearch
     /// tool. When set, the desktop host injects it into the
@@ -2834,7 +2852,8 @@ impl Default for AIConfig {
             browser_control_auto_connect_on_startup: false,
             max_rounds: default_max_rounds(),
             rbac_enabled: true,
-            external_instruction_sources: true,
+            external_instruction_sources: false,
+            workspace_instruction_files: false,
             knowledge_base_root: String::new(),
             legion_max_nodes: default_legion_max_nodes(),
             legion_max_total_nodes: default_legion_max_total_nodes(),

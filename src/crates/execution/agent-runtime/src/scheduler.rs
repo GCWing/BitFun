@@ -1343,6 +1343,63 @@ mod tests {
     }
 
     #[test]
+    fn subagent_steering_is_drained_only_by_its_own_session_and_turn() {
+        // 防回退：子代理 ExecutionContext.round_injection 启用后，引擎会以
+        // 子代理自身的 (session_id, turn_id) 调 take_pending → drain_for_turn。
+        // ExactTurn 定向 + session_id 键隔离保证：子代理只消费指向自己的
+        // steering，父会话条目永不误吞（coordinator.rs 子代理上下文
+        // round_injection 原为 None 导致 steering 永不消费的回归防线）。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let mut steering = injection(RoundInjectionKind::UserSteering, "steer the subagent");
+        steering.id = "subagent-steer-1".to_string();
+        steering.target = RoundInjectionTarget::ExactTurn("subagent-turn".to_string());
+        buffer.push("subagent-session", steering);
+
+        // 父会话有一条指向父会话 turn 的 steering，不得被子代理消费。
+        let mut parent_steering = injection(RoundInjectionKind::UserSteering, "steer the parent");
+        parent_steering.id = "parent-steer-1".to_string();
+        parent_steering.target = RoundInjectionTarget::ExactTurn("parent-turn".to_string());
+        buffer.push("parent-session", parent_steering);
+
+        // 子代理消费自己 session 的 ExactTurn 条目。
+        let subagent_pending = buffer.drain_for_turn("subagent-session", "subagent-turn");
+        assert_eq!(subagent_pending.len(), 1);
+        assert_eq!(subagent_pending[0].id, "subagent-steer-1");
+
+        // 父会话条目仍然保留（未被误吞），父会话可正常消费。
+        assert_eq!(
+            buffer.pending_count("parent-session"),
+            1,
+            "parent session steering must survive the subagent drain"
+        );
+        let parent_pending = buffer.drain_for_turn("parent-session", "parent-turn");
+        assert_eq!(parent_pending.len(), 1);
+        assert_eq!(parent_pending[0].id, "parent-steer-1");
+    }
+
+    #[test]
+    fn subagent_drain_does_not_consume_parent_turn_steering_for_same_session_key() {
+        // 防回退：即便父子共用一个 session_id 键（理论上不存在，子代理会话
+        // 拥有独立 session_id），ExactTurn 定向仍保证子代理 turn 不消费指向
+        // 父 turn 的条目——drain_for_turn 对不匹配的 ExactTurn 条目保留。
+        let buffer = SessionRoundInjectionBuffer::default();
+        let mut parent_steering = injection(RoundInjectionKind::UserSteering, "parent turn msg");
+        parent_steering.id = "parent-steer-1".to_string();
+        parent_steering.target = RoundInjectionTarget::ExactTurn("parent-turn".to_string());
+        buffer.push("shared-session", parent_steering);
+
+        let drained = buffer.drain_for_turn("shared-session", "subagent-turn");
+        assert!(
+            drained.is_empty(),
+            "steering targeting a different (parent) turn must be retained"
+        );
+        assert_eq!(buffer.pending_count("shared-session"), 1);
+        let parent_pending = buffer.drain_for_turn("shared-session", "parent-turn");
+        assert_eq!(parent_pending.len(), 1);
+        assert_eq!(parent_pending[0].id, "parent-steer-1");
+    }
+
+    #[test]
     fn injection_buffer_keeps_background_result_notification_after_window() {
         let buffer = SessionRoundInjectionBuffer::default();
         // 后台通知 = 必要功能：5s 窗口之外的同类通知是新的真实事件，必须保留。
