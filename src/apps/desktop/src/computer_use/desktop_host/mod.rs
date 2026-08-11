@@ -169,15 +169,17 @@ mod macos_applescript_tests {
     /// Every AppleScript this module generates now has to compile.
     #[test]
     fn every_generated_applescript_compiles() {
-        let templates = [
-            format!("id of application {}", applescript_quote("Safari")),
-            format!(
-                "tell application {} to activate",
-                applescript_quote("Safari")
-            ),
-        ];
-        for t in templates {
-            assert!(compiles(&t).is_ok(), "template failed to compile: {t}");
+        // Includes the names that exercise `applescript_quote`: a quote, a
+        // backslash and CJK. Asserting the *escaped* form compiles is what
+        // proves the escaping is genuine AppleScript rather than a plausible
+        // guess about its string-literal syntax.
+        for name in ["Safari", "a\"b", "a\\b", "飞书", "Visual Studio Code"] {
+            for t in [
+                format!("id of application {}", applescript_quote(name)),
+                format!("tell application {} to activate", applescript_quote(name)),
+            ] {
+                assert!(compiles(&t).is_ok(), "template failed to compile: {t}");
+            }
         }
     }
 
