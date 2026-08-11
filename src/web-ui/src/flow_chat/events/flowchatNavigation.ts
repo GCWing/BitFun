@@ -17,6 +17,20 @@ export interface FlowChatFocusItemRequest {
 }
 
 /**
+ * A message has been submitted to a Session from the composer.
+ *
+ * The transcript may be showing a history window the reader navigated to, and
+ * the Turn they just sent is not in it. Session growth alone cannot ask for
+ * that window to be given up — a Turn arriving from anywhere else must leave a
+ * reader where they are — so the submission says so itself.
+ */
+export const FLOWCHAT_MESSAGE_SUBMITTED_EVENT = 'flowchat:message-submitted';
+
+export interface FlowChatMessageSubmittedRequest {
+  sessionId: string;
+}
+
+/**
  * Event for scrolling from the review action bar to a specific remediation
  * item in the CodeReviewToolCard report.
  */

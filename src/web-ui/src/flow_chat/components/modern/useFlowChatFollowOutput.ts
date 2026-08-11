@@ -66,6 +66,15 @@ interface UseFlowChatFollowOutputResult {
   handleViewportResize: (input: ViewportResizeInput) => void;
   /** Offset the follow rule owns, or `null` when it does not own the viewport. */
   getFollowTargetScrollTop: () => number | null;
+  /**
+   * A snap back out of the reserved blank is animating right now.
+   *
+   * Ownership of the viewport passes to follow-output only once it lands, so
+   * without this the animation belongs to nobody for its whole duration and
+   * anything correcting the viewport will treat its movement as a displacement
+   * to undo.
+   */
+  isSnapBackInFlight: () => boolean;
 }
 
 const BOTTOM_EPSILON_PX = 2;
@@ -129,6 +138,16 @@ export function useFlowChatFollowOutput({
   const pinTurnIdRef = useRef<string | null>(null);
   const pinScrollTopRef = useRef<number | null>(null);
   const pinAttemptsRef = useRef(0);
+  /**
+   * A Turn that arrived while it was not in the transcript on screen.
+   *
+   * Submitting from inside a history window is the case: the session gains the
+   * Turn a beat before the presentation is restored to the live tail, so the
+   * one moment the arrival is *detectable* is not a moment it can be answered.
+   * The answer is deferred rather than dropped — kept until the Turn can
+   * actually be aligned, which is what the reader is waiting to see.
+   */
+  const pendingNewTurnIdRef = useRef<string | null>(null);
   const settleFramesRef = useRef(0);
   const smoothScrollFramesRef = useRef(0);
   const pendingSnapBackTargetRef = useRef<number | null>(null);
@@ -324,6 +343,27 @@ export function useFlowChatFollowOutput({
     if (!isViewportActiveRef.current) {
       return;
     }
+
+    /*
+     * A newly submitted Turn opens at the viewport top, and that is the whole
+     * of the answer to one arriving. Until it is in the transcript on screen
+     * there is nothing to align, and the fallback below — the end of real
+     * content — is not a stand-in for it: it would leave the Turn unpinned
+     * where the reader was, or pull them out of a history window entirely.
+     *
+     * So the answer waits for the Turn instead. Resolved before ownership
+     * changes hands, because waiting has to leave the viewport exactly as it
+     * was found.
+     */
+    const pinTurnId = reason === 'new-turn' ? latestTurnIdRef.current : null;
+    const pinnedTurnToTop = pinTurnId !== null && scrollTurnToTop(pinTurnId);
+    if (reason === 'new-turn') {
+      pendingNewTurnIdRef.current = pinnedTurnToTop ? null : pinTurnId;
+      if (!pinnedTurnToTop) {
+        return;
+      }
+    }
+
     isFollowingOutputRef.current = true;
     setIsFollowingOutput(true);
     settleFramesRef.current = SETTLE_FRAMES;
@@ -372,10 +412,8 @@ export function useFlowChatFollowOutput({
       return;
     }
 
-    // A newly submitted Turn opens at the viewport top; every other entry
-    // reason resumes at the end of real content.
-    const pinTurnId = reason === 'new-turn' ? latestTurnIdRef.current : null;
-    if (pinTurnId && scrollTurnToTop(pinTurnId)) {
+    // Every other entry reason resumes at the end of real content.
+    if (pinnedTurnToTop) {
       pinTurnIdRef.current = pinTurnId;
       pinScrollTopRef.current = null;
       pinAttemptsRef.current = 0;
@@ -485,9 +523,10 @@ export function useFlowChatFollowOutput({
       return;
     }
 
+    const followTarget = resolveFollowTargetScrollTop(scroller);
     const snapTo = tailSnapBackScrollTop({
       scrollTop: scroller.scrollTop,
-      followTargetScrollTop: resolveFollowTargetScrollTop(scroller),
+      followTargetScrollTop: followTarget,
       thresholdPx: FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
     });
     if (snapTo === null) {
@@ -505,6 +544,10 @@ export function useFlowChatFollowOutput({
 
   const getFollowTargetScrollTop = useCallback(() => (
     isFollowingOutputRef.current ? followStateRef.current.target : null
+  ), []);
+
+  const isSnapBackInFlight = useCallback(() => (
+    pendingSnapBackTargetRef.current !== null
   ), []);
 
   /**
@@ -586,6 +629,8 @@ export function useFlowChatFollowOutput({
       previousLatestTurnIdRef.current = latestTurnId;
       exitFollowOutput('session-changed');
       retirePin();
+      // A Turn waiting to be shown belongs to the session that gained it.
+      pendingNewTurnIdRef.current = null;
       if (virtualItemCount > 0) {
         enterFollowOutput(isStreaming ? 'streaming-resumed' : 'session-open');
       }
@@ -594,7 +639,20 @@ export function useFlowChatFollowOutput({
 
     const isNewTurn = Boolean(latestTurnId && latestTurnId !== previousLatestTurnIdRef.current);
     previousLatestTurnIdRef.current = latestTurnId;
-    if (isNewTurn && virtualItemCount > 0) {
+    if (virtualItemCount === 0) {
+      return;
+    }
+    if (isNewTurn) {
+      enterFollowOutput('new-turn');
+      return;
+    }
+    /*
+     * The transcript changed without a new Turn, which is the moment a deferred
+     * one can become alignable — the presentation being restored to the live
+     * tail is exactly that. A retry that still cannot align it leaves the
+     * viewport alone and stays pending.
+     */
+    if (pendingNewTurnIdRef.current === latestTurnId && latestTurnId !== null) {
       enterFollowOutput('new-turn');
     }
   }, [
@@ -662,5 +720,6 @@ export function useFlowChatFollowOutput({
     handleScrollSettled,
     handleViewportResize,
     getFollowTargetScrollTop,
+    isSnapBackInFlight,
   };
 }

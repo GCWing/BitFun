@@ -323,7 +323,22 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const activeSession = useActiveSession();
   const activeSessionState = useActiveSessionState();
   const activeSessionId = activeSession?.sessionId ?? null;
-  const latestTurnId = virtualItems.at(-1)?.turnId ?? null;
+  /**
+   * The newest Turn the session has, which is what "a new Turn" means.
+   *
+   * Deliberately a fact about the ledger and not about the projection.
+   * `virtualItems.at(-1)` answers where the presentation currently *ends*, and
+   * a history window re-cut moves that to a Turn which has existed for hours:
+   * measured, navigating to Turn 2 landed correctly and was then overwritten
+   * twice, because each window loaded on the way ended somewhere new and each
+   * of those read as a submission, pinning the window's last Turn to the top.
+   *
+   * Whether the Turn can be *acted on* is a second question, and it belongs
+   * with the response rather than the identity — qualifying the identity by
+   * visibility instead makes a Turn that merely came into view look new, which
+   * is the same bug wearing the opposite sign.
+   */
+  const latestTurnId = activeSession?.dialogTurns.at(-1)?.id ?? null;
   const scrollerElementRef = useRef<HTMLElement | null>(null);
   const headerElementRef = useRef<HTMLDivElement | null>(null);
   const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
@@ -498,6 +513,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     handleScrollSettled,
     handleViewportResize,
     getFollowTargetScrollTop,
+    isSnapBackInFlight,
   } = useFlowChatFollowOutput({
     activeSessionId: activeSessionId ?? undefined,
     latestTurnId,
@@ -515,9 +531,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const isFollowingOutputRef = useRef(isFollowingOutput);
   isFollowingOutputRef.current = isFollowingOutput;
 
+  /*
+   * A snap back counts, and it is the one that had to be measured to be
+   * believed. Ownership passes to follow-output only once the animation lands,
+   * so for its whole duration the viewport belongs to nobody and the anchor
+   * treats the animation's own movement as a displacement: the snap travelled
+   * 0.7px, the anchor wrote it back, the write cancelled the animation, the
+   * cancellation read as a gesture coming to rest, and the snap was issued
+   * again — 958 times over 20 seconds, arriving nowhere.
+   */
   const isViewportOwnedElsewhere = useCallback(() => (
-    isFollowingOutputRef.current || isOpeningViewport()
-  ), [isOpeningViewport]);
+    isFollowingOutputRef.current || isOpeningViewport() || isSnapBackInFlight()
+  ), [isOpeningViewport, isSnapBackInFlight]);
 
   const viewportAnchor = useFlowChatViewportAnchor({
     scrollerRef: scrollerElementRef,
@@ -573,7 +598,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const prependedPx = arrived.startPx - head.startPx;
     if (prependedPx <= 0) return;
     scroller.scrollTop += prependedPx;
-  }, [virtualItems, virtualizer]);
+  }, [presentationMode, virtualItems, virtualizer]);
 
   useLayoutEffect(() => {
     viewportAnchor.openSettleWindow();
@@ -749,7 +774,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     if (!scrollerElement) return;
 
     if ('onscrollend' in window) {
-      const handleScrollEnd = () => handleScrollSettled();
+      const handleScrollEnd = () => {
+        handleScrollSettled();
+      };
       scrollerElement.addEventListener('scrollend', handleScrollEnd, { passive: true });
       return () => scrollerElement.removeEventListener('scrollend', handleScrollEnd);
     }

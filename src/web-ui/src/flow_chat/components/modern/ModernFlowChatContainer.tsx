@@ -51,7 +51,11 @@ import type {
   SessionHistoryPresentation,
 } from '../../types/flow-chat';
 import type { SessionHistoryWindowDirection } from '../../store/FlowChatStore';
-import type { FlowChatFocusItemRequest } from '../../events/flowchatNavigation';
+import {
+  FLOWCHAT_MESSAGE_SUBMITTED_EVENT,
+  type FlowChatFocusItemRequest,
+  type FlowChatMessageSubmittedRequest,
+} from '../../events/flowchatNavigation';
 import {
   useBackgroundCommandActivityStore,
   visibleBackgroundCommandActivitiesForSession,
@@ -112,7 +116,6 @@ import {
 } from '../../utils/flowChatTurnIdentity';
 
 const log = createLogger('ModernFlowChatContainer');
-
 
 interface ModernFlowChatContainerProps {
   className?: string;
@@ -1489,6 +1492,45 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const jumpToLiveTail = useCallback(() => {
     return restoreTailPresentation({ followLatest: true });
   }, [restoreTailPresentation]);
+
+  /*
+   * A message sent from the composer gives up whatever history window is on
+   * screen.
+   *
+   * `resolveTailWindowGrowth` deliberately leaves a navigated window alone as
+   * the session grows, because a Turn arriving from elsewhere is no reason to
+   * take a reader out of the history they are in. A Turn they submitted
+   * themselves is, and nothing in the ledger tells the two apart — measured, a
+   * message sent while parked on the first Turn left the transcript on a
+   * 24-item window it was never in, with follow-output holding an answer it
+   * had nothing to align.
+   *
+   * Deliberately not `followLatest`. Restoring the tail is enough: the Turn
+   * comes into the transcript, and follow-output pins it to the viewport top
+   * the way it pins any newly submitted Turn.
+   */
+  useEffect(() => {
+    const handleMessageSubmitted = (event: Event) => {
+      const { sessionId } = (event as CustomEvent<FlowChatMessageSubmittedRequest>).detail ?? {};
+      const reaches = transcriptReachesLatestTurn({
+        windowEndOrdinalExclusive: renderedHistoryPresentation?.range.endOrdinalExclusive ?? null,
+        knownTurnCount: activeSessionKnownTurnCount,
+      });
+      if (!sessionId || sessionId !== activeSessionIdRef.current) return;
+      if (reaches) {
+        return;
+      }
+      restoreTailPresentation();
+    };
+    window.addEventListener(FLOWCHAT_MESSAGE_SUBMITTED_EVENT, handleMessageSubmitted);
+    return () => {
+      window.removeEventListener(FLOWCHAT_MESSAGE_SUBMITTED_EVENT, handleMessageSubmitted);
+    };
+  }, [
+    activeSessionKnownTurnCount,
+    renderedHistoryPresentation,
+    restoreTailPresentation,
+  ]);
 
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);

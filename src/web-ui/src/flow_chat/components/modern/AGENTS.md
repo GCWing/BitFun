@@ -50,6 +50,16 @@ Also follow the repository and Web UI instructions in the parent guides.
 - The virtualizer must not adjust the scroll for its own re-measurements. It
   replays a delta against a scroll position it learns about a frame late, and
   every continuous writer here assigns `scrollTop` directly.
+- Anything that moves the viewport deliberately must be registered in
+  `isViewportOwnedElsewhere` for as long as it is moving, including an animation
+  still in flight. The anchor judges by geometry and cannot tell our own
+  movement from a displacement to undo.
+- "A new Turn" is `activeSession.dialogTurns.at(-1)`, never the end of the
+  projection. Do not qualify that identity by whether the Turn is on screen —
+  that belongs to the response, which defers until the Turn can be aligned.
+- Giving up a navigated history window is the composer's call, announced through
+  `FLOWCHAT_MESSAGE_SUBMITTED_EVENT`. The ledger cannot tell a Turn the reader
+  sent from one that arrived from elsewhere, and only the first may move them.
 - The virtualizer never follows output. "At bottom" is measured against the end
   of real content, which sits above the tail spacer, so no alignment to the last
   item can express it.

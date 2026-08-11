@@ -264,6 +264,39 @@ Both were free under react-virtuoso: `firstItemIndex` moved the reported range
 with the prepend, so the local start index jumped by the number of items added
 and the rule stopped applying by itself.
 
+## A New Turn Is a Fact About the Session
+
+`latestTurnId` comes from `activeSession.dialogTurns`, never from
+`virtualItems.at(-1)`. The projection answers where the presentation currently
+*ends*, and a history window re-cut moves that to a Turn which has existed for
+hours: measured, navigating to Turn 2 landed correctly and was then overwritten
+twice, because each window loaded on the way ended somewhere new and each of
+those read as a submission, pinning the window's last Turn to the top.
+
+**Whether the Turn can be acted on is a second question, and it does not belong
+in the identity.** Qualifying `latestTurnId` by "and it is on screen" makes a
+Turn that merely came into view look new — the same bug with the opposite sign,
+and it is how navigating to Turn 29 ended on Turn 38.
+
+So the response carries it instead. A new Turn is answered by pinning it to the
+viewport top; until it is in the transcript on screen there is nothing to align,
+and the fallback — the end of real content — is not a stand-in, because it
+would leave the Turn unpinned or pull a reader out of a history window. The
+answer is therefore **deferred, not dropped**: held in `pendingNewTurnIdRef` and
+retried when the transcript next changes, which is exactly when the presentation
+is restored to the live tail.
+
+**Submitting is what gives up a navigated window.** `resolveTailWindowGrowth`
+leaves such a window alone as the session grows, and that is right — a Turn
+arriving from anywhere else must not take a reader out of the history they are
+in. Nothing in the ledger separates that from a Turn the reader sent themselves,
+so the composer says so directly: `useMessageSender` announces
+`FLOWCHAT_MESSAGE_SUBMITTED_EVENT`, and the container gives up the window only
+when the transcript does not already reach the latest Turn. Measured before it
+existed: a message sent while parked on the first Turn left the transcript on a
+24-item window it was never in, with follow-output holding an answer it had
+nothing to align.
+
 ## Snapping Back Out of the Reserved Blank
 
 The spacer is a full viewport the user can scroll into, and under slow streaming
@@ -632,6 +665,21 @@ The virtualizer never follows output. Continuous movement belongs to
 `VirtualMessageList`. Card renderers and tool cards must not write the outer
 FlowChat `scrollTop`.
 
+**Anything that moves the viewport deliberately has to be registered as an
+owner, for as long as it is moving.** `isViewportOwnedElsewhere` is that
+register, and the viewport anchor reads it before correcting — it judges by
+geometry alone and cannot tell our own movement from a displacement to undo.
+A snap back was missing from it: ownership passes to follow-output only when the
+animation lands, so for its whole duration the viewport belonged to nobody. The
+snap travelled 0.7px, the anchor wrote it back, the write cancelled the
+animation, the cancellation read as a gesture coming to rest, and the snap was
+issued again — **958 times over 20 seconds, arriving nowhere**.
+
+This register is pairwise, and every writer added to the transcript has to be
+declared in it by hand. That is the standing cost of having no single arbiter of
+`scrollTop`; see *Why There Is No Viewport Coordinator*, and weigh it against
+this section before adding the next writer.
+
 Local scroll surfaces inside a thinking, explore, terminal, or subagent card
 may manage their own scroll position. They must not dispatch an outer viewport
 compensation request.
@@ -755,6 +803,17 @@ confirm:
     going: every junction must behave the same way all the way to the first
     Turn, with no run of pages and no point where scrolling up stops doing
     anything.
+25. Wheel down into the reserved blank and stop. The transcript must return to
+    the content end in one smooth movement, not shudder in place.
+26. Navigate to a Turn from the Turn Rail — a near one, a far one, and one close
+    enough to the end that the window loaded for it reaches the newest Turn. All
+    three must come to rest on that Turn at the viewport top and stay there.
+27. Send a message from the live tail, and again while parked deep in history.
+    Both must end with the new Turn at the viewport top; the second also has to
+    leave the history window to get there.
+28. While reading a history window, let output arrive from somewhere else. The
+    viewport must not move — this is the case the submission event exists to
+    stay out of.
 
 ## Related Files
 
