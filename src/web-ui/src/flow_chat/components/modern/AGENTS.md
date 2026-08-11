@@ -38,7 +38,18 @@ Also follow the repository and Web UI instructions in the parent guides.
   Compute one only when the target is not an item.
 - Deciding *that* a history boundary is worth asking about belongs to
   `flowChatHistoryBoundary.ts` and reads only a visible item range. Deciding
-  whether the ask is honoured stays in the container.
+  whether the ask is honoured stays in the container, which declines while
+  follow-output owns the viewport and until the visible range has left that
+  boundary since the last page.
+- A *visible* item range is `getVisibleItemRange`, never the rendered rows. The
+  rendered window carries overscan and reports both ends present for any
+  transcript short enough to render whole.
+- A history prepend must be compensated for in `VirtualMessageList`, by the
+  height of the items that arrived above. Keying measurements on item identity
+  covers the measurements; it does not move the scroll offset.
+- The virtualizer must not adjust the scroll for its own re-measurements. It
+  replays a delta against a scroll position it learns about a frame late, and
+  every continuous writer here assigns `scrollTop` directly.
 - The virtualizer never follows output. "At bottom" is measured against the end
   of real content, which sits above the tail spacer, so no alignment to the last
   item can express it.

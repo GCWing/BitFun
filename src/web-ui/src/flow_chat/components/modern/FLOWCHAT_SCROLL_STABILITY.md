@@ -95,6 +95,36 @@ tolerable only because more output is about to fill it. Do not reuse it to
 absorb anything else — applied to a foreign forward move it parks the content
 end mid-viewport permanently, since nothing pulls the target back down.
 
+## Keeping the Viewport on the Reader's Content
+
+When history is prepended, the items arriving above the reader push their content
+down by their own height while `scrollTop` stays the number it was.
+`VirtualMessageList` adds that height back, in a layout effect, before anything
+else observes the new transcript. The amount is read from the virtualizer's
+placement of the item that *used to be first* — the height of exactly what
+arrived, a delta and not a total.
+
+This is the half of `firstItemIndex` that keying measurements on item identity
+does not supply, and it was left out of the TanStack migration. Everything
+downstream assumes it holds, and three separate failures were that one
+assumption breaking:
+
+- The virtualizer re-windows from its own scroll offset, which lags a frame, so
+  it renders the head. The paging rule reads that as the reader having arrived
+  at the head, and pages again — **five pages in 890ms on session open, and a
+  single junction paging a transcript back to its first Turn**.
+- The anchored Turn falls outside that window, so the anchor cannot find its
+  element, drops the anchor, and corrects nothing. Measured: **655px of history
+  arrived and `scrollTop` held at 23**, leaving the reader at the top of a block
+  they never asked to see.
+- With the reader left at the head, the paging boundary never re-arms and
+  history becomes unreachable.
+
+The arriving items are estimates until they measure, so this lands close rather
+than exactly; the anchor — which can now find its Turn — takes it the rest of the
+way. It is skipped while follow-output owns the viewport, which re-asserts its
+own target every frame.
+
 ## The Viewport Anchor Owns Scroll Compensation
 
 A virtualizer places items in the scroll range before it knows how tall they
@@ -105,11 +135,10 @@ position is therefore recorded as a **Turn and its offset from the viewport
 top**, and restored as a relationship rather than replayed as a delta. That
 makes the correction idempotent — when nothing moved it is zero.
 
-**The anchor does not replace the virtualizer's own correction, it survives it.**
-TanStack adjusts for a re-measured item only when that item is above the
-viewport, and only by that item's own delta. The anchor composes with that
-rather than competing, because restoring a relationship is idempotent: a
-correction already applied leaves it with nothing to do.
+**The anchor is the only compensator.** The virtualizer's own adjustment is
+turned off (see *What Belongs to the Virtualizer*) because it replays a delta
+against a scroll position it learns about a frame late. Restoring a relationship
+has no base to go stale, which is the whole reason this is the one that stays.
 
 This was not always true, and what happened when it was not is why the rule is
 written down. react-virtuoso corrected by the change in *total* list height,
@@ -211,6 +240,29 @@ end, so the session growing says nothing about it and it is left alone. When the
 store cannot extend far enough, the fallback drops back to the canonical tail:
 that costs a visible re-page of the history above, which is why it is the
 fallback, but it is the only branch that always shows the message just sent.
+
+## Two Refusals Stand Between an Ask and a Page
+
+`flowChatHistoryBoundary.ts` decides that a boundary is worth asking about.
+Whether the ask is honoured is the container's, and it declines twice:
+
+**While follow-output owns the viewport.** The position the ask was derived from
+is then our own placement, not the reader's — as true of a history window being
+opened as of the live tail, so the test is ownership and not presentation mode.
+Ownership ends the moment the reader scrolls, which is exactly when the ask
+starts meaning something.
+
+**Until the visible range has left that boundary.** Prepend compensation puts
+the viewport back on the reader's content, but the virtualizer places its rows
+from a scroll offset it refreshes a frame later, so for one commit the visible
+range is still read against the head. A direction is disarmed on dispatch and
+armed again by the range leaving it; an ask that resolves to anything other than
+`applied` re-arms immediately, because nothing was prepended and the range
+sitting at the boundary is still the reader's own position.
+
+Both were free under react-virtuoso: `firstItemIndex` moved the reported range
+with the prepend, so the local start index jumped by the number of items added
+and the rule stopped applying by itself.
 
 ## Snapping Back Out of the Reserved Blank
 
@@ -422,6 +474,9 @@ coordinates and gets them back; there is no index space of the virtualizer's own
 to convert at the edges, because measurements are cached against **item keys**,
 so a history prepend leaves every measured item exactly where it was.
 
+That is only half of what react-virtuoso's `firstItemIndex` did, and the other
+half has to be supplied — see *Keeping the Viewport on the Reader's Content*.
+
 The reason it is TanStack and not react-virtuoso is one line of its measurement
 pass: `size = measured ?? estimateSize(i)`. A per-item estimate for everything
 unmeasured. react-virtuoso reserves a single scalar (`lastSize`) for all of
@@ -436,14 +491,18 @@ inside the window changes height, the browser reflows the ones below it in the
 same layout pass, so there is no frame where the scroll has been corrected but
 the items have not moved yet.
 
-**Compensation is no longer contested.** TanStack adjusts the scroll for a
-re-measured item only when that item is genuinely above the viewport, and only
-by that item's own delta — which is the question worth answering, and the one
-react-virtuoso's total-height correction was not asking. The viewport anchor
-still runs on top of it: the two compose rather than fight, because the anchor
-restores a relationship, so a correction that has already been applied leaves it
-with nothing to do. The `scrollBy` interceptor that used to take compensation
-away from the virtualizer is gone.
+**The virtualizer does not compensate for its own late measurements.**
+`shouldAdjustScrollPositionOnItemSizeChange` is set to refuse, always. Its rule
+is the right shape — this item's delta, only for an item above the viewport —
+but it applies that delta to `scrollOffset`, the library's own copy of the
+scroll position, refreshed only from scroll events. Every continuous writer here
+assigns `scrollTop` directly and the matching scroll event lands a frame later,
+so a measurement arriving in between is compensated from a position the viewport
+has already left. Measured on session open: **nine corrections across two frames
+walked the viewport from 7440 back to 3556**, and the follow loop wrote 7440
+again on the next frame. The interception this replaces was written for
+react-virtuoso and removed on the assumption that TanStack asked the right
+question. It does — from a stale base.
 
 **Alignment is asked for, not computed, wherever it fits.** `scrollItemIntoView`
 goes through the virtualizer so that its re-aim keeps chasing the item while the
@@ -460,9 +519,19 @@ Two things that look like they belong here do not:
   `scrollToSearchMatch`, and `data-virtual-index` all carry one and are left
   alone.
 - **When to page.** `historyBoundariesForVisibleRange` decides that a boundary
-  is worth asking about from a rendered item range and nothing else. Its two
+  is worth asking about from a visible item range and nothing else. Its two
   thresholds are the ones that decide where a junction happens, which is why
   they are named and tested rather than inline.
+
+**Visible is not rendered.** `getVisibleItemRange` intersects the rows with the
+scroller box; the rendered window carries overscan, and a transcript short
+enough to render whole reports the first *and* last item present wherever the
+viewport stands. Feeding the rendered window to a rule that means "has the
+reader arrived here" asks whether the item exists instead. Measured: a 21-item
+transcript rendered rows 0..20 from index 0 no matter where the reader was, so
+the head boundary read as reached forever. It has to be a callback rather than a
+value, because a scroll moves the viewport across the window without changing
+it.
 
 react-virtuoso remains a dependency: the file tree (`VirtualFileTree.tsx`) still
 uses it. Nothing under `flow_chat/` does.
@@ -677,6 +746,15 @@ confirm:
     opens.
 22. Expand and collapse a tall tool card near the top of the viewport, and one
     below it, and confirm earlier content stays put in both cases.
+23. Open a long `isPartial` session and leave it alone. Nothing may page in
+    behind the reveal: the transcript opens on its loaded tail and stays there.
+    Five pages arriving over 890ms is what this checks for, and the reveal only
+    hides the first frame of it.
+24. Scroll up to a junction. **One** page loads, the Turn under the cursor stays
+    where it is, and paging stops until the head is reached again. Then keep
+    going: every junction must behave the same way all the way to the first
+    Turn, with no run of pages and no point where scrolling up stops doing
+    anything.
 
 ## Related Files
 

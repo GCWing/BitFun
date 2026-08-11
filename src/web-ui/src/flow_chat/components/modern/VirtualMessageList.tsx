@@ -88,6 +88,7 @@ const SCROLL_SETTLE_FALLBACK_MS = 140;
  * inherits it.
  */
 const TAIL_REALIGN_RESIZE_CALLBACKS = 6;
+const HISTORY_WINDOW_DIRECTIONS: readonly SessionHistoryWindowDirection[] = ['before', 'after'];
 const IDLE_HISTORY_WINDOW_BOUNDARY_STATE: Record<
   SessionHistoryWindowDirection,
   'idle' | 'loading' | 'error'
@@ -346,6 +347,27 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     before: false,
     after: false,
   });
+  /**
+   * Whether a boundary may be asked about again.
+   *
+   * Prepend compensation puts the viewport back on the reader's content, but
+   * the virtualizer places its rows from a scroll offset it only refreshes on
+   * the next frame, so for one commit the visible range is still read against
+   * the head. Asking from that commit pages again and produces another one just
+   * like it: measured, a single junction paged a transcript back to its first
+   * Turn while the reader held still.
+   *
+   * A direction is armed by the visible range leaving it. react-virtuoso had
+   * this for free — the range it reported was absolute, so a prepend moved the
+   * local start index by the number of items added and the rule stopped
+   * applying by itself.
+   */
+  const boundaryArmedRef = useRef<Record<SessionHistoryWindowDirection, boolean>>({
+    before: true,
+    after: true,
+  });
+  /** Assigned below, once the boundary evaluation it stands for exists. */
+  const evaluateHistoryBoundariesRef = useRef<() => void>(() => {});
   const searchNavigationRequestIdRef = useRef(0);
   const visibleTurnUpdateFrameRef = useRef<number | null>(null);
 
@@ -501,6 +523,57 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollerRef: scrollerElementRef,
     isViewportOwnedElsewhere,
   });
+
+  /**
+   * Keep the viewport on the same content when history is prepended.
+   *
+   * This is the half of react-virtuoso's `firstItemIndex` that nothing replaced.
+   * Keying measurements on item identity means a prepend invalidates none of
+   * them, which is the other half — but the scroll offset is still a number,
+   * and items arriving above it push the reader's content down by their height
+   * while it stays where it was.
+   *
+   * Everything downstream assumes this does not happen, and all three of the
+   * failures measured here were that assumption breaking:
+   *
+   * - The virtualizer re-windows from its own scroll offset, which lags by a
+   *   frame, so it renders the head. The paging rule reads that as the reader
+   *   having arrived at the head and pages again, and again.
+   * - The anchored Turn falls outside that window, so the anchor cannot find
+   *   its element, drops the anchor and corrects nothing — measured, 655px of
+   *   history arrived and `scrollTop` held at 23.
+   * - With the reader left at the head, the boundary never re-arms.
+   *
+   * The amount is a delta and not a total: the height of exactly the items that
+   * arrived above, read from the virtualizer's own placement of the item that
+   * used to be first. Their heights are estimates until they measure, so this
+   * lands close rather than exactly, and the anchor — which can now find its
+   * Turn — takes it the rest of the way.
+   */
+  const firstItemKeyRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const previousFirstKey = firstItemKeyRef.current;
+    const nextFirstKey = virtualItems[0] ? getVirtualItemStableKey(virtualItems[0]) : null;
+    firstItemKeyRef.current = nextFirstKey;
+
+    const scroller = scrollerElementRef.current;
+    // Follow-output re-asserts its own target every frame; a second writer in
+    // the same commit would only be overwritten by it.
+    if (!scroller || isFollowingOutputRef.current) return;
+    if (previousFirstKey === null || previousFirstKey === nextFirstKey) return;
+    // Absent means the head was trimmed rather than extended, and there is no
+    // prepended height to account for.
+    const movedTo = virtualItems.findIndex(
+      item => getVirtualItemStableKey(item) === previousFirstKey,
+    );
+    if (movedTo <= 0) return;
+    const arrived = virtualizer.getItemBounds(movedTo);
+    const head = virtualizer.getItemBounds(0);
+    if (!arrived || !head) return;
+    const prependedPx = arrived.startPx - head.startPx;
+    if (prependedPx <= 0) return;
+    scroller.scrollTop += prependedPx;
+  }, [virtualItems, virtualizer]);
 
   useLayoutEffect(() => {
     viewportAnchor.openSettleWindow();
@@ -717,6 +790,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
        */
       viewportAnchor.captureAnchorForScroll();
       scheduleVisibleTurnInfoUpdate();
+      /*
+       * Paging is a question about where the reader is, so a scroll is its
+       * primary input. Through a ref: this listener must not be torn down and
+       * re-attached every time the transcript changes.
+       */
+      evaluateHistoryBoundariesRef.current();
     };
     const handleWheel = () => notifyUserScrollIntent();
     const handleTouchMove = () => notifyUserScrollIntent();
@@ -1036,6 +1115,21 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   useEffect(() => () => setFlowChatSearchHighlight(null), []);
 
   const requestHistoryBoundary = useCallback((direction: SessionHistoryWindowDirection) => {
+    /*
+     * Two refusals, both asking whether the ask describes the reader.
+     *
+     * While the follow rule owns the viewport, the position the ask was derived
+     * from is our own placement — as true of a history window being opened as
+     * of the live tail, so the test is ownership and not which presentation is
+     * on screen. Ownership ends the moment the reader scrolls, which is exactly
+     * when the ask starts meaning something. Measured on session open: five
+     * pages landed in 890ms, each one displacing the viewport and so requesting
+     * the next, until history ran out.
+     *
+     * The second is the arming latch; see `boundaryArmedRef`.
+     */
+    if (isFollowingOutputRef.current) return;
+    if (!boundaryArmedRef.current[direction]) return;
     const latchedExhausted = exhaustedBoundaryRef.current[direction];
     if (
       !onHistoryWindowBoundaryIntent ||
@@ -1061,6 +1155,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
       return;
     }
+    // Disarmed for as long as this page is the reason the window sits at the
+    // boundary. Only the window moving off it arms the direction again.
+    boundaryArmedRef.current[direction] = false;
     const request = Promise.resolve(onHistoryWindowBoundaryIntent(direction)).then(
       normalizeBoundaryResult,
     ).then(result => {
@@ -1069,39 +1166,64 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       } else if (result === 'applied') {
         exhaustedBoundaryRef.current[direction] = false;
       }
+      // Nothing was prepended, so the window sitting at the boundary is still
+      // the reader's own position rather than a consequence of this page.
+      if (result !== 'applied') {
+        boundaryArmedRef.current[direction] = true;
+      }
     }).finally(() => {
       boundaryRequestRef.current[direction] = null;
     });
     boundaryRequestRef.current[direction] = request;
   }, [onHistoryWindowBoundaryIntent]);
 
-  /*
-   * Paging follows the rendered window rather than a callback of the
-   * virtualizer's, because the window is the state — a scroll and a prepend
-   * both reach here through the same value, and only when it actually changed.
+  /**
+   * Whether either end of the loaded transcript is on screen, and act on it.
+   *
+   * Reads live geometry rather than the rendered window. The window carries
+   * overscan and, for a transcript short enough to render whole, reports the
+   * first and last item as present wherever the viewport is — which makes it
+   * mute on the only question being asked. Measured: a 21-item transcript
+   * rendered 21 rows from index 0 no matter where the reader stood, so the
+   * head boundary read as reached forever and the tail never re-armed.
+   *
+   * A scroll moves the viewport across the window without changing it, so this
+   * has to be a callback that both the scroll handler and the item-change
+   * effect can invoke, rather than a value either of them derives.
    */
-  const renderedRange = useMemo(() => {
-    const first = virtualizer.rows[0];
-    const last = virtualizer.rows[virtualizer.rows.length - 1];
-    return first && last ? { startIndex: first.index, endIndex: last.index } : null;
-  }, [virtualizer.rows]);
-
-  useEffect(() => {
-    if (!renderedRange) return;
-    scheduleVisibleTurnInfoUpdate();
-    for (const direction of historyBoundariesForVisibleRange(
-      renderedRange,
+  const evaluateHistoryBoundaries = useCallback(() => {
+    const range = virtualizer.getVisibleItemRange();
+    if (!range) return;
+    const atBoundary = new Set(historyBoundariesForVisibleRange(
+      range,
       virtualItems.length,
       presentationMode,
-    )) {
+    ));
+    for (const direction of HISTORY_WINDOW_DIRECTIONS) {
+      // Off the boundary: whatever the last page added has been absorbed, and
+      // arriving there again will be the reader's own doing.
+      if (!atBoundary.has(direction)) {
+        boundaryArmedRef.current[direction] = true;
+        continue;
+      }
       requestHistoryBoundary(direction);
     }
+  }, [presentationMode, requestHistoryBoundary, virtualItems.length, virtualizer]);
+
+  evaluateHistoryBoundariesRef.current = evaluateHistoryBoundaries;
+
+  useEffect(() => {
+    scheduleVisibleTurnInfoUpdate();
+    evaluateHistoryBoundaries();
   }, [
-    presentationMode,
-    renderedRange,
-    requestHistoryBoundary,
+    evaluateHistoryBoundaries,
+    /*
+     * Follow-output releasing the viewport is a reason to ask again, not only a
+     * reason the last ask was declined.
+     */
+    isFollowingOutput,
     scheduleVisibleTurnInfoUpdate,
-    virtualItems.length,
+    virtualizer.rows,
   ]);
 
   useLayoutEffect(() => {

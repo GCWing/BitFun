@@ -68,25 +68,43 @@ function fakeLayout(options: {
  * the library. Every item is rendered, which is what a list shorter than the
  * viewport would do anyway.
  */
-vi.mock('./useFlowChatVirtualizer', () => ({
-  useFlowChatVirtualizer: (options: {
-    items: Array<Record<string, unknown>>;
-    getItemKey: (item: Record<string, unknown>) => string;
-  }) => ({
-    rows: options.items.map((item, index) => ({
-      index,
-      key: options.getItemKey(item),
-      startPx: index * 40,
-      endPx: index * 40 + 40,
-    })),
-    paddingTopPx: 0,
-    paddingBottomPx: 0,
-    measureRowElement: () => {},
-    getItemBounds: (index: number) => ({ startPx: index * 40, endPx: index * 40 + 40 }),
-    scrollItemIntoView: mocks.scrollItemIntoView,
-    scrollToOffset: mocks.scrollToOffset,
-  }),
-}));
+vi.mock('./useFlowChatVirtualizer', async () => {
+  // The visible range is real geometry, and the paging rule reads it. Faking it
+  // would leave the rule tested against an answer no viewport can produce.
+  const actual = await vi.importActual<typeof import('./useFlowChatVirtualizer')>(
+    './useFlowChatVirtualizer',
+  );
+  return {
+    ...actual,
+    useFlowChatVirtualizer: (options: {
+      items: Array<Record<string, unknown>>;
+      getItemKey: (item: Record<string, unknown>) => string;
+      scrollerRef: { current: HTMLElement | null };
+    }) => {
+      const rows = options.items.map((item, index) => ({
+        index,
+        key: options.getItemKey(item),
+        startPx: index * 40,
+        endPx: index * 40 + 40,
+      }));
+      return {
+        rows,
+        paddingTopPx: 0,
+        paddingBottomPx: 0,
+        measureRowElement: () => {},
+        getItemBounds: (index: number) => ({ startPx: index * 40, endPx: index * 40 + 40 }),
+        getVisibleItemRange: () => {
+          const scroller = options.scrollerRef.current;
+          return scroller
+            ? actual.visibleRowRange(rows, scroller.scrollTop, scroller.clientHeight)
+            : null;
+        },
+        scrollItemIntoView: mocks.scrollItemIntoView,
+        scrollToOffset: mocks.scrollToOffset,
+      };
+    },
+  };
+});
 
 vi.mock('../../store/modernFlowChatStore', () => {
   const useModernFlowChatStore = Object.assign(
@@ -390,6 +408,51 @@ describe('VirtualMessageList natural scroll contract', () => {
       });
 
       expect(mocks.handleUserScrollIntent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('history arriving above the viewport', () => {
+    it('moves the viewport by the height that was prepended', () => {
+      act(() => root.render(<VirtualMessageList />));
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.scrollTop = 500;
+
+      mocks.items = [
+        userMessage('turn-a', 'message-a', 'Older'),
+        userMessage('turn-b', 'message-b', 'Older'),
+        userMessage('turn-c', 'message-c', 'Older'),
+        ...mocks.items,
+      ];
+      act(() => root.render(<VirtualMessageList />));
+
+      // Three 40px items arrived above, so the reader's content is 120px lower
+      // and the viewport follows it. Anything less leaves them looking at
+      // history they never asked to be shown.
+      expect(scroller.scrollTop).toBe(620);
+    });
+
+    it('leaves the viewport alone when the transcript grows at the end', () => {
+      act(() => root.render(<VirtualMessageList />));
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.scrollTop = 500;
+
+      mocks.items = [...mocks.items, userMessage('turn-3', 'message-3', 'Newer')];
+      act(() => root.render(<VirtualMessageList />));
+
+      expect(scroller.scrollTop).toBe(500);
+    });
+
+    it('leaves the viewport alone when the head is trimmed', () => {
+      act(() => root.render(<VirtualMessageList />));
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.scrollTop = 500;
+
+      // The item that was first is gone rather than moved, so there is no
+      // arrived height to account for and nothing to compensate with.
+      mocks.items = mocks.items.slice(1);
+      act(() => root.render(<VirtualMessageList />));
+
+      expect(scroller.scrollTop).toBe(500);
     });
   });
 

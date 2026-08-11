@@ -31,6 +31,24 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 /** Item-count overscan. Roughly two Turns either side of the viewport. */
 const FLOW_CHAT_OVERSCAN_ITEMS = 6;
 
+/**
+ * The virtualizer does not compensate for its own late measurements.
+ *
+ * Its rule is the right shape — adjust by *this item's* delta, and only for an
+ * item above the viewport — but it applies that delta to `scrollOffset`, which
+ * is the library's own copy of the scroll position and is refreshed only from
+ * scroll events. Every continuous writer here assigns `scrollTop` directly, and
+ * the scroll event for that assignment does not land until the following frame,
+ * so a measurement arriving in between is compensated from a position the
+ * viewport has already left. Measured on session open: nine corrections across
+ * two frames walked the viewport from 7440 back to 3556 before the follow loop
+ * wrote 7440 again.
+ *
+ * The viewport anchor is the compensator instead. It restores a relationship
+ * rather than replaying a delta, so it has no base to go stale.
+ */
+const neverAdjustScrollPositionOnItemResize = () => false;
+
 export interface FlowChatVirtualRow {
   index: number;
   key: string;
@@ -76,6 +94,13 @@ export interface FlowChatVirtualizer {
   /** Where an item sits in scroller coordinates, or null if it has no place yet. */
   getItemBounds: (index: number) => FlowChatItemBounds | null;
   /**
+   * The items intersecting the viewport right now, read from live geometry.
+   *
+   * A callback rather than a value because it has to answer during a scroll,
+   * which moves the viewport across the rendered window without changing it.
+   */
+  getVisibleItemRange: () => FlowChatVisibleItemRange | null;
+  /**
    * Scroll so that an item lands at the viewport's start or centre.
    *
    * Preferred over an offset wherever it fits: the virtualizer re-aims at the
@@ -88,6 +113,40 @@ export interface FlowChatVirtualizer {
   ) => void;
   /** Scroll to an offset in scroller coordinates. */
   scrollToOffset: (offsetPx: number, behavior?: 'auto' | 'smooth') => void;
+}
+
+export interface FlowChatVisibleItemRange {
+  startIndex: number;
+  endIndex: number;
+}
+
+/**
+ * The items the reader can actually see.
+ *
+ * Deliberately not the rendered window: that carries overscan, and a transcript
+ * short enough to render whole reports the first and last item as rendered no
+ * matter where the viewport is. Anything asking "has the reader reached the end
+ * of what is loaded" needs this instead, or it is asking whether the item
+ * exists.
+ *
+ * Null when no item intersects the viewport at all, which is a real state — the
+ * reserved tail blank is below every item — and the honest answer is that the
+ * reader is at neither boundary.
+ */
+export function visibleRowRange(
+  rows: readonly FlowChatVirtualRow[],
+  scrollTopPx: number,
+  clientHeightPx: number,
+): FlowChatVisibleItemRange | null {
+  const viewportEndPx = scrollTopPx + clientHeightPx;
+  let startIndex = -1;
+  let endIndex = -1;
+  for (const row of rows) {
+    if (row.endPx <= scrollTopPx || row.startPx >= viewportEndPx) continue;
+    if (startIndex === -1) startIndex = row.index;
+    endIndex = row.index;
+  }
+  return startIndex === -1 ? null : { startIndex, endIndex };
 }
 
 export interface FlowChatVirtualWindowPadding {
@@ -177,6 +236,9 @@ export function useFlowChatVirtualizer<T>({
     scrollMargin: contentStartPx,
     scrollPaddingStart: scrollPaddingStartPx,
   });
+  // An instance field rather than an option, so it is assigned here — before
+  // any measurement callback can reach `resizeItem`.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = neverAdjustScrollPositionOnItemResize;
 
   const virtualRows = virtualizer.getVirtualItems();
   const totalSizePx = virtualizer.getTotalSize();
@@ -195,6 +257,15 @@ export function useFlowChatVirtualizer<T>({
   );
 
   const measureRowElement = virtualizer.measureElement;
+
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+
+  const getVisibleItemRange = useCallback((): FlowChatVisibleItemRange | null => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return null;
+    return visibleRowRange(rowsRef.current, scroller.scrollTop, scroller.clientHeight);
+  }, [scrollerRef]);
 
   const getItemBounds = useCallback((index: number): FlowChatItemBounds | null => {
     const measurement = virtualizer.measurementsCache[index];
@@ -221,6 +292,7 @@ export function useFlowChatVirtualizer<T>({
     paddingBottomPx,
     measureRowElement,
     getItemBounds,
+    getVisibleItemRange,
     scrollItemIntoView,
     scrollToOffset,
   };

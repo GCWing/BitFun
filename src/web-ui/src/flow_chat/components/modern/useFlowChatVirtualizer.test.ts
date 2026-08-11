@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { virtualWindowPaddingPx, type FlowChatVirtualRow } from './useFlowChatVirtualizer';
+import {
+  virtualWindowPaddingPx,
+  visibleRowRange,
+  type FlowChatVirtualRow,
+} from './useFlowChatVirtualizer';
 
 /** Header above the items, which every offset below is measured past. */
 const CONTENT_START = 24;
@@ -51,5 +55,54 @@ describe('virtualWindowPaddingPx', () => {
       paddingTopPx: 0,
       paddingBottomPx: 3916,
     });
+  });
+});
+
+describe('visibleRowRange', () => {
+  /** 21 items of 100px, all rendered — the transcript is barely one screen. */
+  const wholeTranscript = Array.from({ length: 21 }, (_, index) => (
+    row(index, CONTENT_START + index * 100, 100)
+  ));
+
+  it('answers where the reader is, not what is rendered', () => {
+    // The defect this exists for: every row is rendered wherever the viewport
+    // stands, so the rendered window reports index 0 as present forever.
+    expect(visibleRowRange(wholeTranscript, 1200, 500)).toEqual({
+      startIndex: 11,
+      endIndex: 16,
+    });
+  });
+
+  it('reports the head only when the first item is on screen', () => {
+    expect(visibleRowRange(wholeTranscript, 0, 500)).toEqual({
+      startIndex: 0,
+      endIndex: 4,
+    });
+  });
+
+  it('counts an item the viewport edge merely clips', () => {
+    // Half of item 4 and a sliver of item 9 are on screen, and both are things
+    // the reader can see.
+    expect(visibleRowRange(wholeTranscript, CONTENT_START + 450, 500)).toEqual({
+      startIndex: 4,
+      endIndex: 9,
+    });
+  });
+
+  it('excludes an item that ends exactly on the viewport top', () => {
+    expect(visibleRowRange(wholeTranscript, CONTENT_START + 500, 500)).toEqual({
+      startIndex: 5,
+      endIndex: 9,
+    });
+  });
+
+  it('reports no boundary from inside the reserved tail blank', () => {
+    // Past every item. The reader is at neither end of the loaded transcript,
+    // and answering "the last one" would page on a viewport full of nothing.
+    expect(visibleRowRange(wholeTranscript, 5000, 500)).toBeNull();
+  });
+
+  it('reports nothing when there is nothing rendered', () => {
+    expect(visibleRowRange([], 0, 500)).toBeNull();
   });
 });
