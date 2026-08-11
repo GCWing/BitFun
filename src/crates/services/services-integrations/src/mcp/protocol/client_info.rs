@@ -17,6 +17,9 @@ pub fn create_mcp_client_info(
         .enable_sampling()
         .enable_elicitation()
         .build();
-    ClientInfo::new(capabilities, Implementation::new(client_name, client_version))
-        .with_protocol_version(ProtocolVersion::LATEST)
+    ClientInfo::new(
+        capabilities,
+        Implementation::new(client_name, client_version),
+    )
+    .with_protocol_version(ProtocolVersion::LATEST)
 }

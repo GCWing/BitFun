@@ -176,6 +176,7 @@ const CORE_TOKIO_FEATURES = new Map([
 const CORE_TOKIO_AGGREGATES = new Set([
   'external-sources',
   'plugin-runtime',
+  'opencode-plugin-host',
   'product-full',
   'remote-connect',
   'tools-browser-web',
@@ -1341,6 +1342,7 @@ export function findProductEntrypointCoreFeatureViolations(
       ...coreCompatibilityReviewedFeatures,
       'remote-connect',
       'plugin-runtime',
+      'opencode-plugin-host',
       'ssh-remote',
     ]],
     ['bitfun-acp', [...new Set([...acpClientCoreFeatures, ...acpServerCoreFeatures])]],
@@ -1403,6 +1405,7 @@ export function findProductEntrypointCoreFeatureViolations(
       ...acpActiveCoreFeatures,
       'i18n-runtime',
       'plugin-runtime',
+      'opencode-plugin-host',
       'remote-connect',
     ]],
     ['bitfun-acp', acpActiveCoreFeatures],

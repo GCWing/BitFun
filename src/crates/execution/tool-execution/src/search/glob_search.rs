@@ -179,7 +179,6 @@ fn create_command(program: &str) -> Command {
 
 #[cfg(not(windows))]
 fn create_command(program: &str) -> Command {
-    
     Command::new(program)
 }
 

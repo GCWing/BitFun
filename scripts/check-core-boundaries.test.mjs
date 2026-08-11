@@ -1551,6 +1551,7 @@ const CLI_REVIEWED_CORE_FEATURES = [
   ...ACP_REVIEWED_CORE_FEATURES,
   'remote-connect',
   'plugin-runtime',
+  'opencode-plugin-host',
 ];
 
 const APP_SERVER_REVIEWED_CORE_FEATURES = [

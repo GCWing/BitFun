@@ -612,6 +612,61 @@ impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
 /// harnesses; plugin runtime bindings are deliberately not part of this API.
 pub struct CoreProductAgentRuntime;
 
+pub(crate) async fn fork_session_for_plugin(
+    workspace_path: PathBuf,
+    source_session_id: String,
+    source_message_id: Option<String>,
+) -> Result<AgentSessionForkResult, String> {
+    let coordinator = crate::agentic::coordination::get_global_coordinator()
+        .ok_or_else(|| "Session coordinator is not initialized".to_string())?;
+    let scheduler = crate::agentic::coordination::get_global_scheduler()
+        .ok_or_else(|| "Dialog scheduler is not initialized".to_string())?;
+    let path_manager =
+        crate::infrastructure::try_get_path_manager_arc().map_err(|error| error.to_string())?;
+    let token_usage_service = Arc::new(
+        TokenUsageService::new(path_manager)
+            .await
+            .map_err(|error| error.to_string())?,
+    );
+    let operations =
+        CoreSessionOperationsPort::new(coordinator.clone(), scheduler, token_usage_service);
+    match source_message_id {
+        Some(message_id) => {
+            let source_turn_id = coordinator
+                .get_messages(&source_session_id)
+                .await
+                .map_err(|error| error.to_string())?
+                .into_iter()
+                .find(|message| message.id == message_id)
+                .and_then(|message| message.metadata.turn_id)
+                .ok_or_else(|| format!("Source message was not found: {message_id}"))?;
+            AgentSessionForkPort::fork_session_at_turn(
+                &operations,
+                AgentSessionForkAtTurnRequest {
+                    workspace_path: workspace_path.to_string_lossy().into_owned(),
+                    source_session_id,
+                    source_turn_id,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                },
+            )
+            .await
+            .map_err(|error| error.to_string())
+        }
+        None => AgentSessionForkPort::fork_session(
+            &operations,
+            AgentSessionForkRequest {
+                workspace_path: workspace_path.to_string_lossy().into_owned(),
+                source_session_id,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        )
+        .await
+        .map_err(|error| error.to_string()),
+    }
+}
+
 impl CoreProductAgentRuntime {
     /// Build a narrow session and interaction facade for an existing product
     /// owner. This does not assemble runtime services, harnesses, events, or a

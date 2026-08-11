@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,24 @@ import { ensureProductOutputDirectory, productBuildEnvironment } from './product
 import { ProductDefinitionError, resolveProductDefinition } from './product-customization/resolver.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
+const PLUGIN_HOST_DIST = join(ROOT, 'src', 'apps', 'extension-host', 'dist');
+const PLUGIN_HOST_ENTRIES = ['extension-host.js'];
+
+export function stagePluginHostResources(destination, sourceDirectory = PLUGIN_HOST_DIST) {
+  for (const entry of PLUGIN_HOST_ENTRIES) {
+    const source = join(sourceDirectory, entry);
+    if (!existsSync(source)) {
+      throw new Error(
+        `CLI plugin Host resource was not produced: ${source}. Run pnpm run plugin-host:prepare.`,
+      );
+    }
+  }
+  rmSync(destination, { recursive: true, force: true });
+  mkdirSync(destination, { recursive: true });
+  for (const entry of PLUGIN_HOST_ENTRIES) {
+    copyFileSync(join(sourceDirectory, entry), join(destination, entry));
+  }
+}
 
 function stripDelimiter(args) {
   const result = [...args];
@@ -76,6 +94,12 @@ export function cliBuildPlan(resolution, mode, forwardArgs = [], platform = proc
     cargoArgs,
     internalBinaryPath: join(cargoTargetDir, ...(target ? [target] : []), profileDir, `bitfun${suffix}`),
     stagedBinaryPath: join(resolution.outputDir, 'package', `${resolution.assembly.binaryName}${suffix}`),
+    stagedPluginHostPath: join(
+      resolution.outputDir,
+      'package',
+      'resources',
+      'ext-host',
+    ),
   };
 }
 
@@ -93,7 +117,9 @@ function run(plan) {
     ensureProductOutputDirectory(plan.resolution);
     mkdirSync(join(plan.stagedBinaryPath, '..'), { recursive: true });
     copyFileSync(plan.internalBinaryPath, plan.stagedBinaryPath);
+    stagePluginHostResources(plan.stagedPluginHostPath);
     console.log(`[product] staged CLI: ${plan.stagedBinaryPath}`);
+    console.log(`[product] staged plugin Host: ${plan.stagedPluginHostPath}`);
   }
 }
 

@@ -957,6 +957,7 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
         ));
     }
     let legacy_target = install_dir.join("bitfun-cli");
+    let plugin_host_target = install_dir.join("resources").join("ext-host");
     if !legacy_target.is_file() {
         return Err(anyhow!(
             "official bitfun-cli companion was not found beside {}",
@@ -971,7 +972,9 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
     let package_dir = find_package_dir(extract_dir.path())?;
     let new_primary = package_dir.join("bitfun");
     let new_legacy = package_dir.join("bitfun-cli");
+    let new_plugin_host = package_dir.join("resources").join("ext-host");
     validate_entrypoint_pair(&new_primary, &new_legacy)?;
+    validate_plugin_host_resources(&new_plugin_host)?;
 
     let stage = tempfile::Builder::new()
         .prefix(".bitfun-update.")
@@ -984,14 +987,19 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
         })?;
     let staged_primary = stage.path().join("bitfun");
     let staged_legacy = stage.path().join("bitfun-cli");
+    let staged_plugin_host = stage.path().join("ext-host");
     fs::copy(&new_primary, &staged_primary).context("stage bitfun")?;
     fs::copy(&new_legacy, &staged_legacy).context("stage bitfun-cli")?;
+    copy_plugin_host_resources(&new_plugin_host, &staged_plugin_host)?;
     fs::set_permissions(&staged_primary, fs::Permissions::from_mode(0o755))?;
     fs::set_permissions(&staged_legacy, fs::Permissions::from_mode(0o755))?;
     validate_entrypoint_pair(&staged_primary, &staged_legacy)?;
+    validate_plugin_host_resources(&staged_plugin_host)?;
 
     let primary_backup = stage.path().join("previous-bitfun");
     let legacy_backup = stage.path().join("previous-bitfun-cli");
+    let plugin_host_backup = stage.path().join("previous-ext-host");
+    let plugin_host_existed = plugin_host_target.is_dir();
 
     // Rollback runs while something has already gone wrong, so its own failures
     // are the ones that matter most: they are the difference between "the update
@@ -1023,7 +1031,25 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
             rollback_failures,
         ));
     }
+    if plugin_host_existed {
+        if let Err(error) = fs::rename(&plugin_host_target, &plugin_host_backup) {
+            restore(&legacy_backup, &legacy_target, &mut rollback_failures);
+            restore(&primary_backup, current_exe, &mut rollback_failures);
+            return Err(rollback_error(
+                error,
+                "back up current plugin Host resources",
+                rollback_failures,
+            ));
+        }
+    }
     if let Err(error) = fs::rename(&staged_primary, current_exe) {
+        if plugin_host_existed {
+            restore(
+                &plugin_host_backup,
+                &plugin_host_target,
+                &mut rollback_failures,
+            );
+        }
         restore(&legacy_backup, &legacy_target, &mut rollback_failures);
         restore(&primary_backup, current_exe, &mut rollback_failures);
         return Err(rollback_error(
@@ -1036,6 +1062,13 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
         if let Err(remove_error) = fs::remove_file(current_exe) {
             rollback_failures.push(format!("remove {}: {remove_error}", current_exe.display()));
         }
+        if plugin_host_existed {
+            restore(
+                &plugin_host_backup,
+                &plugin_host_target,
+                &mut rollback_failures,
+            );
+        }
         restore(&legacy_backup, &legacy_target, &mut rollback_failures);
         restore(&primary_backup, current_exe, &mut rollback_failures);
         return Err(rollback_error(
@@ -1044,11 +1077,72 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
             rollback_failures,
         ));
     }
-    if let Err(error) = validate_entrypoint_pair(current_exe, &legacy_target) {
+    if let Err(error) = fs::create_dir_all(
+        plugin_host_target
+            .parent()
+            .expect("plugin Host resource directory has a parent"),
+    ) {
         for path in [current_exe, legacy_target.as_path()] {
             if let Err(remove_error) = fs::remove_file(path) {
                 rollback_failures.push(format!("remove {}: {remove_error}", path.display()));
             }
+        }
+        if plugin_host_existed {
+            restore(
+                &plugin_host_backup,
+                &plugin_host_target,
+                &mut rollback_failures,
+            );
+        }
+        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
+        restore(&primary_backup, current_exe, &mut rollback_failures);
+        return Err(rollback_error(
+            error,
+            "create plugin Host resource directory",
+            rollback_failures,
+        ));
+    }
+    if let Err(error) = fs::rename(&staged_plugin_host, &plugin_host_target) {
+        for path in [current_exe, legacy_target.as_path()] {
+            if let Err(remove_error) = fs::remove_file(path) {
+                rollback_failures.push(format!("remove {}: {remove_error}", path.display()));
+            }
+        }
+        if plugin_host_existed {
+            restore(
+                &plugin_host_backup,
+                &plugin_host_target,
+                &mut rollback_failures,
+            );
+        }
+        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
+        restore(&primary_backup, current_exe, &mut rollback_failures);
+        return Err(rollback_error(
+            error,
+            "install updated plugin Host resources",
+            rollback_failures,
+        ));
+    }
+    let validation = validate_entrypoint_pair(current_exe, &legacy_target)
+        .and_then(|_| validate_plugin_host_resources(&plugin_host_target));
+    if let Err(error) = validation {
+        for path in [current_exe, legacy_target.as_path()] {
+            if let Err(remove_error) = fs::remove_file(path) {
+                rollback_failures.push(format!("remove {}: {remove_error}", path.display()));
+            }
+        }
+        if let Err(remove_error) = fs::remove_dir_all(&plugin_host_target) {
+            rollback_failures.push(format!(
+                "remove {}: {remove_error}",
+                plugin_host_target.display()
+            ));
+        }
+        if plugin_host_existed {
+            restore(
+                &plugin_host_backup,
+                &plugin_host_target,
+                &mut rollback_failures,
+            );
         }
         restore(&legacy_backup, &legacy_target, &mut rollback_failures);
         restore(&primary_backup, current_exe, &mut rollback_failures);
@@ -1100,6 +1194,33 @@ fn validate_entrypoint_pair(primary: &Path, legacy: &Path) -> Result<()> {
         || String::from_utf8_lossy(&legacy_output.stderr).trim() != DEPRECATION_WARNING
     {
         return Err(anyhow!("deprecated bitfun-cli entrypoint contract failed"));
+    }
+    Ok(())
+}
+
+fn validate_plugin_host_resources(directory: &Path) -> Result<()> {
+    for entry in ["extension-host.js"] {
+        let path = directory.join(entry);
+        if !path.is_file() {
+            return Err(anyhow!(
+                "CLI package is missing plugin Host resource {}",
+                path.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn copy_plugin_host_resources(source: &Path, destination: &Path) -> Result<()> {
+    fs::create_dir_all(destination).with_context(|| {
+        format!(
+            "create plugin Host staging directory {}",
+            destination.display()
+        )
+    })?;
+    for entry in ["extension-host.js"] {
+        fs::copy(source.join(entry), destination.join(entry))
+            .with_context(|| format!("stage plugin Host resource {entry}"))?;
     }
     Ok(())
 }

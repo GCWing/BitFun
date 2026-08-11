@@ -219,10 +219,7 @@ pub fn setup_tray(
                 show_main_window(app);
             } else if id == "quit" {
                 log::info!("Quit requested from tray menu");
-                crate::crash_diagnostics::mark_clean_shutdown("tray_quit");
-                crate::save_main_window_state(app);
-                crate::perform_process_exit_cleanup();
-                app.exit(0);
+                crate::request_desktop_exit(app, 0, "tray_quit");
             } else if id == "toggle_desktop_pet" {
                 let app_handle = app.clone();
                 tauri::async_runtime::spawn(async move {

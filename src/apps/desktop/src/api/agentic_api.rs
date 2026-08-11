@@ -1658,6 +1658,24 @@ pub async fn create_session(
         None
     };
 
+    if let Err(error) = runtime
+        .session_application()
+        .ensure_configured_plugin_instance(
+            desktop_session_scope(
+                request.workspace_path.clone(),
+                remote_conn.clone(),
+                remote_ssh_host.clone(),
+            ),
+            request.workspace_id.clone(),
+        )
+        .await
+    {
+        warn!(
+            "Configured workspace plugin activation failed before session creation: {}",
+            error
+        );
+    }
+
     if is_idempotent_managed_create {
         let session_id = request
             .session_id
