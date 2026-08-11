@@ -15,6 +15,7 @@ import {
 } from './rules/crate-layout.mjs';
 import { checkTuiLegacyBackendRatchet } from './tui-boundary-ratchet.mjs';
 import {
+  acpClosedFeatureProfileRules,
   coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
   optionalDependencyFeatureOwnerRules,
@@ -585,19 +586,6 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   }
 }
 
-function checkCoreDefaultProductFullFeature() {
-  const manifestPath = join(crateDirForName('core'), 'Cargo.toml');
-  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
-  if (!featureReferencesFeature(features.get('default'), 'product-full')) {
-    failures.push({
-      path: manifestPath,
-      line: features.get('default')?.line ?? 1,
-      message:
-        'bitfun-core default feature must remain product-full until a separate product matrix review changes it',
-    });
-  }
-}
-
 function checkCoreProductFullFeatureAssembly(rule) {
   const manifestPath = repoPathToFsPath(rule.manifestPath);
   const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
@@ -1092,6 +1080,7 @@ export function runCoreBoundaryCheck() {
       manifestDependencyMatches,
       matchingForbiddenDependency,
       coreClosedFeatureProfileRules,
+      acpClosedFeatureProfileRules,
       coreProductFullFeatureAssemblyRule,
       ownerCrateFeatureAssemblyRules,
       parseManifestFeatures,
@@ -1158,9 +1147,11 @@ export function runCoreBoundaryCheck() {
     checkOptionalDependencyFeatureOwners(crateDir, rule);
   }
 
-  checkCoreDefaultProductFullFeature();
   checkCoreProductFullFeatureAssembly(coreProductFullFeatureAssemblyRule);
   for (const rule of coreClosedFeatureProfileRules) {
+    checkClosedFeatureProfile(rule);
+  }
+  for (const rule of acpClosedFeatureProfileRules) {
     checkClosedFeatureProfile(rule);
   }
   for (const rule of ownerCrateFeatureAssemblyRules) {

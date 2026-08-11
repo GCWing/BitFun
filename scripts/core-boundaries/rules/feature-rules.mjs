@@ -67,6 +67,7 @@ export const optionalDependencyFeatureOwnerRules = [
       'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',
     dependencies: [
       { depName: 'axum', ownerFeatures: ['debug-log', 'mcp-runtime'] },
+      { depName: 'base64', ownerFeatures: ['agent-runtime', 'dispatch-store'] },
       {
         depName: 'bitfun-ai-adapters',
         ownerFeatures: ['ai-adapter-runtime', 'subscription-auth'],
@@ -139,11 +140,13 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'filetime', ownerFeatures: ['agent-runtime'] },
       { depName: 'flate2', ownerFeatures: ['agent-runtime'] },
       { depName: 'fs2', ownerFeatures: ['agent-runtime'] },
+      { depName: 'futures', ownerFeatures: ['agent-runtime'] },
       { depName: 'image', ownerFeatures: ['agent-runtime'] },
       { depName: 'include_dir', ownerFeatures: ['agent-runtime'] },
       { depName: 'indexmap', ownerFeatures: ['agent-runtime'] },
       { depName: 'md5', ownerFeatures: ['agent-runtime'] },
       { depName: 'reqwest', ownerFeatures: ['mcp-runtime', 'tools-miniapp'] },
+      { depName: 'regex', ownerFeatures: ['agent-runtime'] },
       { depName: 'rusqlite', ownerFeatures: ['agent-runtime'] },
       { depName: 'semver', ownerFeatures: ['tools-miniapp'] },
       { depName: 'serde_yaml', ownerFeatures: ['workspace-runtime'] },
@@ -151,6 +154,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'terminal-core', ownerFeatures: ['terminal'] },
       { depName: 'notify', ownerFeatures: ['lsp', 'workspace-watch'] },
       { depName: 'tokio-tungstenite', ownerFeatures: ['browser-control'] },
+      { depName: 'tokio-util', ownerFeatures: ['agent-runtime', 'debug-log'] },
       { depName: 'tower-http', ownerFeatures: ['debug-log'] },
       {
         depName: 'tool-runtime',
@@ -292,7 +296,72 @@ export const coreProductFullFeatureAssemblyRule = {
   reason: 'bitfun-core product-full must explicitly assemble current owner feature groups',
 };
 
+export const acpClientCoreFeatures = [
+  'agent-runtime',
+  'ssh-remote',
+];
+
+export const acpServerCoreFeatures = [
+  'agent-runtime',
+  'document-read',
+  'subscription-auth',
+  'deep-research',
+  'lsp',
+  'external-sources',
+  'tools-basic',
+  'tools-git',
+  'tools-mcp',
+  'tools-browser-web',
+  'tools-computer-use',
+  'tools-image-analysis',
+  'tools-miniapp',
+  'tools-canvas',
+  'tools-agent-control',
+];
+
+export const acpClosedFeatureProfileRules = [
+  {
+    manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
+    featureName: 'default',
+    requiredFeatureRefs: ['client', 'server'],
+    exact: true,
+    reason: 'bitfun-acp default must preserve its complete client and server compatibility surface',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
+    featureName: 'client',
+    requiredFeatureRefs: [
+      'dep:futures',
+      'dep:serde',
+      'dep:bitfun-core',
+      ...acpClientCoreFeatures.map((feature) => `bitfun-core/${feature}`),
+    ],
+    exact: true,
+    reason: 'bitfun-acp client must own only external ACP agent and SSH transport capabilities',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
+    featureName: 'server',
+    requiredFeatureRefs: [
+      'dep:bitfun-agent-runtime',
+      'dep:bitfun-core-types',
+      'dep:bitfun-core',
+      'dep:sha2',
+      ...acpServerCoreFeatures.map((feature) => `bitfun-core/${feature}`),
+    ],
+    exact: true,
+    reason: 'bitfun-acp server must preserve the reviewed Agent Runtime capability surface without SSH transport',
+  },
+];
+
 export const coreClosedFeatureProfileRules = [
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'default',
+    requiredFeatureRefs: [],
+    exact: true,
+    reason: 'bitfun-core default must stay empty so product entrypoints select capabilities explicitly',
+  },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'agent-runtime',
@@ -301,17 +370,21 @@ export const coreClosedFeatureProfileRules = [
       'dep:bitfun-agent-runtime',
       'dep:bitfun-agent-content',
       'dep:bitfun-agent-stream',
+      'dep:base64',
       'dep:bitfun-harness',
       'dep:dashmap',
       'dep:filetime',
       'dep:flate2',
       'dep:fs2',
+      'dep:futures',
       'dep:include_dir',
       'dep:indexmap',
       'dep:image',
       'dep:md5',
       'dep:rusqlite',
+      'dep:regex',
       'dep:similar',
+      'dep:tokio-util',
       'dep:tool-runtime',
       'bitfun-services-core/permission',
       'bitfun-services-core/runtime-ownership',
@@ -697,6 +770,7 @@ export const coreClosedFeatureProfileRules = [
     featureName: 'debug-log',
     requiredFeatureRefs: [
       'dep:axum',
+      'dep:tokio-util',
       'dep:tower-http',
       'bitfun-services-integrations/debug-log',
     ],
@@ -823,7 +897,11 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'dispatch-store',
-    requiredFeatureRefs: ['local-storage', 'bitfun-services-core/dispatch-workspace'],
+    requiredFeatureRefs: [
+      'dep:base64',
+      'local-storage',
+      'bitfun-services-core/dispatch-workspace',
+    ],
     exact: true,
     reason: 'bitfun-core dispatch-store must expose only the durable dispatch index facade',
   },

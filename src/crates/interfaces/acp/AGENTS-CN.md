@@ -6,12 +6,11 @@
 
 `bitfun-acp` 负责基于已组装产品 runtime 的 Agent Client Protocol 入口与 ACP client 行为。ACP protocol / client 细节留在这里或应用入口 adapter 中；跨层只共享稳定 capability facts。
 
-CLI 托管的 ACP 服务端已通过 `ProductAssembler` 消费 `DeliveryProfile::Acp`，并使用 Agent Runtime SDK
-完成会话创建/列举、活动会话模型/模式更新、轮次提交/取消、交互响应和 Agent 事件订阅。`bitfun-acp` 仍直接依赖
-`bitfun-core` 的 `agent-runtime`、`canvas-runtime`、`external-sources` 与 `ssh-remote` owner feature，
-用于一次性恢复完整持久化历史、模型/模式目录、Canvas 工具物化、提供方与兼容指令来源读取、MCP 配置、
-远程工作区，以及本 crate 的 ACP 客户端路径。
-在这些生产路径分别获得可移植替代并证明等价前，不得宣称整个 crate 已与 Core 解耦。
+本 crate 暴露两个可加性的角色 feature。`client` 负责 ACP 进程发现、配置、远程探测、会话传输和
+tool-card 投影，选择 Core Agent Runtime 与具体 SSH 能力；`server` 负责 CLI 托管的 ACP 服务端，
+通过 `DeliveryProfile::Acp` 投影 runtime，并精确选择该路径使用的工具、文档、订阅、LSP 与外部来源 owner，
+但不选择 SSH。兼容默认值必须精确等于 `client + server`；Desktop 只选择 `client`，CLI 选择两者。
+两个角色保持加法语义，不得用 `product-full` 替代任一闭包。
 
 ## 护栏
 
@@ -24,6 +23,7 @@ CLI 托管的 ACP 服务端已通过 `ProductAssembler` 消费 `DeliveryProfile:
 ## 验证
 
 ```bash
-cargo check -p bitfun-acp
+cargo check -p bitfun-acp --no-default-features --features client
+cargo check -p bitfun-acp --no-default-features --features server
 cargo test -p bitfun-acp
 ```
