@@ -15,6 +15,7 @@
 | SDK、Server、ACP、IDE、Web、GitHub、GitLab、Slack | [外部集成适配](opencode-external-integration-adapter-design.md) |
 | 进程、调用、超时、恢复、状态与 BitFun 归属模块边界 | [插件运行时与 Plugin Host](plugin-runtime-design.md) |
 | BitFun 能力输出到外部宿主、能力组合、通用状态/事件/并发/冲突边界 | [能力装配与宿主集成](capability-runtime-integration-design.md) |
+| Plugin Host `input.client` 到 Rust backend 的 HTTP、路由、流和实例适配 | [Plugin Client Rust 路由适配](opencode-plugin-client-route-adapter-design.md) |
 | 交付顺序和阶段退出条件 | [粗粒度计划](../../plans/opencode-extension-compatibility-plan.md) |
 
 ## 1. 基线与判断方法
