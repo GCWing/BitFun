@@ -585,7 +585,13 @@ impl WorkspaceService {
             .await;
     }
 
-    /// Registers or refreshes workspace activity without marking it as opened in the UI.
+    /// Registers or refreshes workspace activity.
+    ///
+    /// The workspace becomes part of the opened list so the UI workspace panel
+    /// shows it (agent/background sessions otherwise disappear from the left
+    /// workspace list). The current workspace is never changed: the caller
+    /// decides activation via `options.auto_set_current` and
+    /// `options.add_to_recent`, which are preserved.
     pub async fn track_workspace_activity(
         &self,
         path: PathBuf,
@@ -2763,7 +2769,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn track_workspace_activity_registers_without_opening_workspace() {
+    async fn track_workspace_activity_registers_into_opened_workspaces() {
         let env = TestEnvironment::new();
         let service = build_test_workspace_service(env.path_manager.clone()).await;
         let workspace_root = env.create_workspace_dir("tracked-workspace");
@@ -2787,9 +2793,11 @@ mod tests {
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].id, tracked.id);
 
-        assert!(
-            service.get_opened_workspaces().await.is_empty(),
-            "tracked workspace activity should not add the workspace to the opened UI list"
+        let opened = service.get_opened_workspaces().await;
+        assert_eq!(
+            opened.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(),
+            vec![tracked.id.as_str()],
+            "tracked workspace activity must register the workspace into the opened UI list"
         );
         assert!(
             service.get_current_workspace().await.is_none(),
@@ -2898,7 +2906,12 @@ mod tests {
             remote_workspace_stable_id("example-host", "/srv/bitfun/project")
         );
         assert_eq!(tracked.root_path, remote_workspace_root);
-        assert!(service.get_opened_workspaces().await.is_empty());
+        let opened = service.get_opened_workspaces().await;
+        assert_eq!(
+            opened.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(),
+            vec![tracked.id.as_str()],
+            "tracked remote workspace must also register into the opened UI list"
+        );
     }
 
     #[cfg(feature = "remote-workspace")]
