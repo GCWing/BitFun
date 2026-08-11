@@ -136,6 +136,15 @@
   &:active {
     transform: scale(0.985);
     background: var(--bf-appearance-token-element-bg-medium);
+
+    // Counter the whole-tab scale drift for the absolutely-positioned close
+    // button so press/release stays under the cursor. The drift (distance
+    // from the tab center × 0.015) is measured by SceneTab and exposed as
+    // --scene-tab-close-shift. The transform transition below keeps this in
+    // sync with the tab's 120ms scale.
+    .bitfun-scene-tab__close {
+      transform: translateY(-50%) translateX(var(--scene-tab-close-shift, 0px));
+    }
   }
 
   &:focus-visible {
@@ -152,6 +161,12 @@
     &:active {
       transform: none;
       background: transparent;
+
+      // No tab-scale drift here (transform is none), so keep the close
+      // button at its base position instead of applying the compensation.
+      .bitfun-scene-tab__close {
+        transform: translateY(-50%);
+      }
     }
   }
 
@@ -237,9 +252,12 @@
     transform: translateY(-50%);
     cursor: pointer;
     flex-shrink: 0;
-    transition: opacity $motion-fast $easing-standard,
-                color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition:
+      // Sync the scale-drift compensation with the tab's 120ms press scale.
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      background $motion-fast $easing-standard;
 
     &:hover {
       color: var(--bf-appearance-token-color-accent-500);
@@ -277,6 +295,13 @@
   .bitfun-scene-tab__close:hover {
     background: var(--bf-appearance-token-element-bg-medium);
     opacity: 1;
+  }
+
+  // Keep the close button at its hovered position while pressed: the global
+  // motion baseline drops buttons 1px on :active.
+  .bitfun-scene-tab__close:active {
+    translate: 0 -1px;
+    scale: 0.985;
   }
 }
 
@@ -348,5 +373,11 @@
   .bitfun-scene-tab__close {
     transition: none;
     transform: none;
+  }
+
+  // No tab-scale drift under reduced motion either (transform is none), so
+  // keep the close button at its base position instead of the compensation.
+  .bitfun-scene-tab:active .bitfun-scene-tab__close {
+    transform: translateY(-50%);
   }
 }
