@@ -83,10 +83,28 @@ pub fn enabled_feature_groups() -> Vec<ToolPackFeatureGroup> {
 
 pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
     match tool_name {
-        "LS" | "Read" | "Glob" | "Grep" | "Write" | "Edit" | "Delete" | "ExecCommand"
-        | "WriteStdin" | "ExecControl" | "GetTime" | "ListModels" => {
-            Some(ToolPackFeatureGroup::Basic)
-        }
+        "LS"
+        | "Read"
+        | "Glob"
+        | "Grep"
+        | "Write"
+        | "Edit"
+        | "Delete"
+        | "ExecCommand"
+        | "WriteStdin"
+        | "ExecControl"
+        | "GetTime"
+        | "ListModels"
+        | "build_project"
+        | "start_app"
+        | "hdc_log"
+        | "arkts_knowledge_search"
+        | "check_arkts_files"
+        | "check_cpp_files"
+        | "switch_cwd"
+        | "verify_ui"
+        | "get_ui_verification_log"
+        | "save_ui_screenshot" => Some(ToolPackFeatureGroup::Basic),
         "Git" | "Worktree" | "ReviewPlatform" | "GetFileDiff" => Some(ToolPackFeatureGroup::Git),
         "ListMCPResources" | "ReadMCPResource" | "ListMCPPrompts" | "GetMCPPrompt" => {
             Some(ToolPackFeatureGroup::Mcp)

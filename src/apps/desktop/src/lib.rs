@@ -2523,7 +2523,7 @@ fn start_event_loop_with_transport(
     event_router: Arc<bitfun_core::agentic::events::EventRouter>,
     transport: Arc<TauriTransportAdapter>,
 ) {
-    tokio::spawn(async move {
+    tauri::async_time::spawn(async move {
         event_loop_driver(event_queue, event_router, |event| {
             let transport = transport.clone();
             async move {

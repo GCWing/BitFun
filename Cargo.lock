@@ -1096,6 +1096,7 @@ dependencies = [
  "serde_yaml",
  "sha2",
  "similar",
+ "tauri",
  "tempfile",
  "terminal-core",
  "thiserror 2.0.19",
