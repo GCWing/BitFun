@@ -579,7 +579,7 @@ fn write_http_403(stream: &mut TcpStream, reason: &str) -> std::io::Result<()> {
     .to_string();
     write!(
         stream,
-        "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\nRetry-After: 1\r\nConnection: close\r\n\r\n{body}",
         body.len()
     )?;
     stream.flush()

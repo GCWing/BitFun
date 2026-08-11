@@ -365,6 +365,7 @@ export interface AIConfig {
    * unaffected. Defaults to true.
    */
   external_instruction_sources?: boolean;
+  browser_control_auto_connect_on_startup?: boolean;
 }
 
 export interface StoredAgentProfileConfigItem {

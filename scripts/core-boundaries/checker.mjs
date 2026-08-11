@@ -32,6 +32,7 @@ import { runManifestParserSelfTest } from './self-test.mjs';
 import {
   featureReferencesDependency,
   featureReferencesFeature,
+  featureReferencesOptionalDependencyOwner,
   unexpectedDependencyOwnerFeatures,
   unexpectedReachableLocalFeatures,
 } from './manifest-feature-helpers.mjs';
@@ -545,7 +546,7 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
         });
         continue;
       }
-      if (!featureReferencesDependency(feature, dependency.depName)) {
+      if (!featureReferencesOptionalDependencyOwner(feature, dependency.depName)) {
         failures.push({
           path: manifestPath,
           line: feature.line,

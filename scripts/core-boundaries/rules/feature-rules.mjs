@@ -58,7 +58,7 @@ export const optionalDependencyFeatureOwnerRules = [
     reason:
       'runtime-ports may expose product-domain permission ports only through the explicit permission contract slice',
     dependencies: [
-      { depName: 'bitfun-product-domains', ownerFeatures: ['permission'] },
+      { depName: 'bitfun-product-domains', ownerFeatures: ['permission', 'ts'] },
     ],
   },
   {
@@ -67,7 +67,10 @@ export const optionalDependencyFeatureOwnerRules = [
       'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',
     dependencies: [
       { depName: 'axum', ownerFeatures: ['debug-log', 'mcp-runtime'] },
-      { depName: 'bitfun-ai-adapters', ownerFeatures: ['ai-adapter-runtime'] },
+      {
+        depName: 'bitfun-ai-adapters',
+        ownerFeatures: ['ai-adapter-runtime', 'subscription-auth'],
+      },
       { depName: 'bitfun-agent-runtime', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-claude-code-adapter', ownerFeatures: ['external-sources'] },
@@ -85,6 +88,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'function-agents',
           'plugin-source',
           'tools-miniapp',
+          'ts',
         ],
       },
       { depName: 'bitfun-runtime-services', ownerFeatures: ['runtime-services'] },
@@ -109,6 +113,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'script-tool-runtime',
           'ssh-remote',
           'tools-miniapp',
+          'ts',
           'web-tools',
           'workspace-search',
         ],
@@ -142,7 +147,7 @@ export const optionalDependencyFeatureOwnerRules = [
       // scheduling compiles unconditionally under agent-runtime (customization
       // over upstream, which moved rand to services-integrations).
       { depName: 'rand', ownerFeatures: ['agent-runtime'] },
-      { depName: 'reqwest', ownerFeatures: ['ai-adapter-runtime', 'mcp-runtime', 'tools-miniapp'] },
+      { depName: 'reqwest', ownerFeatures: ['mcp-runtime', 'tools-miniapp'] },
       { depName: 'rusqlite', ownerFeatures: ['agent-runtime'] },
       { depName: 'semver', ownerFeatures: ['tools-miniapp'] },
       { depName: 'serde_yaml', ownerFeatures: ['workspace-runtime'] },
@@ -151,7 +156,10 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'notify', ownerFeatures: ['lsp', 'workspace-watch'] },
       { depName: 'tokio-tungstenite', ownerFeatures: ['browser-control'] },
       { depName: 'tower-http', ownerFeatures: ['debug-log'] },
-      { depName: 'tool-runtime', ownerFeatures: ['agent-runtime', 'tools-basic', 'web-tools'] },
+      {
+        depName: 'tool-runtime',
+        ownerFeatures: ['agent-runtime', 'document-read', 'web-tools'],
+      },
     ],
   },
   {
@@ -244,6 +252,8 @@ export const coreProductFullFeatureAssemblyRule = {
   featureName: 'product-full',
   requiredFeatureRefs: [
     'agent-runtime',
+    'document-read',
+    'subscription-auth',
     'browser-control',
     'deep-research',
     'mcp-runtime',
@@ -523,10 +533,33 @@ export const coreClosedFeatureProfileRules = [
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'document-read',
+    requiredFeatureRefs: ['tool-runtime?/document-read'],
+    exact: true,
+    reason:
+      'document-read must add conversion only when the Agent tool runtime owner is selected',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'subscription-auth',
+    requiredFeatureRefs: ['bitfun-ai-adapters?/subscription-auth'],
+    exact: true,
+    reason:
+      'subscription-auth must add local credential resolution only when the AI adapter runtime owner is selected',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'ai-adapter-runtime',
+    requiredFeatureRefs: ['dep:bitfun-ai-adapters'],
+    exact: true,
+    reason:
+      'ai-adapter-runtime must own provider protocol clients without implicitly enabling local subscription credentials',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'tools-basic',
     requiredFeatureRefs: [
       'bitfun-tool-packs/basic',
-      'tool-runtime/document-read',
       'workspace-search',
     ],
     allowedTransitiveFeatureRefs: [

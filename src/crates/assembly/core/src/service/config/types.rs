@@ -815,6 +815,13 @@ pub struct AIConfig {
     #[serde(default)]
     pub browser_control_preferred_browser: String,
 
+    /// Reattach to an already-running browser when BitFun starts. Off by
+    /// default: the browser forgets its approval when it restarts, so this can
+    /// put an approval dialog in front of the user before they asked for the
+    /// browser at all.
+    #[serde(default)]
+    pub browser_control_auto_connect_on_startup: bool,
+
     /// Maximum number of rounds per dialog turn before soft-pausing.
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
@@ -2824,6 +2831,7 @@ impl Default for AIConfig {
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
+            browser_control_auto_connect_on_startup: false,
             max_rounds: default_max_rounds(),
             rbac_enabled: true,
             external_instruction_sources: true,

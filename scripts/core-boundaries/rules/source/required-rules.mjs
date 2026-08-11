@@ -1,44 +1,24 @@
 // Boundary rules for source ownership, facades, and required owner content.
 
 export const requiredContentRules = [
-  {
-    path: 'Cargo.toml',
-    reason:
-      'workspace Reqwest defaults must stay transport-only so client owners select one TLS backend explicitly',
-    patterns: [
-      {
-        regex: /^reqwest[ \t]*=[ \t]*\{[ \t]*version[ \t]*=[ \t]*"[^"]+",[ \t]*default-features[ \t]*=[ \t]*false,[ \t]*features[ \t]*=[ \t]*\[[ \t]*"http2",[ \t]*"json",[ \t]*"stream",[ \t]*"multipart",[ \t]*"query",[ \t]*"form"[ \t]*\][ \t]*\}[ \t]*$/m,
-        message:
-          'workspace Reqwest dependency must use the reviewed transport/data feature allowlist',
-      },
-    ],
-  },
   ...[
     'src/apps/cli/Cargo.toml',
     'src/apps/desktop/Cargo.toml',
+    'src/crates/adapters/ai-adapters/Cargo.toml',
+    'src/crates/assembly/core/Cargo.toml',
     'src/crates/services/miniapp-market-service/Cargo.toml',
+    'src/crates/services/services-integrations/Cargo.toml',
     'src/crates/services/skin-market-service/Cargo.toml',
   ].map((path) => ({
     path,
-    reason: 'first-party Reqwest client owners must select the repository TLS backend explicitly',
+    reason: 'first-party Reqwest consumers must inherit the workspace-owned compatible version',
     patterns: [
       {
-        regex: /^reqwest\s*=\s*\{\s*workspace\s*=\s*true,\s*features\s*=\s*\[\s*"rustls"\s*\]\s*\}/m,
-        message: 'Reqwest client dependency must explicitly enable rustls',
+        regex: /^reqwest\s*=\s*\{\s*workspace\s*=\s*true(?:\s*,|\s*\})/m,
+        message: 'Reqwest dependency must use workspace = true',
       },
     ],
   })),
-  {
-    path: 'src/crates/adapters/ai-adapters/Cargo.toml',
-    reason:
-      'the AI adapter owns Rustls HTTPS clients and the product-supported SOCKS proxy transport',
-    patterns: [
-      {
-        regex: /^reqwest\s*=\s*\{\s*workspace\s*=\s*true,\s*features\s*=\s*\[\s*"rustls"\s*,\s*"socks"\s*\]\s*\}/m,
-        message: 'AI adapter Reqwest dependency must explicitly enable rustls and socks',
-      },
-    ],
-  },
   {
     path: 'src/crates/services/services-core/src/lib.rs',
     reason:
@@ -3936,6 +3916,14 @@ export const requiredContentRules = [
         message: 'core ai-adapter-runtime feature must explicitly enable the optional dependency',
       },
       {
+        regex: /subscription-auth = \["bitfun-ai-adapters\?\/subscription-auth"\]/,
+        message: 'core subscription-auth modifier must not activate the optional AI adapter runtime by itself',
+      },
+      {
+        regex: /document-read = \["tool-runtime\?\/document-read"\]/,
+        message: 'core document-read modifier must not activate the optional tool runtime by itself',
+      },
+      {
         regex: /agent-runtime = \[[^\]]*"ai-adapter-runtime"[^\]]*\]/,
         message: 'core agent-runtime assembly must explicitly opt into AI adapter runtime',
       },
@@ -4071,8 +4059,8 @@ export const requiredContentRules = [
         message: 'AI client runtime must stay behind ai-adapter-runtime',
       },
       {
-        regex: /#\[cfg\(feature = "ai-adapter-runtime"\)\]\s*pub mod subscription_auth\b/s,
-        message: 'AI subscription auth runtime must stay behind ai-adapter-runtime',
+        regex: /#\[cfg\(all\(feature = "ai-adapter-runtime", feature = "subscription-auth"\)\)\]\s*pub mod subscription_auth\b/s,
+        message: 'AI subscription auth runtime must require both the adapter and credential owners',
       },
       {
         regex: /#\[cfg\(feature = "debug-log"\)\]\s*pub mod debug_log\b/s,

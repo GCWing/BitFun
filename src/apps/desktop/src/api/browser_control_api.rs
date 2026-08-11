@@ -27,11 +27,18 @@ fn default_cdp_port() -> u16 {
 /// something asks for the browser. Reattaching here restores that connection
 /// without the user having to click anything.
 ///
+/// Opt-in, because the grant does not survive a browser restart: after one,
+/// reattaching raises an approval dialog before the user has asked for the
+/// browser at all.
+///
 /// This never starts a browser and never opens a settings page: when there is
 /// no live endpoint to reattach to, it does nothing and leaves the on-demand
 /// path to handle it.
 pub fn init_on_startup() {
     tokio::spawn(async {
+        if !auto_connect_on_startup_enabled().await {
+            return;
+        }
         let Ok(kind) = selected_browser_kind().await else {
             return;
         };
@@ -62,6 +69,17 @@ pub fn init_on_startup() {
             ),
         }
     });
+}
+
+async fn auto_connect_on_startup_enabled() -> bool {
+    let Ok(service) = get_global_config_service().await else {
+        return false;
+    };
+    service
+        .get_config::<GlobalConfig>(None)
+        .await
+        .map(|config| config.ai.browser_control_auto_connect_on_startup)
+        .unwrap_or(false)
 }
 
 async fn selected_browser_kind() -> Result<BrowserKind, String> {

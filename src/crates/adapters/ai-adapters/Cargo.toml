@@ -25,7 +25,7 @@ futures = { workspace = true }
 fs2 = { workspace = true, optional = true }
 libc = { workspace = true, optional = true }
 log = { workspace = true }
-reqwest = { workspace = true, features = ["rustls", "socks"] }
+reqwest = { workspace = true, features = ["http2", "json", "rustls", "socks", "stream"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true, optional = true }
@@ -53,6 +53,7 @@ subscription-auth = [
     "dep:fs2",
     "dep:keyring-core",
     "dep:libc",
+    "reqwest/form",
     "dep:sha2",
     "tokio/fs",
     "tokio/io-util",

@@ -156,6 +156,8 @@
     "connect": "連接瀏覽器",
     "defaultCdp": "預設 CDP",
     "defaultCdpDesc": "讓 BitFun 直接使用你正在用的 Chrome 或 Edge，保留已開啟的分頁和登入狀態，不必另外開一個空白瀏覽器。首次需要在瀏覽器中授權，之後每次連線也會由瀏覽器向你確認。",
+    "autoConnectOnStartup": "啟動時自動連接",
+    "autoConnectOnStartupDesc": "BitFun 啟動時，若瀏覽器正在執行且已啟用上面的設定，就直接連上。注意：瀏覽器重新啟動後會忘記先前的授權，這時會立刻跳出一次授權確認，即使你這次並不打算用瀏覽器。關閉時改為按需連接 —— Agent 第一次用到瀏覽器才連。",
     "defaultCdpEnabled": "已啟用",
     "defaultCdpDisabled": "未啟用",
     "enableDefaultCdp": "啟用預設 CDP",

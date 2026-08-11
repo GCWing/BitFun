@@ -12,6 +12,8 @@ name = "bitfun_acp"
 [dependencies]
 bitfun-core = { path = "../../assembly/core", default-features = false, features = [
     "agent-runtime",
+    "document-read",
+    "subscription-auth",
     "deep-research",
     "lsp",
     "external-sources",

@@ -2,7 +2,7 @@
 
 > 最近核实：2026-08-10
 >
-> 实现复核基线：`gcwing/main@e63084bc5`
+> 实现复核基线：`gcwing/main@734e5b05f`
 >
 > 性能 A/B 基线：`gcwing/main@1f538b96d`
 >
@@ -17,8 +17,9 @@
 | 结论 | 说明 |
 |---|---|
 | 服务测试链接拓扑已收敛 | Services 两个 crate 的集成 target 总数从 33 降到 25；选中的 `local-storage`、MCP、基础 SSH 闭包从 16 个集成 executable 降到 8 个 |
-| Agent Runtime 基线不再隐藏全量 capability union | `bitfun-core/agent-runtime` 只保留生命周期和基础工具 owner；MCP、Remote Connect、Browser/Web、Git、模型目录等由产品入口显式组合，三平台 normal/build 闭包各减少 105–110 个版本化 package instance |
-| 完整产品行为和闭包保持 | `product-full` 显式组合全部 owner，Windows normal/build 闭包保持 570；CLI 保持 649。ACP 只退出未选择的隐含能力，Windows/macOS/Linux 分别减少 10/13/22 |
+| Agent Runtime 基线不再隐藏重型 capability | `bitfun-core/agent-runtime` 只保留生命周期和基础工具 owner；文档转换与订阅认证也改为产品显式 modifier。在最新主线 A/B 中，三平台 normal/build 闭包进一步减少 69/64/110 个版本化 package instance |
+| App Server 不继承未消费能力 | App Server 保持现有 Agent/Git/外部来源 handler 边界，不再因 Core 基线携带文档转换和本地订阅凭据，三平台闭包减少 61/56/78 |
+| 完整产品行为和闭包保持 | `product-full` 显式组合全部 owner，Windows normal/build 闭包保持 570；CLI 保持 649。ACP 只退出未选择或未使用的隐含能力，累计在 Windows/macOS/Linux 分别减少 12/15/24 |
 | Installer 删除未使用的直接能力 | 独立 manifest 的直接 dependency 从 18 降到 10，Windows normal/build 闭包减少 6；不把 Installer 并入根 workspace，本 PR 按要求不提交其生成 lockfile |
 | focused test 仍保持精确 | 同 owner、feature、平台和进程语义的源文件进入分组 target；使用 `--test <target> <module>::<filter>` 运行单模块 |
 
@@ -94,6 +95,21 @@ package/version，不等同于实际秒数。路径 package 因 A/B worktree 路
 | Desktop | 792 → 792 | 807 → 807 | 892 → 892 | 完整产品继续使用既有跨平台截图行为，本轮不以扩大根 lock 依赖宇宙换取单平台闭包下降 |
 | Installer | 333 → 327 | — | — | Windows 独立 workspace；直接 dependency 18 → 10 |
 
+在最新实现复核基线 `gcwing/main@734e5b05f` 上，本轮继续把两个重型能力从 Core 基线改为弱
+modifier。计数先移除 Cargo tree 的重复展示标记 `(*)`，再按 package/version 去重：
+
+| 本轮闭包 | Windows | macOS | Linux | 行为边界 |
+|---|---:|---:|---:|---|
+| Core `agent-runtime` | 343 → 274 | 330 → 266 | 375 → 265 | 文档扩展识别保留；转换和本地订阅凭据明确不可用 |
+| App Server | 490 → 429 | 477 → 421 | 508 → 430 | 现有 handler/DTO 保持，未消费的两个能力退出 |
+| Core `product-full` | 570 → 570 | 557 → 557 | 601 → 601 | 显式恢复 `document-read` 与 `subscription-auth` |
+| CLI | 649 → 649 | 649 → 649 | 672 → 672 | 显式保持原有能力 |
+| ACP | 589 → 587 | 574 → 572 | 594 → 592 | 保持原有能力，同时退出 Reqwest 未使用的 `mime_guess`/`unicase` |
+
+本轮没有新增 crate 或第三方 dependency。收益来自两类现有重闭包退出窄入口：`anydoc` 及其
+文档解析/压缩依赖，以及订阅凭据的 keyring/加密/本地存储依赖。完整产品 package 集合不变，
+因此这里只报告依赖图收敛，不宣称 `product-full` wall-clock 提速。
+
 Package instance 会低估“同一个大 crate 少编译了多少 feature 代码”。在 Windows
 `agent-runtime` 闭包中，`bitfun-services-integrations` 的 Cargo active feature 从 61 个降到 6 个，
 只保留 `workspace-search` 及其 5 个直接依赖 feature；`bitfun-product-domains` 从 13 个降到 5 个，
@@ -106,7 +122,7 @@ Plugin Source 由各自 owner 选择，完整产品仍经 `product-full` 显式�
 | 状态 | 范围 | 处理结论 |
 |---|---|---|
 | 已稳定 | 根 `Cargo.lock`、Reqwest Rustls 单栈、workspace Tokio 最小基线 | 不重复治理 |
-| 本轮完成 | Core Agent Runtime capability、Installer 未使用直接依赖 | 以真实入口 closure 收敛，不建立新的产品 umbrella，也不扩大根依赖宇宙 |
+| 本轮完成 | Core Agent Runtime capability、文档转换与订阅认证 modifier、Installer 未使用直接依赖 | 以真实入口 closure 收敛，不建立新的产品 umbrella，也不扩大根依赖宇宙 |
 | 当前不动 | App Server / Server | 只为保持现有 handler 编译显式声明其已消费的 Core owner；不在改造稳定前继续拆其生产路径 |
 | 明确保留 | Desktop screenshots backend | 替换方案必须同时保持三平台坐标/权限/区域捕获语义且不增加根 lock package；当前候选不满足 |
 | 明确保留 | `portable-pty 0.8/0.9` | 非 OHOS 与 OHOS 的平台兼容选择，不为去重破坏 |
@@ -131,6 +147,7 @@ Plugin Source 由各自 owner 选择，完整产品仍经 `product-full` 显式�
 | CI 拓扑 | Rust job 不再等待完整前端构建，自建 Tauri 检查所需资源目录 |
 | 依赖收敛 | Desktop 直接 image 版本和 Reqwest TLS 双栈已治理 |
 | Agent Runtime 闭包 | Core 基线不再暗带具体 capability；完整产品和 CLI 显式保持原能力，ACP 退出未选择闭包 |
+| 重型可选能力 | 文档转换和本地订阅凭据由弱 modifier 细化已有 runtime owner；Core 基线和 App Server 退出未消费闭包 |
 | Installer 闭包 | 删除 8 个未使用直接 dependency；独立 workspace 和发布生命周期不变，本 PR 不提交其生成 lockfile |
 | Agent Runtime 测试 | 28 个 integration executable 已收敛为 5 个职责/平台 target |
 | Services 测试 | 两个服务 crate 使用显式 target；选中闭包少 8 个 integration executable，进程/feature/external-system 边界保持独立 |

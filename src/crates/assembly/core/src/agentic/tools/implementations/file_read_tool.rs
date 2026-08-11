@@ -15,16 +15,22 @@ use log::{debug, warn};
 use serde_json::{json, Value};
 use std::convert::TryFrom;
 use std::path::Path;
-use std::time::{Duration, Instant};
+#[cfg(feature = "document-read")]
+use std::time::Duration;
+use std::time::Instant;
+use tool_runtime::fs::document::is_supported_document_path;
+#[cfg(feature = "document-read")]
 use tool_runtime::fs::document::{
-    convert_document_to_markdown, is_supported_document_path, DocumentConversionError,
-    MAX_DOCUMENT_INPUT_BYTES, MAX_DOCUMENT_MARKDOWN_BYTES,
+    convert_document_to_markdown, DocumentConversionError, MAX_DOCUMENT_INPUT_BYTES,
+    MAX_DOCUMENT_MARKDOWN_BYTES,
 };
 use tool_runtime::fs::read_file::{
     build_read_file_presentation, build_remote_read_command, build_remote_tail_read_command,
-    parse_remote_read_output, parse_remote_tail_read_output, read_file, read_file_bytes_bounded,
-    read_file_tail, read_text, read_text_tail, ReadFileResult,
+    parse_remote_read_output, parse_remote_tail_read_output, read_file, read_file_tail,
+    ReadFileResult,
 };
+#[cfg(feature = "document-read")]
+use tool_runtime::fs::read_file::{read_file_bytes_bounded, read_text, read_text_tail};
 
 pub struct FileReadTool {
     default_max_lines_to_read: usize,
@@ -37,6 +43,7 @@ pub const DEFAULT_READ_MAX_TOTAL_CHARS: usize = 64_000;
 /// After this many already-served hits for the exact same range, the Read tool
 /// force-serves real content to break a review spin loop.
 const REPEAT_READ_FORCE_SERVE_THRESHOLD: usize = 3;
+#[cfg(feature = "document-read")]
 // anydoc is synchronous, so this bounds the caller's wait rather than terminating the parser.
 // The worker retains the global conversion permit until it actually exits, keeping failures closed.
 const DOCUMENT_CONVERSION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -308,6 +315,7 @@ impl FileReadTool {
         Ok(result)
     }
 
+    #[cfg(feature = "document-read")]
     async fn read_document_window(
         &self,
         resolved_path: &str,
@@ -418,6 +426,7 @@ impl FileReadTool {
         ))
     }
 
+    #[cfg(feature = "document-read")]
     fn document_conversion_error(
         logical_path: &str,
         resolved_path: &str,
@@ -449,16 +458,29 @@ impl Tool for FileReadTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
+        #[cfg(feature = "document-read")]
+        let document_summary = " Office documents, OpenDocument files, RTF, EPUB, and PDFs are converted locally to GitHub-Flavored Markdown before reading.";
+        #[cfg(not(feature = "document-read"))]
+        let document_summary = "";
+        #[cfg(feature = "document-read")]
+        let document_guidance = format!(
+            r#"- Supported document extensions are .doc, .docx, .docm, .ppt, .pps, .pot, .pptx, .pptm, .ppsx, .ppsm, .xls, .xlsx, .xlsm, .xlsb, .odt, .ods, .odp, .rtf, .epub, .csv, and .pdf. Document input is capped at {} MiB and extracted Markdown at {} MiB. Conversion is offline and never fetches linked resources.
+- render defaults to auto. auto converts supported documents but preserves CSV as exact source text for editing compatibility. Use render=markdown to turn CSV into a Markdown table or to content-detect a document with a missing/wrong extension. Use render=source to bypass conversion for a textual document such as CSV or RTF.
+- For converted documents, offset, limit, tail, line numbers, and total_lines refer to the extracted Markdown, not source pages or rows. The Markdown is a read-only representation; do not use it as exact source text for Edit. Embedded objects are represented by text, and scanned/image-only PDF pages require OCR.
+"#,
+            MAX_DOCUMENT_INPUT_BYTES / (1024 * 1024),
+            MAX_DOCUMENT_MARKDOWN_BYTES / (1024 * 1024),
+        );
+        #[cfg(not(feature = "document-read"))]
+        let document_guidance = "";
+
         Ok(format!(
-            r#"Reads a file from the current workspace filesystem. Office documents, OpenDocument files, RTF, EPUB, and PDFs are converted locally to GitHub-Flavored Markdown before reading. If the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.
+            r#"Reads a file from the current workspace filesystem.{document_summary} If the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.
 
 Usage:
 - The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://...` URI returned by another tool.
 - Do not read host roots or placeholder paths such as `/workspace`.
-- Supported document extensions are .doc, .docx, .docm, .ppt, .pps, .pot, .pptx, .pptm, .ppsx, .ppsm, .xls, .xlsx, .xlsm, .xlsb, .odt, .ods, .odp, .rtf, .epub, .csv, and .pdf. Document input is capped at {} MiB and extracted Markdown at {} MiB. Conversion is offline and never fetches linked resources.
-- render defaults to auto. auto converts supported documents but preserves CSV as exact source text for editing compatibility. Use render=markdown to turn CSV into a Markdown table or to content-detect a document with a missing/wrong extension. Use render=source to bypass conversion for a textual document such as CSV or RTF.
-- For converted documents, offset, limit, tail, line numbers, and total_lines refer to the extracted Markdown, not source pages or rows. The Markdown is a read-only representation; do not use it as exact source text for Edit. Embedded objects are represented by text, and scanned/image-only PDF pages require OCR.
-- By default, it reads up to {} lines starting from the beginning of the file. When you plan to Edit a file, prefer this default full read so you see the exact bytes you will need to match.
+{document_guidance}- By default, it reads up to {} lines starting from the beginning of the file. When you plan to Edit a file, prefer this default full read so you see the exact bytes you will need to match.
 - You can optionally specify an offset and limit. offset is a 1-based line number. Use a range only when you already know the target lines; the range must include every line you will copy into Edit `old_string`.
 - You can set tail=true with limit to read the last N lines. This is useful for command output and logs. Do not combine tail=true with offset.
 - Any lines longer than {} characters will be truncated.
@@ -469,30 +491,24 @@ Usage:
 - Avoid tiny repeated slices (e.g. 30-100 line chunks). If you need more context, read a larger window that covers the whole block you will edit.
 - Do not use `limit` with a small value (e.g. < 50) to probe file type or structure. Source files typically begin with copyright headers — a probe read returns no useful code.
 "#,
-            MAX_DOCUMENT_INPUT_BYTES / (1024 * 1024),
-            MAX_DOCUMENT_MARKDOWN_BYTES / (1024 * 1024),
-            self.default_max_lines_to_read,
-            self.max_line_chars,
-            self.max_total_chars
+            self.default_max_lines_to_read, self.max_line_chars, self.max_total_chars
         ))
     }
 
     fn short_description(&self) -> String {
-        "Read text files and extract documents.".to_string()
+        #[cfg(feature = "document-read")]
+        return "Read text files and extract documents.".to_string();
+        #[cfg(not(feature = "document-read"))]
+        return "Read text files.".to_string();
     }
 
     fn input_schema(&self) -> Value {
-        json!({
+        let schema = json!({
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
                     "description": "The file to read. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun:// URI returned by another tool."
-                },
-                "render": {
-                    "type": "string",
-                    "enum": ["auto", "source", "markdown"],
-                    "description": "How to represent the file. auto converts supported documents but preserves CSV source text; source bypasses conversion; markdown forces local anydoc conversion and enables content detection. Defaults to auto."
                 },
                 "offset": {
                     "type": "number",
@@ -509,7 +525,28 @@ Usage:
             },
             "required": ["file_path"],
             "additionalProperties": false
-        })
+        });
+        #[cfg(feature = "document-read")]
+        let schema = {
+            let mut schema = schema;
+            schema["properties"]["render"] = json!({
+                "type": "string",
+                "enum": ["auto", "source", "markdown"],
+                "description": "How to represent the file. auto converts supported documents but preserves CSV source text; source bypasses conversion; markdown forces local anydoc conversion and enables content detection. Defaults to auto."
+            });
+            schema
+        };
+        #[cfg(not(feature = "document-read"))]
+        let schema = {
+            let mut schema = schema;
+            schema["properties"]["render"] = json!({
+                "type": "string",
+                "enum": ["auto", "source"],
+                "description": "How to read the file. auto reads ordinary text and reports known document formats as unavailable; source bypasses document detection for text-based formats. Defaults to auto."
+            });
+            schema
+        };
+        schema
     }
 
     fn is_readonly(&self) -> bool {
@@ -691,6 +728,13 @@ Usage:
             ReadRenderMode::Source => false,
             ReadRenderMode::Markdown => true,
         };
+        #[cfg(not(feature = "document-read"))]
+        if reads_document_representation {
+            return Err(BitFunError::tool(format!(
+                "Document Markdown conversion is not available in this product build: {}. Use a product that includes document-read, or render=source for text-based formats.",
+                resolved.logical_path
+            )));
+        }
         let revision_before_read = if reads_document_representation
             || resolved.uses_remote_workspace_backend()
             || tail
@@ -740,9 +784,10 @@ Usage:
             reset_review_read_spin_counters(context, &resolved);
         }
 
-        let (read_file_result, document_metadata) = if reads_document_representation {
-            let (result, metadata) = self
-                .read_document_window(
+        #[cfg(feature = "document-read")]
+        let document_read = if reads_document_representation {
+            Some(
+                self.read_document_window(
                     &resolved.resolved_path,
                     &resolved.logical_path,
                     start_line,
@@ -751,7 +796,16 @@ Usage:
                     resolved.uses_remote_workspace_backend(),
                     context,
                 )
-                .await?;
+                .await?,
+            )
+        } else {
+            None
+        };
+        #[cfg(not(feature = "document-read"))]
+        let document_read: Option<(ReadFileResult, DocumentReadMetadata)> = None;
+
+        let (read_file_result, document_metadata) = if let Some((result, metadata)) = document_read
+        {
             (result, Some(metadata))
         } else if resolved.uses_remote_workspace_backend() {
             if tail {
@@ -879,20 +933,27 @@ Usage:
 
 #[cfg(test)]
 mod tests {
-    use super::{FileReadTool, ReadRenderMode, MAX_DOCUMENT_INPUT_BYTES};
+    #[cfg(feature = "document-read")]
+    use super::MAX_DOCUMENT_INPUT_BYTES;
+    use super::{FileReadTool, ReadRenderMode};
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::WorkspaceBinding;
+    #[cfg(feature = "document-read")]
     use async_trait::async_trait;
+    use bitfun_runtime_ports::ToolRuntimeHandles;
+    #[cfg(feature = "document-read")]
     use bitfun_runtime_ports::{
-        ToolRuntimeHandles, WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry,
-        WorkspaceFileSystem, WorkspaceServices, WorkspaceShell,
+        WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
+        WorkspaceServices, WorkspaceShell,
     };
     use serde_json::{json, Value};
     use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
+    #[cfg(feature = "document-read")]
     use std::sync::atomic::{AtomicUsize, Ordering};
+    #[cfg(feature = "document-read")]
     use std::sync::Arc;
 
     fn local_context(root: PathBuf) -> ToolUseContext {
@@ -914,11 +975,13 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "document-read")]
     struct FakeRemoteFs {
         bytes: Vec<u8>,
         bounded_limit: Arc<AtomicUsize>,
     }
 
+    #[cfg(feature = "document-read")]
     #[async_trait]
     impl WorkspaceFileSystem for FakeRemoteFs {
         async fn read_file(&self, _path: &str) -> anyhow::Result<Vec<u8>> {
@@ -959,8 +1022,10 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "document-read")]
     struct PanicRemoteShell;
 
+    #[cfg(feature = "document-read")]
     #[async_trait]
     impl WorkspaceShell for PanicRemoteShell {
         async fn exec_with_options(
@@ -972,6 +1037,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "document-read")]
     fn remote_context(bytes: Vec<u8>, bounded_limit: Arc<AtomicUsize>) -> ToolUseContext {
         let root = "/remote/workspace";
         let session_identity =
@@ -1012,10 +1078,77 @@ mod tests {
 
         assert!(properties.contains_key("offset"));
         assert!(properties.contains_key("tail"));
+        #[cfg(feature = "document-read")]
         assert_eq!(
             properties["render"]["enum"],
             json!(["auto", "source", "markdown"])
         );
+    }
+
+    #[cfg(not(feature = "document-read"))]
+    #[tokio::test]
+    async fn read_tool_without_document_support_does_not_advertise_conversion() {
+        let tool = FileReadTool::new();
+        let schema = tool.input_schema();
+        let properties = schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+
+        assert_eq!(properties["render"]["enum"], json!(["auto", "source"]));
+        assert!(!properties["render"]["description"]
+            .as_str()
+            .expect("render description")
+            .contains("Markdown"));
+        assert!(!tool
+            .description()
+            .await
+            .expect("description")
+            .contains("converted locally"));
+        assert_eq!(tool.short_description(), "Read text files.");
+    }
+
+    #[cfg(not(feature = "document-read"))]
+    #[tokio::test]
+    async fn read_tool_without_document_support_fails_closed_for_document_rendering() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join("notes.rtf"), br"{\rtf1\ansi Hello}").expect("write RTF");
+        fs::write(dir.path().join("notes.txt"), "plain text").expect("write text");
+        let context = local_context(dir.path().to_path_buf());
+        let tool = FileReadTool::new();
+
+        let auto_error = tool
+            .call_impl(&json!({ "file_path": "notes.rtf" }), &context)
+            .await
+            .expect_err("known document path must not fall back to source text");
+        assert!(auto_error
+            .to_string()
+            .contains("Document Markdown conversion is not available"));
+
+        let markdown_error = tool
+            .call_impl(
+                &json!({ "file_path": "notes.txt", "render": "markdown" }),
+                &context,
+            )
+            .await
+            .expect_err("forced Markdown conversion must be unavailable");
+        assert!(markdown_error
+            .to_string()
+            .contains("Document Markdown conversion is not available"));
+
+        let source = tool
+            .call_impl(
+                &json!({ "file_path": "notes.rtf", "render": "source" }),
+                &context,
+            )
+            .await
+            .expect("explicit source reads remain available");
+        let ToolResult::Result { data, .. } = &source[0] else {
+            panic!("expected result");
+        };
+        assert!(data["content"]
+            .as_str()
+            .is_some_and(|content| content.contains("Hello")));
     }
 
     #[test]
@@ -1059,6 +1192,7 @@ mod tests {
         assert!(FileReadTool::read_render_mode(&json!({ "render": 1 })).is_err());
     }
 
+    #[cfg(feature = "document-read")]
     #[tokio::test]
     async fn read_converts_rtf_to_a_markdown_representation() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -1093,6 +1227,22 @@ mod tests {
             .is_some_and(|result| result.contains("from RTF to GitHub-Flavored Markdown")));
     }
 
+    #[cfg(feature = "document-read")]
+    #[tokio::test]
+    async fn document_conversion_failure_does_not_fallback_to_source_bytes() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join("broken.pdf"), b"not a PDF").expect("write invalid PDF");
+        let context = local_context(dir.path().to_path_buf());
+
+        let error = FileReadTool::new()
+            .call_impl(&json!({ "file_path": "broken.pdf" }), &context)
+            .await
+            .expect_err("invalid document must not be returned as source text");
+
+        assert!(error.to_string().contains("Failed to convert document"));
+    }
+
+    #[cfg(feature = "document-read")]
     #[tokio::test]
     async fn csv_auto_preserves_source_while_markdown_render_extracts_a_table() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -1140,6 +1290,7 @@ mod tests {
             .is_some_and(|content| content.contains("| name | value |")));
     }
 
+    #[cfg(feature = "document-read")]
     #[tokio::test]
     async fn remote_document_uses_bounded_file_transfer_and_host_side_conversion() {
         let bounded_limit = Arc::new(AtomicUsize::new(0));
