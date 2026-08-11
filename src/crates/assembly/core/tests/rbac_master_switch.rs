@@ -153,6 +153,7 @@ fn enforce_tool_runtime_restrictions_active_when_switch_on() {
 // ============================================================================
 
 #[tokio::test]
+#[allow(clippy::await_holding_lock)] // switch guard is intentionally held for the whole test body
 async fn warden_runtime_off_disables_turn_and_tool_tracking() {
     let _guard = switch_guard();
     let previous = rbac_enabled();
@@ -189,6 +190,7 @@ async fn warden_runtime_off_disables_turn_and_tool_tracking() {
 }
 
 #[tokio::test]
+#[allow(clippy::await_holding_lock)] // switch guard is intentionally held for the whole test body
 async fn warden_runtime_on_keeps_turn_and_tool_tracking() {
     let _guard = switch_guard();
     let previous = rbac_enabled();

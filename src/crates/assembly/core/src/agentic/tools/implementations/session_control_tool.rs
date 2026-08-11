@@ -2164,19 +2164,16 @@ Arguments:
                         .iter()
                         .map(|session| session.session_id.as_str())
                         .collect();
-                let metadata_list = match coordinator
+                let metadata_list = coordinator
                     .session_manager
                     .persistence_manager()
                     .list_session_metadata_including_internal(
                         &std::path::PathBuf::from(&workspace.project_workspace),
                     )
                     .await
-                {
-                    Ok(metadata_list) => metadata_list,
                     // 批量读取失败时按“无任何 shortName”处理（与原先逐条
                     // .ok().flatten() 的最佳努力语义一致，不中断 list 输出）。
-                    Err(_) => Vec::new(),
-                };
+                    .unwrap_or_default();
                 for metadata in metadata_list {
                     // 仅保留已过滤会话（daemon/warden 已在上方剔除）的
                     // shortName，保持输出契约不变。

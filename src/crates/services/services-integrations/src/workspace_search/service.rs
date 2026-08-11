@@ -368,7 +368,7 @@ impl WorkspaceSearchService {
                     repo_root.display(),
                     pattern_for_log,
                 );
-                original
+                *original
             }
         };
 
@@ -1105,7 +1105,7 @@ fn unknown_repo_status(
 fn cross_validate_empty_result(
     validation_request: &super::rg_fallback::RgValidationRequest,
     result: ContentSearchResult,
-) -> Result<ContentSearchResult, ContentSearchResult> {
+) -> Result<ContentSearchResult, Box<ContentSearchResult>> {
     if !super::rg_fallback::search_result_is_empty(&result) {
         return Ok(result);
     }
@@ -1116,8 +1116,8 @@ fn cross_validate_empty_result(
         Ok(Some(outcome)) => outcome,
         // 预算内无法判定（scope 文件数超预算且前段无命中）或校验不可用：
         // 保守保留原结果，交给工具层既有判据兜底，不在 service 层放大不确定性。
-        Ok(None) => return Err(result),
-        Err(_) => return Err(result),
+        Ok(None) => return Err(Box::new(result)),
+        Err(_) => return Err(Box::new(result)),
     };
     if outcome.total_matches() == 0 {
         // rg 也确认无命中 = 真实空结果。

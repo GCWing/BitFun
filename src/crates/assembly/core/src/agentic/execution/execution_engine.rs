@@ -5873,6 +5873,7 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn user_context_cache_identity_includes_external_sources_switch_state() {
         // P2-1 (KV cache design audit 20260810): the external_instruction_sources
         // master switch changes the rendered User Context content (external user
@@ -5907,6 +5908,7 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn user_context_cache_identity_layers_remote_and_switch_state() {
         // remote:<connection> and extsrc:<on|off> are orthogonal scope suffixes:
         // a remote overlay reconnect and a switch toggle must both invalidate
@@ -5926,6 +5928,7 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn session_user_context_cache_misses_after_external_sources_switch_toggle() {
         // P2-1 end-to-end guard: the scope key drives the session-level user
         // context cache. With the switch ON we remember content under the
@@ -6110,6 +6113,7 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn conditional_rules_persist_once_and_reload_after_compaction() {
         let _environment = lock_environment();
         let temp = tempfile::tempdir().expect("tempdir");

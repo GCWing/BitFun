@@ -338,6 +338,7 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn conditional_instructions_keep_user_then_workspace_precedence() {
         let _environment = lock_environment();
         // Enable both instruction master switches for this test; the
@@ -387,6 +388,7 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn invalid_user_rule_does_not_hide_project_conditional_instructions() {
         let _environment = lock_environment();
         // Enable both instruction master switches for this test; the

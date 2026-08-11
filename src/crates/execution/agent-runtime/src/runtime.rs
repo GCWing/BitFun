@@ -3008,6 +3008,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // cancelled_turns guard is intentionally held between two assertions
     async fn lineage_cancellation_delegates_scope_and_execution_to_one_owner() {
         let ports = Arc::new(FakeAgentRuntimePorts::default());
         let runtime = AgentRuntimeBuilder::new()
