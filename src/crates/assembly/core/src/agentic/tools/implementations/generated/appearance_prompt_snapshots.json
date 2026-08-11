@@ -15,8 +15,6 @@
       "accent600": "#475569",
       "borderBase": "rgba(100, 116, 139, 0.22)",
       "elementBase": "rgba(15, 23, 42, 0.09)",
-      "radiusBase": "8px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 8px rgba(71, 85, 105, 0.1)",
       "styleNotes": "Light appearance - Neutral gray surfaces, black primary actions"
     },
@@ -32,8 +30,6 @@
       "accent600": "#64748b",
       "borderBase": "rgba(255, 255, 255, 0.18)",
       "elementBase": "rgba(255, 255, 255, 0.1)",
-      "radiusBase": "6px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 8px rgba(0, 0, 0, 0.75)",
       "styleNotes": "Slate gray geometric appearance - Deep immersion, high contrast grayscale aesthetics"
     },
@@ -49,8 +45,6 @@
       "accent600": "#3b82f6",
       "borderBase": "rgba(255, 255, 255, 0.18)",
       "elementBase": "rgba(255, 255, 255, 0.1)",
-      "radiusBase": "8px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 8px rgba(0, 0, 0, 0.7)",
       "styleNotes": "Default dark appearance"
     },
@@ -66,8 +60,6 @@
       "accent600": "#3b82f6",
       "borderBase": "rgba(255, 255, 255, 0.14)",
       "elementBase": "rgba(255, 255, 255, 0.09)",
-      "radiusBase": "8px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 8px rgba(0, 0, 0, 0.7)",
       "styleNotes": "Midnight gray dark appearance - Professional and elegant, inspired by JetBrains IDE"
     },
@@ -83,8 +75,6 @@
       "accent600": "#234a6d",
       "borderBase": "rgba(106, 92, 70, 0.2)",
       "elementBase": "rgba(46, 94, 138, 0.1)",
-      "radiusBase": "6px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 8px rgba(106, 92, 70, 0.1)",
       "styleNotes": "Chinese style appearance - Rice paper and ink, blue and vermilion, warm and elegant"
     },
@@ -100,8 +90,6 @@
       "accent600": "#5a8bb3",
       "borderBase": "rgba(232, 232, 232, 0.16)",
       "elementBase": "rgba(115, 165, 204, 0.12)",
-      "radiusBase": "6px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 8px rgba(0, 0, 0, 0.65)",
       "styleNotes": "Chinese dark appearance - Starlit ink night, moonlight like water, serene and elegant"
     },
@@ -117,8 +105,6 @@
       "accent600": "#00ccff",
       "borderBase": "rgba(0, 230, 255, 0.2)",
       "elementBase": "rgba(0, 230, 255, 0.13)",
-      "radiusBase": "6px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 12px rgba(0, 0, 0, 0.8)",
       "styleNotes": "Tech-style appearance - Deep black hole, neon future, ultimate tech aesthetics"
     },
@@ -134,8 +120,6 @@
       "accent600": "#6183bb",
       "borderBase": "rgba(51, 65, 85, 0.6)",
       "elementBase": "rgba(122, 162, 247, 0.11)",
-      "radiusBase": "6px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 12px rgba(0, 0, 0, 0.48)",
       "styleNotes": "Tokyo Night - deep indigo base with soft blue and magenta accents"
     }
