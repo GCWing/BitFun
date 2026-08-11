@@ -31,6 +31,23 @@ export interface FlowChatMessageSubmittedRequest {
 }
 
 /**
+ * Turns have been rolled back out of a Session, and the transcript now ends
+ * somewhere it did not a moment ago.
+ *
+ * The ledger cannot say this by itself. A shorter `dialogTurns` is also what a
+ * history window re-cut and a hydration merge look like, and there are two
+ * dozen writers of that array — so, as with a submission, the actor announces
+ * it rather than leaving the viewport to infer an action from a count.
+ */
+export const FLOWCHAT_TURNS_ROLLED_BACK_EVENT = 'flowchat:turns-rolled-back';
+
+export interface FlowChatTurnsRolledBackRequest {
+  sessionId: string;
+  /** First Turn index removed; everything from here on is gone. */
+  fromTurnIndex: number;
+}
+
+/**
  * Event for scrolling from the review action bar to a specific remediation
  * item in the CodeReviewToolCard report.
  */

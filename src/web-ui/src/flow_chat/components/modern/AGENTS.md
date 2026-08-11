@@ -96,9 +96,15 @@ before reporting a defect as new.
 - "A new Turn" is `activeSession.dialogTurns.at(-1)`, never the end of the
   projection. Do not qualify that identity by whether the Turn is on screen —
   that belongs to the response, which defers until the Turn can be aligned.
-- Giving up a navigated history window is the composer's call, announced through
-  `FLOWCHAT_MESSAGE_SUBMITTED_EVENT`. The ledger cannot tell a Turn the reader
-  sent from one that arrived from elsewhere, and only the first may move them.
+- Detecting one means the ledger **grew**, not that the identity changed. A
+  rollback truncates `dialogTurns` and moves that identity backwards onto a Turn
+  that was always there; read as an arrival it pins the survivor to the top.
+- An action that rewrites `dialogTurns` and wants the viewport moved announces
+  it — `FLOWCHAT_MESSAGE_SUBMITTED_EVENT` for giving up a navigated history
+  window, `FLOWCHAT_TURNS_ROLLED_BACK_EVENT` for settling on a new tail. The
+  ledger cannot tell a Turn the reader sent from one that arrived from
+  elsewhere, nor a rollback from a window re-cut, and there are two dozen
+  writers of that array. Do not infer either from a count.
 
 ## Virtualization and Rendering
 

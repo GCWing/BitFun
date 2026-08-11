@@ -24,6 +24,10 @@ import { useScrollToTurnHeader } from '../../hooks/useScrollToTurnHeader';
 import { useVisibleTaskInfo } from '../../hooks/useVisibleTaskInfo';
 import type { SessionHistoryWindowDirection } from '../../store/FlowChatStore';
 import {
+  FLOWCHAT_TURNS_ROLLED_BACK_EVENT,
+  type FlowChatTurnsRolledBackRequest,
+} from '../../events/flowchatNavigation';
+import {
   useActiveSession,
   useModernFlowChatStore,
   useVirtualItems,
@@ -548,6 +552,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     exitFollowOutput,
     scheduleFollowToLatest,
     handleUserScrollIntent,
+    handleTurnsRolledBack,
     handleScroll,
     handleScrollSettled,
     handleViewportResize,
@@ -555,6 +560,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   } = useFlowChatFollowOutput({
     activeSessionId: activeSessionId ?? undefined,
     latestTurnId,
+    dialogTurnCount: activeSession?.dialogTurns.length ?? 0,
     virtualItemCount: virtualItems.length,
     isStreaming: isStreamingOutput,
     isViewportActive,
@@ -958,6 +964,25 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       scrollerElement.removeEventListener('scroll', handleScrollTick);
     };
   }, [handleScrollSettled, scrollerElement]);
+
+  /*
+   * A rollback removed Turns from the session, so the transcript ends somewhere
+   * it did not a moment ago — and the Turn follow-output was pinning may be one
+   * of the ones that stopped existing. The follow rule settles on the new tail;
+   * it declines for a reader who owns the viewport, which is the case when the
+   * rollback came from the middle of a transcript they were reading.
+   */
+  useEffect(() => {
+    const handleTurnsRolledBackEvent = (event: Event) => {
+      const detail = (event as CustomEvent<FlowChatTurnsRolledBackRequest>).detail;
+      if (!detail?.sessionId || detail.sessionId !== activeSessionId) return;
+      handleTurnsRolledBack();
+    };
+    window.addEventListener(FLOWCHAT_TURNS_ROLLED_BACK_EVENT, handleTurnsRolledBackEvent);
+    return () => {
+      window.removeEventListener(FLOWCHAT_TURNS_ROLLED_BACK_EVENT, handleTurnsRolledBackEvent);
+    };
+  }, [activeSessionId, handleTurnsRolledBack]);
 
   useEffect(() => {
     if (!scrollerElement) return;

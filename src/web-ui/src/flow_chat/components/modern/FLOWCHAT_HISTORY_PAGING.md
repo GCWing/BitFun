@@ -359,6 +359,48 @@ in the identity.** Qualifying `latestTurnId` by "and it is on screen" makes a
 Turn that merely came into view look new — the same bug with the opposite sign,
 and it is how navigating to Turn 29 ended on Turn 38.
 
+**An arrival is not a change.** Getting the identity right does not settle how
+to *detect* one, and the detector asked whether `latestTurnId` differed from
+last render. A rollback truncates `dialogTurns`, which moves that identity
+backwards onto a Turn that has been there all along — so undoing a message
+pinned the Turn *before* it to the viewport top. `dialogTurnCount` separates the
+two: an arrival grows the ledger, and nothing else that rewrites `dialogTurns`
+— a history page merging in above, a window re-cut, a hydration — moves the
+last Turn at all, so requiring growth costs nothing and excludes every
+truncation.
+
+**A rollback then says where to land, because the ledger cannot.** A shorter
+`dialogTurns` is also what a window re-cut and a hydration merge look like, and
+two dozen call sites write that array; inferring an action from its size is the
+same mistake as inferring intent from `scrollTop`. So the rollback announces
+itself through `FLOWCHAT_TURNS_ROLLED_BACK_EVENT`, exactly as a submission does,
+and the transcript settles on the new tail — the Turn it was pinning is one of
+the ones that stopped existing.
+
+It takes the viewport whether or not follow owned it, on the same asymmetry that
+licenses the snap back. A rollback at Turn N removes N *and everything after
+it*, and the reader had N on screen — they clicked its own button. So the new
+tail is always within a Turn of where they already are, and there is no history
+below them to be pulled out of. Gating it on ownership instead — the first
+attempt — made it dead code in the case it was written for: reaching a Turn far
+enough up to want it gone means scrolling, and scrolling is what hands the
+viewport back to the reader. The viewport anchor then answered instead, and
+answered a different question: it holds the reader's Turn at its offset from the
+viewport top, so an 8-Turn session rolled back at Turn 7 came to rest showing
+Turns 2..6, with the new last Turn's answer below the fold. Nothing was wrong
+with the anchor. It was the only thing still running.
+
+The snap back cannot cover this either, and for two reasons worth keeping: it
+runs only from a gesture coming to rest, and a truncation is not a gesture; and
+`tailSnapBackScrollTop` returns nothing unless the viewport is *below* the
+follow target, where a rollback leaves it above.
+
+The event fires a frame after the truncation, because the answer is a scroll to
+the end of *real content* and that has to be read from a DOM the truncation has
+already been committed to. Edit-and-rerun does not announce: its truncation is
+followed by a rerun whose Turn really is new, and announcing would spend a
+visible movement on the way to it.
+
 So the response carries it instead. A new Turn is answered by pinning it to the
 viewport top; until it is in the transcript on screen there is nothing to align,
 and the fallback — the end of real content — is not a stand-in, because it

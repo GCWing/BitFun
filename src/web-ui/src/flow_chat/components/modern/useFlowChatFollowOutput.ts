@@ -20,7 +20,8 @@ export type FollowOutputEnterReason =
   | 'new-turn'
   | 'session-open'
   | 'streaming-resumed'
-  | 'tail-snap-back';
+  | 'tail-snap-back'
+  | 'turns-rolled-back';
 export type FollowOutputExitReason =
   | 'session-changed'
   | 'user-scroll'
@@ -30,6 +31,12 @@ export type FollowOutputExitReason =
 interface UseFlowChatFollowOutputOptions {
   activeSessionId?: string;
   latestTurnId: string | null;
+  /**
+   * Turns in the session ledger, so that an arrival can be told from a
+   * truncation. `latestTurnId` alone cannot: a rollback moves it backwards to a
+   * Turn that has been there all along, which is a change and not an arrival.
+   */
+  dialogTurnCount: number;
   virtualItemCount: number;
   isStreaming: boolean;
   isViewportActive: boolean;
@@ -68,6 +75,8 @@ interface UseFlowChatFollowOutputResult {
   exitFollowOutput: (reason: FollowOutputExitReason) => void;
   scheduleFollowToLatest: () => void;
   handleUserScrollIntent: () => void;
+  /** Turns were rolled back out of the session; end on the new tail. */
+  handleTurnsRolledBack: () => void;
   handleScroll: () => void;
   /** A scroll gesture has come to rest; snap out of the reserved blank if in it. */
   handleScrollSettled: () => void;
@@ -115,6 +124,7 @@ const SETTLE_FRAMES = 90;
 export function useFlowChatFollowOutput({
   activeSessionId,
   latestTurnId,
+  dialogTurnCount,
   virtualItemCount,
   isStreaming,
   isViewportActive,
@@ -134,6 +144,7 @@ export function useFlowChatFollowOutput({
   const followFrameRef = useRef<number | null>(null);
   const previousSessionIdRef = useRef(activeSessionId);
   const previousLatestTurnIdRef = useRef<string | null>(latestTurnId);
+  const previousDialogTurnCountRef = useRef(dialogTurnCount);
   const hasMountedRef = useRef(false);
   const wasStreamingRef = useRef(isStreaming);
 
@@ -520,6 +531,34 @@ export function useFlowChatFollowOutput({
     exitFollowOutput('user-scroll');
   }, [exitFollowOutput]);
 
+  /**
+   * Turns were rolled back out of the session.
+   *
+   * The ledger cannot say this on its own — a shorter `dialogTurns` is also
+   * what a window re-cut and a hydration merge look like — so the rollback
+   * announces it, the same way a submission does. What it asks for is the
+   * *absence* of the pin: the Turn that was pinned is one of the ones that just
+   * stopped existing, and the transcript now ends somewhere else.
+   *
+   * This takes the viewport whether or not follow owned it, which is the same
+   * licence the snap back has and rests on the same asymmetry. A rollback at
+   * Turn N removes N and everything after it, and the reader had N on screen —
+   * they clicked its own button. So the new tail is always within a Turn of
+   * where they already are, and there is no history below them to be pulled out
+   * of. Gating this on ownership instead made it dead code in the case it was
+   * written for: reaching a Turn far enough up to want it gone means scrolling,
+   * and scrolling is exactly what hands the viewport back to the reader.
+   *
+   * Without it the viewport anchor answers instead, and answers the wrong
+   * question — it holds the reader's Turn at its offset from the viewport top,
+   * so an 8-Turn session rolled back at Turn 7 came to rest showing Turns 2..6
+   * with the new last Turn's answer below the fold.
+   */
+  const handleTurnsRolledBack = useCallback(() => {
+    pendingNewTurnIdRef.current = null;
+    enterFollowOutput('turns-rolled-back');
+  }, [enterFollowOutput]);
+
   const handleScroll = useCallback(() => {
     // Scroll events describe the resulting viewport position, but do not prove user intent.
     // Layout growth and virtualizer remeasurement can emit them while output follow still owns
@@ -747,6 +786,7 @@ export function useFlowChatFollowOutput({
     if (previousSessionIdRef.current !== activeSessionId) {
       previousSessionIdRef.current = activeSessionId;
       previousLatestTurnIdRef.current = latestTurnId;
+      previousDialogTurnCountRef.current = dialogTurnCount;
       exitFollowOutput('session-changed');
       retirePin();
       // A Turn waiting to be shown belongs to the session that gained it.
@@ -757,7 +797,25 @@ export function useFlowChatFollowOutput({
       return;
     }
 
-    const isNewTurn = Boolean(latestTurnId && latestTurnId !== previousLatestTurnIdRef.current);
+    /*
+     * An arrival, not a change. `latestTurnId` is the ledger's last Turn and it
+     * is the right identity — but a rollback truncates the ledger, which moves
+     * that identity *backwards* onto a Turn that has been there all along. Read
+     * as an arrival it pinned the survivor to the viewport top, which is the
+     * reader's "I undid my message and it jumped to the one before it".
+     *
+     * The ledger growing is what separates the two. Nothing else that rewrites
+     * `dialogTurns` — a history page merging in above, a window re-cut, a
+     * hydration — moves the last Turn, so requiring growth costs nothing and
+     * excludes every truncation.
+     */
+    const previousDialogTurnCount = previousDialogTurnCountRef.current;
+    previousDialogTurnCountRef.current = dialogTurnCount;
+    const isNewTurn = Boolean(
+      latestTurnId
+      && latestTurnId !== previousLatestTurnIdRef.current
+      && dialogTurnCount > previousDialogTurnCount,
+    );
     previousLatestTurnIdRef.current = latestTurnId;
     if (virtualItemCount === 0) {
       return;
@@ -777,6 +835,7 @@ export function useFlowChatFollowOutput({
     }
   }, [
     activeSessionId,
+    dialogTurnCount,
     enterFollowOutput,
     exitFollowOutput,
     isStreaming,
@@ -836,6 +895,7 @@ export function useFlowChatFollowOutput({
     exitFollowOutput,
     scheduleFollowToLatest,
     handleUserScrollIntent,
+    handleTurnsRolledBack,
     handleScroll,
     handleScrollSettled,
     handleViewportResize,

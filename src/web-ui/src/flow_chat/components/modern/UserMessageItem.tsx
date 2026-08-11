@@ -12,6 +12,10 @@ import { flowChatManager } from '../../services/FlowChatManager';
 import { useFlowChatContext } from './FlowChatContext';
 import { useActiveSession } from '../../store/modernFlowChatStore';
 import { flowChatStore } from '../../store/FlowChatStore';
+import {
+  FLOWCHAT_TURNS_ROLLED_BACK_EVENT,
+  type FlowChatTurnsRolledBackRequest,
+} from '../../events/flowchatNavigation';
 import { useMessageEditStore } from '../../store/messageEditStore';
 import { snapshotAPI } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
@@ -297,6 +301,24 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 
         // 1) Truncate local dialog turns from this index.
         flowChatStore.truncateDialogTurnsFrom(resolvedSessionId, hydratedTurnIndex);
+
+        /*
+         * 1b) Tell the transcript the ledger got shorter, so it can settle on
+         *     the new tail rather than leave the viewport on a Turn that no
+         *     longer exists. Nothing in `dialogTurns` distinguishes this from a
+         *     window re-cut, which is why it is announced — the same reason a
+         *     submission announces itself.
+         *
+         *     On the next frame, because the answer is a scroll to the end of
+         *     real content and that has to be read from a DOM the truncation
+         *     has already been committed to.
+         */
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent<FlowChatTurnsRolledBackRequest>(
+            FLOWCHAT_TURNS_ROLLED_BACK_EVENT,
+            { detail: { sessionId: resolvedSessionId, fromTurnIndex: hydratedTurnIndex } },
+          ));
+        });
 
         // 2) Refresh file tree and open editors.
         const { globalEventBus } = await import('@/infrastructure/event-bus');

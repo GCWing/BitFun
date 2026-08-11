@@ -31,8 +31,19 @@ function setScrollerMetrics(
   });
 }
 
+/**
+ * `turn-N` is the Nth Turn of the session, so the ledger holds N of them.
+ *
+ * A Turn arriving grows the ledger, which is what every test walking `turn-1`
+ * to `turn-2` means. A rollback is the one case where the identity moves and
+ * the ledger does not grow, and those tests state the count themselves.
+ */
+const turnCountFor = (turnId: string) => Number(turnId.replace('turn-', '')) || 1;
+
 interface HarnessProps {
   latestTurnId: string;
+  /** Turns in the session ledger. Defaults to what `latestTurnId` implies. */
+  dialogTurnCount?: number;
   isStreaming?: boolean;
   scroller: HTMLElement;
   scrollToContentEnd?: (behavior: ScrollBehavior) => void;
@@ -44,6 +55,7 @@ interface HarnessProps {
 
 function Harness({
   latestTurnId,
+  dialogTurnCount = turnCountFor(latestTurnId),
   isStreaming = true,
   scroller,
   scrollToContentEnd = () => {},
@@ -59,6 +71,7 @@ function Harness({
   const controller = useFlowChatFollowOutput({
     activeSessionId: 'session-1',
     latestTurnId,
+    dialogTurnCount,
     virtualItemCount: 2,
     isStreaming,
     isViewportActive: true,
@@ -137,6 +150,97 @@ describe('useFlowChatFollowOutput', () => {
 
     expect(scrollTurnToTop).toHaveBeenCalledWith('turn-2');
     expect(scrollToContentEnd).not.toHaveBeenCalled();
+    expect(controller?.isFollowingOutput).toBe(true);
+  });
+
+  it('does not read a rolled-back Turn as a newly arrived one', () => {
+    /*
+     * Measured as a report: send a message, watch it pin, roll it back, and the
+     * Turn *before* it takes the viewport top. `latestTurnId` is right — it is
+     * the ledger's last Turn — but the detector asked whether the identity had
+     * changed, and a truncation changes it without anything having arrived.
+     */
+    const scrollTurnToTop = vi.fn(() => true);
+    const props = {
+      scroller,
+      scrollTurnToTop,
+      onController: (next: Controller) => { controller = next; },
+    };
+
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-2" isStreaming={false} />);
+    });
+    scrollTurnToTop.mockClear();
+
+    // The rollback removes turn-2, so the ledger's last Turn is turn-1 again.
+    act(() => {
+      root.render(
+        <Harness {...props} latestTurnId="turn-1" dialogTurnCount={1} isStreaming={false} />,
+      );
+    });
+
+    expect(scrollTurnToTop).not.toHaveBeenCalled();
+  });
+
+  it('returns to the end of the transcript when a rollback takes the Turn it was following', () => {
+    const scrollToContentEnd = vi.fn();
+    const props = {
+      scroller,
+      scrollToContentEnd,
+      scrollTurnToTop: () => true,
+      onController: (next: Controller) => { controller = next; },
+    };
+
+    act(() => {
+      root.render(<Harness {...props} latestTurnId="turn-2" isStreaming={false} />);
+    });
+    scrollToContentEnd.mockClear();
+
+    act(() => {
+      root.render(
+        <Harness {...props} latestTurnId="turn-1" dialogTurnCount={1} isStreaming={false} />,
+      );
+    });
+    // Nothing on its own: a shorter ledger is not a reason to move, because
+    // hydration and window merges write it too.
+    expect(scrollToContentEnd).not.toHaveBeenCalled();
+
+    // The rollback says so itself, and the answer is the tail.
+    act(() => { controller?.handleTurnsRolledBack(); });
+    expect(scrollToContentEnd).toHaveBeenCalledWith('auto');
+  });
+
+  it('settles a rollback on the new tail even after the reader took the viewport', () => {
+    /*
+     * Gating this on ownership made it dead code in the case it was written
+     * for. Reaching a Turn far enough up to want it gone means scrolling, and
+     * scrolling is what hands the viewport back to the reader — so the answer
+     * never ran, the anchor held the reader's Turn at its offset from the
+     * viewport top, and an 8-Turn session rolled back at Turn 7 came to rest on
+     * Turns 2..6 with the new last Turn's answer below the fold.
+     *
+     * Taking it is safe for the reason the snap back's is: a rollback at Turn N
+     * removes N and everything after it, and N was on screen. The new tail is
+     * within a Turn of where the reader already is.
+     */
+    const scrollToContentEnd = vi.fn();
+    act(() => {
+      root.render(
+        <Harness
+          latestTurnId="turn-2"
+          isStreaming={false}
+          scroller={scroller}
+          scrollToContentEnd={scrollToContentEnd}
+          onController={next => { controller = next; }}
+        />,
+      );
+    });
+    act(() => { controller?.handleUserScrollIntent(); });
+    expect(controller?.isFollowingOutput).toBe(false);
+    scrollToContentEnd.mockClear();
+
+    act(() => { controller?.handleTurnsRolledBack(); });
+    expect(scrollToContentEnd).toHaveBeenCalledWith('auto');
     expect(controller?.isFollowingOutput).toBe(true);
   });
 

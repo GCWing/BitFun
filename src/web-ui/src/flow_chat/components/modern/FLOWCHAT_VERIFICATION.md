@@ -64,6 +64,17 @@ group does not renumber the others.
 4. Send a message from the live tail, and again while parked deep in history.
    Both must end with the new Turn at the viewport top; the second also has to
    leave the history window to get there.
+5. Send a message, let it pin, then roll it back from its own message actions.
+   The transcript must come to rest with the surviving last Turn at the
+   *bottom* — not with it pinned to the top, which is what reading the
+   truncation as an arrival used to do.
+6. Roll a Turn back from further up a transcript, having scrolled to reach it.
+   The surviving last Turn must end at the bottom here too — scrolling to reach
+   the button hands the viewport to the reader, and the answer has to run
+   anyway. Leaving it to the anchor is what showed Turns 2..6 of an 8-Turn
+   session with the new last Turn's answer below the fold.
+7. Edit a message and rerun it. There must be one movement, not two — the
+   truncation is silent and the rerun's Turn pins as usual.
 
 ### Streaming and follow
 
