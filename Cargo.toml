@@ -120,7 +120,7 @@ alloc-stdlib = "=0.2.2"
 regex = "1"
 base64 = "0.22"
 # Keep macOS Tauri's dispatch2/bitflags expansion on the known-good bitflags release.
-bitflags = "=2.11.1"
+bitflags = "2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 md5 = "0.7"
 dashmap = "6"
@@ -170,7 +170,7 @@ portable-pty = "0.8"
 vte = "0.15.0"
 clap = { version = "4.6.1", features = ["derive"] }
 crossterm = "0.28"
-ratatui = "0.29"
+ratatui = "0.30"
 unicode-width = "0.2"
 pulldown-cmark = "0.11"
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-onig"] }

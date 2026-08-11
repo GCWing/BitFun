@@ -361,7 +361,10 @@ impl StartupPage {
             || self.login_form.is_visible()
     }
 
-    pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
+    pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult>
+    where
+        B::Error: Send + Sync + 'static,
+    {
         terminal.clear()?;
         let mut event_reader = crate::ui::input::EventReader::default();
 
