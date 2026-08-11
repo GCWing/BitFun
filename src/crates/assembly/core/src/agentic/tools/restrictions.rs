@@ -439,6 +439,20 @@ pub fn get_session_role(session_id: &str) -> Option<AgentRole> {
         .and_then(|map| map.get(session_id).cloned())
 }
 
+/// W9: worktree 参数授权判定（SessionControl/SessionMessage `create` 带
+/// worktree 参数时）。worktree 创建 = git 文件系统操作（git worktree add），
+/// 是服务层调用不走工具权限门，因此独立判定：仅 Commander owner（或 RBAC
+/// 关闭）允许——对齐 `resolve_session_mutation_authorization` 的 owner 语义
+/// （Commander 角色或 RBAC-off 豁免）。非 owner 调用者（Executor/Reviewer/
+/// Warden 等）携带 worktree 参数一律拒绝，防止子代理以会话创建为名执行
+/// git 文件系统变更。
+pub fn worktree_creation_authorized(caller_session_id: &str) -> bool {
+    matches!(
+        get_session_role(caller_session_id),
+        Some(AgentRole::Commander)
+    ) || !crate::service::config::rbac_enabled()
+}
+
 /// Remove the assigned RBAC role for a session (session-end cleanup).
 ///
 /// Called when a session is deleted or discarded so a recycled session id
@@ -634,6 +648,36 @@ mod tests {
         assert!(!is_local_path_within_root(&sibling, &root.join("allowed")).unwrap());
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn worktree_creation_is_owner_gated() {
+        let caller = format!("wt-auth-{}", uuid::Uuid::new_v4());
+        crate::service::config::set_rbac_enabled(true);
+        // RBAC 开启时：未注册角色 ≠ Commander owner → 拒绝。
+        assert!(
+            !worktree_creation_authorized(&caller),
+            "unregistered role must not be treated as owner when RBAC is on"
+        );
+
+        set_session_role(&caller, AgentRole::Commander).expect("register commander");
+        assert!(worktree_creation_authorized(&caller));
+
+        let executor = format!("wt-auth-exec-{}", uuid::Uuid::new_v4());
+        set_session_role(&executor, AgentRole::Executor).expect("register executor");
+        assert!(
+            !worktree_creation_authorized(&executor),
+            "non-owner roles must be rejected for worktree creation"
+        );
+
+        clear_session_role(&executor);
+        crate::service::config::set_rbac_enabled(false);
+        assert!(
+            worktree_creation_authorized(&executor),
+            "RBAC off must allow worktree creation"
+        );
+        crate::service::config::set_rbac_enabled(true);
+        clear_session_role(&caller);
     }
 
     // ── Role→Permission template tests ─────────────────────────────

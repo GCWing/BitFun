@@ -1,6 +1,6 @@
 use super::session_control_tool::{
     get_available_agent_type_ids_for_creation, resolve_session_mutation_authorization,
-    SessionMutationAuthOptions,
+    SessionControlWorkspaceTarget, SessionMutationAuthOptions, SessionWorktreeCreateResult,
 };
 use super::util::normalize_path;
 use crate::agentic::agents::AcpAgent;
@@ -18,9 +18,11 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::restrictions::get_session_role;
 use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
+use crate::service::worktree::WorktreeService;
+use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_core_types::SessionExecutionTarget;
+use bitfun_core_types::{SessionExecutionTarget, WorktreeSessionOptions};
 use bitfun_runtime_ports::{
     AcpClientBitfunMessageRequest, AcpClientMessageRequest, AcpClientMessageResult, AcpClientPort,
     AcpClientStreamChunk, AcpClientStreamChunkSink, AgentDialogPrependedReminder,
@@ -560,6 +562,13 @@ struct SessionMessageInput {
     plan_file: Option<String>,
     #[serde(default)]
     todo_id: Option<String>,
+    /// Optional worktree options for create: when present (and session_id is
+    /// omitted), a managed worktree is created together with the session via
+    /// WorktreeService and the session is bound to it. `None` keeps the legacy
+    /// behavior (session runs in the project checkout). Rejected for remote
+    /// workspaces and for session_id-based sends.
+    #[serde(default)]
+    worktree: Option<WorktreeSessionOptions>,
     /// Batch dispatch: perform multiple create+send (or send-to-existing)
     /// operations in a single tool call. All items are validated up front (the
     /// whole batch is rejected when any item is structurally invalid), then each
@@ -597,6 +606,11 @@ struct BatchItem {
     /// requires plan_file).
     #[serde(default)]
     todo_id: Option<String>,
+    /// Per-item worktree options for a new session (only when session_id is
+    /// omitted; rejected for remote workspaces). Same semantics as the
+    /// top-level worktree field.
+    #[serde(default)]
+    worktree: Option<WorktreeSessionOptions>,
 }
 
 /// Delivery decision for an urgent message against a target session.
@@ -705,9 +719,25 @@ Allowed agent types when creating a session are dynamically resolved from the av
                     "type": "string",
                     "description": "Optional todo id within plan_file for a created session (only when session_id is omitted, and requires plan_file)."
                 },
+                "worktree": {
+                    "type": "object",
+                    "description": "Optional worktree options for a created session (only when session_id is omitted; not supported for remote workspaces): creates a managed Git worktree together with the session and binds the session to it. Shape: {baseRef?, copyLocalChanges?}.",
+                    "properties": {
+                        "baseRef": {
+                            "type": "string",
+                            "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                        },
+                        "copyLocalChanges": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                        }
+                    },
+                    "additionalProperties": false
+                },
                 "batch": {
                     "type": "array",
-                    "description": "Batch dispatch: perform multiple create+send (or send-to-existing) operations in one tool call. Mutually exclusive with the top-level message and session fields; the top-level workspace is shared by items that create a session. All items validate up front; each item then runs independently (a failed item never rolls back succeeded ones). Item shape: {session_id?, session_name?, message, agent_type?, plan_file?, todo_id?, urgent?}.",
+                    "description": "Batch dispatch: perform multiple create+send (or send-to-existing) operations in one tool call. Mutually exclusive with the top-level message and session fields; the top-level workspace is shared by items that create a session. All items validate up front; each item then runs independently (a failed item never rolls back succeeded ones). Item shape: {session_id?, session_name?, message, agent_type?, plan_file?, todo_id?, urgent?, worktree?}.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -738,6 +768,22 @@ Allowed agent types when creating a session are dynamically resolved from the av
                             "todo_id": {
                                 "type": "string",
                                 "description": "Per-item todo id within plan_file (only when session_id is omitted, and requires plan_file)."
+                            },
+                            "worktree": {
+                                "type": "object",
+                                "description": "Per-item worktree options for a new session (only when session_id is omitted; not supported for remote workspaces). Shape: {baseRef?, copyLocalChanges?}.",
+                                "properties": {
+                                    "baseRef": {
+                                        "type": "string",
+                                        "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                                    },
+                                    "copyLocalChanges": {
+                                        "type": "boolean",
+                                        "default": false,
+                                        "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                                    }
+                                },
+                                "additionalProperties": false
                             }
                         },
                         "required": ["message"],
@@ -790,9 +836,25 @@ Allowed agent types when creating a session are dynamically resolved from the av
                     "type": "string",
                     "description": "Optional todo id within plan_file for a created session (only when session_id is omitted, and requires plan_file)."
                 },
+                "worktree": {
+                    "type": "object",
+                    "description": "Optional worktree options for a created session (only when session_id is omitted; not supported for remote workspaces): creates a managed Git worktree together with the session and binds the session to it. Shape: {baseRef?, copyLocalChanges?}.",
+                    "properties": {
+                        "baseRef": {
+                            "type": "string",
+                            "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                        },
+                        "copyLocalChanges": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                        }
+                    },
+                    "additionalProperties": false
+                },
                 "batch": {
                     "type": "array",
-                    "description": "Batch dispatch: perform multiple create+send (or send-to-existing) operations in one tool call. Mutually exclusive with the top-level message and session fields; the top-level workspace is shared by items that create a session. All items validate up front; each item then runs independently (a failed item never rolls back succeeded ones). Item shape: {session_id?, session_name?, message, agent_type?, plan_file?, todo_id?, urgent?}.",
+                    "description": "Batch dispatch: perform multiple create+send (or send-to-existing) operations in one tool call. Mutually exclusive with the top-level message and session fields; the top-level workspace is shared by items that create a session. All items validate up front; each item then runs independently (a failed item never rolls back succeeded ones). Item shape: {session_id?, session_name?, message, agent_type?, plan_file?, todo_id?, urgent?, worktree?}.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -823,6 +885,22 @@ Allowed agent types when creating a session are dynamically resolved from the av
                             "todo_id": {
                                 "type": "string",
                                 "description": "Per-item todo id within plan_file (only when session_id is omitted, and requires plan_file)."
+                            },
+                            "worktree": {
+                                "type": "object",
+                                "description": "Per-item worktree options for a new session (only when session_id is omitted; not supported for remote workspaces). Shape: {baseRef?, copyLocalChanges?}.",
+                                "properties": {
+                                    "baseRef": {
+                                        "type": "string",
+                                        "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                                    },
+                                    "copyLocalChanges": {
+                                        "type": "boolean",
+                                        "default": false,
+                                        "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                                    }
+                                },
+                                "additionalProperties": false
                             }
                         },
                         "required": ["message"],
@@ -918,6 +996,17 @@ Allowed agent types when creating a session are dynamically resolved from the av
                     };
                 }
 
+                if parsed.worktree.is_some() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(
+                            "worktree is only allowed when session_id is omitted".to_string(),
+                        ),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
                 if let Some(workspace) = parsed.workspace.as_deref() {
                     let workspace_validation = self.validate_workspace_shape(workspace, context);
                     if !workspace_validation.result {
@@ -961,6 +1050,48 @@ Allowed agent types when creating a session are dynamically resolved from the av
                         error_code: Some(400),
                         meta: None,
                     };
+                }
+
+                if let Some(worktree) = parsed.worktree.as_ref() {
+                    if worktree
+                        .base_ref
+                        .as_deref()
+                        .is_some_and(|base_ref| base_ref.trim().is_empty())
+                    {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(
+                                "worktree.base_ref must not be empty when provided".to_string(),
+                            ),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
+                    if context.is_some_and(|context| context.is_remote()) {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(
+                                "worktree is not supported for remote workspaces".to_string(),
+                            ),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
+                    // worktree 与 ACP 真会话（agent_type `acp__<client>`）互斥：
+                    // ACP 会话是外部进程记录，不承载本地 worktree
+                    // execution_target，同时携带会导致 worktree 成为孤儿。
+                    if parsed.agent_type.as_ref().is_some_and(|agent_type| {
+                        agent_type.as_str().starts_with("acp__")
+                    }) {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(
+                                "worktree is not supported with acp__ agent types".to_string(),
+                            ),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
                 }
 
                 let Some(workspace) = parsed.workspace.as_deref() else {
@@ -1380,6 +1511,12 @@ impl SessionMessageTool {
                             field("plan_file/todo_id")
                         ));
                     }
+                    if item.worktree.is_some() {
+                        return Self::invalid(format!(
+                            "{} is only allowed when session_id is omitted",
+                            field("worktree")
+                        ));
+                    }
                     if let Some(source_session_id) = source_session_id {
                         if source_session_id == session_id {
                             return Self::invalid(format!(
@@ -1412,6 +1549,32 @@ impl SessionMessageTool {
                             "{} is required when session_id is omitted",
                             field("agent_type")
                         ));
+                    }
+                    if let Some(worktree) = item.worktree.as_ref() {
+                        if worktree
+                            .base_ref
+                            .as_deref()
+                            .is_some_and(|base_ref| base_ref.trim().is_empty())
+                        {
+                            return Self::invalid(format!(
+                                "{} must not be empty when provided",
+                                field("worktree.base_ref")
+                            ));
+                        }
+                        if context.is_some_and(|context| context.is_remote()) {
+                            return Self::invalid(format!(
+                                "{} is not supported for remote workspaces",
+                                field("worktree")
+                            ));
+                        }
+                        if item.agent_type.as_ref().is_some_and(|agent_type| {
+                            agent_type.as_str().starts_with("acp__")
+                        }) {
+                            return Self::invalid(format!(
+                                "{} is not supported with acp__ agent types",
+                                field("worktree")
+                            ));
+                        }
                     }
                 }
             }
@@ -2065,6 +2228,39 @@ impl SessionMessageTool {
                     })?
                     .as_str()
                     .to_string();
+
+                // W9: worktree 参数授权 + remote 互斥拒绝（SessionMessage create
+                // 与 SessionControl create 同一语义）。
+                let mut created_worktree: Option<SessionWorktreeCreateResult> = None;
+                if params.worktree.is_some() {
+                    super::session_control_tool::ensure_worktree_creation_authorized(context)?;
+                    super::session_control_tool::ensure_worktree_not_remote(context)?;
+                    let worktree_options = params.worktree.as_ref().expect("checked above");
+                    let request_id = context
+                        .tool_call_id
+                        .as_deref()
+                        .map(|tool_call_id| format!("session-message:{tool_call_id}:worktree"))
+                        .unwrap_or_else(|| {
+                            format!("session-message:{}:worktree", uuid::Uuid::new_v4())
+                        });
+                    created_worktree = Some(
+                        super::session_control_tool::create_worktree_for_session(
+                            &request_id,
+                            &SessionControlWorkspaceTarget {
+                                display_workspace: workspace_target.workspace_path.clone(),
+                                project_workspace: workspace_target.project_workspace_path.clone(),
+                                execution_target: workspace_target.execution_target.clone(),
+                                workspace_id: workspace_target.workspace_id.clone(),
+                                remote_connection_id: workspace_target.remote_connection_id.clone(),
+                                remote_ssh_host: workspace_target.remote_ssh_host.clone(),
+                            },
+                            worktree_options,
+                            context,
+                        )
+                        .await?,
+                    );
+                }
+
                 let created_by = self.creator_session_marker(context)?;
                 let mut metadata = serde_json::Map::new();
                 metadata.insert("createdBy".to_string(), json!(created_by));
@@ -2087,25 +2283,66 @@ impl SessionMessageTool {
                 if let Some(todo_id) = params.todo_id.as_deref() {
                     metadata.insert(TODO_ID_METADATA_KEY.to_string(), json!(todo_id));
                 }
-                let session = runtime
+                let session = match runtime
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type: agent_type.clone(),
-                        workspace_path: Some(workspace_target.workspace_path.clone()),
-                        project_workspace_path: Some(
-                            workspace_target.project_workspace_path.clone(),
+                        workspace_path: Some(
+                            created_worktree
+                                .as_ref()
+                                .map(|wt| wt.execution_target.root_path.clone())
+                                .unwrap_or_else(|| workspace_target.workspace_path.clone()),
                         ),
-                        execution_target: workspace_target.execution_target.clone(),
-                        workspace_id: workspace_target.workspace_id.clone(),
+                        project_workspace_path: Some(
+                            created_worktree
+                                .as_ref()
+                                .map(|wt| wt.project_workspace_path.clone())
+                                .unwrap_or_else(|| workspace_target.project_workspace_path.clone()),
+                        ),
+                        execution_target: created_worktree
+                            .as_ref()
+                            .map(|wt| wt.execution_target.clone())
+                            .or_else(|| workspace_target.execution_target.clone()),
+                        workspace_id: created_worktree
+                            .as_ref()
+                            .and_then(|wt| wt.tracked_workspace_id.clone())
+                            .or_else(|| workspace_target.workspace_id.clone()),
                         remote_connection_id: workspace_target.remote_connection_id.clone(),
                         remote_ssh_host: workspace_target.remote_ssh_host.clone(),
                         model_id: None,
                         metadata,
                     })
                     .await
-                    .map_err(|error| {
-                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
-                    })?;
+                {
+                    Ok(session) => session,
+                    Err(create_error) => {
+                        // 会话创建失败 → 回滚已创建的 worktree（仅当本次确实创建）。
+                        if let Some(worktree) = created_worktree.as_ref() {
+                            if worktree.created {
+                                if let Some(workspace_service) = get_global_workspace_service() {
+                                    if let Some(workspace_id) =
+                                        worktree.tracked_workspace_id.as_deref()
+                                    {
+                                        let _ =
+                                            workspace_service.remove_workspace(workspace_id).await;
+                                    }
+                                }
+                                if let Some(worktree_id) =
+                                    worktree.execution_target.worktree_id.as_deref()
+                                {
+                                    let _ = WorktreeService::rollback_created(
+                                        &worktree.project_workspace_path,
+                                        worktree_id,
+                                    )
+                                    .await;
+                                }
+                            }
+                        }
+                        return Err(BitFunError::tool(
+                            CoreServiceAgentRuntime::runtime_error_message(create_error),
+                        ));
+                    }
+                };
 
                 // A2（幽灵会话删除修复）：创建后挂树——持久化 SessionRelationship 并
                 // 注册内存树，对齐 SessionControl create 的 lineage 写入（R-001/R-002/R-003）。
@@ -2454,6 +2691,7 @@ impl SessionMessageTool {
                 urgent: item.urgent,
                 plan_file: item.plan_file.clone(),
                 todo_id: item.todo_id.clone(),
+                worktree: item.worktree.clone(),
                 batch: None,
             };
             match self.dispatch_single(item_params, shared, context).await {
@@ -2619,6 +2857,75 @@ mod tests {
             remote_connection_id: remote_connection_id.map(ToOwned::to_owned),
             remote_ssh_host: remote_ssh_host.map(ToOwned::to_owned),
         }
+    }
+
+    #[test]
+    fn session_message_input_parses_worktree_options_and_keeps_legacy_compat() {
+        // 旧 payload（无 worktree 字段）解析兼容。
+        let legacy: SessionMessageInput = serde_json::from_value(json!({
+            "workspace": "/repo",
+            "session_name": "legacy",
+            "message": "hello",
+            "agent_type": "agentic",
+        }))
+        .expect("legacy payload must parse");
+        assert!(legacy.worktree.is_none());
+
+        // 新 payload：worktree 对象解析。
+        let with_worktree: SessionMessageInput = serde_json::from_value(json!({
+            "workspace": "/repo",
+            "session_name": "task-a",
+            "message": "hello",
+            "agent_type": "agentic",
+            "worktree": {
+                "baseRef": "main",
+                "copyLocalChanges": true
+            }
+        }))
+        .expect("worktree payload must parse");
+        assert!(with_worktree.worktree.is_some());
+        assert_eq!(
+            with_worktree.worktree.as_ref().and_then(|w| w.base_ref.as_deref()),
+            Some("main")
+        );
+        assert!(with_worktree.worktree.as_ref().is_some_and(|w| w.copy_local_changes));
+
+        // batch item 的 worktree 解析。
+        let batch: SessionMessageInput = serde_json::from_value(json!({
+            "workspace": "/repo",
+            "batch": [{
+                "session_name": "item-a",
+                "message": "hi",
+                "agent_type": "agentic",
+                "worktree": {"copyLocalChanges": false}
+            }]
+        }))
+        .expect("batch payload must parse");
+        let item = batch.batch.as_ref().expect("batch").first().expect("item");
+        assert!(item.worktree.is_some());
+    }
+
+    #[tokio::test]
+    async fn session_message_worktree_rejected_for_existing_session_send() {
+        // 发送到既有 session_id 时 worktree 被拒绝（create-only 语义）。
+        let input = json!({
+            "workspace": "/repo",
+            "session_id": "existing_1",
+            "message": "hello",
+            "worktree": {"baseRef": "main"}
+        });
+        let tool = SessionMessageTool::new();
+        let result = tool
+            .validate_input(&input, Some(&session_context("caller_1")))
+            .await;
+        assert!(!result.result);
+        assert!(
+            result
+                .message
+                .as_deref()
+                .unwrap_or_default()
+                .contains("worktree is only allowed when session_id is omitted")
+        );
     }
 
     #[test]

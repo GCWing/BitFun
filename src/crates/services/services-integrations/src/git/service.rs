@@ -1037,6 +1037,55 @@ impl GitService {
         })
     }
 
+    /// Renames a local branch (`git branch -m old new`).
+    ///
+    /// Used by the session↔worktree rename link (W7): renaming a worktree-bound
+    /// session keeps the branch name in sync with the session title. The new
+    /// branch name is validated through `check-ref-format` by Git itself before
+    /// the rename applies; failures (branch checked out in another worktree,
+    /// invalid ref name, missing branch) surface as `GitError`.
+    pub async fn rename_branch<P: AsRef<Path>>(
+        path: P,
+        old_branch: &str,
+        new_branch: &str,
+    ) -> Result<GitOperationResult, GitError> {
+        let start_time = Instant::now();
+        let repo_path = path.as_ref().to_string_lossy();
+        let old_branch = old_branch.trim();
+        let new_branch = new_branch.trim();
+        if old_branch.is_empty() || new_branch.is_empty() {
+            return Err(GitError::CommandFailed(
+                "Branch rename requires both old and new branch names".to_string(),
+            ));
+        }
+        if old_branch == new_branch {
+            return Ok(GitOperationResult {
+                success: true,
+                data: Some(serde_json::json!({
+                    "branch": new_branch,
+                    "renamed": false
+                })),
+                error: None,
+                output: Some("No-op: old and new branch names are identical.".to_string()),
+                duration: Some(0),
+            });
+        }
+        let args = vec!["branch", "-m", old_branch, new_branch];
+        let output = execute_git_command(&repo_path, &args).await?;
+        let duration = elapsed_ms_u64(start_time);
+
+        Ok(GitOperationResult {
+            success: true,
+            data: Some(serde_json::json!({
+                "branch": new_branch,
+                "renamed": true
+            })),
+            error: None,
+            output: Some(output),
+            duration: Some(duration),
+        })
+    }
+
     /// Resets to a specific commit.
     ///
     /// # Parameters
@@ -1674,5 +1723,44 @@ mod review_path_tests {
             .await
             .expect("worktree list should remain readable");
         assert_eq!(worktrees.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn rename_branch_renames_local_branch_and_is_idempotent() {
+        let directory = tempfile::tempdir().expect("temporary repository should be created");
+        git(directory.path(), &["init"], None);
+        commit_file(
+            directory.path(),
+            "initial\n",
+            "initial commit",
+            "2025-01-01T00:00:00Z",
+        );
+        git(directory.path(), &["branch", "task/1"], None);
+
+        let renamed = GitService::rename_branch(directory.path(), "task/1", "task/2")
+            .await
+            .expect("branch rename should succeed");
+        assert_eq!(renamed.success, true);
+        assert_eq!(
+            renamed.data.as_ref().and_then(|data| data.get("branch")).and_then(serde_json::Value::as_str),
+            Some("task/2")
+        );
+
+        // 幂等：同名 rename 是 no-op 成功。
+        let noop = GitService::rename_branch(directory.path(), "task/2", "task/2")
+            .await
+            .expect("identical rename should be a no-op");
+        assert_eq!(noop.success, true);
+        assert_eq!(
+            noop.data.as_ref().and_then(|data| data.get("renamed")).and_then(serde_json::Value::as_bool),
+            Some(false)
+        );
+
+        // 分支确实被改名。
+        let branches = GitService::get_branches(directory.path(), false)
+            .await
+            .expect("branch list should work");
+        assert!(branches.iter().any(|branch| branch.name == "task/2"));
+        assert!(!branches.iter().any(|branch| branch.name == "task/1"));
     }
 }

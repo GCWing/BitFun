@@ -105,6 +105,7 @@ use crate::service::workspace::{
     get_global_workspace_service, WorkspaceActivityMode, WorkspaceCreateOptions, WorkspaceInfo,
     WorkspaceKind, WorkspaceService,
 };
+use crate::service::worktree::{WorktreeRemoveRequest, WorktreeService};
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::deep_review::FocusedReviewAssignment;
@@ -7438,6 +7439,25 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .resolve_storage_path_for_workspace_path(workspace_path)
             .await;
+        // Step3 (W6): 删除前读取会话的 worktree 绑定（execution_target.worktree_id），
+        // 供删除成功后联动清理。读取失败不阻塞删除（best-effort）。
+        let worktree_binding = self
+            .session_manager
+            .load_session_metadata(&session_storage_path, session_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|metadata| {
+                let worktree_id = metadata
+                    .execution_target
+                    .as_ref()
+                    .and_then(|target| target.worktree_id.clone());
+                let project_workspace_path = metadata
+                    .project_workspace_path
+                    .clone()
+                    .unwrap_or_else(|| session_storage_path.to_string_lossy().to_string());
+                worktree_id.map(|worktree_id| (worktree_id, project_workspace_path))
+            });
         let has_revert_state = self
             .session_manager
             .persistence_manager()
@@ -7521,6 +7541,28 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.background_subagent_outcomes
             .delete_session_references(session_id)
             .await?;
+        // Step3 (W6): 会话删除成功后，若绑定 worktree → 联动清理。
+        // 策略（指挥官裁决=保留非强删）：
+        // - worktree 干净 → WorktreeService::remove 清理（safety veto 内部判定）
+        // - worktree 有改动/未发布/锁定 → remove 失败 → 保留不删，仅 log 提示
+        // - remove 失败不阻塞会话删除（会话照删，worktree 靠既有 24h 定时清理兜底）
+        // - 幂等：会话已删后重复 delete 无 worktree 绑定（metadata 已删）→ 无操作
+        if let Some((worktree_id, project_workspace_path)) = worktree_binding {
+            if let Err(remove_error) = WorktreeService::remove(WorktreeRemoveRequest {
+                request_id: format!("session-delete:{session_id}:{worktree_id}"),
+                project_workspace_path,
+                worktree_id,
+                force: false,
+            })
+            .await
+            {
+                log::warn!(
+                    "Session '{}' deleted; associated worktree was retained (not removed): {}",
+                    session_id,
+                    remove_error
+                );
+            }
+        }
         // Custom session-end cleanup (outside hook gating): RBAC role and
         // tool-restriction unregistration plus Warden state cleanup, so a
         // recycled session id cannot inherit stale lifecycle state.
@@ -13386,6 +13428,50 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
             .await
             .map(|_| ())
             .map_err(runtime_port_error_preserving_message)?;
+        // Step4 (W7): 会话 rename 成功后，若绑定 worktree → 联动同步
+        // display_name（+ 分支名仅当非 task/N 系时重命名；指挥官裁决：
+        // 沿用 task/<序号> 系，原分支已是 task/N 则保持分支名，仅同步
+        // display_name，三方一致即可）。
+        // 失败（worktree 不存在/分支被占用等）不阻塞会话 rename，仅 log 提示。
+        let worktree_binding = self
+            .session_manager
+            .load_session_metadata(&effective_storage_path, &request.session_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|metadata| {
+                let worktree_id = metadata
+                    .execution_target
+                    .as_ref()
+                    .and_then(|target| target.worktree_id.clone());
+                let project_workspace_path = metadata
+                    .project_workspace_path
+                    .clone()
+                    .unwrap_or_else(|| effective_storage_path.to_string_lossy().to_string());
+                worktree_id.map(|worktree_id| (worktree_id, project_workspace_path))
+            });
+        if let Some((worktree_id, project_workspace_path)) = worktree_binding {
+            let worktree_request_id = format!(
+                "session-rename:{}:{}",
+                request.session_id, worktree_id
+            );
+            if let Err(link_error) = WorktreeService::update_display_name(
+                &project_workspace_path,
+                &worktree_request_id,
+                &worktree_id,
+                Some(&request.session_name),
+                None,
+            )
+            .await
+            {
+                log::warn!(
+                    "Session '{}' renamed to '{}'; worktree display name sync failed (session rename unaffected): {}",
+                    request.session_id,
+                    request.session_name,
+                    link_error
+                );
+            }
+        }
         // 断点 2 修复（2026-08-08，RECON-子对话rename-list不同步-20260808）：
         // rename 成功后广播 SessionTitleGenerated{method:"manual"}——前端
         // flowChatStore 经 useFlowChatSync/EventHandlerModule 监听该事件更新
@@ -17750,6 +17836,53 @@ mod tests {
                 .is_none(), "session {member_id} must be fully removed");
             assert!(session_manager.get_session(member_id).is_none());
         }
+    }
+
+    #[tokio::test]
+    async fn coordinator_delete_session_with_worktree_binding_does_not_block_on_remove_failure() {
+        // Step3 (W6)：绑定 worktree 的会话删除时，worktree remove 失败
+        // （worktree 不存在/非 git 项目等）不得阻塞会话删除。
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let session_id = format!("wt-delete-{}", uuid::Uuid::new_v4());
+        let storage_path =
+            create_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id).await;
+
+        // 给会话 metadata 挂一个 worktree execution_target（指向不存在的
+        // worktree_id——WorktreeService::remove 将失败）。
+        let mut metadata = session_manager
+            .persistence_manager()
+            .load_session_metadata(&storage_path, &session_id)
+            .await
+            .expect("metadata lookup")
+            .expect("session metadata exists");
+        metadata.execution_target = Some(bitfun_core_types::SessionExecutionTarget {
+            kind: bitfun_core_types::SessionExecutionTargetKind::ManagedWorktree,
+            worktree_id: Some("missing-worktree".to_string()),
+            root_path: "/nonexistent/worktree".to_string(),
+            base_ref: None,
+            base_commit: None,
+            branch: Some("task/1".to_string()),
+            lifecycle: None,
+        });
+        session_manager
+            .persistence_manager()
+            .save_session_metadata(&storage_path, &metadata)
+            .await
+            .expect("save metadata with worktree binding");
+
+        // 删除必须成功（worktree remove 失败仅 log，不阻塞会话删除）。
+        coordinator
+            .delete_session(&storage_path, &session_id)
+            .await
+            .expect("session delete must succeed despite worktree remove failure");
+
+        assert!(session_manager
+            .persistence_manager()
+            .load_session_metadata(&storage_path, &session_id)
+            .await
+            .expect("metadata lookup")
+            .is_none(), "session must be fully removed");
     }
 
     #[tokio::test]

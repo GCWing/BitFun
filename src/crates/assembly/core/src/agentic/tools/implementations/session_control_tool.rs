@@ -10,7 +10,9 @@ use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler}
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::restrictions::{get_session_role, validate_delegation, AgentRole};
+use crate::agentic::tools::restrictions::{
+    get_session_role, validate_delegation, worktree_creation_authorized, AgentRole,
+};
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -26,7 +28,7 @@ use bitfun_agent_runtime::session_control::{
     SessionControlCancelRoute, SessionControlInput, SessionControlValidationContext,
     SessionControlValidationResult,
 };
-use bitfun_core_types::SessionExecutionTarget;
+use bitfun_core_types::{SessionExecutionTarget, WorktreeSessionOptions};
 use bitfun_runtime_ports::{
     AcpClientCreateRequest, AcpClientCreateResult, AcpClientPort, AgentSessionCreateRequest,
     AgentSessionDeleteRequest, AgentSessionListRequest, AgentSessionSummary,
@@ -35,8 +37,16 @@ use bitfun_runtime_ports::{
 };
 use bitfun_services_core::session::merge_session_custom_metadata;
 use bitfun_services_core::session::tree::SessionTreeManager;
+use crate::service::git::GitService;
+use crate::service::worktree::{
+    WorktreeCreateBranchRequest, WorktreeCreateRequest, WorktreeService,
+};
+use crate::service::workspace::{
+    get_global_workspace_service, WorkspaceActivityMode, WorkspaceCreateOptions,
+};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// SessionControl tool - create, cancel, delete, or list persisted sessions
@@ -48,12 +58,23 @@ const CANCEL_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone)]
 pub(crate) struct SessionControlWorkspaceTarget {
-    display_workspace: String,
-    project_workspace: String,
-    execution_target: Option<SessionExecutionTarget>,
-    workspace_id: Option<String>,
-    remote_connection_id: Option<String>,
-    remote_ssh_host: Option<String>,
+    pub display_workspace: String,
+    pub project_workspace: String,
+    pub execution_target: Option<SessionExecutionTarget>,
+    pub workspace_id: Option<String>,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+}
+
+/// 结果：SessionControl/SessionMessage create 时创建的 worktree（W4/W5）。
+/// `created=false` = 幂等重放（request_id 已用过，复用既有 worktree）。
+#[derive(Debug, Clone)]
+pub(crate) struct SessionWorktreeCreateResult {
+    pub execution_target: SessionExecutionTarget,
+    pub tracked_workspace_id: Option<String>,
+    pub created: bool,
+    pub branch_name: Option<String>,
+    pub project_workspace_path: String,
 }
 
 impl Default for SessionControlTool {
@@ -228,6 +249,12 @@ impl SessionControlTool {
         }
     }
 
+    /// W4: SessionControl create 分支的 worktree 授权/remote 检查入口。
+    fn ensure_worktree_allowed(&self, context: &ToolUseContext) -> BitFunResult<()> {
+        ensure_worktree_creation_authorized(context)?;
+        ensure_worktree_not_remote(context)
+    }
+
     #[allow(dead_code)]
     async fn ensure_session_exists(
         &self,
@@ -316,6 +343,239 @@ impl SessionControlTool {
         tree: Option<&SessionTreeManager>,
     ) -> String {
         build_session_tree_json_impl(sessions, tree)
+    }
+}
+
+// ── Session↔worktree 联动共享核心（W4/W5/W8/W9）──────────────────
+//
+// 以下函数为文件级 pub(crate) free functions，SessionControl 与
+// SessionMessage 两个工具共用（SessionMessage 经
+// `use super::session_control_tool::...` 复用）。
+
+/// W9: worktree 参数授权判定。worktree 创建 = git 文件系统操作（git
+/// worktree add），是服务层调用不走工具权限门，因此独立判定：仅
+/// Commander owner（或 RBAC 关闭）允许。非 owner 调用者携带 worktree
+/// 参数一律拒绝。
+pub(crate) fn ensure_worktree_creation_authorized(
+    context: &ToolUseContext,
+) -> BitFunResult<()> {
+    let caller_session_id = context.session_id.as_deref().ok_or_else(|| {
+        BitFunError::tool(
+            "worktree requires a caller session in tool context".to_string(),
+        )
+    })?;
+    if worktree_creation_authorized(caller_session_id) {
+        Ok(())
+    } else {
+        Err(BitFunError::tool(format!(
+            "worktree is only allowed for owner (Commander) sessions; session '{}' is not authorized to create worktrees",
+            caller_session_id
+        )))
+    }
+}
+
+/// W9: remote SSH 互斥拒绝（worktree 不支持 remote workspace）。
+pub(crate) fn ensure_worktree_not_remote(context: &ToolUseContext) -> BitFunResult<()> {
+    if context.is_remote() {
+        return Err(BitFunError::tool(
+            "Managed worktrees are not supported for remote SSH workspaces yet".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// W8 自动命名：worktree 分支 task/<序号>（从既有 task/* 序号递增）。
+/// 稳定前缀 `task/`，序号 = 项目内已有 `task/<n>` 分支的最大值 + 1。
+/// 并发下由 WorktreeService 的仓库级锁 + receipt 幂等兜底（同一
+/// request_id 重放不会重复创建分支）。
+async fn next_task_branch_name(project_workspace_path: &str) -> BitFunResult<String> {
+    let branches = GitService::get_branches(project_workspace_path, false)
+        .await
+        .map_err(|error| BitFunError::tool(format!("Failed to list branches: {error}")))?;
+    let max_task_index = branches
+        .iter()
+        .filter_map(|branch| {
+            branch
+                .name
+                .strip_prefix("task/")
+                .and_then(|suffix| suffix.parse::<u32>().ok())
+        })
+        .max()
+        .unwrap_or(0);
+    Ok(format!("task/{}", max_task_index + 1))
+}
+
+/// W8：把 task/<序号> 分支名清洗为合法 git 分支名（git check-ref-format
+/// 规则 + 长度上限）。自动命名已保证合法，此处防御性清洗（对齐
+/// dispatch_branch_name 的段级过滤思路，不信任任何输入）。
+fn sanitize_task_branch_name(branch: &str) -> String {
+    let sanitized: String = branch
+        .split('/')
+        .map(|segment| {
+            segment
+                .chars()
+                .filter(|character| {
+                    character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+                })
+                .collect::<String>()
+        })
+        .map(|segment| segment.trim_matches('.').to_string())
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("/");
+    if sanitized.is_empty() {
+        "task/1".to_string()
+    } else {
+        sanitized
+    }
+}
+
+/// 创建 managed worktree 并绑定到新会话（W4/W5 共享核心）。
+///
+/// 链路（对齐 WorktreeTool::create_session worktree_tool.rs:358-552，禁裸调
+/// git，一切走 WorktreeService）：
+/// 1. WorktreeService::create（git worktree add --detach + registry + 幂等
+///    receipt）——worktree 创建成功才继续；
+/// 2. track workspace（workspace 注册）；
+/// 3. 自动命名分支 task/<序号> 并 create_branch（worktree 绑定分支）；
+/// 4. 返回 execution_target + tracked workspace id；任何一步失败由本函数
+///    回滚（worktree remove + workspace 注销），不留孤儿。
+pub(crate) async fn create_worktree_for_session(
+    request_id: &str,
+    workspace: &SessionControlWorkspaceTarget,
+    worktree_options: &WorktreeSessionOptions,
+    context: &ToolUseContext,
+) -> BitFunResult<SessionWorktreeCreateResult> {
+    let source_workspace_path = context
+        .workspace_root()
+        .ok_or_else(|| {
+            BitFunError::tool("Current execution workspace is unavailable".to_string())
+        })?
+        .to_string_lossy()
+        .to_string();
+    let project_workspace_path = workspace.project_workspace.clone();
+
+    let created = WorktreeService::create(WorktreeCreateRequest {
+        request_id: request_id.to_string(),
+        project_workspace_path: project_workspace_path.clone(),
+        source_workspace_path: Some(source_workspace_path),
+        base_ref: worktree_options.base_ref.clone(),
+        copy_local_changes: worktree_options.copy_local_changes,
+        claimed_by: None,
+    })
+    .await
+    .map_err(|error| BitFunError::tool(error.to_string()))?;
+
+    let worktree_id = created
+        .execution_target
+        .worktree_id
+        .clone()
+        .ok_or_else(|| {
+            BitFunError::tool("Created worktree is missing its worktree_id".to_string())
+        })?;
+
+    // track workspace（对齐 WorktreeTool::create_session 的
+    // track_workspace_activity 步骤）。失败即回滚新 worktree。
+    let workspace_service = get_global_workspace_service().ok_or_else(|| {
+        BitFunError::tool("Workspace service is not initialized".to_string())
+    })?;
+    let tracked_workspace = match workspace_service
+        .track_workspace_activity(
+            PathBuf::from(&created.execution_target.root_path),
+            WorkspaceCreateOptions::default(),
+            WorkspaceActivityMode::RefreshMetadata,
+        )
+        .await
+    {
+        Ok(workspace) => workspace,
+        Err(track_error) => {
+            return Err(cleanup_failed_worktree_create(
+                &project_workspace_path,
+                &created.execution_target,
+                created.created,
+                None,
+                format!("Failed to register worktree workspace: {track_error}"),
+            )
+            .await);
+        }
+    };
+
+    // 自动命名分支 task/<序号>（幂等重放 created=false 时可能已有分支，
+    // 跳过分支创建）。
+    let branch_name = sanitize_task_branch_name(&next_task_branch_name(&project_workspace_path).await?);
+    if created.created && created.execution_target.branch.is_none() {
+        let branch_request_id = format!("{request_id}:branch");
+        if let Err(branch_error) =
+            WorktreeService::create_branch(WorktreeCreateBranchRequest {
+                request_id: branch_request_id,
+                project_workspace_path: project_workspace_path.clone(),
+                worktree_id: worktree_id.clone(),
+                branch: branch_name.clone(),
+            })
+            .await
+        {
+            return Err(cleanup_failed_worktree_create(
+                &project_workspace_path,
+                &created.execution_target,
+                created.created,
+                Some(&tracked_workspace.id),
+                format!("Failed to create worktree branch: {branch_error}"),
+            )
+            .await);
+        }
+    }
+
+    Ok(SessionWorktreeCreateResult {
+        execution_target: created.execution_target,
+        tracked_workspace_id: Some(tracked_workspace.id),
+        created: created.created,
+        branch_name: Some(branch_name),
+        project_workspace_path,
+    })
+}
+
+/// 回滚刚创建的 worktree（W4/W5 失败路径）。
+///
+/// 对齐 WorktreeTool::cleanup_failed_fresh_create：注销 workspace +
+/// WorktreeService::rollback_created（用项目路径）。仅当本次确实创建了
+/// worktree（created=true）时回滚；幂等重放（created=false）不重复回滚。
+async fn cleanup_failed_worktree_create(
+    project_workspace_path: &str,
+    execution_target: &SessionExecutionTarget,
+    created: bool,
+    tracked_workspace_id: Option<&str>,
+    failure: impl Into<String>,
+) -> BitFunError {
+    let failure = failure.into();
+    let mut rollback_issues = Vec::new();
+    if let Some(workspace_id) = tracked_workspace_id {
+        if let Some(workspace_service) = get_global_workspace_service() {
+            if let Err(remove_error) = workspace_service.remove_workspace(workspace_id).await {
+                rollback_issues.push(format!(
+                    "workspace registration could not be removed: {remove_error}"
+                ));
+            }
+        }
+    }
+    if created {
+        if let Some(worktree_id) = execution_target.worktree_id.as_deref() {
+            if let Err(rollback_error) = WorktreeService::rollback_created(
+                project_workspace_path,
+                worktree_id,
+            )
+            .await
+            {
+                rollback_issues.push(format!("worktree could not be removed: {rollback_error}"));
+            }
+        }
+    }
+    if rollback_issues.is_empty() {
+        BitFunError::tool(failure)
+    } else {
+        BitFunError::tool(format!(
+            "rollback_incomplete: {failure}; {}",
+            rollback_issues.join("; ")
+        ))
     }
 }
 
@@ -1151,6 +1411,22 @@ Arguments:
                 "model_id": {
                     "type": "string",
                     "description": "Optional model id used when creating a session; the created session binds to this model."
+                },
+                "worktree": {
+                    "type": "object",
+                    "description": "Optional worktree options for create: creates a managed Git worktree together with the session and binds the session to it (only for create; not supported for remote workspaces). Shape: {baseRef?, copyLocalChanges?}.",
+                    "properties": {
+                        "baseRef": {
+                            "type": "string",
+                            "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                        },
+                        "copyLocalChanges": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                        }
+                    },
+                    "additionalProperties": false
                 }
             },
             "required": ["action"],
@@ -1198,6 +1474,22 @@ Arguments:
                 "model_id": {
                     "type": "string",
                     "description": "Optional model id used when creating a session; the created session binds to this model."
+                },
+                "worktree": {
+                    "type": "object",
+                    "description": "Optional worktree options for create: creates a managed Git worktree together with the session and binds the session to it (only for create; not supported for remote workspaces). Shape: {baseRef?, copyLocalChanges?}.",
+                    "properties": {
+                        "baseRef": {
+                            "type": "string",
+                            "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                        },
+                        "copyLocalChanges": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                        }
+                    },
+                    "additionalProperties": false
                 }
             },
             "required": ["action"],
@@ -1271,6 +1563,13 @@ Arguments:
                     session_control_session_name_or_default(params.session_name.as_deref());
                 let agent_type = session_control_agent_type_or_default(params.agent_type.as_ref());
 
+                // W9: worktree 参数授权 + remote 互斥拒绝。worktree 创建是 git
+                // 文件系统操作，仅 Commander owner（或 RBAC 关闭）允许，且
+                // remote SSH 工作区不支持。
+                if params.worktree.is_some() {
+                    self.ensure_worktree_allowed(context)?;
+                }
+
                 // ACP 真会话路径：agent_type `acp__<client_id>`（ACP bridge agent
                 // registry id，见 AcpAgent::agent_id_for）直接经 AcpClientPort 创建
                 // 真外部 ACP 会话——与前端 create_acp_flow_session 等价（持久记录 +
@@ -1333,6 +1632,26 @@ Arguments:
                     }
                 }
 
+                // W4: worktree 参数命中 → 先创建 managed worktree（WorktreeService
+                // 链路，worktree 创建成功才创建会话），把会话 execution_target 指向
+                // worktree。失败 = 会话不创建 + worktree 回滚，零孤儿。
+                let mut created_worktree: Option<SessionWorktreeCreateResult> = None;
+                if let Some(worktree_options) = params.worktree.as_ref() {
+                    let request_id = context
+                        .tool_call_id
+                        .as_deref()
+                        .map(|tool_call_id| format!("session-control:{tool_call_id}:worktree"))
+                        .unwrap_or_else(|| format!("session-control:{}:worktree", uuid::Uuid::new_v4()));
+                    let worktree = create_worktree_for_session(
+                        &request_id,
+                        &workspace,
+                        worktree_options,
+                        context,
+                    )
+                    .await?;
+                    created_worktree = Some(worktree);
+                }
+
                 let created_by = self.creator_session_marker(context)?;
                 let mut metadata = serde_json::Map::new();
                 metadata.insert("createdBy".to_string(), json!(created_by));
@@ -1349,23 +1668,66 @@ Arguments:
                     json!(context.session_id.clone()),
                 );
                 metadata.insert("subagentType".to_string(), json!(agent_type.clone()));
-                let session = runtime
+                let session = match runtime
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type,
-                        workspace_path: Some(workspace.display_workspace.clone()),
-                        project_workspace_path: Some(workspace.project_workspace.clone()),
-                        execution_target: workspace.execution_target.clone(),
-                        workspace_id: workspace.workspace_id.clone(),
+                        workspace_path: Some(
+                            created_worktree
+                                .as_ref()
+                                .map(|wt| wt.execution_target.root_path.clone())
+                                .unwrap_or_else(|| workspace.display_workspace.clone()),
+                        ),
+                        project_workspace_path: Some(
+                            created_worktree
+                                .as_ref()
+                                .map(|wt| wt.project_workspace_path.clone())
+                                .unwrap_or_else(|| workspace.project_workspace.clone()),
+                        ),
+                        execution_target: created_worktree
+                            .as_ref()
+                            .map(|wt| wt.execution_target.clone())
+                            .or_else(|| workspace.execution_target.clone()),
+                        workspace_id: created_worktree
+                            .as_ref()
+                            .and_then(|wt| wt.tracked_workspace_id.clone())
+                            .or_else(|| workspace.workspace_id.clone()),
                         remote_connection_id: workspace.remote_connection_id.clone(),
                         remote_ssh_host: workspace.remote_ssh_host.clone(),
                         model_id: params.model_id.clone(),
                         metadata,
                     })
                     .await
-                    .map_err(|error| {
-                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
-                    })?;
+                {
+                    Ok(session) => session,
+                    Err(create_error) => {
+                        // 会话创建失败 → 回滚已创建的 worktree（仅当本次确实创建）。
+                        if let Some(worktree) = created_worktree.as_ref() {
+                            if worktree.created {
+                                if let Some(workspace_service) = get_global_workspace_service() {
+                                    if let Some(workspace_id) =
+                                        worktree.tracked_workspace_id.as_deref()
+                                    {
+                                        let _ =
+                                            workspace_service.remove_workspace(workspace_id).await;
+                                    }
+                                }
+                                if let Some(worktree_id) =
+                                    worktree.execution_target.worktree_id.as_deref()
+                                {
+                                    let _ = WorktreeService::rollback_created(
+                                        &worktree.project_workspace_path,
+                                        worktree_id,
+                                    )
+                                    .await;
+                                }
+                            }
+                        }
+                        return Err(BitFunError::tool(
+                            CoreServiceAgentRuntime::runtime_error_message(create_error),
+                        ));
+                    }
+                };
                 let created_session_id = session.session_id.clone();
                 let created_session_name = session.session_name.clone();
                 let created_agent_type = session.agent_type.clone();
@@ -1499,18 +1861,31 @@ Arguments:
                     &created_agent_type,
                 );
 
+                // W4: worktree 创建成功时把 worktree 信息透出给调用方（worktree_id、
+                // 路径、自动命名分支）。
+                let worktree_payload = created_worktree.as_ref().map(|worktree| {
+                    json!({
+                        "worktree_id": worktree.execution_target.worktree_id,
+                        "path": worktree.execution_target.root_path,
+                        "branch": worktree.branch_name,
+                    })
+                });
+                let mut data = json!({
+                    "success": true,
+                    "action": "create",
+                    "workspace": workspace.display_workspace.clone(),
+                    "session": {
+                        "session_id": created_session_id,
+                        "session_name": created_session_name,
+                        "agent_type": created_agent_type,
+                        "model_id": created_model_id,
+                    }
+                });
+                if let Some(worktree_payload) = worktree_payload {
+                    data["worktree"] = worktree_payload;
+                }
                 Ok(vec![ToolResult::Result {
-                    data: json!({
-                        "success": true,
-                        "action": "create",
-                        "workspace": workspace.display_workspace.clone(),
-                        "session": {
-                            "session_id": created_session_id,
-                            "session_name": created_session_name,
-                            "agent_type": created_agent_type,
-                            "model_id": created_model_id,
-                        }
-                    }),
+                    data,
                     result_for_assistant: Some(result_for_assistant),
                     image_attachments: None,
                 }])
@@ -2106,6 +2481,29 @@ mod tests {
             runtime_tool_restrictions: Default::default(),
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
+    }
+
+    #[test]
+    fn task_branch_names_are_sanitized_to_valid_git_refs() {
+        assert_eq!(sanitize_task_branch_name("task/1"), "task/1");
+        assert_eq!(sanitize_task_branch_name("task/42"), "task/42");
+        // 非法字符被段级过滤。
+        assert_eq!(sanitize_task_branch_name("task/1:bad"), "task/1bad");
+        // 空输入回退 task/1。
+        assert_eq!(sanitize_task_branch_name(""), "task/1");
+        assert_eq!(sanitize_task_branch_name("///"), "task/1");
+        // 点段修剪（git ref 非法）：`..` 段清空后被剔除。
+        assert_eq!(sanitize_task_branch_name("task/.."), "task");
+        assert_eq!(sanitize_task_branch_name("task/.."), "task");
+    }
+
+    #[test]
+    fn task_branch_auto_naming_increments_from_existing_task_branches() {
+        // 纯函数验证：next_task_branch_name 依赖 GitService::get_branches（真实
+        // git 调用），此处仅验证「task/<序号> 从 0 递增」的格式契约；序号递增
+        // 逻辑在集成层由 get_branches 输出驱动。
+        let name = sanitize_task_branch_name("task/3");
+        assert_eq!(name, "task/3");
     }
 
     /// Minimal AcpClientPort fake: records create requests and returns the

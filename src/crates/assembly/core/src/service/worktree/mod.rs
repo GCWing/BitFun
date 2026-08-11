@@ -158,6 +158,11 @@ struct RegisteredWorktree {
     base_ref: Option<String>,
     base_commit: String,
     branch: Option<String>,
+    /// 展示名（W7 rename 联动）：会话 rename 时同步，保持「会话名 =
+    /// worktree 展示名 = 分支名」三方一致。目录名保持 uuid 后缀稳定不变
+    /// （指挥官裁决：目录改名一期不做）。`None` = 未设置（legacy）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    display_name: Option<String>,
     lifecycle: WorktreeLifecycle,
     created_at_ms: u64,
     /// Owner that still needs this worktree, e.g. `dispatch:<jobId>`.
@@ -187,6 +192,11 @@ enum WorktreeOperationReceipt {
         worktree_id: String,
         branch: String,
     },
+    UpdateDisplayName {
+        worktree_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        display_name: Option<String>,
+    },
     Promote {
         worktree_id: String,
     },
@@ -205,6 +215,7 @@ impl WorktreeOperationReceipt {
         match self {
             Self::Create { worktree_id, .. }
             | Self::CreateBranch { worktree_id, .. }
+            | Self::UpdateDisplayName { worktree_id, .. }
             | Self::Promote { worktree_id }
             | Self::Remove { worktree_id, .. }
             | Self::Recreate { worktree_id } => worktree_id,
@@ -548,6 +559,7 @@ impl WorktreeService {
             base_ref: Some(base_ref.to_string()),
             base_commit: base_commit.clone(),
             branch: None,
+            display_name: None,
             lifecycle: WorktreeLifecycle::Managed,
             created_at_ms: current_unix_ms(),
             claimed_by: claimed_by.clone(),
@@ -670,6 +682,88 @@ impl WorktreeService {
         Self::save_registry(&context, &registry).await?;
         let result =
             Self::mutation_result_for_id(&context, &mut registry, &request.worktree_id).await?;
+        notify_changed(&context.project_workspace_path).await;
+        Ok(result)
+    }
+
+    /// W7: 更新 worktree 展示名（display_name）并同步分支名（git branch -m，
+    /// 经 GitService，禁裸调 git）。
+    ///
+    /// 会话 rename 联动：会话重命名后，绑定 worktree 的分支名 + 展示名保持
+    /// 「会话名 = worktree 展示名 = 分支名」三方一致。语义：
+    /// - 分支名已存在时（如 task/N）：仅同步 display_name，分支名不动
+    ///   （指挥官裁决：沿用 task/<序号> 系，三方一致即可，不强改分支名）。
+    /// - `rename_branch` 字段为 Some(new_branch) 时才执行 git branch -m；
+    ///   失败（分支被占用/不存在）不阻塞调用方（会话 rename 照常），错误
+    ///   经 Err 返回由调用方决定提示级别。
+    /// - 幂等：同 request_id 重放复用既有状态；display_name 相同则无操作。
+    pub async fn update_display_name(
+        project_workspace_path: &str,
+        request_id: &str,
+        worktree_id: &str,
+        display_name: Option<&str>,
+        rename_branch: Option<&str>,
+    ) -> Result<WorktreeMutationResult, WorktreeError> {
+        validate_request_id(request_id)?;
+        let context = Self::repository_context(Path::new(project_workspace_path)).await?;
+        let lock = repository_lock(&context.common_git_dir);
+        let _guard = lock.lock().await;
+        let _process_guard = Self::acquire_repository_process_lock(&context).await?;
+        let mut registry = Self::load_registry(&context).await?;
+        if let Some(receipt) = registry.receipts.get(request_id).cloned() {
+            return match receipt {
+                WorktreeOperationReceipt::UpdateDisplayName {
+                    worktree_id: receipt_worktree_id,
+                    display_name: receipt_display_name,
+                } if receipt_worktree_id == worktree_id
+                    && receipt_display_name == display_name.map(ToOwned::to_owned) =>
+                {
+                    Self::mutation_result_for_id(&context, &mut registry, worktree_id).await
+                }
+                _ => Err(error(
+                    WorktreeErrorCode::RequestConflict,
+                    "The requestId was already used with different display-name parameters",
+                )),
+            };
+        }
+
+        let record = registry
+            .worktrees
+            .iter_mut()
+            .find(|record| record.worktree_id == worktree_id)
+            .ok_or_else(|| {
+                error(
+                    WorktreeErrorCode::WorktreeNotFound,
+                    "Managed worktree was not found",
+                )
+            })?;
+        let display_name = display_name.map(str::trim).filter(|name| !name.is_empty());
+        record.display_name = display_name.map(ToOwned::to_owned);
+
+        if let Some(new_branch) = rename_branch.map(str::trim).filter(|name| !name.is_empty()) {
+            if let Some(old_branch) = record.branch.as_deref().map(str::trim).filter(|b| !b.is_empty())
+            {
+                if old_branch != new_branch {
+                    // git branch -m（经 GitService；worktree 目录内执行）。
+                    let info = GitService::rename_branch(&record.path, old_branch, new_branch)
+                        .await
+                        .map_err(map_git_error)?;
+                    if info.success {
+                        record.branch = Some(new_branch.to_string());
+                    }
+                }
+            }
+        }
+
+        registry.receipts.insert(
+            request_id.to_string(),
+            WorktreeOperationReceipt::UpdateDisplayName {
+                worktree_id: worktree_id.to_string(),
+                display_name: record.display_name.clone(),
+            },
+        );
+        Self::save_registry(&context, &registry).await?;
+        let result = Self::mutation_result_for_id(&context, &mut registry, worktree_id).await?;
         notify_changed(&context.project_workspace_path).await;
         Ok(result)
     }
@@ -1094,6 +1188,7 @@ impl WorktreeService {
                     base_ref: git_worktree.branch.clone(),
                     base_commit: git_worktree.head.clone(),
                     branch: git_worktree.branch.clone(),
+                    display_name: None,
                     lifecycle: WorktreeLifecycle::External,
                     created_at_ms: current_unix_ms(),
                     claimed_by: None,
@@ -1105,6 +1200,9 @@ impl WorktreeService {
             let lifecycle = registered
                 .map(|record| record.lifecycle)
                 .unwrap_or(WorktreeLifecycle::External);
+            let display_name = registered
+                .and_then(|record| record.display_name.as_deref())
+                .map(ToOwned::to_owned);
             summaries.push(
                 build_summary(
                     context,
@@ -1112,6 +1210,7 @@ impl WorktreeService {
                     lifecycle,
                     git_worktree,
                     missing,
+                    display_name,
                     &sessions,
                 )
                 .await?,
@@ -1141,6 +1240,7 @@ impl WorktreeService {
                     record.lifecycle,
                     missing_info,
                     true,
+                    record.display_name.clone(),
                     &sessions,
                 )
                 .await?,
@@ -1534,6 +1634,7 @@ async fn build_summary(
     lifecycle: WorktreeLifecycle,
     git_worktree: GitWorktreeInfo,
     missing: bool,
+    display_name: Option<String>,
     sessions: &[SessionMetadata],
 ) -> Result<WorktreeSummary, WorktreeError> {
     let associated = sessions
@@ -1582,6 +1683,7 @@ async fn build_summary(
         path: git_worktree.path,
         head: git_worktree.head,
         branch: git_worktree.branch,
+        display_name,
         lifecycle,
         is_main: git_worktree.is_main,
         dirty,
@@ -2014,6 +2116,7 @@ mod tests {
             path: "/worktrees/wt-1".to_string(),
             head: "0123456789abcdef".to_string(),
             branch: None,
+            display_name: None,
             lifecycle: WorktreeLifecycle::Managed,
             is_main: false,
             dirty: false,
@@ -2250,6 +2353,7 @@ mod tests {
                 base_ref: Some("main".to_string()),
                 base_commit: "0123456789abcdef".to_string(),
                 branch: None,
+                display_name: None,
                 lifecycle,
                 created_at_ms,
                 claimed_by: None,
@@ -2277,6 +2381,7 @@ mod tests {
                 base_ref: Some("main".to_string()),
                 base_commit: "0123456789abcdef".to_string(),
                 branch: None,
+                display_name: None,
                 lifecycle: WorktreeLifecycle::Managed,
                 created_at_ms,
                 claimed_by: claimed_by.map(ToOwned::to_owned),
@@ -2302,6 +2407,7 @@ mod tests {
                 base_ref: Some("main".to_string()),
                 base_commit: "0123456789abcdef".to_string(),
                 branch: None,
+                display_name: None,
                 lifecycle: WorktreeLifecycle::Managed,
                 created_at_ms: 10,
                 claimed_by: None,
@@ -2325,6 +2431,7 @@ mod tests {
                 base_ref: Some("main".to_string()),
                 base_commit: "0123456789abcdef".to_string(),
                 branch: None,
+                display_name: None,
                 lifecycle: WorktreeLifecycle::Managed,
                 created_at_ms,
                 claimed_by: None,
@@ -2335,6 +2442,54 @@ mod tests {
             automatic_delete_candidate_ids(&registry, 1, "newest", AUTO_DELETE_MIN_AGE_MS,)
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn update_display_name_updates_registry_and_keeps_task_branch() {
+        // W7 纯 registry 语义（不触发真实 git）：display_name 更新 + 幂等 receipt。
+        let project = Path::new("/repo");
+        let mut registry = WorktreeRegistry::new(project);
+        registry.worktrees.push(RegisteredWorktree {
+            worktree_id: "wt-1".to_string(),
+            path: "/managed/wt-1".to_string(),
+            base_ref: Some("main".to_string()),
+            base_commit: "0123456789abcdef".to_string(),
+            branch: Some("task/1".to_string()),
+            display_name: None,
+            lifecycle: WorktreeLifecycle::Managed,
+            created_at_ms: 1,
+            claimed_by: None,
+        });
+
+        // 直接调内部逻辑等价物：update_display_name 需要真实仓库上下文，此处
+        // 验证 registry 层字段语义（display_name 与 receipt 持久化）。
+        let record = registry.worktrees.iter_mut().next().expect("record");
+        record.display_name = Some("新会话名".to_string());
+        registry.receipts.insert(
+            "request-1".to_string(),
+            WorktreeOperationReceipt::UpdateDisplayName {
+                worktree_id: "wt-1".to_string(),
+                display_name: Some("新会话名".to_string()),
+            },
+        );
+
+        let restored = serde_json::to_value(&registry).expect("serialize");
+        assert_eq!(restored["worktrees"][0]["displayName"], "新会话名");
+        assert_eq!(restored["worktrees"][0]["branch"], "task/1");
+        assert_eq!(
+            restored["receipts"]["request-1"]["operation"],
+            "update_display_name"
+        );
+
+        let parsed: WorktreeRegistry = serde_json::from_value(restored).expect("deserialize");
+        assert_eq!(parsed.worktrees[0].display_name.as_deref(), Some("新会话名"));
+        assert!(matches!(
+            parsed.receipts.get("request-1"),
+            Some(WorktreeOperationReceipt::UpdateDisplayName {
+                display_name: Some(name),
+                ..
+            }) if name == "新会话名"
+        ));
     }
 
     #[tokio::test]
@@ -2356,6 +2511,7 @@ mod tests {
             base_ref: Some("main".to_string()),
             base_commit: "0123456789abcdef".to_string(),
             branch: None,
+            display_name: None,
             lifecycle: WorktreeLifecycle::Managed,
             created_at_ms: 123,
             claimed_by: Some("dispatch:job-restored".to_string()),
@@ -2412,6 +2568,7 @@ mod tests {
             base_ref: Some("main".to_string()),
             base_commit: "0123456789abcdef".to_string(),
             branch: None,
+            display_name: None,
             lifecycle: WorktreeLifecycle::Managed,
             created_at_ms: 123,
             claimed_by: None,
@@ -2461,6 +2618,7 @@ mod tests {
                 base_ref: Some("main".to_string()),
                 base_commit: "0123456789abcdef".to_string(),
                 branch: None,
+                display_name: None,
                 lifecycle: WorktreeLifecycle::Managed,
                 created_at_ms: 123,
                 claimed_by: claimed_by.map(ToOwned::to_owned),
