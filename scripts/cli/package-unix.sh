@@ -16,6 +16,18 @@ OUTPUT_DIR="${4:-${REPO_ROOT}}"
 PRIMARY="${RELEASE_DIR}/bitfun"
 LEGACY="${RELEASE_DIR}/bitfun-cli"
 DEPRECATION='Warning: `bitfun-cli` is deprecated; use `bitfun` instead.'
+PLUGIN_HOST_DIST="${REPO_ROOT}/src/apps/extension-host/dist"
+PLUGIN_HOST_RESOURCE_DIR="resources/ext-host"
+
+assert_plugin_host_resources() {
+  local directory="$1"
+  for entry in extension-host.js; do
+    if [ ! -f "${directory}/${entry}" ]; then
+      echo "Error: plugin Host resource is missing: ${directory}/${entry}" >&2
+      return 1
+    fi
+  done
+}
 
 assert_legacy_entrypoint() {
   local executable="$1"
@@ -37,6 +49,7 @@ assert_legacy_entrypoint() {
 "$PRIMARY" --version
 "$PRIMARY" --help >/dev/null
 assert_legacy_entrypoint "$LEGACY"
+assert_plugin_host_resources "$PLUGIN_HOST_DIST"
 
 STAGE_NAME="bitfun-cli-${VERSION}-${TARGET}"
 STAGE_DIR="${OUTPUT_DIR}/dist-cli/${STAGE_NAME}"
@@ -59,6 +72,9 @@ fi
 if [ -d "${REPO_ROOT}/src/apps/cli/prompts" ]; then
   cp -R "${REPO_ROOT}/src/apps/cli/prompts" "$STAGE_DIR/prompts"
 fi
+mkdir -p "$STAGE_DIR/$PLUGIN_HOST_RESOURCE_DIR"
+cp "$PLUGIN_HOST_DIST/extension-host.js" "$STAGE_DIR/$PLUGIN_HOST_RESOURCE_DIR/"
+assert_plugin_host_resources "$STAGE_DIR/$PLUGIN_HOST_RESOURCE_DIR"
 
 ARCHIVE="${OUTPUT_DIR}/${STAGE_NAME}.tar.gz"
 tar -C "$(dirname "$STAGE_DIR")" -czf "$ARCHIVE" "$(basename "$STAGE_DIR")"
@@ -87,6 +103,7 @@ LEGACY_CANDIDATES=("$EXTRACT_DIR"/*/bitfun-cli)
 [ -f "$EXTRACT_DIR/$STAGE_NAME/THIRD_PARTY_NOTICES.md" ]
 [ -f "$EXTRACT_DIR/$STAGE_NAME/third-party/models.dev/LICENSE.txt" ]
 [ -f "$EXTRACT_DIR/$STAGE_NAME/third-party/models.dev/provenance.json" ]
+assert_plugin_host_resources "$EXTRACT_DIR/$STAGE_NAME/$PLUGIN_HOST_RESOURCE_DIR"
 "${PRIMARY_CANDIDATES[0]}" --version
 "${PRIMARY_CANDIDATES[0]}" --help >/dev/null
 assert_legacy_entrypoint "${LEGACY_CANDIDATES[0]}"

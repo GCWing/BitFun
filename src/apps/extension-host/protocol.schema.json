@@ -1,0 +1,3354 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencode.ai/schemas/extension-host/protocol-v1.json",
+  "title": "OpenCode extension host protocol",
+  "description": "JSON-RPC 2.0 envelopes and method schemas for the standalone OpenCode 1.17.18 Bun extension host.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/RpcRequest"
+    },
+    {
+      "$ref": "#/$defs/RpcNotification"
+    },
+    {
+      "$ref": "#/$defs/RpcSuccessResponse"
+    },
+    {
+      "$ref": "#/$defs/RpcErrorResponse"
+    }
+  ],
+  "$defs": {
+    "RpcRequest": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "$ref": "#/$defs/RpcRequest/$defs/__schema0"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id",
+        "method"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RpcRequest/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/RpcRequest/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "RpcNotification": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "$ref": "#/$defs/RpcNotification/$defs/__schema0"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RpcNotification/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/RpcNotification/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "RpcSuccessResponse": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "$ref": "#/$defs/RpcSuccessResponse/$defs/__schema0"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id",
+        "result"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RpcSuccessResponse/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/RpcSuccessResponse/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "RpcErrorResponse": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "type": "string",
+          "const": "2.0"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "message": {
+              "type": "string"
+            },
+            "data": {
+              "$ref": "#/$defs/RpcErrorResponse/$defs/__schema0"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "id",
+        "error"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RpcErrorResponse/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/RpcErrorResponse/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostPluginsPrepareParams": {
+      "type": "object",
+      "properties": {
+        "plugins": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "spec": {
+                "type": "string",
+                "minLength": 1
+              },
+              "options": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/HostPluginsPrepareParams/$defs/__schema0"
+                }
+              },
+              "baseDirectory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "spec"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "configurationFingerprint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "defaultBaseDirectory": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugins"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostPluginsPrepareParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostPluginsPrepareParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostPluginsPrepareResult": {
+      "type": "object",
+      "properties": {
+        "configurationFingerprint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prepared": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "spec": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "file",
+                  "npm"
+                ]
+              },
+              "target": {
+                "type": "string"
+              },
+              "entry": {
+                "type": "string"
+              },
+              "cache": {
+                "type": "string",
+                "enum": [
+                  "hit",
+                  "installed",
+                  "validated"
+                ]
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "spec",
+              "source",
+              "target",
+              "entry",
+              "cache"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "failed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "spec": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "declaration",
+                  "resolve",
+                  "install",
+                  "entry",
+                  "compatibility",
+                  "load",
+                  "shape"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "spec",
+              "stage",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "debug",
+                  "info",
+                  "warning",
+                  "error"
+                ]
+              },
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "plugin": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string"
+              },
+              "data": {
+                "$ref": "#/$defs/HostPluginsPrepareResult/$defs/__schema0"
+              }
+            },
+            "required": [
+              "severity",
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "prepared",
+        "failed",
+        "diagnostics"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostPluginsPrepareResult/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostPluginsPrepareResult/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostInstanceOpenParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project": {
+          "$ref": "#/$defs/HostInstanceOpenParams/$defs/__schema0"
+        },
+        "config": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/HostInstanceOpenParams/$defs/__schema0"
+          }
+        },
+        "directory": {
+          "type": "string"
+        },
+        "worktree": {
+          "type": "string"
+        },
+        "plugins": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "spec": {
+                "type": "string",
+                "minLength": 1
+              },
+              "options": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/HostInstanceOpenParams/$defs/__schema0"
+                }
+              },
+              "baseDirectory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "spec"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "configurationFingerprint": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "instanceID",
+        "project",
+        "config",
+        "directory",
+        "worktree",
+        "plugins"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostInstanceOpenParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostInstanceOpenParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostInstanceOpenResult": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "debug",
+                  "info",
+                  "warning",
+                  "error"
+                ]
+              },
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "plugin": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string"
+              },
+              "data": {
+                "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+              }
+            },
+            "required": [
+              "severity",
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "hooks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "registrationID": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "plugin": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+                }
+              },
+              "description": {
+                "type": "string"
+              },
+              "parameters": {
+                "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+              }
+            },
+            "required": [
+              "registrationID",
+              "id",
+              "description",
+              "parameters"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "auth": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "plugin": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+                }
+              },
+              "hasLoader": {
+                "type": "boolean"
+              },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "oauth",
+                        "api"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "methodIndex": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "hasAuthorize": {
+                      "type": "boolean"
+                    },
+                    "prompts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "select"
+                            ]
+                          },
+                          "promptIndex": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "placeholder": {
+                            "type": "string"
+                          },
+                          "options": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                },
+                                "hint": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "label",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "when": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "op": {
+                                "type": "string",
+                                "enum": [
+                                  "eq",
+                                  "neq"
+                                ]
+                              },
+                              "value": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "op",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "hasValidate": {
+                            "type": "boolean"
+                          },
+                          "hasCondition": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "promptIndex",
+                          "key",
+                          "message",
+                          "hasValidate",
+                          "hasCondition"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "label",
+                    "methodIndex",
+                    "hasAuthorize",
+                    "prompts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "provider",
+              "hasLoader",
+              "methods"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "plugin": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+                }
+              },
+              "hasModels": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "provider",
+              "hasModels"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "workspaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "registrationID": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "plugin": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+                }
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "registrationID",
+              "type",
+              "name",
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "gatewayURL": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "instanceID",
+        "config",
+        "diagnostics",
+        "hooks",
+        "tools",
+        "auth",
+        "providers",
+        "workspaces",
+        "gatewayURL"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostInstanceCloseParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "instanceID"
+      ],
+      "additionalProperties": false
+    },
+    "HostInstanceCloseResult": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "closed"
+      ],
+      "additionalProperties": false
+    },
+    "HostLogSetLevelParams": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "off"
+          ]
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "additionalProperties": false
+    },
+    "HostLogSetLevelResult": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "off"
+          ]
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "additionalProperties": false
+    },
+    "HostShutdownParams": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "HostShutdownResult": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "closed"
+      ],
+      "additionalProperties": false
+    },
+    "HostHookCallParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hook": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input": {
+          "$ref": "#/$defs/HostHookCallParams/$defs/__schema0"
+        },
+        "output": {
+          "$ref": "#/$defs/HostHookCallParams/$defs/__schema0"
+        }
+      },
+      "required": [
+        "instanceID",
+        "hook",
+        "input",
+        "output"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostHookCallParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostHookCallParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostHookCallResult": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/HostHookCallResult/$defs/__schema0"
+        },
+        "output": {
+          "$ref": "#/$defs/HostHookCallResult/$defs/__schema0"
+        }
+      },
+      "required": [
+        "input",
+        "output"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostHookCallResult/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostHookCallResult/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostEventEmitParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event": {
+          "$ref": "#/$defs/HostEventEmitParams/$defs/__schema0"
+        }
+      },
+      "required": [
+        "instanceID",
+        "event"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostEventEmitParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostEventEmitParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostEventEmitResult": {
+      "type": "object",
+      "properties": {
+        "accepted": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "accepted"
+      ],
+      "additionalProperties": false
+    },
+    "HostToolExecuteParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executionID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registrationID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "$ref": "#/$defs/HostToolExecuteParams/$defs/__schema0"
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "sessionID": {
+              "type": "string"
+            },
+            "messageID": {
+              "type": "string"
+            },
+            "agent": {
+              "type": "string"
+            },
+            "callID": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sessionID",
+            "messageID",
+            "agent"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "instanceID",
+        "executionID",
+        "registrationID",
+        "args",
+        "context"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostToolExecuteParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostToolExecuteParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostToolExecuteResult": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "output": {
+              "type": "string"
+            },
+            "metadata": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostToolExecuteResult/$defs/__schema0"
+              }
+            },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "file"
+                  },
+                  "mime": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "mime",
+                  "url"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "output"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostToolExecuteResult/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostToolExecuteResult/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostToolCancelParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executionID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceID",
+        "executionID"
+      ],
+      "additionalProperties": false
+    },
+    "HostToolCancelResult": {
+      "type": "object",
+      "properties": {
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cancelled"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthPromptEvaluateParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "methodIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "promptIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "validate",
+            "condition"
+          ]
+        },
+        "value": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "instanceID",
+        "provider",
+        "methodIndex",
+        "promptIndex",
+        "operation",
+        "inputs"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthPromptEvaluateResult": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "const": "validate"
+            },
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "const": "condition"
+            },
+            "active": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "operation",
+            "active"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "HostAuthAuthorizeParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "methodIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "inputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "instanceID",
+        "provider",
+        "methodIndex"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthAuthorizeResult": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "oauth"
+            },
+            "flowID": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "instructions": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "code"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "flowID",
+            "url",
+            "instructions",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "api"
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "success"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "refresh": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string"
+                        },
+                        "expires": {
+                          "type": "number"
+                        },
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "enterpriseUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "refresh",
+                        "access",
+                        "expires"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "success"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "key"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "failed"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "HostAuthCallbackParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "flowID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceID",
+        "flowID"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthCallbackResult": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "success"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "refresh": {
+                  "type": "string"
+                },
+                "access": {
+                  "type": "string"
+                },
+                "expires": {
+                  "type": "number"
+                },
+                "accountId": {
+                  "type": "string"
+                },
+                "enterpriseUrl": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "refresh",
+                "access",
+                "expires"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "success"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "type",
+                "key"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "failed"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "HostAuthFlowCancelParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "flowID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceID",
+        "flowID"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthFlowCancelResult": {
+      "type": "object",
+      "properties": {
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cancelled"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthLoaderParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "providerInfo": {
+          "$ref": "#/$defs/HostAuthLoaderParams/$defs/__schema0"
+        }
+      },
+      "required": [
+        "instanceID",
+        "provider",
+        "providerInfo"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostAuthLoaderParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostAuthLoaderParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostAuthLoaderResult": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/HostAuthLoaderResult/$defs/__schema0"
+          }
+        },
+        "fetchID": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostAuthLoaderResult/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostAuthLoaderResult/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostAuthFetchParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fetchID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "method": {
+              "type": "string",
+              "minLength": 1
+            },
+            "headers": {
+              "type": "array",
+              "items": {
+                "minItems": 2,
+                "maxItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "body": {
+              "type": "object",
+              "properties": {
+                "streamID": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "length": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "streamID"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "instanceID",
+        "fetchID",
+        "requestID",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthFetchResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "statusText": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "minItems": 2,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "streamID": {
+              "type": "string",
+              "minLength": 1
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "streamID"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "status",
+        "headers"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthFetchCancelParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceID",
+        "requestID"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthFetchCancelResult": {
+      "type": "object",
+      "properties": {
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cancelled"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthFetchReleaseParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fetchID": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "instanceID",
+        "fetchID"
+      ],
+      "additionalProperties": false
+    },
+    "HostAuthFetchReleaseResult": {
+      "type": "object",
+      "properties": {
+        "released": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "released"
+      ],
+      "additionalProperties": false
+    },
+    "HostProviderModelsParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "providerID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "$ref": "#/$defs/HostProviderModelsParams/$defs/__schema0"
+        },
+        "auth": {
+          "$ref": "#/$defs/HostProviderModelsParams/$defs/__schema0"
+        }
+      },
+      "required": [
+        "instanceID",
+        "providerID",
+        "provider"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostProviderModelsParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostProviderModelsParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostProviderModelsResult": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/HostProviderModelsResult/$defs/__schema0"
+          }
+        }
+      },
+      "required": [
+        "models"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostProviderModelsResult/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostProviderModelsResult/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostWorkspaceConfigureParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registrationID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config": {
+          "$ref": "#/$defs/HostWorkspaceConfigureParams/$defs/__schema0"
+        }
+      },
+      "required": [
+        "instanceID",
+        "registrationID",
+        "config"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostWorkspaceConfigureParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostWorkspaceConfigureParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostWorkspaceConfigureResult": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/HostWorkspaceConfigureResult/$defs/__schema0"
+        }
+      },
+      "required": [
+        "config"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostWorkspaceConfigureResult/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostWorkspaceConfigureResult/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostWorkspaceCreateParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registrationID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config": {
+          "$ref": "#/$defs/HostWorkspaceCreateParams/$defs/__schema0"
+        },
+        "env": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "from": {
+          "$ref": "#/$defs/HostWorkspaceCreateParams/$defs/__schema0"
+        }
+      },
+      "required": [
+        "instanceID",
+        "registrationID",
+        "config",
+        "env"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostWorkspaceCreateParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostWorkspaceCreateParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostWorkspaceCreateResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "HostWorkspaceRemoveParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registrationID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config": {
+          "$ref": "#/$defs/HostWorkspaceRemoveParams/$defs/__schema0"
+        }
+      },
+      "required": [
+        "instanceID",
+        "registrationID",
+        "config"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostWorkspaceRemoveParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostWorkspaceRemoveParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostWorkspaceRemoveResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "HostWorkspaceTargetParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registrationID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config": {
+          "$ref": "#/$defs/HostWorkspaceTargetParams/$defs/__schema0"
+        }
+      },
+      "required": [
+        "instanceID",
+        "registrationID",
+        "config"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HostWorkspaceTargetParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/HostWorkspaceTargetParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "HostWorkspaceTargetResult": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "local"
+                },
+                "directory": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "directory"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "remote"
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "headers": {
+                  "type": "array",
+                  "items": {
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "type",
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "HostStreamReadParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "streamID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxBytes": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 65536
+        }
+      },
+      "required": [
+        "instanceID",
+        "streamID"
+      ],
+      "additionalProperties": false
+    },
+    "HostStreamReadResult": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+        },
+        "eof": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "data",
+        "eof"
+      ],
+      "additionalProperties": false
+    },
+    "HostStreamCancelParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "streamID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceID",
+        "streamID"
+      ],
+      "additionalProperties": false
+    },
+    "HostStreamCancelResult": {
+      "type": "object",
+      "properties": {
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cancelled"
+      ],
+      "additionalProperties": false
+    },
+    "BackendHandshakeParams": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "opencodeVersion": {
+          "type": "string",
+          "const": "1.17.18"
+        },
+        "maxFrameBytes": {
+          "type": "integer",
+          "minimum": 65536,
+          "maximum": 67108864
+        }
+      },
+      "required": [
+        "token",
+        "protocolVersion",
+        "opencodeVersion",
+        "maxFrameBytes"
+      ],
+      "additionalProperties": false
+    },
+    "BackendHandshakeResult": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "maxFrameBytes": {
+          "type": "integer",
+          "minimum": 65536,
+          "maximum": 67108864
+        },
+        "cacheDirectory": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "maxFrameBytes",
+        "cacheDirectory"
+      ],
+      "additionalProperties": false
+    },
+    "BackendHttpRequestParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "minItems": 2,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "streamID": {
+              "type": "string",
+              "minLength": 1
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "streamID"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "instanceID",
+        "requestID",
+        "method",
+        "path",
+        "headers"
+      ],
+      "additionalProperties": false
+    },
+    "BackendHttpRequestResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "statusText": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "minItems": 2,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "streamID": {
+              "type": "string",
+              "minLength": 1
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "streamID"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "status",
+        "headers"
+      ],
+      "additionalProperties": false
+    },
+    "BackendAuthGetParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "providerID": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "instanceID",
+        "providerID"
+      ],
+      "additionalProperties": false
+    },
+    "BackendAuthGetResult": {
+      "type": "object",
+      "properties": {
+        "auth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackendAuthGetResult/$defs/__schema0"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "auth"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthGetResult/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/BackendAuthGetResult/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BackendToolAskParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executionID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "permission": {
+          "type": "string"
+        },
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "always": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/BackendToolAskParams/$defs/__schema0"
+          }
+        }
+      },
+      "required": [
+        "instanceID",
+        "executionID",
+        "permission",
+        "patterns",
+        "always",
+        "metadata"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendToolAskParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/BackendToolAskParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BackendToolAskResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "BackendToolMetadataParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executionID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/BackendToolMetadataParams/$defs/__schema0"
+          }
+        }
+      },
+      "required": [
+        "instanceID",
+        "executionID"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendToolMetadataParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/BackendToolMetadataParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BackendToolMetadataResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "BackendDiagnosticPublishParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "diagnostic": {
+          "type": "object",
+          "properties": {
+            "severity": {
+              "type": "string",
+              "enum": [
+                "debug",
+                "info",
+                "warning",
+                "error"
+              ]
+            },
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "plugin": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string"
+            },
+            "data": {
+              "$ref": "#/$defs/BackendDiagnosticPublishParams/$defs/__schema0"
+            }
+          },
+          "required": [
+            "severity",
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "diagnostic"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendDiagnosticPublishParams/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/BackendDiagnosticPublishParams/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BackendDiagnosticPublishResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "BackendStreamReadParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "streamID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxBytes": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 65536
+        }
+      },
+      "required": [
+        "instanceID",
+        "streamID"
+      ],
+      "additionalProperties": false
+    },
+    "BackendStreamReadResult": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+        },
+        "eof": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "data",
+        "eof"
+      ],
+      "additionalProperties": false
+    },
+    "BackendStreamCancelParams": {
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "streamID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceID",
+        "streamID"
+      ],
+      "additionalProperties": false
+    },
+    "BackendStreamCancelResult": {
+      "type": "object",
+      "properties": {
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cancelled"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "x-protocol-version": 1,
+  "x-methods": {
+    "host.plugins.prepare": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostPluginsPrepareParams",
+      "result": "#/$defs/HostPluginsPrepareResult"
+    },
+    "host.instance.open": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostInstanceOpenParams",
+      "result": "#/$defs/HostInstanceOpenResult"
+    },
+    "host.instance.close": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostInstanceCloseParams",
+      "result": "#/$defs/HostInstanceCloseResult"
+    },
+    "host.log.setLevel": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostLogSetLevelParams",
+      "result": "#/$defs/HostLogSetLevelResult"
+    },
+    "host.shutdown": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostShutdownParams",
+      "result": "#/$defs/HostShutdownResult"
+    },
+    "host.hook.call": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostHookCallParams",
+      "result": "#/$defs/HostHookCallResult"
+    },
+    "host.event.emit": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostEventEmitParams",
+      "result": "#/$defs/HostEventEmitResult"
+    },
+    "host.tool.execute": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostToolExecuteParams",
+      "result": "#/$defs/HostToolExecuteResult"
+    },
+    "host.tool.cancel": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostToolCancelParams",
+      "result": "#/$defs/HostToolCancelResult"
+    },
+    "host.auth.prompt.evaluate": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostAuthPromptEvaluateParams",
+      "result": "#/$defs/HostAuthPromptEvaluateResult"
+    },
+    "host.auth.authorize": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostAuthAuthorizeParams",
+      "result": "#/$defs/HostAuthAuthorizeResult"
+    },
+    "host.auth.callback": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostAuthCallbackParams",
+      "result": "#/$defs/HostAuthCallbackResult"
+    },
+    "host.auth.flow.cancel": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostAuthFlowCancelParams",
+      "result": "#/$defs/HostAuthFlowCancelResult"
+    },
+    "host.auth.loader": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostAuthLoaderParams",
+      "result": "#/$defs/HostAuthLoaderResult"
+    },
+    "host.auth.fetch": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostAuthFetchParams",
+      "result": "#/$defs/HostAuthFetchResult"
+    },
+    "host.auth.fetch.cancel": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostAuthFetchCancelParams",
+      "result": "#/$defs/HostAuthFetchCancelResult"
+    },
+    "host.auth.fetch.release": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostAuthFetchReleaseParams",
+      "result": "#/$defs/HostAuthFetchReleaseResult"
+    },
+    "host.provider.models": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostProviderModelsParams",
+      "result": "#/$defs/HostProviderModelsResult"
+    },
+    "host.workspace.configure": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostWorkspaceConfigureParams",
+      "result": "#/$defs/HostWorkspaceConfigureResult"
+    },
+    "host.workspace.create": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostWorkspaceCreateParams",
+      "result": "#/$defs/HostWorkspaceCreateResult"
+    },
+    "host.workspace.remove": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostWorkspaceRemoveParams",
+      "result": "#/$defs/HostWorkspaceRemoveResult"
+    },
+    "host.workspace.target": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostWorkspaceTargetParams",
+      "result": "#/$defs/HostWorkspaceTargetResult"
+    },
+    "host.stream.read": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostStreamReadParams",
+      "result": "#/$defs/HostStreamReadResult"
+    },
+    "host.stream.cancel": {
+      "direction": "rust-to-host",
+      "params": "#/$defs/HostStreamCancelParams",
+      "result": "#/$defs/HostStreamCancelResult"
+    },
+    "backend.handshake": {
+      "direction": "host-to-rust",
+      "params": "#/$defs/BackendHandshakeParams",
+      "result": "#/$defs/BackendHandshakeResult"
+    },
+    "backend.http.request": {
+      "direction": "host-to-rust",
+      "params": "#/$defs/BackendHttpRequestParams",
+      "result": "#/$defs/BackendHttpRequestResult"
+    },
+    "backend.auth.get": {
+      "direction": "host-to-rust",
+      "params": "#/$defs/BackendAuthGetParams",
+      "result": "#/$defs/BackendAuthGetResult"
+    },
+    "backend.tool.ask": {
+      "direction": "host-to-rust",
+      "params": "#/$defs/BackendToolAskParams",
+      "result": "#/$defs/BackendToolAskResult"
+    },
+    "backend.tool.metadata": {
+      "direction": "host-to-rust",
+      "params": "#/$defs/BackendToolMetadataParams",
+      "result": "#/$defs/BackendToolMetadataResult"
+    },
+    "backend.diagnostic.publish": {
+      "direction": "host-to-rust",
+      "params": "#/$defs/BackendDiagnosticPublishParams",
+      "result": "#/$defs/BackendDiagnosticPublishResult"
+    },
+    "backend.stream.read": {
+      "direction": "host-to-rust",
+      "params": "#/$defs/BackendStreamReadParams",
+      "result": "#/$defs/BackendStreamReadResult"
+    },
+    "backend.stream.cancel": {
+      "direction": "host-to-rust",
+      "params": "#/$defs/BackendStreamCancelParams",
+      "result": "#/$defs/BackendStreamCancelResult"
+    }
+  }
+}

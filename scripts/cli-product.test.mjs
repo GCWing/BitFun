@@ -1,12 +1,28 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 
-import { cliBuildPlan } from './cli-product.mjs';
+import { cliBuildPlan, stagePluginHostResources } from './cli-product.mjs';
 import { resolveProductDefinition } from './product-customization/resolver.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const ACME = join(ROOT, 'products', 'fixtures', 'acme', 'product.jsonc');
+
+test('CLI stages only the supported plugin Host entry', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'bitfun-cli-plugin-host-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const source = join(root, 'source');
+  const destination = join(root, 'destination');
+  mkdirSync(source);
+  writeFileSync(join(source, 'extension-host.js'), 'current');
+  writeFileSync(join(source, 'stale-runtime.js'), 'stale');
+
+  stagePluginHostResources(destination, source);
+
+  assert.deepEqual(readdirSync(destination), ['extension-host.js']);
+});
 
 test('CLI uses the shared resolver and stages the internal binary under the member name', () => {
   const resolution = resolveProductDefinition({ rootDir: ROOT, productConfig: ACME, member: 'cli' });
@@ -16,6 +32,7 @@ test('CLI uses the shared resolver and stages the internal binary under the memb
   assert.ok(plan.cargoArgs.includes('--locked'));
   assert.ok(plan.internalBinaryPath.endsWith('bitfun.exe'));
   assert.ok(plan.stagedBinaryPath.endsWith('acme.exe'));
+  assert.ok(plan.stagedPluginHostPath.endsWith(join('resources', 'ext-host')));
   assert.equal(plan.environment.BITFUN_PRODUCT_DISPLAY_NAME, 'Acme CLI');
 });
 

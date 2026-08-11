@@ -1576,6 +1576,7 @@ const CLI_REVIEWED_CORE_FEATURES = [
   'product-search',
   'remote-connect',
   'plugin-runtime',
+  'opencode-plugin-host',
 ];
 
 const APP_SERVER_REVIEWED_CORE_FEATURES = [

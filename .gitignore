@@ -95,6 +95,7 @@ external/
 /.flashgrep-index-engine/
 
 .design/
+.pnpm-store/
 
 # KMP shared mobile core and the platform apps that include it (Gradle).
 # Written per-directory rather than as a bare `local.properties` so the pattern

@@ -1,0 +1,29 @@
+[package]
+name = "bitfun-opencode-plugin-host"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish = false
+description = "Private OpenCode plugin host process and IPC adapter"
+
+[lib]
+name = "bitfun_opencode_plugin_host"
+crate-type = ["rlib"]
+
+[dependencies]
+base64 = { workspace = true }
+bitfun-services-core = { path = "../../services/services-core", features = ["process-runtime"] }
+log = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "process", "rt", "sync", "time"] }
+url = { workspace = true }
+urlencoding = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
