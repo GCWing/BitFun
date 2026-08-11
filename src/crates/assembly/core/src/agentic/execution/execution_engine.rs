@@ -1571,6 +1571,22 @@ impl ExecutionEngine {
         )
     }
 
+    /// Text of the last user-authored message in the history, used as the
+    /// stable session-context task summary for permission judging. System
+    /// reminders and tool results are ignored.
+    fn last_user_message_text(messages: &[Message]) -> Option<String> {
+        messages.iter().rev().find_map(|msg| {
+            if msg.role != MessageRole::User {
+                return None;
+            }
+            match &msg.content {
+                MessageContent::Text(text) => Some(text.clone()),
+                MessageContent::Multimodal { text, .. } => Some(text.clone()),
+                _ => None,
+            }
+        })
+    }
+
     /// True if this message would contribute at least one image to the model (before pruning).
     fn message_bears_images(msg: &Message) -> bool {
         if Self::skip_message_for_model_send(msg) {
@@ -1653,6 +1669,7 @@ impl ExecutionEngine {
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
             context_vars: input.execution_context_vars.clone(),
+            current_user_message: Self::last_user_message_text(input.messages),
             permission_constraints: input.permission_constraints,
             permission_runtime_ceiling: input.context.permission_runtime_ceiling.clone(),
             delegation_policy: input.context.delegation_policy,
@@ -3690,6 +3707,7 @@ impl ExecutionEngine {
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
+                current_user_message: Self::last_user_message_text(&messages),
                 permission_constraints: tool_policy.permission_constraints.clone(),
                 permission_runtime_ceiling: context.permission_runtime_ceiling.clone(),
                 delegation_policy: context.delegation_policy,

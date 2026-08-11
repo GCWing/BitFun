@@ -74,6 +74,10 @@ pub struct RoundContext {
     pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
+    /// The user's latest task message for this round, when available. Stable
+    /// for the whole round so permission judging can use it as a stable
+    /// session-context prefix.
+    pub current_user_message: Option<String>,
     pub permission_constraints: PermissionConstraintLayer,
     pub permission_runtime_ceiling: Option<PermissionRuntimeCeiling>,
     pub(crate) delegation_policy: DelegationPolicy,

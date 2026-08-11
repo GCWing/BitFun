@@ -59,6 +59,8 @@
     "cancel": "取消",
     "autoApprove": "自动批准",
     "autoApproveDescription": "自动允许原本需要确认的操作。",
+    "aiAutoApprove": "AI 自动批准",
+    "aiAutoApproveDescription": "使用快速模型判断请求是否安全：安全则自动放行，极高危险直接拒绝，其余交给用户确认。",
     "showInChatInput": "显示权限模式选择器",
     "showInChatInputDescription": "在输入框下方显示权限模式，可随时为当前会话切换。",
     "globalRules": "全局规则",

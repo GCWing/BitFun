@@ -59,7 +59,7 @@ fn protocol_round_trips_reviewed_permission_and_user_input_operations() {
         RuntimeIpcOperation::RespondPermission {
             session_id: "session-1".to_string(),
             request_id: "permission-1".to_string(),
-            reply: PermissionReply::Once,
+            reply: PermissionReply::Once { feedback: None },
         },
         RuntimeIpcOperation::SubmitUserAnswers {
             request: RuntimeUserAnswersRequest {

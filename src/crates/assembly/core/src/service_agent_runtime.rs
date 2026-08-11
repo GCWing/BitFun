@@ -2222,7 +2222,10 @@ impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
 impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
     async fn confirm_tool(&self, tool_id: &str) -> Result<(), String> {
         self.coordinator()?
-            .reply_to_tool(tool_id, bitfun_agent_runtime::sdk::PermissionReply::Once)
+            .reply_to_tool(
+                tool_id,
+                bitfun_agent_runtime::sdk::PermissionReply::Once { feedback: None },
+            )
             .await
             .map_err(|error| error.to_string())
     }
@@ -2249,6 +2252,9 @@ impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
             .map_err(|error| error.to_string())?;
         Ok(match config.policy.preset {
             PermissionPolicyPreset::FullAccess => RemotePermissionMode::FullAccess,
+            PermissionPolicyPreset::Ask if config.interaction.ai_auto_approve_ask => {
+                RemotePermissionMode::AiAuto
+            }
             PermissionPolicyPreset::Ask if config.interaction.auto_approve_ask => {
                 RemotePermissionMode::Auto
             }
@@ -2271,14 +2277,30 @@ impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
             RemotePermissionMode::Ask => {
                 config.policy.preset = PermissionPolicyPreset::Ask;
                 config.interaction.auto_approve_ask = false;
+                config.interaction.ai_auto_approve_ask = false;
             }
             RemotePermissionMode::Auto => {
                 config.policy.preset = PermissionPolicyPreset::Ask;
                 config.interaction.auto_approve_ask = true;
+                config.interaction.ai_auto_approve_ask = false;
+            }
+            RemotePermissionMode::AiAuto => {
+                config.policy.preset = PermissionPolicyPreset::Ask;
+                config.interaction.auto_approve_ask = false;
+                config.interaction.ai_auto_approve_ask = true;
             }
             RemotePermissionMode::FullAccess => {
                 config.policy.preset = PermissionPolicyPreset::FullAccess;
                 config.interaction.auto_approve_ask = false;
+                config.interaction.ai_auto_approve_ask = false;
+            }
+            RemotePermissionMode::Unknown => {
+                // An unrecognized mode from a remote peer degrades to the safest
+                // known mode instead of persisting an unknown value.
+                config.policy.preset = PermissionPolicyPreset::Ask;
+                config.interaction.auto_approve_ask = false;
+                config.interaction.ai_auto_approve_ask = false;
+                return Ok(RemotePermissionMode::Ask);
             }
         }
         service

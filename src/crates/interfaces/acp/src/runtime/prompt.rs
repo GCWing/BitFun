@@ -382,7 +382,7 @@ async fn handle_permission_request(
         RequestPermissionOutcome::Selected(selected)
             if selected.option_id.to_string() == PERMISSION_ALLOW_ONCE =>
         {
-            PermissionReply::Once
+            PermissionReply::Once { feedback: None }
         }
         RequestPermissionOutcome::Selected(selected)
             if selected.option_id.to_string() == PERMISSION_REJECT_ONCE =>

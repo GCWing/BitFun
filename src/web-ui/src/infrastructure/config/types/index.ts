@@ -28,6 +28,8 @@ export interface PermissionPolicyConfig {
 
 export interface PermissionInteractionConfig {
   auto_approve_ask: boolean;
+  /** Ask the fast-model permission judge before replying to `ask` requests. */
+  ai_auto_approve_ask: boolean;
 }
 
 export interface ToolPermissionConfig {

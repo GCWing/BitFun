@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
+  BrainCircuit,
   Check,
   EyeOff,
   GitBranch,
@@ -115,11 +116,12 @@ export interface ChatInputWorkspaceStripProps {
   };
 }
 
-export type ChatInputPermissionMode = 'ask' | 'auto' | 'full_access' | 'reject' | 'acp';
+export type ChatInputPermissionMode = 'ask' | 'auto' | 'full_access' | 'ai_auto' | 'reject' | 'acp';
 
 const NATIVE_PERMISSION_MODES: Array<Exclude<ChatInputPermissionMode, 'acp' | 'reject'>> = [
   'ask',
   'auto',
+  'ai_auto',
   'full_access',
 ];
 
@@ -130,6 +132,7 @@ const NATIVE_PERMISSION_MODES: Array<Exclude<ChatInputPermissionMode, 'acp' | 'r
 const PERMISSION_MODE_ICONS: Record<ChatInputPermissionMode, typeof Shield> = {
   ask: Shield,
   auto: ShieldCheck,
+  ai_auto: BrainCircuit,
   full_access: ShieldAlert,
   reject: Shield,
   acp: Shield,
@@ -211,6 +214,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     auto: {
       label: t('chatInput.permissionMode.auto.label'),
       description: t('chatInput.permissionMode.auto.description'),
+    },
+    ai_auto: {
+      label: t('chatInput.permissionMode.aiAuto.label'),
+      description: t('chatInput.permissionMode.aiAuto.description'),
     },
     full_access: {
       label: t('chatInput.permissionMode.fullAccess.label'),
@@ -306,7 +313,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   // The trigger reports what the next submission will actually run with, so an
   // armed one-off outranks the session mode there.
   const permissionDisplayMode = permissionNextTurnMode ?? permissionMode;
-  const permissionModeLabel = permissionCopy[permissionDisplayMode].label;
+  // A backend value this build does not know must not take the strip down:
+  // fall back to the `ask` copy and icon so the trigger still renders.
+  const permissionCopyForMode = permissionCopy[permissionDisplayMode] ?? permissionCopy.ask;
+  const permissionModeLabel = permissionCopyForMode.label;
   const permissionTooltip = permissionMode === 'acp'
     ? t('chatInput.permissionMode.acp.tooltip')
     : permissionNextTurnArmed
@@ -314,7 +324,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       : permissionOverridden
         ? t('chatInput.permissionMode.currentSessionOverride', { mode: permissionModeLabel })
         : t('chatInput.permissionMode.current', { mode: permissionModeLabel });
-  const PermissionIcon = PERMISSION_MODE_ICONS[permissionDisplayMode];
+  const PermissionIcon = PERMISSION_MODE_ICONS[permissionDisplayMode] ?? Shield;
   const showPermissionLabel = permissionMode !== 'acp';
 
   const handleWorktreeToggle = () => {

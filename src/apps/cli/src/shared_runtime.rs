@@ -1861,7 +1861,7 @@ mod tests {
             },
             PermissionRequestEvent::Replied {
                 request_id: request.request_id,
-                reply: bitfun_agent_runtime::sdk::PermissionReply::Once,
+                reply: bitfun_agent_runtime::sdk::PermissionReply::Once { feedback: None },
                 source: PermissionReplySource::User,
             },
         ];

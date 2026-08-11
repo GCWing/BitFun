@@ -59,6 +59,8 @@
     "cancel": "取消",
     "autoApprove": "自動批准",
     "autoApproveDescription": "自動允許原本需要確認的操作。",
+    "aiAutoApprove": "AI 自動批准",
+    "aiAutoApproveDescription": "使用快速模型判斷請求是否安全：安全則自動放行，極高危險直接拒絕，其餘交給使用者確認。",
     "showInChatInput": "顯示權限模式選擇器",
     "showInChatInputDescription": "在輸入框下方顯示權限模式，可隨時為目前工作階段切換。",
     "globalRules": "全域規則",

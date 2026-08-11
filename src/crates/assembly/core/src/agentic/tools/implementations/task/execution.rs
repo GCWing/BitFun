@@ -53,13 +53,14 @@ fn forward_subagent_invocation_context(
     subagent_context: &mut HashMap<String, String>,
 ) {
     use bitfun_agent_runtime::permission::{
-        AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+        AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
     };
     use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 
     for key in [
         USER_INPUT_AVAILABLE_CONTEXT_KEY,
         AUTO_APPROVE_ASK_CONTEXT_KEY,
+        AI_AUTO_APPROVE_ASK_CONTEXT_KEY,
     ] {
         let Some(value) = context.custom_data.get(key) else {
             continue;
@@ -1207,7 +1208,9 @@ impl TaskTool {
 mod target_context_tests {
     use super::*;
     use bitfun_agent_runtime::deep_review::{append_tool_use_context_data, ReviewTargetEvidence};
-    use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+    use bitfun_agent_runtime::permission::{
+        AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY,
+    };
     use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 
     fn parent_tool_context() -> ToolUseContext {
@@ -1341,6 +1344,25 @@ mod target_context_tests {
         forward_subagent_invocation_context(&parent, &mut child);
 
         assert!(!child.contains_key(AUTO_APPROVE_ASK_CONTEXT_KEY));
+    }
+
+    #[test]
+    fn child_context_preserves_the_ai_auto_approve_flag() {
+        let mut parent = parent_tool_context();
+        parent.custom_data.insert(
+            AI_AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            Value::Bool(true),
+        );
+        let mut child = HashMap::new();
+
+        forward_subagent_invocation_context(&parent, &mut child);
+
+        assert_eq!(
+            child
+                .get(AI_AUTO_APPROVE_ASK_CONTEXT_KEY)
+                .map(String::as_str),
+            Some("true")
+        );
     }
 
     #[test]

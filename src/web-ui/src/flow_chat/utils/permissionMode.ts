@@ -3,7 +3,7 @@ import type { SessionPermissionMode } from '@/infrastructure/api/service-api/Age
 import type { ChatInputPermissionMode } from '../components/ChatInputWorkspaceStrip';
 
 /**
- * The chat input control and the backend name the same three modes slightly
+ * The chat input control and the backend name the same modes slightly
  * differently: the control has carried `auto` since before the backend had a
  * single mode value, and the backend spells it `auto_approve`. These helpers
  * keep that one difference in one place instead of at every call site.
@@ -25,10 +25,11 @@ export function sessionPermissionMode(mode: NativePermissionMode): SessionPermis
  * Derives the mode a stored configuration represents.
  *
  * Mirrors `PermissionMode::from_config`: full access already resolves every
- * ask, so it outranks the auto-approve preference.
+ * ask, so it outranks the auto-approve preferences.
  */
 export function permissionModeFromConfig(config: ToolPermissionConfig): SessionPermissionMode {
   if (config.policy.preset === 'full_access') return 'full_access';
+  if (config.interaction.ai_auto_approve_ask) return 'ai_auto';
   return config.interaction.auto_approve_ask ? 'auto_approve' : 'ask';
 }
 
@@ -45,6 +46,7 @@ export function permissionModeToConfig(
     interaction: {
       ...config.interaction,
       auto_approve_ask: mode === 'auto_approve',
+      ai_auto_approve_ask: mode === 'ai_auto',
     },
   };
 }

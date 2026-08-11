@@ -161,7 +161,7 @@ async fn audit_records_are_idempotent_project_scoped_and_persistent() {
         audit_id: "request-1:replied".to_string(),
         request: request("request-1", "project-a"),
         event: PermissionAuditEvent::Replied {
-            reply: PermissionReply::Once,
+            reply: PermissionReply::Once { feedback: None },
             source: PermissionReplySource::User,
         },
         timestamp_ms: 100,
@@ -224,7 +224,7 @@ async fn reply_transaction_persists_grants_and_audit_in_one_state_update() {
         audit_id: "request-1:replied".to_string(),
         request: request("request-1", "project-a"),
         event: PermissionAuditEvent::Replied {
-            reply: PermissionReply::Always,
+            reply: PermissionReply::Always { feedback: None },
             source: PermissionReplySource::User,
         },
         timestamp_ms: 100,

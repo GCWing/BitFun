@@ -1270,8 +1270,12 @@ pub enum PermissionReplyKind {
 
 fn permission_reply(request: PermissionResponseRequest) -> PermissionReply {
     match request.reply {
-        PermissionReplyKind::Once => PermissionReply::Once,
-        PermissionReplyKind::Always => PermissionReply::Always,
+        PermissionReplyKind::Once => PermissionReply::Once {
+            feedback: request.feedback,
+        },
+        PermissionReplyKind::Always => PermissionReply::Always {
+            feedback: request.feedback,
+        },
         PermissionReplyKind::Reject => PermissionReply::Reject {
             feedback: request.feedback,
         },

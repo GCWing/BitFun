@@ -77,8 +77,8 @@ impl PermissionPrompt {
             }
             KeyCode::Esc => PermissionAction::Reply(PermissionReply::Reject { feedback: None }),
             KeyCode::Enter => match self.selected_option {
-                0 => PermissionAction::Reply(PermissionReply::Once),
-                1 => PermissionAction::Reply(PermissionReply::Always),
+                0 => PermissionAction::Reply(PermissionReply::Once { feedback: None }),
+                1 => PermissionAction::Reply(PermissionReply::Always { feedback: None }),
                 _ => {
                     self.editing_reject_feedback = true;
                     PermissionAction::None
@@ -320,7 +320,7 @@ mod tests {
 
         assert_eq!(
             prompt.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-            PermissionAction::Reply(PermissionReply::Always)
+            PermissionAction::Reply(PermissionReply::Always { feedback: None })
         );
     }
 

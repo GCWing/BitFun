@@ -2477,14 +2477,14 @@ mod tests {
             .save_permission_answer(
                 "job-permission",
                 &permission.request_id,
-                PermissionReply::Once,
+                PermissionReply::Once { feedback: None },
             )
             .expect("first answer"));
         assert!(store
             .save_permission_answer(
                 "job-permission",
                 &permission.request_id,
-                PermissionReply::Once,
+                PermissionReply::Once { feedback: None },
             )
             .expect("retry pending answer"));
         let answer = store
@@ -2499,14 +2499,14 @@ mod tests {
             .save_permission_answer(
                 "job-permission",
                 &permission.request_id,
-                PermissionReply::Once,
+                PermissionReply::Once { feedback: None },
             )
             .expect("retry resolved answer"));
         assert!(store
             .save_permission_answer(
                 "job-permission",
                 &permission.request_id,
-                PermissionReply::Always,
+                PermissionReply::Always { feedback: None },
             )
             .is_err());
     }

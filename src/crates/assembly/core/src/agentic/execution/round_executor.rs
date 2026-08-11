@@ -1018,6 +1018,7 @@ impl RoundExecutor {
                 workspace: context.workspace.clone(),
                 primary_model_facts: context.primary_model_facts.clone(),
                 context_vars: context.context_vars.clone(),
+                current_user_message: context.current_user_message.clone(),
                 subagent_parent_info,
                 permission_delegation,
                 delegation_policy: context.delegation_policy,
@@ -1040,6 +1041,7 @@ impl RoundExecutor {
             let permission_mode =
                 Self::resolve_permission_mode(&global_config, &context.context_vars);
             let auto_approve_ask = permission_mode.auto_approve_ask();
+            let ai_auto_approve_ask = permission_mode.ai_auto_approve_ask();
 
             let project_rules = match context.workspace.as_ref() {
                 Some(workspace) if workspace.is_remote() => {
@@ -1084,6 +1086,7 @@ impl RoundExecutor {
                 subagent_batch_execution_policy,
                 permission_policy,
                 auto_approve_ask,
+                ai_auto_approve_ask,
                 ..ToolExecutionOptions::default()
             };
 
@@ -1544,12 +1547,12 @@ mod tests {
     use crate::util::errors::BitFunError;
     use crate::util::types::ai::GeminiUsage;
     use bitfun_agent_runtime::permission::{
-        AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+        AI_AUTO_APPROVE_ASK_CONTEXT_KEY, AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
     };
     use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
     use bitfun_runtime_ports::{
-        DelegationPolicy, PermissionEffect, PermissionEvaluator, PermissionPolicyPreset,
-        PermissionRule,
+        DelegationPolicy, PermissionEffect, PermissionEvaluator, PermissionMode,
+        PermissionPolicyPreset, PermissionRule,
     };
     use serde_json::json;
     use std::collections::HashMap;
@@ -1637,6 +1640,7 @@ mod tests {
             ),
             agent_type: "agentic".to_string(),
             context_vars: HashMap::new(),
+            current_user_message: None,
             permission_constraints: Default::default(),
             permission_runtime_ceiling: None,
             delegation_policy: DelegationPolicy::top_level(),
@@ -1757,6 +1761,55 @@ mod tests {
         assert_eq!(
             RoundExecutor::resolve_permission_mode(&global, &context_vars),
             PermissionMode::Ask
+        );
+    }
+
+    #[test]
+    fn ai_auto_approve_resolves_through_the_unified_permission_mode() {
+        let mut global = GlobalConfig::default();
+        global.tool_permissions.interaction.ai_auto_approve_ask = true;
+        let mut context_vars = std::collections::HashMap::new();
+
+        // The persisted interaction preference resolves to the AI mode.
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::AiAutoApprove
+        );
+        // The legacy AI flag outranks the persisted preference.
+        context_vars.insert(
+            AI_AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            "false".to_string(),
+        );
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::Ask
+        );
+        context_vars.insert(
+            AI_AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            "true".to_string(),
+        );
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::AiAutoApprove
+        );
+        // An unparseable flag falls back to the persisted preference.
+        context_vars.insert(
+            AI_AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+            "invalid".to_string(),
+        );
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::AiAutoApprove
+        );
+
+        // The resolved mode key outranks every legacy flag.
+        context_vars.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            PermissionMode::FullAccess.as_str().to_string(),
+        );
+        assert_eq!(
+            RoundExecutor::resolve_permission_mode(&global, &context_vars),
+            PermissionMode::FullAccess
         );
     }
 

@@ -59,6 +59,8 @@
     "cancel": "Cancel",
     "autoApprove": "Auto approve",
     "autoApproveDescription": "Automatically allow actions that would normally need confirmation.",
+    "aiAutoApprove": "AI auto approve",
+    "aiAutoApproveDescription": "A fast model judges each request: safe requests auto-approve, critical-risk requests are rejected, and the rest ask for confirmation.",
     "showInChatInput": "Show permission mode selector",
     "showInChatInputDescription": "Show the permission mode below the chat input so it can be changed for the current session.",
     "globalRules": "Global rules",

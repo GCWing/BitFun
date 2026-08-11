@@ -2,8 +2,8 @@
   "permission": {
     "title": "需要授权",
     "subagentOwner": "{{subagent}} 子 Agent",
-    "feedbackLabel": "拒绝反馈",
-    "feedbackPlaceholder": "拒绝时可选填后续建议",
+    "feedbackLabel": "审批意见",
+    "feedbackPlaceholder": "可选，例如：批准所有查看日志的命令",
     "responseFailed": "权限回复未能送达，请重试。",
     "allowOnce": "允许一次",
     "allowAlways": "始终允许",
@@ -699,6 +699,10 @@
       "auto": {
         "label": "自动批准",
         "description": "自动批准需要确认的请求。"
+      },
+      "aiAuto": {
+        "label": "AI 自动批准",
+        "description": "快速模型判断请求是否安全：安全自动放行，极高危险拒绝，其余询问。"
       },
       "fullAccess": {
         "label": "完全访问",

@@ -305,14 +305,7 @@
 
 .permission-request-panel__actions button:disabled {
   opacity: 0.6;
-}
-
-.permission-request-panel__actions button:disabled:not(.permission-request-panel__feedback-disabled) {
   cursor: wait;
-}
-
-.permission-request-panel__actions button.permission-request-panel__feedback-disabled {
-  cursor: not-allowed;
 }
 
 .permission-request-panel .permission-request-panel__reject {

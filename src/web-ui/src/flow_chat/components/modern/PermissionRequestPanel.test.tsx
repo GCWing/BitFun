@@ -315,12 +315,13 @@ describe('PermissionRequestPanel', () => {
     expect(onRespondBatch).toHaveBeenCalledWith(first.requestId, 'once', undefined);
   });
 
-  it('disables allow actions while rejection feedback is present', () => {
+  it('keeps allow actions enabled and forwards the note when feedback is present', async () => {
+    const onRespond = vi.fn(() => Promise.resolve());
     act(() => {
       root.render(
         <PermissionRequestPanel
           requests={[request(false)]}
-          onRespond={vi.fn()}
+          onRespond={onRespond}
           onRespondBatch={vi.fn()}
         />,
       );
@@ -332,7 +333,7 @@ describe('PermissionRequestPanel', () => {
       'value',
     )?.set;
     act(() => {
-      valueSetter?.call(feedbackInput, 'Use a safer command instead.');
+      valueSetter?.call(feedbackInput, 'Approve all log-viewing commands');
       feedbackInput?.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
@@ -342,14 +343,43 @@ describe('PermissionRequestPanel', () => {
     const allowOnce = buttonWithLabel('permission.allowOnce');
     const allowAlways = buttonWithLabel('permission.allowAlways');
     const allowAll = buttonWithLabel('permission.allowCurrentAndFollowing');
-    expect(allowOnce?.disabled).toBe(true);
-    expect(allowAlways?.disabled).toBe(true);
-    expect(allowAll?.disabled).toBe(true);
-    expect(allowOnce?.classList.contains('permission-request-panel__feedback-disabled')).toBe(true);
-    expect(allowAlways?.classList.contains('permission-request-panel__feedback-disabled')).toBe(true);
-    expect(allowAll?.classList.contains('permission-request-panel__feedback-disabled')).toBe(true);
-    expect(buttonWithLabel('permission.reject')?.disabled).toBe(false);
-    expect(buttonWithLabel('permission.rejectCurrentAndFollowing')?.disabled).toBe(false);
+    // The note must not disable approval: approving with a note is a first-class action.
+    expect(allowOnce?.disabled).toBe(false);
+    expect(allowAlways?.disabled).toBe(false);
+    expect(allowAll?.disabled).toBe(false);
+    expect(allowOnce?.classList.contains('permission-request-panel__feedback-disabled')).toBe(false);
+
+    await act(async () => {
+      allowOnce?.click();
+      await Promise.resolve();
+    });
+    expect(onRespond).toHaveBeenCalledWith(
+      expect.any(String),
+      'once',
+      'Approve all log-viewing commands',
+    );
+  });
+
+  it('omits the feedback argument when the note is blank', async () => {
+    const onRespond = vi.fn(() => Promise.resolve());
+    act(() => {
+      root.render(
+        <PermissionRequestPanel
+          requests={[request(false)]}
+          onRespond={onRespond}
+          onRespondBatch={vi.fn()}
+        />,
+      );
+    });
+
+    const allowOnce = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.includes('permission.allowOnce'),
+    );
+    await act(async () => {
+      allowOnce?.click();
+      await Promise.resolve();
+    });
+    expect(onRespond).toHaveBeenCalledWith(expect.any(String), 'once', undefined);
   });
 
   it('collapses to an anchored permission indicator and reopens it with the session pending count', () => {
