@@ -24,8 +24,8 @@ use crate::agentic::core::{
 };
 use crate::agentic::events::AgenticEvent;
 use crate::agentic::goal_mode::{
-    goal_internal_context_message, goal_objective_updated_message, thread_goal_from_custom_metadata,
-    GOAL_IDLE_WAKEUP_DELAY_MS,
+    goal_internal_context_message, goal_objective_updated_message,
+    thread_goal_from_custom_metadata, GOAL_IDLE_WAKEUP_DELAY_MS,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::init_agents_md::build_init_agents_md_user_input;
@@ -203,10 +203,7 @@ fn session_tree_root_id(summaries: &[SessionSummary], session_id: &str) -> Strin
 /// dual goal trigger: it does NOT require the `GOAL_IDLE_WAKEUP_DELAY_MS`
 /// window, so the goal wakes up as soon as nothing in the workspace is running
 /// or queued.
-fn all_sessions_quiescent(
-    all_ids: &[String],
-    is_busy_or_queued: impl Fn(&str) -> bool,
-) -> bool {
+fn all_sessions_quiescent(all_ids: &[String], is_busy_or_queued: impl Fn(&str) -> bool) -> bool {
     all_ids.iter().all(|id| !is_busy_or_queued(id))
 }
 
@@ -223,8 +220,13 @@ fn goal_idle_wakeup_conditions_met(
     is_busy_or_queued: impl Fn(&str) -> bool,
     last_activity_at: impl Fn(&str) -> Option<SystemTime>,
 ) -> (bool, bool) {
-    let primary_silent =
-        session_tree_is_silent(primary_ids, now, idle_delay, &is_busy_or_queued, &last_activity_at);
+    let primary_silent = session_tree_is_silent(
+        primary_ids,
+        now,
+        idle_delay,
+        &is_busy_or_queued,
+        &last_activity_at,
+    );
     let all_silent = all_sessions_quiescent(all_ids, &is_busy_or_queued);
     (primary_silent, all_silent)
 }
@@ -567,7 +569,9 @@ impl DialogScheduler {
         // Inject the Warden runtime into the tool pipeline for tool-level
         // audit (custom point outside the hook dispatch channel). Must happen
         // before `coordinator` is moved into the struct below.
-        coordinator.tool_pipeline().set_warden_runtime(warden_runtime.clone());
+        coordinator
+            .tool_pipeline()
+            .set_warden_runtime(warden_runtime.clone());
         let scheduler = Arc::new(Self {
             coordinator,
             session_manager,
@@ -592,6 +596,22 @@ impl DialogScheduler {
             .goal_idle_wakeup_self
             .set(std::sync::Arc::downgrade(&scheduler));
 
+        // 阈值参数配置化（R-GC-26）：`group_chat.queue_limit` 注入对话框队列
+        // 深度。构造是同步链，配置读取需 async——通过 spawn 的后台任务在构造
+        // 后异步注入（best-effort；默认 = 现值硬编码，未初始化 config service
+        // 时零回归，`set_max_depth` 忽略 0 防止配置错误禁用上限）。
+        let queues_for_config = Arc::clone(&scheduler.queues);
+        tokio::spawn(async move {
+            if let Ok(service) = crate::service::config::get_global_config_service().await {
+                if let Ok(limit) = service
+                    .get_config::<usize>(Some("group_chat.queue_limit"))
+                    .await
+                {
+                    queues_for_config.set_max_depth(limit);
+                }
+            }
+        });
+
         let scheduler_for_handler = Arc::clone(&scheduler);
         tokio::spawn(async move {
             scheduler_for_handler.run_outcome_handler(outcome_rx).await;
@@ -601,7 +621,9 @@ impl DialogScheduler {
         // restart (see `rearm_goal_idle_wakeups_after_startup`).
         let scheduler_for_rearm = Arc::clone(&scheduler);
         tokio::spawn(async move {
-            scheduler_for_rearm.rearm_goal_idle_wakeups_after_startup().await;
+            scheduler_for_rearm
+                .rearm_goal_idle_wakeups_after_startup()
+                .await;
         });
 
         scheduler
@@ -643,7 +665,10 @@ impl DialogScheduler {
     /// Forwarded to the tool pipeline, mirroring the `set_warden_runtime`
     /// injection in [`DialogScheduler::new`]; the host assembly (desktop)
     /// owns the concrete provider and calls this once after construction.
-    pub fn set_warden_model_judgement(&self, port: Arc<dyn bitfun_runtime_ports::WardenModelJudgementPort>) {
+    pub fn set_warden_model_judgement(
+        &self,
+        port: Arc<dyn bitfun_runtime_ports::WardenModelJudgementPort>,
+    ) {
         self.coordinator
             .tool_pipeline()
             .set_warden_model_judgement(port);
@@ -970,10 +995,9 @@ impl DialogScheduler {
                 // unchanged; only its static type is erased.
                 let follow_up: std::pin::Pin<
                     Box<dyn std::future::Future<Output = Result<(), String>> + Send>,
-                > = Box::pin(self.submit_background_result_follow_up_locked(
-                    delivery,
-                    queue_priority,
-                ));
+                > = Box::pin(
+                    self.submit_background_result_follow_up_locked(delivery, queue_priority),
+                );
                 follow_up.await
             }
         }
@@ -1871,9 +1895,7 @@ impl DialogScheduler {
                 }
                 attempts += 1;
                 if attempts >= REARM_MAX_ATTEMPTS {
-                    debug!(
-                        "Goal idle-wakeup rearm skipped: global workspace service unavailable"
-                    );
+                    debug!("Goal idle-wakeup rearm skipped: global workspace service unavailable");
                     return;
                 }
                 tokio::time::sleep(REARM_POLL_INTERVAL).await;
@@ -1881,10 +1903,7 @@ impl DialogScheduler {
         };
         for workspace in workspace_service.list_workspace_infos().await {
             let workspace_path = workspace.root_path;
-            let goal_session_ids = match self
-                .active_goal_session_ids(&workspace_path)
-                .await
-            {
+            let goal_session_ids = match self.active_goal_session_ids(&workspace_path).await {
                 Ok(ids) => ids,
                 Err(error) => {
                     debug!(
@@ -1920,7 +1939,9 @@ impl DialogScheduler {
             // ephemeral children to keep the startup scan cheap.
             if matches!(
                 summary.kind,
-                SessionKind::Subagent | SessionKind::EphemeralChild | SessionKind::EphemeralSubagent
+                SessionKind::Subagent
+                    | SessionKind::EphemeralChild
+                    | SessionKind::EphemeralSubagent
             ) {
                 continue;
             }
@@ -2601,9 +2622,8 @@ impl DialogScheduler {
         request: HiddenSubagentExecutionRequest,
         execution_cancel_token: CancellationToken,
         timeout_seconds: Option<u64>,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = BitFunResult<SubagentResult>> + Send>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = BitFunResult<SubagentResult>> + Send>>
+    {
         Box::pin(async move {
             coordinator
                 .execute_prepared_hidden_subagent(
@@ -2815,16 +2835,8 @@ impl DialogScheduler {
     /// path manager cannot be constructed.
     fn resolve_default_agent_reply_archive_root() -> PathBuf {
         PathManager::new()
-            .map(|path_manager| {
-                path_manager
-                    .bitfun_home_dir()
-                    .join("agent-replies")
-            })
-            .unwrap_or_else(|_| {
-                std::env::temp_dir()
-                    .join("bitfun")
-                    .join("agent-replies")
-            })
+            .map(|path_manager| path_manager.bitfun_home_dir().join("agent-replies"))
+            .unwrap_or_else(|_| std::env::temp_dir().join("bitfun").join("agent-replies"))
     }
 
     /// Default shame-wall registry path for the embedded Warden runtime.
@@ -3022,8 +3034,9 @@ impl DialogScheduler {
     /// operation lock inside `process_turn_outcome`. The semaphore only caps
     /// the number of concurrently processing outcome tasks.
     async fn run_outcome_handler(&self, mut outcome_rx: mpsc::Receiver<(String, TurnOutcome)>) {
-        let outcome_concurrency =
-            Arc::new(tokio::sync::Semaphore::new(OUTCOME_PROCESSING_MAX_CONCURRENCY));
+        let outcome_concurrency = Arc::new(tokio::sync::Semaphore::new(
+            OUTCOME_PROCESSING_MAX_CONCURRENCY,
+        ));
         while let Some((session_id, outcome)) = outcome_rx.recv().await {
             let Some(scheduler) = self.self_arc() else {
                 break;
@@ -3160,8 +3173,11 @@ impl DialogScheduler {
                             session_id, error
                         );
                     }
-                    self.round_injection_buffer
-                        .mark_steering_consumed(session_id, &steering_content, steering.dedup_key());
+                    self.round_injection_buffer.mark_steering_consumed(
+                        session_id,
+                        &steering_content,
+                        steering.dedup_key(),
+                    );
                 }
             }
             self.round_injection_buffer
@@ -3196,12 +3212,8 @@ impl DialogScheduler {
                         );
                     }
                     AgentSessionReplyAction::Forward(plan) => {
-                        self.forward_agent_session_reply(
-                            session_id,
-                            outcome.turn_id(),
-                            plan,
-                        )
-                        .await;
+                        self.forward_agent_session_reply(session_id, outcome.turn_id(), plan)
+                            .await;
                     }
                 }
 
@@ -3618,7 +3630,11 @@ impl AgentTurnCancellationPort for DialogScheduler {
                 .cancel_queued_or_active_turn(&session_id, &turn_id)
                 .await
                 .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?;
-            if removed { Some(turn_id) } else { None }
+            if removed {
+                Some(turn_id)
+            } else {
+                None
+            }
         } else if let Some(requester_session_id) = request.requester_session_id {
             self.cancel_active_turn_for_session_from_requester(
                 &session_id,
@@ -3851,36 +3867,70 @@ mod tests {
         ];
 
         // Every node idle -> the whole tree is silent.
-        assert!(session_tree_is_silent(&tree, now, idle_delay, |_| false, |_| {
-            Some(idle)
-        }));
+        assert!(session_tree_is_silent(
+            &tree,
+            now,
+            idle_delay,
+            |_| false,
+            |_| { Some(idle) }
+        ));
 
         // A descendant active within the idle window blocks the wakeup even
         // when the parent itself is idle.
-        assert!(!session_tree_is_silent(&tree, now, idle_delay, |_| false, |id| {
-            if id == "child" { Some(active) } else { Some(idle) }
-        }));
+        assert!(!session_tree_is_silent(
+            &tree,
+            now,
+            idle_delay,
+            |_| false,
+            |id| {
+                if id == "child" {
+                    Some(active)
+                } else {
+                    Some(idle)
+                }
+            }
+        ));
 
         // A busy descendant blocks the wakeup even when every node looks idle.
-        assert!(!session_tree_is_silent(&tree, now, idle_delay, |id| {
-            id == "grandchild"
-        }, |_| {
-            Some(idle)
-        }));
+        assert!(!session_tree_is_silent(
+            &tree,
+            now,
+            idle_delay,
+            |id| { id == "grandchild" },
+            |_| { Some(idle) }
+        ));
 
         // A descendant that no longer exists contributes no activity.
-        assert!(session_tree_is_silent(&tree, now, idle_delay, |_| false, |id| {
-            if id == "grandchild" { None } else { Some(idle) }
-        }));
+        assert!(session_tree_is_silent(
+            &tree,
+            now,
+            idle_delay,
+            |_| false,
+            |id| {
+                if id == "grandchild" {
+                    None
+                } else {
+                    Some(idle)
+                }
+            }
+        ));
 
         // Root-only tree follows the root activity.
         let root_only = vec!["parent".to_string()];
-        assert!(session_tree_is_silent(&root_only, now, idle_delay, |_| false, |_| {
-            Some(idle)
-        }));
-        assert!(!session_tree_is_silent(&root_only, now, idle_delay, |_| false, |_| {
-            Some(active)
-        }));
+        assert!(session_tree_is_silent(
+            &root_only,
+            now,
+            idle_delay,
+            |_| false,
+            |_| { Some(idle) }
+        ));
+        assert!(!session_tree_is_silent(
+            &root_only,
+            now,
+            idle_delay,
+            |_| false,
+            |_| { Some(active) }
+        ));
     }
 
     fn session_summary(session_id: &str, parent_session_id: Option<&str>) -> SessionSummary {
@@ -3918,7 +3968,10 @@ mod tests {
         // Unknown sessions fall back to themselves.
         assert_eq!(session_tree_root_id(&summaries, "unknown"), "unknown");
         // A parent chain that never terminates is capped at 64 hops.
-        let self_cycle = vec![session_summary("a", Some("b")), session_summary("b", Some("a"))];
+        let self_cycle = vec![
+            session_summary("a", Some("b")),
+            session_summary("b", Some("a")),
+        ];
         let _ = session_tree_root_id(&self_cycle, "a");
     }
 
@@ -3975,7 +4028,11 @@ mod tests {
             idle_delay,
             |_| false,
             |id| {
-                if id == "primary" { Some(active) } else { Some(idle) }
+                if id == "primary" {
+                    Some(active)
+                } else {
+                    Some(idle)
+                }
             },
         );
         assert!(!primary_silent && all_silent);
@@ -5526,11 +5583,7 @@ mod tests {
     #[tokio::test]
     async fn in_progress_hook_direct_call_marks_real_plan_file() {
         let root = tempfile::tempdir().expect("test root");
-        let workspace_path = root
-            .path()
-            .join("workspace")
-            .to_string_lossy()
-            .into_owned();
+        let workspace_path = root.path().join("workspace").to_string_lossy().into_owned();
         let (plan_path, plan_file) = write_bound_plan_file(&root, "hook_in_progress_plan.plan.md");
 
         let _override_guard =
@@ -5575,7 +5628,8 @@ mod tests {
             "in_progress hook must be gated on reply_route.is_some()"
         );
         assert!(
-            start_turn.contains("// in_progress. Only execution turns (reply_route.is_some()) can carry"),
+            start_turn
+                .contains("// in_progress. Only execution turns (reply_route.is_some()) can carry"),
             "missing gate comment explaining the reply_route condition"
         );
     }
@@ -5704,12 +5758,7 @@ mod tests {
         let reply_turn_id = "bound-reply-outcome-turn";
         scheduler.active_turns.insert(
             reply_session_id,
-            bound_active_turn(
-                reply_turn_id,
-                &reply_workspace_path,
-                &reply_plan_file,
-                None,
-            ),
+            bound_active_turn(reply_turn_id, &reply_workspace_path, &reply_plan_file, None),
         );
         scheduler
             .outcome_tx
@@ -5739,7 +5788,11 @@ mod tests {
             if !month.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
                 continue;
             }
-            for entry in std::fs::read_dir(month.path()).into_iter().flatten().flatten() {
+            for entry in std::fs::read_dir(month.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
                 if entry.path().extension().and_then(|ext| ext.to_str()) == Some("md") {
                     files.push(entry.path());
                 }
@@ -5837,7 +5890,10 @@ mod tests {
 
     #[test]
     fn archive_id_sanitization_replaces_unsafe_characters() {
-        assert_eq!(DialogScheduler::sanitize_archive_id("session-1"), "session-1");
+        assert_eq!(
+            DialogScheduler::sanitize_archive_id("session-1"),
+            "session-1"
+        );
         assert_eq!(DialogScheduler::sanitize_archive_id("../evil"), "evil");
         assert_eq!(DialogScheduler::sanitize_archive_id("a b/c"), "a_b_c");
         assert_eq!(DialogScheduler::sanitize_archive_id(""), "unknown");
@@ -5889,8 +5945,7 @@ mod tests {
         // P-19：主会话通知只含极简元信息（session_id + 身份标识 + 已回复状态），
         // 不含内容全文；全文由 P-03 persist_background_acp_turn 落盘后经
         // SessionHistory(session_id) 检索。
-        let notice =
-            background_result_follow_up_user_input("flow-session-1", "external::opencode");
+        let notice = background_result_follow_up_user_input("flow-session-1", "external::opencode");
         assert!(notice.contains("flow-session-1"));
         assert!(notice.contains("external::opencode"));
         assert!(notice.contains("has replied"));
@@ -6116,6 +6171,8 @@ mod tests {
         assert!(is_background_result_follow_up(&notice));
         // 真实用户消息绝不能被误判为后台通知。
         assert!(!is_background_result_follow_up("check tests"));
-        assert!(!is_background_result_follow_up("Background agent session foo"));
+        assert!(!is_background_result_follow_up(
+            "Background agent session foo"
+        ));
     }
 }

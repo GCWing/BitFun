@@ -36,6 +36,11 @@ export interface MentionState {
   isActive: boolean;
   query: string;
   startOffset: number;  // Position of the @ symbol in text
+  /**
+   * `@@` 前缀分流（R-GC-15，契约 §2.5）：用户输入 '@@'（trigger 前一字符
+   * 也是 '@'）→ memberMode=true（群聊成员/全体选择器）；普通 '@' 原逻辑。
+   */
+  memberMode?: boolean;
 }
 
 export interface InlineTriggerState {
@@ -695,21 +700,27 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       const query = textBeforeCursor.slice(selectedIndex + 1);
 
       if (
-        isWhitespaceCharacter(charBeforeTrigger) &&
+        (isWhitespaceCharacter(charBeforeTrigger) || charBeforeTrigger === '@') &&
         !query.includes(' ') &&
         !query.includes('\n')
       ) {
         if (selectedTrigger === '@') {
+          // `@@` 前缀分流（R-GC-15，契约 §2.5）：trigger 前一个字符也是 '@'
+          // （用户输入 '@@'）→ memberMode=true（群聊成员+全体选择器）；
+          // 普通 '@' 保持原形状（memberMode 缺省），文件提及逻辑零回归。
+          const memberMode = charBeforeTrigger === '@';
           const newState: MentionState = {
             isActive: true,
             query,
             startOffset: selectedIndex,
+            ...(memberMode ? { memberMode: true } : {}),
           };
 
           if (
             !mentionStateRef.current.isActive ||
             mentionStateRef.current.query !== query ||
-            mentionStateRef.current.startOffset !== selectedIndex
+            mentionStateRef.current.startOffset !== selectedIndex ||
+            mentionStateRef.current.memberMode !== memberMode
           ) {
             mentionStateRef.current = newState;
             onMentionStateChange?.(newState);

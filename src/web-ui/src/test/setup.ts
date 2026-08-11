@@ -8,6 +8,12 @@
  * throws `localStorage.getItem is not a function`. Replace the shell with a
  * working in-memory Storage before any store module loads.
  */
+import { enableMapSet } from 'immer';
+
+// groupChatStore 的 state 使用 Map（rooms/members/messages，契约 §2.2）。
+// immer 需显式启用 MapSet 插件才能对 Map 做 draft 变更。
+enableMapSet();
+
 if (
   typeof globalThis.localStorage === 'undefined'
   || typeof globalThis.localStorage.getItem !== 'function'

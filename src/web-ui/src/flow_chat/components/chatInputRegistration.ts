@@ -1,5 +1,6 @@
 import type { ContextItem } from '@/shared/types/context';
 import type { ComposerPresentation } from '../utils/composerPresentation';
+import type { GroupChatActor } from '../types/flow-chat';
 
 /**
  * One submission produced by the shared ChatInput surface.
@@ -57,4 +58,15 @@ export async function submitThroughChatInputRegistration(
 
   await submitToSession();
   return 'session';
+}
+
+/**
+ * Group chat registration（R-GC-18，契约 §2.4，P1-3 文件归属）。
+ *
+ * 群聊面板复用标准 ChatInput，通过 registration.onSubmit 路由到
+ * groupChatStore.sendMessage。
+ */
+export interface GroupChatRegistration {
+  roomId: string;                    // 群聊面板传
+  onSubmit: (text: string, author: GroupChatActor, mentionTargets: GroupChatActor[], urgent?: boolean) => void;  // P2-4 补 urgent
 }

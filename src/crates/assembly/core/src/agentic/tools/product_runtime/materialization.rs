@@ -78,6 +78,7 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "GetFileDiff" => Some(Arc::new(GetFileDiffTool::new())),
             "SessionControl" => Some(Arc::new(SessionControlTool::new())),
             "LegionControl" => Some(Arc::new(LegionControlTool::new())),
+            "group_chat" => Some(Arc::new(GroupChatTool::new())),
             "SessionMessage" => Some(Arc::new(SessionMessageTool::new())),
             "SessionHistory" => Some(Arc::new(SessionHistoryTool::new())),
             "acp_control" => Some(Arc::new(AcpControlTool::new())),

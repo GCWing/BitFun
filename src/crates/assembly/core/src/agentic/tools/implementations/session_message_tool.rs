@@ -17,25 +17,25 @@ use crate::agentic::tools::framework::{
 };
 use crate::agentic::tools::restrictions::get_session_role;
 use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
-use crate::service_agent_runtime::CoreServiceAgentRuntime;
-use crate::service::worktree::WorktreeService;
 use crate::service::workspace::get_global_workspace_service;
+use crate::service::worktree::WorktreeService;
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_core_types::{SessionExecutionTarget, WorktreeSessionOptions};
 use bitfun_runtime_ports::{
     AcpClientBitfunMessageRequest, AcpClientMessageRequest, AcpClientMessageResult, AcpClientPort,
     AcpClientStreamChunk, AcpClientStreamChunkSink, AgentDialogPrependedReminder,
-    AgentDialogSteerRequest, AgentDialogTurnPort, AgentDialogTurnRequest, AgentSessionCreateRequest,
-    AgentSessionListRequest, AgentSessionReplyRoute, AgentSessionSummary, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, PortResult,
+    AgentDialogSteerRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
+    AgentSessionCreateRequest, AgentSessionListRequest, AgentSessionReplyRoute,
+    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, PortResult,
 };
+use log::{info, warn};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
-use log::{info, warn};
 use uuid::Uuid;
 
 /// Primary channel for legion communication. With a session_id, messages can be sent and received across conversations.
@@ -165,6 +165,7 @@ impl SessionMessageTool {
     fn forwarded_user_input_metadata(
         context: &ToolUseContext,
         sender: &SenderIdentity,
+        group: &GroupChatForwardMetadata,
     ) -> serde_json::Map<String, Value> {
         use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 
@@ -194,6 +195,17 @@ impl SessionMessageTool {
             .filter(|value| !value.trim().is_empty())
         {
             metadata.insert("senderName".to_string(), json!(name));
+        }
+        // Group chat reply correlation keys (R-GC-11, contract §1.4): only
+        // written when present so non-group dispatch stays zero-pollution.
+        if let Some(group_id) = &group.group_id {
+            metadata.insert("groupId".to_string(), json!(group_id));
+        }
+        if let Some(group_message_id) = &group.group_message_id {
+            metadata.insert("groupMessageId".to_string(), json!(group_message_id));
+        }
+        if let Some(group_author) = &group.group_author {
+            metadata.insert("groupAuthor".to_string(), json!(group_author));
         }
         metadata
     }
@@ -468,7 +480,6 @@ impl SessionMessageTool {
             }],
         )
     }
-
 }
 
 /// Identity of the session that sent a forwarded message.
@@ -482,6 +493,21 @@ struct SenderIdentity {
     depth: Option<u32>,
     /// Session name, or the agent type fallback, when available.
     name: Option<String>,
+}
+
+/// Optional group-chat reply correlation keys forwarded with a dispatched turn
+/// (R-GC-11, contract §1.4: groupId / groupMessageId / groupAuthor).
+///
+/// All fields are optional: a non-group dispatch carries the default empty
+/// metadata and never writes the keys (zero pollution).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct GroupChatForwardMetadata {
+    /// The group chat room id the message belongs to.
+    pub group_id: Option<String>,
+    /// The group chat message id being replied to.
+    pub group_message_id: Option<String>,
+    /// Sender identifier: `__master__` or a member session id.
+    pub group_author: Option<String>,
 }
 
 impl SenderIdentity {
@@ -499,7 +525,11 @@ impl SenderIdentity {
     /// display name is unavailable.
     fn display_label(&self) -> String {
         let mut label = self.role_label();
-        if let Some(name) = self.name.as_deref().filter(|value| !value.trim().is_empty()) {
+        if let Some(name) = self
+            .name
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
             label.push(' ');
             label.push_str(name);
         }
@@ -1080,9 +1110,11 @@ Allowed agent types when creating a session are dynamically resolved from the av
                     // worktree 与 ACP 真会话（agent_type `acp__<client>`）互斥：
                     // ACP 会话是外部进程记录，不承载本地 worktree
                     // execution_target，同时携带会导致 worktree 成为孤儿。
-                    if parsed.agent_type.as_ref().is_some_and(|agent_type| {
-                        agent_type.as_str().starts_with("acp__")
-                    }) {
+                    if parsed
+                        .agent_type
+                        .as_ref()
+                        .is_some_and(|agent_type| agent_type.as_str().starts_with("acp__"))
+                    {
                         return ValidationResult {
                             result: false,
                             message: Some(
@@ -1148,11 +1180,7 @@ Allowed agent types when creating a session are dynamically resolved from the av
             .and_then(|value| value.as_str())
             .unwrap_or("resolved workspace");
         if let Some(batch) = input.get("batch").and_then(|value| value.as_array()) {
-            return format!(
-                "Batch dispatch {} message(s) in {}",
-                batch.len(),
-                workspace
-            );
+            return format!("Batch dispatch {} message(s) in {}", batch.len(), workspace);
         }
         if let Some(session_id) = input.get("session_id").and_then(|value| value.as_str()) {
             format!("Send message to session {} in {}", session_id, workspace)
@@ -1468,7 +1496,9 @@ impl SessionMessageTool {
             || parsed.todo_id.is_some()
             || parsed.urgent
         {
-            return Self::invalid("session fields must be provided per batch item when batch is used");
+            return Self::invalid(
+                "session fields must be provided per batch item when batch is used",
+            );
         }
 
         // The shared workspace must be present (and well-formed) when any item
@@ -1567,9 +1597,11 @@ impl SessionMessageTool {
                                 field("worktree")
                             ));
                         }
-                        if item.agent_type.as_ref().is_some_and(|agent_type| {
-                            agent_type.as_str().starts_with("acp__")
-                        }) {
+                        if item
+                            .agent_type
+                            .as_ref()
+                            .is_some_and(|agent_type| agent_type.as_str().starts_with("acp__"))
+                        {
                             return Self::invalid(format!(
                                 "{} is not supported with acp__ agent types",
                                 field("worktree")
@@ -1702,7 +1734,9 @@ impl SessionMessageTool {
         let Some(custom) = metadata.custom_metadata.as_ref() else {
             return Ok(AcpFlowSessionRegistryStatus::NotAcpFlow);
         };
-        if custom.get(ACP_FLOW_METADATA_PROVIDER_KEY).and_then(Value::as_str)
+        if custom
+            .get(ACP_FLOW_METADATA_PROVIDER_KEY)
+            .and_then(Value::as_str)
             != Some(ACP_FLOW_METADATA_PROVIDER_VALUE)
         {
             return Ok(AcpFlowSessionRegistryStatus::NotAcpFlow);
@@ -1732,7 +1766,8 @@ impl SessionMessageTool {
         match op {
             AcpDirectSendOp::Flow(request) => port.send_message_stream(request, chunk_sink).await,
             AcpDirectSendOp::Bitfun(request) => {
-                port.send_message_to_bitfun_session_stream(request, chunk_sink).await
+                port.send_message_to_bitfun_session_stream(request, chunk_sink)
+                    .await
             }
         }
     }
@@ -2110,7 +2145,8 @@ impl SessionMessageTool {
                     let source = AcpDirectReplySource {
                         source_session_id: source_session_id.clone(),
                         source_workspace: source_workspace.clone(),
-                        source_remote_connection_id: source_remote_connection_id.map(ToOwned::to_owned),
+                        source_remote_connection_id: source_remote_connection_id
+                            .map(ToOwned::to_owned),
                         source_remote_ssh_host: source_remote_ssh_host.map(ToOwned::to_owned),
                     };
                     Self::spawn_acp_direct_delivery(
@@ -2414,10 +2450,11 @@ impl SessionMessageTool {
                     }
                     // 内存树注册是 best-effort（R-003 语义，同 SessionControl create）：
                     // 注册失败只 warn，lineage 已持久化，重启后由 list 重建树。
-                    if let Err(error) = coordinator
-                        .session_tree()
-                        .register_child(parent_session_id, &session.session_id, child_depth)
-                    {
+                    if let Err(error) = coordinator.session_tree().register_child(
+                        parent_session_id,
+                        &session.session_id,
+                        child_depth,
+                    ) {
                         log::warn!(
                             "SessionMessage create: failed to register child {} under {} in tree: {:?}",
                             session.session_id,
@@ -2555,9 +2592,13 @@ impl SessionMessageTool {
         // through the normal submission path so the message is never dropped.
         let mut steering_turn_id: Option<String> = None;
         let has_plan_todo_binding = params.plan_file.is_some() || params.todo_id.is_some();
-        if should_attempt_steering(params.urgent, created_session_id.as_deref(), has_plan_todo_binding)
-        {
-            match resolve_urgent_delivery(scheduler.current_processing_turn_id(&target_session_id)) {
+        if should_attempt_steering(
+            params.urgent,
+            created_session_id.as_deref(),
+            has_plan_todo_binding,
+        ) {
+            match resolve_urgent_delivery(scheduler.current_processing_turn_id(&target_session_id))
+            {
                 UrgentDelivery::Steer { turn_id } => {
                     match scheduler
                         .steer_dialog_turn(AgentDialogSteerRequest {
@@ -2593,8 +2634,11 @@ impl SessionMessageTool {
             // dispatched session to a plan todo, carry planFile/todoId in the
             // forwarded turn metadata so the scheduler can auto-mark the todo
             // (in_progress at turn start, completed on a Completed outcome).
-            let mut forwarded_metadata =
-                Self::forwarded_user_input_metadata(context, &sender_identity);
+            let mut forwarded_metadata = Self::forwarded_user_input_metadata(
+                context,
+                &sender_identity,
+                &GroupChatForwardMetadata::default(),
+            );
             if let Some(plan_file) = params.plan_file.as_deref() {
                 forwarded_metadata.insert(PLAN_FILE_METADATA_KEY.to_string(), json!(plan_file));
             }
@@ -2616,7 +2660,8 @@ impl SessionMessageTool {
                     reply_route: Some(AgentSessionReplyRoute {
                         source_session_id: source_session_id.clone(),
                         source_workspace_path: source_workspace.clone(),
-                        source_remote_connection_id: source_remote_connection_id.map(ToOwned::to_owned),
+                        source_remote_connection_id: source_remote_connection_id
+                            .map(ToOwned::to_owned),
                         source_remote_ssh_host: source_remote_ssh_host.map(ToOwned::to_owned),
                     }),
                     prepended_reminders: prepended_messages,
@@ -2629,9 +2674,8 @@ impl SessionMessageTool {
                 })?;
         }
 
-        let urgent_fell_back = params.urgent
-            && steering_turn_id.is_none()
-            && created_session_id.is_none();
+        let urgent_fell_back =
+            params.urgent && steering_turn_id.is_none() && created_session_id.is_none();
         let mut result_text = if let Some(steered_turn_id) = steering_turn_id.as_ref() {
             format!(
                 "Urgent message injected into the running turn '{}' of session '{}' in workspace '{}' using agent type '{}'.",
@@ -2885,10 +2929,16 @@ mod tests {
         .expect("worktree payload must parse");
         assert!(with_worktree.worktree.is_some());
         assert_eq!(
-            with_worktree.worktree.as_ref().and_then(|w| w.base_ref.as_deref()),
+            with_worktree
+                .worktree
+                .as_ref()
+                .and_then(|w| w.base_ref.as_deref()),
             Some("main")
         );
-        assert!(with_worktree.worktree.as_ref().is_some_and(|w| w.copy_local_changes));
+        assert!(with_worktree
+            .worktree
+            .as_ref()
+            .is_some_and(|w| w.copy_local_changes));
 
         // batch item 的 worktree 解析。
         let batch: SessionMessageInput = serde_json::from_value(json!({
@@ -2919,13 +2969,11 @@ mod tests {
             .validate_input(&input, Some(&session_context("caller_1")))
             .await;
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("worktree is only allowed when session_id is omitted")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("worktree is only allowed when session_id is omitted"));
     }
 
     #[test]
@@ -3020,9 +3068,7 @@ mod tests {
             None
         );
         assert_eq!(
-            SessionMessageTool::acp_flow_client_id_from_session_id(
-                "acp_codebuddy_not-a-uuid"
-            ),
+            SessionMessageTool::acp_flow_client_id_from_session_id("acp_codebuddy_not-a-uuid"),
             None
         );
         assert_eq!(
@@ -3039,7 +3085,9 @@ mod tests {
     fn looks_like_uuid_accepts_only_canonical_shape() {
         assert!(looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b"));
         assert!(!looks_like_uuid("7f0e1a2b3c4d4e5f8a9b0c1d2e3f4a5b"));
-        assert!(!looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b-extra"));
+        assert!(!looks_like_uuid(
+            "7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b-extra"
+        ));
         assert!(!looks_like_uuid(""));
         assert!(!looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5"));
     }
@@ -3060,16 +3108,29 @@ mod tests {
             name: Some("Assistant".to_string()),
         };
 
-        let metadata = SessionMessageTool::forwarded_user_input_metadata(&context, &sender);
+        let metadata = SessionMessageTool::forwarded_user_input_metadata(
+            &context,
+            &sender,
+            &GroupChatForwardMetadata::default(),
+        );
 
         assert_eq!(
             metadata.get(USER_INPUT_AVAILABLE_CONTEXT_KEY),
             Some(&Value::Bool(false))
         );
-        assert_eq!(metadata.get("senderSessionId"), Some(&Value::String("source-1".to_string())));
-        assert_eq!(metadata.get("senderRole"), Some(&Value::String("Commander".to_string())));
+        assert_eq!(
+            metadata.get("senderSessionId"),
+            Some(&Value::String("source-1".to_string()))
+        );
+        assert_eq!(
+            metadata.get("senderRole"),
+            Some(&Value::String("Commander".to_string()))
+        );
         assert_eq!(metadata.get("senderDepth"), Some(&Value::from(0)));
-        assert_eq!(metadata.get("senderName"), Some(&Value::String("Assistant".to_string())));
+        assert_eq!(
+            metadata.get("senderName"),
+            Some(&Value::String("Assistant".to_string()))
+        );
     }
 
     #[test]
@@ -3082,12 +3143,71 @@ mod tests {
             name: None,
         };
 
-        let metadata = SessionMessageTool::forwarded_user_input_metadata(&context, &sender);
+        let metadata = SessionMessageTool::forwarded_user_input_metadata(
+            &context,
+            &sender,
+            &GroupChatForwardMetadata::default(),
+        );
 
-        assert_eq!(metadata.get("senderSessionId"), Some(&Value::String("source-2".to_string())));
+        assert_eq!(
+            metadata.get("senderSessionId"),
+            Some(&Value::String("source-2".to_string()))
+        );
         assert!(!metadata.contains_key("senderRole"));
         assert!(!metadata.contains_key("senderDepth"));
         assert!(!metadata.contains_key("senderName"));
+    }
+
+    #[test]
+    fn forwarded_metadata_carries_group_chat_keys_when_present() {
+        let context = empty_context();
+        let sender = SenderIdentity {
+            session_id: "source-3".to_string(),
+            role: None,
+            depth: None,
+            name: None,
+        };
+        let group = GroupChatForwardMetadata {
+            group_id: Some("room-1".to_string()),
+            group_message_id: Some("msg-42".to_string()),
+            group_author: Some("__master__".to_string()),
+        };
+
+        let metadata = SessionMessageTool::forwarded_user_input_metadata(&context, &sender, &group);
+
+        assert_eq!(
+            metadata.get("groupId"),
+            Some(&Value::String("room-1".to_string()))
+        );
+        assert_eq!(
+            metadata.get("groupMessageId"),
+            Some(&Value::String("msg-42".to_string()))
+        );
+        assert_eq!(
+            metadata.get("groupAuthor"),
+            Some(&Value::String("__master__".to_string()))
+        );
+    }
+
+    #[test]
+    fn forwarded_metadata_omits_group_chat_keys_when_absent() {
+        let context = empty_context();
+        let sender = SenderIdentity {
+            session_id: "source-4".to_string(),
+            role: None,
+            depth: None,
+            name: None,
+        };
+
+        let metadata = SessionMessageTool::forwarded_user_input_metadata(
+            &context,
+            &sender,
+            &GroupChatForwardMetadata::default(),
+        );
+
+        assert!(!metadata.contains_key("groupId"));
+        assert!(!metadata.contains_key("groupMessageId"));
+        assert!(!metadata.contains_key("groupAuthor"));
     }
 
     #[test]
@@ -3345,10 +3465,7 @@ mod tests {
         }))
         .expect("payload with plan-todo binding must parse");
 
-        assert_eq!(
-            input.plan_file.as_deref(),
-            Some("my_plan_1234.plan.md")
-        );
+        assert_eq!(input.plan_file.as_deref(), Some("my_plan_1234.plan.md"));
         assert_eq!(input.todo_id.as_deref(), Some("setup-auth"));
     }
 
@@ -3451,7 +3568,11 @@ mod tests {
     #[test]
     fn non_urgent_message_never_attempts_steering_channel() {
         assert!(!should_attempt_steering(false, None, false));
-        assert!(!should_attempt_steering(false, Some("new-session-1"), false));
+        assert!(!should_attempt_steering(
+            false,
+            Some("new-session-1"),
+            false
+        ));
         assert!(!should_attempt_steering(false, None, true));
     }
 
@@ -3531,7 +3652,10 @@ mod tests {
     #[test]
     fn role_display_title_cases_snake_case_keys() {
         assert_eq!(format_role_display("commander"), "Commander");
-        assert_eq!(format_role_display("punishment_executor"), "PunishmentExecutor");
+        assert_eq!(
+            format_role_display("punishment_executor"),
+            "PunishmentExecutor"
+        );
     }
 
     #[test]
@@ -3557,7 +3681,10 @@ mod tests {
         assert_eq!(batch.len(), 2);
         assert_eq!(batch[0].session_name.as_deref(), Some("Worker One"));
         assert_eq!(batch[0].message, "hello one");
-        assert_eq!(batch[0].agent_type.as_ref().map(AgentType::as_str), Some("agentic"));
+        assert_eq!(
+            batch[0].agent_type.as_ref().map(AgentType::as_str),
+            Some("agentic")
+        );
         assert!(batch[0].session_id.is_none());
         assert!(!batch[0].urgent);
         assert_eq!(batch[1].session_id.as_deref(), Some("worker_2"));
@@ -3592,7 +3719,10 @@ mod tests {
         .expect("batch payload without top-level message must parse");
 
         assert!(input.message.is_none());
-        assert_eq!(input.batch.as_ref().expect("batch must be present").len(), 1);
+        assert_eq!(
+            input.batch.as_ref().expect("batch must be present").len(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -4084,9 +4214,7 @@ mod tests {
             ))
         }
 
-        async fn list_clients(
-            &self,
-        ) -> PortResult<bitfun_runtime_ports::AcpClientListResult> {
+        async fn list_clients(&self) -> PortResult<bitfun_runtime_ports::AcpClientListResult> {
             Err(PortError::new(
                 PortErrorKind::Backend,
                 "not exercised by the ACP direct-path tests",
@@ -4291,7 +4419,10 @@ mod tests {
             SessionMessageTool::acp_client_id_from_agent_type("agentic"),
             None
         );
-        assert_eq!(SessionMessageTool::acp_client_id_from_agent_type("Plan"), None);
+        assert_eq!(
+            SessionMessageTool::acp_client_id_from_agent_type("Plan"),
+            None
+        );
         // A flow session id (acp_<client>_<uuid>) is not an agent type prefix.
         assert_eq!(
             SessionMessageTool::acp_client_id_from_agent_type("acp_codex_abc123"),
@@ -4299,7 +4430,10 @@ mod tests {
         );
         assert_eq!(SessionMessageTool::acp_client_id_from_agent_type(""), None);
         // A bare prefix with no client id is rejected (empty client id).
-        assert_eq!(SessionMessageTool::acp_client_id_from_agent_type("acp__"), None);
+        assert_eq!(
+            SessionMessageTool::acp_client_id_from_agent_type("acp__"),
+            None
+        );
     }
 
     #[tokio::test]
@@ -4329,7 +4463,10 @@ mod tests {
         assert_eq!(messages[0].workspace_path.as_deref(), Some("/repo/project"));
         // The async direct path now carries a bounded window instead of the
         // old unbounded `None`.
-        assert_eq!(messages[0].timeout_seconds, Some(ACP_DIRECT_TIMEOUT_SECONDS));
+        assert_eq!(
+            messages[0].timeout_seconds,
+            Some(ACP_DIRECT_TIMEOUT_SECONDS)
+        );
 
         // The external response is returned verbatim, no re-translation.
         assert_eq!(response.response, "external response");
@@ -4434,9 +4571,9 @@ mod tests {
                     {
                         saw_round_started = true;
                     }
-                    AgenticEvent::TextChunk { session_id, text, .. }
-                        if session_id == &target_session_id =>
-                    {
+                    AgenticEvent::TextChunk {
+                        session_id, text, ..
+                    } if session_id == &target_session_id => {
                         saw_text = text == "external response";
                     }
                     AgenticEvent::ModelRoundCompleted { session_id, .. }
@@ -4529,7 +4666,10 @@ mod tests {
         assert_eq!(turn.model_rounds.len(), 1);
         assert_eq!(turn.model_rounds[0].round_index, 0);
         assert_eq!(turn.model_rounds[0].text_items.len(), 1);
-        assert_eq!(turn.model_rounds[0].text_items[0].content, "external response");
+        assert_eq!(
+            turn.model_rounds[0].text_items[0].content,
+            "external response"
+        );
         assert_eq!(turn.status, crate::service::session::TurnStatus::Completed);
         assert!(turn.end_time.is_some());
         assert!(turn.error.is_none());
@@ -4621,7 +4761,10 @@ mod tests {
             .await
             .expect("load should succeed")
             .expect("delivery turn should be persisted, not dropped");
-        assert_eq!(saved.user_message.content, "【acp 会话存活测试】只回『alive』");
+        assert_eq!(
+            saved.user_message.content,
+            "【acp 会话存活测试】只回『alive』"
+        );
         assert_eq!(saved.model_rounds[0].text_items[0].content, "alive");
         assert_eq!(saved.status, crate::service::session::TurnStatus::Completed);
     }
@@ -4669,7 +4812,10 @@ mod tests {
             .expect("turn should be persisted");
         assert_eq!(saved.turn_id, "turn-1");
         assert_eq!(saved.user_message.content, "hello");
-        assert_eq!(saved.model_rounds[0].text_items[0].content, "external response");
+        assert_eq!(
+            saved.model_rounds[0].text_items[0].content,
+            "external response"
+        );
         assert_eq!(saved.status, crate::service::session::TurnStatus::Completed);
 
         // 幂等：同 turn 再次落盘为 no-op（不覆盖已保存内容、不报错）。
@@ -4709,10 +4855,8 @@ mod tests {
             Arc::new(SessionContextStore::new()),
             Arc::new(
                 PersistenceManager::new(Arc::new(PathManager::with_user_root_for_tests(
-                    std::env::temp_dir().join(format!(
-                        "bitfun-session-message-authz-{}",
-                        Uuid::new_v4()
-                    )),
+                    std::env::temp_dir()
+                        .join(format!("bitfun-session-message-authz-{}", Uuid::new_v4())),
                 )))
                 .expect("persistence manager"),
             ),
@@ -4763,7 +4907,9 @@ mod tests {
         .await
         .expect_err("daemon session delivery must be rejected");
         assert!(
-            error.to_string().contains("cannot deliver to daemon/warden"),
+            error
+                .to_string()
+                .contains("cannot deliver to daemon/warden"),
             "{error}"
         );
     }
@@ -4802,7 +4948,9 @@ mod tests {
         .await
         .expect_err("warden session delivery must be rejected");
         assert!(
-            error.to_string().contains("cannot deliver to daemon/warden"),
+            error
+                .to_string()
+                .contains("cannot deliver to daemon/warden"),
             "{error}"
         );
     }
@@ -4830,7 +4978,9 @@ mod tests {
         .expect_err("unrelated caller without metadata must be rejected");
         assert!(
             error.to_string().contains("not authorized to deliver to")
-                || error.to_string().contains("cannot verify ancestor relationship"),
+                || error
+                    .to_string()
+                    .contains("cannot verify ancestor relationship"),
             "{error}"
         );
     }

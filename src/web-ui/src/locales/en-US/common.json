@@ -95,7 +95,33 @@
     "sections": {
       "extensions": "Customize",
       "shell": "Shell",
-      "assistantSessions": "Assistant Sessions"
+      "assistantSessions": "Assistant Sessions",
+      "groupChat": "Group Chat"
+    },
+    "groupChat": {
+      "empty": "No group chats yet. Click + above to create one.",
+      "deleteTitle": "Delete Group Chat",
+      "deleteConfirm": "Delete group chat \"{{name}}\"? All messages will be permanently removed.",
+      "deleteConfirmText": "Delete",
+      "deleteTooltip": "Delete group chat",
+      "modeFree": "Free",
+      "modeRoundRobin": "Round-robin",
+      "paneEmpty": "Select a group chat",
+      "noMessages": "No messages yet",
+      "addMember": "Add member",
+      "noAddable": "No assistants available",
+      "noMembers": "No members",
+      "roleOwner": "Owner",
+      "roleMember": "Member",
+      "leaveTooltip": "Remove from group",
+      "createTitle": "Create Group Chat",
+      "nameLabel": "Name",
+      "namePlaceholder": "Group name",
+      "membersLabel": "Members",
+      "cancel": "Cancel",
+      "create": "Create",
+      "timeoutReminder": "No reply within the timeout",
+      "manageMembers": "Manage members"
     },
     "search": {
       "triggerPlaceholder": "Search",

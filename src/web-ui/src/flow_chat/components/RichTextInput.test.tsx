@@ -546,4 +546,50 @@ describeWithJsdom('RichTextInput external sync', () => {
       startOffset: 6,
     });
   });
+
+  it('@@ prefix opens member mode while plain @ keeps file mention (R-GC-15)', async () => {
+    const onMentionStateChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={() => {}}
+          onMentionStateChange={onMentionStateChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input');
+    expect(editor).toBeInstanceOf(HTMLDivElement);
+
+    // Plain '@' → 原文件提及逻辑（memberMode 缺省，零回归）。
+    await updateEditorText(editor as HTMLDivElement, 'ask @test');
+    expect(onMentionStateChange).toHaveBeenLastCalledWith({
+      isActive: true,
+      query: 'test',
+      startOffset: 4,
+    });
+    expect(
+      (onMentionStateChange.mock.calls.at(-1)?.[0] as { memberMode?: boolean }).memberMode
+    ).toBeUndefined();
+
+    // '@@' → memberMode=true（群聊成员+全体选择器）。最后一个 trigger 是第 2
+    // 个 '@'（位置 5），其前一个字符也是 '@' → memberMode；query = 其后文本。
+    await updateEditorText(editor as HTMLDivElement, 'ask @@test');
+    expect(onMentionStateChange).toHaveBeenLastCalledWith({
+      isActive: true,
+      query: 'test',
+      startOffset: 5,
+      memberMode: true,
+    });
+
+    // '@@' 后普通 '@' → memberMode 关闭（互斥，不同时两个选择器）。
+    await updateEditorText(editor as HTMLDivElement, 'ask @file');
+    const last = onMentionStateChange.mock.calls.at(-1)?.[0] as { memberMode?: boolean };
+    expect(last.isActive).toBe(true);
+    expect(last.memberMode).toBeUndefined();
+  });
 });

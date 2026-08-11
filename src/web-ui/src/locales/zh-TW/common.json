@@ -95,7 +95,33 @@
     "sections": {
       "extensions": "定製",
       "shell": "Shell",
-      "assistantSessions": "助理會話"
+      "assistantSessions": "助理會話",
+      "groupChat": "群聊"
+    },
+    "groupChat": {
+      "empty": "尚無群聊，點擊上方 + 建立",
+      "deleteTitle": "刪除群聊",
+      "deleteConfirm": "確定刪除群聊「{{name}}」？該操作將清空全部訊息且不可恢復。",
+      "deleteConfirmText": "刪除",
+      "deleteTooltip": "刪除群聊",
+      "modeFree": "自由",
+      "modeRoundRobin": "輪轉",
+      "paneEmpty": "請選擇一個群聊",
+      "noMessages": "尚無訊息",
+      "addMember": "拉人進群",
+      "noAddable": "沒有可加入的助理",
+      "noMembers": "暫無成員",
+      "roleOwner": "群主",
+      "roleMember": "成員",
+      "leaveTooltip": "移出群聊",
+      "createTitle": "新建群聊",
+      "nameLabel": "群名",
+      "namePlaceholder": "群聊名稱",
+      "membersLabel": "成員",
+      "cancel": "取消",
+      "create": "建立",
+      "timeoutReminder": "逾時未回覆",
+      "manageMembers": "管理成員"
     },
     "search": {
       "triggerPlaceholder": "搜尋...",

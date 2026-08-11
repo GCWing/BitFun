@@ -84,6 +84,9 @@ pub struct GlobalConfig {
     pub version: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub last_modified: chrono::DateTime<chrono::Utc>,
+    /// Group chat threshold parameters (群聊阈值参数配置化, S-90 / R-GC-26).
+    #[serde(default)]
+    pub group_chat: GroupChatConfig,
 }
 
 /// Project-scoped configuration overlay.
@@ -2031,6 +2034,55 @@ pub fn default_legion_deploy_frequency_per_hour() -> usize {
     10
 }
 
+/// Group chat threshold parameters (群聊阈值参数配置化, R-GC-26 / S-90).
+///
+/// Every field mirrors a legacy hard-coded threshold and is read at the
+/// `group_chat.*` dot path; unconfigured documents keep the default values.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GroupChatConfig {
+    /// Per-session dialog turn queue depth for group chat dispatch
+    /// (`group_chat.queue_limit`, default 20). Replaces the hard-coded
+    /// `DEFAULT_MAX_DIALOG_QUEUE_DEPTH` in agent-runtime scheduler.
+    #[serde(default = "default_group_chat_queue_limit")]
+    pub queue_limit: usize,
+    /// Maximum number of members in one group chat room
+    /// (`group_chat.member_limit`, default 50). Consumed by GroupChatTool
+    /// create/join RoomFull validation (R-GC-06/07).
+    #[serde(default = "default_group_chat_member_limit")]
+    pub member_limit: usize,
+    /// Reply timeout in seconds before a pending group chat message is
+    /// surfaced as a timeout reminder (`group_chat.reply_timeout_secs`,
+    /// default 300). Consumed by the timeout reminder scan (P1-2, R-GC-26).
+    #[serde(default = "default_group_chat_reply_timeout_secs")]
+    pub reply_timeout_secs: u64,
+}
+
+impl Default for GroupChatConfig {
+    fn default() -> Self {
+        Self {
+            queue_limit: default_group_chat_queue_limit(),
+            member_limit: default_group_chat_member_limit(),
+            reply_timeout_secs: default_group_chat_reply_timeout_secs(),
+        }
+    }
+}
+
+/// Default group chat dialog queue depth (legacy `DEFAULT_MAX_DIALOG_QUEUE_DEPTH = 20`).
+pub fn default_group_chat_queue_limit() -> usize {
+    20
+}
+
+/// Default group chat member limit (规划期定标, default 50).
+pub fn default_group_chat_member_limit() -> usize {
+    50
+}
+
+/// Default group chat reply timeout in seconds (规划期定标 P1-2, default 300).
+pub fn default_group_chat_reply_timeout_secs() -> u64 {
+    300
+}
+
 pub const DEFAULT_MAX_ROUNDS: usize = 200;
 
 fn default_max_rounds() -> usize {
@@ -2684,6 +2736,7 @@ impl Default for GlobalConfig {
             schema_version: CURRENT_CONFIG_SCHEMA_VERSION,
             version: "1.0.0".to_string(),
             last_modified: chrono::Utc::now(),
+            group_chat: GroupChatConfig::default(),
         }
     }
 }
@@ -3128,7 +3181,7 @@ impl AIModelConfig {
 mod tests {
     use super::{
         AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
-        AgentProfileView, AppConfig, AppLoggingConfig, AuthConfig, GlobalConfig,
+        AgentProfileView, AppConfig, AppLoggingConfig, AuthConfig, GlobalConfig, GroupChatConfig,
         MemoryExternalContextPolicy, ModelExchangeTracingMode, NotificationConfig, OpenCodePlan,
         SubagentBatchExecutionPolicy, SubagentModelSelection, SubscriptionProvider,
         UserSkillGroupsConfig, UserToolGroupsConfig,
@@ -4059,5 +4112,53 @@ mod tests {
         assert_eq!(serialized["legion_max_nodes"], 5);
         assert_eq!(serialized["legion_max_total_nodes"], 30);
         assert_eq!(serialized["legion_deploy_frequency_per_hour"], 0);
+    }
+
+    #[test]
+    fn group_chat_thresholds_default_to_plan_values() {
+        let config = GroupChatConfig::default();
+        assert_eq!(config.queue_limit, 20);
+        assert_eq!(config.member_limit, 50);
+        assert_eq!(config.reply_timeout_secs, 300);
+
+        // Unset config must deserialize to the same defaults (零回归).
+        let empty: GroupChatConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("empty group chat config defaults");
+        assert_eq!(empty.queue_limit, 20);
+        assert_eq!(empty.member_limit, 50);
+        assert_eq!(empty.reply_timeout_secs, 300);
+    }
+
+    #[test]
+    fn group_chat_thresholds_round_trip_explicit_values() {
+        let config: GroupChatConfig = serde_json::from_value(serde_json::json!({
+            "queue_limit": 10,
+            "member_limit": 8,
+            "reply_timeout_secs": 120
+        }))
+        .expect("group chat config should deserialize");
+
+        assert_eq!(config.queue_limit, 10);
+        assert_eq!(config.member_limit, 8);
+        assert_eq!(config.reply_timeout_secs, 120);
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(serialized["queue_limit"], 10);
+        assert_eq!(serialized["member_limit"], 8);
+        assert_eq!(serialized["reply_timeout_secs"], 120);
+    }
+
+    #[test]
+    fn global_config_default_contains_group_chat_section() {
+        let config = GlobalConfig::default();
+        assert_eq!(config.group_chat.queue_limit, 20);
+        assert_eq!(config.group_chat.member_limit, 50);
+        assert_eq!(config.group_chat.reply_timeout_secs, 300);
+
+        // Serialized shape exposes the `group_chat` section for dot-path reads.
+        let value = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(value["group_chat"]["queue_limit"], 20);
+        assert_eq!(value["group_chat"]["member_limit"], 50);
+        assert_eq!(value["group_chat"]["reply_timeout_secs"], 300);
     }
 }

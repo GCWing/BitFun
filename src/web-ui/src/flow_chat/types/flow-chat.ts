@@ -753,3 +753,62 @@ export interface FlowChatConfig {
   maxHistoryRounds: number;
   enableVirtualScroll: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Group chat types (type-contract v1.3 §2.1, R-GC-13)
+// ---------------------------------------------------------------------------
+
+// P1-9 修复：枚举统一 snake_case（与后端 serde 一致）——'round_robin' 非 'round-robin'
+export type GroupChatMode = 'free' | 'round_robin';
+
+// P0-2 修复：主人保留字（与后端 GROUP_MASTER_ACTOR 一致）
+export const GROUP_MASTER_ACTOR = '__master__';
+
+// 复审 P0-1 修复：tagged union（internally tagged，与后端 serde(tag="kind") 一致）
+// 形态：{kind:'master'} / {kind:'claw',sessionId,agentType} / {kind:'all'}
+export type GroupChatActor =
+  | { kind: 'master' }
+  | { kind: 'claw'; sessionId: string; agentType: string }
+  | { kind: 'all' };   // @全体（复审 P1-4 修复）
+
+export interface GroupChatRoom {
+  schemaVersion: number;
+  roomId: string;
+  name: string;
+  owner: GroupChatActor;
+  mode: GroupChatMode;
+  roundRobinCursor: number;
+  createdAt: number;
+  lastActiveAt: number;
+  status: 'active' | 'archived';
+  memberLimit: number;
+}
+
+export interface GroupChatMember {
+  sessionId: string;
+  role: 'owner' | 'member';
+  joinedAt: number;
+  agentType: string;      // 必须 'Claw'
+  displayName?: string;
+}
+
+export interface GroupChatMessage {
+  messageId: string;
+  roomId: string;
+  author: GroupChatActor;
+  kind: 'user' | 'agent' | 'system';
+  content: string;
+  mentionTargets: GroupChatActor[];
+  replyToMessageId?: string;
+  timestamp: number;
+  status: 'pending' | 'delivered' | 'replied' | 'failed';
+}
+
+export interface GroupChatState {
+  rooms: Map<string, GroupChatRoom>;
+  activeRoomId: string | null;
+  members: Map<string, GroupChatMember[]>;   // roomId → 成员（P1-11 前端也单源）
+  messages: Map<string, GroupChatMessage[]>; // roomId → 消息
+  mode: GroupChatMode;
+  roundRobinCursor: number;
+}

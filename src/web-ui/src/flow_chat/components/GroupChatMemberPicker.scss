@@ -1,0 +1,127 @@
+.group-chat-member-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  min-width: 200px;
+  background: var(--color-surface, #1f1f1f);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 8px;
+  color: var(--color-text, #e5e5e5);
+
+  &__members {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  &__member {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--color-surface-raised, #262626);
+    font-size: 13px;
+  }
+
+  &__member-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__role {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    padding: 2px 5px;
+    border-radius: 4px;
+
+    &--owner {
+      color: var(--color-warning, #d9a13b);
+      background: rgba(217, 161, 59, 0.12);
+    }
+
+    &--member {
+      color: var(--color-text-dim, #999);
+      background: rgba(255, 255, 255, 0.06);
+    }
+  }
+
+  &__leave {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-danger, #e5534b);
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(229, 83, 75, 0.12);
+    }
+  }
+
+  &__add {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__add-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border: 1px dashed var(--color-border, #444);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-accent, #4f8cff);
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-accent-dim, rgba(79, 140, 255, 0.08));
+    }
+  }
+
+  &__add-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 140px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border, #333);
+    border-radius: 6px;
+    padding: 4px;
+  }
+
+  &__add-item {
+    text-align: left;
+    padding: 5px 8px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text, #e5e5e5);
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-accent-dim, rgba(79, 140, 255, 0.12));
+    }
+  }
+
+  &__empty {
+    color: var(--color-text-dim, #999);
+    font-size: 12px;
+    text-align: center;
+    padding: 8px 0;
+  }
+}

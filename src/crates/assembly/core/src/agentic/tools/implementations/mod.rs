@@ -38,13 +38,12 @@ pub mod get_time_tool;
 pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
-pub mod legion_control_tool;
+pub mod group_chat_router;
+pub mod group_chat_tool;
 pub mod knowledge_base_search_tool;
+pub mod legion_control_tool;
 pub mod list_models_tool;
 pub mod ls_tool;
-pub mod plan_list_tool;
-pub mod plan_read_tool;
-pub mod plan_update_tool;
 #[cfg(feature = "tools-mcp")]
 pub mod mcp_tools;
 #[cfg(feature = "tools-miniapp")]
@@ -57,6 +56,9 @@ pub mod miniapp_publish_tool;
 pub mod page_deploy_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod page_publish_tool;
+pub mod plan_list_tool;
+pub mod plan_read_tool;
+pub mod plan_update_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod playbook_tool;
 #[cfg(feature = "tools-git")]
@@ -113,8 +115,9 @@ pub use get_time_tool::GetTimeTool;
 pub use git_tool::GitTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;
-pub use legion_control_tool::LegionControlTool;
+pub use group_chat_tool::GroupChatTool;
 pub use knowledge_base_search_tool::KnowledgeBaseSearchTool;
+pub use legion_control_tool::LegionControlTool;
 pub use list_models_tool::ListModelsTool;
 pub use ls_tool::LSTool;
 #[cfg(feature = "tools-mcp")]

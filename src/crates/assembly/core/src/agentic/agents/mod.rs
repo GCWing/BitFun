@@ -181,6 +181,9 @@ pub fn subagent_default_tools() -> Vec<String> {
     if !tools.contains(&"SessionControl".to_string()) {
         tools.push("SessionControl".to_string());
     }
+    if !tools.contains(&"group_chat".to_string()) {
+        tools.push("group_chat".to_string());
+    }
     tools
 }
 

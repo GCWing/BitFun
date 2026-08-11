@@ -76,8 +76,8 @@ use crate::agentic::tools::pipeline::{
     PrimaryModelFacts, SubagentParentInfo, ToolExecutionContext, ToolExecutionOptions, ToolPipeline,
 };
 use crate::agentic::tools::{
-    clear_session_role, clear_session_restrictions, get_session_role, miniapp_agent_run_tool_restrictions,
-    set_session_role, subagent_tool_restrictions,
+    clear_session_restrictions, clear_session_role, get_session_role,
+    miniapp_agent_run_tool_restrictions, set_session_role, subagent_tool_restrictions,
     tool_restrictions_for_delegation_policy as runtime_tool_restrictions_for_delegation_policy,
     AgentRole, ToolRuntimeRestrictions,
 };
@@ -123,7 +123,7 @@ use bitfun_events::agentic::SubagentCompletionStatus;
 use bitfun_events::{ToolEventData, ToolEventIdentity};
 use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_runtime_ports::{
-    AcpClientPort, agent_workspace_references_from_metadata, resolve_permission_mode,
+    agent_workspace_references_from_metadata, resolve_permission_mode, AcpClientPort,
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentMessageWorkspaceReferencesRequest,
     AgentSessionComposerUpdate, AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind,
     AgentThreadGoalDeliveryRequest, AgentWorkspaceReference, AgentWorkspaceReferenceKind,
@@ -473,6 +473,13 @@ fn runtime_tool_restrictions_for_session_lifetime(
             // children out of a throwaway scope.
             "LegionControl",
             "LegionControl is unavailable in connection-scoped transient Sessions.",
+        ),
+        (
+            // Group chat rooms persist durable member back-indexes and message
+            // files; a connection-scoped transient session must not mutate
+            // durable group state.
+            "group_chat",
+            "group_chat is unavailable in connection-scoped transient Sessions.",
         ),
     ] {
         restrictions.denied_tool_names.insert(tool_name.to_string());
@@ -2875,18 +2882,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // （Read/Glob/Grep）与 Communicate 类（TodoWrite/SessionMessage 等）。
         // 形态判断覆盖全部执行者 agent_type（GeneralPurpose/agentic 等），
         // 根治"派发形态不同 → 模板不同"的硬编码漂移。
-        let register_result = if crate::agentic::tools::restrictions::is_main_session(kind, created_by)
-        {
-            crate::agentic::tools::restrictions::register_main_session(session_id, role.clone())
-        } else if role == AgentRole::Executor && Self::is_executor_agent_type(&agent_type) {
-            crate::agentic::tools::restrictions::set_session_role_with_restrictions(
-                session_id,
-                role.clone(),
-                crate::agentic::tools::restrictions::general_purpose_tool_restrictions(),
-            )
-        } else {
-            set_session_role(session_id, role)
-        };
+        let register_result =
+            if crate::agentic::tools::restrictions::is_main_session(kind, created_by) {
+                crate::agentic::tools::restrictions::register_main_session(session_id, role.clone())
+            } else if role == AgentRole::Executor && Self::is_executor_agent_type(agent_type) {
+                crate::agentic::tools::restrictions::set_session_role_with_restrictions(
+                    session_id,
+                    role.clone(),
+                    crate::agentic::tools::restrictions::general_purpose_tool_restrictions(),
+                )
+            } else {
+                set_session_role(session_id, role)
+            };
         if let Err(e) = register_result {
             warn!(
                 "Failed to register RBAC role for session {}: {}",
@@ -2956,8 +2963,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             metadata.created_by.as_deref(),
         ) {
             crate::agentic::tools::restrictions::register_main_session(session_id, role.clone())
-        } else if role == AgentRole::Executor
-            && Self::is_executor_agent_type(&metadata.agent_type)
+        } else if role == AgentRole::Executor && Self::is_executor_agent_type(&metadata.agent_type)
         {
             crate::agentic::tools::restrictions::set_session_role_with_restrictions(
                 session_id,
@@ -3187,7 +3193,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         };
         let mut lines = vec![
             "[Legion Context]".to_string(),
-            format!("Assigned role: {} — {}", role.as_str(), Self::role_duty_summary(role)),
+            format!(
+                "Assigned role: {} — {}",
+                role.as_str(),
+                Self::role_duty_summary(role)
+            ),
         ];
         if let Some(creator_id) = session.created_by.as_deref() {
             if let Some(creator_role) = get_session_role(creator_id) {
@@ -3227,7 +3237,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     async fn session_end_cleanup(&self, session_id: &str) {
         clear_session_role(session_id);
         clear_session_restrictions(session_id);
-        self.subagent_timeout_registry.write().await.remove(session_id);
+        self.subagent_timeout_registry
+            .write()
+            .await
+            .remove(session_id);
         self.active_subagent_executions.remove(session_id);
         if let Some(scheduler) = get_global_scheduler() {
             scheduler.cleanup_session_state(session_id).await;
@@ -5949,7 +5962,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     /// task used by Agent Runtime callers, then await its terminal result for
     /// the existing Desktop compatibility API.
     pub async fn compact_session_manually(&self, session_id: String) -> BitFunResult<()> {
-        self.compact_session_with_outcome(session_id).await.map(|_| ())
+        self.compact_session_with_outcome(session_id)
+            .await
+            .map(|_| ())
     }
 
     /// Compact the active session context and return the compaction outcome
@@ -6652,10 +6667,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             // Subagent sessions default to auto-approve so unattended delegation
             // never blocks on user approval prompts; an explicit message value
             // still wins via the branch above.
-            context_vars.insert(
-                AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
-                "true".to_string(),
-            );
+            context_vars.insert(AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(), "true".to_string());
         }
         // Resolve the permission mode once per submission. Downstream rounds and
         // delegated subagents read this value instead of re-resolving the layers
@@ -7698,7 +7710,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
         postorder.reverse();
-        if !metadata.iter().any(|member| member.session_id == session_id)
+        if !metadata
+            .iter()
+            .any(|member| member.session_id == session_id)
             && self.session_manager.get_session(session_id).is_none()
         {
             return Err(BitFunError::NotFound(format!(
@@ -8993,7 +9007,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     async fn get_subagent_concurrency_limiter(&self) -> SubagentConcurrencyLimiter {
-        let configured = match GlobalConfigManager::get_service().await {            Ok(config_service) => match config_service
+        let configured = match GlobalConfigManager::get_service().await {
+            Ok(config_service) => match config_service
                 .get_config::<usize>(Some("ai.subagent_max_concurrency"))
                 .await
             {
@@ -10439,7 +10454,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // SubagentStop hooks observe the settled subagent turn. A blocking
         // decision is recorded for the operator; it does not restart the
         // subagent, because its result has already been persisted.
-        if let Some(reason) = native_hooks::dispatch_subagent_stop(            subagent_hook_facts,
+        if let Some(reason) = native_hooks::dispatch_subagent_stop(
+            subagent_hook_facts,
             &session_id,
             &agent_type,
             Some(response_text.as_str()).filter(|text| !text.trim().is_empty()),
@@ -11734,9 +11750,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // the caller opts in (e.g. read-only listing); mutating Task operations
         // (cancel/send_input/history) pass false so a scope miss is "not found"
         // instead of reaching subagents owned by other conversations.
-        let scope = self
-            .session_subtree_scope(parent_session_id)
-            .await;
+        let scope = self.session_subtree_scope(parent_session_id).await;
         self.background_subagent_outcomes
             .resolve_agent_id_in_scope(&scope, agent_id, allow_global_fallback)
             .await
@@ -11748,9 +11762,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
         // R-2: List background tasks spawned anywhere in the caller's session
         // subtree so a conversation can manage every subagent task it owns.
-        let scope = self
-            .session_subtree_scope(parent_session_id)
-            .await;
+        let scope = self.session_subtree_scope(parent_session_id).await;
         self.background_subagent_outcomes
             .list_records_for_parents(&scope)
             .await
@@ -13451,10 +13463,8 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
                 worktree_id.map(|worktree_id| (worktree_id, project_workspace_path))
             });
         if let Some((worktree_id, project_workspace_path)) = worktree_binding {
-            let worktree_request_id = format!(
-                "session-rename:{}:{}",
-                request.session_id, worktree_id
-            );
+            let worktree_request_id =
+                format!("session-rename:{}:{}", request.session_id, worktree_id);
             if let Err(link_error) = WorktreeService::update_display_name(
                 &project_workspace_path,
                 &worktree_request_id,
@@ -14951,9 +14961,8 @@ fn merge_prepended_messages_for_turn(
 mod tests {
     use super::{
         apply_primary_agent_model_default, background_subagent_follow_up_notice,
-        btw_session_memory_mode,
-        build_subagent_session_relationship, lineage_active_turn_after_transcript,
-        lineage_post_admission_cancellation_error,
+        btw_session_memory_mode, build_subagent_session_relationship,
+        lineage_active_turn_after_transcript, lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency_with_cap,
         permission_mode_from_metadata, register_session_tree_edge_idempotent,
@@ -15082,10 +15091,8 @@ mod tests {
     async fn session_creation_registers_rbac_role_in_registry() {
         use crate::agentic::tools::{get_session_role, AgentRole};
         let (coordinator, _session_manager) = test_coordinator();
-        let workspace = std::env::temp_dir().join(format!(
-            "bitfun-rbac-role-test-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let workspace =
+            std::env::temp_dir().join(format!("bitfun-rbac-role-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&workspace).expect("create workspace dir");
         let workspace_path = workspace.to_string_lossy().into_owned();
 
@@ -15220,7 +15227,15 @@ mod tests {
         // context-level default (empty allowlist) = allow all, so all main
         // flow tools remain available.
         let effective = ToolRuntimeRestrictions::default();
-        for tool in ["Read", "Grep", "Glob", "Edit", "Delete", "ExecCommand", "WebSearch"] {
+        for tool in [
+            "Read",
+            "Grep",
+            "Glob",
+            "Edit",
+            "Delete",
+            "ExecCommand",
+            "WebSearch",
+        ] {
             assert!(
                 effective.ensure_tool_allowed(tool).is_ok(),
                 "main session default restrictions must allow {tool}"
@@ -15234,7 +15249,9 @@ mod tests {
 
     #[tokio::test]
     async fn main_session_restore_keeps_exemption_and_subagent_keeps_executor_template() {
-        use crate::agentic::tools::{clear_session_role, get_session_restrictions, get_session_role, AgentRole};
+        use crate::agentic::tools::{
+            clear_session_role, get_session_restrictions, get_session_role, AgentRole,
+        };
         let (coordinator, _session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
         let workspace_path = workspace.path().to_string_lossy().into_owned();
@@ -15304,7 +15321,10 @@ mod tests {
             .expect("subagent must land the Executor template");
         assert!(
             sub_restrictions
-                .ensure_operation_allowed(bitfun_agent_tools::OperationClass::ExecuteCode, "ExecCommand")
+                .ensure_operation_allowed(
+                    bitfun_agent_tools::OperationClass::ExecuteCode,
+                    "ExecCommand"
+                )
                 .is_ok(),
             "subagent Executor template must allow ExecuteCode"
         );
@@ -15313,7 +15333,9 @@ mod tests {
 
     #[tokio::test]
     async fn restore_session_view_registers_persisted_role_for_main_session() {
-        use crate::agentic::tools::{clear_session_role, get_session_restrictions, get_session_role, AgentRole};
+        use crate::agentic::tools::{
+            clear_session_role, get_session_restrictions, get_session_role, AgentRole,
+        };
         let (coordinator, _session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
         let workspace_path = workspace.path().to_string_lossy().into_owned();
@@ -15344,8 +15366,7 @@ mod tests {
             .await
             .expect("restore session view");
         assert_eq!(
-            restored.session_id,
-            main_session_id,
+            restored.session_id, main_session_id,
             "restore_session_view returns the restored session"
         );
         assert_eq!(
@@ -15366,7 +15387,9 @@ mod tests {
         // P1-S2 断言：storage-path 系 restore 变体（desktop 生产主入口）必须
         // 与 workspace 版对齐，恢复后重注册持久化 RBAC 角色——否则进程重启后
         // 子代理角色静默丢失、回落到 context 级空模板全放行。
-        use crate::agentic::tools::{clear_session_role, get_session_restrictions, get_session_role, AgentRole};
+        use crate::agentic::tools::{
+            clear_session_role, get_session_restrictions, get_session_role, AgentRole,
+        };
         let (coordinator, session_manager) = test_persistent_coordinator();
         let workspace = tempfile::tempdir().expect("workspace");
         let workspace_path = workspace.path().to_string_lossy().into_owned();
@@ -15428,10 +15451,7 @@ mod tests {
             .expect("resolve storage path");
         clear_session_role(&sub_session_id);
         let (restored, _turns) = coordinator
-            .restore_internal_session_with_turns_from_storage_path(
-                &storage_path,
-                &sub_session_id,
-            )
+            .restore_internal_session_with_turns_from_storage_path(&storage_path, &sub_session_id)
             .await
             .expect("restore subagent from storage path");
         assert_eq!(restored.session_id, sub_session_id);
@@ -15661,10 +15681,8 @@ mod tests {
             set_session_role, update_restrictions, AgentRole, ToolRuntimeRestrictionsPatch,
         };
         let (coordinator, _session_manager) = test_coordinator();
-        let workspace = std::env::temp_dir().join(format!(
-            "bitfun-lifecycle-test-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let workspace =
+            std::env::temp_dir().join(format!("bitfun-lifecycle-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&workspace).expect("create workspace dir");
         let workspace_path = workspace.to_string_lossy().into_owned();
 
@@ -15709,7 +15727,11 @@ mod tests {
 
         // SessionEnd cleanup: role + restrictions unregistered, idempotent.
         coordinator.session_end_cleanup(&session_id).await;
-        assert_eq!(get_session_role(&session_id), None, "role must be unregistered");
+        assert_eq!(
+            get_session_role(&session_id),
+            None,
+            "role must be unregistered"
+        );
         assert_eq!(
             get_session_restrictions(&session_id),
             None,
@@ -15737,7 +15759,10 @@ mod tests {
 
         let session = coordinator
             .create_session_with_workspace_and_creator_internal(
-                Some(format!("agentic-exec-{}", uuid::Uuid::new_v4().to_string().split('-').next().unwrap())),
+                Some(format!(
+                    "agentic-exec-{}",
+                    uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
+                )),
                 "agentic executor".to_string(),
                 "agentic".to_string(),
                 SessionConfig::default(),
@@ -16733,10 +16758,7 @@ mod tests {
         let mut accepted = 0usize;
         let mut rejected = 0usize;
         for _ in 0..30 {
-            match coordinator
-                .check_and_record_subagent_dispatch(parent)
-                .await
-            {
+            match coordinator.check_and_record_subagent_dispatch(parent).await {
                 Ok(()) => accepted += 1,
                 Err(error) => {
                     rejected += 1;
@@ -16851,6 +16873,7 @@ mod tests {
             "Cron",
             "ControlHub",
             "LegionControl",
+            "group_chat",
         ] {
             assert!(
                 !transient.is_tool_allowed(tool_name),
@@ -16868,6 +16891,7 @@ mod tests {
             "Cron",
             "ControlHub",
             "LegionControl",
+            "group_chat",
         ] {
             assert!(durable.is_tool_allowed(tool_name));
         }
@@ -17828,12 +17852,15 @@ mod tests {
             "children must be deleted before the root"
         );
         for member_id in [&root_id, &child_id, &grandchild_id] {
-            assert!(session_manager
-                .persistence_manager()
-                .load_session_metadata(&storage_path, member_id)
-                .await
-                .expect("metadata lookup")
-                .is_none(), "session {member_id} must be fully removed");
+            assert!(
+                session_manager
+                    .persistence_manager()
+                    .load_session_metadata(&storage_path, member_id)
+                    .await
+                    .expect("metadata lookup")
+                    .is_none(),
+                "session {member_id} must be fully removed"
+            );
             assert!(session_manager.get_session(member_id).is_none());
         }
     }
@@ -17877,12 +17904,15 @@ mod tests {
             .await
             .expect("session delete must succeed despite worktree remove failure");
 
-        assert!(session_manager
-            .persistence_manager()
-            .load_session_metadata(&storage_path, &session_id)
-            .await
-            .expect("metadata lookup")
-            .is_none(), "session must be fully removed");
+        assert!(
+            session_manager
+                .persistence_manager()
+                .load_session_metadata(&storage_path, &session_id)
+                .await
+                .expect("metadata lookup")
+                .is_none(),
+            "session must be fully removed"
+        );
     }
 
     #[tokio::test]
@@ -17987,7 +18017,10 @@ mod tests {
             .expect("start pending turn");
         assert!(
             matches!(
-                session_manager.get_session(&session_id).expect("session").state,
+                session_manager
+                    .get_session(&session_id)
+                    .expect("session")
+                    .state,
                 SessionState::Processing { .. }
             ),
             "precondition: session must be Processing"
@@ -18258,10 +18291,7 @@ mod tests {
             .delete_session_locked(workspace.path(), &session_id)
             .await
             .expect_err("deletion must fail on an unfinished revert transition");
-        assert!(
-            !error.to_string().is_empty(),
-            "expected a deletion error"
-        );
+        assert!(!error.to_string().is_empty(), "expected a deletion error");
         assert!(
             !session_manager.is_session_deleted(&session_id),
             "failed deletion must roll back the deleted marker"
@@ -19598,7 +19628,10 @@ mod tests {
     fn clamps_subagent_max_concurrency_into_safe_range() {
         assert_eq!(normalize_subagent_max_concurrency_with_cap(0, 64), 1);
         assert_eq!(normalize_subagent_max_concurrency_with_cap(5, 64), 5);
-        assert_eq!(normalize_subagent_max_concurrency_with_cap(usize::MAX, 64), 64);
+        assert_eq!(
+            normalize_subagent_max_concurrency_with_cap(usize::MAX, 64),
+            64
+        );
         // 阈值参数配置化：可调硬上限参与钳制。
         assert_eq!(normalize_subagent_max_concurrency_with_cap(0, 16), 1);
         assert_eq!(normalize_subagent_max_concurrency_with_cap(32, 16), 16);
@@ -20883,7 +20916,7 @@ mod tests {
                     dialog_turn_id: "parent-turn".to_string(),
                     tool_call_id: "task-tool".to_string(),
                     depth: None,
-                role: None,
+                    role: None,
                 },
                 context: HashMap::new(),
                 permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
@@ -20961,7 +20994,7 @@ mod tests {
                     dialog_turn_id: "parent-turn".to_string(),
                     tool_call_id: "task-tool".to_string(),
                     depth: None,
-                role: None,
+                    role: None,
                 },
                 context: HashMap::new(),
                 permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
@@ -21029,7 +21062,7 @@ mod tests {
                     dialog_turn_id: "parent-turn".to_string(),
                     tool_call_id: "task-tool".to_string(),
                     depth: None,
-                role: None,
+                    role: None,
                 },
                 context: HashMap::new(),
                 permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
@@ -21087,7 +21120,7 @@ mod tests {
                     dialog_turn_id: "parent-turn-2".to_string(),
                     tool_call_id: "task-tool-2".to_string(),
                     depth: None,
-                role: None,
+                    role: None,
                 },
                 context: HashMap::new(),
                 permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
@@ -21214,7 +21247,9 @@ mod tests {
             "transient child must be discarded when its execution scope drops"
         );
         assert!(
-            session_manager.get_session(&grandchild_session_id).is_none(),
+            session_manager
+                .get_session(&grandchild_session_id)
+                .is_none(),
             "transient grandchild must be discarded when its execution scope drops"
         );
         assert!(
@@ -21920,13 +21955,22 @@ mod tests {
         let tree = SessionTreeManager::new(bitfun_core_types::session_tree::MAX_TREE_DEPTH);
         // A persistent subagent re-executes the same registration repeatedly;
         // only the first call must create the edge (COORD-14).
-        assert!(register_session_tree_edge_idempotent(&tree, "parent", "child", 1));
-        assert!(!register_session_tree_edge_idempotent(&tree, "parent", "child", 1));
+        assert!(register_session_tree_edge_idempotent(
+            &tree, "parent", "child", 1
+        ));
+        assert!(!register_session_tree_edge_idempotent(
+            &tree, "parent", "child", 1
+        ));
         assert_eq!(tree.get_children("parent"), vec!["child".to_string()]);
         assert_eq!(tree.get_parent("child"), Some("parent".to_string()));
 
         // A different parent still produces a new edge.
-        assert!(register_session_tree_edge_idempotent(&tree, "other-parent", "child", 1));
+        assert!(register_session_tree_edge_idempotent(
+            &tree,
+            "other-parent",
+            "child",
+            1
+        ));
         assert_eq!(tree.get_children("other-parent"), vec!["child".to_string()]);
     }
 
