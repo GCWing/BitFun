@@ -365,7 +365,11 @@ impl StartupPage {
     where
         B::Error: Send + Sync + 'static,
     {
-        terminal.clear()?;
+        // ratatui 0.30 的 `Terminal::clear()` 会先查询光标位置（crossterm 发 DSR
+        // `ESC[6n` 等待应答），在无人应答的 PTY 测试环境中会超时失败。
+        // 直接清后端（`clear_region(All)`，语义与 0.29 的 `Terminal::clear()` 一致）
+        // 不查询光标位置；随后的首个 `terminal.draw` 即全量重绘，无需 back-buffer reset。
+        terminal.backend_mut().clear()?;
         let mut event_reader = crate::ui::input::EventReader::default();
 
         loop {
