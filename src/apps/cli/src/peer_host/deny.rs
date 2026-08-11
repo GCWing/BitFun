@@ -96,8 +96,18 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "dispatch_list_jobs",
     "dispatch_answer",
     "dispatch_append",
+    "dispatch_continue",
     "dispatch_load_transcript",
     "dispatch_save_transcript",
+    "speech_list_models",
+    "speech_download_model",
+    "speech_cancel_model_download",
+    "speech_delete_model",
+    "speech_verify_model",
+    "speech_start_input_session",
+    "speech_append_audio_chunk",
+    "speech_finish_input_session",
+    "speech_cancel_input_session",
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.
@@ -158,8 +168,28 @@ mod tests {
             "dispatch_list_jobs",
             "dispatch_answer",
             "dispatch_append",
+            "dispatch_continue",
             "dispatch_load_transcript",
             "dispatch_save_transcript",
+        ] {
+            assert!(is_local_only_command(command), "{command}");
+        }
+    }
+
+    /// The controller-side FE deny list is an optimization, not the boundary.
+    /// An older or non-FE controller still reaches this host.
+    #[test]
+    fn speech_capture_stays_on_the_controller_device() {
+        for command in [
+            "speech_list_models",
+            "speech_download_model",
+            "speech_cancel_model_download",
+            "speech_delete_model",
+            "speech_verify_model",
+            "speech_start_input_session",
+            "speech_append_audio_chunk",
+            "speech_finish_input_session",
+            "speech_cancel_input_session",
         ] {
             assert!(is_local_only_command(command), "{command}");
         }

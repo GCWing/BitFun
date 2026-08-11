@@ -37,6 +37,7 @@ import {
   unexpectedReachableLocalFeatures,
 } from './manifest-feature-helpers.mjs';
 import { checkCargoDependencyBoundariesSafely } from './cargo-dependency-boundaries.mjs';
+import { checkPeerCommandPolicySync } from './peer-command-policy.mjs';
 import {
   agentRuntimeIntegrationTestTargets,
   checkAgentRuntimeIntegrationTestTopology,
@@ -1125,6 +1126,7 @@ export function runCoreBoundaryCheck() {
   failures.push(...checkAgentRuntimeIntegrationTestTopology(ROOT));
   failures.push(...checkCliIntegrationTestTopology(ROOT));
   failures.push(...checkServiceIntegrationTestTopologies(ROOT));
+  failures.push(...checkPeerCommandPolicySync(ROOT));
 
   for (const rule of forbiddenManifestDependencyRules) {
     checkForbiddenManifestDependencyRule(rule);
