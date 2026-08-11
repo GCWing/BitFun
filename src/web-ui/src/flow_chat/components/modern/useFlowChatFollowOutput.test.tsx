@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tailSpacerPxForViewport } from './flowChatTailFollow';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
+import { useFlowChatViewportOwner } from './useFlowChatViewportOwner';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -52,6 +53,9 @@ function Harness({
   onController,
 }: HarnessProps) {
   const scrollerRef = React.useRef<HTMLElement | null>(scroller);
+  // The real register, not a stand-in: what this hook is allowed to write is
+  // now part of its behaviour, so a permissive fake would test the wrong thing.
+  const viewportOwner = useFlowChatViewportOwner(scrollerRef);
   const controller = useFlowChatFollowOutput({
     activeSessionId: 'session-1',
     latestTurnId,
@@ -65,6 +69,7 @@ function Harness({
     scrollTurnToTop,
     resolveTurnTopScrollTop,
     isOpeningViewport: () => isOpeningViewport,
+    viewportOwner,
   });
   onController(controller);
   return <div data-following={String(controller.isFollowingOutput)} />;

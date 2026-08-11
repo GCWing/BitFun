@@ -9,6 +9,7 @@
  */
 
 import { useRef, useCallback, useState, useEffect } from 'react';
+import { traceViewportPlacement } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
 import type { VirtualItem } from '../store/modernFlowChatStore';
 import type { FlowToolItem } from '../types/flow-chat';
 import { getEffectiveToolName, projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
@@ -176,7 +177,25 @@ export function useVisibleTaskInfo(options: UseVisibleTaskInfoOptions): UseVisib
     const elementRect = element.getBoundingClientRect();
     const offset = elementRect.top - scrollerRect.top - VIEWPORT_TOP_OFFSET_PX + scroller.scrollTop;
 
-    scroller.scrollTo({ top: offset, behavior: 'smooth' });
+    /*
+     * Not routed through the viewport register, and traced because of it. This
+     * animates for as long as it takes, during which the anchor sees a viewport
+     * moving with nobody owning it — the shape that destroyed the snap back. The
+     * outcome sample is what would show it: a drift back towards where the
+     * reader was is this being undone rather than never issued.
+     */
+    traceViewportPlacement(
+      scroller,
+      {
+        location: 'visibleTask.scrollToTask',
+        message: 'sticky Task indicator placed its Task at the viewport top',
+        targetPx: offset,
+        // Animated, so it is still travelling at the default sample.
+        settleAfterMs: 900,
+        data: () => ({ itemId: info.itemId, virtualIndex: info.virtualIndex }),
+      },
+      () => scroller.scrollTo({ top: offset, behavior: 'smooth' }),
+    );
   }, [visibleTaskInfo, scrollerRef]);
 
   return {

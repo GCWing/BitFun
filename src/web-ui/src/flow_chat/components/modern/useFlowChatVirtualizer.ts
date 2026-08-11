@@ -27,6 +27,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import type { FlowChatViewportOwner } from './flowChatViewportOwnership';
 
 /** Item-count overscan. Roughly two Turns either side of the viewport. */
 const FLOW_CHAT_OVERSCAN_ITEMS = 6;
@@ -80,6 +81,21 @@ export interface UseFlowChatVirtualizerOptions<T> {
    * items below the target are still measuring, keeps the same gap.
    */
   scrollPaddingStartPx: number;
+  /**
+   * Every write the library makes goes through this.
+   *
+   * `scrollToFn` is a first-class option, so `scrollToIndex`, `scrollToOffset`
+   * and the re-aim that follows them all arrive here — which is what makes
+   * "nothing moves the viewport unregistered" true rather than aspirational.
+   * The library's writes are a continuation of whoever asked for the aim, so
+   * they are attributed to that owner and not to the library.
+   */
+  writeViewport: (request: {
+    owner: FlowChatViewportOwner;
+    topPx: number;
+    behavior?: ScrollBehavior;
+    holdForMs?: number;
+  }) => boolean;
 }
 
 export interface FlowChatVirtualizer {
@@ -109,10 +125,23 @@ export interface FlowChatVirtualizer {
    */
   scrollItemIntoView: (
     index: number,
-    options: { align: 'start' | 'center'; behavior?: 'auto' | 'smooth' },
+    options: {
+      align: 'start' | 'center';
+      behavior?: 'auto' | 'smooth';
+      /** Who the aim, and every re-aim it produces, belongs to. */
+      owner: FlowChatViewportOwner;
+      holdForMs?: number;
+    },
   ) => void;
   /** Scroll to an offset in scroller coordinates. */
-  scrollToOffset: (offsetPx: number, behavior?: 'auto' | 'smooth') => void;
+  scrollToOffset: (
+    offsetPx: number,
+    options: {
+      behavior?: 'auto' | 'smooth';
+      owner: FlowChatViewportOwner;
+      holdForMs?: number;
+    },
+  ) => void;
 }
 
 export interface FlowChatVisibleItemRange {
@@ -188,9 +217,23 @@ export function useFlowChatVirtualizer<T>({
   getItemKey,
   estimateItemHeightPx,
   scrollPaddingStartPx,
+  writeViewport,
 }: UseFlowChatVirtualizerOptions<T>): FlowChatVirtualizer {
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const writeViewportRef = useRef(writeViewport);
+  writeViewportRef.current = writeViewport;
+  /**
+   * Who the aim currently in flight belongs to.
+   *
+   * The library re-aims for as long as the measurements under its target keep
+   * moving, and those later writes arrive with no caller of ours on the stack.
+   * They are still the same request, so they are attributed to whoever made
+   * it — which is also what lets a gesture preempt a navigation that is still
+   * chasing its Turn.
+   */
+  const aimOwnerRef = useRef<FlowChatViewportOwner>('one-shot-navigation');
+  const aimHoldForMsRef = useRef<number | undefined>(undefined);
   const getItemKeyRef = useRef(getItemKey);
   getItemKeyRef.current = getItemKey;
   const estimateItemHeightRef = useRef(estimateItemHeightPx);
@@ -235,6 +278,20 @@ export function useFlowChatVirtualizer<T>({
     overscan: FLOW_CHAT_OVERSCAN_ITEMS,
     scrollMargin: contentStartPx,
     scrollPaddingStart: scrollPaddingStartPx,
+    /*
+     * The library's only way out to the DOM. Routing it through the register
+     * is what closes the gap the contract used to describe as unclosable: a
+     * write from inside the library is now a write like any other, refusable
+     * by whatever outranks the aim it came from.
+     */
+    scrollToFn: (offsetPx, { behavior }) => {
+      writeViewportRef.current({
+        owner: aimOwnerRef.current,
+        topPx: offsetPx,
+        behavior,
+        holdForMs: aimHoldForMsRef.current,
+      });
+    },
   });
   // An instance field rather than an option, so it is assigned here — before
   // any measurement callback can reach `resizeItem`.
@@ -274,16 +331,35 @@ export function useFlowChatVirtualizer<T>({
 
   const scrollItemIntoView = useCallback((
     index: number,
-    options: { align: 'start' | 'center'; behavior?: 'auto' | 'smooth' },
+    options: {
+      align: 'start' | 'center';
+      behavior?: 'auto' | 'smooth';
+      owner: FlowChatViewportOwner;
+      holdForMs?: number;
+    },
   ) => {
+    aimOwnerRef.current = options.owner;
+    aimHoldForMsRef.current = options.holdForMs;
     virtualizer.scrollToIndex(index, {
       align: options.align,
       behavior: options.behavior ?? 'auto',
     });
   }, [virtualizer]);
 
-  const scrollToOffset = useCallback((offsetPx: number, behavior: 'auto' | 'smooth' = 'auto') => {
-    virtualizer.scrollToOffset(offsetPx, { align: 'start', behavior });
+  const scrollToOffset = useCallback((
+    offsetPx: number,
+    options: {
+      behavior?: 'auto' | 'smooth';
+      owner: FlowChatViewportOwner;
+      holdForMs?: number;
+    },
+  ) => {
+    aimOwnerRef.current = options.owner;
+    aimHoldForMsRef.current = options.holdForMs;
+    virtualizer.scrollToOffset(offsetPx, {
+      align: 'start',
+      behavior: options.behavior ?? 'auto',
+    });
   }, [virtualizer]);
 
   return {

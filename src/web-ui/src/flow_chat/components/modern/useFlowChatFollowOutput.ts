@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import {
+  roundViewportPx,
+  traceViewportRepeating,
+} from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
+import type { FlowChatViewportOwnerApi } from './useFlowChatViewportOwner';
+import { SNAP_BACK_HOLD_MS } from './flowChatViewportOwnership';
+import {
   contentEndScrollTop,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
   memorylessFollowState,
@@ -38,6 +44,11 @@ interface UseFlowChatFollowOutputOptions {
   resolveTurnTopScrollTop: (turnId: string) => number | null;
   /** True while the transcript is still hidden for the opening reveal. */
   isOpeningViewport: () => boolean;
+  /**
+   * Who is moving the viewport. Every write below goes through it, so that
+   * nothing else has to carry a private opinion about when this hook is busy.
+   */
+  viewportOwner: FlowChatViewportOwnerApi;
 }
 
 export interface ViewportResizeInput {
@@ -66,15 +77,6 @@ interface UseFlowChatFollowOutputResult {
   handleViewportResize: (input: ViewportResizeInput) => void;
   /** Offset the follow rule owns, or `null` when it does not own the viewport. */
   getFollowTargetScrollTop: () => number | null;
-  /**
-   * A snap back out of the reserved blank is animating right now.
-   *
-   * Ownership of the viewport passes to follow-output only once it lands, so
-   * without this the animation belongs to nobody for its whole duration and
-   * anything correcting the viewport will treat its movement as a displacement
-   * to undo.
-   */
-  isSnapBackInFlight: () => boolean;
 }
 
 const BOTTOM_EPSILON_PX = 2;
@@ -122,6 +124,7 @@ export function useFlowChatFollowOutput({
   scrollTurnToTop,
   resolveTurnTopScrollTop,
   isOpeningViewport,
+  viewportOwner,
 }: UseFlowChatFollowOutputOptions): UseFlowChatFollowOutputResult {
   const [isFollowingOutput, setIsFollowingOutput] = useState(false);
   const isFollowingOutputRef = useRef(false);
@@ -297,7 +300,7 @@ export function useFlowChatFollowOutput({
     }
 
     if (!onTarget) {
-      scroller.scrollTop = next.target;
+      viewportOwner.write({ owner: 'follow-output', topPx: next.target });
     }
   }, [
     isOpeningViewport,
@@ -305,6 +308,7 @@ export function useFlowChatFollowOutput({
     readPinScrollTop,
     retirePin,
     scrollerRef,
+    viewportOwner,
   ]);
 
   const runFollowFrame = useCallback(() => {
@@ -360,6 +364,17 @@ export function useFlowChatFollowOutput({
     if (reason === 'new-turn') {
       pendingNewTurnIdRef.current = pinnedTurnToTop ? null : pinTurnId;
       if (!pinnedTurnToTop) {
+        /*
+         * The viewport is deliberately left exactly as it was, so the only
+         * evidence that a submission was answered at all is this line. A
+         * deferral with no `followOutput.enter` after it is the reader's
+         * "nothing happened when I sent a message".
+         */
+        traceViewportRepeating('follow|deferred-new-turn', {
+          location: 'followOutput.deferNewTurn',
+          message: 'new Turn is not in the transcript on screen yet, so the answer waits',
+          data: () => ({ turnId: pinTurnId }),
+        });
         return;
       }
     }
@@ -367,6 +382,24 @@ export function useFlowChatFollowOutput({
     isFollowingOutputRef.current = true;
     setIsFollowingOutput(true);
     settleFramesRef.current = SETTLE_FRAMES;
+    traceViewportRepeating(`follow|enter|${reason}`, {
+      location: 'followOutput.enter',
+      message: 'follow-output took the viewport',
+      data: () => ({
+        reason,
+        pinnedTurnId: pinnedTurnToTop ? pinTurnId : pinTurnIdRef.current,
+        isStreaming: isStreamingRef.current,
+        scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+      }),
+    });
+    /*
+     * Ownership is taken here rather than at each write, because following is
+     * continuous: between two frames of the loop the viewport is still ours,
+     * and a correction slipping into that gap is the thing this prevents. A
+     * refused claim is not a reason to stop following — the loop keeps its
+     * state and simply writes nothing until whoever outranks it is done.
+     */
+    viewportOwner.claim('follow-output');
 
     const scroller = scrollerRef.current;
     const contentEnd = scroller ? readContentEndScrollTop(scroller) : 0;
@@ -406,7 +439,11 @@ export function useFlowChatFollowOutput({
       // `runContentEndScroll` uses.
       if (scroller && Math.abs(scroller.scrollTop - pinTarget) > BOTTOM_EPSILON_PX) {
         smoothScrollFramesRef.current = SMOOTH_SCROLL_YIELD_FRAMES;
-        scroller.scrollTo({ top: pinTarget, behavior: 'smooth' });
+        viewportOwner.write({
+          owner: 'follow-output',
+          topPx: pinTarget,
+          behavior: 'smooth',
+        });
       }
       startFollowFrame();
       return;
@@ -427,6 +464,7 @@ export function useFlowChatFollowOutput({
 
     startFollowFrame();
   }, [
+    viewportOwner,
     readContentEndScrollTop,
     readPinScrollTop,
     retirePin,
@@ -441,13 +479,26 @@ export function useFlowChatFollowOutput({
    * here; the pin stays on record so a snap back can restore the mode rather
    * than fall through to the tail.
    */
-  const exitFollowOutput = useCallback((_reason: FollowOutputExitReason) => {
+  const exitFollowOutput = useCallback((reason: FollowOutputExitReason) => {
+    if (isFollowingOutputRef.current) {
+      traceViewportRepeating(`follow|exit|${reason}`, {
+        location: 'followOutput.exit',
+        message: 'follow-output gave the viewport up',
+        data: () => ({
+          reason,
+          pinnedTurnId: pinTurnIdRef.current,
+          scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+        }),
+      });
+    }
     isFollowingOutputRef.current = false;
     setIsFollowingOutput(false);
     smoothScrollFramesRef.current = 0;
     pendingSnapBackTargetRef.current = null;
+    viewportOwner.release('follow-output');
+    viewportOwner.release('snap-back');
     stopFollowFrame();
-  }, [stopFollowFrame]);
+  }, [scrollerRef, stopFollowFrame, viewportOwner]);
 
   /**
    * Re-assert ownership after a layout change. This deliberately does not force
@@ -498,9 +549,24 @@ export function useFlowChatFollowOutput({
     const pendingTarget = pendingSnapBackTargetRef.current;
     if (pendingTarget !== null) {
       pendingSnapBackTargetRef.current = null;
+      // The animation is over either way, so the hold ends here rather than
+      // waiting out its backstop.
+      viewportOwner.release('snap-back');
       // Take the viewport back only if our own snap is what landed it here. A
       // gesture that overrode the animation mid-flight belongs to the user.
-      if (Math.abs(scroller.scrollTop - pendingTarget) <= FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX) {
+      const arrived = Math.abs(scroller.scrollTop - pendingTarget)
+        <= FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX;
+      traceViewportRepeating(`snapBack|settled|${arrived}`, {
+        location: 'snapBack.settled',
+        message: arrived
+          ? 'snap back arrived and handed the viewport to follow'
+          : 'snap back was overridden before it arrived',
+        data: () => ({
+          targetPx: roundViewportPx(pendingTarget),
+          scrollTopPx: roundViewportPx(scroller.scrollTop),
+        }),
+      });
+      if (arrived) {
         enterFollowOutput('tail-snap-back');
         return;
       }
@@ -520,6 +586,19 @@ export function useFlowChatFollowOutput({
     const isFollowCorrectingViewport = isFollowingOutputRef.current
       && followFrameRef.current !== null;
     if (isFollowCorrectingViewport || isOpeningViewport()) {
+      // "The wheel went down and nothing brought me back" is this line or the
+      // one below it, and they are not the same fault.
+      traceViewportRepeating(
+        `snapBack|declined|${isFollowCorrectingViewport ? 'follow-correcting' : 'opening'}`,
+        {
+          location: 'snapBack.declined',
+          message: 'gesture came to rest, but the snap back is not this settle\'s business',
+          data: () => ({
+            reason: isFollowCorrectingViewport ? 'follow-correcting' : 'opening-reveal',
+            scrollTopPx: roundViewportPx(scroller.scrollTop),
+          }),
+        },
+      );
       return;
     }
 
@@ -530,12 +609,42 @@ export function useFlowChatFollowOutput({
       thresholdPx: FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
     });
     if (snapTo === null) {
+      traceViewportRepeating('snapBack|not-in-blank', {
+        location: 'snapBack.notNeeded',
+        message: 'gesture came to rest above the follow target, so nothing to snap back from',
+        data: () => ({
+          scrollTopPx: roundViewportPx(scroller.scrollTop),
+          followTargetPx: roundViewportPx(followTarget),
+        }),
+      });
       return;
     }
 
-    pendingSnapBackTargetRef.current = snapTo;
-    scroller.scrollTo({ top: snapTo, behavior: 'smooth' });
+    /*
+     * Held for the animation, not just the write. Ownership passing to
+     * follow-output only on landing is what left the snap belonging to nobody
+     * while it travelled, and the anchor undid its first 0.7px 958 times.
+     */
+    const issued = viewportOwner.write({
+      owner: 'snap-back',
+      topPx: snapTo,
+      behavior: 'smooth',
+      holdForMs: SNAP_BACK_HOLD_MS,
+    });
+    traceViewportRepeating(`snapBack|issued|${issued}`, {
+      location: 'snapBack.issued',
+      message: issued ? 'snap back is on its way' : 'snap back was refused the viewport',
+      data: () => ({
+        fromPx: roundViewportPx(scroller.scrollTop),
+        targetPx: roundViewportPx(snapTo),
+        followTargetPx: roundViewportPx(followTarget),
+      }),
+    });
+    if (issued) {
+      pendingSnapBackTargetRef.current = snapTo;
+    }
   }, [
+    viewportOwner,
     enterFollowOutput,
     isOpeningViewport,
     resolveFollowTargetScrollTop,
@@ -544,10 +653,6 @@ export function useFlowChatFollowOutput({
 
   const getFollowTargetScrollTop = useCallback(() => (
     isFollowingOutputRef.current ? followStateRef.current.target : null
-  ), []);
-
-  const isSnapBackInFlight = useCallback(() => (
-    pendingSnapBackTargetRef.current !== null
   ), []);
 
   /**
@@ -590,8 +695,23 @@ export function useFlowChatFollowOutput({
       return;
     }
 
+    traceViewportRepeating(`resize|${input.wasAtTail}|${input.viewportHeightDeltaPx !== 0}`, {
+      location: 'followOutput.viewportResize',
+      message: 'the scroller box changed under a viewport nobody was following',
+      travelPx: input.viewportHeightDeltaPx,
+      data: () => ({
+        viewportHeightDeltaPx: roundViewportPx(input.viewportHeightDeltaPx),
+        wasAtTail: input.wasAtTail,
+        scrollTopPx: roundViewportPx(scroller.scrollTop),
+        clientHeightPx: scroller.clientHeight,
+      }),
+    });
+
     if (input.viewportHeightDeltaPx !== 0) {
-      scroller.scrollTop = Math.max(0, scroller.scrollTop - input.viewportHeightDeltaPx);
+      viewportOwner.write({
+        owner: 'layout-correction',
+        topPx: Math.max(0, scroller.scrollTop - input.viewportHeightDeltaPx),
+      });
     }
 
     const followTarget = resolveFollowTargetScrollTop(scroller);
@@ -599,7 +719,7 @@ export function useFlowChatFollowOutput({
       input.wasAtTail &&
       followTarget - scroller.scrollTop > FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX
     ) {
-      scroller.scrollTop = followTarget;
+      viewportOwner.write({ owner: 'layout-correction', topPx: followTarget });
       return;
     }
 
@@ -611,9 +731,9 @@ export function useFlowChatFollowOutput({
       thresholdPx: FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
     });
     if (snapTo !== null) {
-      scroller.scrollTop = snapTo;
+      viewportOwner.write({ owner: 'layout-correction', topPx: snapTo });
     }
-  }, [resolveFollowTargetScrollTop, scrollerRef]);
+  }, [resolveFollowTargetScrollTop, scrollerRef, viewportOwner]);
 
   useEffect(() => {
     if (!hasMountedRef.current) {
@@ -720,6 +840,5 @@ export function useFlowChatFollowOutput({
     handleScrollSettled,
     handleViewportResize,
     getFollowTargetScrollTop,
-    isSnapBackInFlight,
   };
 }

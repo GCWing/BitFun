@@ -38,6 +38,8 @@
     "theme:color-audit:test": "node --test scripts/audit-theme-colors.test.mjs scripts/audit-cli-theme-colors.test.mjs",
     "theme:visual-contract": "node scripts/validate-theme-visual-contract.mjs",
     "appearance:contract-audit": "node scripts/audit-appearance-contracts.mjs",
+    "flowchat:log:analyze": "node scripts/diagnostics/analyze-flowchat-log.mjs",
+    "flowchat:log:analyze:test": "node --test scripts/diagnostics/analyze-flowchat-log.test.mjs",
     "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs && node scripts/update-models-dev-snapshot.mjs --check",
     "models-dev:check": "node scripts/update-models-dev-snapshot.mjs --check",
     "models-dev:update": "node scripts/update-models-dev-snapshot.mjs",

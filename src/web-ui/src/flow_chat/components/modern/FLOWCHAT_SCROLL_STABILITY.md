@@ -122,8 +122,10 @@ assumption breaking:
 
 The arriving items are estimates until they measure, so this lands close rather
 than exactly; the anchor — which can now find its Turn — takes it the rest of the
-way. It is skipped while follow-output owns the viewport, which re-asserts its
-own target every frame.
+way. It writes as `layout-correction`, so the register refuses it while anything
+above is moving the viewport on purpose: a navigation reaching a Turn, or the
+follow loop re-asserting its target, both of which already say where the reader
+belongs.
 
 ## The Viewport Anchor Owns Scroll Compensation
 
@@ -644,19 +646,128 @@ boundary latch entirely, which is why it keeps working. The accompanying
 `anchor_capture_failed` — `captureHistoryPrependAnchor` returning `false`
 cancels a window that was already fetched.
 
-## Why There Is No Viewport Coordinator
+## The Viewport Has One Register
+
+Every deliberate write goes through `useFlowChatViewportOwner`, which asks
+`flowChatViewportOwnership.ts` whether the writer may act. The order is the
+design:
+
+| | Owner | Held while |
+|---|---|---|
+| 1 | `user-gesture` | 200ms from the last wheel, touch, key, or scrollbar press |
+| 2 | `one-shot-navigation` | a Turn, search hit, or focus request is being reached |
+| 3 | `snap-back` | the return from the reserved blank is animating |
+| 4 | `follow-output` | the continuous writer owns the viewport |
+| 5 | `layout-correction` | history arrived above the reader, or the box resized |
+| 6 | `anchor-correction` | a late measurement is being undone |
+
+The register decides **whether**, never **where** — targets stay with the writer
+that owns them, and the anchor's correction stays idempotent. Ordering answers
+what idempotency cannot: whether a movement was ours on purpose or something to
+be undone. The anchor is idempotent and still destroyed the snap back, because
+it restored a relationship we had deliberately changed.
+
+**Taking ownership and writing are one call.** Adding a writer without declaring
+it means not using the helper, which is visible in review — where the previous
+scheme needed the new writer added by hand to every other writer's private
+predicate, and a single missed pair was a bug.
+
+### Why there was no coordinator before, and what changed
 
 There was one — `FlowChatViewportCoordinator.ts`, removed alongside the
-compensation engine. Single-writer semantics are not reachable here: the
-virtualizer writes `scrollTop` from inside the library — its own re-aim, and its
-adjustment for a re-measured item above the viewport — so a coordinator can only
-serialise *our* writes, and the conflicts observed in practice were with that
-third writer. What made those conflicts survivable was not serialising them but
-making our correction idempotent; see the viewport anchor.
+compensation engine, and it was a compensation engine itself: reservations,
+pin and collapse compensation, element-anchor leases, a synthetic bottom range.
+Nothing here does any of that.
 
-What works instead is a single *source of truth*. Read the live viewport, and
-make each phase's rule idempotent with respect to a foreign write: authoritative
-while hidden, cooperative once painted.
+The argument recorded against replacing it was that single-writer semantics were
+unreachable, because the virtualizer writes `scrollTop` from inside the library —
+its own re-aim, and its adjustment for a re-measured item — so a coordinator
+could only serialise *our* writes while the conflicts in practice were with that
+third writer. Two things retired that premise:
+
+- The library's adjustment for a re-measured item is **off**
+  (`shouldAdjustScrollPositionOnItemSizeChange`), because it replayed a delta
+  against a scroll offset it learns about a frame late.
+- **`scrollToFn` is a first-class virtualizer option.** Every write the library
+  makes — `scrollToIndex`, `scrollToOffset`, and the re-aim that follows them —
+  goes through a function we supply, so it is registered like any other.
+
+What remains outside the register is the reader and the browser, and browser
+scroll anchoring is off. A library write is attributed to whoever asked for the
+aim, which is also what lets a gesture preempt a navigation still chasing its
+Turn: the re-aim keeps computing for up to 5 s, and every write it attempts is
+refused.
+
+**The opening reveal is not an owner.** It is a phase, and the thing moving the
+viewport during it is follow-output, so a claim standing in for the reveal would
+outrank follow-output and refuse it. One slot cannot hold a phase and a writer
+at once, so the reveal remains an explicit condition beside the register.
+
+Not everything collapsed into it, and the difference is worth keeping straight.
+`smoothScrollFramesRef` is follow-output yielding to *its own* animation, which
+is intra-owner; `settleFramesRef` is a frame budget; `pendingSnapBackTargetRef`
+still answers "did our snap land here"; `boundaryArmedRef` is paging policy.
+Only the parts that were really answering "is someone else moving the viewport"
+are gone.
+
+## Diagnosing the Viewport
+
+Viewport faults are intermittent, leave nothing in the DOM once they are over,
+and read identically to two or three other causes: a Turn that lands and is
+dragged away and a Turn that never landed are the same complaint. So the trail
+is permanent, in `flowchat.log`, behind `app.logging.flow_chat_diagnostics` —
+the same switch history paging uses — and tagged `viewport`.
+
+`flowChatViewportDiagnostics.ts` records two different kinds of thing:
+
+| | Where | What |
+|---|---|---|
+| **Writes** | the register, `viewportOwner.write` / `.claim` / `.release` | who moved the viewport, from where to where, and **who was refused** |
+| **Decisions** | each writer | why it wanted to move, and why it did not |
+
+The second half is the one that pays. A write that never happened leaves nothing
+at the register to find, and "nothing happened" has been the report more often
+than a wrong move has: a deferred new Turn, an anchor whose Turn left the
+rendered window, a snap back declined because the settle belonged to the opening
+reveal, a boundary that never re-armed. Each of those is now one line saying
+which.
+
+**A placement is recorded with what became of it.** `traceViewportPlacement`
+samples the offset on the next frame and again once things have settled, and
+reports the drift from the target. Read against the register's writes in the
+same window, the drift says *who* took it away. This is how the two writers that
+do not go through the register — the sticky Task indicator and cross-session
+focus — are watched without being changed.
+
+Everything here can fire on every frame, so repeated identical events collapse
+into one entry per 500ms carrying the count and travel it stands for. The key
+includes whatever makes one run a different run — the owner, the outcome, the
+direction — so a *transition* always emits immediately. A thousand copies of a
+steady state would only bury the transitions, which are the point.
+
+Nothing evaluates a payload while the switch is off.
+
+### Reading the log
+
+```text
+pnpm run flowchat:log:analyze -- <path-to-flowchat.log> [--around <sequence>]
+```
+
+`scripts/diagnostics/analyze-flowchat-log.mjs` reports, in this order:
+
+1. **Episodes** of viewport activity, worst *churn* first — travel per pixel of
+   progress. A clean move is 1. The snap back that never arrived would be
+   hundreds, and that number is the difference between "it moved wrongly" and
+   "it fought".
+2. **Placements that did not stick**, ranked by drift. A placement with no
+   outcome sampled is listed separately rather than counted as clean.
+3. **Refusals**, as owner × who outranked them.
+4. **Declines**, as writer × reason.
+
+Two things it is careful about, because both would otherwise flatter the
+result: a coalesced entry is weighed by the run it stands for, not as one event;
+and dropped entries are reported at the top, since every count below one is a
+lower bound.
 
 ## Viewport Ownership
 
@@ -665,20 +776,15 @@ The virtualizer never follows output. Continuous movement belongs to
 `VirtualMessageList`. Card renderers and tool cards must not write the outer
 FlowChat `scrollTop`.
 
-**Anything that moves the viewport deliberately has to be registered as an
-owner, for as long as it is moving.** `isViewportOwnedElsewhere` is that
-register, and the viewport anchor reads it before correcting — it judges by
-geometry alone and cannot tell our own movement from a displacement to undo.
-A snap back was missing from it: ownership passes to follow-output only when the
-animation lands, so for its whole duration the viewport belonged to nobody. The
-snap travelled 0.7px, the anchor wrote it back, the write cancelled the
-animation, the cancellation read as a gesture coming to rest, and the snap was
-issued again — **958 times over 20 seconds, arriving nowhere**.
-
-This register is pairwise, and every writer added to the transcript has to be
-declared in it by hand. That is the standing cost of having no single arbiter of
-`scrollTop`; see *Why There Is No Viewport Coordinator*, and weigh it against
-this section before adding the next writer.
+**Anything that moves the viewport deliberately does so through the register**,
+and holds ownership for as long as it is moving — see *The Viewport Has One
+Register*. The anchor judges by geometry alone and cannot tell our own movement
+from a displacement to undo, so it asks. The failure that made this explicit: a
+snap back was missing from the hand-written predicate that preceded the
+register, so it belonged to nobody while it animated. The snap travelled 0.7px,
+the anchor wrote it back, the write cancelled the animation, the cancellation
+read as a gesture coming to rest, and the snap was issued again — **958 times
+over 20 seconds, arriving nowhere**.
 
 Local scroll surfaces inside a thinking, explore, terminal, or subagent card
 may manage their own scroll position. They must not dispatch an outer viewport
@@ -720,6 +826,8 @@ pnpm --dir src/web-ui run test:run \
   src/flow_chat/components/modern/useFlowChatFollowOutput.test.tsx \
   src/flow_chat/components/modern/VirtualMessageList.session-boundary.test.tsx \
   src/flow_chat/components/modern/ModernFlowChatContainer.history-state.test.tsx \
+  src/flow_chat/components/modern/flowChatViewportOwnership.test.ts \
+  src/infrastructure/diagnostics/flowChatViewportDiagnostics.test.ts \
   src/flow_chat/tool-cards/useToolCardHeightContract.test.tsx
 ```
 
@@ -814,9 +922,17 @@ confirm:
 28. While reading a history window, let output arrive from somewhere else. The
     viewport must not move — this is the case the submission event exists to
     stay out of.
+29. Navigate to a far Turn and start scrolling with the wheel before it comes to
+    rest. The gesture wins immediately and nothing pulls the viewport back to
+    the Turn afterwards, including several seconds later.
+30. With output streaming, scroll up and hold still. Follow must not write while
+    the gesture is recent, and must resume once it goes quiet.
 
 ## Related Files
 
+- `flowChatViewportOwnership.ts`
+- `useFlowChatViewportOwner.ts`
+- `@/infrastructure/diagnostics/flowChatViewportDiagnostics.ts`
 - `flowChatTailFollow.ts`
 - `flowChatLiveTailWindow.ts`
 - `useFlowChatVirtualizer.ts`

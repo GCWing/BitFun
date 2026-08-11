@@ -4,6 +4,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tailSpacerPxForViewport } from './flowChatTailFollow';
+import { ONE_SHOT_NAVIGATION_HOLD_MS } from './flowChatViewportOwnership';
 import { VirtualMessageList, type VirtualMessageListRef } from './VirtualMessageList';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -274,6 +275,10 @@ describe('VirtualMessageList natural scroll contract', () => {
     expect(mocks.scrollItemIntoView).toHaveBeenCalledWith(1, {
       align: 'start',
       behavior: 'auto',
+      // The aim carries its owner, so the re-aims it produces are still the
+      // navigation's and are refused for anything that outranks it.
+      owner: 'one-shot-navigation',
+      holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
     });
     expect(container.querySelector('.message-list-footer')?.getAttribute('style')).toContain('168px');
   });
@@ -296,6 +301,8 @@ describe('VirtualMessageList natural scroll contract', () => {
         // A resolvable Turn is clamped before anything moves, so the requested
         // animation survives.
         behavior: 'smooth',
+        owner: 'one-shot-navigation',
+        holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
       });
     } finally {
       restoreLayout();
@@ -321,7 +328,7 @@ describe('VirtualMessageList natural scroll contract', () => {
       expect(mocks.scrollToOffset).toHaveBeenCalledTimes(1);
       expect(mocks.scrollToOffset).toHaveBeenCalledWith(
         1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600,
-        'smooth',
+        { behavior: 'smooth', owner: 'one-shot-navigation' },
       );
     } finally {
       restoreLayout();
@@ -353,12 +360,16 @@ describe('VirtualMessageList natural scroll contract', () => {
       // Placed instantly, because an animation would not have arrived yet and
       // there would be nothing to read back.
       expect(mocks.scrollItemIntoView).toHaveBeenCalledTimes(1);
-      expect(mocks.scrollItemIntoView).toHaveBeenCalledWith(1, { align: 'start' });
+      expect(mocks.scrollItemIntoView).toHaveBeenCalledWith(1, {
+        align: 'start',
+        owner: 'one-shot-navigation',
+        holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
+      });
       // Corrected through the virtualizer, not the scroller: a direct write
       // would leave the first call's re-aim pending, and it aims at the top.
       expect(mocks.scrollToOffset).toHaveBeenCalledWith(
         1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600,
-        'auto',
+        { behavior: 'auto', owner: 'one-shot-navigation' },
       );
     } finally {
       restoreLayout();

@@ -50,10 +50,22 @@ Also follow the repository and Web UI instructions in the parent guides.
 - The virtualizer must not adjust the scroll for its own re-measurements. It
   replays a delta against a scroll position it learns about a frame late, and
   every continuous writer here assigns `scrollTop` directly.
-- Anything that moves the viewport deliberately must be registered in
-  `isViewportOwnedElsewhere` for as long as it is moving, including an animation
-  still in flight. The anchor judges by geometry and cannot tell our own
-  movement from a displacement to undo.
+- Every deliberate viewport write goes through `useFlowChatViewportOwner`, named
+  with the owner it belongs to, and holds that ownership for as long as it is
+  moving — an animation included. Never assign `scrollTop` or call `scrollTo`
+  on the FlowChat scroller directly.
+- Adding an owner means adding it to `FLOWCHAT_VIEWPORT_OWNERS` in priority
+  order and to its test, not adding a condition to anyone else's predicate.
+- A writer that declines to move the viewport says so through
+  `flowChatViewportDiagnostics.ts`. The register records the writes; a write
+  that never happened is invisible everywhere else, and "nothing happened" is
+  the more common report. Anything reachable every frame goes through
+  `traceViewportRepeating`, keyed by what distinguishes one run from another.
+- A viewport write that does not go through the register is wrapped in
+  `traceViewportPlacement`, which samples what became of it. There are two, both
+  outside this directory, and neither may grow into three without evidence.
+- The virtualizer's own writes are registered through its `scrollToFn` option
+  and attributed to whoever asked for the aim. Do not bypass it.
 - "A new Turn" is `activeSession.dialogTurns.at(-1)`, never the end of the
   projection. Do not qualify that identity by whether the Turn is on screen —
   that belongs to the response, which defers until the Turn can be aligned.
@@ -84,6 +96,8 @@ pnpm --dir src/web-ui run test:run <focused-test-files>
 Relevant tests include:
 
 - `flowChatTailFollow.test.ts`
+- `flowChatViewportOwnership.test.ts`
+- `../../../infrastructure/diagnostics/flowChatViewportDiagnostics.test.ts`
 - `flowChatHistoryBoundary.test.ts`
 - `useFlowChatVirtualizer.test.ts`
 - `flowChatViewportAnchor.test.ts`

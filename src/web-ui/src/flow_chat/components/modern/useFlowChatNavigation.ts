@@ -7,6 +7,7 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
+import { traceViewportPlacement } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { useModernFlowChatStore, type VirtualItem } from '../../store/modernFlowChatStore';
 import { flowChatManager } from '../../services/FlowChatManager';
@@ -183,7 +184,21 @@ export function useFlowChatNavigation({
           return;
         }
 
-        element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+        /*
+         * Not routed through the viewport register, and traced because of it.
+         * A focus request carries no user gesture, so nothing tells the anchor
+         * this movement was deliberate — a drift in the outcome sample is that
+         * placement being undone a frame later.
+         */
+        traceViewportPlacement(
+          document.querySelector<HTMLElement>('[data-flowchat-scroller]'),
+          {
+            location: 'navigation.scrollIntoView',
+            message: 'focus request centred an item',
+            data: () => ({ sessionId, focusItemId, attempts }),
+          },
+          () => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' }),
+        );
         element.classList.add('flowchat-flow-item--focused');
         window.setTimeout(() => element.classList.remove('flowchat-flow-item--focused'), 1600);
       };

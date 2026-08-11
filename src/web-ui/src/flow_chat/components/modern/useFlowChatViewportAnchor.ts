@@ -28,6 +28,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
 import {
+  roundViewportPx,
+  traceViewportRepeating,
+} from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
+import {
   ANCHOR_CORRECTION_EPSILON_PX,
   ANCHOR_SETTLE_FRAMES,
   findRenderedTurnAnchorElement,
@@ -44,11 +48,18 @@ export interface UseFlowChatViewportAnchorOptions {
   /**
    * Another writer owns the viewport right now, so the anchor must stay quiet.
    *
-   * Follow-output writes its own target every frame, and an opening reveal is
-   * still walking the viewport down to the tail. Neither wants a second opinion
-   * about where the viewport belongs.
+   * The anchor judges by geometry alone, which cannot tell a movement made on
+   * purpose from a displacement to undo — so it is told. The caller answers
+   * from the viewport register; this hook only needs the answer, which is what
+   * keeps it independent of everything that moves the viewport.
    */
   isViewportOwnedElsewhere: () => boolean;
+  /**
+   * Move the viewport. Supplied rather than performed here so that the
+   * correction is registered like every other deliberate write, without this
+   * hook having to know what else writes.
+   */
+  writeViewport: (topPx: number) => void;
 }
 
 export interface FlowChatViewportAnchorApi {
@@ -88,7 +99,10 @@ export interface FlowChatViewportAnchorApi {
 export function useFlowChatViewportAnchor({
   scrollerRef,
   isViewportOwnedElsewhere,
+  writeViewport,
 }: UseFlowChatViewportAnchorOptions): FlowChatViewportAnchorApi {
+  const writeViewportRef = useRef(writeViewport);
+  writeViewportRef.current = writeViewport;
   const anchorRef = useRef<ViewportAnchor | null>(null);
   /** When the user last did something that scrolls, by their own hand. */
   const lastUserScrollIntentAtRef = useRef(0);
@@ -123,13 +137,32 @@ export function useFlowChatViewportAnchor({
   const restoreAnchor = useCallback((): boolean => {
     const scroller = scrollerRef.current;
     const anchor = anchorRef.current;
-    if (!scroller || !anchor || isViewportOwnedElsewhereRef.current()) return false;
+    if (!scroller || !anchor) return false;
+    /*
+     * Every way this declines is silent and looks like the transcript simply
+     * not moving, which is why each of them is traced. Standing down for
+     * another owner is the intended case; the other two are how a reading
+     * position gets lost, and they have both happened.
+     */
+    if (isViewportOwnedElsewhereRef.current()) {
+      traceViewportRepeating('anchor|owned-elsewhere', {
+        location: 'anchor.stoodDown',
+        message: 'anchor stood down for another owner',
+        data: () => ({ turnId: anchor.turnId, scrollTopPx: roundViewportPx(scroller.scrollTop) }),
+      });
+      return false;
+    }
     const element = findRenderedTurnAnchorElement(scroller, anchor.turnId);
     // The anchored Turn can leave the rendered window entirely. Nothing can be
     // restored from it then, so drop it and let the next scroll pick a Turn
     // that is actually on screen.
     if (!element) {
       anchorRef.current = null;
+      traceViewportRepeating('anchor|turn-gone', {
+        location: 'anchor.dropped',
+        message: 'anchored Turn left the rendered window, so nothing was restored',
+        data: () => ({ turnId: anchor.turnId, scrollTopPx: roundViewportPx(scroller.scrollTop) }),
+      });
       return false;
     }
     const correction = viewportAnchorCorrectionPx(
@@ -138,7 +171,17 @@ export function useFlowChatViewportAnchor({
     );
     // Already where it belongs, which still counts as answered.
     if (Math.abs(correction) < ANCHOR_CORRECTION_EPSILON_PX) return true;
-    scroller.scrollTop += correction;
+    traceViewportRepeating('anchor|correcting', {
+      location: 'anchor.correct',
+      message: 'anchor put the reading position back',
+      travelPx: correction,
+      data: () => ({
+        turnId: anchor.turnId,
+        correctionPx: roundViewportPx(correction),
+        scrollTopPx: roundViewportPx(scroller.scrollTop),
+      }),
+    });
+    writeViewportRef.current(scroller.scrollTop + correction);
     return true;
   }, [scrollerRef]);
 

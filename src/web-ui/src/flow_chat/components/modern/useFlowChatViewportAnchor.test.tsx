@@ -36,7 +36,12 @@ interface HarnessProps {
 
 function Harness({ scroller, isViewportOwnedElsewhere, onApi }: HarnessProps) {
   const scrollerRef = React.useRef<HTMLElement | null>(scroller);
-  onApi(useFlowChatViewportAnchor({ scrollerRef, isViewportOwnedElsewhere }));
+  // The anchor no longer touches the scroller itself; the register does, and
+  // here that is the plain assignment it used to make.
+  const writeViewport = React.useCallback((topPx: number) => {
+    scroller.scrollTop = topPx;
+  }, []);
+  onApi(useFlowChatViewportAnchor({ scrollerRef, isViewportOwnedElsewhere, writeViewport }));
   return null;
 }
 
