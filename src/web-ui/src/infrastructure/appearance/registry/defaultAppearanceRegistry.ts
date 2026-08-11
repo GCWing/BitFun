@@ -178,7 +178,6 @@ import { exploreGroupAppearanceDescriptor } from '@/flow_chat/components/modern/
 import { pendingQueuePanelAppearanceDescriptor } from '@/flow_chat/components/PendingQueuePanel.appearance';
 import { subagentProjectionAppearanceDescriptor } from '@/flow_chat/components/subagent/SubagentProjectionView.appearance';
 import { threadGoalDialogsAppearanceDescriptor } from '@/flow_chat/components/thread-goal/ThreadGoalDialogs.appearance';
-import { userSteeringBubbleAppearanceDescriptor } from '@/flow_chat/components/UserSteeringBubble.appearance';
 import { welcomePanelAppearanceDescriptor } from '@/flow_chat/components/WelcomePanel.appearance';
 import { generativeWidgetToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/GenerativeWidgetToolCard.appearance';
 import { gitToolDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/GitToolDisplay.appearance';
@@ -228,7 +227,6 @@ import { reviewSessionSummaryCardAppearanceDescriptor } from '@/flow_chat/tool-c
 import { deepReviewConsentDialogAppearanceDescriptor } from '@/flow_chat/components/DeepReviewConsentDialog.appearance';
 import { flowTextBlockAppearanceDescriptor } from '@/flow_chat/components/FlowTextBlock.appearance';
 import { permissionRequestPanelAppearanceDescriptor } from '@/flow_chat/components/modern/PermissionRequestPanel.appearance';
-import { userMessageAppearanceDescriptor } from '@/flow_chat/components/UserMessage.appearance';
 import { toolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/BaseToolCard.appearance';
 import { canvasToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/CanvasToolCard.appearance';
 import { computerUseToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ComputerUseToolCard.appearance';
@@ -465,7 +463,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(pendingQueuePanelAppearanceDescriptor)
     .registerComponent(subagentProjectionAppearanceDescriptor)
     .registerComponent(threadGoalDialogsAppearanceDescriptor)
-    .registerComponent(userSteeringBubbleAppearanceDescriptor)
     .registerComponent(welcomePanelAppearanceDescriptor)
     .registerComponent(generativeWidgetToolCardAppearanceDescriptor)
     .registerComponent(gitToolDisplayAppearanceDescriptor)
@@ -489,7 +486,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(deepReviewConsentDialogAppearanceDescriptor)
     .registerComponent(flowTextBlockAppearanceDescriptor)
     .registerComponent(permissionRequestPanelAppearanceDescriptor)
-    .registerComponent(userMessageAppearanceDescriptor)
     .registerComponent(toolCardAppearanceDescriptor)
     .registerComponent(canvasToolCardAppearanceDescriptor)
     .registerComponent(computerUseToolCardAppearanceDescriptor)

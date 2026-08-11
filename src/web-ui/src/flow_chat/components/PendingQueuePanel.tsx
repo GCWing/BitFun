@@ -7,9 +7,9 @@
  * UX notes:
  * - Click anywhere on the preview text to start editing.
  * - Cmd/Ctrl+Enter saves the edit; Esc cancels.
- * - Clicking "send now" eagerly inserts a UserSteeringBubble into the live
- *   round so the user sees feedback instantly; the backend confirmation event
- *   is deduped via `steeringId`.
+ * - Clicking "send now" eagerly inserts a steering message into the live round
+ *   so the user sees feedback instantly; the backend confirmation event is
+ *   deduped via `steeringId`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
