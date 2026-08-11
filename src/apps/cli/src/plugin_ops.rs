@@ -248,7 +248,19 @@ async fn fetch_local(src: &str, stage: &Path) -> Result<PathBuf, String> {
 }
 
 async fn fetch_npm(spec: &str, stage: &Path) -> Result<PathBuf, String> {
-    let output = tokio::process::Command::new("npm")
+    // On Windows `npm` ships as `npm.cmd` (a batch wrapper), not `npm.exe`;
+    // `Command::new("npm")` would fail with "program not found". Route through
+    // `cmd /c npm` so cmd resolves PATHEXT. On Unix npm is a real executable.
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("cmd");
+        c.args(["/c", "npm"]);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut cmd = tokio::process::Command::new("npm");
+
+    let output = cmd
         .args(["pack", spec])
         .current_dir(stage)
         .output()
