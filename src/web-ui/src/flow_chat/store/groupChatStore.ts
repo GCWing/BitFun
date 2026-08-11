@@ -5,7 +5,6 @@
  * Every action calls the corresponding `group_chat_*` Tauri command
  * (R-GC-12, P2-1: 11 commands unified naming).
  */
-
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
@@ -19,25 +18,25 @@ import type {
 } from '../types/flow-chat';
 
 export interface GroupChatStore extends GroupChatState {
-  /** P1-4 修复：统一 workspace_path（各 action 消费，避免 '' 不对称）。 */
+  /** P1-4 fix: unified workspace_path (consumed by every action, avoids '' asymmetry). */
   workspacePath: string;
   setWorkspacePath: (workspacePath: string) => void;
-  // 列表
+  // listing
   loadRooms: (workspacePath?: string) => Promise<void>;
-  // 成员（P1-1 修复：loadMembers 拉取成员列表，消费 group_chat_members command）
+  // members (P1-1 fix: loadMembers fetches the member list via group_chat_members)
   loadMembers: (roomId: string) => Promise<GroupChatMember[]>;
-  // 创建/管理
+  // create/manage
   createRoom: (
     name: string,
     owner: GroupChatActor,
     members: string[],
     mode?: GroupChatMode,
-  ) => Promise<GroupChatRoom>; // mode 默认 free
+  ) => Promise<GroupChatRoom>; // mode defaults to free
   joinRoom: (roomId: string, sessionId: string, actor: GroupChatActor) => Promise<void>;
   leaveRoom: (roomId: string, sessionId: string, actor: GroupChatActor) => Promise<void>;
-  deleteRoom: (roomId: string, actor: GroupChatActor) => Promise<void>; // P0-3 修复
+  deleteRoom: (roomId: string, actor: GroupChatActor) => Promise<void>; // P0-3 fix
   setMode: (roomId: string, mode: GroupChatMode, actor: GroupChatActor) => Promise<void>;
-  // 消息（P0-2 修复：sendMessage 带 author；P2-4 修复：带 urgent）
+  // messages (P0-2 fix: sendMessage carries author; P2-4 fix: carries urgent)
   sendMessage: (
     roomId: string,
     author: GroupChatActor,
@@ -46,9 +45,9 @@ export interface GroupChatStore extends GroupChatState {
     urgent?: boolean,
   ) => Promise<void>;
   loadMessages: (roomId: string, cursor?: string) => Promise<void>;
-  /** P1-1 修复：超时提醒消费端——扫描全部房间超时消息（消费 reply_timeout_secs）。 */
+  /** P1-1 fix: timeout-reminder consumer — scan all rooms' timed-out messages (reply_timeout_secs). */
   scanTimeouts: (replyTimeoutSecs: number) => Promise<Array<{ roomId: string; messageId: string; content: string }>>;
-  // 状态
+  // state
   setActiveRoom: (roomId: string) => void;
 }
 

@@ -37,8 +37,9 @@ export interface MentionState {
   query: string;
   startOffset: number;  // Position of the @ symbol in text
   /**
-   * `@@` 前缀分流（R-GC-15，契约 §2.5）：用户输入 '@@'（trigger 前一字符
-   * 也是 '@'）→ memberMode=true（群聊成员/全体选择器）；普通 '@' 原逻辑。
+   * `@@` prefix routing (R-GC-15, contract §2.5): when the user types '@@'
+   * (the char before the trigger is also '@') -> memberMode=true (group member
+   * / @all picker); a plain '@' keeps the original behavior.
    */
   memberMode?: boolean;
 }
@@ -705,9 +706,10 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         !query.includes('\n')
       ) {
         if (selectedTrigger === '@') {
-          // `@@` 前缀分流（R-GC-15，契约 §2.5）：trigger 前一个字符也是 '@'
-          // （用户输入 '@@'）→ memberMode=true（群聊成员+全体选择器）；
-          // 普通 '@' 保持原形状（memberMode 缺省），文件提及逻辑零回归。
+          // `@@` prefix routing (R-GC-15, contract §2.5): the char before the
+          // trigger is also '@' (user typed '@@') -> memberMode=true (group
+          // member + @all picker); a plain '@' keeps the original shape
+          // (memberMode unset) so file-mention logic has zero regression.
           const memberMode = charBeforeTrigger === '@';
           const newState: MentionState = {
             isActive: true,

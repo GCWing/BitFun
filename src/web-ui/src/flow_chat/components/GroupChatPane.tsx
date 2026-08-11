@@ -50,8 +50,9 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
     loadMessages(roomId).catch(() => {});
   }, [roomId, isViewportActive, loadMembers, loadMessages]);
 
-  // P1-1 修复：超时提醒消费端——定时扫描（默认 300s，R-GC-26 reply_timeout_secs），
-  // 超时消息作为提醒展示（系统级通知语义）。
+  // P1-1 fix: timeout-reminder consumer — periodic scan (default 300s,
+  // R-GC-26 reply_timeout_secs); timed-out messages surface as reminders
+  // (system-level notification semantics).
   useEffect(() => {
     if (!isViewportActive) return;
     const scan = () => {
@@ -60,11 +61,11 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
           setTimeoutReminders((prev) => mergeReminders(prev, reminders));
         }
       }).catch(() => {
-        // Best-effort: 扫描失败不打断面板。
+        // Best-effort: a failed scan must not interrupt the panel.
       });
     };
     scan();
-    const timer = window.setInterval(scan, 60_000); // 每分钟扫描一次。
+    const timer = window.setInterval(scan, 60_000); // scan once per minute.
     return () => window.clearInterval(timer);
   }, [isViewportActive, scanTimeouts]);
 
@@ -76,7 +77,6 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
     [roomId, sendMessage],
   );
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const registration: GroupChatRegistration = useMemo(
     () => ({
       roomId,
@@ -86,12 +86,20 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
     [roomId, handleSubmit],
   );
 
-  const messageRows = useMemo(() => renderMessages(messages, members), [messages, members]);
+  const messageRows = useMemo(
+    () => renderMessages(
+      messages,
+      members,
+      t('nav.groupChat.masterLabel'),
+      t('nav.groupChat.allLabel'),
+    ),
+    [messages, members, t],
+  );
 
   if (!room) {
     return (
       <div data-bf-component="group-chat-pane" data-bf-part="empty" className="group-chat-pane group-chat-pane--empty">
-        {t('groupChat.paneEmpty')}
+        {t('nav.groupChat.paneEmpty')}
       </div>
     );
   }
@@ -103,7 +111,7 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
           <MessageSquare size={14} aria-hidden="true" />
           {room.name}
         </span>
-        <span data-bf-part="memberCount" className="group-chat-pane__meta">
+        <span data-bf-component="group-chat-pane" data-bf-part="memberCount" className="group-chat-pane__meta">
           <Users size={11} aria-hidden="true" />
           {members.length}
         </span>
@@ -114,14 +122,14 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
           onClick={() => setMode(roomId, mode === 'free' ? 'round_robin' : 'free', { kind: 'master' })}
         >
           <Repeat size={12} aria-hidden="true" />
-          {mode === 'round_robin' ? t('groupChat.modeRoundRobin') : t('groupChat.modeFree')}
+          {mode === 'round_robin' ? t('nav.groupChat.modeRoundRobin') : t('nav.groupChat.modeFree')}
         </button>
         <button
           data-bf-component="group-chat-pane"
           data-bf-part="memberToggle"
           className="group-chat-pane__member-toggle"
           onClick={() => setMemberPickerOpen((open) => !open)}
-          aria-label={t('groupChat.manageMembers')}
+          aria-label={t('nav.groupChat.manageMembers')}
         >
           <Settings2 size={12} aria-hidden="true" />
         </button>
@@ -139,15 +147,15 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
       {timeoutReminders.length > 0 ? (
         <div data-bf-component="group-chat-pane" data-bf-part="timeoutReminders" className="group-chat-pane__timeout-reminders">
           {timeoutReminders.map((reminder) => (
-            <div key={reminder.messageId} data-bf-part="timeoutReminder" className="group-chat-pane__timeout-reminder">
-              {t('groupChat.timeoutReminder')}: {reminder.content}
+            <div key={reminder.messageId} data-bf-component="group-chat-pane" data-bf-part="timeoutReminder" className="group-chat-pane__timeout-reminder">
+              {t('nav.groupChat.timeoutReminder')}: {reminder.content}
             </div>
           ))}
         </div>
       ) : null}
       <div data-bf-component="group-chat-pane" data-bf-part="messages" className="group-chat-pane__messages">
         {messageRows.length === 0 ? (
-          <div className="group-chat-pane__no-messages">{t('groupChat.noMessages')}</div>
+          <div className="group-chat-pane__no-messages">{t('nav.groupChat.noMessages')}</div>
         ) : (
           messageRows
         )}
@@ -159,7 +167,7 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
   );
 };
 
-/** P1-1 修复：合并超时提醒（按 messageId 去重）。 */
+/** P1-1 fix: merge timeout reminders (dedupe by messageId). */
 function mergeReminders(
   prev: Array<{ roomId: string; messageId: string; content: string }>,
   next: Array<{ roomId: string; messageId: string; content: string }>,
@@ -171,14 +179,19 @@ function mergeReminders(
   return Array.from(byId.values());
 }
 
-/** Renders one message row with the sender label (主人 / member displayName). */
-function renderMessages(messages: GroupChatMessage[], members: Array<{ sessionId: string; displayName?: string }>) {
+/** Renders one message row with the sender label (master / member displayName). */
+function renderMessages(
+  messages: GroupChatMessage[],
+  members: Array<{ sessionId: string; displayName?: string }>,
+  masterLabel: string,
+  allLabel: string,
+) {
   return messages.map((message) => {
-    const senderLabel = authorLabel(message.author, members);
+    const senderLabel = authorLabel(message.author, members, masterLabel, allLabel);
     return (
       <div key={message.messageId} data-bf-component="group-chat-pane" data-bf-part="message" className="group-chat-pane__message">
-        <span data-bf-part="messageAuthor" className="group-chat-pane__message-author">{senderLabel}</span>
-        <span data-bf-part="messageContent" className="group-chat-pane__message-content">{message.content}</span>
+        <span data-bf-component="group-chat-pane" data-bf-part="messageAuthor" className="group-chat-pane__message-author">{senderLabel}</span>
+        <span data-bf-component="group-chat-pane" data-bf-part="messageContent" className="group-chat-pane__message-content">{message.content}</span>
       </div>
     );
   });
@@ -187,12 +200,14 @@ function renderMessages(messages: GroupChatMessage[], members: Array<{ sessionId
 function authorLabel(
   author: GroupChatActor,
   members: Array<{ sessionId: string; displayName?: string }>,
+  masterLabel: string,
+  allLabel: string,
 ): string {
   switch (author.kind) {
     case 'master':
-      return '主人';
+      return masterLabel;
     case 'all':
-      return '@全体';
+      return allLabel;
     case 'claw': {
       const member = members.find((m) => m.sessionId === author.sessionId);
       return member?.displayName ?? author.sessionId;

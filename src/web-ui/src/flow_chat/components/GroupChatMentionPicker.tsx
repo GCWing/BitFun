@@ -10,6 +10,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Users } from 'lucide-react';
+import { useI18n } from '@/infrastructure/i18n';
 import type { GroupChatActor, GroupChatMember } from '../types/flow-chat';
 import './GroupChatMentionPicker.scss';
 
@@ -31,6 +32,7 @@ export const GroupChatMentionPicker: React.FC<GroupChatMentionPickerProps> = ({
   onSelect,
   onClose,
 }) => {
+  const { t } = useI18n('common');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -101,6 +103,7 @@ export const GroupChatMentionPicker: React.FC<GroupChatMentionPickerProps> = ({
     <div
       ref={containerRef}
       data-bf-component="group-chat-mention-picker"
+      data-bf-part="root"
       className="group-chat-mention-picker"
     >
       <div data-bf-component="group-chat-mention-picker" data-bf-part="items">
@@ -124,13 +127,13 @@ export const GroupChatMentionPicker: React.FC<GroupChatMentionPickerProps> = ({
             </span>
             {item.isAll && (
               <span data-bf-component="group-chat-mention-picker" data-bf-part="itemDetail" className="group-chat-mention-picker__item-detail">
-                @ 全体
+                {t('nav.groupChat.allLabel')}
               </span>
             )}
           </div>
         ))}
         {items.length <= 1 && (
-          <div className="group-chat-mention-picker__empty">no members</div>
+          <div className="group-chat-mention-picker__empty">{t('nav.groupChat.noMembers')}</div>
         )}
       </div>
     </div>

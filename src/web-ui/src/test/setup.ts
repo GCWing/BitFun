@@ -10,8 +10,8 @@
  */
 import { enableMapSet } from 'immer';
 
-// groupChatStore 的 state 使用 Map（rooms/members/messages，契约 §2.2）。
-// immer 需显式启用 MapSet 插件才能对 Map 做 draft 变更。
+// groupChatStore state uses Map (rooms/members/messages, contract §2.2).
+// immer needs the MapSet plugin enabled explicitly to draft-change Maps.
 enableMapSet();
 
 if (

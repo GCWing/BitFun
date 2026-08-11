@@ -121,7 +121,9 @@
       "cancel": "取消",
       "create": "创建",
       "timeoutReminder": "超时未回复",
-      "manageMembers": "管理成员"
+      "manageMembers": "管理成员",
+      "masterLabel": "主人",
+      "allLabel": "@全体"
     },
     "search": {
       "triggerPlaceholder": "搜索",

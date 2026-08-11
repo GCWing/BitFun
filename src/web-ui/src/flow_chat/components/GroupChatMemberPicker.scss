@@ -4,10 +4,10 @@
   gap: 8px;
   padding: 8px;
   min-width: 200px;
-  background: var(--color-surface, #1f1f1f);
-  border: 1px solid var(--color-border, #333);
+  background: var(--bf-appearance-token-color-bg-elevated);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
-  color: var(--color-text, #e5e5e5);
+  color: var(--bf-appearance-token-color-text-primary);
 
   &__members {
     display: flex;
@@ -23,7 +23,7 @@
     gap: 8px;
     padding: 6px 8px;
     border-radius: 6px;
-    background: var(--color-surface-raised, #262626);
+    background: var(--bf-appearance-token-color-bg-tertiary);
     font-size: 13px;
   }
 
@@ -43,13 +43,13 @@
     border-radius: 4px;
 
     &--owner {
-      color: var(--color-warning, #d9a13b);
-      background: rgba(217, 161, 59, 0.12);
+      color: var(--bf-appearance-token-color-warning);
+      background: var(--bf-appearance-token-color-warning-bg);
     }
 
     &--member {
-      color: var(--color-text-dim, #999);
-      background: rgba(255, 255, 255, 0.06);
+      color: var(--bf-appearance-token-color-text-muted);
+      background: var(--bf-appearance-token-color-overlay-white-08);
     }
   }
 
@@ -61,11 +61,11 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--color-danger, #e5534b);
+    color: var(--bf-appearance-token-color-error);
     cursor: pointer;
 
     &:hover {
-      background: rgba(229, 83, 75, 0.12);
+      background: var(--bf-appearance-token-color-error-bg);
     }
   }
 
@@ -80,15 +80,15 @@
     align-items: center;
     gap: 6px;
     padding: 6px 8px;
-    border: 1px dashed var(--color-border, #444);
+    border: 1px dashed var(--bf-appearance-token-border-medium);
     border-radius: 6px;
     background: transparent;
-    color: var(--color-accent, #4f8cff);
+    color: var(--bf-appearance-token-color-accent-500);
     font-size: 12px;
     cursor: pointer;
 
     &:hover {
-      background: var(--color-accent-dim, rgba(79, 140, 255, 0.08));
+      background: var(--bf-appearance-token-color-accent-300);
     }
   }
 
@@ -98,7 +98,7 @@
     gap: 2px;
     max-height: 140px;
     overflow-y: auto;
-    border: 1px solid var(--color-border, #333);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 6px;
     padding: 4px;
   }
@@ -109,17 +109,17 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--color-text, #e5e5e5);
+    color: var(--bf-appearance-token-color-text-primary);
     font-size: 12px;
     cursor: pointer;
 
     &:hover {
-      background: var(--color-accent-dim, rgba(79, 140, 255, 0.12));
+      background: var(--bf-appearance-token-color-accent-300);
     }
   }
 
   &__empty {
-    color: var(--color-text-dim, #999);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 12px;
     text-align: center;
     padding: 8px 0;

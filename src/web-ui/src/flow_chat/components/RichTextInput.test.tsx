@@ -565,7 +565,7 @@ describeWithJsdom('RichTextInput external sync', () => {
     const editor = container.querySelector('.rich-text-input');
     expect(editor).toBeInstanceOf(HTMLDivElement);
 
-    // Plain '@' → 原文件提及逻辑（memberMode 缺省，零回归）。
+    // Plain '@' -> original file-mention logic (memberMode unset, zero regression).
     await updateEditorText(editor as HTMLDivElement, 'ask @test');
     expect(onMentionStateChange).toHaveBeenLastCalledWith({
       isActive: true,
@@ -576,8 +576,9 @@ describeWithJsdom('RichTextInput external sync', () => {
       (onMentionStateChange.mock.calls.at(-1)?.[0] as { memberMode?: boolean }).memberMode
     ).toBeUndefined();
 
-    // '@@' → memberMode=true（群聊成员+全体选择器）。最后一个 trigger 是第 2
-    // 个 '@'（位置 5），其前一个字符也是 '@' → memberMode；query = 其后文本。
+    // '@@' -> memberMode=true (group member + @all picker). The final trigger
+    // is the 2nd '@' (offset 5), whose preceding char is also '@' -> memberMode;
+    // query is the text after it.
     await updateEditorText(editor as HTMLDivElement, 'ask @@test');
     expect(onMentionStateChange).toHaveBeenLastCalledWith({
       isActive: true,
@@ -586,7 +587,8 @@ describeWithJsdom('RichTextInput external sync', () => {
       memberMode: true,
     });
 
-    // '@@' 后普通 '@' → memberMode 关闭（互斥，不同时两个选择器）。
+    // '@@' followed by a plain '@' -> memberMode off (mutually exclusive; no
+    // two pickers at once).
     await updateEditorText(editor as HTMLDivElement, 'ask @file');
     const last = onMentionStateChange.mock.calls.at(-1)?.[0] as { memberMode?: boolean };
     expect(last.isActive).toBe(true);

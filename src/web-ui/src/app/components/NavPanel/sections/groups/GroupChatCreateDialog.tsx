@@ -1,8 +1,9 @@
 /**
  * GroupChatCreateDialog — create-group-chat modal (R-GC-20).
  *
- * 新建群聊：群名 + 选成员（Claw 助理多选）+ 模式默认 Free → createRoom。
- * 成员候选来自 assistantWorkspacesList（Claw 助理工作区）。
+ * Creates a group chat: name + member selection (multi-select Claw assistants)
+ * + mode defaulting to Free -> createRoom. Member candidates come from
+ * assistantWorkspacesList (Claw assistant workspaces).
  */
 
 import React, { useMemo, useState } from 'react';
@@ -13,7 +14,7 @@ import './GroupChatCreateDialog.scss';
 
 export interface GroupChatCreateDialogProps {
   workspacePath: string;
-  /** 可加入的 Claw 助理（sessionId + 名称）。 */
+  /** Addable Claw assistants (sessionId + name). */
   availableAssistants?: { sessionId: string; name: string }[];
   onClose: () => void;
 }
@@ -29,8 +30,9 @@ export const GroupChatCreateDialog: React.FC<GroupChatCreateDialogProps> = ({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // loadMembers 遗留处理（Wave 5 登记）：桌面单工作区场景下 store 内部 workspace
-  // 固定 ''；多工作区支持时按契约 workspace_path 传递（R-GC-14/17/18 接线）。
+  // loadMembers legacy handling (Wave 5 registration): in the desktop
+  // single-workspace scenario the store's internal workspace stays '';
+  // pass workspace_path per contract when multi-workspace lands (R-GC-14/17/18).
   void workspacePath;
 
   const toggleMember = (sessionId: string) => {
@@ -56,7 +58,7 @@ export const GroupChatCreateDialog: React.FC<GroupChatCreateDialogProps> = ({
         name.trim(),
         { kind: 'master' },
         Array.from(selected),
-        'free', // 模式默认 Free（契约 §1.3 P2-9）
+        'free', // mode defaults to Free (contract §1.3 P2-9)
       );
       onClose();
     } catch (err) {
@@ -71,36 +73,37 @@ export const GroupChatCreateDialog: React.FC<GroupChatCreateDialogProps> = ({
   );
 
   return (
-    <div data-bf-component="group-chat-create-dialog" className="group-chat-create-dialog__backdrop" onClick={onClose}>
+    <div data-bf-component="group-chat-create-dialog" data-bf-part="backdrop" className="group-chat-create-dialog__backdrop" onClick={onClose}>
       <div className="group-chat-create-dialog" onClick={(event) => event.stopPropagation()}>
         <header className="group-chat-create-dialog__header">
-          <span data-bf-part="title">
+          <span data-bf-component="group-chat-create-dialog" data-bf-part="title">
             <Users size={14} aria-hidden="true" />
-            {t('groupChat.createTitle')}
+            {t('nav.groupChat.createTitle')}
           </span>
-          <button data-bf-part="close" className="group-chat-create-dialog__close" onClick={onClose} aria-label="close">
+          <button data-bf-component="group-chat-create-dialog" data-bf-part="close" className="group-chat-create-dialog__close" onClick={onClose} aria-label="close">
             <X size={14} />
           </button>
         </header>
 
         <div className="group-chat-create-dialog__body">
           <label className="group-chat-create-dialog__field">
-            <span className="group-chat-create-dialog__label">{t('groupChat.nameLabel')}</span>
+            <span className="group-chat-create-dialog__label">{t('nav.groupChat.nameLabel')}</span>
             <input
+              data-bf-component="group-chat-create-dialog"
               data-bf-part="nameInput"
               className="group-chat-create-dialog__input"
               value={name}
-              placeholder={t('groupChat.namePlaceholder')}
+              placeholder={t('nav.groupChat.namePlaceholder')}
               onChange={(event) => setName(event.target.value)}
               autoFocus
             />
           </label>
 
           <div className="group-chat-create-dialog__field">
-            <span className="group-chat-create-dialog__label">{t('groupChat.membersLabel')}</span>
-            <div data-bf-part="memberList" className="group-chat-create-dialog__members">
+            <span className="group-chat-create-dialog__label">{t('nav.groupChat.membersLabel')}</span>
+            <div data-bf-component="group-chat-create-dialog" data-bf-part="memberList" className="group-chat-create-dialog__members">
               {sortedAssistants.length === 0 ? (
-                <div className="group-chat-create-dialog__empty">{t('groupChat.noAddable')}</div>
+                <div className="group-chat-create-dialog__empty">{t('nav.groupChat.noAddable')}</div>
               ) : (
                 sortedAssistants.map((assistant) => (
                   <label
@@ -126,16 +129,17 @@ export const GroupChatCreateDialog: React.FC<GroupChatCreateDialogProps> = ({
         </div>
 
         <footer className="group-chat-create-dialog__footer">
-          <button data-bf-part="cancel" className="group-chat-create-dialog__cancel" onClick={onClose}>
-            {t('groupChat.cancel')}
+          <button data-bf-component="group-chat-create-dialog" data-bf-part="cancel" className="group-chat-create-dialog__cancel" onClick={onClose}>
+            {t('nav.groupChat.cancel')}
           </button>
           <button
+            data-bf-component="group-chat-create-dialog"
             data-bf-part="create"
             className="group-chat-create-dialog__create"
             disabled={!canSubmit}
             onClick={handleCreate}
           >
-            {t('groupChat.create')}
+            {t('nav.groupChat.create')}
           </button>
         </footer>
       </div>

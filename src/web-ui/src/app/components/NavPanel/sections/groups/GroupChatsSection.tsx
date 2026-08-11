@@ -28,7 +28,8 @@ export const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
 }) => {
   const { t } = useI18n('common');
   const rooms = useGroupChatStore(useShallow((state) => Array.from(state.rooms.values())));
-  // P1-2：直接订阅 members Map 引用（immer 下未变时引用稳定，避免派生数组无限循环）。
+  // P1-2: subscribe to the members Map reference directly (stable under immer,
+  // avoiding infinite loops from derived arrays).
   const membersByRoom = useGroupChatStore((state) => state.members);
   const activeRoomId = useGroupChatStore((state) => state.activeRoomId);
   const loadRooms = useGroupChatStore((state) => state.loadRooms);
@@ -45,7 +46,7 @@ export const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
     [rooms],
   );
 
-  /** P1-2 修复：真实成员数（members Map，P1-11 单源），非 memberLimit 上限。 */
+  /** P1-2 fix: real member count (members Map, P1-11 single source), not memberLimit. */
   const memberCountByRoom = useMemo(() => {
     const map = new Map<string, number>();
     for (const [roomId, members] of membersByRoom.entries()) {
@@ -57,10 +58,10 @@ export const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
   useEffect(() => {
     if (!isVisible) return;
     if (!effectiveWorkspacePath) return;
-    // P1-4 修复：loadRooms 同时同步 store 的 workspacePath（各 action 消费）。
+    // P1-4 fix: loadRooms also syncs the store's workspacePath (consumed by actions).
     setWorkspacePath(effectiveWorkspacePath);
     loadRooms(effectiveWorkspacePath).catch(() => {
-      // Best-effort: store 数据未就绪时保持空态（铁则 6 防呆）。
+      // Best-effort: keep the empty state until store data is ready (fail-safe).
     });
   }, [isVisible, effectiveWorkspacePath, loadRooms, setWorkspacePath]);
 
@@ -68,7 +69,7 @@ export const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
     (roomId: string) => {
       setActiveRoom(roomId);
       loadMembers(roomId).catch(() => {
-        // Best-effort: 成员数据加载失败不影响房间激活。
+        // Best-effort: member load failure must not block room activation.
       });
     },
     [setActiveRoom, loadMembers],
@@ -77,9 +78,9 @@ export const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
   const handleDelete = useCallback(
     async (roomId: string, roomName: string) => {
       const confirmed = await confirmWarning(
-        t('groupChat.deleteTitle'),
-        t('groupChat.deleteConfirm', { name: roomName }),
-        { confirmText: t('groupChat.deleteConfirmText') },
+        t('nav.groupChat.deleteTitle'),
+        t('nav.groupChat.deleteConfirm', { name: roomName }),
+        { confirmText: t('nav.groupChat.deleteConfirmText') },
       );
       if (!confirmed) return;
       await deleteRoom(roomId, { kind: 'master' });
@@ -90,10 +91,10 @@ export const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div data-bf-component="group-chats-section" className="group-chats-section">
+    <div data-bf-component="group-chats-section" data-bf-part="root" className="group-chats-section">
       {sortedRooms.length === 0 ? (
         <div data-bf-component="group-chats-section" data-bf-part="empty" className="group-chats-section__empty">
-          {t('groupChat.empty')}
+          {t('nav.groupChat.empty')}
         </div>
       ) : (
         <div data-bf-component="group-chats-section" data-bf-part="items" className="group-chats-section__items">
@@ -109,20 +110,20 @@ export const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
               <span className="group-chats-section__item-icon" aria-hidden="true">
                 <MessageSquare size={13} />
               </span>
-              <span data-bf-part="itemName" className="group-chats-section__item-name">
+              <span data-bf-component="group-chats-section" data-bf-part="itemName" className="group-chats-section__item-name">
                 {room.name}
               </span>
-              <span data-bf-part="itemMeta" className="group-chats-section__item-meta">
+              <span data-bf-component="group-chats-section" data-bf-part="itemMeta" className="group-chats-section__item-meta">
                 <Users size={10} aria-hidden="true" />
                 {memberCountByRoom.get(room.roomId) ?? 0}
               </span>
-              <span data-bf-part="itemMode" className={`group-chats-section__item-mode group-chats-section__item-mode--${room.mode}`}>
-                {room.mode === 'round_robin' ? t('groupChat.modeRoundRobin') : t('groupChat.modeFree')}
+              <span data-bf-component="group-chats-section" data-bf-part="itemMode" className={`group-chats-section__item-mode group-chats-section__item-mode--${room.mode}`}>
+                {room.mode === 'round_robin' ? t('nav.groupChat.modeRoundRobin') : t('nav.groupChat.modeFree')}
               </span>
-              <Tooltip content={t('groupChat.deleteTooltip')} placement="right">
+              <Tooltip content={t('nav.groupChat.deleteTooltip')} placement="right">
                 <IconButton
                   size="small"
-                  aria-label={t('groupChat.deleteTooltip')}
+                  aria-label={t('nav.groupChat.deleteTooltip')}
                   data-bf-action="delete-room"
                   onClick={(event) => {
                     event.stopPropagation();

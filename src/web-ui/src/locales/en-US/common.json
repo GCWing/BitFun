@@ -121,7 +121,9 @@
       "cancel": "Cancel",
       "create": "Create",
       "timeoutReminder": "No reply within the timeout",
-      "manageMembers": "Manage members"
+      "manageMembers": "Manage members",
+      "masterLabel": "Master",
+      "allLabel": "@all"
     },
     "search": {
       "triggerPlaceholder": "Search",

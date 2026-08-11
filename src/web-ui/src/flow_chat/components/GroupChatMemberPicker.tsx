@@ -1,8 +1,9 @@
 /**
- * GroupChatMemberPicker — member management panel (R-GC-19, P1-4 定标).
+ * GroupChatMemberPicker — member management panel (R-GC-19, P1-4).
  *
- * 职责 = 成员管理面板（拉人/踢人/角色），非 @ 选择器。当前用户为 Owner 或
- * 主人时可踢人；非 Owner 踢人入口隐藏/禁用。
+ * Responsibility: member management (join/leave/roles), not the @ picker.
+ * The current user may remove members when Owner or master; the remove entry
+ * is hidden/disabled for non-Owner users.
  *
  * Contract: type-contract v1.3 §2.3 (GroupChatMemberPickerProps).
  */
@@ -17,7 +18,7 @@ export interface GroupChatMemberPickerProps {
   roomId: string;
   members: GroupChatMember[];
   currentActor: GroupChatActor;
-  availableAssistants: { sessionId: string; name: string }[];  // 可加入的 Claw 助理
+  availableAssistants: { sessionId: string; name: string }[];  // addable Claw assistants
   onJoin: (sessionId: string) => void;
   onLeave: (sessionId: string) => void;
 }
@@ -32,9 +33,9 @@ export const GroupChatMemberPicker: React.FC<GroupChatMemberPickerProps> = ({
   const { t } = useI18n('common');
   const [showAddList, setShowAddList] = useState(false);
 
-  /** 主人例外（P0-2/P1-4）：matches 枚举，禁字符串比较。 */
+  /** Master exception (P0-2/P1-4): match on the enum, never string-compare. */
   const isMaster = currentActor.kind === 'master';
-  /** 当前 Claw 是否为 Owner。 */
+  /** Whether the current Claw is the room Owner. */
   const isOwnerClaw =
     currentActor.kind === 'claw' &&
     members.some(
@@ -59,10 +60,10 @@ export const GroupChatMemberPicker: React.FC<GroupChatMemberPickerProps> = ({
   );
 
   return (
-    <div data-bf-component="group-chat-member-picker" className="group-chat-member-picker">
-      <div data-bf-part="members" className="group-chat-member-picker__members">
+    <div data-bf-component="group-chat-member-picker" data-bf-part="root" className="group-chat-member-picker">
+      <div data-bf-component="group-chat-member-picker" data-bf-part="members" className="group-chat-member-picker__members">
         {members.length === 0 ? (
-          <div className="group-chat-member-picker__empty">{t('groupChat.noMembers')}</div>
+          <div className="group-chat-member-picker__empty">{t('nav.groupChat.noMembers')}</div>
         ) : (
           members.map((member) => (
             <div
@@ -72,19 +73,19 @@ export const GroupChatMemberPicker: React.FC<GroupChatMemberPickerProps> = ({
               data-bf-state={member.role === 'owner' ? 'owner' : 'member'}
               className="group-chat-member-picker__member"
             >
-              <span data-bf-part="memberName" className="group-chat-member-picker__member-name">
+              <span data-bf-component="group-chat-member-picker" data-bf-part="memberName" className="group-chat-member-picker__member-name">
                 {member.displayName ?? member.sessionId}
               </span>
-              <span data-bf-part="memberRole" className={`group-chat-member-picker__role group-chat-member-picker__role--${member.role}`}>
+              <span data-bf-component="group-chat-member-picker" data-bf-part="memberRole" className={`group-chat-member-picker__role group-chat-member-picker__role--${member.role}`}>
                 {member.role === 'owner' ? <Crown size={11} aria-hidden="true" /> : null}
-                {member.role === 'owner' ? t('groupChat.roleOwner') : t('groupChat.roleMember')}
+                {member.role === 'owner' ? t('nav.groupChat.roleOwner') : t('nav.groupChat.roleMember')}
               </span>
               {canManage && member.role !== 'owner' ? (
                 <button
                   data-bf-component="group-chat-member-picker"
                   data-bf-part="leaveButton"
                   className="group-chat-member-picker__leave"
-                  aria-label={t('groupChat.leaveTooltip')}
+                  aria-label={t('nav.groupChat.leaveTooltip')}
                   onClick={() => onLeave(member.sessionId)}
                 >
                   <UserMinus size={12} />
@@ -104,12 +105,12 @@ export const GroupChatMemberPicker: React.FC<GroupChatMemberPickerProps> = ({
             onClick={() => setShowAddList((open) => !open)}
           >
             <UserPlus size={12} aria-hidden="true" />
-            {t('groupChat.addMember')}
+            {t('nav.groupChat.addMember')}
           </button>
           {showAddList && (
-            <div data-bf-part="addList" className="group-chat-member-picker__add-list">
+            <div data-bf-component="group-chat-member-picker" data-bf-part="addList" className="group-chat-member-picker__add-list">
               {addable.length === 0 ? (
-                <div className="group-chat-member-picker__empty">{t('groupChat.noAddable')}</div>
+                <div className="group-chat-member-picker__empty">{t('nav.groupChat.noAddable')}</div>
               ) : (
                 addable.map((assistant) => (
                   <button

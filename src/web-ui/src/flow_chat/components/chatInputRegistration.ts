@@ -61,12 +61,12 @@ export async function submitThroughChatInputRegistration(
 }
 
 /**
- * Group chat registration（R-GC-18，契约 §2.4，P1-3 文件归属）。
+ * Group chat registration (R-GC-18, contract §2.4, P1-3 file ownership).
  *
- * 群聊面板复用标准 ChatInput，通过 registration.onSubmit 路由到
- * groupChatStore.sendMessage。
+ * The group chat panel reuses the standard ChatInput and routes submissions
+ * through registration.onSubmit to groupChatStore.sendMessage.
  */
 export interface GroupChatRegistration {
-  roomId: string;                    // 群聊面板传
-  onSubmit: (text: string, author: GroupChatActor, mentionTargets: GroupChatActor[], urgent?: boolean) => void;  // P2-4 补 urgent
+  roomId: string;                    // passed by the group chat panel
+  onSubmit: (text: string, author: GroupChatActor, mentionTargets: GroupChatActor[], urgent?: boolean) => void;  // P2-4 adds urgent
 }

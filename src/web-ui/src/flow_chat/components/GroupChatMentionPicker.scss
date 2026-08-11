@@ -1,10 +1,10 @@
 .group-chat-mention-picker {
   position: absolute;
   z-index: 1000;
-  background: var(--color-surface, #1f1f1f);
-  border: 1px solid var(--color-border, #333);
+  background: var(--bf-appearance-token-color-bg-elevated);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 16px var(--bf-appearance-token-color-overlay-black-40);
   min-width: 220px;
   max-height: 240px;
   overflow-y: auto;
@@ -17,11 +17,11 @@
     padding: 6px 8px;
     border-radius: 6px;
     cursor: pointer;
-    color: var(--color-text, #e5e5e5);
+    color: var(--bf-appearance-token-color-text-primary);
     font-size: 13px;
 
     &--selected {
-      background: var(--color-accent-dim, rgba(255, 255, 255, 0.12));
+      background: var(--bf-appearance-token-color-overlay-white-12);
     }
   }
 
@@ -29,7 +29,7 @@
     flex-shrink: 0;
 
     &--all {
-      color: var(--color-accent, #4f8cff);
+      color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
@@ -38,13 +38,13 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: var(--color-accent-dim, rgba(255, 255, 255, 0.15));
+    background: var(--bf-appearance-token-color-overlay-white-15);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 10px;
     font-weight: 600;
-    color: var(--color-text, #e5e5e5);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__item-name {
@@ -55,13 +55,13 @@
   }
 
   &__item-detail {
-    color: var(--color-text-dim, #999);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 11px;
   }
 
   &__empty {
     padding: 8px;
-    color: var(--color-text-dim, #999);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 12px;
     text-align: center;
   }

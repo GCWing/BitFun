@@ -758,18 +758,18 @@ export interface FlowChatConfig {
 // Group chat types (type-contract v1.3 §2.1, R-GC-13)
 // ---------------------------------------------------------------------------
 
-// P1-9 修复：枚举统一 snake_case（与后端 serde 一致）——'round_robin' 非 'round-robin'
+// P1-9 fix: enum unified as snake_case (matches backend serde) — 'round_robin', not 'round-robin'
 export type GroupChatMode = 'free' | 'round_robin';
 
-// P0-2 修复：主人保留字（与后端 GROUP_MASTER_ACTOR 一致）
+// P0-2 fix: master reserved word (matches backend GROUP_MASTER_ACTOR)
 export const GROUP_MASTER_ACTOR = '__master__';
 
-// 复审 P0-1 修复：tagged union（internally tagged，与后端 serde(tag="kind") 一致）
-// 形态：{kind:'master'} / {kind:'claw',sessionId,agentType} / {kind:'all'}
+// P0-1 fix (re-reviewed): tagged union (internally tagged, matches backend serde(tag="kind"))
+// Shapes: {kind:'master'} / {kind:'claw',sessionId,agentType} / {kind:'all'}
 export type GroupChatActor =
   | { kind: 'master' }
   | { kind: 'claw'; sessionId: string; agentType: string }
-  | { kind: 'all' };   // @全体（复审 P1-4 修复）
+  | { kind: 'all' };   // @all (P1-4 fix re-reviewed)
 
 export interface GroupChatRoom {
   schemaVersion: number;
@@ -788,7 +788,7 @@ export interface GroupChatMember {
   sessionId: string;
   role: 'owner' | 'member';
   joinedAt: number;
-  agentType: string;      // 必须 'Claw'
+  agentType: string;      // must be 'Claw'
   displayName?: string;
 }
 
@@ -807,8 +807,8 @@ export interface GroupChatMessage {
 export interface GroupChatState {
   rooms: Map<string, GroupChatRoom>;
   activeRoomId: string | null;
-  members: Map<string, GroupChatMember[]>;   // roomId → 成员（P1-11 前端也单源）
-  messages: Map<string, GroupChatMessage[]>; // roomId → 消息
+  members: Map<string, GroupChatMember[]>;   // roomId -> members (P1-11: frontend single source too)
+  messages: Map<string, GroupChatMessage[]>; // roomId -> messages
   mode: GroupChatMode;
   roundRobinCursor: number;
 }
