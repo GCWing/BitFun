@@ -775,12 +775,20 @@ impl ComputerUseActions {
         fn snap_state_json(
             snap: &crate::agentic::tools::computer_use_host::AppStateSnapshot,
         ) -> serde_json::Value {
+            // Bounded here rather than at the `get_app_state` call site: every
+            // `app_click` / `app_type_text` / `app_scroll` / `app_key_chord` /
+            // `app_wait_for` result carries this same post-action tree, so they
+            // all shared the same unbounded-payload risk.
+            let tree_text = super::computer_use_tool::clip_tree_text(
+                snap.tree_text.clone(),
+                super::computer_use_tool::APP_STATE_TREE_TEXT_MAX_BYTES,
+            );
             let mut v = json!({
                 "app": snap.app,
                 "window_title": snap.window_title,
                 "digest": snap.digest,
                 "captured_at_ms": snap.captured_at_ms,
-                "tree_text": snap.tree_text,
+                "tree_text": tree_text,
                 "node_count": snap.nodes.len(),
                 "has_screenshot": snap.screenshot.is_some(),
             });

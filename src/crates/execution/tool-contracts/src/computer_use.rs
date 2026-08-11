@@ -1094,6 +1094,11 @@ pub enum AppWaitPredicate {
 /// `interaction_state.displays` so it can pick the right screen explicitly
 /// instead of falling back to whichever screen the mouse pointer happens
 /// to be on (the original "computer use 在多屏时搞错操作的屏幕" failure mode).
+///
+/// `interaction_state.displays` is populated **only when more than one display
+/// is attached** — it rides on every result, and on a single-screen machine
+/// repeating it says nothing `active_display_id` does not already say. Callers
+/// that need the list unconditionally should use `list_displays`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ComputerUseDisplayInfo {
     /// Stable per-session id of the display. Pass back to
