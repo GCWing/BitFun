@@ -1463,6 +1463,16 @@ impl ComputerUseHost for DesktopComputerUseHost {
                     } else {
                         Some(String::from_utf8_lossy(&output.stderr).trim().to_string())
                     },
+                    // `start` hands off to the shell and returns immediately
+                    // without telling us what it launched, so there is no pid
+                    // to resolve identity or window count from. Left as `None`
+                    // (the "not measured" value) rather than faked — the model
+                    // reads `window_count: Some(0)` as a definite windowless
+                    // app and would act on it.
+                    bundle_id: None,
+                    process_name: None,
+                    window_count: None,
+                    launch_path: Some("shell_start".to_string()),
                 })
             })
             .await
@@ -1487,6 +1497,14 @@ impl ComputerUseHost for DesktopComputerUseHost {
                     } else {
                         Some(String::from_utf8_lossy(&output.stderr).trim().to_string())
                     },
+                    // Linux is the legacy tier: no AX layer, so there is no pid
+                    // to resolve identity or window count from. `None` means
+                    // "not measured" — do not substitute `Some(0)`, which the
+                    // model reads as a definite windowless app.
+                    bundle_id: None,
+                    process_name: None,
+                    window_count: None,
+                    launch_path: Some("xdg_open".to_string()),
                 })
             })
             .await
