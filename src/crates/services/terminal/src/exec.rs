@@ -1946,6 +1946,7 @@ mod tests {
     #[tokio::test]
     async fn delayed_poll_returns_unread_output_after_process_exit() {
         let manager = ExecProcessManager::default();
+        let (lifecycle_tx, mut lifecycle_rx) = tokio::sync::mpsc::unbounded_channel();
         #[cfg(windows)]
         let script = "echo first & powershell -NoProfile -Command \"Start-Sleep -Milliseconds 250\" & echo second";
         #[cfg(not(windows))]
@@ -1959,7 +1960,7 @@ mod tests {
                 tty: false,
                 yield_time_ms: Some(100),
                 max_output_chars: Some(10_000),
-                lifecycle_tx: None,
+                lifecycle_tx: Some(lifecycle_tx),
                 output_capture_tx: None,
             })
             .await
@@ -1970,7 +1971,24 @@ mod tests {
             .expect("process should still be running after first yield");
         assert!(first.output.contains("first"));
 
-        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        let running = tokio::time::timeout(std::time::Duration::from_secs(2), lifecycle_rx.recv())
+            .await
+            .expect("running lifecycle event should arrive")
+            .expect("lifecycle channel should stay open");
+        assert_eq!(running.session_id, session_id);
+        assert_eq!(running.status, ExecProcessLifecycleStatus::Running);
+
+        let exited = tokio::time::timeout(std::time::Duration::from_secs(5), lifecycle_rx.recv())
+            .await
+            .expect("exit lifecycle event should arrive")
+            .expect("lifecycle channel should stay open until exit");
+        assert_eq!(exited.session_id, session_id);
+        assert_eq!(exited.status, ExecProcessLifecycleStatus::Exited);
+        assert_eq!(
+            exited.exit_code,
+            Some(0),
+            "a naturally exited process must retain its real exit code"
+        );
 
         let second = manager
             .write_stdin(WriteStdinRequest {
@@ -1983,8 +2001,11 @@ mod tests {
             .await
             .expect("poll should return unread output");
 
+        assert!(
+            second.session_id.is_none(),
+            "the lifecycle exit event must not be published before the session is closed"
+        );
         assert_eq!(second.exit_code, Some(0));
-        assert!(second.session_id.is_none());
         assert!(second.output.contains("second"));
     }
 
