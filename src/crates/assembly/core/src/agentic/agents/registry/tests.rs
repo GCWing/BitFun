@@ -341,6 +341,30 @@ fn every_builtin_primary_mode_defaults_to_the_thread_goal_lifecycle() {
 }
 
 #[test]
+fn every_builtin_mode_with_control_hub_can_also_schedule_with_cron() {
+    // ControlHub's `wait` documentation tells the agent to schedule anything
+    // repeating — or further out than an hour — with Cron instead of holding
+    // the turn open. A mode that offers one without the other sends the agent
+    // after a tool that is not in its list; Cowork answered a "check every 30
+    // minutes" request with "I have no cron tool" for exactly this reason.
+    for spec in builtin_agent_specs()
+        .iter()
+        .filter(|spec| spec.category == AgentCategory::Mode)
+    {
+        let mode = (spec.factory)();
+        let default_tools = mode.default_tools();
+        if !default_tools.iter().any(|tool| tool == "ControlHub") {
+            continue;
+        }
+        assert!(
+            default_tools.iter().any(|tool| tool == "Cron"),
+            "builtin mode {} offers ControlHub but cannot schedule with Cron",
+            mode.id()
+        );
+    }
+}
+
+#[test]
 fn non_deep_review_builtin_subagents_default_to_primary() {
     for agent_type in [
         "Explore",

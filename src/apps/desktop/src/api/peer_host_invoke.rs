@@ -119,6 +119,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "dispatch_list_jobs",
     "dispatch_answer",
     "dispatch_append",
+    "dispatch_continue",
     "dispatch_load_transcript",
     "dispatch_save_transcript",
     // One-click relay deploy SSHes from the controller to a user host
@@ -129,6 +130,16 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "relay_deploy_cancel",
     "relay_deploy_register",
     "relay_deploy_verify",
+    // Speech capture and model files belong to the machine the user speaks at.
+    "speech_list_models",
+    "speech_download_model",
+    "speech_cancel_model_download",
+    "speech_delete_model",
+    "speech_verify_model",
+    "speech_start_input_session",
+    "speech_append_audio_chunk",
+    "speech_finish_input_session",
+    "speech_cancel_input_session",
 ];
 
 static PENDING: OnceLock<Mutex<HashMap<String, oneshot::Sender<HostInvokeBridgeResult>>>> =
@@ -471,6 +482,30 @@ mod tests {
             "appearance_market_review_submission",
             "appearance_market_submit_package",
             "appearance_market_withdraw_submission",
+        ] {
+            assert!(is_local_only_command(command), "{command}");
+        }
+    }
+
+    /// The controller-side FE deny list is an optimization, not the boundary.
+    /// A controller on an older build (or a non-FE controller) still reaches
+    /// this host, so every controller-owned command must be refused here too.
+    #[test]
+    fn controller_owned_capture_and_dispatch_commands_are_refused_on_the_peer() {
+        for command in [
+            // Capture and model files belong to the machine the user speaks at.
+            "speech_list_models",
+            "speech_download_model",
+            "speech_cancel_model_download",
+            "speech_delete_model",
+            "speech_verify_model",
+            "speech_start_input_session",
+            "speech_append_audio_chunk",
+            "speech_finish_input_session",
+            "speech_cancel_input_session",
+            // Same controller-owned observer/credential family as the other
+            // dispatch verbs already denied here.
+            "dispatch_continue",
         ] {
             assert!(is_local_only_command(command), "{command}");
         }

@@ -46,6 +46,115 @@ export const servicesIntegrationsIntegrationTestTargets = [
   { name: 'workspace_search_contracts', path: 'tests/workspace_search_contracts.rs' },
 ];
 
+export const opencodeAdapterIntegrationTestTargets = [
+  { name: 'opencode_mcp_adapter', path: 'tests/opencode_mcp_adapter.rs' },
+  { name: 'opencode_source_adapter', path: 'tests/opencode_source_adapter.rs' },
+  {
+    name: 'opencode_static_source_contracts',
+    path: 'tests/opencode_static_source_contracts.rs',
+    leaves: [
+      'tests/opencode_static_source_contracts/hook_source.rs',
+      'tests/opencode_static_source_contracts/opencode_command_adapter.rs',
+      'tests/opencode_static_source_contracts/opencode_skill_roots.rs',
+      'tests/opencode_static_source_contracts/opencode_subagent_adapter.rs',
+      'tests/opencode_static_source_contracts/opencode_workspace_references.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+  { name: 'tool_source_contracts', path: 'tests/tool_source_contracts.rs' },
+];
+
+export const claudeCodeAdapterIntegrationTestTargets = [
+  {
+    name: 'claude_code_source_contracts',
+    path: 'tests/claude_code_source_contracts.rs',
+    leaves: [
+      'tests/claude_code_source_contracts/command_source.rs',
+      'tests/claude_code_source_contracts/hook_source.rs',
+      'tests/claude_code_source_contracts/mcp_source.rs',
+      'tests/claude_code_source_contracts/subagent_source.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+];
+
+export const codexAdapterIntegrationTestTargets = [
+  {
+    name: 'codex_source_contracts',
+    path: 'tests/codex_source_contracts.rs',
+    leaves: [
+      'tests/codex_source_contracts/hook_source.rs',
+      'tests/codex_source_contracts/mcp_source.rs',
+      'tests/codex_source_contracts/subagent_source.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+];
+
+export const externalSourcesIntegrationTestTargets = [
+  {
+    name: 'external_source_coordination_contracts',
+    path: 'tests/external_source_coordination_contracts.rs',
+    leaves: [
+      'tests/external_source_coordination_contracts/control_plane.rs',
+      'tests/external_source_coordination_contracts/coordinator_contracts.rs',
+      'tests/external_source_coordination_contracts/hook_coordinator.rs',
+      'tests/external_source_coordination_contracts/mcp_coordinator.rs',
+      'tests/external_source_coordination_contracts/subagent_coordinator.rs',
+      'tests/external_source_coordination_contracts/tool_coordinator_contracts.rs',
+      'tests/external_source_coordination_contracts/workspace_reference.rs',
+    ],
+    forbidRequiredFeatures: true,
+  },
+];
+
+function decodeBasicTomlKey(token) {
+  let decoded = '';
+  const simpleEscapes = new Map([
+    ['b', '\b'], ['t', '\t'], ['n', '\n'], ['f', '\f'], ['r', '\r'],
+    ['"', '"'], ['\\', '\\'],
+  ]);
+  for (let index = 1; index < token.length - 1; index += 1) {
+    if (token[index] !== '\\') {
+      decoded += token[index];
+      continue;
+    }
+    index += 1;
+    const escape = token[index];
+    if (simpleEscapes.has(escape)) {
+      decoded += simpleEscapes.get(escape);
+      continue;
+    }
+    if (escape !== 'u' && escape !== 'U') {
+      return null;
+    }
+    const digitCount = escape === 'u' ? 4 : 8;
+    const hex = token.slice(index + 1, index + 1 + digitCount);
+    if (!new RegExp(`^[0-9a-fA-F]{${digitCount}}$`).test(hex)) {
+      return null;
+    }
+    const codePoint = Number.parseInt(hex, 16);
+    if (codePoint > 0x10FFFF || (codePoint >= 0xD800 && codePoint <= 0xDFFF)) {
+      return null;
+    }
+    decoded += String.fromCodePoint(codePoint);
+    index += digitCount;
+  }
+  return decoded;
+}
+
+function tomlFieldName(line) {
+  const match = line.match(/^([A-Za-z0-9_-]+|'[^']*'|"(?:[^"\\]|\\.)*")\s*=/);
+  if (!match) {
+    return null;
+  }
+  const token = match[1];
+  if (token.startsWith("'")) {
+    return token.slice(1, -1);
+  }
+  return token.startsWith('"') ? decodeBasicTomlKey(token) : token;
+}
+
 function parseExplicitTestTargets(manifestText) {
   const targets = [];
   let current = null;
@@ -66,6 +175,9 @@ function parseExplicitTestTargets(manifestText) {
     if (trimmed.startsWith('[')) {
       finishCurrent();
       continue;
+    }
+    if (current && tomlFieldName(trimmed) === 'required-features') {
+      current.hasRequiredFeatures = true;
     }
     const field = current && trimmed.match(/^(name|path)\s*=\s*"([^"]+)"\s*$/);
     if (field) {
@@ -386,11 +498,22 @@ export function validateExplicitIntegrationTestTopology({
   }
 
   const expectedTargetEntries = expectedTargets.map(({ name, path }) => `${name}=${path}`).sort();
-  const actualTargetEntries = parseExplicitTestTargets(manifestText)
+  const actualTargets = parseExplicitTestTargets(manifestText);
+  const actualTargetEntries = actualTargets
     .map(({ name, path }) => `${name ?? '<missing-name>'}=${path ?? '<missing-path>'}`)
     .sort();
   if (actualTargetEntries.join('\n') !== expectedTargetEntries.join('\n')) {
     errors.push(`explicit test targets must be exactly: ${expectedTargetEntries.join(', ')}`);
+  }
+  const targetsWithoutRequiredFeatures = new Set(
+    expectedTargets
+      .filter(({ forbidRequiredFeatures }) => forbidRequiredFeatures)
+      .map(({ name, path }) => `${name}=${path}`),
+  );
+  for (const { name, path, hasRequiredFeatures } of actualTargets) {
+    if (hasRequiredFeatures && targetsWithoutRequiredFeatures.has(`${name}=${path}`)) {
+      errors.push(`explicit test target ${name} must not declare required-features`);
+    }
   }
 
   const expectedRoots = expectedTargets.map(({ path }) => path).sort();
@@ -399,6 +522,13 @@ export function validateExplicitIntegrationTestTopology({
   }
 
   const leaves = new Set(leafRustFiles);
+  const expectedLeaves = expectedTargets.flatMap(({ leaves: targetLeaves = [] }) => targetLeaves).sort();
+  if (
+    expectedLeaves.length > 0
+    && [...leaves].sort().join('\n') !== expectedLeaves.join('\n')
+  ) {
+    errors.push(`grouped test leaves must be exactly: ${expectedLeaves.join(', ')}`);
+  }
   const referenceCounts = new Map();
   for (const root of expectedRoots) {
     const source = rootSources.get(root);
@@ -541,6 +671,44 @@ export function checkServicesIntegrationsIntegrationTestTopology(root) {
       '#![cfg(not(feature = "remote-ssh-concrete"))]',
     ]]),
   });
+}
+
+export function checkOpencodeAdapterIntegrationTestTopology(root) {
+  return checkExplicitIntegrationTestTopology(root, {
+    cratePath: 'src/crates/adapters/opencode-adapter',
+    expectedTargets: opencodeAdapterIntegrationTestTargets,
+    ignoredDirectories: ['tests/fixtures'],
+  });
+}
+
+export function checkClaudeCodeAdapterIntegrationTestTopology(root) {
+  return checkExplicitIntegrationTestTopology(root, {
+    cratePath: 'src/crates/adapters/claude-code-adapter',
+    expectedTargets: claudeCodeAdapterIntegrationTestTargets,
+  });
+}
+
+export function checkCodexAdapterIntegrationTestTopology(root) {
+  return checkExplicitIntegrationTestTopology(root, {
+    cratePath: 'src/crates/adapters/codex-adapter',
+    expectedTargets: codexAdapterIntegrationTestTargets,
+  });
+}
+
+export function checkExternalSourcesIntegrationTestTopology(root) {
+  return checkExplicitIntegrationTestTopology(root, {
+    cratePath: 'src/crates/assembly/external-sources',
+    expectedTargets: externalSourcesIntegrationTestTargets,
+  });
+}
+
+export function checkExternalSourceIntegrationTestTopologies(root) {
+  return [
+    ...checkOpencodeAdapterIntegrationTestTopology(root),
+    ...checkClaudeCodeAdapterIntegrationTestTopology(root),
+    ...checkCodexAdapterIntegrationTestTopology(root),
+    ...checkExternalSourcesIntegrationTestTopology(root),
+  ];
 }
 
 export function checkServiceIntegrationTestTopologies(root) {

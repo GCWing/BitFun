@@ -19,6 +19,7 @@ use crate::trace::{
 use crate::types::ProxyConfig;
 use crate::types::*;
 use anyhow::Result;
+use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
 use format::ApiFormat;
 use log::warn;
 use reqwest::Client;
@@ -223,30 +224,36 @@ impl AIClient {
         extra_body: Option<serde_json::Value>,
         trace: Option<ModelExchangeTraceConfig>,
     ) -> Result<StreamResponse> {
-        let max_tries = SEND_MESSAGE_STREAM_ATTEMPTS;
-        match ApiFormat::parse(&self.config.format)? {
-            ApiFormat::OpenAIChat => {
-                openai::chat::send_stream(self, messages, tools, extra_body, max_tries, trace).await
-            }
-            ApiFormat::OpenAIResponses => {
-                openai::responses::send_stream(self, messages, tools, extra_body, max_tries, trace)
-                    .await
-            }
-            ApiFormat::Anthropic => {
-                anthropic::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
-                    .await
-            }
-            ApiFormat::Gemini => {
-                gemini::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
-                    .await
-            }
-            ApiFormat::GeminiCodeAssist => {
-                gemini::code_assist::send_stream(
-                    self, messages, tools, extra_body, max_tries, trace,
-                )
-                .await
-            }
-        }
+        self.send_message_stream_with_extra_body_and_max_attempts(
+            messages,
+            tools,
+            extra_body,
+            SEND_MESSAGE_STREAM_ATTEMPTS,
+            trace,
+        )
+        .await
+    }
+
+    /// Open one model stream without an adapter-owned retry loop.
+    ///
+    /// Runtime owners with a broader attempt lifecycle use this entry point so
+    /// connection, HTTP, TTFT, parsing, and in-stream failures all consume one
+    /// shared retry budget instead of multiplying nested retry loops.
+    pub async fn send_message_stream_once(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        trace: Option<ModelExchangeTraceConfig>,
+    ) -> Result<StreamResponse> {
+        let custom_body = self.config.custom_request_body.clone();
+        self.send_message_stream_with_extra_body_and_max_attempts(
+            messages,
+            tools,
+            custom_body,
+            1,
+            trace,
+        )
+        .await
     }
 
     pub async fn send_message(
@@ -306,15 +313,33 @@ impl AIClient {
         max_attempts: usize,
     ) -> Result<GeminiResponse> {
         for attempt in 0..max_attempts {
-            let stream_response = self
+            let stream_response = match self
                 .send_message_stream_with_extra_body_and_max_attempts(
                     messages.clone(),
                     tools.clone(),
                     extra_body.clone(),
-                    max_attempts,
+                    1,
                     trace.clone(),
                 )
-                .await?;
+                .await
+            {
+                Ok(response) => response,
+                Err(error) => {
+                    if attempt == max_attempts - 1 {
+                        return Err(error);
+                    }
+                    let delay_ms = send_message_retry_delay_ms_for_error(attempt, &error);
+                    warn!(
+                        "Retrying AI stream request after error: attempt={}/{}, delay_ms={}, error={}",
+                        attempt + 1,
+                        max_attempts,
+                        delay_ms,
+                        error
+                    );
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                    continue;
+                }
+            };
             let trace_handle = stream_response.trace_handle.clone();
 
             match response_aggregator::aggregate_stream_response(stream_response).await {
@@ -333,7 +358,7 @@ impl AIClient {
                     if attempt == max_attempts - 1 {
                         return Err(error);
                     }
-                    let delay_ms = send_message_retry_delay_ms(attempt, &error.to_string());
+                    let delay_ms = send_message_retry_delay_ms_for_error(attempt, &error);
                     warn!(
                         "Retrying aggregated AI stream after error: attempt={}/{}, delay_ms={}, error={}",
                         attempt + 1,
@@ -419,15 +444,35 @@ impl AIClient {
     }
 }
 
+#[cfg(test)]
 fn send_message_retry_delay_ms(attempt_index: usize, error_message: &str) -> u64 {
+    send_message_retry_delay_ms_with_provider(attempt_index, error_message, None)
+}
+
+fn send_message_retry_delay_ms_for_error(attempt_index: usize, error: &anyhow::Error) -> u64 {
+    send_message_retry_delay_ms_with_provider(
+        attempt_index,
+        &error.to_string(),
+        error.downcast_ref::<AiProviderError>(),
+    )
+}
+
+fn send_message_retry_delay_ms_with_provider(
+    attempt_index: usize,
+    error_message: &str,
+    provider_error: Option<&AiProviderError>,
+) -> u64 {
     let shift = u32::try_from(attempt_index)
         .unwrap_or(u32::MAX)
         .min(SEND_MESSAGE_MAX_RETRY_EXPONENT_SHIFT);
     let msg = error_message.to_lowercase();
-    let is_rate_limit =
-        msg.contains("429") || msg.contains("rate limit") || msg.contains("too many requests");
+    let is_rate_limit = provider_error
+        .is_some_and(|error| error.category == ErrorCategory::RateLimit)
+        || msg.contains("429")
+        || msg.contains("rate limit")
+        || msg.contains("too many requests");
 
-    if is_rate_limit {
+    let fallback = if is_rate_limit {
         SEND_MESSAGE_RATE_LIMIT_RETRY_BASE_DELAY_MS
             .saturating_mul(1u64 << shift)
             .min(SEND_MESSAGE_MAX_RATE_LIMIT_DELAY_MS)
@@ -435,6 +480,16 @@ fn send_message_retry_delay_ms(attempt_index: usize, error_message: &str) -> u64
         SEND_MESSAGE_RETRY_BASE_DELAY_MS
             .saturating_mul(1u64 << shift)
             .min(SEND_MESSAGE_MAX_EXPONENTIAL_DELAY_MS)
+    };
+
+    match provider_error.and_then(|error| error.retry_after_ms) {
+        Some(retry_after_ms) if is_rate_limit => retry_after_ms
+            .max(fallback)
+            .min(SEND_MESSAGE_MAX_RATE_LIMIT_DELAY_MS),
+        Some(retry_after_ms) if retry_after_ms > 0 => {
+            retry_after_ms.min(SEND_MESSAGE_MAX_RATE_LIMIT_DELAY_MS)
+        }
+        Some(_) | None => fallback,
     }
 }
 

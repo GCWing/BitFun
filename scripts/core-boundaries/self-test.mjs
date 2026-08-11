@@ -152,6 +152,53 @@ export function runManifestParserSelfTest({
   if (!orphanErrors.some((error) => error.includes('orphan_contracts.rs'))) {
     throw new Error('explicit integration-test topology must reject an orphan leaf test');
   }
+  const reviewedLeafTargets = agentRuntimeIntegrationTestTargets.map((target) => (
+    target.path === 'tests/agent_definition_contracts.rs'
+      ? {
+          ...target,
+          leaves: ['tests/agent_definition_contracts/prompt_contracts.rs'],
+          forbidRequiredFeatures: true,
+        }
+      : target
+  ));
+  const missingReviewedLeafErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    expectedTargets: reviewedLeafTargets,
+    leafRustFiles: [],
+    leafSources: new Map(),
+  });
+  if (!missingReviewedLeafErrors.some((error) => error.includes('grouped test leaves'))) {
+    throw new Error('explicit integration-test topology must reject a removed reviewed leaf');
+  }
+  for (const requiredFeaturesDeclaration of [
+    'required-features = [\n  "opt-in",\n]',
+    '"required\\u002dfeatures" = ["opt-in"]',
+  ]) {
+    const unexpectedRequiredFeaturesErrors = validateExplicitIntegrationTestTopology({
+      ...explicitTestFixture,
+      expectedTargets: reviewedLeafTargets,
+      manifestText: explicitTestManifest.replace(
+        'path = "tests/agent_definition_contracts.rs"',
+        `path = "tests/agent_definition_contracts.rs"\n${requiredFeaturesDeclaration}`,
+      ),
+    });
+    if (!unexpectedRequiredFeaturesErrors.some((error) => error.includes('required-features'))) {
+      throw new Error(`ungated explicit test topology accepted: ${requiredFeaturesDeclaration}`);
+    }
+  }
+  const independentRequiredFeaturesErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    expectedTargets: reviewedLeafTargets,
+    manifestText: explicitTestManifest.replace(
+      'path = "tests/native_hook_execution_contracts.rs"',
+      'path = "tests/native_hook_execution_contracts.rs"\nrequired-features = ["native-hooks"]',
+    ),
+  });
+  if (independentRequiredFeaturesErrors.length > 0) {
+    throw new Error(
+      `target-scoped required-features contract rejected an independent target: ${independentRequiredFeaturesErrors.join('; ')}`,
+    );
+  }
   const reviewedLeafCfgFixture = {
     ...explicitTestFixture,
     leafSources: new Map([[

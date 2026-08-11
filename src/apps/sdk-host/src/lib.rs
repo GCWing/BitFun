@@ -4,13 +4,13 @@ pub mod transport;
 
 /// Stack size used by the SDK Host worker.
 ///
-/// The Host initializes the same full Agent Runtime as the CLI and preserves
-/// the reviewed Windows stack-overflow protection used by that runtime.
+/// The Host initializes its reviewed SDK capability profile and preserves the
+/// Windows stack-overflow protection used by the shared Agent Runtime.
 pub const SDK_HOST_WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 /// Installs process-global prerequisites before any TLS-capable service starts.
 pub fn initialize_process_runtime() {
-    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+    let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
 /// Spawns the SDK Host runtime on the reviewed worker-stack boundary.
