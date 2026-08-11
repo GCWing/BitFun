@@ -809,52 +809,39 @@ export function findProductEntrypointCoreFeatureViolations(
   packages,
   { root, crateLayoutRules },
 ) {
+  const coreCompatibilityReviewedFeatures = [
+    'agent-runtime',
+    'document-read',
+    'subscription-auth',
+    'deep-research',
+    'lsp',
+    'external-sources',
+    'tools-basic',
+    'tools-git',
+    'tools-mcp',
+    'tools-browser-web',
+    'tools-computer-use',
+    'tools-image-analysis',
+    'tools-miniapp',
+    'tools-canvas',
+    'tools-agent-control',
+  ];
   const reviewedCoreFeatureClosures = new Map([
     ['bitfun-cli', [
-      'agent-runtime',
-      'document-read',
-      'subscription-auth',
+      ...coreCompatibilityReviewedFeatures,
       'remote-connect',
-      'deep-research',
-      'lsp',
-      'external-sources',
       'plugin-runtime',
       'ssh-remote',
-      'tools-basic',
-      'tools-git',
-      'tools-mcp',
-      'tools-browser-web',
-      'tools-computer-use',
-      'tools-image-analysis',
-      'tools-miniapp',
-      'tools-canvas',
-      'tools-agent-control',
     ]],
-    ['bitfun-acp', [
-      'agent-runtime',
-      'document-read',
-      'subscription-auth',
-      'deep-research',
-      'lsp',
-      'external-sources',
-      'ssh-remote',
-      'tools-basic',
-      'tools-git',
-      'tools-mcp',
-      'tools-browser-web',
-      'tools-computer-use',
-      'tools-image-analysis',
-      'tools-miniapp',
-      'tools-canvas',
-      'tools-agent-control',
-    ]],
+    ['bitfun-acp', [...coreCompatibilityReviewedFeatures, 'ssh-remote']],
     ['bitfun-app-server', [
       'external-sources',
       'git',
       'remote-connect',
     ]],
+    ['bitfun-sdk-host-app', coreCompatibilityReviewedFeatures],
   ]);
-  const acpActiveCoreFeatures = [
+  const coreCompatibilityActiveFeatures = [
     'agent-runtime',
     'ai-adapter-runtime',
     'browser-control',
@@ -872,12 +859,10 @@ export function findProductEntrypointCoreFeatureViolations(
     'plugin-source',
     'process-runtime',
     'product-capabilities',
-    'remote-workspace',
     'review-platform',
     'runtime-services',
     'scheduled-jobs',
     'script-tool-runtime',
-    'ssh-remote',
     'subscription-auth',
     'terminal',
     'tool-packs',
@@ -895,9 +880,15 @@ export function findProductEntrypointCoreFeatureViolations(
     'workspace-runtime',
     'workspace-watch',
   ];
+  const acpActiveCoreFeatures = [
+    ...coreCompatibilityActiveFeatures,
+    'remote-workspace',
+    'ssh-remote',
+  ];
   const reviewedActiveCoreFeatureClosures = new Map([
     ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime', 'remote-connect']],
     ['bitfun-acp', acpActiveCoreFeatures],
+    ['bitfun-sdk-host-app', coreCompatibilityActiveFeatures],
     ['bitfun-app-server', [
       'agent-runtime',
       'ai-adapter-runtime',
@@ -924,6 +915,21 @@ export function findProductEntrypointCoreFeatureViolations(
       'workspace-runtime',
       'workspace-watch',
     ]],
+  ]);
+  const reviewedForbiddenDependencyOwnerFeatures = new Map([
+    ['bitfun-sdk-host-app', new Map([
+      ['bitfun-services-integrations', [
+        'announcement',
+        'debug-log',
+        'function-agents',
+        'product-full',
+        'remote-connect',
+        'remote-ssh',
+        'remote-ssh-concrete',
+      ]],
+      ['bitfun-product-domains', ['function-agents', 'product-full']],
+      ['bitfun-services-core', ['dispatch-workspace']],
+    ])],
   ]);
   const packageByManifest = new Map(
     packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
@@ -1012,7 +1018,10 @@ export function findProductEntrypointCoreFeatureViolations(
         ['bitfun-cli', 'CLI'],
         ['bitfun-acp', 'ACP'],
         ['bitfun-app-server', 'App Server'],
+        ['bitfun-sdk-host-app', 'SDK Host'],
       ]).get(rootName) ?? rootName;
+      const forbiddenOwnerFeatures =
+        reviewedForbiddenDependencyOwnerFeatures.get(rootName);
 
       const packageStates = new Map();
       const pending = [];
@@ -1146,6 +1155,30 @@ export function findProductEntrypointCoreFeatureViolations(
                 message: `${rootLabel} dependency closure must not enable ${unexpected}: ${[
                   ...packagePath,
                   `${targetPackage.name}/${unexpected}`,
+                ].join(' -> ')}`,
+              });
+            }
+            continue;
+          }
+
+          const forbiddenOwnerFeature = (
+            forbiddenOwnerFeatures?.get(targetPackage.name) ?? []
+          ).find((feature) => targetState.featureState.active.has(feature));
+          if (forbiddenOwnerFeature) {
+            const forbiddenOwner = `${targetPackage.name}/${forbiddenOwnerFeature}`;
+            const reportKey = [
+              rootName,
+              targetDependencyKindContext,
+              forbiddenOwner,
+            ].join('|');
+            if (!reportedUnexpectedFeatures.has(reportKey)) {
+              reportedUnexpectedFeatures.add(reportKey);
+              violations.push({
+                path: sourcePackage.manifest_path,
+                line: 1,
+                message: `${rootLabel} dependency closure must not enable ${forbiddenOwner}: ${[
+                  ...packagePath,
+                  forbiddenOwner,
                 ].join(' -> ')}`,
               });
             }

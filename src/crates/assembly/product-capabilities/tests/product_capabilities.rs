@@ -410,7 +410,7 @@ fn product_delivery_profile_matrix_documents_current_core_dependency_shape() {
             ),
             (
                 DeliveryProfile::Sdk,
-                ProductCoreDependencyMode::ProductFullCompatibility,
+                ProductCoreDependencyMode::ExplicitCoreCapabilityClosure,
             ),
         ]
     );

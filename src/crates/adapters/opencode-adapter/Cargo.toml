@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "OpenCode-compatible source and candidate adapter for BitFun"
+autotests = false
 
 [lib]
 name = "bitfun_opencode_adapter"
@@ -34,6 +35,22 @@ url = { workspace = true }
 bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["plugin-source", "script-tool-runtime"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tempfile = { workspace = true }
+
+[[test]]
+name = "opencode_mcp_adapter"
+path = "tests/opencode_mcp_adapter.rs"
+
+[[test]]
+name = "opencode_source_adapter"
+path = "tests/opencode_source_adapter.rs"
+
+[[test]]
+name = "opencode_static_source_contracts"
+path = "tests/opencode_static_source_contracts.rs"
+
+[[test]]
+name = "tool_source_contracts"
+path = "tests/tool_source_contracts.rs"
 
 [lints]
 workspace = true

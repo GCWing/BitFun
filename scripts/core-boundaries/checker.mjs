@@ -42,6 +42,7 @@ import {
   agentRuntimeIntegrationTestTargets,
   checkAgentRuntimeIntegrationTestTopology,
   checkCliIntegrationTestTopology,
+  checkExternalSourceIntegrationTestTopologies,
   checkServiceIntegrationTestTopologies,
   cliIntegrationTestTargets,
   validateExplicitIntegrationTestTopology,
@@ -1125,7 +1126,7 @@ export function runCoreBoundaryCheck() {
   failures.push(...checkCargoDependencyBoundariesSafely({ root: ROOT, crateLayoutRules }));
   failures.push(...checkAgentRuntimeIntegrationTestTopology(ROOT));
   failures.push(...checkCliIntegrationTestTopology(ROOT));
-  failures.push(...checkServiceIntegrationTestTopologies(ROOT));
+  failures.push(...checkExternalSourceIntegrationTestTopologies(ROOT), ...checkServiceIntegrationTestTopologies(ROOT));
   failures.push(...checkPeerCommandPolicySync(ROOT));
 
   for (const rule of forbiddenManifestDependencyRules) {

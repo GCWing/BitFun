@@ -20,9 +20,14 @@ import {
 } from './core-boundaries/cargo-dependency-boundaries.mjs';
 import {
   checkCliIntegrationTestTopology,
+  checkExternalSourceIntegrationTestTopologies,
   checkServicesCoreIntegrationTestTopology,
   checkServicesIntegrationsIntegrationTestTopology,
+  claudeCodeAdapterIntegrationTestTargets,
   cliIntegrationTestTargets,
+  codexAdapterIntegrationTestTargets,
+  externalSourcesIntegrationTestTargets,
+  opencodeAdapterIntegrationTestTargets,
   validateExplicitIntegrationTestTopology,
 } from './core-boundaries/explicit-test-topology.mjs';
 import { crateLayoutRules } from './core-boundaries/rules/crate-layout.mjs';
@@ -253,6 +258,73 @@ test('service integration tests keep their reviewed explicit target topology', (
 
   assert.deepEqual(checkServicesCoreIntegrationTestTopology(repositoryRoot), []);
   assert.deepEqual(checkServicesIntegrationsIntegrationTestTopology(repositoryRoot), []);
+});
+
+test('external source integration tests keep reviewed owner and process boundaries', () => {
+  const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
+
+  assert.deepEqual(opencodeAdapterIntegrationTestTargets, [
+    { name: 'opencode_mcp_adapter', path: 'tests/opencode_mcp_adapter.rs' },
+    { name: 'opencode_source_adapter', path: 'tests/opencode_source_adapter.rs' },
+    {
+      name: 'opencode_static_source_contracts',
+      path: 'tests/opencode_static_source_contracts.rs',
+      leaves: [
+        'tests/opencode_static_source_contracts/hook_source.rs',
+        'tests/opencode_static_source_contracts/opencode_command_adapter.rs',
+        'tests/opencode_static_source_contracts/opencode_skill_roots.rs',
+        'tests/opencode_static_source_contracts/opencode_subagent_adapter.rs',
+        'tests/opencode_static_source_contracts/opencode_workspace_references.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+    { name: 'tool_source_contracts', path: 'tests/tool_source_contracts.rs' },
+  ]);
+  assert.deepEqual(claudeCodeAdapterIntegrationTestTargets, [
+    {
+      name: 'claude_code_source_contracts',
+      path: 'tests/claude_code_source_contracts.rs',
+      leaves: [
+        'tests/claude_code_source_contracts/command_source.rs',
+        'tests/claude_code_source_contracts/hook_source.rs',
+        'tests/claude_code_source_contracts/mcp_source.rs',
+        'tests/claude_code_source_contracts/subagent_source.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+  ]);
+  assert.deepEqual(codexAdapterIntegrationTestTargets, [
+    {
+      name: 'codex_source_contracts',
+      path: 'tests/codex_source_contracts.rs',
+      leaves: [
+        'tests/codex_source_contracts/hook_source.rs',
+        'tests/codex_source_contracts/mcp_source.rs',
+        'tests/codex_source_contracts/subagent_source.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+  ]);
+  assert.deepEqual(externalSourcesIntegrationTestTargets, [
+    {
+      name: 'external_source_coordination_contracts',
+      path: 'tests/external_source_coordination_contracts.rs',
+      leaves: [
+        'tests/external_source_coordination_contracts/control_plane.rs',
+        'tests/external_source_coordination_contracts/coordinator_contracts.rs',
+        'tests/external_source_coordination_contracts/hook_coordinator.rs',
+        'tests/external_source_coordination_contracts/mcp_coordinator.rs',
+        'tests/external_source_coordination_contracts/subagent_coordinator.rs',
+        'tests/external_source_coordination_contracts/tool_coordinator_contracts.rs',
+        'tests/external_source_coordination_contracts/workspace_reference.rs',
+      ],
+      forbidRequiredFeatures: true,
+    },
+  ]);
+  assert.deepEqual(
+    checkExternalSourceIntegrationTestTopologies(repositoryRoot),
+    [],
+  );
 });
 
 test('runtime-services test support is absent from ordinary library builds', async () => {
@@ -506,14 +578,13 @@ test('explicit product entrypoint bitfun-core feature selections pass', () => {
   );
 });
 
-const ACP_REVIEWED_CORE_FEATURES = [
+const SDK_HOST_REVIEWED_CORE_FEATURES = [
   'agent-runtime',
   'document-read',
   'subscription-auth',
   'deep-research',
   'lsp',
   'external-sources',
-  'ssh-remote',
   'tools-basic',
   'tools-git',
   'tools-mcp',
@@ -523,6 +594,11 @@ const ACP_REVIEWED_CORE_FEATURES = [
   'tools-miniapp',
   'tools-canvas',
   'tools-agent-control',
+];
+
+const ACP_REVIEWED_CORE_FEATURES = [
+  ...SDK_HOST_REVIEWED_CORE_FEATURES,
+  'ssh-remote',
 ];
 
 const CLI_REVIEWED_CORE_FEATURES = [
@@ -536,6 +612,126 @@ const APP_SERVER_REVIEWED_CORE_FEATURES = [
   'git',
   'remote-connect',
 ];
+
+test('SDK Host Core capability closure keeps every reviewed owner', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const sdkHost = packageAt(
+    'bitfun-sdk-host-app',
+    'src/apps/sdk-host/Cargo.toml',
+    [pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: SDK_HOST_REVIEWED_CORE_FEATURES.filter(
+        (feature) => feature !== 'external-sources',
+      ),
+    })],
+  );
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [sdkHost, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.deepEqual(violations.map((violation) => violation.message), [
+    'bitfun-sdk-host-app Core capability closure must include external-sources',
+  ]);
+});
+
+test('SDK Host closure rejects unreviewed capability owners below Core', () => {
+  const cases = [
+    ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'remote-connect'],
+    ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'remote-ssh'],
+    ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'remote-ssh-concrete'],
+    ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'function-agents'],
+    ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'announcement'],
+    ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'debug-log'],
+    ['bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', 'product-full'],
+    ['bitfun-product-domains', 'src/crates/contracts/product-domains/Cargo.toml', 'function-agents'],
+    ['bitfun-product-domains', 'src/crates/contracts/product-domains/Cargo.toml', 'product-full'],
+    ['bitfun-services-core', 'src/crates/services/services-core/Cargo.toml', 'dispatch-workspace'],
+  ];
+
+  for (const [ownerName, ownerManifest, forbiddenFeature] of cases) {
+    const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+    const owner = {
+      ...packageAt(ownerName, ownerManifest),
+      features: { [forbiddenFeature]: [] },
+    };
+    const bridge = packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+      pathDependency(ownerManifest.replace('/Cargo.toml', ''), {
+        name: ownerName,
+        usesDefaultFeatures: false,
+        features: [forbiddenFeature],
+      }),
+    ]);
+    const sdkHost = packageAt(
+      'bitfun-sdk-host-app',
+      'src/apps/sdk-host/Cargo.toml',
+      [
+        pathDependency('src/crates/assembly/core', {
+          name: 'bitfun-core',
+          usesDefaultFeatures: false,
+          features: SDK_HOST_REVIEWED_CORE_FEATURES,
+        }),
+        pathDependency('src/crates/assembly/bridge', { name: 'bridge' }),
+      ],
+    );
+
+    const violations = findProductEntrypointCoreFeatureViolations(
+      [sdkHost, bridge, core, owner],
+      { root: TEST_ROOT, crateLayoutRules },
+    );
+
+    const forbiddenOwner = `${ownerName}/${forbiddenFeature}`;
+    assert.equal(violations.length, 1, forbiddenOwner);
+    assert.match(
+      violations[0].message,
+      new RegExp(forbiddenOwner),
+    );
+  }
+});
+
+test('SDK Host closure inspects lower owners forwarded by reviewed Core features', () => {
+  const ownerManifest = 'src/crates/services/services-integrations/Cargo.toml';
+  const core = {
+    ...packageAt(
+      'bitfun-core',
+      'src/crates/assembly/core/Cargo.toml',
+      [pathDependency('src/crates/services/services-integrations', {
+        name: 'bitfun-services-integrations',
+        optional: true,
+        usesDefaultFeatures: false,
+      })],
+    ),
+    features: {
+      'external-sources': ['bitfun-services-integrations/remote-connect'],
+    },
+  };
+  const owner = {
+    ...packageAt('bitfun-services-integrations', ownerManifest),
+    features: { 'remote-connect': [] },
+  };
+  const sdkHost = packageAt(
+    'bitfun-sdk-host-app',
+    'src/apps/sdk-host/Cargo.toml',
+    [pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: SDK_HOST_REVIEWED_CORE_FEATURES,
+    })],
+  );
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [sdkHost, core, owner],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(
+    violations[0].message,
+    /bitfun-services-integrations\/remote-connect/,
+  );
+});
 
 test('App Server Core capability closure keeps its production Git owner', () => {
   const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
