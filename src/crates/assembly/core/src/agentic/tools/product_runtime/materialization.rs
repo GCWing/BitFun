@@ -71,6 +71,7 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "PlanRead" => Some(Arc::new(PlanReadTool::new())),
             "PlanUpdate" => Some(Arc::new(PlanUpdateTool::new())),
             "submit_code_review" => Some(Arc::new(CodeReviewTool::new())),
+            "DeepReview" => Some(Arc::new(DeepReviewTool::new())),
             "GetToolSpec" => Some(Arc::new(GetToolSpecTool::new())),
             "CallDeferredTool" => Some(Arc::new(CallDeferredTool::new())),
             #[cfg(feature = "tools-git")]

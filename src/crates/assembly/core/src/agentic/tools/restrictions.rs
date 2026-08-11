@@ -172,6 +172,9 @@ fn build_default_role_permissions() -> RolePermissionMap {
         // review/探索形态附加只读工具（不在 subagent_default_tools() 内）：
         // LaunchReviewAgent（review 编排入口，deferred）+ LS（目录形态只读）。
         allowed_tools.insert("LaunchReviewAgent".to_string());
+        // DeepReview：后台 CodeReview 派发工具（指挥官/任意会话可用），
+        // 子代理侧 review 形态同样需要（DeepReview 会话内可再派发审查）。
+        allowed_tools.insert("DeepReview".to_string());
         allowed_tools.insert("LS".to_string());
         let mut restrictions = ToolRuntimeRestrictions {
             allowed_operation_classes: allowed_ops,
@@ -204,6 +207,8 @@ fn build_default_role_permissions() -> RolePermissionMap {
         allowed_tools.insert("submit_code_review".to_string());
         // review/探索形态附加只读工具（与 Executor 同源）。
         allowed_tools.insert("LaunchReviewAgent".to_string());
+        // DeepReview：后台 CodeReview 派发工具（审查官可再派发审查）。
+        allowed_tools.insert("DeepReview".to_string());
         allowed_tools.insert("LS".to_string());
         // Deferred 工具链核心（与 Executor/Commander 同源）。
         allowed_tools.insert("GetToolSpec".to_string());

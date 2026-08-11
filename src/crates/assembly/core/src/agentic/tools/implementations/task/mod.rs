@@ -37,12 +37,14 @@ use std::time::Instant;
 
 mod background;
 mod deep_review;
+mod deep_review_tool;
 mod execution;
 mod input;
 mod launch_review_agent;
 mod schema;
 mod validation;
 
+pub use deep_review_tool::DeepReviewTool;
 pub use launch_review_agent::LaunchReviewAgentTool;
 
 pub struct TaskTool;
