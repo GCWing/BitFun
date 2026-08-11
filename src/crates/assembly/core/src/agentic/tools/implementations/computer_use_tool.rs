@@ -158,9 +158,16 @@ fn clip_tree_text(text: String) -> String {
     if text.len() <= DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES {
         return text;
     }
-    let cut = text[..DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES]
-        .rfind('\n')
-        .unwrap_or(DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES);
+    // Walk back to a char boundary before slicing. The cap is a byte count, and
+    // slicing a `str` at a byte index inside a multi-byte character panics —
+    // which CJK app trees (the ones most likely to be large) would hit
+    // constantly.
+    let mut end = DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    // A newline is single-byte, so its index is always a valid boundary too.
+    let cut = text[..end].rfind('\n').unwrap_or(end);
     let kept_lines = text[..cut].lines().count();
     let total_lines = text.lines().count();
     format!(
@@ -2678,6 +2685,49 @@ mod tests {
                 .all(|l| l.is_empty() || l.starts_with("[0] AXButton")),
             "clip must land on a line boundary"
         );
+    }
+
+    /// The cap is a byte count but the tree is a `str`, so the clip has to land
+    /// on a char boundary. A CJK app — exactly the kind whose tree gets large —
+    /// would otherwise panic the whole tool call on a mid-character slice.
+    #[test]
+    fn oversized_cjk_tree_text_clips_without_panicking() {
+        for label in ["范明裕", "飞书 · 消息", "🙂 emoji", "混合 mixed 内容"] {
+            let line = format!("[0] AXStaticText title=\"{label}\"\n");
+            let big = line.repeat(DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES / line.len() + 500);
+            assert!(big.len() > DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES);
+
+            let out = clip_tree_text(big.clone());
+            assert!(out.contains("[truncated]"), "must announce the clip");
+            assert!(out.len() < big.len(), "must actually shrink");
+        }
+    }
+
+    /// The cut offset must be safe for *every* alignment, not the one a given
+    /// repeated line happens to produce.
+    ///
+    /// Shifting the content by one and two bytes is what makes this bite: a
+    /// 3-byte character misaligns against the byte cap at two of every three
+    /// offsets, and only those two panic. An unshifted string of `范` lands
+    /// exactly on 60_000 and sails through a completely broken implementation —
+    /// which is how the first version of this test passed without the fix.
+    #[test]
+    fn clip_lands_on_a_char_boundary_at_every_alignment() {
+        for pad in 0..3 {
+            // No newline anywhere, so the cut falls back to the boundary walk
+            // rather than being rescued by `rfind('\n')`.
+            let mut s = "a".repeat(pad);
+            s.push_str(&"范".repeat(DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES / 3 + 10));
+            assert!(s.len() > DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES);
+
+            let out = clip_tree_text(s.clone());
+            assert!(out.contains("[truncated]"), "pad={pad}");
+            let body = out.split("\n[truncated]").next().unwrap();
+            assert!(
+                body.chars().all(|c| c == 'a' || c == '范'),
+                "clip split a character at pad={pad}"
+            );
+        }
     }
 
     /// An empty snapshot must say *why* it is empty. A bare `ax_tree_text:
