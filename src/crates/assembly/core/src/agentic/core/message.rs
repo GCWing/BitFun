@@ -873,7 +873,10 @@ mod tests {
             (InternalReminderKind::Generic, "generic"),
             (InternalReminderKind::SkillListingDiff, "skill_listing_diff"),
             (InternalReminderKind::HookContext, "hook_context"),
-            (InternalReminderKind::CompressionContinuation, "compression_continuation"),
+            (
+                InternalReminderKind::CompressionContinuation,
+                "compression_continuation",
+            ),
         ];
         for (kind, expected) in cases {
             assert_eq!(
@@ -915,9 +918,7 @@ mod tests {
 
     #[test]
     fn steering_id_metadata_round_trips_and_is_backwards_compatible() {
-        use super::{
-            InternalReminderKind, Message, MessageSemanticKind,
-        };
+        use super::{InternalReminderKind, Message, MessageSemanticKind};
         use std::time::SystemTime;
 
         // 携带 steering_id 的消息序列化后必须能读回（快照持久化往返）。
@@ -954,8 +955,7 @@ mod tests {
             serde_json::from_value(legacy).expect("legacy snapshot without steering_id must load");
         assert_eq!(legacy_msg.steering_id(), None);
         assert_eq!(
-            legacy_msg.metadata.semantic_kind,
-            None,
+            legacy_msg.metadata.semantic_kind, None,
             "legacy metadata has no semantic_kind either"
         );
 

@@ -330,10 +330,7 @@ async fn resolved_read_shell_output_caps() -> (usize, usize) {
         return (READ_MAX_TOOL_RESULT_CHARS, SHELL_MAX_TOOL_RESULT_CHARS);
     };
     let caps = &thresholds.tool_output_cap;
-    (
-        caps.read_chars.max(1),
-        caps.shell_chars.max(1),
-    )
+    (caps.read_chars.max(1), caps.shell_chars.max(1))
 }
 
 fn content_override_if_oversized(

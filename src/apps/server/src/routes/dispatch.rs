@@ -10,12 +10,11 @@ use bitfun_core::external_sources::{
 use bitfun_core::service::dispatch::{
     answer_dispatch, append_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     get_dispatch_status, list_dispatch_jobs, list_dispatch_targets, poll_dispatch_cli_install,
-    probe_dispatch_target, start_dispatch_cli_install, submit_dispatch,
-    sync_dispatch_model_config, sync_dispatch_result, DispatchAnswerRequest,
-    DispatchAppendRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
-    DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
-    DispatchListTargetsRequest, DispatchProbeTargetRequest, DispatchStatusRequest,
-    DispatchSubmitRequest, DispatchSyncResultRequest, OutboundDispatchStore,
+    probe_dispatch_target, start_dispatch_cli_install, submit_dispatch, sync_dispatch_model_config,
+    sync_dispatch_result, DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
+    DispatchInstallPollRequest, DispatchInstallStartRequest, DispatchJobRequest,
+    DispatchListJobsRequest, DispatchListTargetsRequest, DispatchProbeTargetRequest,
+    DispatchStatusRequest, DispatchSubmitRequest, DispatchSyncResultRequest, OutboundDispatchStore,
 };
 use serde::de::DeserializeOwned;
 

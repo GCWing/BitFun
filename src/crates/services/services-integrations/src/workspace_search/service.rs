@@ -158,10 +158,14 @@ impl WorkspaceSearchService {
             FlashgrepRepoSession::build_index(session.as_ref()),
         )
         .await
-        .map_err(|_| format!("workspace search timed out starting index build: path={}", repo_root.as_ref().display()))?
+        .map_err(|_| {
+            format!(
+                "workspace search timed out starting index build: path={}",
+                repo_root.as_ref().display()
+            )
+        })?
         .map_err(map_flashgrep_error("Failed to start index build"))?;
-        let repo_status = match tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status())
-            .await
+        let repo_status = match tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status()).await
         {
             Ok(Ok(status)) => status.into(),
             Ok(Err(error)) => {
@@ -211,10 +215,14 @@ impl WorkspaceSearchService {
             FlashgrepRepoSession::rebuild_index(session.as_ref()),
         )
         .await
-        .map_err(|_| format!("workspace search timed out starting index rebuild: path={}", repo_root.as_ref().display()))?
+        .map_err(|_| {
+            format!(
+                "workspace search timed out starting index rebuild: path={}",
+                repo_root.as_ref().display()
+            )
+        })?
         .map_err(map_flashgrep_error("Failed to start index rebuild"))?;
-        let repo_status = match tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status())
-            .await
+        let repo_status = match tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status()).await
         {
             Ok(Ok(status)) => status.into(),
             Ok(Err(error)) => {
@@ -415,13 +423,15 @@ impl WorkspaceSearchService {
         let (walk_root, pattern) = derive_glob_walk_root(&normalized_search_path, &request.pattern);
         if !walk_root.is_dir() {
             let session = self.get_or_open_session(&repo_root).await?;
-            let repo_status = tokio::time::timeout(
-                SESSION_STATUS_TIMEOUT,
-                session.status(),
-            )
-            .await
-            .map_err(|_| format!("workspace search timed out fetching repository status: path={}", repo_root.display()))?
-            .map_err(map_flashgrep_error("Glob status failed"))?;
+            let repo_status = tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status())
+                .await
+                .map_err(|_| {
+                    format!(
+                        "workspace search timed out fetching repository status: path={}",
+                        repo_root.display()
+                    )
+                })?
+                .map_err(map_flashgrep_error("Glob status failed"))?;
             return Ok(GlobSearchResult {
                 paths: Vec::new(),
                 matches_relative_to: path_to_string(&walk_root),
@@ -437,7 +447,12 @@ impl WorkspaceSearchService {
             FlashgrepRepoSession::glob(session.as_ref(), GlobRequest::new().with_scope(scope)),
         )
         .await
-        .map_err(|_| format!("workspace search timed out executing glob search: path={}", repo_root.display()))?
+        .map_err(|_| {
+            format!(
+                "workspace search timed out executing glob search: path={}",
+                repo_root.display()
+            )
+        })?
         .map_err(map_flashgrep_error("Glob search failed"))?;
         let mut paths = outcome
             .paths
@@ -561,8 +576,7 @@ impl WorkspaceSearchService {
     ) -> WorkspaceSearchResult<Arc<RepoSession>> {
         let repo_root = normalize_repo_root(repo_root)?;
         let repo_guard = {
-            let mut guards = try_lock_or_timeout(&self.open_guards, "workspace search")
-                .await?;
+            let mut guards = try_lock_or_timeout(&self.open_guards, "workspace search").await?;
             guards
                 .entry(repo_root.clone())
                 .or_insert_with(|| Arc::new(Mutex::new(())))
@@ -572,13 +586,10 @@ impl WorkspaceSearchService {
 
         if let Some(existing) = self.sessions.read().await.get(&repo_root).cloned() {
             existing.activity_epoch.fetch_add(1, Ordering::Relaxed);
-            let status_ok = tokio::time::timeout(
-                SESSION_STATUS_TIMEOUT,
-                existing.session.status(),
-            )
-            .await
-            .map(|r| r.is_ok())
-            .unwrap_or(false);
+            let status_ok = tokio::time::timeout(SESSION_STATUS_TIMEOUT, existing.session.status())
+                .await
+                .map(|r| r.is_ok())
+                .unwrap_or(false);
             if status_ok {
                 return Ok(existing.session);
             }
@@ -627,7 +638,9 @@ impl WorkspaceSearchService {
                     repo_root.display()
                 )
             })?
-            .map_err(map_flashgrep_error("Failed to open flashgrep repository session"))?;
+            .map_err(map_flashgrep_error(
+                "Failed to open flashgrep repository session",
+            ))?;
         let entry = SessionEntry {
             session: Arc::new(session),
             activity_epoch: Arc::new(AtomicU64::new(1)),
@@ -654,13 +667,10 @@ impl WorkspaceSearchService {
     where
         S: FlashgrepRepoSession + ?Sized,
     {
-        let repo_status = tokio::time::timeout(
-            SESSION_STATUS_TIMEOUT,
-            session.status(),
-        )
-        .await
-        .map_err(|_| format!("workspace search timed out fetching repository status"))?
-        .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
+        let repo_status = tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.status())
+            .await
+            .map_err(|_| format!("workspace search timed out fetching repository status"))?
+            .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
         let active_task = match repo_status.active_task_id.clone() {
             Some(task_id) => {
                 match tokio::time::timeout(SESSION_STATUS_TIMEOUT, session.task_status(task_id))
@@ -1071,10 +1081,7 @@ fn normalize_scope_path(repo_root: &Path, search_path: &Path) -> WorkspaceSearch
     Ok(normalized)
 }
 
-fn unknown_repo_status(
-    repo_root: &Path,
-    reason: &str,
-) -> super::types::WorkspaceSearchRepoStatus {
+fn unknown_repo_status(repo_root: &Path, reason: &str) -> super::types::WorkspaceSearchRepoStatus {
     super::types::WorkspaceSearchRepoStatus {
         repo_id: String::new(),
         repo_path: repo_root.display().to_string(),

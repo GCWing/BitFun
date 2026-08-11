@@ -231,11 +231,15 @@ mod tests {
     #[test]
     fn classifies_tagged_injections_as_system_reminder() {
         assert_eq!(
-            classify_prompt_source(Some("<system_reminder>\nInternal steering\n</system_reminder>")),
+            classify_prompt_source(Some(
+                "<system_reminder>\nInternal steering\n</system_reminder>"
+            )),
             PromptSourceKind::SystemReminder
         );
         assert_eq!(
-            classify_prompt_source(Some("<system-reminder>\nLegacy internal\n</system-reminder>")),
+            classify_prompt_source(Some(
+                "<system-reminder>\nLegacy internal\n</system-reminder>"
+            )),
             PromptSourceKind::SystemReminder
         );
         // A leading tag with trailing content is still an injection-only block.
@@ -260,7 +264,9 @@ mod tests {
         // Content that only *contains* a system reminder after visible text is
         // a user prompt — the injection marker alone does not make it one.
         assert_eq!(
-            classify_prompt_source(Some("answer\n<system_reminder>\ninternal\n</system_reminder>")),
+            classify_prompt_source(Some(
+                "answer\n<system_reminder>\ninternal\n</system_reminder>"
+            )),
             PromptSourceKind::UserPrompt
         );
     }

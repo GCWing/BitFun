@@ -13,6 +13,13 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::restrictions::{
     get_session_role, validate_delegation, worktree_creation_authorized, AgentRole,
 };
+use crate::service::git::GitService;
+use crate::service::workspace::{
+    get_global_workspace_service, WorkspaceActivityMode, WorkspaceCreateOptions,
+};
+use crate::service::worktree::{
+    WorktreeCreateBranchRequest, WorktreeCreateRequest, WorktreeService,
+};
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -23,10 +30,9 @@ use bitfun_agent_runtime::session_control::{
     session_control_cancel_result_message, session_control_cancel_status,
     session_control_created_result_message, session_control_creator_marker,
     session_control_deleted_result_message, session_control_renamed_result_message,
-    session_control_session_name_or_default,
-    validate_session_control_input, validate_session_id, SessionControlAction,
-    SessionControlCancelRoute, SessionControlInput, SessionControlValidationContext,
-    SessionControlValidationResult,
+    session_control_session_name_or_default, validate_session_control_input, validate_session_id,
+    SessionControlAction, SessionControlCancelRoute, SessionControlInput,
+    SessionControlValidationContext, SessionControlValidationResult,
 };
 use bitfun_core_types::{SessionExecutionTarget, WorktreeSessionOptions};
 use bitfun_runtime_ports::{
@@ -37,13 +43,6 @@ use bitfun_runtime_ports::{
 };
 use bitfun_services_core::session::merge_session_custom_metadata;
 use bitfun_services_core::session::tree::SessionTreeManager;
-use crate::service::git::GitService;
-use crate::service::worktree::{
-    WorktreeCreateBranchRequest, WorktreeCreateRequest, WorktreeService,
-};
-use crate::service::workspace::{
-    get_global_workspace_service, WorkspaceActivityMode, WorkspaceCreateOptions,
-};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -356,13 +355,9 @@ impl SessionControlTool {
 /// worktree add），是服务层调用不走工具权限门，因此独立判定：仅
 /// Commander owner（或 RBAC 关闭）允许。非 owner 调用者携带 worktree
 /// 参数一律拒绝。
-pub(crate) fn ensure_worktree_creation_authorized(
-    context: &ToolUseContext,
-) -> BitFunResult<()> {
+pub(crate) fn ensure_worktree_creation_authorized(context: &ToolUseContext) -> BitFunResult<()> {
     let caller_session_id = context.session_id.as_deref().ok_or_else(|| {
-        BitFunError::tool(
-            "worktree requires a caller session in tool context".to_string(),
-        )
+        BitFunError::tool("worktree requires a caller session in tool context".to_string())
     })?;
     if worktree_creation_authorized(caller_session_id) {
         Ok(())
@@ -448,9 +443,7 @@ pub(crate) async fn create_worktree_for_session(
 ) -> BitFunResult<SessionWorktreeCreateResult> {
     let source_workspace_path = context
         .workspace_root()
-        .ok_or_else(|| {
-            BitFunError::tool("Current execution workspace is unavailable".to_string())
-        })?
+        .ok_or_else(|| BitFunError::tool("Current execution workspace is unavailable".to_string()))?
         .to_string_lossy()
         .to_string();
     let project_workspace_path = workspace.project_workspace.clone();
@@ -476,9 +469,8 @@ pub(crate) async fn create_worktree_for_session(
 
     // track workspace（对齐 WorktreeTool::create_session 的
     // track_workspace_activity 步骤）。失败即回滚新 worktree。
-    let workspace_service = get_global_workspace_service().ok_or_else(|| {
-        BitFunError::tool("Workspace service is not initialized".to_string())
-    })?;
+    let workspace_service = get_global_workspace_service()
+        .ok_or_else(|| BitFunError::tool("Workspace service is not initialized".to_string()))?;
     let tracked_workspace = match workspace_service
         .track_workspace_activity(
             PathBuf::from(&created.execution_target.root_path),
@@ -502,17 +494,17 @@ pub(crate) async fn create_worktree_for_session(
 
     // 自动命名分支 task/<序号>（幂等重放 created=false 时可能已有分支，
     // 跳过分支创建）。
-    let branch_name = sanitize_task_branch_name(&next_task_branch_name(&project_workspace_path).await?);
+    let branch_name =
+        sanitize_task_branch_name(&next_task_branch_name(&project_workspace_path).await?);
     if created.created && created.execution_target.branch.is_none() {
         let branch_request_id = format!("{request_id}:branch");
-        if let Err(branch_error) =
-            WorktreeService::create_branch(WorktreeCreateBranchRequest {
-                request_id: branch_request_id,
-                project_workspace_path: project_workspace_path.clone(),
-                worktree_id: worktree_id.clone(),
-                branch: branch_name.clone(),
-            })
-            .await
+        if let Err(branch_error) = WorktreeService::create_branch(WorktreeCreateBranchRequest {
+            request_id: branch_request_id,
+            project_workspace_path: project_workspace_path.clone(),
+            worktree_id: worktree_id.clone(),
+            branch: branch_name.clone(),
+        })
+        .await
         {
             return Err(cleanup_failed_worktree_create(
                 &project_workspace_path,
@@ -559,11 +551,8 @@ async fn cleanup_failed_worktree_create(
     }
     if created {
         if let Some(worktree_id) = execution_target.worktree_id.as_deref() {
-            if let Err(rollback_error) = WorktreeService::rollback_created(
-                project_workspace_path,
-                worktree_id,
-            )
-            .await
+            if let Err(rollback_error) =
+                WorktreeService::rollback_created(project_workspace_path, worktree_id).await
             {
                 rollback_issues.push(format!("worktree could not be removed: {rollback_error}"));
             }
@@ -931,13 +920,7 @@ pub(crate) async fn resolve_session_read_authorization(
 
     // R-A.04 同源：Warden/daemon 会话是可信审计角色，豁免读取授权
     // （SessionHistory 是 Warden 模板刻意保留的跨会话审计工具）。
-    if caller_is_warden_or_daemon(
-        session_manager,
-        caller_workspace_path,
-        caller_session_id,
-    )
-    .await
-    {
+    if caller_is_warden_or_daemon(session_manager, caller_workspace_path, caller_session_id).await {
         return Ok(());
     }
 
@@ -1624,7 +1607,10 @@ Arguments:
                     let registry = get_agent_registry();
                     let workspace_path = std::path::Path::new(&workspace.display_workspace);
                     registry.load_custom_agents(Some(workspace_path)).await;
-                    if registry.get_agent(&agent_type, Some(workspace_path)).is_none() {
+                    if registry
+                        .get_agent(&agent_type, Some(workspace_path))
+                        .is_none()
+                    {
                         return Err(BitFunError::tool(format!(
                             "Unknown agent_type '{}' for SessionControl create; agent must be registered in the agent registry",
                             agent_type
@@ -1641,7 +1627,9 @@ Arguments:
                         .tool_call_id
                         .as_deref()
                         .map(|tool_call_id| format!("session-control:{tool_call_id}:worktree"))
-                        .unwrap_or_else(|| format!("session-control:{}:worktree", uuid::Uuid::new_v4()));
+                        .unwrap_or_else(|| {
+                            format!("session-control:{}:worktree", uuid::Uuid::new_v4())
+                        });
                     let worktree = create_worktree_for_session(
                         &request_id,
                         &workspace,
@@ -2159,17 +2147,16 @@ Arguments:
                 // shortName，替代原先对每个会话串行 load_session_metadata 的
                 // N+1 读。
                 let mut short_names: HashMap<String, Option<String>> = HashMap::new();
-                let surfaced_session_ids: std::collections::HashSet<&str> =
-                    sessions
-                        .iter()
-                        .map(|session| session.session_id.as_str())
-                        .collect();
+                let surfaced_session_ids: std::collections::HashSet<&str> = sessions
+                    .iter()
+                    .map(|session| session.session_id.as_str())
+                    .collect();
                 let metadata_list = coordinator
                     .session_manager
                     .persistence_manager()
-                    .list_session_metadata_including_internal(
-                        &std::path::PathBuf::from(&workspace.project_workspace),
-                    )
+                    .list_session_metadata_including_internal(&std::path::PathBuf::from(
+                        &workspace.project_workspace,
+                    ))
                     .await
                     // 批量读取失败时按“无任何 shortName”处理（与原先逐条
                     // .ok().flatten() 的最佳努力语义一致，不中断 list 输出）。
@@ -2381,8 +2368,7 @@ Arguments:
                     .filter(|value| !value.is_empty())
                     .ok_or_else(|| {
                         BitFunError::tool(
-                            "session_name is required and must not be empty for rename"
-                                .to_string(),
+                            "session_name is required and must not be empty for rename".to_string(),
                         )
                     })?;
                 let workspace = self
@@ -2702,14 +2688,12 @@ mod tests {
         use crate::agentic::session::session_manager::{SessionManager, SessionManagerConfig};
         use crate::agentic::session::{PromptCachePolicy, SessionContextStore};
         use crate::infrastructure::app_paths::path_manager::PathManager;
-        let user_root = std::env::temp_dir().join(format!(
-            "bitfun-authz-test-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let user_root =
+            std::env::temp_dir().join(format!("bitfun-authz-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&user_root).expect("test user root");
         let path_manager = PathManager::with_user_root_for_tests(user_root.clone());
-        let persistence = PersistenceManager::new(Arc::new(path_manager))
-            .expect("persistence manager");
+        let persistence =
+            PersistenceManager::new(Arc::new(path_manager)).expect("persistence manager");
         Arc::new(SessionManager::new(
             Arc::new(SessionContextStore::new()),
             Arc::new(persistence),
@@ -2748,7 +2732,9 @@ mod tests {
         .expect_err("unrelated caller without metadata must be rejected");
         assert!(
             error.to_string().contains("not authorized to delete")
-                || error.to_string().contains("cannot verify ancestor relationship"),
+                || error
+                    .to_string()
+                    .contains("cannot verify ancestor relationship"),
             "{error}"
         );
     }
@@ -2776,7 +2762,9 @@ mod tests {
         .expect_err("unrelated caller without metadata must be rejected");
         assert!(
             error.to_string().contains("not authorized to cancel")
-                || error.to_string().contains("cannot verify ancestor relationship"),
+                || error
+                    .to_string()
+                    .contains("cannot verify ancestor relationship"),
             "{error}"
         );
     }
@@ -2896,7 +2884,9 @@ mod tests {
         .expect_err("owner must not bypass cancel gate");
         assert!(
             error.to_string().contains("not authorized to cancel")
-                || error.to_string().contains("cannot verify ancestor relationship"),
+                || error
+                    .to_string()
+                    .contains("cannot verify ancestor relationship"),
             "{error}"
         );
     }
@@ -2999,13 +2989,11 @@ mod tests {
             .await;
 
         assert!(!validation.result);
-        assert!(
-            validation
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("session_name is required for rename")
-        );
+        assert!(validation
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_name is required for rename"));
     }
 
     #[tokio::test]
@@ -3023,13 +3011,11 @@ mod tests {
             .await;
 
         assert!(!validation.result);
-        assert!(
-            validation
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("session_id is required")
-        );
+        assert!(validation
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_id is required"));
     }
 
     #[tokio::test]
@@ -3209,14 +3195,18 @@ mod tests {
 
     #[test]
     fn acp_flow_session_id_is_recognized() {
-        assert!(is_acp_flow_session_id("acp_codex_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b"));
+        assert!(is_acp_flow_session_id(
+            "acp_codex_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b"
+        ));
         assert!(!is_acp_flow_session_id("acp_opensource_abcdef")); // tail is not a uuid
         assert!(!is_acp_flow_session_id("session-1"));
         assert!(!is_acp_flow_session_id("acp__codex")); // agent type prefix, not a flow session id
         assert!(!is_acp_flow_session_id("acp_codex")); // no uuid tail
         assert!(!is_acp_flow_session_id("acp_codex_notauuid")); // tail is not a uuid shape
         assert!(!is_acp_flow_session_id(""));
-        assert!(!is_acp_flow_session_id("acp_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b")); // client_id is empty
+        assert!(!is_acp_flow_session_id(
+            "acp_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b"
+        )); // client_id is empty
     }
 
     #[test]
@@ -3254,7 +3244,10 @@ mod tests {
             .as_ref()
             .and_then(|metadata| metadata.created_by.as_deref())
             .is_none();
-        assert!(created_by_is_none, "SessionMetadata::new 默认 created_by 应为 None");
+        assert!(
+            created_by_is_none,
+            "SessionMetadata::new 默认 created_by 应为 None"
+        );
         assert!(ghost_acp_delete_authorized(
             created_by_is_none,
             is_acp_flow_session_id("acp_codebuddy_a4f68de7-c4ec-46a8-9aab-7e2bc417c3d0"),
@@ -3285,7 +3278,11 @@ mod tests {
         assert!(orphan.created_by.is_none());
         assert!(orphan.relationship.is_none());
         assert!(orphan_session_delete_authorized(true, Some(&orphan), false));
-        assert!(!orphan_session_delete_authorized(false, Some(&orphan), false));
+        assert!(!orphan_session_delete_authorized(
+            false,
+            Some(&orphan),
+            false
+        ));
     }
 
     #[test]
@@ -3305,7 +3302,11 @@ mod tests {
             depth: Some(1),
             ..Default::default()
         });
-        assert!(!orphan_session_delete_authorized(true, Some(&attached), false));
+        assert!(!orphan_session_delete_authorized(
+            true,
+            Some(&attached),
+            false
+        ));
 
         let mut created = crate::service::session::SessionMetadata::new(
             "created-session".to_string(),
@@ -3314,7 +3315,11 @@ mod tests {
             "auto".to_string(),
         );
         created.created_by = Some("session-parent-1".to_string());
-        assert!(!orphan_session_delete_authorized(true, Some(&created), false));
+        assert!(!orphan_session_delete_authorized(
+            true,
+            Some(&created),
+            false
+        ));
     }
 
     fn summary(
@@ -3455,10 +3460,7 @@ mod tests {
         // asserts; the production reader hits the same shape only for
         // genuinely deep trees).
         // 1. Exactly one root.
-        assert!(
-            tree_json.starts_with("["),
-            "tree json is a forest array"
-        );
+        assert!(tree_json.starts_with("["), "tree json is a forest array");
         // 2. The truncated marker appears exactly once (on the boundary node).
         //    serde_json pretty-prints with a space after the colon.
         let truncated_markers = tree_json.matches("\"truncated\": true").count();
@@ -3512,7 +3514,9 @@ mod tests {
         );
         // The serialized tree is a single-root forest.
         assert!(
-            tree_json.trim_start().starts_with("[\n  {\n    \"agentType\""),
+            tree_json
+                .trim_start()
+                .starts_with("[\n  {\n    \"agentType\""),
             "tree json is a single-root forest"
         );
     }
@@ -3753,7 +3757,9 @@ mod tests {
         .await
         .expect_err("unrelated caller without metadata must be rejected");
         assert!(
-            error.to_string().contains("not authorized to export history of"),
+            error
+                .to_string()
+                .contains("not authorized to export history of"),
             "{error}"
         );
     }
@@ -3898,7 +3904,9 @@ mod tests {
         .await
         .expect_err("sibling sessions must not read each other");
         assert!(
-            error.to_string().contains("not authorized to export history of"),
+            error
+                .to_string()
+                .contains("not authorized to export history of"),
             "{error}"
         );
     }
@@ -3928,7 +3936,9 @@ mod tests {
         .await
         .expect_err("cross-workspace export must be rejected even for owner");
         assert!(
-            error.to_string().contains("belongs to a different workspace"),
+            error
+                .to_string()
+                .contains("belongs to a different workspace"),
             "{error}"
         );
     }

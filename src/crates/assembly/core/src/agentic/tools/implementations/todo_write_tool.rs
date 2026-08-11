@@ -266,9 +266,7 @@ fn validate_todo_dependencies(todos: &[Value]) -> BitFunResult<()> {
         };
         for dep_value in deps {
             let Some(dep) = dep_value.as_str() else {
-                return Err(BitFunError::validation(
-                    "Todo dependency must be a string",
-                ));
+                return Err(BitFunError::validation("Todo dependency must be a string"));
             };
             if dep == child {
                 return Err(BitFunError::validation(format!(
@@ -282,23 +280,16 @@ fn validate_todo_dependencies(todos: &[Value]) -> BitFunResult<()> {
                     dep
                 )));
             }
-            let nexts = adjacency
-                .get_mut(dep)
-                .ok_or_else(|| {
-                    BitFunError::validation(format!(
-                        "Internal error: missing adjacency for '{}'",
-                        dep
-                    ))
-                })?;
+            let nexts = adjacency.get_mut(dep).ok_or_else(|| {
+                BitFunError::validation(format!("Internal error: missing adjacency for '{}'", dep))
+            })?;
             nexts.push(child.to_string());
-            let degree = in_degree
-                .get_mut(child)
-                .ok_or_else(|| {
-                    BitFunError::validation(format!(
-                        "Internal error: missing in-degree for '{}'",
-                        child
-                    ))
-                })?;
+            let degree = in_degree.get_mut(child).ok_or_else(|| {
+                BitFunError::validation(format!(
+                    "Internal error: missing in-degree for '{}'",
+                    child
+                ))
+            })?;
             *degree += 1;
         }
     }
@@ -314,24 +305,13 @@ fn validate_todo_dependencies(todos: &[Value]) -> BitFunResult<()> {
     while let Some(id) = ready.iter().next().cloned() {
         ready.remove(&id);
         order.push(id.clone());
-        let nexts = adjacency
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| {
-                BitFunError::validation(format!(
-                    "Internal error: missing adjacency for '{}'",
-                    id
-                ))
-            })?;
+        let nexts = adjacency.get(&id).cloned().ok_or_else(|| {
+            BitFunError::validation(format!("Internal error: missing adjacency for '{}'", id))
+        })?;
         for next in nexts {
-            let degree = in_degree
-                .get_mut(&next)
-                .ok_or_else(|| {
-                    BitFunError::validation(format!(
-                        "Internal error: missing in-degree for '{}'",
-                        next
-                    ))
-                })?;
+            let degree = in_degree.get_mut(&next).ok_or_else(|| {
+                BitFunError::validation(format!("Internal error: missing in-degree for '{}'", next))
+            })?;
             *degree -= 1;
             if *degree == 0 {
                 ready.insert(next);
@@ -339,9 +319,7 @@ fn validate_todo_dependencies(todos: &[Value]) -> BitFunResult<()> {
         }
     }
     if order.len() != ids.len() {
-        return Err(BitFunError::validation(
-            "Todo dependencies contain a cycle",
-        ));
+        return Err(BitFunError::validation("Todo dependencies contain a cycle"));
     }
 
     Ok(())
@@ -449,9 +427,18 @@ mod tests {
         let result = tool.call_impl(&input, &empty_context()).await;
         let results = result.expect("valid todo list should succeed");
         let data = &results[0].content();
-        let todos = data.get("todos").and_then(|value| value.as_array()).expect("todos array");
+        let todos = data
+            .get("todos")
+            .and_then(|value| value.as_array())
+            .expect("todos array");
         assert_eq!(todos.len(), 2);
-        assert!(todos[0].get("id").and_then(|value| value.as_str()).is_some());
-        assert_eq!(todos[1].get("id").and_then(|value| value.as_str()), Some("b"));
+        assert!(todos[0]
+            .get("id")
+            .and_then(|value| value.as_str())
+            .is_some());
+        assert_eq!(
+            todos[1].get("id").and_then(|value| value.as_str()),
+            Some("b")
+        );
     }
 }

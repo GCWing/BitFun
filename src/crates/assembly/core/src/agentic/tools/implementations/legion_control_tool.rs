@@ -864,11 +864,9 @@ Related tools:
             }
             // Reuse topology resolution for structural validation (cycles,
             // duplicate ids, unknown edge endpoints, protected agents).
-            if let Err(message) = Self::resolve_legion_topology(
-                preset.nodes.clone(),
-                preset.edges.clone(),
-                max_nodes,
-            ) {
+            if let Err(message) =
+                Self::resolve_legion_topology(preset.nodes.clone(), preset.edges.clone(), max_nodes)
+            {
                 return ValidationResult {
                     result: false,
                     message: Some(format!("Invalid preset topology: {message}")),
@@ -876,9 +874,7 @@ Related tools:
                     meta: None,
                 };
             }
-        } else if action == LegionControlAction::Delete
-            && parsed.preset_id.is_none()
-        {
+        } else if action == LegionControlAction::Delete && parsed.preset_id.is_none() {
             return ValidationResult {
                 result: false,
                 message: Some("delete requires preset_id".to_string()),
@@ -975,11 +971,14 @@ Related tools:
                 // agents) before anything is persisted (d2-P2-1). The node cap
                 // is front-end configurable (`ai.legion_max_nodes`).
                 let max_nodes = resolve_legion_max_nodes().await;
-                Self::resolve_legion_topology(preset.nodes.clone(), preset.edges.clone(), max_nodes)
-                    .map_err(BitFunError::tool)?;
+                Self::resolve_legion_topology(
+                    preset.nodes.clone(),
+                    preset.edges.clone(),
+                    max_nodes,
+                )
+                .map_err(BitFunError::tool)?;
                 create_preset(&preset).map_err(BitFunError::tool)?;
-                let result_for_assistant =
-                    format!("Saved legion preset '{}'", preset.id);
+                let result_for_assistant = format!("Saved legion preset '{}'", preset.id);
                 Ok(vec![ToolResult::Result {
                     data: json!({
                         "success": true,
@@ -991,12 +990,11 @@ Related tools:
                 }])
             }
             LegionControlAction::Delete => {
-                let preset_id = params.preset_id.ok_or_else(|| {
-                    BitFunError::tool("delete requires preset_id".to_string())
-                })?;
+                let preset_id = params
+                    .preset_id
+                    .ok_or_else(|| BitFunError::tool("delete requires preset_id".to_string()))?;
                 delete_preset(&preset_id).map_err(BitFunError::tool)?;
-                let result_for_assistant =
-                    format!("Deleted legion preset '{}'", preset_id);
+                let result_for_assistant = format!("Deleted legion preset '{}'", preset_id);
                 Ok(vec![ToolResult::Result {
                     data: json!({
                         "success": true,
@@ -1364,8 +1362,7 @@ Related tools:
                     {
                         Ok(session) => session,
                         Err(error) => {
-                            let created: Vec<String> =
-                                session_by_node.values().cloned().collect();
+                            let created: Vec<String> = session_by_node.values().cloned().collect();
                             Self::cleanup_deployed_sessions(
                                 &coordinator,
                                 &std::path::PathBuf::from(&display_workspace),
@@ -1625,8 +1622,9 @@ mod tests {
 
     #[test]
     fn resolve_topology_rejects_empty_topology() {
-        let err = LegionControlTool::resolve_legion_topology(Vec::new(), Vec::new(), MAX_LEGION_NODES)
-            .expect_err("empty topology must be rejected");
+        let err =
+            LegionControlTool::resolve_legion_topology(Vec::new(), Vec::new(), MAX_LEGION_NODES)
+                .expect_err("empty topology must be rejected");
         assert!(err.contains("at least one node"), "unexpected error: {err}");
     }
 
@@ -1648,8 +1646,9 @@ mod tests {
         let nodes: Vec<LegionNode> = (0..MAX_LEGION_NODES)
             .map(|index| node(&format!("node-{index}")))
             .collect();
-        let resolved = LegionControlTool::resolve_legion_topology(nodes, Vec::new(), MAX_LEGION_NODES)
-            .expect("topology at the maximum node count should resolve");
+        let resolved =
+            LegionControlTool::resolve_legion_topology(nodes, Vec::new(), MAX_LEGION_NODES)
+                .expect("topology at the maximum node count should resolve");
         assert_eq!(resolved.len(), MAX_LEGION_NODES);
     }
 
@@ -1657,8 +1656,12 @@ mod tests {
     fn resolve_topology_rejects_empty_node_fields() {
         let mut empty_id = node("a");
         empty_id.id = "  ".to_string();
-        let err = LegionControlTool::resolve_legion_topology(vec![empty_id], Vec::new(), MAX_LEGION_NODES)
-            .expect_err("empty id must be rejected");
+        let err = LegionControlTool::resolve_legion_topology(
+            vec![empty_id],
+            Vec::new(),
+            MAX_LEGION_NODES,
+        )
+        .expect_err("empty id must be rejected");
         assert!(
             err.contains("id must not be empty"),
             "unexpected error: {err}"
@@ -1666,8 +1669,12 @@ mod tests {
 
         let mut empty_agent = node("a");
         empty_agent.agent = String::new();
-        let err = LegionControlTool::resolve_legion_topology(vec![empty_agent], Vec::new(), MAX_LEGION_NODES)
-            .expect_err("empty agent must be rejected");
+        let err = LegionControlTool::resolve_legion_topology(
+            vec![empty_agent],
+            Vec::new(),
+            MAX_LEGION_NODES,
+        )
+        .expect_err("empty agent must be rejected");
         assert!(err.contains("empty agent type"), "unexpected error: {err}");
     }
 
@@ -2096,13 +2103,10 @@ mod tests {
 
         release_a_tx.send(()).expect("release A");
         let _ = task_a.await.expect("task A");
-        let _ = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            entered_b_rx,
-        )
-        .await
-        .expect("task B must acquire the lock after A releases")
-        .expect("B entered");
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), entered_b_rx)
+            .await
+            .expect("task B must acquire the lock after A releases")
+            .expect("B entered");
         let _ = task_b.await.expect("task B");
     }
 

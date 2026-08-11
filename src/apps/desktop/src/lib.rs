@@ -534,7 +534,8 @@ pub async fn run() {
     // every model tool call sees it. The environment value wins over the
     // config value when both exist (explicit env is the escape hatch).
     if std::env::var_os("BITFUN_KNOWLEDGE_BASE_ROOT").is_none() {
-        if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await {
+        if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await
+        {
             match config_service
                 .get_config::<String>(Some("ai.knowledge_base_root"))
                 .await

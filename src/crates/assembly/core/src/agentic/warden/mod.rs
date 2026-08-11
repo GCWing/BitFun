@@ -275,13 +275,14 @@ impl ShameWallRegistry {
     pub fn load_from_path(path: &std::path::Path) -> BitFunResult<Self> {
         match std::fs::read_to_string(path) {
             Ok(contents) => {
-                let registry: ShameWallRegistry = serde_json::from_str(&contents).map_err(
-                    |err| BitFunError::parse(format!(
-                        "failed to parse shame-wall registry at {}: {}",
-                        path.display(),
-                        err
-                    )),
-                )?;
+                let registry: ShameWallRegistry =
+                    serde_json::from_str(&contents).map_err(|err| {
+                        BitFunError::parse(format!(
+                            "failed to parse shame-wall registry at {}: {}",
+                            path.display(),
+                            err
+                        ))
+                    })?;
                 Ok(registry)
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
@@ -774,10 +775,8 @@ mod tests {
     fn corrupt_shame_wall_file_is_quarantined_not_overwritten() {
         // P1-S3：损坏文件 load 时被 rename 为 .corrupt-<ts> 备份，原路径
         // 之后以空注册表启动；后续 save 只写原路径，备份保留恢复路径。
-        let dir = std::env::temp_dir().join(format!(
-            "warden-corrupt-test-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("warden-corrupt-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).expect("create temp dir");
         let path = dir.join("shame-wall-registry.json");
         std::fs::write(&path, "{ this is not valid json").expect("write corrupt file");
@@ -822,9 +821,8 @@ mod tests {
             .expect("save empty registry to live path");
         assert!(path.exists(), "live path must be recreated by save");
         let live: ShameWallRegistry =
-            serde_json::from_str(&std::fs::read_to_string(&path).expect("read live")).expect(
-                "live path must contain a valid registry after save",
-            );
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("read live"))
+                .expect("live path must contain a valid registry after save");
         assert!(live.entries.is_empty());
         assert!(
             backups[0].path().exists(),

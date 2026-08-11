@@ -700,7 +700,6 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![".claude/rules/project.md"]
         );
-
     }
 
     #[cfg(feature = "external-sources")]
@@ -786,7 +785,10 @@ mod tests {
             .expect("second instruction context")
             .expect("second rendered instructions");
 
-        assert_eq!(first, second, "byte-identical prefix across repeated builds");
+        assert_eq!(
+            first, second,
+            "byte-identical prefix across repeated builds"
+        );
 
         // Source order must stay stable: opencode → codex → claude → workspace.
         let positions = [

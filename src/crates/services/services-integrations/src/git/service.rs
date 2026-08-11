@@ -1742,7 +1742,11 @@ mod review_path_tests {
             .expect("branch rename should succeed");
         assert_eq!(renamed.success, true);
         assert_eq!(
-            renamed.data.as_ref().and_then(|data| data.get("branch")).and_then(serde_json::Value::as_str),
+            renamed
+                .data
+                .as_ref()
+                .and_then(|data| data.get("branch"))
+                .and_then(serde_json::Value::as_str),
             Some("task/2")
         );
 
@@ -1752,7 +1756,10 @@ mod review_path_tests {
             .expect("identical rename should be a no-op");
         assert_eq!(noop.success, true);
         assert_eq!(
-            noop.data.as_ref().and_then(|data| data.get("renamed")).and_then(serde_json::Value::as_bool),
+            noop.data
+                .as_ref()
+                .and_then(|data| data.get("renamed"))
+                .and_then(serde_json::Value::as_bool),
             Some(false)
         );
 

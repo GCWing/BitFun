@@ -246,9 +246,7 @@ impl Tool for TaskTool {
                 .filter(|id| !id.is_empty())
                 .map(|id| format!("history:{id}"))
                 .ok_or_else(|| {
-                    BitFunError::validation(
-                        "agent_id or session_id is required".to_string(),
-                    )
+                    BitFunError::validation("agent_id or session_id is required".to_string())
                 })?,
         };
         Ok(vec![PermissionIntent::new("task", vec![resource])])

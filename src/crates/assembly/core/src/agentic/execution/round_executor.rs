@@ -347,12 +347,7 @@ impl RoundExecutor {
             };
         let allow_normal_tool_json_repair = global_config.ai.allow_tool_json_repair;
         // 阈值参数配置化：ai.thresholds.model_retry.max_attempts
-        let max_attempts = global_config
-            .ai
-            .thresholds
-            .model_retry
-            .max_attempts
-            .max(1);
+        let max_attempts = global_config.ai.thresholds.model_retry.max_attempts.max(1);
         let mut local_attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms, final_trace_handle) = loop {
             let attempt_number = lifecycle.begin_attempt();

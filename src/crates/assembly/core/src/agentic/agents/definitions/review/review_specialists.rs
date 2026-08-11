@@ -68,15 +68,21 @@ mod tests {
             // 审查类智能体统一配齐 submit_code_review（severity 结构化提交）
             // + AskUserQuestion（向上级提判断问题）。
             assert!(
-                agent.default_tools().contains(&"submit_code_review".to_string()),
+                agent
+                    .default_tools()
+                    .contains(&"submit_code_review".to_string()),
                 "specialist reviewer must include submit_code_review"
             );
             assert!(
-                agent.default_tools().contains(&"AskUserQuestion".to_string()),
+                agent
+                    .default_tools()
+                    .contains(&"AskUserQuestion".to_string()),
                 "specialist reviewer must include AskUserQuestion"
             );
             assert!(
-                agent.default_tools().contains(&"ReviewPlatform".to_string()),
+                agent
+                    .default_tools()
+                    .contains(&"ReviewPlatform".to_string()),
                 "specialist reviewer must include ReviewPlatform"
             );
         }

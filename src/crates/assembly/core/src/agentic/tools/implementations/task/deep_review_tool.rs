@@ -128,9 +128,7 @@ The reviewer is read-only: it inspects and reports findings, it never modifies f
 
     fn build_review_prompt(invocation: &DeepReviewInvocation) -> String {
         let mut parts = Vec::new();
-        parts.push(
-            "独立对抗性代码审查。只读：检查并报告发现，绝不修改任何文件。\n".to_string(),
-        );
+        parts.push("独立对抗性代码审查。只读：检查并报告发现，绝不修改任何文件。\n".to_string());
         if let Some(target) = &invocation.target {
             parts.push(format!("审查目标：{target}\n"));
         }
@@ -172,9 +170,7 @@ The reviewer is read-only: it inspects and reports findings, it never modifies f
             task_input["timeout_seconds"] = json!(timeout_seconds);
         }
 
-        TaskTool::new()
-            .call_task_impl(&task_input, context)
-            .await
+        TaskTool::new().call_task_impl(&task_input, context).await
     }
 }
 

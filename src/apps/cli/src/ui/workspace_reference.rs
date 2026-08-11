@@ -73,7 +73,6 @@ fn parse_line_range(raw: &str) -> (String, Option<u32>, Option<u32>) {
     }
 }
 
-
 #[derive(Debug, Default)]
 pub(crate) struct WorkspaceReferencePopupState {
     pub(crate) query: Option<WorkspaceReferenceQuery>,

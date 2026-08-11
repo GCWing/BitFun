@@ -112,7 +112,11 @@ pub(crate) fn classify_evaluate_exception(message: &str) -> BitFunError {
         if message.contains("cross-origin iframe") {
             hints.push("The page contains cross-origin iframes whose contents cannot be inspected or clicked — an element inside one is unreachable; work with the top-level document instead");
         }
-        structured_error(ErrorCode::NotFound, format!("JS error: {}", message), &hints)
+        structured_error(
+            ErrorCode::NotFound,
+            format!("JS error: {}", message),
+            &hints,
+        )
     } else {
         structured_error(
             ErrorCode::Internal,
@@ -1666,9 +1670,10 @@ mod structured_error_tests {
 
     #[test]
     fn classify_transport_error_maps_dead_socket_to_wrong_tab() {
-        let msg =
-            classify_transport_error(BitFunError::tool("CDP send failed: broken pipe".to_string()))
-                .to_string();
+        let msg = classify_transport_error(BitFunError::tool(
+            "CDP send failed: broken pipe".to_string(),
+        ))
+        .to_string();
         assert!(msg.contains("[WRONG_TAB]"), "got: {msg}");
         assert!(msg.contains("browser.connect"), "got: {msg}");
     }

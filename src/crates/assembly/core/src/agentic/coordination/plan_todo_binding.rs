@@ -120,8 +120,8 @@ async fn mark_todo_status_if_bound(
         return;
     };
     let result = async {
-        let plan_path = resolve_plan_path_for_backend(&plan_file, Some(Path::new(workspace_path)))
-            .await?;
+        let plan_path =
+            resolve_plan_path_for_backend(&plan_file, Some(Path::new(workspace_path))).await?;
         apply_todo_status_update(&plan_path, &todo_id, status).await?;
         Ok::<_, BitFunError>(())
     }

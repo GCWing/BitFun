@@ -755,7 +755,8 @@ mod tests {
         let coordination_store = Arc::new(CoordinationStore::new(
             path_manager.agent_coordination_database_file(),
         ));
-        let store = BackgroundSubagentOutcomeStore::new(session_manager, coordination_store.clone());
+        let store =
+            BackgroundSubagentOutcomeStore::new(session_manager, coordination_store.clone());
         let registered = store
             .register(BackgroundTaskRegistration {
                 parent_session_id: "parent-session".to_string(),
@@ -832,7 +833,8 @@ mod tests {
         let coordination_store = Arc::new(CoordinationStore::new(
             path_manager.agent_coordination_database_file(),
         ));
-        let store = BackgroundSubagentOutcomeStore::new(session_manager, coordination_store.clone());
+        let store =
+            BackgroundSubagentOutcomeStore::new(session_manager, coordination_store.clone());
         let registered = store
             .register(BackgroundTaskRegistration {
                 parent_session_id: "parent-session".to_string(),

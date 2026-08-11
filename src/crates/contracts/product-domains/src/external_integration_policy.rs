@@ -55,7 +55,6 @@ impl ExternalIntegrationMode {
     }
 }
 
-
 impl Serialize for ExternalIntegrationMode {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -136,7 +135,6 @@ impl ExternalIntegrationAccess {
     }
 }
 
-
 impl Serialize for ExternalIntegrationAccess {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -187,7 +185,6 @@ pub struct ExternalIntegrationPolicySettings {
     #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     pub extensions: BTreeMap<String, serde_json::Value>,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
@@ -376,7 +373,6 @@ impl ExternalIntegrationPolicyStatus {
         })
     }
 }
-
 
 impl Serialize for ExternalIntegrationPolicyStatus {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

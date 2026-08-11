@@ -83,11 +83,20 @@ pub fn enabled_feature_groups() -> Vec<ToolPackFeatureGroup> {
 
 pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
     match tool_name {
-        "LS" | "Read" | "Glob" | "Grep" | "Write" | "Edit" | "Delete" | "ExecCommand"
-        | "WriteStdin" | "ExecControl" | "GetTime" | "ListModels" | "WorkspaceScan"
-        | "KnowledgeBaseSearch" => {
-            Some(ToolPackFeatureGroup::Basic)
-        }
+        "LS"
+        | "Read"
+        | "Glob"
+        | "Grep"
+        | "Write"
+        | "Edit"
+        | "Delete"
+        | "ExecCommand"
+        | "WriteStdin"
+        | "ExecControl"
+        | "GetTime"
+        | "ListModels"
+        | "WorkspaceScan"
+        | "KnowledgeBaseSearch" => Some(ToolPackFeatureGroup::Basic),
         "Git" | "Worktree" | "ReviewPlatform" | "GetFileDiff" => Some(ToolPackFeatureGroup::Git),
         "ListMCPResources" | "ReadMCPResource" | "ListMCPPrompts" | "GetMCPPrompt" => {
             Some(ToolPackFeatureGroup::Mcp)

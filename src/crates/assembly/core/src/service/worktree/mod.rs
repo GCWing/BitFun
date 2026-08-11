@@ -741,7 +741,11 @@ impl WorktreeService {
         record.display_name = display_name.map(ToOwned::to_owned);
 
         if let Some(new_branch) = rename_branch.map(str::trim).filter(|name| !name.is_empty()) {
-            if let Some(old_branch) = record.branch.as_deref().map(str::trim).filter(|b| !b.is_empty())
+            if let Some(old_branch) = record
+                .branch
+                .as_deref()
+                .map(str::trim)
+                .filter(|b| !b.is_empty())
             {
                 if old_branch != new_branch {
                     // git branch -m（经 GitService；worktree 目录内执行）。
@@ -2482,7 +2486,10 @@ mod tests {
         );
 
         let parsed: WorktreeRegistry = serde_json::from_value(restored).expect("deserialize");
-        assert_eq!(parsed.worktrees[0].display_name.as_deref(), Some("新会话名"));
+        assert_eq!(
+            parsed.worktrees[0].display_name.as_deref(),
+            Some("新会话名")
+        );
         assert!(matches!(
             parsed.receipts.get("request-1"),
             Some(WorktreeOperationReceipt::UpdateDisplayName {

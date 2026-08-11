@@ -81,7 +81,10 @@ pub fn classify_orphaned_metadata(metadata: &[SessionMetadata]) -> SessionGcRepo
                 orphaned.push(OrphanedSessionRecord {
                     session_id: session_id.to_string(),
                     kind: OrphanKind::DanglingChild,
-                    reason: format!("parent session {} is missing from metadata", parent_session_id),
+                    reason: format!(
+                        "parent session {} is missing from metadata",
+                        parent_session_id
+                    ),
                 });
             }
             continue;
@@ -93,7 +96,10 @@ pub fn classify_orphaned_metadata(metadata: &[SessionMetadata]) -> SessionGcRepo
                     orphaned.push(OrphanedSessionRecord {
                         session_id: session_id.to_string(),
                         kind: OrphanKind::DetachedChild,
-                        reason: format!("creator marker references missing parent {}", parent_session_id),
+                        reason: format!(
+                            "creator marker references missing parent {}",
+                            parent_session_id
+                        ),
                     });
                 }
             }

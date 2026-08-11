@@ -76,9 +76,9 @@ impl DesktopWardenModelJudgementPort {
             return WARDEN_JUDGEMENT_TIMEOUT;
         };
         let Ok(thresholds) = config_service
-            .get_config::<bitfun_core::service::config::types::AiThresholdsConfig>(
-                Some("ai.thresholds"),
-            )
+            .get_config::<bitfun_core::service::config::types::AiThresholdsConfig>(Some(
+                "ai.thresholds",
+            ))
             .await
         else {
             return WARDEN_JUDGEMENT_TIMEOUT;
@@ -375,24 +375,21 @@ mod tests {
         let empty = DesktopWardenModelJudgementPort::parse_judgement_response("   ");
         assert!(empty.is_err(), "empty response is a parse error");
 
-        let empty_object =
-            DesktopWardenModelJudgementPort::parse_judgement_response("{}");
+        let empty_object = DesktopWardenModelJudgementPort::parse_judgement_response("{}");
         assert!(
             empty_object.is_err(),
             "an empty object must not default shouldPoke to false"
         );
 
-        let missing_field = DesktopWardenModelJudgementPort::parse_judgement_response(
-            r#"{"ruleIds": ["R1"]}"#,
-        );
+        let missing_field =
+            DesktopWardenModelJudgementPort::parse_judgement_response(r#"{"ruleIds": ["R1"]}"#);
         assert!(
             missing_field.is_err(),
             "a missing shouldPoke must not default to false"
         );
 
-        let wrong_type = DesktopWardenModelJudgementPort::parse_judgement_response(
-            r#"{"shouldPoke": "yes"}"#,
-        );
+        let wrong_type =
+            DesktopWardenModelJudgementPort::parse_judgement_response(r#"{"shouldPoke": "yes"}"#);
         assert!(
             wrong_type.is_err(),
             "a non-boolean shouldPoke is not a valid verdict"
@@ -404,10 +401,9 @@ mod tests {
         // A bare `shouldPoke` verdict parses; absent rule/evidence lists
         // default to empty (which resolve_audit_poke_from_judgement fills
         // from the mechanical candidates).
-        let parsed = DesktopWardenModelJudgementPort::parse_judgement_response(
-            r#"{"shouldPoke": false}"#,
-        )
-        .expect("bare verdict parses");
+        let parsed =
+            DesktopWardenModelJudgementPort::parse_judgement_response(r#"{"shouldPoke": false}"#)
+                .expect("bare verdict parses");
         assert!(!parsed.should_poke);
         assert!(parsed.rule_ids.is_empty());
         assert!(parsed.evidence_requested.is_empty());

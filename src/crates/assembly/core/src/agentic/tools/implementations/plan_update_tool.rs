@@ -36,9 +36,9 @@ impl Default for PlanUpdateTool {
 /// round-trip writes preserve key order and formatting) and markdown body.
 pub(crate) fn parse_plan_file(content: &str) -> BitFunResult<(Value, String)> {
     let trimmed = content.trim_start();
-    let after_open = trimmed
-        .strip_prefix("---")
-        .ok_or_else(|| BitFunError::tool("Plan file is missing the YAML frontmatter opener '---'"))?;
+    let after_open = trimmed.strip_prefix("---").ok_or_else(|| {
+        BitFunError::tool("Plan file is missing the YAML frontmatter opener '---'")
+    })?;
     let end = after_open.find("\n---").ok_or_else(|| {
         BitFunError::tool("Plan file is missing the YAML frontmatter closer '---'")
     })?;
@@ -51,10 +51,7 @@ pub(crate) fn parse_plan_file(content: &str) -> BitFunResult<(Value, String)> {
         .to_string();
 
     let frontmatter: Value = serde_yaml::from_str(yaml_part).map_err(|error| {
-        BitFunError::tool(format!(
-            "Failed to parse plan YAML frontmatter: {}",
-            error
-        ))
+        BitFunError::tool(format!("Failed to parse plan YAML frontmatter: {}", error))
     })?;
     Ok((frontmatter, body))
 }
@@ -75,7 +72,10 @@ pub(crate) struct TodoUpdate {
 /// the todo id must exist, duplicate ids in one batch are rejected, and every
 /// dependency referenced by an update must exist without introducing a
 /// self-loop or a cycle. Returns the applied updates for the tool result.
-pub(crate) fn validate_updates(frontmatter: &Value, updates: &[TodoUpdate]) -> BitFunResult<Vec<Value>> {
+pub(crate) fn validate_updates(
+    frontmatter: &Value,
+    updates: &[TodoUpdate],
+) -> BitFunResult<Vec<Value>> {
     let todos = frontmatter
         .get("todos")
         .and_then(Value::as_array)
@@ -134,8 +134,12 @@ pub(crate) fn validate_updates(frontmatter: &Value, updates: &[TodoUpdate]) -> B
             applied_item["content"] = Value::String(content.clone());
         }
         if let Some(dependencies) = &update.dependencies {
-            applied_item["dependencies"] =
-                Value::Array(dependencies.iter().map(|d| Value::String(d.clone())).collect());
+            applied_item["dependencies"] = Value::Array(
+                dependencies
+                    .iter()
+                    .map(|d| Value::String(d.clone()))
+                    .collect(),
+            );
         }
         applied.push(applied_item);
     }
@@ -193,10 +197,8 @@ fn validate_todo_dependency_graph(frontmatter: &Value, updates: &[TodoUpdate]) -
 
     // Kahn's algorithm over edges that reference existing todos (dangling deps
     // are ignored here; the caller already rejects newly-set dangling deps).
-    let mut in_degree: std::collections::HashMap<String, usize> = adjacency
-        .keys()
-        .map(|id| (id.clone(), 0usize))
-        .collect();
+    let mut in_degree: std::collections::HashMap<String, usize> =
+        adjacency.keys().map(|id| (id.clone(), 0usize)).collect();
     for deps in adjacency.values() {
         for dep in deps {
             if let Some(degree) = in_degree.get_mut(dep) {
@@ -246,11 +248,20 @@ fn is_yaml_11_boolean(value: &str) -> bool {
     matches!(
         value,
         "y" | "Y"
-            | "yes" | "Yes" | "YES"
-            | "n" | "N"
-            | "no" | "No" | "NO"
-            | "on" | "On" | "ON"
-            | "off" | "Off" | "OFF"
+            | "yes"
+            | "Yes"
+            | "YES"
+            | "n"
+            | "N"
+            | "no"
+            | "No"
+            | "NO"
+            | "on"
+            | "On"
+            | "ON"
+            | "off"
+            | "Off"
+            | "OFF"
     )
 }
 
@@ -258,14 +269,8 @@ fn is_yaml_11_boolean(value: &str) -> bool {
 /// scalar has its surrounding whitespace trimmed on read-back, so an unquoted
 /// `padded ` would silently lose its trailing spaces.
 fn has_edge_whitespace(value: &str) -> bool {
-    value
-        .chars()
-        .next()
-        .is_some_and(char::is_whitespace)
-        || value
-            .chars()
-            .next_back()
-            .is_some_and(char::is_whitespace)
+    value.chars().next().is_some_and(char::is_whitespace)
+        || value.chars().next_back().is_some_and(char::is_whitespace)
 }
 
 /// Quote a single-line YAML scalar value so it can be written back safely as
@@ -305,7 +310,8 @@ fn yaml_quote_single_line(value: &str) -> String {
                         | '%'
                         | '@'
                         | '`'
-                ) || (c == '-' && value.starts_with('-'))
+                )
+                || (c == '-' && value.starts_with('-'))
         });
     if !special {
         return value.to_string();
@@ -372,7 +378,9 @@ pub(crate) fn apply_updates_text(content: &str, updates: &[TodoUpdate]) -> BitFu
             // (`todos: # ...`) is not a block start (d6-P2-2): it carries no
             // array value, so entering the block on it would misparse every
             // following line as todo content.
-            if structural == "todos:" || structural.starts_with("todos: ") && !structural.contains("#") {
+            if structural == "todos:"
+                || structural.starts_with("todos: ") && !structural.contains("#")
+            {
                 in_todos = true;
             }
             out.push(line.to_string());
@@ -394,7 +402,10 @@ pub(crate) fn apply_updates_text(content: &str, updates: &[TodoUpdate]) -> BitFu
             continue;
         }
         // A top-level key (unindented, not a list item) ends the todos block.
-        if !structural.starts_with(' ') && !structural.starts_with('\t') && !structural.starts_with('-') && !structural.is_empty()
+        if !structural.starts_with(' ')
+            && !structural.starts_with('\t')
+            && !structural.starts_with('-')
+            && !structural.is_empty()
         {
             in_todos = false;
             in_content_block = false;
@@ -472,7 +483,11 @@ pub(crate) fn apply_updates_text(content: &str, updates: &[TodoUpdate]) -> BitFu
                         // Keep everything after the old value (e.g. a trailing
                         // CR from CRLF files) byte-identical.
                         let old_value_len = tail.trim_end_matches(['\r', ' ', '\t']).len();
-                        out.push(format!("  status: {}{}", new_status, &tail[old_value_len..]));
+                        out.push(format!(
+                            "  status: {}{}",
+                            new_status,
+                            &tail[old_value_len..]
+                        ));
                         seen.insert("status".to_string());
                         replaced += 1;
                         continue;
@@ -680,7 +695,9 @@ impl Tool for PlanUpdateTool {
         let plan_file = input
             .get("plan_file")
             .and_then(Value::as_str)
-            .ok_or_else(|| BitFunError::validation("Missing required field: plan_file".to_string()))?;
+            .ok_or_else(|| {
+                BitFunError::validation("Missing required field: plan_file".to_string())
+            })?;
         let plans_dir = context.current_workspace_runtime_root()?.join("plans");
         let plan_path = resolve_plan_path_with_plans_dir(
             plan_file.trim(),
@@ -699,14 +716,10 @@ impl Tool for PlanUpdateTool {
         let plan_file = input
             .get("plan_file")
             .and_then(|value| value.as_str())
-            .ok_or(BitFunError::validation(
-                "Missing required field: plan_file",
-            ))?;
+            .ok_or(BitFunError::validation("Missing required field: plan_file"))?;
         let plan_file = plan_file.trim();
         if plan_file.is_empty() {
-            return Err(BitFunError::validation(
-                "Missing required field: plan_file",
-            ));
+            return Err(BitFunError::validation("Missing required field: plan_file"));
         }
 
         let updates_value = input
@@ -720,12 +733,9 @@ impl Tool for PlanUpdateTool {
         }
         let mut updates = Vec::with_capacity(updates_value.len());
         for update in updates_value {
-            let id = update
-                .get("id")
-                .and_then(|value| value.as_str())
-                .ok_or(BitFunError::validation(
-                    "Each update requires an 'id' field",
-                ))?;
+            let id = update.get("id").and_then(|value| value.as_str()).ok_or(
+                BitFunError::validation("Each update requires an 'id' field"),
+            )?;
             let status = update
                 .get("status")
                 .and_then(|value| value.as_str())
@@ -828,7 +838,9 @@ mod tests {
         assert_eq!(todos[0]["status"].as_str(), Some("completed"));
         assert_eq!(todos[1]["status"].as_str(), Some("pending"));
         assert_eq!(
-            todos[1]["dependencies"].as_array().map(|deps| deps[0].as_str()),
+            todos[1]["dependencies"]
+                .as_array()
+                .map(|deps| deps[0].as_str()),
             Some(Some("setup-auth"))
         );
     }
@@ -847,7 +859,8 @@ mod tests {
 
     #[test]
     fn apply_updates_text_keeps_crlf_line_endings() {
-        let content = "---\r\ntodos:\r\n- id: a\r\n  content: A\r\n  status: pending\r\n---\r\n\r\nbody\r\n";
+        let content =
+            "---\r\ntodos:\r\n- id: a\r\n  content: A\r\n  status: pending\r\n---\r\n\r\nbody\r\n";
         let updates = vec![status_update("a", "completed")];
         let updated = apply_updates_text(content, &updates).expect("apply updates");
         let expected = "---\r\ntodos:\r\n- id: a\r\n  content: A\r\n  status: completed\r\n---\r\n\r\nbody\r\n";
@@ -856,7 +869,8 @@ mod tests {
 
     #[test]
     fn apply_updates_text_updates_content_single_line() {
-        let content = "---\ntodos:\n- id: a\n  content: Old content\n  status: pending\n---\n\nbody";
+        let content =
+            "---\ntodos:\n- id: a\n  content: Old content\n  status: pending\n---\n\nbody";
         let updates = vec![TodoUpdate {
             id: "a".to_string(),
             status: None,
@@ -864,12 +878,16 @@ mod tests {
             dependencies: None,
         }];
         let updated = apply_updates_text(content, &updates).expect("apply updates");
-        let expected = "---\ntodos:\n- id: a\n  content: New content\n  status: pending\n---\n\nbody";
+        let expected =
+            "---\ntodos:\n- id: a\n  content: New content\n  status: pending\n---\n\nbody";
         assert_eq!(updated, expected);
 
         // Parser agrees on the new content.
         let (frontmatter, _) = parse_plan_file(&updated).expect("re-parse");
-        assert_eq!(frontmatter["todos"][0]["content"].as_str(), Some("New content"));
+        assert_eq!(
+            frontmatter["todos"][0]["content"].as_str(),
+            Some("New content")
+        );
         assert_eq!(frontmatter["todos"][0]["status"].as_str(), Some("pending"));
     }
 
@@ -888,7 +906,10 @@ mod tests {
         assert_eq!(updated, expected);
 
         let (frontmatter, _) = parse_plan_file(&updated).expect("re-parse");
-        assert_eq!(frontmatter["todos"][0]["content"].as_str(), Some("Replaced"));
+        assert_eq!(
+            frontmatter["todos"][0]["content"].as_str(),
+            Some("Replaced")
+        );
     }
 
     #[test]
@@ -1087,14 +1108,34 @@ mod tests {
         // PLAN-03: yes/no/on/off（YAML 1.1 布尔）与带前后空白的值必须加引号，
         // 且引号包裹后的值经 YAML 解析必须回读为原始字符串（写-读自校验）。
         for value in [
-            "yes", "Yes", "YES", "no", "No", "NO", "on", "On", "OFF", "y", "n",
-            " padded", "padded ", "  both  ", "\tleading", "trailing\t",
+            "yes",
+            "Yes",
+            "YES",
+            "no",
+            "No",
+            "NO",
+            "on",
+            "On",
+            "OFF",
+            "y",
+            "n",
+            " padded",
+            "padded ",
+            "  both  ",
+            "\tleading",
+            "trailing\t",
         ] {
             let quoted = yaml_quote_single_line(value);
             assert_ne!(quoted, value, "value must be quoted: {:?}", value);
             let parsed: serde_yaml::Value =
                 serde_yaml::from_str(&quoted).expect("quoted value must parse");
-            assert_eq!(parsed.as_str(), Some(value), "value: {:?} -> {}", value, quoted);
+            assert_eq!(
+                parsed.as_str(),
+                Some(value),
+                "value: {:?} -> {}",
+                value,
+                quoted
+            );
         }
         // Plain string values stay bare.
         assert_eq!(yaml_quote_single_line("Set up auth"), "Set up auth");
@@ -1108,9 +1149,21 @@ mod tests {
         // as_str() 不能得 None、也不能丢掉首尾空白。
         let content = "---\ntodos:\n- id: a\n  content: Old\n  status: pending\n---\n\nbody";
         for value in [
-            "123", "1.5", "true", "false", "null", "~",
-            "yes", "no", "on", "off",
-            " padded", "padded ", "  both  ", "\tleading", "trailing\t",
+            "123",
+            "1.5",
+            "true",
+            "false",
+            "null",
+            "~",
+            "yes",
+            "no",
+            "on",
+            "off",
+            " padded",
+            "padded ",
+            "  both  ",
+            "\tleading",
+            "trailing\t",
         ] {
             let updates = vec![TodoUpdate {
                 id: "a".to_string(),
@@ -1139,10 +1192,11 @@ mod tests {
             status_update("a", "in_progress"),
             status_update("a", "completed"),
         ];
-        let error = validate_updates(&frontmatter, &updates)
-            .expect_err("duplicate id must error");
+        let error = validate_updates(&frontmatter, &updates).expect_err("duplicate id must error");
         assert!(
-            error.to_string().contains("Duplicate todo id in updates: a"),
+            error
+                .to_string()
+                .contains("Duplicate todo id in updates: a"),
             "unexpected error: {}",
             error
         );
@@ -1159,8 +1213,8 @@ mod tests {
             content: None,
             dependencies: Some(vec!["missing-todo".to_string()]),
         }];
-        let error = validate_updates(&frontmatter, &updates)
-            .expect_err("dangling dependency must error");
+        let error =
+            validate_updates(&frontmatter, &updates).expect_err("dangling dependency must error");
         let message = error.to_string();
         assert!(
             message.contains("Dependency todo id not found in plan: missing-todo"),
@@ -1180,8 +1234,7 @@ mod tests {
             content: None,
             dependencies: Some(vec!["a".to_string()]),
         }];
-        let error = validate_updates(&frontmatter, &updates)
-            .expect_err("self-loop must error");
+        let error = validate_updates(&frontmatter, &updates).expect_err("self-loop must error");
         let message = error.to_string();
         assert!(
             message.contains("Todo dependency cycle detected"),
@@ -1202,8 +1255,8 @@ mod tests {
             content: None,
             dependencies: Some(vec!["a".to_string()]),
         }];
-        let error = validate_updates(&frontmatter, &updates)
-            .expect_err("a -> b -> a cycle must error");
+        let error =
+            validate_updates(&frontmatter, &updates).expect_err("a -> b -> a cycle must error");
         let message = error.to_string();
         assert!(
             message.contains("Todo dependency cycle detected"),
@@ -1234,8 +1287,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("plan-update-intent-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(dir.join("plans")).expect("plans dir should be created");
         let plan_path = dir.join("plans/my_plan_1234.plan.md");
-        std::fs::write(&plan_path, "---\nname: X\ntodos:\n- id: a\n  content: A\n  status: pending\n---\n\nbody")
-            .expect("write plan file");
+        std::fs::write(
+            &plan_path,
+            "---\nname: X\ntodos:\n- id: a\n  content: A\n  status: pending\n---\n\nbody",
+        )
+        .expect("write plan file");
         let mut context = ToolUseContext::for_tool_listing(
             Some(crate::agentic::WorkspaceBinding::new(None, dir.clone())),
             None,

@@ -430,7 +430,10 @@ fn penalty_execution_l3_is_reminder_only() {
             .contains(&OperationClass::ExecuteCode),
         "R-25: after L3 penalty ExecuteCode must STILL be allowed (no RBAC change)"
     );
-    assert_eq!(post_restrictions, pre_restrictions, "restrictions untouched");
+    assert_eq!(
+        post_restrictions, pre_restrictions,
+        "restrictions untouched"
+    );
 
     // ── Verify tool-level enforcement is unchanged ───────────────────────
     let write_result =
@@ -828,8 +831,8 @@ fn warden_audit_poke_model_verdict_replaces_mechanical_rules() {
         rule_ids: vec!["R2: execution_safety".into()],
         evidence_requested: vec!["tool_call_log".into()],
     };
-    let poke = resolve_audit_poke_from_judgement(&mechanical, &confirmed)
-        .expect("confirmed poke is sent");
+    let poke =
+        resolve_audit_poke_from_judgement(&mechanical, &confirmed).expect("confirmed poke is sent");
     assert_eq!(poke.poke_id, "audit-tool-42");
     assert_eq!(poke.poke_type, PokeType::Audit);
     assert_eq!(poke.deadline_turns, 3);

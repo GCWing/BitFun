@@ -3199,7 +3199,9 @@ pub async fn delete_session_tree(
         session_id,
         deleted_session_ids.len()
     );
-    Ok(DeleteSessionTreeResponse { deleted_session_ids })
+    Ok(DeleteSessionTreeResponse {
+        deleted_session_ids,
+    })
 }
 
 #[tauri::command]

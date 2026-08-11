@@ -530,8 +530,7 @@ pub async fn list_pages_from_relay(relay_url: &str, token: &str) -> Result<Vec<P
         let body = resp.text().await.unwrap_or_default();
         return Err(anyhow!("list pages failed: HTTP {status} — {body}"));
     }
-    resp
-        .json()
+    resp.json()
         .await
         .map_err(|e| anyhow!("parse list pages: {e}"))
 }
@@ -565,8 +564,7 @@ pub async fn list_page_versions_from_relay(
         let body = resp.text().await.unwrap_or_default();
         return Err(anyhow!("list versions failed: HTTP {status} — {body}"));
     }
-    resp
-        .json()
+    resp.json()
         .await
         .map_err(|e| anyhow!("parse list versions: {e}"))
 }
@@ -654,10 +652,7 @@ pub async fn deploy_page_version_on_relay(
         let body = resp.text().await.unwrap_or_default();
         return Err(anyhow!("deploy failed: HTTP {status} — {body}"));
     }
-    resp
-        .json()
-        .await
-        .map_err(|e| anyhow!("parse deploy: {e}"))
+    resp.json().await.map_err(|e| anyhow!("parse deploy: {e}"))
 }
 
 pub async fn delete_page_version_on_relay(
@@ -732,8 +727,7 @@ pub async fn update_page_on_relay(
         let body = resp.text().await.unwrap_or_default();
         return Err(anyhow!("update page failed: HTTP {status} — {body}"));
     }
-    resp
-        .json()
+    resp.json()
         .await
         .map_err(|e| anyhow!("parse update page: {e}"))
 }

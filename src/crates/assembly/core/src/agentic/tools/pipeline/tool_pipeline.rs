@@ -37,9 +37,9 @@ use bitfun_agent_tools::{
     build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, build_write_tail_closure_notice,
     render_tool_result_for_assistant, validate_tool_execution_admission, LoadedDeferredToolSpec,
-    PokeMessage, PokeType, PermissionIntent, ResolvedToolInvocation, ToolExecutionAdmissionRejection,
-    ToolExecutionAdmissionRequest, ToolExecutionErrorPresentation, ToolRuntimeRestrictions,
-    GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
+    PermissionIntent, PokeMessage, PokeType, ResolvedToolInvocation,
+    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExecutionErrorPresentation,
+    ToolRuntimeRestrictions, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_runtime_ports::{
     PermissionReply, PermissionRequest, PermissionRequestSource, PermissionRequestSourceKind,
@@ -823,25 +823,38 @@ impl ToolPipeline {
         if task.context.subagent_parent_info.is_some() {
             return;
         }
-        let workspace_root = task.context.workspace.as_ref().map(|workspace| workspace.root_path());
+        let workspace_root = task
+            .context
+            .workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path());
         let active_goal = {
             let mut cache = self.warden_goal_gate_cache.lock().await;
             match cache.get(&session_id) {
-                Some(&(active, fetched_at)) if fetched_at.elapsed() < WARDEN_GOAL_GATE_CACHE_TTL => {
+                Some(&(active, fetched_at))
+                    if fetched_at.elapsed() < WARDEN_GOAL_GATE_CACHE_TTL =>
+                {
                     active
                 }
                 Some(_) => {
                     cache.remove(&session_id);
-                    self.session_has_active_goal(&session_id, workspace_root).await
+                    self.session_has_active_goal(&session_id, workspace_root)
+                        .await
                 }
-                None => self.session_has_active_goal(&session_id, workspace_root).await,
+                None => {
+                    self.session_has_active_goal(&session_id, workspace_root)
+                        .await
+                }
             }
         };
         if !active_goal {
             // WARDEN-01: the goal left the active state (or the session is
             // non-main) — clear stale tool-failure counts here so a later,
             // new goal generation starts from a clean ladder.
-            warden_runtime.lock().await.clear_failure_counts(&session_id);
+            warden_runtime
+                .lock()
+                .await
+                .clear_failure_counts(&session_id);
             return;
         }
         let tool_name = task.invocation.effective_tool_name;
@@ -884,10 +897,11 @@ impl ToolPipeline {
         let Some(workspace_path) = workspace_root else {
             return true;
         };
-        match coordinator.get_thread_goal(session_id, workspace_path).await {
-            Ok(goal) => crate::agentic::warden::runtime::warden_enforcement_for_goal(
-                goal.as_ref(),
-            ),
+        match coordinator
+            .get_thread_goal(session_id, workspace_path)
+            .await
+        {
+            Ok(goal) => crate::agentic::warden::runtime::warden_enforcement_for_goal(goal.as_ref()),
             Err(error) => {
                 debug!(
                     "Warden goal gate lookup failed; keeping tool enforcement enabled: session_id={}, error={}",
@@ -1373,7 +1387,10 @@ impl ToolPipeline {
         let Some(workspace_path) = workspace_root else {
             return WardenGoalContext::FailOpen;
         };
-        match coordinator.get_thread_goal(session_id, workspace_path).await {
+        match coordinator
+            .get_thread_goal(session_id, workspace_path)
+            .await
+        {
             Ok(Some(goal)) => {
                 if goal.is_active() {
                     WardenGoalContext::Active(serde_json::json!({
@@ -1924,7 +1941,9 @@ impl ToolPipeline {
         // a spec refreshed in an earlier round would be stale again on the
         // next round and re-trigger the reload.
         let mut context = context;
-        let cached_specs = self.cached_session_loaded_deferred_specs(&context.session_id).await;
+        let cached_specs = self
+            .cached_session_loaded_deferred_specs(&context.session_id)
+            .await;
         if !cached_specs.is_empty() {
             context.loaded_deferred_tool_specs = merge_loaded_deferred_tool_specs(
                 &context.loaded_deferred_tool_specs,
@@ -2118,7 +2137,8 @@ impl ToolPipeline {
         let mut all_results = Vec::new();
         for (idx, result) in results.into_iter().enumerate() {
             let task_id = &task_ids[idx];
-            self.append_execution_result(task_id, result, &mut all_results).await;
+            self.append_execution_result(task_id, result, &mut all_results)
+                .await;
         }
 
         Ok(all_results)
@@ -2154,7 +2174,8 @@ impl ToolPipeline {
                 handle.abort();
                 let _ = handle.await;
             }
-            self.append_execution_result(&task_id, result, &mut results).await;
+            self.append_execution_result(&task_id, result, &mut results)
+                .await;
         }
 
         Ok(results)
@@ -2170,10 +2191,7 @@ impl ToolPipeline {
         task: &ToolTask,
         tool_name: &str,
         tool_args: &serde_json::Value,
-    ) -> (
-        Result<(), ToolExecutionAdmissionRejection>,
-        Option<ToolRef>,
-    ) {
+    ) -> (Result<(), ToolExecutionAdmissionRejection>, Option<ToolRef>) {
         let registry = self.tool_registry.read().await;
         let effective_restrictions = if crate::service::config::rbac_enabled() {
             effective_runtime_tool_restrictions(
@@ -2231,9 +2249,7 @@ impl ToolPipeline {
                     "Stale deferred-tool spec reload failed during GetToolSpec execution: tool_name={}, session_id={}, error={}",
                     stale_tool_name, task.context.session_id, error
                 );
-                return StaleSpecReloadOutcome::NotReloadable(
-                    "GetToolSpec execution failed",
-                );
+                return StaleSpecReloadOutcome::NotReloadable("GetToolSpec execution failed");
             }
         };
         let Some(result) = results.into_iter().next() else {
@@ -2253,9 +2269,7 @@ impl ToolPipeline {
                 "Stale deferred-tool spec reload received a non-result GetToolSpec outcome: tool_name={}, session_id={}",
                 stale_tool_name, task.context.session_id
             );
-            return StaleSpecReloadOutcome::NotReloadable(
-                "GetToolSpec returned an error result",
-            );
+            return StaleSpecReloadOutcome::NotReloadable("GetToolSpec returned an error result");
         };
         // Synthesize a GetToolSpec ToolResult message and feed it through the
         // loaded-spec state collection channel so the refreshed generation is
@@ -2270,10 +2284,8 @@ impl ToolPipeline {
             duration_ms: Some(0),
             image_attachments,
         });
-        let refreshed = collect_product_loaded_deferred_tool_specs(
-            &[message],
-            &task.context.deferred_tools,
-        );
+        let refreshed =
+            collect_product_loaded_deferred_tool_specs(&[message], &task.context.deferred_tools);
         if refreshed.is_empty() {
             warn!(
                 "Stale deferred-tool spec is not reloadable: tool_name={}, session_id={} — the tool is no longer part of the contextual deferred catalog or the GetToolSpec result lacks a catalog generation",
@@ -2412,7 +2424,9 @@ impl ToolPipeline {
         // Repetition alone is not execution failure: polling and status checks
         // may legitimately reuse identical arguments. The execution engine
         // evaluates repeated patterns only after observing actual tool results.
-        let (admission, tool) = self.resolve_tool_admission(&task, &tool_name, &tool_args).await;
+        let (admission, tool) = self
+            .resolve_tool_admission(&task, &tool_name, &tool_args)
+            .await;
 
         // F2: stale deferred-tool specs are refreshed automatically instead of
         // surfacing a protocol-layer admission failure. The GetToolSpec reload
@@ -2427,9 +2441,7 @@ impl ToolPipeline {
         // tool explicitly.
         let (admission, tool) = if let Err(err) = &admission {
             match err {
-                ToolExecutionAdmissionRejection::Deferred(stale)
-                    if stale.is_stale_spec() =>
-                {
+                ToolExecutionAdmissionRejection::Deferred(stale) if stale.is_stale_spec() => {
                     let mut admission = admission;
                     let mut tool = tool;
                     let mut reload_attempts = 0usize;
@@ -2465,9 +2477,9 @@ impl ToolPipeline {
                                     "Automatically reloaded stale deferred-tool spec: tool_name={}, tool_id={}, session_id={}, attempt={}",
                                     tool_name, tool_id, task.context.session_id, reload_attempts
                                 );
-                                (admission, tool) =
-                                    self.resolve_tool_admission(&task, &tool_name, &tool_args)
-                                        .await;
+                                (admission, tool) = self
+                                    .resolve_tool_admission(&task, &tool_name, &tool_args)
+                                    .await;
                             }
                             StaleSpecReloadOutcome::NotReloadable(reason) => {
                                 warn!(
@@ -2498,7 +2510,10 @@ impl ToolPipeline {
             // to the Warden audit — admission rejections (stale catalog,
             // deferred gateway, runtime restrictions) are protocol-layer
             // outcomes and must never count toward the tool-failure penalty.
-            self.admission_rejected_tasks.lock().await.insert(tool_id.clone());
+            self.admission_rejected_tasks
+                .lock()
+                .await
+                .insert(tool_id.clone());
 
             self.state_manager
                 .update_state(
@@ -5365,8 +5380,7 @@ mod tests {
         result: std::sync::Mutex<
             bitfun_runtime_ports::PortResult<bitfun_runtime_ports::WardenAuditJudgementResponse>,
         >,
-        captured_requests:
-            Arc<TokioMutex<Vec<bitfun_runtime_ports::WardenAuditJudgementRequest>>>,
+        captured_requests: Arc<TokioMutex<Vec<bitfun_runtime_ports::WardenAuditJudgementRequest>>>,
     }
 
     impl FakeWardenJudgementPort {
@@ -5387,13 +5401,9 @@ mod tests {
         async fn judge_audit(
             &self,
             request: bitfun_runtime_ports::WardenAuditJudgementRequest,
-        ) -> bitfun_runtime_ports::PortResult<
-            bitfun_runtime_ports::WardenAuditJudgementResponse,
-        > {
-            self.captured_requests
-                .lock()
-                .await
-                .push(request.clone());
+        ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::WardenAuditJudgementResponse>
+        {
+            self.captured_requests.lock().await.push(request.clone());
             self.result.lock().unwrap().clone()
         }
     }
@@ -5519,7 +5529,8 @@ mod tests {
         pipeline.set_warden_model_judgement(confirm_port.clone());
 
         let task = test_tool_task("tool-debounce", "Write");
-        let mechanical = ToolPipeline::build_audit_poke("tool-debounce", &OperationClass::WriteFile);
+        let mechanical =
+            ToolPipeline::build_audit_poke("tool-debounce", &OperationClass::WriteFile);
 
         let first = pipeline
             .warden_audit_poke_decision(&task, "Write", &mechanical)
@@ -5533,7 +5544,10 @@ mod tests {
         let second = pipeline
             .warden_audit_poke_decision(&task, "Write", &mechanical)
             .await;
-        assert!(second.is_none(), "debounced exploratory occurrence sends no poke");
+        assert!(
+            second.is_none(),
+            "debounced exploratory occurrence sends no poke"
+        );
         assert_eq!(
             confirm_port.captured_requests.lock().await.len(),
             1,
@@ -5598,10 +5612,20 @@ mod tests {
         {
             let mut guard = warden.lock().await;
             guard
-                .on_tool_outcome("session_1", "Write", &scene, WardenToolOutcome::ExecutionFailed)
+                .on_tool_outcome(
+                    "session_1",
+                    "Write",
+                    &scene,
+                    WardenToolOutcome::ExecutionFailed,
+                )
                 .await;
             guard
-                .on_tool_outcome("session_1", "Write", &scene, WardenToolOutcome::ExecutionFailed)
+                .on_tool_outcome(
+                    "session_1",
+                    "Write",
+                    &scene,
+                    WardenToolOutcome::ExecutionFailed,
+                )
                 .await;
             guard.record_tool_error("session_1", &scene, "permission denied");
             guard.take_pending_reminders("session_1");
@@ -5733,7 +5757,9 @@ mod tests {
             "bitfun-pipeline-warden-test-{}",
             uuid::Uuid::new_v4()
         ));
-        let path_manager = Arc::new(PathManager::with_user_root_for_tests(root.join("user-root")));
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.join("user-root"),
+        ));
         let persistence_manager =
             Arc::new(PersistenceManager::new(path_manager).expect("persistence manager"));
         Arc::new(SessionManager::new(
@@ -5866,7 +5892,10 @@ mod tests {
             "no L1 reminder for an admission rejection"
         );
         assert!(
-            warden_guard.shame_wall().entry_for_session("session_1").is_none(),
+            warden_guard
+                .shame_wall()
+                .entry_for_session("session_1")
+                .is_none(),
             "no shame-wall record"
         );
     }
@@ -5965,10 +5994,7 @@ mod tests {
         .expect("valid deferred ListModels invocation")
     }
 
-    fn test_deferred_list_models_task(
-        tool_id: &str,
-        stale_generation: u64,
-    ) -> ToolTask {
+    fn test_deferred_list_models_task(tool_id: &str, stale_generation: u64) -> ToolTask {
         let mut context = test_tool_execution_context();
         context.agent_type = "agentic".to_string();
         context.deferred_tools = vec!["ListModels".to_string()];
@@ -6067,10 +6093,8 @@ mod tests {
             guard.current_snapshot_generation()
         };
 
-        let task = test_deferred_list_models_task(
-            "f2-reload-unit",
-            current_generation.saturating_sub(1),
-        );
+        let task =
+            test_deferred_list_models_task("f2-reload-unit", current_generation.saturating_sub(1));
         let outcome = pipeline
             .reload_stale_deferred_tool_spec(&task, "ListModels")
             .await;
@@ -6289,7 +6313,9 @@ mod tests {
 
         let pipeline_runner = pipeline.clone();
         let handle = tokio::spawn(async move {
-            pipeline_runner.execute_single_tool(tool_id.to_string()).await
+            pipeline_runner
+                .execute_single_tool(tool_id.to_string())
+                .await
         });
 
         // Wait until the first reload has landed in the session cache, then
@@ -6435,7 +6461,9 @@ mod tests {
         task.context.loaded_deferred_tool_specs = Vec::new();
         pipeline.insert_tool_task_for_test(task).await;
 
-        let result = pipeline.execute_single_tool("f2-require-spec".to_string()).await;
+        let result = pipeline
+            .execute_single_tool("f2-require-spec".to_string())
+            .await;
         let err = result.expect_err("unloaded deferred tools must still require GetToolSpec");
         let message = err.to_string();
         assert!(

@@ -864,15 +864,14 @@ async fn initialize_core_services_for_deployment(
     // here so every model tool call sees it. An explicit environment value
     // wins over the config value when both exist (explicit env is the escape
     // hatch) — matching the desktop behavior exactly.
-    let configured_knowledge_base_root = match bitfun_core::service::config::get_global_config_service()
-        .await
-    {
-        Ok(service) => service
-            .get_config::<String>(Some("ai.knowledge_base_root"))
-            .await
-            .ok(),
-        Err(_) => None,
-    };
+    let configured_knowledge_base_root =
+        match bitfun_core::service::config::get_global_config_service().await {
+            Ok(service) => service
+                .get_config::<String>(Some("ai.knowledge_base_root"))
+                .await
+                .ok(),
+            Err(_) => None,
+        };
     inject_knowledge_base_root_if_needed(configured_knowledge_base_root).await;
 
     let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()

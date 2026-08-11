@@ -1,7 +1,7 @@
 use crate::{
     classify_tool_call, validate_deferred_tool_usage, validate_tool_allowed_by_list,
-    DeferredToolUsageError, LoadedDeferredToolSpec, ToolExecutionAccessError,
-    ToolRestrictionError, ToolRuntimeRestrictions,
+    DeferredToolUsageError, LoadedDeferredToolSpec, ToolExecutionAccessError, ToolRestrictionError,
+    ToolRuntimeRestrictions,
 };
 use serde_json::Value;
 use std::fmt;
@@ -70,9 +70,7 @@ pub fn validate_tool_execution_admission(
         let mut expanded = request.runtime_tool_restrictions.clone();
         for tool_name in request.user_enabled_tools {
             // 不把内部网关纳入联动放行（仅模型可见性管辖）；deny 仍优先。
-            if tool_name == request.get_tool_spec_tool_name
-                || tool_name == "CallDeferredTool"
-            {
+            if tool_name == request.get_tool_spec_tool_name || tool_name == "CallDeferredTool" {
                 continue;
             }
             expanded.allowed_tool_names.insert(tool_name.clone());
@@ -115,8 +113,7 @@ mod tests {
         invocation_is_deferred: bool,
         deferred_tools: &[&str],
     ) -> Result<(), ToolExecutionAdmissionRejection> {
-        let user_enabled: Vec<String> =
-            user_enabled_tools.iter().map(|s| s.to_string()).collect();
+        let user_enabled: Vec<String> = user_enabled_tools.iter().map(|s| s.to_string()).collect();
         let allowed: Vec<String> = allowed_tools.iter().map(|s| s.to_string()).collect();
         let deferred: Vec<String> = deferred_tools.iter().map(|s| s.to_string()).collect();
         validate_tool_execution_admission(ToolExecutionAdmissionRequest {
@@ -203,7 +200,9 @@ mod tests {
     fn deny_list_still_prevails_over_user_enabled_union() {
         // 子代理 deny（ReviewPlatform）即使被勾选也拦截——安全层保留。
         let mut restrictions = commander_template();
-        restrictions.denied_tool_names.insert("ReviewPlatform".to_string());
+        restrictions
+            .denied_tool_names
+            .insert("ReviewPlatform".to_string());
         let result = admission(
             "ReviewPlatform",
             &restrictions,
@@ -261,7 +260,14 @@ mod tests {
             "GetToolSpec",
             &restrictions,
             &["Read", "Write", "Grep", "Glob"], // 模式 default 工具集（不含网关）
-            &["Read", "Write", "Grep", "Glob", "GetToolSpec", "CallDeferredTool"],
+            &[
+                "Read",
+                "Write",
+                "Grep",
+                "Glob",
+                "GetToolSpec",
+                "CallDeferredTool",
+            ],
             false,
             &["WebFetch", "SessionMessage", "SessionControl", "ListModels"],
         );

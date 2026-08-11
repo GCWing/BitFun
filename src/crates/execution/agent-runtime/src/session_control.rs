@@ -309,9 +309,11 @@ pub fn validate_session_control_input(
                 // worktree 与 ACP 真会话（agent_type `acp__<client>`）互斥：
                 // ACP 会话是外部进程记录，不承载本地 worktree execution_target，
                 // 同时携带会导致 worktree 被静默忽略/成为孤儿。
-                if input.agent_type.as_ref().is_some_and(|agent_type| {
-                    agent_type.as_str().starts_with("acp__")
-                }) {
+                if input
+                    .agent_type
+                    .as_ref()
+                    .is_some_and(|agent_type| agent_type.as_str().starts_with("acp__"))
+                {
                     return invalid("worktree is not supported with acp__ agent types");
                 }
             }
@@ -385,9 +387,7 @@ pub fn session_control_renamed_result_message(
     workspace: &str,
     session_name: &str,
 ) -> String {
-    format!(
-        "Renamed session '{session_id}' to '{session_name}' in workspace '{workspace}'."
-    )
+    format!("Renamed session '{session_id}' to '{session_name}' in workspace '{workspace}'.")
 }
 
 pub fn session_control_created_result_message(
@@ -465,13 +465,11 @@ mod tests {
         };
         let result = validate_session_control_input(&input, context(None));
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("session_id is required")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_id is required"));
     }
 
     #[test]
@@ -511,7 +509,11 @@ mod tests {
             detail: None,
         };
         let result = validate_session_control_input(&input, context(Some("self_1")));
-        assert!(result.result, "compact of the current session must be allowed: {:?}", result.message);
+        assert!(
+            result.result,
+            "compact of the current session must be allowed: {:?}",
+            result.message
+        );
     }
 
     #[test]
@@ -587,8 +589,14 @@ mod tests {
             }
         }))
         .expect("create payload with worktree options must parse");
-        assert_eq!(input.worktree.as_ref().and_then(|w| w.base_ref.as_deref()), Some("main"));
-        assert!(input.worktree.as_ref().is_some_and(|w| w.copy_local_changes));
+        assert_eq!(
+            input.worktree.as_ref().and_then(|w| w.base_ref.as_deref()),
+            Some("main")
+        );
+        assert!(input
+            .worktree
+            .as_ref()
+            .is_some_and(|w| w.copy_local_changes));
 
         let result = validate_session_control_input(&input, context(Some("creator_1")));
         assert!(result.result, "{:?}", result.message);
@@ -654,13 +662,11 @@ mod tests {
         };
         let result = validate_session_control_input(&input, context(Some("creator_1")));
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("worktree is not supported with acp__ agent types")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("worktree is not supported with acp__ agent types"));
     }
 
     #[test]
@@ -727,13 +733,11 @@ mod tests {
         };
         let result = validate_session_control_input(&input, context(None));
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("session_id is required")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_id is required"));
     }
 
     #[test]
@@ -751,13 +755,11 @@ mod tests {
         };
         let result = validate_session_control_input(&input, context(None));
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("session_name is required for rename")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_name is required for rename"));
     }
 
     #[test]
@@ -813,13 +815,11 @@ mod tests {
         };
         let result = validate_session_control_input(&input, context(Some("self_1")));
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("cannot rename the current session")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("cannot rename the current session"));
     }
 
     #[test]

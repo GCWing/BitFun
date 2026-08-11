@@ -44,7 +44,9 @@ use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::service::config::get_global_config_service;
 #[cfg(test)]
-use crate::service::config::types::{automatic_max_output_tokens, MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT};
+use crate::service::config::types::{
+    automatic_max_output_tokens, MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT,
+};
 use crate::service::config::types::{
     model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
 };
@@ -708,9 +710,8 @@ impl ExecutionEngine {
     /// the Runtime Facts reminder: live usage ratio plus the dynamic
     /// compression preview trigger point (input_limit / context_window).
     fn runtime_facts_usage_from_pressure(pressure: &TokenPressureSnapshot) -> RuntimeFactsUsage {
-        let compression_preview_ratio = (pressure.context_window > 0).then(|| {
-            pressure.input_limit as f32 / pressure.context_window as f32
-        });
+        let compression_preview_ratio = (pressure.context_window > 0)
+            .then(|| pressure.input_limit as f32 / pressure.context_window as f32);
         RuntimeFactsUsage {
             context_usage_ratio: Some(pressure.usage_ratio),
             compression_preview_ratio,
@@ -883,8 +884,7 @@ impl ExecutionEngine {
         // `is_valid_configured_max_output_tokens` 强制执行的同一比例）。否则配置了
         // 超过窗口的 max_tokens 会把 input_limit 压到 0，导致每一轮都无条件触发自动压缩。
         let ratio_percent = ratio_percent.max(1).min(100);
-        let max_output_reserve =
-            (context_window as f64 * ratio_percent as f64 / 100.0) as usize;
+        let max_output_reserve = (context_window as f64 * ratio_percent as f64 / 100.0) as usize;
         let output_reserve_tokens = output_reserve_tokens.min(max_output_reserve);
         let safety_reserve_tokens = safety_reserve_tokens.max(1);
         // ENGINE-05: saturating_add guards a 32-bit usize overflow when both
@@ -1065,7 +1065,10 @@ impl ExecutionEngine {
     /// request is only useful while the model still has a chance to produce a
     /// final answer; otherwise the turn should synthesize a local final
     /// response without spending tokens on a request that cannot help.
-    fn should_allow_finalize_round(finalize_rounds_completed: usize, max_finalize_rounds: usize) -> bool {
+    fn should_allow_finalize_round(
+        finalize_rounds_completed: usize,
+        max_finalize_rounds: usize,
+    ) -> bool {
         finalize_rounds_completed < max_finalize_rounds
     }
 
@@ -1512,8 +1515,7 @@ impl ExecutionEngine {
         if let Some(connection) = remote_connection {
             scope_key = format!("{scope_key}|remote:{connection}");
         }
-        let external_sources =
-            crate::service::config::external_instruction_sources_enabled();
+        let external_sources = crate::service::config::external_instruction_sources_enabled();
         scope_key = format!(
             "{scope_key}|extsrc:{}",
             if external_sources { "on" } else { "off" }
@@ -1522,7 +1524,11 @@ impl ExecutionEngine {
             crate::service::config::workspace_instruction_files_enabled();
         scope_key = format!(
             "{scope_key}|winstr:{}",
-            if workspace_instruction_files { "on" } else { "off" }
+            if workspace_instruction_files {
+                "on"
+            } else {
+                "off"
+            }
         );
         if let Some(workspace_root) = workspace_root {
             let digest = workspace_instruction_digest(&workspace_root, external_sources).await;
@@ -1697,7 +1703,10 @@ impl ExecutionEngine {
 /// Best-effort: any read/scan failure falls back to `"unreadable"` so the
 /// digest never blocks prompt assembly; the cache just misses once and the
 /// fresh content is re-read on the miss path.
-async fn workspace_instruction_digest(workspace_root: &std::path::Path, external_sources: bool) -> String {
+async fn workspace_instruction_digest(
+    workspace_root: &std::path::Path,
+    external_sources: bool,
+) -> String {
     use std::collections::BTreeMap;
 
     let mut digest_input = String::new();
@@ -1733,8 +1742,7 @@ async fn workspace_instruction_digest(workspace_root: &std::path::Path, external
     // AGENTS.md, Codex AGENTS.md, rules/) — only when the master switch is on,
     // mirroring the render path in service::instruction_context.
     if external_sources {
-        match crate::instruction_sources::load_local_user_instruction_files(workspace_root).await
-        {
+        match crate::instruction_sources::load_local_user_instruction_files(workspace_root).await {
             loaded => {
                 let mut names: BTreeMap<String, String> = BTreeMap::new();
                 for file in loaded.files {
@@ -1906,7 +1914,7 @@ impl ExecutionEngine {
                     context.remote_execution = original_context.remote_execution.clone();
                 }
                 PromptBuilder::new(context)
-            },
+            }
         };
         let refreshed = builder.build_runtime_facts_reminder(usage);
         scaffold.prepended_prompt_reminders.runtime_facts = Some(refreshed);
@@ -2132,7 +2140,9 @@ impl ExecutionEngine {
         )
         .await?;
         final_ai_messages.push(AIMessage::user(render_system_reminder(input.reminder_text)));
-        final_ai_messages.push(AIMessage::user(render_system_reminder(Self::FINALIZE_USER_FOLLOWUP)));
+        final_ai_messages.push(AIMessage::user(render_system_reminder(
+            Self::FINALIZE_USER_FOLLOWUP,
+        )));
 
         let model_exchange_trace_dir = self
             .session_manager
@@ -5187,7 +5197,10 @@ impl ExecutionEngine {
                             .add_message(&context.session_id, local_msg)
                             .await
                         {
-                            warn!("Failed to persist thinking-only budget final response: {}", e);
+                            warn!(
+                                "Failed to persist thinking-only budget final response: {}",
+                                e
+                            );
                         }
                         break;
                     }
@@ -5283,10 +5296,8 @@ impl ExecutionEngine {
                 // finalize 路径是直线结构：首请求 + 至多一次重试，天然受
                 // DEFAULT_FINALIZE_ROUND_LIMIT=2 约束（gate 边界 0/1 用字面量
                 // 显式表达），无需运行时计数（消除「写后未读」死代码）。
-                let finalize_allowed = Self::should_allow_finalize_round(
-                    0,
-                    DEFAULT_FINALIZE_ROUND_LIMIT,
-                );
+                let finalize_allowed =
+                    Self::should_allow_finalize_round(0, DEFAULT_FINALIZE_ROUND_LIMIT);
                 let finalize_round_group_id = Some(format!(
                     "{}:finalize:{}",
                     context.dialog_turn_id, completed_rounds
@@ -5351,10 +5362,8 @@ impl ExecutionEngine {
                         "Finalize round did not return usable assistant text; retrying once: session_id={}, turn_id={}",
                         context.session_id, context.dialog_turn_id
                     );
-                    let retry_allowed = Self::should_allow_finalize_round(
-                        1,
-                        DEFAULT_FINALIZE_ROUND_LIMIT,
-                    );
+                    let retry_allowed =
+                        Self::should_allow_finalize_round(1, DEFAULT_FINALIZE_ROUND_LIMIT);
                     let retry_result = if retry_allowed {
                         self.run_finalize_round(FinalizeRoundInput {
                             permission_constraints: tool_policy.permission_constraints.clone(),
@@ -5612,19 +5621,25 @@ mod tests {
         manual_compaction_terminal_error, ContextHealthSnapshot, ExecutionEngine, RoundResult,
         TurnPromptScaffold,
     };
-    use crate::agentic::round_preempt::{RoundInjection, RoundInjectionKind, RoundInjectionTarget};
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, UserContextPolicy,
     };
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageRole, MessageSemanticKind, ToolCall, ToolResult,
     };
+    use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use crate::agentic::execution::{ExecutionEngineConfig, RoundExecutor, StreamProcessor};
     use crate::agentic::persistence::PersistenceManager;
+    use crate::agentic::round_preempt::{RoundInjection, RoundInjectionKind, RoundInjectionTarget};
+    use crate::agentic::session::compression::CompressionConfig;
+    use crate::agentic::session::PromptCacheScope;
     use crate::agentic::session::{
         ContextCompressor, PromptCachePolicy, SessionContextStore, SessionManager,
         SessionManagerConfig, TokenAnchor, TokenAnchorInput,
     };
+    use crate::agentic::tools::registry::ToolRegistry;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::agentic::workspace::{local_workspace_services, WorkspaceBinding};
     use crate::infrastructure::PathManager;
     use crate::instruction_sources::test_support::InstructionSwitches;
@@ -5633,8 +5648,8 @@ mod tests {
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
-    use crate::util::TokenCounter;
     use crate::util::types::ToolDefinition;
+    use crate::util::TokenCounter;
     use bitfun_agent_runtime::prompt::RuntimeFactsUsage;
     use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
     use bitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind};
@@ -5645,12 +5660,6 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
-    use crate::agentic::events::{EventQueue, EventQueueConfig};
-    use crate::agentic::execution::{ExecutionEngineConfig, RoundExecutor, StreamProcessor};
-    use crate::agentic::session::compression::CompressionConfig;
-    use crate::agentic::session::PromptCacheScope;
-    use crate::agentic::tools::registry::ToolRegistry;
-    use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use tokio::sync::RwLock as TokioRwLock;
 
     #[test]
@@ -5914,12 +5923,11 @@ mod tests {
         // a remote overlay reconnect and a switch toggle must both invalidate
         // the user context cache independently while composing in one key.
         let _environment = lock_environment();
-        let base = crate::agentic::session::UserContextCacheIdentity::new(
-            "workspace_instructions",
-        );
+        let base = crate::agentic::session::UserContextCacheIdentity::new("workspace_instructions");
         // Guard restores the previous switch values on drop.
         let _switches = InstructionSwitches::set(None, Some(true));
-        let identity = ExecutionEngine::user_context_cache_identity_for(base, Some("ssh-host/22"), None).await;
+        let identity =
+            ExecutionEngine::user_context_cache_identity_for(base, Some("ssh-host/22"), None).await;
         assert_eq!(
             identity.scope_key,
             "workspace_instructions|remote:ssh-host/22|extsrc:on|winstr:off"
@@ -5974,12 +5982,9 @@ mod tests {
             crate::agentic::session::UserContextCacheIdentity::new("workspace_instructions");
 
         crate::service::config::set_external_instruction_sources_enabled(true);
-        let on_identity = ExecutionEngine::user_context_cache_identity_for(
-            base_identity.clone(),
-            None,
-            None,
-        )
-        .await;
+        let on_identity =
+            ExecutionEngine::user_context_cache_identity_for(base_identity.clone(), None, None)
+                .await;
         session_manager
             .remember_user_context(
                 &session.session_id,
@@ -5997,12 +6002,8 @@ mod tests {
         );
 
         crate::service::config::set_external_instruction_sources_enabled(false);
-        let off_identity = ExecutionEngine::user_context_cache_identity_for(
-            base_identity,
-            None,
-            None,
-        )
-        .await;
+        let off_identity =
+            ExecutionEngine::user_context_cache_identity_for(base_identity, None, None).await;
         assert_ne!(on_identity, off_identity);
         assert_eq!(
             session_manager
@@ -6806,9 +6807,7 @@ mod tests {
         };
 
         // Turn 1, first round: runtime facts + user context both inject.
-        let turn1_first = engine
-            .round_dynamic_reminders(session_id, &reminders)
-            .await;
+        let turn1_first = engine.round_dynamic_reminders(session_id, &reminders).await;
         assert!(turn1_first.iter().any(|r| r.contains("[Runtime Facts]")));
         assert!(turn1_first.iter().any(|r| r.contains("[User Context]")));
 
@@ -6837,22 +6836,21 @@ mod tests {
             false,
         );
         let turn1_tool_round = engine
-            .round_dynamic_reminders(
-                session_id,
-                &tool_round_scaffold.prepended_prompt_reminders,
-            )
+            .round_dynamic_reminders(session_id, &tool_round_scaffold.prepended_prompt_reminders)
             .await;
         assert!(
-            !turn1_tool_round.iter().any(|r| r.contains("[Runtime Facts]")),
+            !turn1_tool_round
+                .iter()
+                .any(|r| r.contains("[Runtime Facts]")),
             "same-round tool turn must not carry runtime facts (cleared at scaffold level)"
         );
-        assert!(!turn1_tool_round.iter().any(|r| r.contains("[User Context]")));
+        assert!(!turn1_tool_round
+            .iter()
+            .any(|r| r.contains("[User Context]")));
 
         // Turn 2: session-scoped semantics — no turn-start marker reset, so the
         // first round of the next user turn must NOT re-inject user context.
-        let turn2_first = engine
-            .round_dynamic_reminders(session_id, &reminders)
-            .await;
+        let turn2_first = engine.round_dynamic_reminders(session_id, &reminders).await;
         assert!(turn2_first.iter().any(|r| r.contains("[Runtime Facts]")));
         assert!(
             !turn2_first.iter().any(|r| r.contains("[User Context]")),
@@ -6864,9 +6862,7 @@ mod tests {
         session_manager
             .invalidate_prompt_cache(session_id, PromptCacheScope::UserContext, "test")
             .await;
-        let recovery_first = engine
-            .round_dynamic_reminders(session_id, &reminders)
-            .await;
+        let recovery_first = engine.round_dynamic_reminders(session_id, &reminders).await;
         assert!(recovery_first.iter().any(|r| r.contains("[Runtime Facts]")));
         assert!(recovery_first.iter().any(|r| r.contains("[User Context]")));
     }
@@ -6922,9 +6918,7 @@ mod tests {
             ..Default::default()
         };
 
-        let first = engine
-            .round_dynamic_reminders(session_id, &reminders)
-            .await;
+        let first = engine.round_dynamic_reminders(session_id, &reminders).await;
         assert!(first.iter().any(|r| r.contains("[Runtime Facts]")));
         assert!(
             session_manager
@@ -7115,7 +7109,11 @@ mod tests {
             test_injection(RoundInjectionKind::UserSteering, "steer two"),
         ];
         let merged = ExecutionEngine::coalesce_round_injections(pending);
-        assert_eq!(merged.len(), 4, "distinct notifications and steering survive");
+        assert_eq!(
+            merged.len(),
+            4,
+            "distinct notifications and steering survive"
+        );
     }
 
     #[test]
@@ -7164,10 +7162,12 @@ mod tests {
 
         // Both finalize anchor messages must carry the system-reminder markup so
         // downstream CLI statistics can tell them apart from real user prompts.
-        assert!(message_text(&messages[0])
-            .is_some_and(crate::agentic::core::is_system_reminder_only));
-        assert!(message_text(&messages[1])
-            .is_some_and(crate::agentic::core::is_system_reminder_only));
+        assert!(
+            message_text(&messages[0]).is_some_and(crate::agentic::core::is_system_reminder_only)
+        );
+        assert!(
+            message_text(&messages[1]).is_some_and(crate::agentic::core::is_system_reminder_only)
+        );
     }
 
     #[test]
@@ -7441,8 +7441,11 @@ mod tests {
         let compressed_turn = loop {
             turn += 1;
             assert!(turn < 50, "compression never triggered");
-            let user_message = Message::user(format!("send_input turn {}: continue the standing task", turn))
-                .with_turn_id(format!("turn-{turn}"));
+            let user_message = Message::user(format!(
+                "send_input turn {}: continue the standing task",
+                turn
+            ))
+            .with_turn_id(format!("turn-{turn}"));
             let assistant_message =
                 Message::assistant(format!("round evidence {}", "x".repeat(2_000)))
                     .with_turn_id(format!("turn-{turn}"));
@@ -7536,7 +7539,8 @@ mod tests {
                     },
                     ToolDefinition {
                         name: "Read".to_string(),
-                        description: "Read a file from the workspace and return its content.".to_string(),
+                        description: "Read a file from the workspace and return its content."
+                            .to_string(),
                         parameters: json!({"type": "object", "properties": {"path": {"type": "string"}}}),
                     },
                 ];
