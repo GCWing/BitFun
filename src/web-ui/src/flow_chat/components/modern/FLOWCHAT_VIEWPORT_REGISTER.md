@@ -188,9 +188,19 @@ which.
 **A placement is recorded with what became of it.** `traceViewportPlacement`
 samples the offset on the next frame and again once things have settled, and
 reports the drift from the target. Read against the register's writes in the
-same window, the drift says *who* took it away. This is how the two writers that
-do not go through the register — the sticky Task indicator and cross-session
-focus — are watched without being changed.
+same window, the drift says *who* took it away. This is how the one writer that
+does not go through the register — the cross-session focus request in
+`useFlowChatNavigation`, which lands an `element.scrollIntoView` with no gesture
+behind it — is watched without being changed.
+
+There were two. The other was a sticky indicator naming the Task you were
+reading inside, and it turned out never to have run: its selector wanted
+`.flowchat-flow-item[data-flow-item-id][data-tool-name]` on one element, and
+`data-tool-name` has only ever been on the tool card *inside* that wrapper —
+added two months later, by a commit adding e2e locators, for an unrelated
+reason. So the probe written to gather evidence about it could not have fired
+either. Deleted rather than repaired; if the affordance is wanted again it
+needs registering as well as fixing.
 
 Everything here can fire on every frame, so repeated identical events collapse
 into one entry per 500ms carrying the count and travel it stands for. The key

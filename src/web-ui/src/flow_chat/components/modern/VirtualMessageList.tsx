@@ -21,7 +21,6 @@ import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useActiveSessionState } from '../../hooks/useActiveSessionState';
 import { useScrollToTurnHeader } from '../../hooks/useScrollToTurnHeader';
-import { useVisibleTaskInfo } from '../../hooks/useVisibleTaskInfo';
 import type { SessionHistoryWindowDirection } from '../../store/FlowChatStore';
 import {
   FLOWCHAT_TURNS_ROLLED_BACK_EVENT,
@@ -45,7 +44,6 @@ import {
   setFlowChatSearchHighlight,
 } from './flowChatSearchDom';
 import { RuntimeStatusSlot } from './RuntimeStatusSlot';
-import { StickyTaskIndicator } from '../StickyTaskIndicator';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
 import { findRenderedTurnAnchorElement } from './flowChatViewportAnchor';
 import { useFlowChatViewportAnchor } from './useFlowChatViewportAnchor';
@@ -1649,11 +1647,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       visibleTurnInfo,
       onJumpToCurrentTurn: handleJumpToCurrentTurn,
     });
-  const { visibleTaskInfo, scrollToTask } = useVisibleTaskInfo({
-    scrollerRef: scrollerElementRef,
-    virtualItems,
-  });
-
   const previousHistoryBoundaryStatusNode = useMemo(() => (
     historyBoundaryState.before !== 'idle' ? (
       <FlowChatHistoryPagingSentinel
@@ -1744,11 +1737,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         visible={shouldShowTurnHeaderButton}
         onClick={handleTurnHeaderClick}
         turnLabel={visibleTurnInfo ? `Turn ${visibleTurnInfo.turnIndex}` : undefined}
-      />
-      <StickyTaskIndicator
-        visible={Boolean(visibleTaskInfo)}
-        taskInfo={visibleTaskInfo}
-        onClick={scrollToTask}
       />
       <ScrollToLatestBar
         visible={(viewportMode === 'history-reading' || !isAtBottom) && virtualItems.length > 0}

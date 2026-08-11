@@ -1320,9 +1320,6 @@
       "failed": "命令失败"
     }
   },
-  "stickyTaskIndicator": {
-    "tooltip": "跳转到当前任务"
-  },
   "sessionFilesBadge": {
     "files": "文件",
     "filesSummaryCount": "{{count}} 个文件",

@@ -163,7 +163,7 @@ describe('traceViewportPlacement', () => {
 
     traceViewportPlacement(
       scroller,
-      { location: 'visibleTask.scrollToTask', message: 'placed', targetPx: 900 },
+      { location: 'navigation.scrollIntoView', message: 'placed', targetPx: 900 },
       () => {
         scroller.scrollTop = 900;
       },
@@ -179,7 +179,7 @@ describe('traceViewportPlacement', () => {
       targetPx: 900,
     });
     expect(diagnosticsMocks.trace.mock.calls[1][0].location)
-      .toBe('visibleTask.scrollToTask.outcome');
+      .toBe('navigation.scrollIntoView.outcome');
     expect(diagnosticsMocks.trace.mock.calls[1][0].data()).toMatchObject({
       settledPx: 120,
       driftPx: -780,

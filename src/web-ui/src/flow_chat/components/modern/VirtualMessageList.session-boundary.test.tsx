@@ -180,14 +180,9 @@ vi.mock('../../hooks/useScrollToTurnHeader', () => ({
   useScrollToTurnHeader: () => ({ shouldShowButton: false, handleClick: vi.fn() }),
 }));
 
-vi.mock('../../hooks/useVisibleTaskInfo', () => ({
-  useVisibleTaskInfo: () => ({ visibleTaskInfo: null, scrollToTask: vi.fn() }),
-}));
-
 vi.mock('./RuntimeStatusSlot', () => ({ RuntimeStatusSlot: () => <div data-runtime-status /> }));
 vi.mock('../ScrollToLatestBar', () => ({ ScrollToLatestBar: () => null }));
 vi.mock('../ScrollToTurnHeaderButton', () => ({ ScrollToTurnHeaderButton: () => null }));
-vi.mock('../StickyTaskIndicator', () => ({ StickyTaskIndicator: () => null }));
 
 function userMessage(turnId: string, id: string, content: string) {
   return {

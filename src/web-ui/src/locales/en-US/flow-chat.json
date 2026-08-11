@@ -1320,9 +1320,6 @@
       "failed": "Command failed"
     }
   },
-  "stickyTaskIndicator": {
-    "tooltip": "Jump to current task"
-  },
   "sessionFilesBadge": {
     "files": "files",
     "filesSummaryCount": "{{count}} files",

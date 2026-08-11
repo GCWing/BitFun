@@ -55,8 +55,9 @@ before reporting a defect as new.
   the more common report. Anything reachable every frame goes through
   `traceViewportRepeating`, keyed by what distinguishes one run from another.
 - A viewport write that does not go through the register is wrapped in
-  `traceViewportPlacement`, which samples what became of it. There are two, both
-  outside this directory, and neither may grow into three without evidence.
+  `traceViewportPlacement`, which samples what became of it. There is exactly
+  one — the cross-session focus request — and it may not become two without
+  evidence that a second is needed.
 - One-shot Turn/search/history navigation remains inside `VirtualMessageList`.
 
 ## History Paging and the Anchor
