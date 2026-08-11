@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "BitFun core service owner crate"
+autotests = false
 
 [lib]
 name = "bitfun_services_core"
@@ -117,70 +118,66 @@ tokio = { workspace = true, features = ["macros"] }
 
 [[test]]
 name = "markdown_owner_contracts"
+path = "tests/markdown_owner_contracts.rs"
 required-features = ["markdown"]
 
 [[test]]
 name = "declarative_workspace_instruction_contracts"
+path = "tests/declarative_workspace_instruction_contracts.rs"
 required-features = ["workspace-instructions"]
 
 [[test]]
-name = "json_store_contracts"
-required-features = ["local-storage"]
-
-[[test]]
 name = "lsp_plugin_registry_contracts"
+path = "tests/lsp_plugin_registry_contracts.rs"
 required-features = ["lsp"]
 
 [[test]]
 name = "runtime_ownership_contracts"
+path = "tests/runtime_ownership_contracts.rs"
 required-features = ["runtime-ownership"]
 
 [[test]]
 name = "local_runtime_ports"
+path = "tests/local_runtime_ports.rs"
 required-features = ["workspace-runtime"]
 
 [[test]]
 name = "permission_store_contracts"
+path = "tests/permission_store_contracts.rs"
 required-features = ["permission"]
 
 [[test]]
 name = "workspace_instruction_contracts"
+path = "tests/workspace_instruction_contracts.rs"
 required-features = ["workspace-instructions", "workspace-runtime"]
 
 [[test]]
 name = "session_write_lock_contracts"
+path = "tests/session_write_lock_contracts.rs"
 required-features = ["local-storage"]
 
 [[test]]
 name = "process_runtime_contracts"
+path = "tests/process_runtime_contracts.rs"
 required-features = ["process-runtime"]
 
 [[test]]
+name = "service_contracts"
+path = "tests/service_contracts.rs"
+
+[[test]]
+name = "storage_owner_contracts"
+path = "tests/storage_owner_contracts.rs"
+required-features = ["local-storage"]
+
+[[test]]
 name = "session_contracts"
-required-features = ["local-storage"]
-
-[[test]]
-name = "session_layout_contracts"
-required-features = ["local-storage"]
-
-[[test]]
-name = "session_metadata_contracts"
-required-features = ["local-storage"]
-
-[[test]]
-name = "session_page_contracts"
+path = "tests/session_contracts.rs"
 required-features = ["local-storage"]
 
 [[test]]
 name = "session_usage_contracts"
-required-features = ["local-storage"]
-
-[[test]]
-name = "storage_owner_contracts"
-required-features = ["local-storage"]
-
-[[test]]
-name = "token_usage_contracts"
+path = "tests/session_usage_contracts.rs"
 required-features = ["local-storage"]
 
 [lints]

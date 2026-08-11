@@ -81,6 +81,7 @@ struct RemoteSkillRootEntry {
 #[derive(Debug, Clone)]
 struct UserSkillSources {
     standard: Vec<SkillCandidate>,
+    #[cfg(feature = "file-watch")]
     cacheable: bool,
     #[cfg(feature = "file-watch")]
     watch_roots: Vec<LocalSkillWatchRoot>,
@@ -807,6 +808,7 @@ impl SkillRegistry {
     }
 
     async fn scan_user_skill_sources() -> UserSkillSources {
+        #[cfg(feature = "file-watch")]
         let mut cacheable = match ensure_builtin_skills_installed().await {
             Ok(()) => true,
             Err(error) => {
@@ -814,16 +816,26 @@ impl SkillRegistry {
                 false
             }
         };
+        #[cfg(not(feature = "file-watch"))]
+        if let Err(error) = ensure_builtin_skills_installed().await {
+            debug!("Failed to install built-in skills: {}", error);
+        }
 
         let mut standard = Vec::new();
         for entry in Self::get_user_skill_roots() {
             let mut scan = Self::scan_skills_in_dir_with_status(&entry).await;
-            cacheable &= scan.cacheable;
+            #[cfg(feature = "file-watch")]
+            {
+                cacheable &= scan.cacheable;
+            }
+            #[cfg(not(feature = "file-watch"))]
+            let _ = scan.cacheable;
             standard.append(&mut scan.candidates);
         }
 
         UserSkillSources {
             standard,
+            #[cfg(feature = "file-watch")]
             cacheable,
             #[cfg(feature = "file-watch")]
             watch_roots: Self::standard_user_skill_watch_roots(),

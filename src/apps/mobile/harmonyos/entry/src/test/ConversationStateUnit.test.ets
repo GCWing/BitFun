@@ -80,9 +80,12 @@ import {
 } from '../main/ets/services/VoiceInputLifecycleController';
 import { VoiceInputCallbacks, VoiceInputService } from '../main/ets/services/VoiceInputService';
 import { AppShellState } from '../main/ets/pages/state/AppShellState';
+import { ConversationCoreState } from '../main/ets/pages/state/ConversationCoreState';
 import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
+import { RemoteCreateSessionState } from '../main/ets/pages/state/RemoteCreateSessionState';
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
+import { ConversationController } from '../main/ets/pages/viewmodel/ConversationController';
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
   REMOTE_CHAT_COMPOSER_CAPABILITIES
@@ -564,6 +567,81 @@ export default function conversationStateUnitTest() {
     });
   });
 
+  describe('ConversationController', () => {
+    it('keeps composer state isolated while the visible route changes', 0, () => {
+      const general = new GeneralChatPageState();
+      const remote = new RemotePageState();
+      const remoteCreate = new RemoteCreateSessionState();
+      let route = AppRoute.ChatHome;
+      const controller = new ConversationController(
+        general,
+        remote,
+        remoteCreate,
+        { currentRoute: (): AppRoute => route }
+      );
+
+      controller.setChatInput(AppRoute.ChatHome, 'general draft');
+      controller.setChatInput(AppRoute.RemoteChat, 'remote draft');
+      controller.setChatInput(AppRoute.RemoteCreate, 'create draft');
+
+      expect(controller.visibleChatInput()).assertEqual('general draft');
+      route = AppRoute.RemoteChat;
+      expect(controller.visibleChatInput()).assertEqual('remote draft');
+      route = AppRoute.RemoteCreate;
+      expect(controller.visibleChatInput()).assertEqual('create draft');
+      expect(general.chatInput).assertEqual('general draft');
+      expect(remote.chatInput).assertEqual('remote draft');
+    });
+
+    it('clears voice state for every conversation surface on teardown', 0, () => {
+      const general = new GeneralChatPageState();
+      const remote = new RemotePageState();
+      const remoteCreate = new RemoteCreateSessionState();
+      const controller = new ConversationController(
+        general,
+        remote,
+        remoteCreate,
+        { currentRoute: (): AppRoute => AppRoute.RemoteCreate }
+      );
+      controller.setVoiceListening(AppRoute.ChatHome, true);
+      controller.setVoiceListening(AppRoute.RemoteChat, true);
+      controller.setVoiceListening(AppRoute.RemoteCreate, true);
+
+      controller.clearAllVoiceListening();
+
+      expect(general.isVoiceListening).assertFalse();
+      expect(remote.isVoiceListening).assertFalse();
+      expect(remoteCreate.isVoiceListening).assertFalse();
+    });
+  });
+
+  describe('ConversationCoreState', () => {
+    it('owns shared conversation data while keeping product surfaces isolated', 0, () => {
+      const general = new ConversationCoreState('chat');
+      const remote = new ConversationCoreState('code');
+      general.setActiveSession({
+        sessionId: 'general-core', title: 'General', workspacePath: '', agentType: 'code'
+      });
+      remote.setActiveSession({
+        sessionId: 'remote-core', title: 'Remote', workspacePath: '/workspace', agentType: 'code'
+      });
+      general.setChatInput('general draft');
+      remote.setChatInput('remote draft');
+      general.setBusy(true);
+
+      expect(general.activeSession.agentType).assertEqual('chat');
+      expect(remote.activeSession.agentType).assertEqual('code');
+      expect(general.chatInput).assertEqual('general draft');
+      expect(remote.chatInput).assertEqual('remote draft');
+      expect(remote.isBusy).assertFalse();
+
+      general.clearActiveSession();
+      expect(general.activeSession.sessionId).assertEqual('');
+      expect(remote.activeSession.sessionId).assertEqual('remote-core');
+      expect(remote.chatInput).assertEqual('remote draft');
+    });
+  });
+
   describe('GeneralChatPageState', () => {
     it('projects configuration, busy state, and status text', 0, () => {
       const state = new GeneralChatPageState();
@@ -797,6 +875,9 @@ export default function conversationStateUnitTest() {
       });
       state.setTimelineProjection([userMessage], [], activeTurn, false, timelineItems);
       state.setModelCatalog(modelCatalog, 'model-a');
+      state.setConversationLoading(true);
+      state.setPendingSessionId('remote-2');
+      state.setConversationDismissed(true);
       timelineItems.length = 0;
 
       expect(state.activeSession.sessionId).assertEqual('remote-1');
@@ -805,6 +886,14 @@ export default function conversationStateUnitTest() {
       expect(state.hasRunningActiveTurn()).assertTrue();
       expect(state.modelCatalog.version).assertEqual(2);
       expect(state.selectedModelId).assertEqual('model-a');
+      expect(state.isLoadingConversation).assertTrue();
+      expect(state.pendingSessionId).assertEqual('remote-2');
+      expect(state.isConversationDismissed).assertTrue();
+
+      state.clearActiveSession();
+      expect(state.pendingSessionId).assertEqual('');
+      expect(state.isLoadingConversation).assertFalse();
+      expect(state.isConversationDismissed).assertFalse();
     });
 
     it('copies nested remote session projection and replaces streaming turn snapshots', 0, () => {
@@ -932,6 +1021,7 @@ export default function conversationStateUnitTest() {
       remote.setActiveSession({
         sessionId: 'remote-session', title: 'Remote', workspacePath: '/repo', agentType: 'code'
       });
+      remote.setConversationLoading(true);
       const general = new GeneralChatPageState();
       general.setChatInput('general draft');
       general.setActiveSession({
@@ -942,6 +1032,7 @@ export default function conversationStateUnitTest() {
       expect(remoteProjection.surface).assertEqual(ChatSurface.Remote);
       expect(remoteProjection.chatInput).assertEqual('remote draft');
       expect(remoteProjection.activeSession.sessionId).assertEqual('remote-session');
+      expect(remoteProjection.isLoadingConversation).assertTrue();
 
       const generalProjection = ConversationViewState.project(AppRoute.ChatHome, remote, general, 'Configure model');
       expect(generalProjection.surface).assertEqual(ChatSurface.General);

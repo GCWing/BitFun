@@ -1,13 +1,13 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { INK, LINE, MUTED, PAGE_BG, SOFT } from './Theme';
 
-@Component
+@ComponentV2
 export struct ChatStatusBar {
-  @Prop title: string = '';
-  @Prop detail: string = '';
-  @Prop color: ResourceColor = MUTED;
-  @Prop canStop: boolean = false;
-  onStop: () => void = () => {};
+  @Param title: string = '';
+  @Param detail: string = '';
+  @Param color: ResourceColor = MUTED;
+  @Param canStop: boolean = false;
+  @Event onStop: () => void = () => {};
 
   build() {
     Row({ space: 10 }) {

@@ -253,6 +253,29 @@
     gap: $size-gap-3;
   }
 
+  &__hidden-remote-list {
+    display: flex;
+    flex-direction: column;
+    margin-top: $size-gap-3;
+    overflow: hidden;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+  }
+
+  &__hidden-remote-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: $size-gap-3;
+    align-items: center;
+    min-width: 0;
+    padding: $size-gap-3;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
   &__remote-server {
     display: flex;
     flex-direction: column;
@@ -328,7 +351,8 @@
   @media (max-width: 860px) {
     &__toolbar,
     &__registry-row,
-    &__remote-head {
+    &__remote-head,
+    &__hidden-remote-row {
       grid-template-columns: 1fr;
     }
 

@@ -105,7 +105,11 @@ beforeAll(async () => {
         'flow-chat': {
           agentCompanion: {
             activity: { working: 'Working', completed: 'Completed' },
-            menu: { closePet: 'Close pet', closeBubble: 'Close this bubble' },
+            menu: {
+              switchPet: 'Switch pet',
+              closePet: 'Close pet',
+              closeBubble: 'Close this bubble',
+            },
             composer: {
               openTitle: 'Send a message to this session',
               ariaLabel: 'Send a message to this session',
@@ -185,7 +189,9 @@ describe('AgentCompanionDesktopPet', () => {
 
     dispatch(hitbox!, 'contextmenu', { clientX: 300, clientY: 200 });
 
-    const menuItem = query<HTMLButtonElement>('.bitfun-agent-companion-window__menu-item');
+    const menuItem = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.bitfun-agent-companion-window__menu-item'),
+    ).find(item => item.textContent === 'Close pet');
     expect(menuItem?.textContent).toBe('Close pet');
 
     act(() => {
@@ -193,6 +199,25 @@ describe('AgentCompanionDesktopPet', () => {
     });
 
     expect(emitMock).toHaveBeenCalledWith(PET_COMMAND_EVENT, { type: 'close-desktop-pet' });
+    expect(query('.bitfun-agent-companion-window__menu-item')).toBeNull();
+  });
+
+  it('opens the pet settings from the pet context menu', () => {
+    dispatch(query('.bitfun-agent-companion-window__pet-hitbox')!, 'contextmenu', {
+      clientX: 300,
+      clientY: 200,
+    });
+
+    const menuItems = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.bitfun-agent-companion-window__menu-item'),
+    );
+    expect(menuItems.map(item => item.textContent)).toEqual(['Switch pet', 'Close pet']);
+
+    act(() => {
+      menuItems[0]!.click();
+    });
+
+    expect(emitMock).toHaveBeenCalledWith(PET_COMMAND_EVENT, { type: 'open-pet-settings' });
     expect(query('.bitfun-agent-companion-window__menu-item')).toBeNull();
   });
 

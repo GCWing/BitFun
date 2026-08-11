@@ -586,9 +586,9 @@ static ACTION_SPECS: &[ActionSpec] = &[
     },
     ActionSpec {
         id: "extensions",
-        name: "External integrations",
+        name: "Extensions",
         aliases: &["/extensions"],
-        description: "View external source status and Safe Mode",
+        description: "View and manage extensions",
         contexts: CHAT,
         availability: ActionAvailability::Always,
         handler: ActionHandler::Extensions,
@@ -603,7 +603,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
         id: "hooks",
         name: "Hooks",
         aliases: &["/hooks"],
-        description: "Review and manage native and imported Hooks",
+        description: "View and manage Hooks",
         contexts: CHAT,
         availability: ActionAvailability::Always,
         handler: ActionHandler::NativeHooks,
@@ -625,7 +625,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
         default_bindings: &[],
         fallback_bindings: &[],
         shortcut_field: None,
-        palette: palette("Tools", false),
+        palette: None,
         shortcut_label: None,
         slash_on_startup: false,
     },
@@ -1327,6 +1327,7 @@ pub(crate) fn slash_actions(state: ActionState) -> Vec<ActionProjection> {
         .filter(|spec| {
             spec.available(state)
                 && !spec.aliases.is_empty()
+                && spec.id != "hooks_external"
                 && (state.context != ActionContext::Startup || spec.slash_on_startup)
         })
         .flat_map(|spec| {
@@ -2484,7 +2485,22 @@ mod tests {
         assert_eq!(tools.handler, ActionHandler::Tools);
         let extensions = action_for_alias("/extensions", ActionContext::Chat).unwrap();
         assert_eq!(extensions.handler, ActionHandler::Extensions);
-        assert!(extensions.description.contains("Safe Mode"));
+        assert_eq!(extensions.name, "Extensions");
+        assert_eq!(extensions.description, "View and manage extensions");
+        assert_eq!(
+            action_for_alias("/hooks_external", ActionContext::Chat)
+                .expect("legacy Hook alias remains parseable")
+                .handler,
+            ActionHandler::ExternalHooks
+        );
+        assert!(!slash_actions(ActionState::chat(false, false))
+            .iter()
+            .any(|action| action.id == "hooks_external"));
+        assert!(!palette_actions(ActionState::chat(false, false))
+            .iter()
+            .any(|action| action.id == "hooks_external"));
+        let hooks = action_for_alias("/hooks", ActionContext::Chat).unwrap();
+        assert_eq!(hooks.description, "View and manage Hooks");
         let agents = action_for_alias("/agent", ActionContext::Chat).unwrap();
         assert_eq!(agents.handler, ActionHandler::OpenAgentSelector);
         assert_eq!(agents.description, "Switch modes and manage agents");

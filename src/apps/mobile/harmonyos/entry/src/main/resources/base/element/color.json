@@ -61,6 +61,14 @@
       "value": "#F8FAFF"
     },
     {
+      "name": "connect_scan_accent",
+      "value": "#FFD021"
+    },
+    {
+      "name": "modal_scrim",
+      "value": "#99000000"
+    },
+    {
       "name": "soft",
       "value": "#F4F3F0"
     },

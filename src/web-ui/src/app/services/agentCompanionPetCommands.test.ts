@@ -6,6 +6,12 @@ const sessionsMock = vi.hoisted(() => new Map<string, unknown>());
 const clearSessionUnreadCompletionMock = vi.hoisted(() => vi.fn());
 const getSettingsAsyncMock = vi.hoisted(() => vi.fn());
 const saveSettingsMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+const openSettingsMock = vi.hoisted(() => vi.fn());
+const invokeMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
+}));
 
 vi.mock('@/flow_chat/services/FlowChatManager', () => ({
   FlowChatManager: {
@@ -31,17 +37,32 @@ vi.mock('@/infrastructure/config/services/AIExperienceConfigService', () => ({
   },
 }));
 
+vi.mock('@/shared/services/ide-control', () => ({
+  quickActions: {
+    openSettings: openSettingsMock,
+  },
+}));
+
 describe('handleAgentCompanionPetCommand', () => {
   beforeEach(() => {
     sendMessageMock.mockClear();
     clearSessionUnreadCompletionMock.mockClear();
     saveSettingsMock.mockClear();
+    openSettingsMock.mockClear();
+    invokeMock.mockClear();
     sessionsMock.clear();
     getSettingsAsyncMock.mockReset();
     getSettingsAsyncMock.mockResolvedValue({
       enable_agent_companion: true,
       agent_companion_display_mode: 'desktop',
     });
+  });
+
+  it('opens the companion personalization settings', async () => {
+    await handleAgentCompanionPetCommand({ type: 'open-pet-settings' });
+
+    expect(openSettingsMock).toHaveBeenCalledWith('session-personalization');
+    expect(invokeMock).toHaveBeenCalledWith('show_main_window');
   });
 
   it('turns the companion off and keeps the display mode when the pet is closed', async () => {

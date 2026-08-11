@@ -32,6 +32,9 @@ export const ExternalCommandConflicts: React.FC<ExternalCommandConflictsProps> =
       title={t('conflicts.title')}
     >
       {conflicts.map((conflict) => {
+        const ecosystemIds = new Set(
+          conflict.candidates.map((candidate) => candidate.ecosystemId),
+        );
         const selectedChoiceUnavailable = conflict.candidates.some((candidate) => (
           candidate.candidateId === conflict.selectedCandidateId
           && candidate.availability.state !== 'available'
@@ -43,6 +46,9 @@ export const ExternalCommandConflicts: React.FC<ExternalCommandConflictsProps> =
             data-bf-part="conflict"
             key={conflict.conflictKey}
             data-external-attention={!conflict.selectedCandidateId ? 'true' : undefined}
+            data-external-ecosystem={ecosystemIds.size === 1
+              ? ecosystemIds.values().next().value
+              : undefined}
           >
           <div className="bitfun-external-sources-config__conflict-title" data-bf-component="external-sources-config" data-bf-part="conflictTitle">
             {t('conflicts.commandName', { name: conflict.commandName })}

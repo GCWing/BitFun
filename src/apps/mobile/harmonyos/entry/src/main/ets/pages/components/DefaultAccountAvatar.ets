@@ -1,8 +1,8 @@
 import { MUTED, SOFT } from './Theme';
 
-@Component
+@ComponentV2
 export struct DefaultAccountAvatar {
-  @Prop avatarSize: number = 34;
+  @Param avatarSize: number = 34;
 
   build() {
     Stack({ alignContent: Alignment.Center }) {

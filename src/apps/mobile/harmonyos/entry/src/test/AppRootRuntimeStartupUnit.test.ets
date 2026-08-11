@@ -1,8 +1,7 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { AppRootHostPort } from '../main/ets/pages/host/AppRootHostAdapter';
 import { AppRoute } from '../main/ets/pages/navigation/AppRouteContract';
-import { AppRootRuntime } from '../main/ets/pages/state/AppRootRuntime';
-import { CloudAccountSession } from '../main/ets/services/CloudAccountClient';
+import { AppRootRuntime } from '../main/ets/pages/runtime/AppRootRuntime';
 
 class FakeAppRootHost implements AppRootHostPort {
   attach(_context: Context, _uiContext: UIContext): void {
@@ -21,21 +20,11 @@ class FakeAppRootHost implements AppRootHostPort {
   }
 }
 
-class TestAppRootRuntime extends AppRootRuntime {
-  constructor() {
-    super(new FakeAppRootHost());
-  }
-
-  applySession(session: CloudAccountSession, relayUrl: string, username: string): void {
-    this.applyCloudAccountSession(session, relayUrl, username);
-  }
-}
-
 export default function appRootRuntimeStartupUnitTest() {
   describe('AppRootRuntime startup restore', () => {
     it('applies cloud credentials without selecting a remote target', 0, () => {
-      const runtime = new TestAppRootRuntime();
-      runtime.applySession({
+      const runtime = new AppRootRuntime(new FakeAppRootHost());
+      runtime.settingsController.applyCloudAccountSession({
         token: 'token-1',
         userId: 'user-1',
         masterKey: new Uint8Array(32)
@@ -45,7 +34,7 @@ export default function appRootRuntimeStartupUnitTest() {
       expect(runtime.remotePageState.accountUsername).assertEqual('alice');
       expect(runtime.remotePageState.controlTargetType).assertEqual('none');
       expect(runtime.remotePageState.controlTargetDeviceId).assertEqual('');
-      expect(runtime.currentRoute()).assertEqual(AppRoute.ChatHome);
+      expect(runtime.appShellViewModel.currentRoute()).assertEqual(AppRoute.ChatHome);
     });
   });
 }

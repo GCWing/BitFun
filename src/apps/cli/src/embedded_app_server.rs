@@ -24,14 +24,9 @@ impl EmbeddedAppServerHost {
             runtime.agent_event_source(),
         )
         .with_context_reload(Arc::new(runtime.compatibility().clone()));
-        let account_host = Arc::new(
-            crate::tui_account_management::CliAccountManagementHost::new(
-                runtime.compatibility().clone(),
-            ),
-        );
-        let worktree_host = Arc::new(crate::tui_worktree_management::CliWorktreeManagementHost);
         let management = Arc::new(
-            AppManagementService::load_with_hosts(Some(account_host), Some(worktree_host)).await?,
+            AppManagementService::load_for_local_host(Some(runtime.account_runtime().clone()))
+                .await?,
         );
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let server_thread = std::thread::Builder::new()

@@ -30,6 +30,9 @@ impl CoworkMode {
                 // Clarification + planning helpers
                 "AskUserQuestion".to_string(),
                 "TodoWrite".to_string(),
+                "get_goal".to_string(),
+                "create_goal".to_string(),
+                "update_goal".to_string(),
                 "Task".to_string(),
                 "ListModels".to_string(),
                 "AgentWait".to_string(),
@@ -108,6 +111,14 @@ impl Agent for CoworkMode {
 mod tests {
     use super::CoworkMode;
     use crate::agentic::agents::Agent;
+
+    #[test]
+    fn cowork_mode_includes_goal_lifecycle_tools_in_defaults() {
+        let tools = CoworkMode::new().default_tools();
+        for tool in ["get_goal", "create_goal", "update_goal"] {
+            assert!(tools.contains(&tool.to_string()));
+        }
+    }
 
     #[test]
     fn cowork_mode_includes_miniapp_lifecycle_tools_in_defaults() {

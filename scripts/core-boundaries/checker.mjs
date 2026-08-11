@@ -40,6 +40,7 @@ import {
   agentRuntimeIntegrationTestTargets,
   checkAgentRuntimeIntegrationTestTopology,
   checkCliIntegrationTestTopology,
+  checkServiceIntegrationTestTopologies,
   cliIntegrationTestTargets,
   validateExplicitIntegrationTestTopology,
 } from './explicit-test-topology.mjs';
@@ -1122,6 +1123,7 @@ export function runCoreBoundaryCheck() {
   failures.push(...checkCargoDependencyBoundariesSafely({ root: ROOT, crateLayoutRules }));
   failures.push(...checkAgentRuntimeIntegrationTestTopology(ROOT));
   failures.push(...checkCliIntegrationTestTopology(ROOT));
+  failures.push(...checkServiceIntegrationTestTopologies(ROOT));
 
   for (const rule of forbiddenManifestDependencyRules) {
     checkForbiddenManifestDependencyRule(rule);

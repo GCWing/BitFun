@@ -27,10 +27,9 @@
   "sessionTitle": {
     "title": "Auto Session Title",
     "subtitle": "AI automatically generates concise titles for new conversations",
-    "enable": "Enable",
     "loadFailed": "Failed to load session title settings",
     "model": {
-      "label": "Model",
+      "label": "Session Title Generation Model",
       "primary": "Primary Model",
       "fast": "Fast Model"
     },

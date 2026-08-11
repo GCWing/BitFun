@@ -5,7 +5,9 @@
 //! `chatgpt.com/backend-api/codex/responses`.
 
 use super::store::{self, StoredCredential};
-use super::{jwt, oauth_server, pkce::Pkce, ResolvedCredential, StartedLogin};
+use super::{
+    jwt, oauth_server, pkce::Pkce, ResolvedCredential, StartedLogin, SubscriptionHttpOptions,
+};
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -63,15 +65,17 @@ fn build_authorize_url(pkce: &Pkce, state: &str, redirect_uri: &str) -> String {
     format!("{ISSUER}/oauth/authorize?{query}")
 }
 
-fn http_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .context("build codex http client")
+fn http_client(options: &SubscriptionHttpOptions) -> Result<reqwest::Client> {
+    super::build_http_client(options, "Codex")
 }
 
-async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result<TokenResponse> {
-    let client = http_client()?;
+async fn exchange_code(
+    code: &str,
+    verifier: &str,
+    redirect_uri: &str,
+    options: &SubscriptionHttpOptions,
+) -> Result<TokenResponse> {
+    let client = http_client(options)?;
     let params = [
         ("grant_type", "authorization_code"),
         ("code", code),
@@ -95,8 +99,8 @@ async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result
     resp.json().await.context("parse codex token response")
 }
 
-async fn refresh(refresh_token: &str) -> Result<TokenResponse> {
-    let client = http_client()?;
+async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Result<TokenResponse> {
+    let client = http_client(options)?;
     let params = [
         ("grant_type", "refresh_token"),
         ("refresh_token", refresh_token),
@@ -171,6 +175,7 @@ async fn persist_tokens(tokens: TokenResponse, expected_revision: u64) -> Result
 pub(crate) async fn begin_login(
     cancel: CancellationToken,
     expected_revision: u64,
+    options: SubscriptionHttpOptions,
 ) -> Result<StartedLogin> {
     let pkce = Pkce::generate();
     let state = super::pkce::random_state();
@@ -190,7 +195,7 @@ pub(crate) async fn begin_login(
                     .get("code")
                     .cloned()
                     .ok_or_else(|| anyhow!("codex callback missing code"))?;
-                exchange_code(&code, &verifier, &redirect_uri).await
+                exchange_code(&code, &verifier, &redirect_uri, &options).await
             },
             move |tokens| persist_tokens(tokens, expected_revision),
         )
@@ -207,7 +212,7 @@ pub(crate) async fn begin_login(
 
 /// Ensures the stored access token is fresh, refreshing it when needed. Returns
 /// the current `(access, account_id, expires_ms)`.
-async fn ensure_fresh() -> Result<(String, Option<String>, i64)> {
+async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, Option<String>, i64)> {
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
@@ -227,7 +232,7 @@ async fn ensure_fresh() -> Result<(String, Option<String>, i64)> {
         return Ok((access, account_id, expires));
     }
 
-    let refreshed = refresh(&refresh_token).await?;
+    let refreshed = refresh(&refresh_token, options).await?;
     let new_access = refreshed
         .access_token
         .clone()
@@ -248,9 +253,34 @@ async fn ensure_fresh() -> Result<(String, Option<String>, i64)> {
         },
     )
     .await?;
-    super::require_current_store_revision(super::SubscriptionProvider::Codex, outcome)?;
-    log::info!("codex subscription tokens refreshed");
-    Ok((new_access, new_account_id, new_expires))
+    match outcome {
+        store::ConditionalCommitOutcome::Committed { .. } => {
+            log::info!("codex subscription tokens refreshed");
+            Ok((new_access, new_account_id, new_expires))
+        }
+        store::ConditionalCommitOutcome::Conflict { current_revision } => {
+            let current = super::load_current_store_after_conflict(
+                super::SubscriptionProvider::Codex,
+                current_revision,
+            )
+            .await?;
+            match current.credential {
+                Some(StoredCredential::Oauth {
+                    access,
+                    expires,
+                    account_id,
+                    ..
+                }) if expires > now_ms() => {
+                    log::info!("codex refresh reused tokens committed by a concurrent refresh");
+                    Ok((access, account_id, expires))
+                }
+                _ => Err(super::store_revision_conflict(
+                    super::SubscriptionProvider::Codex,
+                    current_revision,
+                )),
+            }
+        }
+    }
 }
 
 async fn resolve_codex_cli_version() -> Option<String> {
@@ -286,8 +316,8 @@ fn parse_codex_cli_version(output: &str) -> Option<String> {
 }
 
 /// Resolves the runtime credential (refreshing tokens if required).
-pub(crate) async fn resolve() -> Result<ResolvedCredential> {
-    let (access, account_id, expires) = ensure_fresh().await?;
+pub(crate) async fn resolve(options: &SubscriptionHttpOptions) -> Result<ResolvedCredential> {
+    let (access, account_id, expires) = ensure_fresh(options).await?;
     let mut headers = HashMap::new();
     if let Some(account) = account_id {
         headers.insert("ChatGPT-Account-ID".to_string(), account);

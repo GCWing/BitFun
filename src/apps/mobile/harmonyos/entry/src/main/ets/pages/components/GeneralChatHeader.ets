@@ -1,11 +1,13 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK, LINE, PAGE_BG } from './Theme';
+import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
 import { CompactMenuButton } from './CompactMenuButton';
 import { SidebarToggleButton } from './SidebarToggleButton';
 
 @ComponentV2
 export struct GeneralChatHeader {
   @Param title: string = '';
+  /** Secondary context line. Empty keeps the single-line header. */
+  @Param subtitle: string = '';
   @Param showActions: boolean = false;
   @Param showSidebarButton: boolean = true;
   @Param showBackButton: boolean = false;
@@ -21,23 +23,42 @@ export struct GeneralChatHeader {
   build() {
     Row({ space: 8 }) {
       this.LeadingControl()
-
-      Text(this.title || 'BitFun')
-        .fontSize(17)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(INK)
-        .layoutWeight(1)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .textAlign(TextAlign.Center)
-
+      this.TitleBlock()
       this.TrailingControl()
     }
     .width('100%')
-    .height(64)
+    .height(this.hasSubtitle() ? 76 : 64)
     .alignItems(VerticalAlign.Center)
     .padding({ left: 16, right: 16, top: 8, bottom: 8 })
     .backgroundColor(PAGE_BG)
+  }
+
+  /** Mirrors the conversation header: title above a muted context line. */
+  @Builder
+  private TitleBlock() {
+    Column({ space: 3 }) {
+      Text(this.title || 'BitFun')
+        .fontSize(this.hasSubtitle() ? 18 : 17)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(INK)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .textAlign(TextAlign.Center)
+      if (this.hasSubtitle()) {
+        Text(this.subtitle)
+          .fontSize(14)
+          .fontColor(MUTED)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .textAlign(TextAlign.Center)
+      }
+    }
+    .layoutWeight(1)
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  private hasSubtitle(): boolean {
+    return this.subtitle.length > 0;
   }
 
   @Builder

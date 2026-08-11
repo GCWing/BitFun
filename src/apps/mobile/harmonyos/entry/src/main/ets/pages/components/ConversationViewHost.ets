@@ -4,7 +4,7 @@ import {
   ConversationIntent,
   ConversationIntents,
   ConversationIntentType
-} from './ConversationIntent';
+} from '../actions/ConversationIntent';
 import { ConversationUiQuestionAnswer } from './ConversationUiModels';
 import { ComposerPresentation } from './ComposerBar';
 
@@ -32,6 +32,7 @@ export struct ConversationViewHost {
       connectionState: this.viewState.connectionState,
       composerCapabilities: this.viewState.composerCapabilities,
       isBusy: this.viewState.isBusy,
+      isLoadingConversation: this.viewState.isLoadingConversation,
       canStop: this.viewState.canStop,
       hasMoreMessages: this.viewState.hasMoreMessages,
       timelineItems: this.viewState.timelineItems,

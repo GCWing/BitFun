@@ -395,6 +395,128 @@ describe('ModelSelector external transport reuse', () => {
     expect(onSelect).toHaveBeenCalledWith('model-b');
   });
 
+  it('offers this device\'s models when the transport only relays the session', async () => {
+    // A projection restored without a probe snapshot used to render nothing at
+    // all, leaving the user with no way to switch models in that session.
+    const onSelect = vi.fn(async () => undefined);
+    await act(async () => {
+      root.render(
+        <ModelSelector
+          currentMode="agentic"
+          externalSelection={{
+            models: [],
+            includeLocalCatalog: true,
+            providerLabel: 'parallels-ubuntu',
+            onSelect,
+          }}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-btn"]',
+    );
+    expect(trigger, 'the picker must not disappear').not.toBeNull();
+    // Falls back to this device's own default rather than list order.
+    expect(trigger?.textContent).toContain('friendly-model-a');
+
+    await act(async () => {
+      trigger?.click();
+    });
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-selector-option"][data-model-id="model-a"]',
+      )?.click();
+      await Promise.resolve();
+    });
+    expect(onSelect).toHaveBeenCalledWith('model-a');
+  });
+
+  it('keeps the local list out of a transport that owns a foreign catalog', async () => {
+    await act(async () => {
+      root.render(
+        <ModelSelector
+          currentMode="agentic"
+          externalSelection={{
+            models: ['remote-only'],
+            selectedModelId: 'remote-only',
+            providerLabel: 'parallels-ubuntu',
+            onSelect: vi.fn(),
+          }}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-selector-btn"]',
+      )?.click();
+    });
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-option"][data-model-id="model-a"]',
+    )).toBeNull();
+  });
+
+  it('reads reasoning presets from this device when the target reported none', async () => {
+    aiApiMocks.getModelCatalog.mockResolvedValueOnce({
+      version: 1,
+      default_models: { primary: 'model-a' },
+      models: [{
+        id: 'model-a',
+        name: 'Synced provider',
+        provider: 'openai',
+        base_url: 'https://example.test/v1',
+        model_name: 'friendly-model-a',
+        enabled: true,
+        capabilities: ['text_chat'],
+        reasoning: {
+          status: 'known',
+          default_preset: 'high',
+          presets: [{
+            id: 'high',
+            label: 'High',
+            order: 10,
+            source: 'models_dev',
+            actions: [{ type: 'effort', value: 'high' }],
+          }],
+        },
+      }],
+    });
+    const onSelectReasoningPreset = vi.fn(async () => undefined);
+
+    await act(async () => {
+      root.render(
+        <ModelSelector
+          currentMode="agentic"
+          externalSelection={{
+            models: [],
+            includeLocalCatalog: true,
+            selectedModelId: 'model-a',
+            providerLabel: 'parallels-ubuntu',
+            onSelect: vi.fn(),
+            onSelectReasoningPreset,
+          }}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-reasoning-preset-selector-btn"]',
+    );
+    expect(trigger).not.toBeNull();
+    await act(async () => {
+      trigger?.click();
+    });
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('[data-preset-id="high"]')?.click();
+      await Promise.resolve();
+    });
+    expect(onSelectReasoningPreset).toHaveBeenCalledWith('high');
+  });
+
   it('hides reasoning when the target did not report a catalog', async () => {
     await act(async () => {
       root.render(

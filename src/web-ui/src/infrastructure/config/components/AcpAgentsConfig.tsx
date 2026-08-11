@@ -4,6 +4,8 @@ import {
   Bot,
   CircleAlert,
   Download,
+  Eye,
+  EyeOff,
   ExternalLink,
   FileJson,
   LoaderCircle,
@@ -14,7 +16,7 @@ import {
   Server,
   Terminal,
 } from 'lucide-react';
-import { Button, Input, Select, Textarea } from '@/component-library';
+import { Button, IconButton, Input, Select, Textarea } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -37,6 +39,31 @@ import { createLogger } from '@/shared/utils/logger';
 import './AcpAgentsConfig.scss';
 
 const log = createLogger('AcpAgentsConfig');
+const HIDDEN_REMOTE_CONNECTION_IDS_STORAGE_KEY =
+  'bitfun:settings:acp-agents:hidden-remote-connections:v1';
+
+function loadHiddenRemoteConnectionIds(): Set<string> {
+  try {
+    const stored = localStorage.getItem(HIDDEN_REMOTE_CONNECTION_IDS_STORAGE_KEY);
+    if (!stored) return new Set();
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === 'string' && id.trim().length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
+function persistHiddenRemoteConnectionIds(connectionIds: Set<string>): void {
+  try {
+    localStorage.setItem(
+      HIDDEN_REMOTE_CONNECTION_IDS_STORAGE_KEY,
+      JSON.stringify(Array.from(connectionIds).sort())
+    );
+  } catch {
+    // Keep the preference in memory when browser storage is unavailable.
+  }
+}
 
 interface AcpClientConfig {
   name?: string;
@@ -379,6 +406,8 @@ const AcpAgentsConfig: React.FC = () => {
   const [registryFilter, setRegistryFilter] = useState<RegistryFilter>('all');
   const [installingClientIds, setInstallingClientIds] = useState<Set<string>>(() => new Set());
   const [installingRemoteClientIds, setInstallingRemoteClientIds] = useState<Set<string>>(() => new Set());
+  const [hiddenRemoteConnectionIds, setHiddenRemoteConnectionIds] = useState(loadHiddenRemoteConnectionIds);
+  const [showHiddenRemoteConnections, setShowHiddenRemoteConnections] = useState(false);
   const requirementProbeRequestIdRef = useRef(0);
   const savingConfigRef = useRef(false);
   const loadedRemoteProbeIdsRef = useRef<Set<string>>(new Set());
@@ -393,6 +422,14 @@ const AcpAgentsConfig: React.FC = () => {
       return (left.name || left.id).localeCompare(right.name || right.id);
     });
   }, [savedConnections]);
+  const visibleRemoteConnectionRows = useMemo(
+    () => remoteConnectionRows.filter(connection => !hiddenRemoteConnectionIds.has(connection.id)),
+    [hiddenRemoteConnectionIds, remoteConnectionRows]
+  );
+  const hiddenRemoteConnectionRows = useMemo(
+    () => remoteConnectionRows.filter(connection => hiddenRemoteConnectionIds.has(connection.id)),
+    [hiddenRemoteConnectionIds, remoteConnectionRows]
+  );
   const probesById = useMemo(
     () => new Map(requirementProbes.map(probe => [probe.id, probe])),
     [requirementProbes]
@@ -579,6 +616,30 @@ const AcpAgentsConfig: React.FC = () => {
     }
   }, [notifyError, refreshRequirementProbes, t]);
 
+  const hideRemoteConnection = useCallback((connection: SavedConnection) => {
+    const connectionName = connection.name || connection.id;
+    setHiddenRemoteConnectionIds(prev => {
+      const next = new Set(prev).add(connection.id);
+      persistHiddenRemoteConnectionIds(next);
+      return next;
+    });
+    notifySuccess(t('notifications.connectionHidden', { name: connectionName }));
+  }, [notifySuccess, t]);
+
+  const restoreRemoteConnection = useCallback((connection: SavedConnection) => {
+    const connectionName = connection.name || connection.id;
+    if (hiddenRemoteConnectionRows.length <= 1) {
+      setShowHiddenRemoteConnections(false);
+    }
+    setHiddenRemoteConnectionIds(prev => {
+      const next = new Set(prev);
+      next.delete(connection.id);
+      persistHiddenRemoteConnectionIds(next);
+      return next;
+    });
+    notifySuccess(t('notifications.connectionRestored', { name: connectionName }));
+  }, [hiddenRemoteConnectionRows.length, notifySuccess, t]);
+
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
@@ -598,10 +659,10 @@ const AcpAgentsConfig: React.FC = () => {
 
   useEffect(() => {
     if (loading) return;
-    for (const connection of remoteConnectionRows) {
+    for (const connection of visibleRemoteConnectionRows) {
       void refreshRemoteRequirementProbes(connection.id, { notifyOnError: false });
     }
-  }, [loading, refreshRemoteRequirementProbes, remoteConnectionRows, remoteProbeRefreshNonce]);
+  }, [loading, refreshRemoteRequirementProbes, remoteProbeRefreshNonce, visibleRemoteConnectionRows]);
 
   const patchClientConfig = (clientId: string, patch: Partial<AcpClientConfig>) => {
     setConfig(prev => {
@@ -1375,10 +1436,29 @@ const AcpAgentsConfig: React.FC = () => {
           )}
           </ConfigPageSection>
 
-          <ConfigPageSection title={t('remote.title')} description={t('remote.description')}>
-            {remoteConnectionRows.length === 0 ? (
+          <ConfigPageSection
+            title={t('remote.title')}
+            description={t('remote.description')}
+            extra={hiddenRemoteConnectionRows.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="small"
+                onClick={() => setShowHiddenRemoteConnections(visible => !visible)}
+                aria-expanded={showHiddenRemoteConnections}
+              >
+                {showHiddenRemoteConnections ? <EyeOff size={14} /> : <Eye size={14} />}
+                {t(
+                  showHiddenRemoteConnections
+                    ? 'remote.hideHiddenConnections'
+                    : 'remote.showHiddenConnections',
+                  { count: hiddenRemoteConnectionRows.length }
+                )}
+              </Button>
+            ) : undefined}
+          >
+            {visibleRemoteConnectionRows.length === 0 ? (
               <div className="bitfun-acp-agents__empty" data-bf-component="acp-agents-config" data-bf-part="empty">
-                {t('remote.empty')}
+                {t(remoteConnectionRows.length === 0 ? 'remote.empty' : 'remote.emptyVisible')}
               </div>
             ) : (
               <div
@@ -1386,7 +1466,7 @@ const AcpAgentsConfig: React.FC = () => {
                 data-bf-component="acp-agents-config"
                 data-bf-part="remoteList"
               >
-                {remoteConnectionRows.map(connection => {
+                {visibleRemoteConnectionRows.map(connection => {
                   const hostLabel = [connection.username, connection.host]
                     .filter(Boolean)
                     .join('@');
@@ -1502,6 +1582,19 @@ const AcpAgentsConfig: React.FC = () => {
                             <RefreshCw size={14} />
                             {t('remote.refreshDetection')}
                           </Button>
+                          <IconButton
+                            variant="ghost"
+                            size="small"
+                            aria-label={t('remote.hideConnection', {
+                              name: connection.name || connection.id,
+                            })}
+                            tooltip={t('remote.hideConnection', {
+                              name: connection.name || connection.id,
+                            })}
+                            onClick={() => hideRemoteConnection(connection)}
+                          >
+                            <EyeOff size={14} />
+                          </IconButton>
                         </div>
                       </div>
                       <div
@@ -1663,6 +1756,54 @@ const AcpAgentsConfig: React.FC = () => {
                           );
                         })}
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {showHiddenRemoteConnections && hiddenRemoteConnectionRows.length > 0 && (
+              <div
+                className="bitfun-acp-agents__hidden-remote-list"
+                data-bf-component="acp-agents-config"
+                data-bf-part="hiddenRemoteList"
+              >
+                {hiddenRemoteConnectionRows.map(connection => {
+                  const hostLabel = [connection.username, connection.host]
+                    .filter(Boolean)
+                    .join('@');
+                  return (
+                    <div
+                      key={connection.id}
+                      className="bitfun-acp-agents__hidden-remote-row"
+                      data-bf-component="acp-agents-config"
+                      data-bf-part="hiddenRemoteRow"
+                    >
+                      <div className="bitfun-acp-agents__registry-main">
+                        <span className="bitfun-acp-agents__registry-icon">
+                          <Server size={16} />
+                        </span>
+                        <div className="bitfun-acp-agents__registry-copy">
+                          <span className="bitfun-acp-agents__registry-name">
+                            {connection.name || connection.id}
+                          </span>
+                          <p className="bitfun-acp-agents__registry-description">
+                            {hostLabel || connection.id}
+                          </p>
+                        </div>
+                      </div>
+                      <IconButton
+                        variant="ghost"
+                        size="small"
+                        aria-label={t('remote.restoreConnection', {
+                          name: connection.name || connection.id,
+                        })}
+                        tooltip={t('remote.restoreConnection', {
+                          name: connection.name || connection.id,
+                        })}
+                        onClick={() => restoreRemoteConnection(connection)}
+                      >
+                        <Eye size={14} />
+                      </IconButton>
                     </div>
                   );
                 })}

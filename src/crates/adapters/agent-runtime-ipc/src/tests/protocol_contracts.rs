@@ -19,6 +19,11 @@ use bitfun_runtime_ports::{
 use serde_json::{json, Map};
 
 #[test]
+fn shared_runtime_protocol_stays_at_version_17() {
+    assert_eq!(PROTOCOL_VERSION, 17);
+}
+
+#[test]
 fn protocol_rejects_unknown_fields_and_operations() {
     let unknown_field =
         r#"{"type":"request","request_id":1,"operation":{"operation":"health"},"metadata":{}}"#

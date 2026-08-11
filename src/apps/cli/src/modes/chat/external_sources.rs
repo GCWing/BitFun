@@ -379,267 +379,6 @@ impl ChatMode {
         &mut self,
         arguments: &str,
         chat_view: &mut ChatView,
-        chat_state: &ChatState,
-        rt_handle: &tokio::runtime::Handle,
-    ) {
-        let legacy_command = arguments.split_whitespace().next().is_some_and(|command| {
-            command.eq_ignore_ascii_case("safe-mode") || command.eq_ignore_ascii_case("source")
-        });
-        if !legacy_command {
-            self.handle_external_application(arguments, chat_view, rt_handle);
-            return;
-        }
-        self.handle_legacy_external_control(arguments, chat_view, chat_state, rt_handle);
-    }
-
-    fn handle_external_application(
-        &mut self,
-        arguments: &str,
-        chat_view: &mut ChatView,
-        rt_handle: &tokio::runtime::Handle,
-    ) {
-        let action =
-            match parse_external_application_action(arguments, &self.external_application_ui) {
-                Ok(action) => action,
-                Err(error) => {
-                    chat_view.set_status(Some(error));
-                    return;
-                }
-            };
-        if self.external_application_ui.pending_rx.is_some() {
-            chat_view.set_status(Some(
-                "An external application update is already running; input remains available."
-                    .to_string(),
-            ));
-            return;
-        }
-
-        if let ExternalApplicationUiAction::SetReviewItem { item_ref, selected } = &action {
-            let index = self
-                .external_application_ui
-                .review
-                .as_ref()
-                .and_then(|review| {
-                    review
-                        .page
-                        .items
-                        .iter()
-                        .position(|item| item.item_ref == *item_ref)
-                });
-            let result = index
-                .ok_or_else(|| "That review item is stale; reopen /extensions review.".to_string())
-                .and_then(|index| {
-                    self.external_application_ui
-                        .set_review_item_selected(index, *selected)
-                });
-            match result
-                .and_then(|()| external_application_review_text(&self.external_application_ui))
-            {
-                Ok(text) => {
-                    chat_view.show_info_popup(text);
-                    chat_view.set_status(Some(
-                        "Review selection updated; run /extensions review apply to use it."
-                            .to_string(),
-                    ));
-                }
-                Err(error) => chat_view.set_status(Some(error)),
-            }
-            return;
-        }
-        let pending = match &action {
-            ExternalApplicationUiAction::Show => ExternalApplicationPendingRequest::Snapshot {
-                force_refresh: false,
-            },
-            ExternalApplicationUiAction::Refresh => ExternalApplicationPendingRequest::Snapshot {
-                force_refresh: true,
-            },
-            ExternalApplicationUiAction::OpenReview => {
-                let request = match self.external_application_ui.open_review_page_request() {
-                    Ok(request) => request,
-                    Err(error) => {
-                        chat_view.set_status(Some(error));
-                        return;
-                    }
-                };
-                ExternalApplicationPendingRequest::ReviewPage {
-                    request,
-                    navigation: ExternalReviewNavigation::Open,
-                }
-            }
-            ExternalApplicationUiAction::ReviewNext => {
-                let (request, navigation) = match self
-                    .external_application_ui
-                    .review_page_request(ExternalReviewDirection::Next)
-                {
-                    Ok(request) => request,
-                    Err(error) => {
-                        chat_view.set_status(Some(error));
-                        return;
-                    }
-                };
-                ExternalApplicationPendingRequest::ReviewPage {
-                    request,
-                    navigation,
-                }
-            }
-            ExternalApplicationUiAction::ReviewPrevious => {
-                let (request, navigation) = match self
-                    .external_application_ui
-                    .review_page_request(ExternalReviewDirection::Previous)
-                {
-                    Ok(request) => request,
-                    Err(error) => {
-                        chat_view.set_status(Some(error));
-                        return;
-                    }
-                };
-                ExternalApplicationPendingRequest::ReviewPage {
-                    request,
-                    navigation,
-                }
-            }
-            ExternalApplicationUiAction::ConnectApplication { application_id } => {
-                let request = self.external_application_ui.control_request(
-                    &format!("tui-{}", uuid::Uuid::new_v4()),
-                    ExternalApplicationControlActionV2::ConnectApplication {
-                        application_id: application_id.clone(),
-                    },
-                );
-                match request {
-                    Ok(request) => ExternalApplicationPendingRequest::Mutation(request),
-                    Err(error) => {
-                        chat_view.set_status(Some(error));
-                        return;
-                    }
-                }
-            }
-            ExternalApplicationUiAction::DisconnectApplication { application_id } => {
-                let request = self.external_application_ui.control_request(
-                    &format!("tui-{}", uuid::Uuid::new_v4()),
-                    ExternalApplicationControlActionV2::DisconnectApplication {
-                        application_id: application_id.clone(),
-                    },
-                );
-                match request {
-                    Ok(request) => ExternalApplicationPendingRequest::Mutation(request),
-                    Err(error) => {
-                        chat_view.set_status(Some(error));
-                        return;
-                    }
-                }
-            }
-            ExternalApplicationUiAction::DeferApplication { application_id } => {
-                let request = self.external_application_ui.control_request(
-                    &format!("tui-{}", uuid::Uuid::new_v4()),
-                    ExternalApplicationControlActionV2::SetApplicationDeferred {
-                        application_id: application_id.clone(),
-                    },
-                );
-                match request {
-                    Ok(request) => ExternalApplicationPendingRequest::Mutation(request),
-                    Err(error) => {
-                        chat_view.set_status(Some(error));
-                        return;
-                    }
-                }
-            }
-            ExternalApplicationUiAction::SubmitReview {
-                baseline,
-                immediate_selection,
-            } => {
-                match self.external_application_ui.review_submit_request(
-                    &format!("tui-{}", uuid::Uuid::new_v4()),
-                    *baseline,
-                    immediate_selection
-                        .as_ref()
-                        .map(|(item_ref, selected)| (item_ref, *selected)),
-                ) {
-                    Ok(request) => ExternalApplicationPendingRequest::Mutation(request),
-                    Err(error) => {
-                        chat_view.set_status(Some(error));
-                        return;
-                    }
-                }
-            }
-            ExternalApplicationUiAction::SetReviewItem { .. } => unreachable!(),
-        };
-
-        let agent = self.agent.clone();
-        let shared = agent.is_shared();
-        let task_action = action.clone();
-        let (sender, receiver) = mpsc::channel();
-        rt_handle.spawn(async move {
-            let result = match pending {
-                ExternalApplicationPendingRequest::Snapshot { force_refresh } => {
-                    match agent.external_application_snapshot_v2(force_refresh).await {
-                        Ok(snapshot) => Ok(ExternalApplicationAsyncResult::Snapshot(snapshot)),
-                        Err(error) if should_fallback_to_legacy_external_status(shared, &error) => {
-                            agent
-                                .external_source_snapshot(force_refresh)
-                                .await
-                                .map(ExternalApplicationAsyncResult::LegacySnapshot)
-                        }
-                        Err(error) => Err(error),
-                    }
-                }
-                ExternalApplicationPendingRequest::ReviewPage {
-                    request,
-                    navigation,
-                } => agent
-                    .external_application_review_page_v2(request)
-                    .await
-                    .map(|page| ExternalApplicationAsyncResult::ReviewPage { page, navigation }),
-                ExternalApplicationPendingRequest::Mutation(request) => {
-                    let result = agent.apply_external_application_action_v2(request).await;
-                    match result {
-                        Ok(result) => {
-                            agent
-                                .external_application_snapshot_v2(false)
-                                .await
-                                .map(|snapshot| ExternalApplicationAsyncResult::Mutation {
-                                    result,
-                                    snapshot,
-                                })
-                        }
-                        Err(error) => Err(error),
-                    }
-                }
-            };
-            let _ = sender.send(ExternalApplicationMutationResult {
-                action: task_action,
-                result,
-            });
-        });
-        self.external_application_ui.pending_rx = Some(receiver);
-        let status = match action {
-            ExternalApplicationUiAction::Show => "Reading external applications",
-            ExternalApplicationUiAction::Refresh => "Refreshing external applications",
-            ExternalApplicationUiAction::OpenReview
-            | ExternalApplicationUiAction::ReviewNext
-            | ExternalApplicationUiAction::ReviewPrevious => "Reading external application review",
-            ExternalApplicationUiAction::ConnectApplication { .. } => {
-                "Connecting external application"
-            }
-            ExternalApplicationUiAction::DisconnectApplication { .. } => {
-                "Disconnecting external application"
-            }
-            ExternalApplicationUiAction::DeferApplication { .. } => {
-                "Deferring external application decision"
-            }
-            ExternalApplicationUiAction::SubmitReview { .. } => {
-                "Applying external application review"
-            }
-            ExternalApplicationUiAction::SetReviewItem { .. } => unreachable!(),
-        };
-        chat_view.set_status(Some(format!(
-            "{status}; you can continue typing or cancel other UI work"
-        )));
-    }
-
-    fn handle_legacy_external_control(
-        &mut self,
-        arguments: &str,
-        chat_view: &mut ChatView,
         _chat_state: &ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
@@ -652,14 +391,40 @@ impl ChatMode {
         };
         if self.external_control_mutation_rx.is_some() {
             chat_view.set_status(Some(
-                "An external integration update is already running; input remains available."
-                    .to_string(),
+                "An extension update is already running; input remains available.".to_string(),
             ));
             return;
         }
 
+        let source_selection = match &action {
+            ExternalControlUiAction::SetSourceEnabled {
+                source_index,
+                enabled,
+            } => {
+                let Some(control) = self.external_control_snapshot.as_ref() else {
+                    chat_view.set_status(Some(
+                        "Open /extensions before changing an extension.".to_string(),
+                    ));
+                    return;
+                };
+                if !control.host_capabilities.can_manage_sources {
+                    chat_view.set_status(Some(
+                        "This connection can only show extension status.".to_string(),
+                    ));
+                    return;
+                }
+                let Some(source) = control.sources.get(*source_index) else {
+                    chat_view.set_status(Some(
+                        "That extension is no longer listed. Run /extensions refresh.".to_string(),
+                    ));
+                    return;
+                };
+                Some((source.stable_key.clone(), *enabled))
+            }
+            _ => None,
+        };
         let expected_preference_revision = self
-            .external_source_snapshot
+            .external_control_snapshot
             .as_ref()
             .map(|snapshot| snapshot.preference_revision);
         let task_action = action.clone();
@@ -681,13 +446,15 @@ impl ChatMode {
                     ExternalControlUiAction::SetSafeMode(enabled) => {
                         ExternalSourceControlActionV1::SetSafeMode { enabled: *enabled }
                     }
-                    ExternalControlUiAction::SetSourceEnabled {
-                        source_key,
-                        enabled,
-                    } => ExternalSourceControlActionV1::SetSourceEnabled {
-                        source_key: source_key.clone(),
-                        enabled: *enabled,
-                    },
+                    ExternalControlUiAction::SetSourceEnabled { .. } => {
+                        let (source_key, enabled) = source_selection
+                            .clone()
+                            .expect("source selection was resolved before spawning");
+                        ExternalSourceControlActionV1::SetSourceEnabled {
+                            source_key,
+                            enabled,
+                        }
+                    }
                     ExternalControlUiAction::Show => unreachable!(),
                 };
                 let response = agent
@@ -712,15 +479,13 @@ impl ChatMode {
         });
         self.external_control_mutation_rx = Some(receiver);
         let status = match action {
-            ExternalControlUiAction::Show => "Reading external integration status",
-            ExternalControlUiAction::Refresh => "Refreshing external integrations",
-            ExternalControlUiAction::SetSafeMode(true) => "Entering External Safe Mode",
-            ExternalControlUiAction::SetSafeMode(false) => "Exiting External Safe Mode",
-            ExternalControlUiAction::SetSourceEnabled { enabled: true, .. } => {
-                "Enabling external source"
-            }
+            ExternalControlUiAction::Show => "Reading extension status",
+            ExternalControlUiAction::Refresh => "Refreshing extensions",
+            ExternalControlUiAction::SetSafeMode(true) => "Pausing external access",
+            ExternalControlUiAction::SetSafeMode(false) => "Resuming external access",
+            ExternalControlUiAction::SetSourceEnabled { enabled: true, .. } => "Enabling extension",
             ExternalControlUiAction::SetSourceEnabled { enabled: false, .. } => {
-                "Disabling external source"
+                "Disabling extension"
             }
         };
         chat_view.set_status(Some(format!(
@@ -728,161 +493,14 @@ impl ChatMode {
         )));
     }
 
-    fn poll_external_application_mutation(&mut self, chat_view: &mut ChatView) -> bool {
-        let outcome = match self
-            .external_application_ui
-            .pending_rx
-            .as_ref()
-            .map(Receiver::try_recv)
-        {
-            Some(Ok(outcome)) => outcome,
-            Some(Err(MpscTryRecvError::Empty)) | None => return false,
-            Some(Err(MpscTryRecvError::Disconnected)) => {
-                self.external_application_ui.pending_rx = None;
-                chat_view.set_status(Some(
-                    "External application status stopped before returning a result; retry /extensions status."
-                        .to_string(),
-                ));
-                return true;
-            }
-        };
-        self.external_application_ui.pending_rx = None;
-        match outcome.result {
-            Ok(ExternalApplicationAsyncResult::Snapshot(snapshot)) => {
-                match self.external_application_ui.replace_snapshot(snapshot) {
-                    Ok(()) => {
-                        if let Ok(snapshot) = self.external_application_ui.snapshot() {
-                            chat_view.show_info_popup(external_application_overview_text(snapshot));
-                            chat_view.set_status(Some(
-                                if matches!(outcome.action, ExternalApplicationUiAction::Refresh) {
-                                    "External applications refreshed"
-                                } else {
-                                    "External application status updated"
-                                }
-                                .to_string(),
-                            ));
-                        }
-                    }
-                    Err(error) => chat_view.set_status(Some(error)),
-                }
-            }
-            Ok(ExternalApplicationAsyncResult::LegacySnapshot(response)) => {
-                self.replace_external_conflict_preferences(response.preferences.into());
-                self.update_external_source_view(chat_view, &response.snapshot);
-                self.external_source_snapshot = Some(response.snapshot);
-                self.external_application_ui.snapshot = None;
-                self.external_application_ui.review = None;
-                chat_view
-                    .show_info_popup(external_control_read_only_review_text(&response.control));
-                chat_view.set_status(Some(
-                    "External application status is shown in read-only compatibility mode"
-                        .to_string(),
-                ));
-            }
-            Ok(ExternalApplicationAsyncResult::ReviewPage { page, navigation }) => {
-                match self
-                    .external_application_ui
-                    .replace_review_page(page, navigation)
-                    .and_then(|()| external_application_review_text(&self.external_application_ui))
-                {
-                    Ok(text) => {
-                        chat_view.show_info_popup(text);
-                        chat_view.set_status(Some(
-                            "External application review page updated".to_string(),
-                        ));
-                    }
-                    Err(error) => {
-                        self.external_application_ui.review = None;
-                        chat_view.set_status(Some(error));
-                    }
-                }
-            }
-            Ok(ExternalApplicationAsyncResult::Mutation { result, snapshot }) => {
-                if let Err(error) = result.validate() {
-                    chat_view.set_status(Some(format!(
-                        "The external application response was invalid: {error}"
-                    )));
-                    return true;
-                }
-                let operation_outcome = result.outcome;
-                let partial = result
-                    .item_results
-                    .iter()
-                    .any(|item| item.outcome != ExternalApplicationOperationOutcomeV2::Applied);
-                if let Err(error) = self.external_application_ui.replace_snapshot(snapshot) {
-                    chat_view.set_status(Some(error));
-                    return true;
-                }
-                if let Ok(snapshot) = self.external_application_ui.snapshot() {
-                    chat_view.show_info_popup(external_application_overview_text(snapshot));
-                }
-                let status = match operation_outcome {
-                    ExternalApplicationOperationOutcomeV2::Applied if partial => {
-                        "External application changes were partially applied; review the refreshed status"
-                    }
-                    ExternalApplicationOperationOutcomeV2::Applied => match outcome.action {
-                        ExternalApplicationUiAction::ConnectApplication { .. } => {
-                            "External application connected"
-                        }
-                        ExternalApplicationUiAction::DisconnectApplication { .. } => {
-                            "External application disconnected"
-                        }
-                        ExternalApplicationUiAction::DeferApplication { .. } => {
-                            "External application decision deferred"
-                        }
-                        ExternalApplicationUiAction::SubmitReview { .. } => {
-                            "External application review applied"
-                        }
-                        _ => "External application change applied",
-                    },
-                    ExternalApplicationOperationOutcomeV2::Stale => {
-                        "Nothing was applied because the external application data changed; review the refreshed status"
-                    }
-                    ExternalApplicationOperationOutcomeV2::Blocked => {
-                        "External application change was blocked; review the refreshed status"
-                    }
-                    ExternalApplicationOperationOutcomeV2::Rejected => {
-                        "External application change was rejected; review the refreshed status"
-                    }
-                    ExternalApplicationOperationOutcomeV2::Failed => {
-                        "External application change failed; review the refreshed status"
-                    }
-                };
-                chat_view.set_status(Some(status.to_string()));
-            }
-            Err(error) => {
-                if matches!(
-                    error.code,
-                    ExternalSourceOperationErrorCode::HostCapabilityUnavailable
-                        | ExternalSourceOperationErrorCode::Unsupported
-                        | ExternalSourceOperationErrorCode::IncompatibleVersion
-                ) {
-                    self.external_application_ui.snapshot = None;
-                    self.external_application_ui.review = None;
-                } else if matches!(error.code, ExternalSourceOperationErrorCode::StaleRevision) {
-                    self.external_application_ui.review = None;
-                }
-                tracing::warn!(
-                    error_code = error.code.as_str(),
-                    correlation_id = error.correlation_id.as_deref().unwrap_or("none"),
-                    operation_stage = ?error.stage,
-                    "External application action failed"
-                );
-                chat_view.set_status(Some(external_operation_error_status("extensions", &error)));
-            }
-        }
-        true
-    }
-
     fn poll_external_control_mutation(&mut self, chat_view: &mut ChatView) -> bool {
-        let application_changed = self.poll_external_application_mutation(chat_view);
         let outcome = match self
             .external_control_mutation_rx
             .as_ref()
             .map(Receiver::try_recv)
         {
             Some(Ok(outcome)) => outcome,
-            Some(Err(MpscTryRecvError::Empty)) | None => return application_changed,
+            Some(Err(MpscTryRecvError::Empty)) | None => return false,
             Some(Err(MpscTryRecvError::Disconnected)) => {
                 self.external_control_mutation_rx = None;
                 chat_view.set_status(Some(
@@ -902,19 +520,18 @@ impl ChatMode {
                     self.update_external_source_view(chat_view, &catalog);
                     self.external_source_snapshot = Some(catalog);
                 }
-                chat_view.show_info_popup(external_control_review_text(&control));
+                chat_view.show_info_popup(external_control_status_text(&control));
+                self.external_control_snapshot = Some(control);
                 let status = match outcome.action {
-                    ExternalControlUiAction::Show => "External integration status updated",
-                    ExternalControlUiAction::Refresh => "External integrations refreshed",
-                    ExternalControlUiAction::SetSafeMode(true) => "External Safe Mode is active",
-                    ExternalControlUiAction::SetSafeMode(false) => {
-                        "External Safe Mode is off; eligible integrations were reconciled"
-                    }
+                    ExternalControlUiAction::Show => "Extension status updated",
+                    ExternalControlUiAction::Refresh => "Extensions refreshed",
+                    ExternalControlUiAction::SetSafeMode(true) => "External access is paused",
+                    ExternalControlUiAction::SetSafeMode(false) => "External access resumed",
                     ExternalControlUiAction::SetSourceEnabled { enabled: true, .. } => {
-                        "External source enabled"
+                        "Extension enabled"
                     }
                     ExternalControlUiAction::SetSourceEnabled { enabled: false, .. } => {
-                        "External source disabled"
+                        "Extension disabled"
                     }
                 };
                 chat_view.set_status(Some(status.to_string()));

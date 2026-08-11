@@ -82,6 +82,9 @@ resvg = { workspace = true }
 arboard = "3"
 tempfile = { workspace = true }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 bitflags = { workspace = true }
 core-foundation = { workspace = true }
@@ -136,9 +139,6 @@ devtools = ["tauri/devtools", "bitfun-webdriver/embedded"]
 [target.'cfg(all(target_os = "linux", not(target_env = "ohos")))'.dependencies]
 atspi = { workspace = true }
 leptess = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
 
 [target.'cfg(not(target_env = "ohos"))'.dependencies]
 xz2 = { workspace = true }

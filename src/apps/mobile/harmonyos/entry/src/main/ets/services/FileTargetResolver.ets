@@ -1,4 +1,4 @@
-import { FilePreviewTarget, FilePreviewTargetContext } from '../pages/state/FilePreviewTarget';
+import { FilePreviewTarget, FilePreviewTargetContext } from '../model/FilePreviewTarget';
 import { RemoteUiState } from './RemoteUiState';
 
 export enum FileReferenceKind {

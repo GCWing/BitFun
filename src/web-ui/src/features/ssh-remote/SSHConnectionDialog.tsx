@@ -897,6 +897,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 value={formData.targetType}
                 onChange={(value) => handleInputChange('targetType', String(value))}
                 size="medium"
+                dropdownClassName="ssh-connection-dialog__select-dropdown"
               />
             </div>
 
@@ -969,6 +970,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       value={formData.containerName}
                       onChange={(value) => handleInputChange('containerName', String(value))}
                       size="medium"
+                      dropdownClassName="ssh-connection-dialog__select-dropdown"
                     />
                   ) : (
                     <Input
@@ -990,6 +992,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                         value={formData.containerAccess}
                         onChange={(value) => handleInputChange('containerAccess', String(value))}
                         size="medium"
+                        dropdownClassName="ssh-connection-dialog__select-dropdown"
                       />
                       <div className="ssh-connection-dialog__hint">
                         {t('ssh.remote.containerAccessHint')}
@@ -1048,6 +1051,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 value={formData.authType}
                 onChange={(value) => handleInputChange('authType', String(value))}
                 size="medium"
+                dropdownClassName="ssh-connection-dialog__select-dropdown"
               />
             </div>
 

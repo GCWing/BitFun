@@ -1,7 +1,9 @@
 //! Tool implementation module
 
 pub mod agent_wait_tool;
+#[cfg(feature = "tools-image-analysis")]
 pub mod analyze_image_tool;
+#[cfg(feature = "tools-miniapp")]
 pub mod appearance_publish_tool;
 pub mod arkts_knowledge_search_tool;
 pub mod ask_user_question_tool;
@@ -10,15 +12,21 @@ pub mod build_project_tool;
 pub mod check_arkts_files_tool;
 pub mod check_cpp_files_tool;
 pub mod switch_cwd_tool;
-#[cfg(feature = "canvas-runtime")]
+#[cfg(feature = "tools-canvas")]
 pub mod canvas_tools;
 pub mod code_review_tool;
+#[cfg(feature = "tools-computer-use")]
 pub mod computer_use_actions;
+#[cfg(feature = "tools-computer-use")]
 pub mod computer_use_locate;
+#[cfg(feature = "tools-computer-use")]
 pub mod computer_use_tool;
+#[cfg(feature = "tools-browser-web")]
 pub mod control_hub;
+#[cfg(feature = "tools-browser-web")]
 pub mod control_hub_tool;
 pub mod create_plan_tool;
+#[cfg(feature = "tools-agent-control")]
 pub mod cron_tool;
 pub mod devecocli_run;
 pub mod deveco_mcp_check;
@@ -27,10 +35,13 @@ pub mod exec_command;
 pub mod file_edit_tool;
 pub mod file_read_tool;
 pub mod file_write_tool;
+#[cfg(feature = "tools-miniapp")]
 pub mod generative_ui_tool;
+#[cfg(feature = "tools-git")]
 pub mod get_file_diff_tool;
 pub mod get_time_tool;
 pub mod get_ui_verification_log_tool;
+#[cfg(feature = "tools-git")]
 pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
@@ -39,13 +50,21 @@ pub mod hdc_fallback;
 pub mod hdc_log_tool;
 pub mod list_models_tool;
 pub mod ls_tool;
+#[cfg(feature = "tools-mcp")]
 pub mod mcp_tools;
+#[cfg(feature = "tools-miniapp")]
 pub mod miniapp_finalize_tool;
+#[cfg(feature = "tools-miniapp")]
 pub mod miniapp_init_tool;
+#[cfg(feature = "tools-miniapp")]
 pub mod miniapp_publish_tool;
+#[cfg(feature = "tools-miniapp")]
 pub mod page_deploy_tool;
+#[cfg(feature = "tools-miniapp")]
 pub mod page_publish_tool;
+#[cfg(feature = "tools-miniapp")]
 pub mod playbook_tool;
+#[cfg(feature = "tools-git")]
 pub mod review_platform_tool;
 pub mod save_ui_screenshot_tool;
 pub mod session_cwd;
@@ -62,36 +81,47 @@ pub mod todo_write_tool;
 pub mod ui_verification_mcp;
 pub mod util;
 pub mod verify_ui_tool;
+#[cfg(feature = "tools-image-analysis")]
 pub mod view_image_tool;
+#[cfg(feature = "tools-browser-web")]
 pub mod web;
+#[cfg(feature = "tools-git")]
 pub mod worktree_tool;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
 pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
 pub use agent_wait_tool::AgentWaitTool;
+#[cfg(feature = "tools-image-analysis")]
 pub use analyze_image_tool::AnalyzeImageTool;
+#[cfg(feature = "tools-miniapp")]
 pub use appearance_publish_tool::PublishAppearanceTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
 pub use check_arkts_files_tool::CheckArktsFilesTool;
 pub use check_cpp_files_tool::CheckCppFilesTool;
 pub use switch_cwd_tool::SwitchCwdTool;
-#[cfg(feature = "canvas-runtime")]
+#[cfg(feature = "tools-canvas")]
 pub use canvas_tools::{CreateCanvasTool, PatchCanvasTool, ReadCanvasTool, UpdateCanvasTool};
 pub use code_review_tool::CodeReviewTool;
+#[cfg(feature = "tools-computer-use")]
 pub use computer_use_tool::ComputerUseTool;
+#[cfg(feature = "tools-browser-web")]
 pub use control_hub_tool::ControlHubTool;
 pub use create_plan_tool::CreatePlanTool;
+#[cfg(feature = "tools-agent-control")]
 pub use cron_tool::CronTool;
 pub use delete_file_tool::DeleteFileTool;
 pub use exec_command::{ExecCommandTool, ExecControlTool, WriteStdinTool};
 pub use file_edit_tool::FileEditTool;
 pub use file_read_tool::FileReadTool;
 pub use file_write_tool::FileWriteTool;
+#[cfg(feature = "tools-miniapp")]
 pub use generative_ui_tool::GenerativeUITool;
+#[cfg(feature = "tools-git")]
 pub use get_file_diff_tool::GetFileDiffTool;
 pub use get_time_tool::GetTimeTool;
 pub use get_ui_verification_log_tool::GetUiVerificationLogTool;
+#[cfg(feature = "tools-git")]
 pub use git_tool::GitTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;
@@ -101,15 +131,23 @@ pub use hdc_log_tool::HdcLogTool;
 pub use start_app_tool::StartAppTool;
 pub use list_models_tool::ListModelsTool;
 pub use ls_tool::LSTool;
+#[cfg(feature = "tools-mcp")]
 pub use mcp_tools::{
     GetMCPPromptTool, ListMCPPromptsTool, ListMCPResourcesTool, ReadMCPResourceTool,
 };
+#[cfg(feature = "tools-miniapp")]
 pub use miniapp_finalize_tool::FinalizeMiniAppTool;
+#[cfg(feature = "tools-miniapp")]
 pub use miniapp_init_tool::InitMiniAppTool;
+#[cfg(feature = "tools-miniapp")]
 pub use miniapp_publish_tool::PublishMiniAppTool;
+#[cfg(feature = "tools-miniapp")]
 pub use page_deploy_tool::PageDeployTool;
+#[cfg(feature = "tools-miniapp")]
 pub use page_publish_tool::PagePublishTool;
+#[cfg(feature = "tools-miniapp")]
 pub use playbook_tool::PlaybookTool;
+#[cfg(feature = "tools-git")]
 pub use review_platform_tool::ReviewPlatformTool;
 pub use save_ui_screenshot_tool::SaveUiScreenshotTool;
 pub use session_control_tool::SessionControlTool;
@@ -121,6 +159,9 @@ pub use terminal_control_tool::TerminalControlTool;
 pub use thread_goal_tools::{CreateGoalTool, GetGoalTool, UpdateGoalTool};
 pub use todo_write_tool::TodoWriteTool;
 pub use verify_ui_tool::VerifyUiTool;
+#[cfg(feature = "tools-image-analysis")]
 pub use view_image_tool::ViewImageTool;
+#[cfg(feature = "tools-browser-web")]
 pub use web::{WebFetchTool, WebSearchTool};
+#[cfg(feature = "tools-git")]
 pub use worktree_tool::WorktreeTool;

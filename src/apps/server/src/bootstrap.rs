@@ -38,6 +38,10 @@ pub(crate) struct ServerAppState {
 pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerAppState>> {
     log::info!("Initializing BitFun server core services");
 
+    bitfun_core::agentic::system::select_agentic_system_profile(
+        bitfun_core::agentic::system::DeliveryProfile::ProductFull,
+    )?;
+
     // 1. Global config
     config::initialize_global_config().await?;
     let config_service = config::get_global_config_service().await?;

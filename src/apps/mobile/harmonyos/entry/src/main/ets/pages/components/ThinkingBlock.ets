@@ -1,14 +1,14 @@
 import { MUTED } from './Theme';
 
-@Component
+@ComponentV2
 export struct ThinkingBlock {
-  @Prop text: string = '';
-  @Prop status: string = '';
-  @Prop keepExpandedWhenDone: boolean = false;
-  @Prop streaming: boolean = false;
-  @Prop streamKey: string = '';
-  onCopyText: (text: string) => void = (_text: string) => {};
-  @State dotPhase: number = 0;
+  @Param text: string = '';
+  @Param status: string = '';
+  @Param keepExpandedWhenDone: boolean = false;
+  @Param streaming: boolean = false;
+  @Param streamKey: string = '';
+  @Event onCopyText: (text: string) => void = (_text: string) => {};
+  @Local dotPhase: number = 0;
   private dotTimerId: number = 0;
 
   aboutToAppear(): void {

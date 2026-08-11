@@ -1,87 +1,124 @@
 # BitFun 编译与依赖治理计划
 
-> 最近核实：2026-08-04
+> 最近核实：2026-08-10
 >
-> 快照基线：`gcwing/main@061024fb2` 加权限规划 owner 迁移
+> 实现复核基线：`gcwing/main@e63084bc5`
+>
+> 性能 A/B 基线：`gcwing/main@1f538b96d`
+>
+> 依赖闭包 A/B 基线：`gcwing/main@4781e453c`
 >
 > 稳定规则：[Rust 构建与依赖边界](../architecture/rust-build-dependency-boundaries.md)
 
-这份文档只回答三个问题：当前主要成本在哪里、下一步先做什么、每轮治理如何证明有效。
-模块边界以架构文档为准，具体本地命令由最近的 `AGENTS.md` 维护，PR 只记录实际运行过的验证。
+这份文档只维护长期有用的信息：主要成本、已验证收益、下一步顺序和停止条件。模块边界以架构文档为准，具体本地命令由最近的 `AGENTS.md` 维护，单次 PR 的完整命令和日志留在 PR 中。
 
 ## 1. 当前结论
 
 | 结论 | 说明 |
 |---|---|
-| 本轮收益是测试隔离，不是产品构建瘦身 | 权限纯策略测试从 Core 约 449 节点的闭包迁到 Agent Runtime 约 78 节点的闭包；产品依赖图不变 |
-| 不再用 `product-full` 解决 focused test | Core 权限编排测试当前最小闭包是 `agent-runtime,canvas-runtime`；纯策略直接在 Agent Runtime 验证 |
-| 不新增 CI 或测试入口 | 继续使用现有 test target 和 CI job；治理 PR 不复制同一闭包的验证 |
-| 下一优先级是 App Server / Server | 先核实真实生产调用链，再收敛其 Core `product-full` 边界；收益不足则停止 |
-| 依赖多版本不能按数量批量清理 | 只处理仓库能控制、行为等价且能缩小真实构建图的版本路径 |
+| 服务测试链接拓扑已收敛 | Services 两个 crate 的集成 target 总数从 33 降到 25；选中的 `local-storage`、MCP、基础 SSH 闭包从 16 个集成 executable 降到 8 个 |
+| Agent Runtime 基线不再隐藏全量 capability union | `bitfun-core/agent-runtime` 只保留生命周期和基础工具 owner；MCP、Remote Connect、Browser/Web、Git、模型目录等由产品入口显式组合，三平台 normal/build 闭包各减少 105–110 个版本化 package instance |
+| 完整产品行为和闭包保持 | `product-full` 显式组合全部 owner，Windows normal/build 闭包保持 570；CLI 保持 649。ACP 只退出未选择的隐含能力，Windows/macOS/Linux 分别减少 10/13/22 |
+| Installer 删除未使用的直接能力 | 独立 manifest 的直接 dependency 从 18 降到 10，Windows normal/build 闭包减少 6；不把 Installer 并入根 workspace，本 PR 按要求不提交其生成 lockfile |
+| focused test 仍保持精确 | 同 owner、feature、平台和进程语义的源文件进入分组 target；使用 `--test <target> <module>::<filter>` 运行单模块 |
 
-权限 owner 的长期边界和功能不变量见
-[Agent Runtime 服务设计](../architecture/agent-runtime-services-design.md)。这里不重复维护行为规格。
+## 2. 治理门槛
 
-## 2. 治理原则
-
-目标是缩短常用开发、focused test、CI 和打包路径，同时保持产品行为与分层边界稳定。
-每个治理 PR 必须同时满足以下门槛：
+目标是缩短常用开发、focused test、CI 和打包路径，同时保持产品行为与分层边界稳定。每个治理 PR 必须同时回答：
 
 | 门槛 | 必须回答的问题 |
 |---|---|
-| Owner | 逻辑属于哪个现有 owner？是否存在真实生产消费者？ |
-| 行为 | 本地、远程和平台差异如何保持？哪些等价测试保护它？ |
-| 构建图 | 哪个产品或测试闭包实际退出了哪些依赖？ |
-| 耗时 | 若宣称性能收益，是否在同机器、同命令、同缓存状态下测量？ |
+| Owner | 逻辑属于哪个现有 owner？是否有真实生产消费者？ |
+| 行为 | 本地、远程、平台、进程和失败语义如何保持？ |
+| 构建图 | 哪个真实产品或测试闭包退出了哪些依赖或 target？ |
+| 耗时 | 若宣称提速，是否在同机器、同命令和同缓存状态下测量？ |
 | 增量成本 | 是否新增 dependency、feature、test target、CI job 或长期兼容层？ |
 
 以下做法不属于优化：
 
 - 用 `product-full`、`all-features` 或 workspace 全量测试掩盖 feature 边界；
 - 为减少重复版本数字强制 patch 平台依赖、宏生态或第三方兼容窗口；
-- 新建第二套 Agent、Tool、Permission Runtime 或无消费者抽象；
-- 未测量就引入 sccache、替换链接器、合并 Installer workspace 或增加 CI job；
-- 删除跨平台行为保护来换取表面 CI 时长。
+- 为统一形式新建第二套 Runtime、状态 owner、传输层或无消费者抽象；
+- 未测量就引入 sccache、替换链接器、合并独立 workspace 或增加 CI job；
+- 删除跨平台、负向能力或异常进程行为保护来换取表面时长。
 
 ## 3. 当前基线
 
-### 3.1 Rust 构建图
+### 3.1 服务层测试拓扑
 
-| 路径 | 当前快照 | 判断 |
-|---|---:|---|
-| `bitfun-core` | 约 493 个 Rust 文件、243,900 行 | 仍是最大的高频失效面；只按真实 owner 做纵向迁移 |
-| Core 直接消费者 | ACP、App Server、CLI、Desktop、SDK Host、Server | 每次只迁移一个有真实调用方的服务切片 |
-| Agent Runtime focused test | 约 78 个唯一 package/version 节点 | 适合无 IO 的 Agent Runtime 纯决策测试 |
-| Core `agent-runtime` check | 约 391 个节点 | 窄 owner feature 可独立编译 |
-| Core 权限编排测试 | `agent-runtime,canvas-runtime`，约 449 个节点 | 保留真实 scope、Hook、请求生命周期和 Tool 执行 |
-| Core `product-full` test | 约 516 个节点 | 仅用于确实需要完整产品装配的兼容路径 |
-| Agent Runtime integration target | 5 个显式 target | 已完成收敛；平台和进程边界继续独立 |
+本轮只合并 owner 和运行边界相同的测试。`session_write_lock_contracts` 依赖当前测试 executable 启动异常退出子进程，因此继续保持独立；不同 feature 的服务测试也不合并。
 
-节点数来自同一 Windows 环境下的 `cargo tree --locked` 相对统计，不是实际耗时，也不是跨平台阈值。
-权限纯策略路径理论上少进入约 371 个节点；产品构建闭包没有变化。
+| 范围 | 变更前 target | 变更后 target | 集成测试数 |
+|---|---:|---:|---:|
+| `services-core` 全部 | 20 | 13 | 不变 |
+| `services-core/local-storage` | 12 | 5 | 58 |
+| `services-integrations` 全部 | 13 | 12 | 不变 |
+| MCP | 2 | 2 | 45 |
+| 基础 Remote SSH | 2 | 1 | 11 |
+
+Windows、Cargo 1.97.1 的同机独立 `CARGO_TARGET_DIR` A/B 如下。冷构建、无变更重跑和
+单叶文件 mtime 触发各测一次；“owner 重建”在依赖已热后对 owner package 执行三轮
+clean/rebuild，表中为均值。时间是方向性证据，不是硬阈值。
+
+| 闭包 | 冷构建前→后 | 无变更前→后 | 单叶变更前→后 | owner 重建前→后 |
+|---|---:|---:|---:|---:|
+| local-storage | 22.14s → 22.04s | 0.56s → 0.55s | 0.99s → 1.06s | 8.30s → 8.16s |
+| 基础 Remote SSH | 27.60s → 28.35s | 0.61s → 0.62s | 1.22s → 1.30s | 3.49s → 3.49s |
+
+这些单轮数据不支持“编译明显提速”的结论，也不足以把小幅差值与机器波动区分开。依赖编译仍占
+冷路径主导；分组后单叶变更会重链整个职责 target，模块过滤只减少实际运行的测试，不减少该 target
+的编译和链接。分组还会降低测试进程级故障隔离粒度，因此当前只合并相同失败域，没有继续扩大。
+
+MCP 的 2→1 candidate 也做过同口径 A/B，但冷构建和 owner 重建均无可区分的提速；streamable HTTP
+测试还拥有真实 loopback TCP/SSE/超时失败域，因此最终继续保持两个 target，不计入本轮收益。
+
+可重复确认的产物变化如下；`test executable` 包含每个 crate 的 lib test harness，因此比 integration
+target 多 1。PDB 大小会随工具链变化，只比较同次 A/B：
+
+| 闭包 | test executable | EXE | PDB |
+|---|---:|---:|---:|
+| local-storage | 13 → 6 | 25.2 → 19.2 MiB | 135.7 → 91.9 MiB |
+| 基础 Remote SSH | 3 → 2 | 3.9 → 2.8 MiB | 53.5 → 43.8 MiB |
 
 ### 3.2 依赖与 feature
 
+闭包使用 `cargo tree -e normal,build` 按目标平台统计版本化 package instance；它衡量进入编译图的
+package/version，不等同于实际秒数。路径 package 因 A/B worktree 路径不同不参与集合差值。
+
+| 产品闭包 | Windows | macOS | Linux | 说明 |
+|---|---:|---:|---:|---|
+| Core `agent-runtime` | 449 → 343 | 435 → 330 | 485 → 375 | 基线退出具体 service/tool capability，不改变 Runtime 生命周期 owner |
+| Core `product-full` | 570 → 570 | — | — | 完整产品显式恢复所有 owner；Windows 抽样闭包不变 |
+| CLI | 649 → 649 | — | — | 入口显式选择其现有能力，Windows 闭包不变 |
+| ACP | 599 → 589 | 587 → 574 | 616 → 594 | 退出过去由 Core 基线暗带、但 ACP 未选择的能力 |
+| Desktop | 792 → 792 | 807 → 807 | 892 → 892 | 完整产品继续使用既有跨平台截图行为，本轮不以扩大根 lock 依赖宇宙换取单平台闭包下降 |
+| Installer | 333 → 327 | — | — | Windows 独立 workspace；直接 dependency 18 → 10 |
+
+Package instance 会低估“同一个大 crate 少编译了多少 feature 代码”。在 Windows
+`agent-runtime` 闭包中，`bitfun-services-integrations` 的 Cargo active feature 从 61 个降到 6 个，
+只保留 `workspace-search` 及其 5 个直接依赖 feature；`bitfun-product-domains` 从 13 个降到 5 个，
+只保留 Agent Runtime 实际使用的 external-subagent contract slice。Function Agent、MiniApp、
+Plugin Source 由各自 owner 选择，完整产品仍经 `product-full` 显式恢复。
+
+根 `Cargo.lock` 与实现复核基线保持一致，package 记录不增加；Installer 自己生成的
+`BitFun-Installer/src-tauri/Cargo.lock` 本 PR 不提交。
+
 | 状态 | 范围 | 处理结论 |
 |---|---|---|
-| 已稳定 | 根 `Cargo.lock`、Reqwest Rustls 单栈、Desktop 直接 `image 0.25`、workspace Tokio 最小基线 | 不重复治理 |
-| 下一步核实 | App Server / Server 的 Core `product-full` | 按生产 construction path 收敛，不先写 feature 清单 |
-| 可独立治理 | Installer 的 Reqwest 0.12、独立 lockfile、疑似无消费者的 `tokio/full` | 保持 Installer 独立 workspace，不顺手合并 |
-| 等待上游 | `screenshots 0.8.10 -> image 0.24.9` | 只有受维护且行为等价的上游替代出现后再处理 |
+| 已稳定 | 根 `Cargo.lock`、Reqwest Rustls 单栈、workspace Tokio 最小基线 | 不重复治理 |
+| 本轮完成 | Core Agent Runtime capability、Installer 未使用直接依赖 | 以真实入口 closure 收敛，不建立新的产品 umbrella，也不扩大根依赖宇宙 |
+| 当前不动 | App Server / Server | 只为保持现有 handler 编译显式声明其已消费的 Core owner；不在改造稳定前继续拆其生产路径 |
+| 明确保留 | Desktop screenshots backend | 替换方案必须同时保持三平台坐标/权限/区域捕获语义且不增加根 lock package；当前候选不满足 |
 | 明确保留 | `portable-pty 0.8/0.9` | 非 OHOS 与 OHOS 的平台兼容选择，不为去重破坏 |
 
-根 lockfile 约有 116 个名称存在多版本。这个数字只用于发现候选，不能直接转化为治理任务。
-`oxc`、`rquickjs`、vendored `git2`、`sherpa-onnx` 等重依赖都有真实 capability owner；只有某个产品入口
-不消费对应能力时，才允许让它退出该入口的构建图。
+重复版本数量只用于发现候选，不能直接转化为治理任务。`oxc`、`rquickjs`、vendored `git2`、`sherpa-onnx` 等重依赖都有真实 capability owner；只有某个产品入口不消费对应能力时，才允许让它退出该入口的构建图。
 
 ### 3.3 CI 与本地验证
 
-- 现有 CI 已覆盖 workspace check、Core/Desktop lib、平台敏感 owner 测试和独立 runtime/CLI 验证；
-  不再为治理 PR 叠加同闭包 job。
-- 本地先运行 owner 文档维护的最小 package/target/feature 命令。广泛 build、workspace suite、打包和
-  平台矩阵由 CI 承担，除非改动直接影响这些路径或需要复现 CI 故障。
-- CI 收敛必须基于多次 job/step 耗时、缓存状态、平台事实和失败历史。测试名称相似不等于覆盖重复，
-  `SKIPPED`、未触发或只编译未运行也不等于通过。
+- 现有 CI 已覆盖 workspace check、Core/Desktop lib、平台敏感 owner 测试和独立 runtime/CLI 验证；本轮不新增 job、矩阵或 changed-path 分类器。
+- CI 不负责穷举所有测试；新增验证只有具备独立 owner、平台矩阵或失败归因价值时才进入既有流水线，否则由最近模块的 focused command 维护。
+- 本地从 owner 文档的最小 package/target/feature 入口开始；仅名称过滤不能阻止无关 target 编译。
+- CI 收敛必须先有多次 job/step 耗时、缓存状态和失败历史；`SKIPPED`、未触发或只编译未运行都不算通过证据。
 
 ## 4. 已完成，不再重复实施
 
@@ -93,54 +130,39 @@
 | 可复现解析 | 根 lockfile 已提交，普通 CI 使用 `--locked`；build.rs 输出已排序 |
 | CI 拓扑 | Rust job 不再等待完整前端构建，自建 Tauri 检查所需资源目录 |
 | 依赖收敛 | Desktop 直接 image 版本和 Reqwest TLS 双栈已治理 |
+| Agent Runtime 闭包 | Core 基线不再暗带具体 capability；完整产品和 CLI 显式保持原能力，ACP 退出未选择闭包 |
+| Installer 闭包 | 删除 8 个未使用直接 dependency；独立 workspace 和发布生命周期不变，本 PR 不提交其生成 lockfile |
 | Agent Runtime 测试 | 28 个 integration executable 已收敛为 5 个职责/平台 target |
+| Services 测试 | 两个服务 crate 使用显式 target；选中闭包少 8 个 integration executable，进程/feature/external-system 边界保持独立 |
 
-内置 Agent 内容已经移到无第三方依赖的 `bitfun-agent-content`，减少了 Core build-script 工作；但 Core
-仍直接依赖该 crate。没有足够产品收益前，不为消除这一编译指纹引入动态 provider、运行时文件读取或资源协议。
+内置 Agent 内容已经移到无第三方依赖的 `bitfun-agent-content`，减少了 Core build-script 工作；
+但 Core 仍直接依赖该 crate。没有足够产品收益前，不为消除这一编译指纹引入动态 provider、
+运行时文件读取或资源协议。
 
 ## 5. 后续顺序
 
-### R1：收敛 App Server / Server 的 `product-full` 边界
+本轮之后先观察，不立即再开同类“小修补”PR。需要真实 CI 样本或上游条件成熟后，按以下顺序重新核实：
 
-这是下一 PR 的推荐范围，也是唯一需要优先设计的核心入口改造。
-
-先回答：
-
-- App Server 与 Server 的真实 construction、command 和 schema 路径分别消费哪些 Core owner？
-- Server 对未实现能力应保持什么 typed unsupported 行为？
-- 哪些能力由 Server 直接消费，哪些只是经 App Server 间接带入？
-
-实现边界：
-
-- 只替换一个端到端 capability slice 的依赖路径，不一次迁移全部 Core 调用；
-- 优先显式选择已有 owner feature，或消费现有 Runtime SDK/service port；
-- 不复制 Session、Tool、Permission、Hook、Event 状态，不建立第二 Runtime；
-- 未迁移能力保留现有兼容路径或明确 unsupported，禁止静默本机回退。
-
-验收必须覆盖 Server WebSocket/App Server round-trip、权限、取消、事件与恢复语义，并对比 App Server、
-Server 的 normal/build/test closure。若构建图收益不足或行为等价无法证明，则不删除兼容边界。
-
-### 后续队列
-
-| 顺序 | 范围 | 启动条件 |
-|---|---|---|
-| R2 | 从 ACP 迁移一个已有 Services owner 的 host-service 切片 | 明确真实调用方，并能保持 Windows 进程树、SSH、取消和远程身份语义 |
-| R3 | Installer lockfile、Reqwest 0.13 与无消费者依赖治理 | 下载、SSE/进度、取消、代理、证书失败和三平台 packaging 可验证 |
-| R4 | 消除 `screenshots -> image 0.24` | 有受维护、无需 fork/vendoring 且屏幕枚举/DPI/权限行为等价的上游路径 |
+| 范围 | 启动条件 |
+|---|---|
+| CI 收敛 | 先积累多次相同 owner 的 step wall-clock、cache hit/miss 和失败历史；只有能证明收益且不会静默缩小覆盖时再独立设计 |
+| Desktop 截图后端 | 新候选同时满足三平台行为等价、区域捕获无性能回退、系统依赖可 feature-gate，且根 lock package 不增加 |
+| App Server / Server | 当前改造合入并稳定后，重新锁定最新生产调用链和可信 owner 边界 |
+| 其他产品入口重型 capability | 证明入口不消费该能力，具备 typed unsupported/fallback 行为，并能让一个真实重依赖子图退出 |
+| 重复 native/sys 库版本 | 同一 owner 能升级收敛且三平台打包/ABI 有证据；不因版本数字重复强行 patch |
 
 每一步都在前一 PR 合入后的最新 main 重新测量。无法证明边界或收益时停止，不为了完成清单继续重构。
 
 ## 6. 每轮 PR 的证据
 
-PR 描述只需维护一张简表，不新增全仓依赖台账：
+PR 描述维护一张简表即可，不新增全仓依赖台账：
 
 | 证据 | 变更前 | 变更后 |
 |---|---:|---:|
 | 真实产品 normal/build closure |  |  |
-| owner focused-test closure |  |  |
-| 目标重复版本或重型依赖路径 |  |  |
+| owner focused-test closure/target |  |  |
 | 冷、热或增量耗时（同机器、命令、缓存状态） |  |  |
+| 产物数量/大小 |  |  |
 | 新增 dependency、feature、test target、CI job |  |  |
 
-同时记录功能不变量、远程/平台差异、实际运行的最小验证和未运行的 CI。若产品 closure 不变，只能说明
-focused-test 或 owner 边界收益，不能宣称产品构建已经变快。
+同时记录功能不变量、远程/平台差异、实际运行的最小验证和未运行的 CI。若产品 closure 不变，只能说明测试拓扑或 owner 边界收益，不能宣称产品构建已经变快。
