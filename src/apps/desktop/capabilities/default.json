@@ -105,11 +105,6 @@
     "notification:allow-request-permission",
     "notification:allow-check-permissions",
     "notification:allow-permission-state",
-    "notification:allow-is-permission-granted",
-    "global-shortcut:default",
-    "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister",
-    "global-shortcut:allow-unregister-all",
-    "global-shortcut:allow-is-registered"
+    "notification:allow-is-permission-granted"
   ]
 }

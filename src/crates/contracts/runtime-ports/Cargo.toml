@@ -4,10 +4,15 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "Thin runtime ports for BitFun core decomposition"
+autotests = false
 
 [lib]
 name = "bitfun_runtime_ports"
 crate-type = ["rlib"]
+
+[[test]]
+name = "runtime_port_contracts"
+path = "tests/runtime_port_contracts.rs"
 
 [dependencies]
 anyhow = { workspace = true }

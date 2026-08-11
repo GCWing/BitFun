@@ -12,7 +12,6 @@ crate-type = ["rlib"]
 [dependencies]
 # Inherit shared dependencies from workspace
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
-tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
@@ -57,7 +56,6 @@ include_dir = { workspace = true, optional = true }
 
 # Command detection (cross-platform)
 similar = { workspace = true, optional = true }
-urlencoding = { workspace = true }
 
 # Shared AI protocol adapters
 bitfun-ai-adapters = { path = "../../adapters/ai-adapters", optional = true }
