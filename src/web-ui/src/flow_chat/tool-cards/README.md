@@ -87,4 +87,7 @@ Current examples:
 
 For details, read:
 
-- `src/web-ui/src/flow_chat/components/modern/FLOWCHAT_SCROLL_STABILITY.md`
+- `src/web-ui/src/flow_chat/components/modern/AGENTS.md` — the rules, and a map
+  of which viewport document covers what. A card's height contract is in
+  `FLOWCHAT_SCROLL_STABILITY.md`; what a card may render inside a virtualized
+  row is in `FLOWCHAT_VIRTUALIZATION.md`.
