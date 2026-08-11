@@ -260,8 +260,6 @@ import { toolApprovalBarAppearanceDescriptor } from '@/flow_chat/components/Tool
 import { snapshotRollbackButtonAppearanceDescriptor } from '@/flow_chat/components/SnapshotRollbackButton.appearance';
 import { smartRecommendationsAppearanceDescriptor } from '@/flow_chat/components/smart-recommendations/SmartRecommendations.appearance';
 import { stickyTaskIndicatorAppearanceDescriptor } from '@/flow_chat/components/StickyTaskIndicator.appearance';
-import { turnHistoryPanelAppearanceDescriptor } from '@/flow_chat/components/TurnHistoryPanel.appearance';
-import { turnRollbackButtonAppearanceDescriptor } from '@/flow_chat/components/TurnRollbackButton.appearance';
 import { sessionRuntimeStatusEntryAppearanceDescriptor } from '@/flow_chat/components/usage/SessionRuntimeStatusEntry.appearance';
 import { runtimeStatusSlotAppearanceDescriptor } from '@/flow_chat/components/modern/RuntimeStatusSlot.appearance';
 import { sessionMenuAppearanceDescriptor } from '@/flow_chat/components/session-menu/SessionMenu.appearance';
@@ -519,8 +517,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(snapshotRollbackButtonAppearanceDescriptor)
     .registerComponent(smartRecommendationsAppearanceDescriptor)
     .registerComponent(stickyTaskIndicatorAppearanceDescriptor)
-    .registerComponent(turnHistoryPanelAppearanceDescriptor)
-    .registerComponent(turnRollbackButtonAppearanceDescriptor)
     .registerComponent(sessionRuntimeStatusEntryAppearanceDescriptor)
     .registerComponent(runtimeStatusSlotAppearanceDescriptor)
     .registerComponent(sessionMenuAppearanceDescriptor)
