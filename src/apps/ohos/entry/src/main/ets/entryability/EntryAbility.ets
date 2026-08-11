@@ -285,7 +285,7 @@ export default class EntryAbility extends RustAbility {
       } else if (arg.startsWith('/data/storage/')) {
         uri = fileUri.getUriFromPath(arg);
       } else {
-        uri = 'file://docs' + arg;
+        uri = 'file://docs' + arg.split('/').map((part: string) => encodeURIComponent(part)).join('/');
       }
       const want: Want = {
         bundleName: 'com.huawei.hmos.filemanager',
