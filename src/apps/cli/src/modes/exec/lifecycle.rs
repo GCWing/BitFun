@@ -19,7 +19,7 @@ use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::{AgenticEvent, ToolEventIdentity};
 use tokio::time::Instant;
 
-use crate::agent::runtime_client::ExecAgentRuntimeClient;
+use crate::agent::exec_runtime_client::ExecAgentRuntimeClient;
 use crate::config::CliConfig;
 use crate::diagnostics::{
     cli_error_code, emit_exit_diagnostic, user_facing_error_message, ExitContext, ExitKind,

@@ -8,7 +8,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
         .builder()
         .name("config handlers")
         .on_receive_request(
-            async move |_: GetAgentProfileConfigsMessage, responder, _cx| {
+            async move |_request: GetAgentProfileConfigsMessage, responder, _cx| {
                 let result = bitfun_core::service::config::mode_config_canonicalizer::get_agent_profile_views()
                     .await
                     .map(|profiles| GetAgentProfileConfigsResponse { profiles })
@@ -28,7 +28,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |_: GetModelConfigsMessage, responder, _cx| {
+            async move |_request: GetModelConfigsMessage, responder, _cx| {
                 let result = async {
                     let service = bitfun_core::service::config::get_global_config_service().await?;
                     service.get_ai_models().await
@@ -125,7 +125,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |_: ValidateConfigMessage, responder, _cx| {
+            async move |_request: ValidateConfigMessage, responder, _cx| {
                 let result = async {
                     let service = bitfun_core::service::config::get_global_config_service().await?;
                     let validation = service.validate_config().await?;

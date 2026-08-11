@@ -9,6 +9,7 @@ use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
     management: Option<Arc<AppManagementService>>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -16,6 +17,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MODELS_CAPABILITY,
                 ProjectReasoningCatalogRequest,
                 project_reasoning_catalog
@@ -25,6 +27,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MODELS_CAPABILITY,
                 TuiModelCatalogRequest,
                 tui_model_catalog
@@ -34,6 +37,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MODELS_CAPABILITY,
                 ListModelsRequest,
                 list_models
@@ -41,16 +45,29 @@ pub(in crate::server) fn builder(
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(management, MODELS_CAPABILITY, GetModelRequest, get_model),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            management_handler!(management, MODELS_CAPABILITY, AddModelRequest, add_model),
+            management_handler!(
+                management,
+                event_state,
+                MODELS_CAPABILITY,
+                GetModelRequest,
+                get_model
+            ),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
+                MODELS_CAPABILITY,
+                AddModelRequest,
+                add_model
+            ),
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            management_handler!(
+                management,
+                event_state,
                 MODELS_CAPABILITY,
                 UpdateModelRequest,
                 update_model
@@ -60,6 +77,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MODELS_CAPABILITY,
                 DeleteModelRequest,
                 delete_model
@@ -69,6 +87,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MODELS_CAPABILITY,
                 SetModelDefaultRequest,
                 set_model_default

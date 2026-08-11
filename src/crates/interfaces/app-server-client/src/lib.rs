@@ -28,7 +28,7 @@ use bitfun_app_server_protocol::subagent::*;
 use bitfun_app_server_protocol::workspace::*;
 use bitfun_app_server_protocol::worktree::*;
 use bitfun_app_server_protocol::{AppClient, AppServer};
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{broadcast, oneshot, watch};
 
 pub use agent_client_protocol::Error as ProtocolError;
 
@@ -48,16 +48,16 @@ pub enum AppServerEvent {
 #[derive(Debug)]
 pub enum ClientError {
     Protocol(agent_client_protocol::Error),
-    Timeout(AppServerErrorData),
+    OutcomeUnknown(AppServerErrorData),
 }
 
 impl std::fmt::Display for ClientError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Protocol(error) => write!(formatter, "{error}"),
-            Self::Timeout(data) => write!(
+            Self::OutcomeUnknown(data) => write!(
                 formatter,
-                "App Server request {} timed out with unknown outcome",
+                "App Server request {} lost its response with unknown outcome",
                 data.request_id.as_deref().unwrap_or("unknown")
             ),
         }
@@ -70,6 +70,7 @@ impl std::error::Error for ClientError {}
 pub struct AppServerClient {
     connection: Arc<ConnectionTo<AppServer>>,
     event_tx: broadcast::Sender<AppServerEvent>,
+    connection_closed_rx: watch::Receiver<bool>,
     shutdown_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
 }
 
@@ -213,6 +214,30 @@ impl AppServerClient {
         request: SyncEventsRequest,
     ) -> agent_client_protocol::Result<SyncEventsResponse> {
         self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
+    pub async fn subscribe_session(
+        &self,
+        session_id: impl Into<String>,
+    ) -> agent_client_protocol::Result<SubscribeSessionResponse> {
+        self.rpc(|cx| {
+            Ok(cx.send_request(SubscribeSessionRequest {
+                session_id: session_id.into(),
+            }))
+        })
+        .await
+    }
+
+    pub async fn unsubscribe_session(
+        &self,
+        session_id: impl Into<String>,
+    ) -> agent_client_protocol::Result<UnsubscribeSessionResponse> {
+        self.rpc(|cx| {
+            Ok(cx.send_request(UnsubscribeSessionRequest {
+                session_id: session_id.into(),
+            }))
+        })
+        .await
     }
 
     pub async fn external_source_snapshot(
@@ -657,19 +682,27 @@ impl AppServerClient {
             tx.send(result)
                 .map_err(|_| agent_client_protocol::Error::internal_error())
         })
-        .map_err(ClientError::Protocol)?;
-        match tokio::time::timeout(timeout, rx).await {
-            Ok(Ok(result)) => result.map_err(ClientError::Protocol),
-            Ok(Err(_)) => Err(ClientError::Protocol(
-                agent_client_protocol::Error::internal_error(),
-            )),
-            Err(_) => Err(ClientError::Timeout(AppServerErrorData {
-                kind: AppServerErrorKind::OutcomeUnknown,
-                retryable: false,
-                outcome_unknown: true,
-                capability: None,
-                request_id: Some(request_id),
-            })),
+        .map_err(|_| outcome_unknown(request_id.clone()))?;
+        let mut connection_closed = self.connection_closed_rx.clone();
+        if *connection_closed.borrow() {
+            return Err(outcome_unknown(request_id));
+        }
+        let response_request_id = request_id.clone();
+        let response = async move {
+            tokio::select! {
+                result = rx => match result {
+                    Ok(result) => result.map_err(ClientError::Protocol),
+                    Err(_) => Err(outcome_unknown(response_request_id.clone())),
+                },
+                changed = connection_closed.changed() => {
+                    let _ = changed;
+                    Err(outcome_unknown(response_request_id.clone()))
+                }
+            }
+        };
+        match tokio::time::timeout(timeout, response).await {
+            Ok(result) => result,
+            Err(_) => Err(outcome_unknown(request_id)),
         }
     }
 
@@ -706,6 +739,7 @@ pub async fn connect(
     let event_tx_for_task = event_tx.clone();
     let (cx_tx, cx_rx) = oneshot::channel::<ConnectionTo<AppServer>>();
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let (connection_closed_tx, connection_closed_rx) = watch::channel(false);
     let connect_task = tokio::spawn(async move {
         let result = AppClient
             .builder()
@@ -767,6 +801,7 @@ pub async fn connect(
             })
             .await;
         let _ = event_tx_for_task.send(AppServerEvent::ConnectionClosed);
+        let _ = connection_closed_tx.send(true);
         result
     });
 
@@ -785,6 +820,120 @@ pub async fn connect(
     Ok(AppServerClient {
         connection: Arc::new(connection),
         event_tx,
+        connection_closed_rx,
         shutdown_tx: Arc::new(Mutex::new(Some(shutdown_tx))),
     })
+}
+
+fn outcome_unknown(request_id: String) -> ClientError {
+    ClientError::OutcomeUnknown(AppServerErrorData {
+        kind: AppServerErrorKind::OutcomeUnknown,
+        retryable: false,
+        outcome_unknown: true,
+        capability: None,
+        request_id: Some(request_id),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agent_client_protocol::{ConnectionTo, Responder};
+    use bitfun_app_server_protocol::app::{HealthRequest, HealthResponse};
+    use bitfun_app_server_protocol::transport;
+
+    #[tokio::test]
+    async fn accepted_request_losing_its_connection_reports_unknown_outcome() {
+        let (server_transport, client_transport) = transport::in_memory_channel_pair();
+        let (received_tx, received_rx) = oneshot::channel();
+        let received_tx = Arc::new(Mutex::new(Some(received_tx)));
+        let server = AppServer
+            .builder()
+            .name("unknown-outcome-test-server")
+            .on_receive_request(
+                {
+                    let received_tx = received_tx.clone();
+                    async move |_request: HealthRequest,
+                                _responder: Responder<HealthResponse>,
+                                _cx: ConnectionTo<AppClient>| {
+                        if let Some(tx) = received_tx
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .take()
+                        {
+                            let _ = tx.send(());
+                        }
+                        Ok(())
+                    }
+                },
+                agent_client_protocol::on_receive_request!(),
+            );
+        let server_task = tokio::spawn(async move {
+            server
+                .connect_with(
+                    server_transport,
+                    async move |_cx: ConnectionTo<AppClient>| {
+                        let _ = received_rx.await;
+                        Ok(())
+                    },
+                )
+                .await
+        });
+        let client = connect(client_transport)
+            .await
+            .expect("connect test client");
+
+        let result = client
+            .request_with_timeout(
+                |cx| Ok(cx.send_request(HealthRequest {})),
+                Duration::from_secs(2),
+            )
+            .await;
+        let ClientError::OutcomeUnknown(data) = result.expect_err("response must be unknown")
+        else {
+            panic!("accepted request must not be reported as a pre-send protocol failure");
+        };
+        assert_eq!(data.kind, AppServerErrorKind::OutcomeUnknown);
+        assert!(!data.retryable);
+        assert!(data.outcome_unknown);
+        assert!(data
+            .request_id
+            .as_deref()
+            .is_some_and(|request_id| !request_id.is_empty()));
+
+        client.shutdown().await;
+        let _ = server_task.await;
+    }
+
+    #[tokio::test]
+    async fn failure_before_send_remains_a_protocol_error() {
+        let (server_transport, client_transport) = transport::in_memory_channel_pair();
+        let server_task = tokio::spawn(async move {
+            AppServer
+                .builder()
+                .connect_with(
+                    server_transport,
+                    async move |_cx: ConnectionTo<AppClient>| {
+                        std::future::pending::<()>().await;
+                        Ok(())
+                    },
+                )
+                .await
+        });
+        let client = connect(client_transport)
+            .await
+            .expect("connect test client");
+
+        let result = client
+            .request_with_timeout::<HealthResponse>(
+                |_cx| Err(agent_client_protocol::Error::internal_error()),
+                Duration::from_secs(1),
+            )
+            .await;
+        assert!(matches!(result, Err(ClientError::Protocol(_))));
+
+        client.shutdown().await;
+        server_task.abort();
+        let _ = server_task.await;
+    }
 }

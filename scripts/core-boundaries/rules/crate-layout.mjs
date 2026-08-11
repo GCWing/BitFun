@@ -34,7 +34,6 @@ export const crateLayoutRules = [
   { crateName: 'app-server-client', layer: 'interfaces', path: 'src/crates/interfaces/app-server-client' },
   { crateName: 'app-server-protocol', layer: 'interfaces', path: 'src/crates/interfaces/app-server-protocol' },
   { crateName: 'sdk-host', layer: 'interfaces', path: 'src/crates/interfaces/sdk-host' },
-  { crateName: 'agent-runtime-ipc', layer: 'adapters', path: 'src/crates/adapters/agent-runtime-ipc' },
   { crateName: 'ai-adapters', layer: 'adapters', path: 'src/crates/adapters/ai-adapters' },
   { crateName: 'claude-code-adapter', layer: 'adapters', path: 'src/crates/adapters/claude-code-adapter' },
   { crateName: 'codex-adapter', layer: 'adapters', path: 'src/crates/adapters/codex-adapter' },

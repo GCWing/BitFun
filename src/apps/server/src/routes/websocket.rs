@@ -33,10 +33,8 @@ use axum::{
 
 use bitfun_app_server::BitfunAppServer;
 
+use crate::app_server::MAX_WEBSOCKET_FRAME_BYTES;
 use crate::AppState;
-
-/// Maximum accepted WS frame size (256 KiB), matching the prior envelope handler.
-const MAX_WS_TEXT_BYTES: usize = 256 * 1024;
 
 /// WebSocket connection handler.
 ///
@@ -54,8 +52,8 @@ pub(crate) async fn websocket_handler(
         return StatusCode::FORBIDDEN.into_response();
     }
     tracing::info!("New WebSocket connection");
-    ws.max_message_size(MAX_WS_TEXT_BYTES)
-        .max_frame_size(MAX_WS_TEXT_BYTES)
+    ws.max_message_size(MAX_WEBSOCKET_FRAME_BYTES)
+        .max_frame_size(MAX_WEBSOCKET_FRAME_BYTES)
         .on_upgrade(move |socket| handle_socket(socket, bitfun_app_server))
 }
 

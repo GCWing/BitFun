@@ -29,15 +29,15 @@
 | --- | --- | --- | --- | --- |
 | A. App Server-first Rich Clients（当前首选） | Desktop、Web、Embedded/Shared TUI 复用一个 wire 与 typed client | 跨 Rich Client 合同和 fixture 最集中 | Embedded 编解码与 runtime/thread 成本；Desktop/Web 迁移面大；Shared 必须重新交付连接治理 | 真实 Desktop/TUI consumer、跨 transport parity、性能和安全门槛全部通过 |
 | B. Deployment-specific product adapters | Desktop、Web、Embedded TUI、Shared TUI 各保留窄 adapter，共享 owner ports | 每个 Host 可按自身生命周期优化，迁移风险较低 | DTO、错误、恢复和行为 fixture 可能分叉；跨入口一致性需额外治理 | 证明长期重复成本低于统一 wire 成本，并建立跨 adapter 行为合同 |
-| C. Shared Runtime use cases with separate wires | 提取稳定用例/结果，Embedded 使用 Rust adapter，Shared 保留 v17 或后继 wire，Web 使用 App Server | 业务语义集中，同时允许 deployment-specific framing、安全和性能 | 需要清晰区分 use-case DTO 与 wire DTO；client 不能假装同一协议 | 证明共享 use case 不泄漏 Runtime 实现，并分别验证每条 wire 的故障语义 |
+| C. Shared Runtime use cases with separate wires | 提取稳定用例/结果，Embedded、Shared 和 Web 使用各自受控 wire | 业务语义集中，同时允许 deployment-specific framing、安全和性能 | 需要清晰区分 use-case DTO 与 wire DTO；client 不能假装同一协议 | 证明共享 use case 不泄漏 Runtime 实现，并分别验证每条 wire 的故障语义 |
 
-评审可以选择 A、B、C 或其受限组合。已有 `TuiBackend`、App Server 和 v17 是评估证据，不自动决定最终架构。
+评审可以选择 A、B、C 或其受限组合。已有 `TuiBackend` 和 App Server 是评估证据，不自动决定 Desktop 的最终架构。
 
 ### 1.2 Costs of the preferred candidate
 
 - Embedded Rich Client 需要承担 App Server client/server、JSON-RPC 编解码、事件队列和专用 runtime/thread 的启动、内存与延迟成本；必须以基准证明该成本可接受。
-- 迁移期会同时维护 App Server 与 Runtime IPC v17 两条 wire；新增核心用例需保持 `TuiBackend` 行为等价，不能让双写期形成两个业务 owner。
-- Shared App Server 需要重新交付 v17 已有的 framing、方向性 limits、鉴权、实例身份、controller/lease、断连取消、未知结果和空闲退出，不能只复用 method/DTO。
+- Shared App Server 当前已交付 framing、方向性 limits、鉴权、实例身份、连接级 Session subscription 和空闲退出；跨连接 replay、完整慢客户端治理、断连取消和未知结果恢复仍需继续补齐。
+- Shared 与 Embedded 复用同一 typed client 和 App Server handler，但 Host-specific 连接治理仍必须有独立测试，不能只用 method/DTO 相同证明可靠性等价。
 - Desktop 迁移必须划清 controller-local capability、Tauri 生命周期和工作区 Host capability；Web/Remote 扩展还需要独立的认证、授权和多租户资源治理。
 
 ### 1.3 当前实现状态
@@ -47,28 +47,40 @@
 | 范围 | 当前状态 | 目标 |
 | --- | --- | --- |
 | Embedded TUI | 已创建私有 `BitfunAppServer`，通过 in-memory transport 连接 `AppServerClient` | 完成剩余管理面迁移和行为等价验证 |
-| Shared TUI | 仍通过私有 Runtime IPC v17 连接独立 Runtime Host | App Server Shared transport 达到可靠性等价后迁移 |
+| Shared TUI | `--shared` 启动或连接本机 Shared App Server Host，通过正式 `AppServerClient` 与 `AppServerTuiBackend` 工作；当前 Shared Host 已拥有 workspace、execution、Session binding、operation ownership 和 local-only policy | 补齐跨连接持久化 replay、透明 resume 和完整慢客户端治理 |
 | Desktop GUI | 主要仍使用 Tauri command 和桌面事件投影 | Tauri 收窄为 Host adapter，产品请求统一进入 App Server |
 | Web Host | 当前 Server 已组装 Embedded Runtime，WebSocket 直接承载 `BitfunAppServer`；仅适用于 loopback 单用户模式 | 补齐连接身份、作用域绑定和 Host allowlist 后才能扩展部署范围 |
-| App Server protocol/client | 已拆为 behavior-light crate，已有版本、能力、限制、错误和部分事件恢复类型 | 补齐 Host 注入能力、可靠性语义及跨 transport 合同测试 |
-| App Server server | 已注册 app、agent、session、permission、TUI/workspace、git、config 和 i18n handler | 按真实 owner 和 Host 装配收窄能力，不以已存在 DTO 代替可用性证据 |
+| App Server protocol/client | 已拆为 behavior-light crate；client 已区分发送前 `Protocol` failure 与发送后 `OutcomeUnknown`，并保留 request identity | 补齐跨 transport 的持久化恢复与更完整的慢客户端合同 |
+| App Server server | 已注册 app、agent、session、permission、TUI/workspace、git、config 和 i18n handler；所有 Shared 暴露 handler 都经过 Host method/capability policy | 按真实 owner 和 Host 装配继续收窄能力，不以已存在 DTO 代替可用性证据 |
 
-Shared TUI 继续使用 Runtime IPC 是当前 compatibility boundary。只有候选 A 获批且替换门槛通过后，才迁移或删除该 IPC；候选 B/C 可能将 private v17 或后继协议保留为受控的长期物理 wire。
+### 1.3.1 Shared 评审意见收口
+
+本轮修改直接在当前 Shared App Server 方案上补齐 gate，不恢复旧 v17 或旧 Shared Runtime 实现。当前 Shared Host 的责任边界如下：
+
+- `SharedHostPolicy` 持有 canonical project workspace、允许的 execution roots 和 authoritative Session binding。App Server 在所有 typed request handler 之前统一执行 Host preflight；Session mutation、transcript/lineage 和 workspace reference 请求在 Runtime 解析并注册 authoritative Session binding 后再执行 owner-aware authorization。Permission project scope、git/config/i18n 及管理面请求在进入 Runtime 或 Service owner 前同样经过 Host method/capability policy。
+- local-only Shared Host 对 `remoteConnectionId`、`remoteSshHost` 和非本地 workspace fail closed，返回结构化 `unsupported` 或 `invalid_request`，不静默回退 controller 本地路径。Remote workspace、Remote control、Peer Device Mode 和 Detached Dispatch 不通过本 Shared TUI Host 路径提供功能支持。
+- Dialog Turn 和 Context Compaction 在连接生命周期之外由 Host operation tracker 记录 pending/admitted/terminal 状态。无连接时只有在 tracker 确认没有 active/pending operation 且没有 event lag 不确定性时才允许 idle exit；不同 operation kind 的 terminal event 不互相清理。
+- Permission lag 通过 authoritative `app/syncEvents` 差量重建 added/removed request；Agent lag 因没有 authoritative Agent snapshot 而 fail closed。发送后 timeout、connection close 或 response callback 丢失统一为 `outcome_unknown`，`retryable` 保持 false，禁止盲目重试副作用请求。
+- 本轮已验证 workspace 越界、remote fail-closed、精确 `turnId`、未注册 Session、operation detach/settlement、tracker lag、permission reconciliation、Agent lag 和真实 in-memory transport unknown outcome。跨连接持久化 event replay、透明 resume 和完整慢客户端治理仍是后续 gate，不能以当前连接级 cursor 代替。
+
+`bitfun --shared` 按 canonical workspace 启动一个独立 Host 和一个 Runtime owner，使用 loopback TCP、随机 bearer token、实例身份、实例锁、严格 frame 上限和 30 秒无连接退出；每条连接通过 `session/subscribe` / `session/unsubscribe` 选择事件与 Permission 作用域。多个已认证客户端可以同时订阅、观察、steer 或按精确 Turn ID cancel 同一 Session，不使用 controller lease。独立 Turn 的提交仍由唯一 Runtime owner 按 Session 串行准入，因此“多客户端可操作”不等于“同一 Session 历史可并行改写”。
+
+该入口不是公网、多用户或远程 API。当前尚未补齐跨连接持久 replay、透明 resume、通用 `outcome_unknown` 恢复和完整慢客户端治理；这些限制必须明确暴露，不能以静默重试或控制端本机 fallback 掩盖。
 
 ### 1.4 Decision and replacement gates
 
-在满足下列门槛前，不得把候选 A 标记为 approved，也不得用 Shared App Server 替换 v17：
+Shared TUI 已采用 App Server；下列门槛继续约束该 transport 的可靠性收敛，以及 Desktop 等后续 Rich Client 迁移：
 
 | 门槛 | 必需证据 |
 | --- | --- |
 | Framing 与 limits | request/response/event/attachment 的方向性上限、无界分配防护、慢 client/backpressure 和超限结果均有跨 transport 测试 |
 | 身份与作用域 | 实例身份、每连接认证、user/product/workspace/execution-domain 绑定和 method allowlist fail closed |
-| Controller 与 Session 单写 | controller/observer/lease、断连隔离、跨进程 Session writer 冲突和转移规则有 owner-level 决策与竞争测试 |
+| 多客户端与 Session 单写 | controller/observer/lease 或无 lease 的 Runtime 串行准入模型、断连隔离、跨进程 Session writer 冲突和精确 Turn 控制均有 owner-level 决策与竞争测试 |
 | 事件恢复 | 明确 snapshot/replay owner、连接内 cursor、跨连接是否持久化、lag/closed/invalidation 和 resync 行为 |
 | 取消与未知结果 | disconnect/shutdown 取消、迟到响应、operation identity、`outcome_unknown` 查询/恢复和禁止盲重试 |
 | Host capability | Desktop local effect 与工作区 capability 边界、provider 注入、Remote unsupported 和 Web/Remote auth 已定稿 |
 | 生命周期与性能 | discovery、startup、idle exit、crash cleanup、延迟、吞吐、内存和 Embedded thread/runtime 成本有预算与测量 |
-| 迁移与回滚 | 同一第一方 consumer 完成 opt-in 双栈 parity；升级/降级和 v17 rollback 可重复验证；删除条件有明确 owner 批准 |
+| 迁移与回滚 | 同一第一方 consumer 完成 Embedded/Shared parity；升级、降级、Host 重启和过期 discovery 恢复可重复验证；删除条件有明确 owner 批准 |
 
 ## 2. 问题与目标
 
@@ -77,7 +89,7 @@ GUI、Web 和 TUI 若分别围绕 Tauri command、WebSocket route、CLI/Core 直
 - 同一用例出现多套 DTO、错误码、默认值和字段归一化。
 - 某一入口完成权限、取消或远程工作区支持，其他入口仍静默缺失。
 - 事件被不同 Host 投影后丢失身份、顺序或恢复信息。
-- UI 组件与 Tauri、Core singleton 或私有 Runtime IPC 绑定，无法验证跨入口行为等价。
+- UI 组件与 Tauri、Core singleton 或 Host 私有 transport 绑定，无法验证跨入口行为等价。
 - “handler 已存在”“DTO 已生成”或“能力被硬编码为 available”被误当成端到端能力已交付。
 
 App Server 的目标是提供一个可版本化、可生成 client、可跨 Embedded/Shared transport 验证的 Rich Client 合同，同时保持业务 owner 平台无关。它统一的是产品后端行为，不统一 GUI/TUI renderer、布局、键位、窗口、终端或 controller-local effect。
@@ -196,13 +208,13 @@ Shared Host 在基础 App Server 合同之外必须提供：
 - initialize-first 握手、协议版本和 client identity 校验。
 - workspace、用户、产品和 execution domain 绑定。
 - 连接数、请求队列、事件队列和 frame 大小上限。
-- 每个 Session 的 controller/lease、冲突和转移规则。
-- 断连时取消连接拥有的活动操作，并隔离未完成清理的 lease。
+- 使用连接级 Session subscription 与 Runtime owner 的 Turn 串行准入，不使用 controller lease。
+- 断连时隔离该连接未完成的请求，并以精确 Turn identity 执行可确认的取消。
 - 有序 writer、并发 reader、背压和慢 client 失效策略。
 - 无客户端且无活动任务时的受控空闲退出。
 - 副作用请求在超时或断连后的 `outcome_unknown` 结果。
 
-当前 Runtime IPC v17 已具有 128 KiB request、8 MiB response/event、token、实例身份、controller/lease、断连取消、有界事件流、`outcome_unknown` 和空闲退出等合同。在 App Server Shared transport 逐项获得等价测试前，该 IPC 可以作为 Shared TUI 的兼容 adapter 保留；不得先切换 transport 再以功能回退换取表面统一。
+当前 Shared App Server 已具有 128 KiB request、8 MiB response/event、token、实例身份、连接级 Session subscription、有界连接数和空闲退出等合同。它仍缺少跨连接持久 replay、透明 resume、通用 `outcome_unknown` 恢复与完整慢客户端治理；后续工作必须以故障测试补齐这些合同，不能用表面 wire 统一替代可靠性证据。
 
 ## 8. Desktop GUI 与 Tauri
 
@@ -259,7 +271,7 @@ WebSocket 是 App Server 的一种 transport，不是另一套业务 API。Web H
 4. transport limits 必须反映当前连接的真实限制；不能把 server 内部默认值宣传为所有 transport 的通用事实。
 5. method 级 allowlist 必须是 capability 声明的子集，fallback handler 不能扩大可调用面。
 
-当前实现中通用 App Server 初始化声明 16 MiB frame，而 WebSocket Host 接收上限为 256 KiB，Shared Runtime IPC 又区分 128 KiB request 与 8 MiB response/event。目标合同需要表达方向和 transport 的真实限制；在扩展 schema 前，Host 至少必须返回不超过底层 transport 的有效上限。
+当前实现中通用 App Server 初始化声明 16 MiB frame，而 WebSocket Host 接收上限为 256 KiB，Shared App Server Host 又区分 128 KiB request 与 8 MiB response/event。目标合同需要表达方向和 transport 的真实限制；在扩展 schema 前，Host 至少必须返回不超过底层 transport 的有效上限。
 
 ## 11. 事件、恢复与取消
 
@@ -333,10 +345,10 @@ Embedded 的私有 transport 可以依赖同进程构造身份，但仍必须传
 迁移按行为闭环推进，不按 method 数量推进：
 
 1. **锁定合同基础**：稳定 protocol/client crate、版本、错误、能力、限制和事件 envelope；增加 Embedded contract test。
-2. **完成 Embedded TUI**：所有交互式 TUI 产品请求经 `TuiBackend -> AppServerClient`；移除 Core、Runtime SDK、Service singleton 和 Runtime IPC 的 TUI-facing 依赖。
-3. **迁移 Desktop GUI**：按 Session/Turn/Permission、Workspace、Config/MCP/Extension 等垂直切片迁移；每片完成后删除重复 Tauri DTO/handler。
-4. **补齐 Shared 语义**：把 authentication、instance identity、controller/lease、framing、背压、断连取消、idle exit、event recovery 和 `outcome_unknown` 纳入 App Server Host/transport。
-5. **评审 Shared TUI 迁移**：候选 A 获批且 1.4 节门槛通过后，才用同一 client/schema 替换 Runtime IPC compatibility adapter；旧 wire 仅在 rollback 窗口结束并获得 owner 批准后删除。若选择 B/C，则记录 v17 的长期 owner、版本和删除条件。
+2. **完成 Embedded TUI**：所有交互式 TUI 产品请求经 `TuiBackend -> AppServerClient`；移除 Core、Runtime SDK、Service singleton 和 Host 私有 transport 的 TUI-facing 依赖。
+3. **完成 Shared TUI 替换**：`--shared` 使用同一 typed client/schema 连接 Shared App Server Host，删除旧命令、旧 adapter 和旧 wire crate。
+4. **补齐 Shared 语义**：在现有 authentication、instance identity、framing、连接级 Session subscription 和 idle exit 基础上，补齐背压、断连取消、跨连接 event recovery 和 `outcome_unknown`。
+5. **迁移 Desktop GUI**：按 Session/Turn/Permission、Workspace、Config/MCP/Extension 等垂直切片迁移；每片完成后删除重复 Tauri DTO/handler。
 6. **收紧 Web Host**：由 Host 注入 allowlist、作用域和真实 limits；完成安全绑定前保持 loopback 单用户限制。
 7. **删除旁路**：移除 Rich Client 的 Core/Runtime 直连、重复事件投影和无生产消费方的旧 route。
 
@@ -362,12 +374,12 @@ Embedded 的私有 transport 可以依赖同进程构造身份，但仍必须传
 
 1. Desktop GUI、Web UI 和交互式 TUI 的产品后端请求与订阅均经过 App Server。
 2. Embedded 与 Shared 使用同一 client、method、DTO、错误和事件恢复合同，UI 不包含部署分支。
-3. Shared transport 达到现有 Runtime IPC 的鉴权、lease、取消、背压、限制、失效和生命周期等价。
+3. Shared transport 的鉴权、Session subscription、取消、背压、方向性限制、失效和生命周期合同均有独立故障测试。
 4. capability 和 limits 来自 Host 的真实装配与 transport，不再由通用 handler 无条件硬编码。
-5. Rich Client 不直接依赖 Core singleton、Runtime SDK、Tauri 业务 command 或私有 Runtime IPC。
+5. Rich Client 不直接依赖 Core singleton、Runtime SDK、Tauri 业务 command 或 Host 私有 transport。
 6. App Server handler 不持有业务权威状态，不复制 owner 校验和策略。
 7. Remote workspace 和多用户连接具有明确身份、作用域、授权和 fail-closed 行为。
-8. 重复 Tauri/Web/IPC DTO、旧 handler 和事件旁路已删除，或有明确的兼容期限与删除证据。
+8. 重复 Tauri/Web/transport DTO、旧 handler 和事件旁路已删除，或有明确的兼容期限与删除证据。
 9. 上述合同、行为、安全、依赖和跨入口测试全部通过。
 
 ## 17. Proposed constraints and open decisions
@@ -391,4 +403,4 @@ Embedded 的私有 transport 可以依赖同进程构造身份，但仍必须传
 - Desktop client-local capability 的请求方向：App Server 反向 request、Host provider port，或显式两段式工作流。
 - Web/Remote 的认证凭据来源、刷新、撤销和多租户资源配额。
 
-这些待决项会影响候选选择，不能被实现默认值或迁移进度替代。评审结论必须记录所选候选、拒绝其他候选的理由、门槛 owner、验证证据和回滚/删除条件；在此之前，当前 Embedded App Server 与 Shared v17 路径都保持有效。
+这些待决项会影响候选选择，不能被实现默认值或迁移进度替代。评审结论必须记录所选候选、拒绝其他候选的理由、门槛 owner、验证证据和回滚/删除条件；当前 Embedded 与 Shared TUI 都使用 App Server，Desktop 的最终迁移选择仍须独立评审。

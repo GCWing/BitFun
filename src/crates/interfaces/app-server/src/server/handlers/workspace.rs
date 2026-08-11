@@ -8,6 +8,7 @@ use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
     runtime: Arc<BitfunAppRuntime>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -15,7 +16,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
-                async move |_: WorkspaceDiffRequest, responder, _cx| {
+                async move |_request: WorkspaceDiffRequest, responder, _cx| {
                     responder.respond_with_result(runtime_call(
                         runtime
                             .runtime()
@@ -30,7 +31,15 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: SearchWorkspaceReferencesRequest, responder, _cx| {
+                    event_state
+                        .authorize_session_request(
+                            &runtime,
+                            &request,
+                            &[request.0.session_id.as_str()],
+                        )
+                        .await?;
                     responder.respond_with_result(runtime_call(
                         runtime
                             .runtime()
@@ -44,6 +53,9 @@ pub(in crate::server) fn builder(
         )
         .on_receive_request(
             async move |request: MessageReferencesRequest, responder, _cx| {
+                event_state
+                    .authorize_session_request(&runtime, &request, &[request.0.session_id.as_str()])
+                    .await?;
                 responder.respond_with_result(runtime_call(
                     runtime
                         .runtime()

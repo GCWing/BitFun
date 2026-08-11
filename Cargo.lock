@@ -811,26 +811,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bitfun-agent-runtime-ipc"
-version = "0.2.17"
-dependencies = [
- "async-trait",
- "bitfun-events",
- "bitfun-product-domains",
- "bitfun-runtime-ports",
- "dunce",
- "fs2",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "uuid",
- "windows 0.61.3",
-]
-
-[[package]]
 name = "bitfun-agent-stream"
 version = "0.2.17"
 dependencies = [
@@ -970,13 +950,13 @@ dependencies = [
 name = "bitfun-cli"
 version = "0.2.17"
 dependencies = [
+ "agent-client-protocol",
  "anyhow",
  "arboard",
  "async-trait",
  "base64 0.22.1",
  "bitfun-acp",
  "bitfun-agent-runtime",
- "bitfun-agent-runtime-ipc",
  "bitfun-agent-tools",
  "bitfun-app-server",
  "bitfun-app-server-client",
@@ -1016,6 +996,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
+ "tokio-util",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
  "tracing-subscriber",

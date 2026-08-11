@@ -56,6 +56,7 @@
 
 pub mod agent;
 pub mod client;
+mod host;
 pub mod management;
 pub mod role;
 pub mod schema;
@@ -64,6 +65,10 @@ pub mod transport;
 
 pub use agent::BitfunAppRuntime;
 pub use agent_client_protocol as protocol;
+pub use host::{
+    AppServerHostPolicy, AppServerHostPolicyError, AppServerOperationKind,
+    AppServerOperationObserver,
+};
 // `connect`, `AppServerClient`, and `FrontendEvent` are test-only utilities
 // with no production consumer. They are `#[doc(hidden)]` to avoid implying a
 // versioned public client SDK; they will be replaced by a proper versioned

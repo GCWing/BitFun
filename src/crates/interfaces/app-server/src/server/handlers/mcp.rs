@@ -9,6 +9,7 @@ use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
     management: Option<Arc<AppManagementService>>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -16,6 +17,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MCP_CAPABILITY,
                 ListMcpServersRequest,
                 list_mcp_servers
@@ -25,6 +27,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MCP_CAPABILITY,
                 ToggleMcpServerRequest,
                 toggle_mcp_server
@@ -34,6 +37,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MCP_CAPABILITY,
                 AddMcpServerRequest,
                 add_mcp_server
@@ -43,6 +47,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MCP_CAPABILITY,
                 DeleteMcpServerRequest,
                 delete_mcp_server
@@ -52,6 +57,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MCP_CAPABILITY,
                 ExternalMcpDecisionRequest,
                 external_mcp_decision
@@ -61,6 +67,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MCP_CAPABILITY,
                 McpConflictChoiceRequest,
                 mcp_conflict_choice

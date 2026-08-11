@@ -8,7 +8,6 @@
 
 | Crate | 职责 | 本地文档 |
 |---|---|---|
-| `agent-runtime-ipc` | 不发布的私有本机 IPC adapter，为可选的第一方 Shared TUI Runtime 提供封闭交互操作 | [AGENTS.md](agent-runtime-ipc/AGENTS.md) |
 | `ai-adapters` | AI provider 请求/响应 adapter 与 stream protocol glue | [AGENTS.md](ai-adapters/AGENTS.md) |
 | `opencode-adapter` | OpenCode Command、standalone Tool 和 Subagent 实时 provider 的生态语义；受管包静态预览 | [AGENTS.md](opencode-adapter/AGENTS.md) |
 | `transport` | Event transport emitter 与宿主 transport adapter | [AGENTS.md](transport/AGENTS.md) |

@@ -33,8 +33,7 @@ mod prompts;
 mod root_handlers;
 mod runtime;
 mod self_update;
-mod shared_runtime;
-mod shared_tui_backend;
+mod shared_app_server;
 mod terminal_attention;
 mod tui_backend;
 mod ui;
@@ -111,9 +110,8 @@ fn ensure_cli_mcp_service(
     bitfun_core::service::mcp::set_global_mcp_service(service.clone());
     get_mcp_init_status().store(1, Ordering::Relaxed);
 
-    // Shared TUI keeps the pre-migration CLI-local MCP compatibility path. It
-    // is intentionally separate from the MCP manager inside Shared Runtime;
-    // this process must not be mistaken for that Runtime's owner.
+    // Initialize the MCP owner in the process that owns this Runtime. For
+    // Shared TUI this runs in the Shared App Server Host, not its clients.
     let initializing = service.clone();
     tokio::spawn(async move {
         match initializing.server_manager().initialize_all().await {
@@ -143,8 +141,8 @@ struct Cli {
     #[arg(short, long, global = true)]
     verbose: bool,
 
-    /// Use the opt-in Shared Runtime for interactive TUI mode
-    /// Multiple TUIs may share one workspace Runtime; each controls a Session at a time.
+    /// Use the Shared App Server for interactive TUI mode
+    /// Multiple local TUIs may observe and control the same Session.
     /// Automation, desktop, and remote modes remain unchanged.
     #[arg(long, verbatim_doc_comment)]
     shared: bool,
@@ -183,13 +181,13 @@ enum Commands {
         #[arg(short, long, default_value = "agentic")]
         agent: String,
 
-        /// Use the opt-in Shared Runtime for this interactive TUI
+        /// Use the Shared App Server for this interactive TUI
         #[arg(long)]
         shared: bool,
     },
 
-    #[command(name = "__shared-runtime", hide = true)]
-    SharedRuntime {
+    #[command(name = "__shared-app-server", hide = true)]
+    SharedAppServer {
         #[arg(long)]
         workspace: std::path::PathBuf,
         #[arg(long)]
@@ -537,6 +535,18 @@ pub(crate) enum BootstrapProfile {
     Interactive,
     Execution,
     Management,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InteractiveDeployment {
+    Embedded,
+    Shared,
+}
+
+impl InteractiveDeployment {
+    const fn is_embedded(self) -> bool {
+        matches!(self, Self::Embedded)
+    }
 }
 
 impl BootstrapProfile {
@@ -905,7 +915,7 @@ async fn run_interactive(
     config: CliConfig,
     default_agent: String,
     _workspace_str: String,
-    shared: bool,
+    deployment: InteractiveDeployment,
     agent_override: Option<String>,
     model_id: Option<String>,
     session_override: Option<String>,
@@ -924,9 +934,7 @@ async fn run_interactive(
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-    let runtime = if shared {
-        None
-    } else {
+    let runtime = if deployment.is_embedded() {
         Some(
             initialize_core_services(
                 &workspace_path,
@@ -935,6 +943,8 @@ async fn run_interactive(
             )
             .await?,
         )
+    } else {
+        None
     };
     let embedded_app_server = if let Some(runtime) = &runtime {
         Some(embedded_app_server::EmbeddedAppServerHost::start(runtime).await?)
@@ -953,26 +963,20 @@ async fn run_interactive(
             runtime.approval_policy(),
         ))
     } else {
-        let client = shared_runtime::connect_or_start(&workspace_path).await?;
-        let config_service = bitfun_core::service::config::get_global_config_service()
-            .await
-            .map_err(|error| anyhow!("Failed to load Shared TUI management config: {error}"))?;
-        ensure_cli_mcp_service(config_service);
-        let management = Arc::new(bitfun_app_server::AppManagementService::load().await?);
-        let backend: Arc<dyn tui_backend::TuiBackend> = Arc::new(
-            shared_tui_backend::SharedTuiBackend::new(client, management),
-        );
-        let backend_initialized = backend
+        let client = shared_app_server::connect_or_start(&workspace_path).await?;
+        let backend: Arc<dyn tui_backend::TuiBackend> =
+            Arc::new(tui_backend::AppServerTuiBackend::new(client));
+        let initialized = backend
             .initialize(bitfun_app_server_protocol::app::InitializeRequest {
                 protocol_version: bitfun_app_server_protocol::PROTOCOL_VERSION,
                 client: bitfun_app_server_protocol::app::ClientInfo {
-                    name: "bitfun-tui".to_string(),
+                    name: "bitfun-tui-shared".to_string(),
                     version: env!("CARGO_PKG_VERSION").to_string(),
                 },
             })
             .await?;
-        if backend_initialized.protocol_version != bitfun_app_server_protocol::PROTOCOL_VERSION {
-            anyhow::bail!("Shared TUI Host negotiated an incompatible protocol");
+        if initialized.protocol_version != bitfun_app_server_protocol::PROTOCOL_VERSION {
+            anyhow::bail!("Shared App Server negotiated an incompatible protocol");
         }
         backend.health().await?;
         Arc::new(TuiAgentClient::new(
@@ -983,7 +987,7 @@ async fn run_interactive(
         ))
     };
     // 3.5 Restore persisted account session (if any)
-    if !shared {
+    if deployment.is_embedded() {
         let runtime = runtime
             .as_ref()
             .expect("Embedded account startup requires the CLI Runtime");
@@ -1009,7 +1013,7 @@ async fn run_interactive(
 
     // 3.6 Continuous account settings sync (30s pull + debounced push).
     // Safe to start before login: cycles skip while logged out.
-    if !shared {
+    if deployment.is_embedded() {
         runtime
             .as_ref()
             .expect("Embedded settings sync requires the CLI Runtime")
@@ -1042,7 +1046,7 @@ async fn run_interactive(
         }
         let chat_result = chat_mode.run(Some(terminal));
 
-        if !shared {
+        if deployment.is_embedded() {
             shutdown_mcp_servers().await;
         }
         let _exit_reason = chat_result?;
@@ -1192,8 +1196,8 @@ async fn run_cli() -> Result<()> {
     };
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
-    let is_shared_service = matches!(cli.command, Some(Commands::SharedRuntime { .. }));
-    let use_shared_runtime = match shared_tui_requested(cli.shared, &cli.command) {
+    let is_shared_service = matches!(cli.command, Some(Commands::SharedAppServer { .. }));
+    let use_shared_app_server = match shared_tui_requested(cli.shared, &cli.command) {
         Ok(shared) => shared,
         Err(error) if exec_requests_json_output(&raw_args) => {
             modes::exec::emit_preflight_json_error(ExecOutputFormat::Json, &error)?;
@@ -1218,7 +1222,7 @@ async fn run_cli() -> Result<()> {
 
     if is_shared_service {
         let service_log_dir =
-            logging::resolve_logs_root().join(format!("shared-runtime-{}", std::process::id()));
+            logging::resolve_logs_root().join(format!("shared-app-server-{}", std::process::id()));
         logging::init_file_logging_at(&service_log_dir, file_log_level);
     } else if is_tui_mode || is_exec_mode || is_daemon_run || is_dispatch_mode {
         logging::init_file_logging(file_log_level);
@@ -1249,7 +1253,11 @@ async fn run_cli() -> Result<()> {
                 config,
                 agent,
                 ".".to_string(),
-                use_shared_runtime,
+                if use_shared_app_server {
+                    InteractiveDeployment::Shared
+                } else {
+                    InteractiveDeployment::Embedded
+                },
                 cli.agent.clone(),
                 cli.model.clone(),
                 None,
@@ -1257,10 +1265,10 @@ async fn run_cli() -> Result<()> {
             .await?;
         }
 
-        Some(Commands::SharedRuntime {
+        Some(Commands::SharedAppServer {
             workspace,
             instance_identity,
-        }) => shared_runtime::run_service(workspace, instance_identity).await?,
+        }) => shared_app_server::run_service(workspace, instance_identity)?,
 
         Some(Commands::Exec {
             message,
@@ -1527,7 +1535,11 @@ async fn run_cli() -> Result<()> {
                 config,
                 default_agent,
                 workspace_str,
-                use_shared_runtime,
+                if use_shared_app_server {
+                    InteractiveDeployment::Shared
+                } else {
+                    InteractiveDeployment::Embedded
+                },
                 cli.agent.clone(),
                 cli.model.clone(),
                 session_override,
@@ -2006,7 +2018,19 @@ mod shared_tui_command_tests {
     }
 
     #[test]
-    fn shared_runtime_does_not_start_the_peer_host() {
+    fn sharedv2_is_removed_and_internal_host_role_is_hidden() {
+        assert!(Cli::try_parse_from(["bitfun", "sharedv2"]).is_err());
+        assert!(Cli::try_parse_from(["bitfun", "--sharedv2"]).is_err());
+        assert!(Cli::try_parse_from(["bitfun", "chat", "--sharedv2"]).is_err());
+        let help = Cli::command().render_long_help().to_string();
+        assert!(!help.contains("sharedv2"));
+        assert!(help.contains("Shared App Server"));
+        assert!(help.contains("same Session"));
+        assert!(!help.contains("__shared-app-server"));
+    }
+
+    #[test]
+    fn shared_app_server_does_not_start_the_peer_host() {
         assert!(BootstrapProfile::Interactive.starts_peer_host(RuntimeDeployment::Embedded));
         assert!(!BootstrapProfile::Interactive.starts_peer_host(RuntimeDeployment::Shared));
     }
@@ -2014,10 +2038,9 @@ mod shared_tui_command_tests {
     #[test]
     fn help_explains_shared_scope_and_hides_internal_process_role() {
         let help = Cli::command().render_long_help().to_string();
-        assert!(help.contains("one workspace Runtime"));
-        assert!(help.contains("controls a Session at a time"));
+        assert!(help.contains("Shared App Server"));
+        assert!(help.contains("observe and control the same Session"));
         assert!(help.contains("Automation, desktop, and remote modes"));
-        assert!(!help.contains("__shared-runtime"));
         let exec_help = Commands::augment_subcommands(Cli::command())
             .find_subcommand("exec")
             .expect("exec command")

@@ -1,7 +1,7 @@
 use agent_client_protocol::{Builder, Error, HandleDispatchFrom};
 use bitfun_app_server_protocol::app::{
     CapabilityAvailability, CapabilityDescriptor, HealthRequest, HealthResponse, HealthStatus,
-    InitializeRequest, InitializeResponse, ServerInfo, TransportLimits,
+    InitializeRequest, InitializeResponse, ServerInfo,
 };
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::event::{SyncEventsRequest, SyncEventsResponse};
@@ -10,15 +10,13 @@ use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 use crate::management::EXTERNAL_SOURCES_CAPABILITY;
 use crate::role::{AppClient, AppServer};
 
-const MAX_FRAME_BYTES: u64 = 16 * 1024 * 1024;
-const EVENT_BUFFER_CAPACITY: u32 = 1024;
-
 pub(in crate::server) fn builder(
     runtime: std::sync::Arc<crate::agent::BitfunAppRuntime>,
     event_state: std::sync::Arc<crate::server::ConnectionEventState>,
     management: Option<std::sync::Arc<crate::management::AppManagementService>>,
+    transport_limits: bitfun_app_server_protocol::app::TransportLimits,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
-    let capabilities = registered_capabilities(management.as_deref());
+    let capabilities = registered_capabilities(management.as_deref(), &event_state);
     let external_source_snapshot_available = capabilities.iter().any(|capability| {
         capability.id == EXTERNAL_SOURCES_CAPABILITY
             && matches!(capability.availability, CapabilityAvailability::Available)
@@ -27,37 +25,36 @@ pub(in crate::server) fn builder(
         .builder()
         .name("app lifecycle handlers")
         .on_receive_request(
-            async move |request: InitializeRequest, responder, _cx| {
-                if request.protocol_version < MIN_PROTOCOL_VERSION
-                    || request.protocol_version > PROTOCOL_VERSION
-                {
-                    return responder.respond_with_result(Err(Error::invalid_params().data(
-                        serde_json::to_value(AppServerErrorData {
-                            kind: AppServerErrorKind::InvalidRequest,
-                            retryable: false,
-                            outcome_unknown: false,
-                            capability: Some("app.initialize".to_string()),
-                            request_id: None,
-                        })
-                        .unwrap_or(serde_json::Value::Null),
-                    )));
+            {
+                async move |request: InitializeRequest, responder, _cx| {
+                    if request.protocol_version < MIN_PROTOCOL_VERSION
+                        || request.protocol_version > PROTOCOL_VERSION
+                    {
+                        return responder.respond_with_result(Err(Error::invalid_params().data(
+                            serde_json::to_value(AppServerErrorData {
+                                kind: AppServerErrorKind::InvalidRequest,
+                                retryable: false,
+                                outcome_unknown: false,
+                                capability: Some("app.initialize".to_string()),
+                                request_id: None,
+                            })
+                            .unwrap_or(serde_json::Value::Null),
+                        )));
+                    }
+                    responder.respond_with_result(Ok(InitializeResponse::new(
+                        ServerInfo {
+                            name: "bitfun-app-server".to_string(),
+                            version: env!("CARGO_PKG_VERSION").to_string(),
+                        },
+                        capabilities.clone(),
+                        transport_limits.clone(),
+                    )))
                 }
-                responder.respond_with_result(Ok(InitializeResponse::new(
-                    ServerInfo {
-                        name: "bitfun-app-server".to_string(),
-                        version: env!("CARGO_PKG_VERSION").to_string(),
-                    },
-                    capabilities.clone(),
-                    TransportLimits {
-                        max_frame_bytes: MAX_FRAME_BYTES,
-                        event_buffer_capacity: EVENT_BUFFER_CAPACITY,
-                    },
-                )))
             },
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |_: HealthRequest, responder, _cx| {
+            async move |_request: HealthRequest, responder, _cx| {
                 responder.respond(HealthResponse {
                     status: HealthStatus::Ready,
                     protocol_version: PROTOCOL_VERSION,
@@ -66,22 +63,27 @@ pub(in crate::server) fn builder(
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |request: SyncEventsRequest, responder, _cx| {
-                let pending_permissions = runtime
-                    .runtime()
-                    .pending_permission_requests()
-                    .unwrap_or_default();
-                responder.respond(SyncEventsResponse {
-                    cursors: request
-                        .streams
-                        .into_iter()
-                        .map(|stream| event_state.cursor(stream))
-                        .collect(),
-                    pending_permissions,
-                    agent_snapshot_available: false,
-                    config_snapshot_available: false,
-                    external_source_snapshot_available,
-                })
+            {
+                let event_state = event_state.clone();
+                async move |request: SyncEventsRequest, responder, _cx| {
+                    let pending_permissions = runtime
+                        .runtime()
+                        .pending_permission_requests()
+                        .map(|requests| event_state.filter_pending_permissions(requests))
+                        .unwrap_or_default();
+                    responder.respond(SyncEventsResponse {
+                        cursors: request
+                            .streams
+                            .into_iter()
+                            .map(|stream| event_state.cursor(stream))
+                            .collect(),
+                        pending_permissions,
+                        agent_snapshot_available: false,
+                        config_snapshot_available: false,
+                        external_source_snapshot_available: external_source_snapshot_available
+                            && event_state.allows_local_management(),
+                    })
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )
@@ -89,6 +91,7 @@ pub(in crate::server) fn builder(
 
 fn registered_capabilities(
     management: Option<&crate::management::AppManagementService>,
+    event_state: &crate::server::ConnectionEventState,
 ) -> Vec<CapabilityDescriptor> {
     let mut capabilities = [
         (
@@ -111,6 +114,8 @@ fn registered_capabilities(
             "session",
             vec![
                 "session/sync",
+                "session/subscribe",
+                "session/unsubscribe",
                 "session/readTranscript",
                 "session/resolveWorkspace",
                 "session/rename",
@@ -204,6 +209,16 @@ fn registered_capabilities(
             })
             .descriptors(),
     );
+    for capability in &mut capabilities {
+        capability
+            .methods
+            .retain(|method| event_state.allows_method(method));
+        if !event_state.allows_capability(&capability.id) || capability.methods.is_empty() {
+            capability.availability = CapabilityAvailability::Unavailable {
+                reason: "The Host policy does not expose this capability".to_string(),
+            };
+        }
+    }
     capabilities
 }
 
@@ -213,7 +228,8 @@ mod tests {
 
     #[test]
     fn missing_host_management_service_declares_capabilities_unavailable() {
-        let capabilities = registered_capabilities(None);
+        let event_state = crate::server::ConnectionEventState::new(false, None, None);
+        let capabilities = registered_capabilities(None, &event_state);
         for id in [
             "tui.modes",
             "tui.models",

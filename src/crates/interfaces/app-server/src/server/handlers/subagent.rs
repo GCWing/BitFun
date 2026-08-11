@@ -9,6 +9,7 @@ use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
     management: Option<Arc<AppManagementService>>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -16,6 +17,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 SUBAGENTS_CAPABILITY,
                 ListSubagentsRequest,
                 list_subagents
@@ -25,6 +27,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 SUBAGENTS_CAPABILITY,
                 SetSubagentEnabledRequest,
                 set_subagent_enabled

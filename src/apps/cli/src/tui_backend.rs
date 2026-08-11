@@ -6,6 +6,7 @@ use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::agent::*;
 use bitfun_app_server_protocol::app::{HealthResponse, InitializeRequest, InitializeResponse};
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
+use bitfun_app_server_protocol::event::{SyncEventsRequest, SyncEventsResponse};
 use bitfun_app_server_protocol::external_source::*;
 use bitfun_app_server_protocol::hook::*;
 use bitfun_app_server_protocol::mcp::*;
@@ -60,6 +61,10 @@ pub(crate) trait TuiBackend: Send + Sync {
     async fn health(&self) -> Result<HealthResponse, TuiBackendError>;
 
     fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<AppServerEvent>;
+    async fn sync_events(
+        &self,
+        request: SyncEventsRequest,
+    ) -> Result<SyncEventsResponse, TuiBackendError>;
 
     async fn model_catalog(&self) -> Result<TuiModelCatalogResponse, TuiBackendError>;
     async fn account_snapshot(
@@ -350,6 +355,13 @@ impl TuiBackend for AppServerTuiBackend {
 
     fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<AppServerEvent> {
         self.client.subscribe_events()
+    }
+
+    async fn sync_events(
+        &self,
+        request: SyncEventsRequest,
+    ) -> Result<SyncEventsResponse, TuiBackendError> {
+        map(self.client.sync_events(request).await)
     }
 
     async fn account_snapshot(
@@ -813,8 +825,8 @@ fn map<T>(result: Result<T, ProtocolError>) -> Result<T, TuiBackendError> {
 fn map_client<T>(result: Result<T, ClientError>) -> Result<T, TuiBackendError> {
     result.map_err(|error| match error {
         ClientError::Protocol(error) => map_protocol_error(error),
-        ClientError::Timeout(data) => backend_error_from_data(
-            "App Server request timed out with unknown outcome".to_string(),
+        ClientError::OutcomeUnknown(data) => backend_error_from_data(
+            "App Server request lost its response with unknown outcome".to_string(),
             data,
         ),
     })

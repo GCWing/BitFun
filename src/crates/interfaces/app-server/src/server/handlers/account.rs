@@ -9,6 +9,7 @@ use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
     management: Option<Arc<AppManagementService>>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -16,6 +17,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 ACCOUNT_CAPABILITY,
                 AccountSnapshotRequest,
                 account_snapshot
@@ -25,6 +27,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 ACCOUNT_CAPABILITY,
                 AccountLoginRequest,
                 account_login
@@ -34,6 +37,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 ACCOUNT_CAPABILITY,
                 AccountFinalizeLoginRequest,
                 account_finalize_login
@@ -43,6 +47,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 ACCOUNT_CAPABILITY,
                 AccountLogoutRequest,
                 account_logout
@@ -52,6 +57,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 SETTINGS_SYNC_CAPABILITY,
                 SettingsSyncStartRequest,
                 settings_sync_start
@@ -61,6 +67,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 SETTINGS_SYNC_CAPABILITY,
                 SettingsSyncSnapshotRequest,
                 settings_sync_snapshot
@@ -70,6 +77,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 SETTINGS_SYNC_CAPABILITY,
                 SettingsSyncCancelRequest,
                 settings_sync_cancel
@@ -79,6 +87,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 SETTINGS_SYNC_CAPABILITY,
                 SettingsSyncLocalChangedRequest,
                 settings_sync_local_changed

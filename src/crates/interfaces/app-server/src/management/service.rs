@@ -25,7 +25,7 @@ use super::{
     SETTINGS_SYNC_CAPABILITY, WORKTREES_CAPABILITY,
 };
 
-/// App Server adapter shared by Embedded and local Shared compatibility Hosts.
+/// App Server adapter shared by Embedded and local Shared Hosts.
 ///
 /// The service delegates to the existing config, registry, MCP, and external
 /// source owners. Local-only capabilities must be enabled through the local
