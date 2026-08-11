@@ -208,6 +208,30 @@ impl AppServerClient {
         self.rpc(|cx| Ok(cx.send_request(request))).await
     }
 
+    pub async fn subscribe_session(
+        &self,
+        session_id: impl Into<String>,
+    ) -> agent_client_protocol::Result<SubscribeSessionResponse> {
+        self.rpc(|cx| {
+            Ok(cx.send_request(SubscribeSessionRequest {
+                session_id: session_id.into(),
+            }))
+        })
+        .await
+    }
+
+    pub async fn unsubscribe_session(
+        &self,
+        session_id: impl Into<String>,
+    ) -> agent_client_protocol::Result<UnsubscribeSessionResponse> {
+        self.rpc(|cx| {
+            Ok(cx.send_request(UnsubscribeSessionRequest {
+                session_id: session_id.into(),
+            }))
+        })
+        .await
+    }
+
     pub async fn external_source_snapshot(
         &self,
         request: ExternalSourceSnapshotRequest,

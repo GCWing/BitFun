@@ -12,7 +12,6 @@ members = [
     "src/crates/interfaces/app-server-client",
     "src/crates/interfaces/app-server-protocol",
     "src/crates/interfaces/sdk-host",
-    "src/crates/adapters/agent-runtime-ipc",
     "src/crates/assembly/agent-content",
     "src/crates/assembly/core",
     "src/crates/assembly/external-sources",

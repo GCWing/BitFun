@@ -145,12 +145,14 @@ unsupported and keeps the draft unchanged.
 bitfun chat --shared
 ```
 
-Shared TUI lets multiple terminal processes reuse one workspace Runtime. Each
-TUI controls at most one session and a session has one controller. Core chat,
-Shell mode, session navigation, read-only subagent transcript inspection,
-model/mode selection, permissions, and transcript events use the same behavior
-as Embedded TUI. Some local management and attachment capabilities remain
-Embedded-only and report that limitation instead of silently falling back.
+Shared TUI lets multiple terminal processes reuse one workspace Runtime through
+the Shared App Server. Clients can subscribe to, observe, and control the same
+session; independent turns are still admitted serially by the single Runtime
+owner, and steer or cancel targets an exact turn. Core chat, Shell mode, session
+navigation, read-only subagent transcript inspection, model/mode selection,
+permissions, management, and transcript events use the same typed App Server
+behavior as Embedded TUI. Unsupported attachments report that limitation
+instead of silently falling back.
 
 Exit all Shared TUI clients and wait briefly before returning to the default
 Embedded mode for the same workspace.

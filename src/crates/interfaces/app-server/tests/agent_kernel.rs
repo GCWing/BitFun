@@ -45,13 +45,20 @@ use bitfun_app_server::schema::{
 };
 use bitfun_app_server::{transport, AppClient, AppServer, BitfunAppRuntime, BitfunAppServer};
 use bitfun_app_server_protocol::agent as protocol_agent;
-use bitfun_app_server_protocol::app::{ClientInfo, HealthStatus, InitializeRequest};
+use bitfun_app_server_protocol::app::{
+    ClientInfo, HealthStatus, InitializeRequest, TransportLimits,
+};
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::event::{AgentEventNotification, EventStream, SyncEventsRequest};
 use bitfun_app_server_protocol::session as protocol_session;
 use bitfun_app_server_protocol::workspace as protocol_workspace;
 use bitfun_app_server_protocol::PROTOCOL_VERSION;
+
+use bitfun_app_server_protocol::account::{
+    AccountSnapshotRequest, SettingsSyncSnapshotRequest,
+};
 use bitfun_runtime_ports as ports;
+
 use tokio::task::LocalSet;
 
 /// Minimal `AgentSubmissionPort` mock modeled on `sdk_minimal.rs`.
@@ -354,8 +361,18 @@ impl ports::AgentSessionManagementPort for Phase2Provider {
 
     async fn resolve_session_workspace_binding(
         &self,
-        _request: ports::AgentSessionWorkspaceRequest,
+        request: ports::AgentSessionWorkspaceRequest,
     ) -> PortResult<Option<ports::AgentSessionWorkspaceBinding>> {
+        if request.session_id == "remote-session" {
+            return Ok(Some(ports::AgentSessionWorkspaceBinding {
+                workspace_id: Some("remote-workspace-1".to_string()),
+                workspace_path: "/remote/workspace".to_string(),
+                project_workspace_path: Some("/remote/workspace".to_string()),
+                execution_target: None,
+                remote_connection_id: Some("remote-1".to_string()),
+                remote_ssh_host: Some("ssh.example.test".to_string()),
+            }));
+        }
         Ok(Some(ports::AgentSessionWorkspaceBinding {
             workspace_id: Some("workspace-1".to_string()),
             workspace_path: "/authoritative/workspace".to_string(),
@@ -815,6 +832,112 @@ async fn phase2_sync_aggregates_authoritative_session_state() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn remote_session_does_not_block_host_config() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            let (runtime, _provider) = build_phase2_app_runtime();
+            spawn_server(runtime, server_transport);
+
+            let client = bitfun_app_server_client::connect(client_transport)
+                .await
+                .expect("connect app server client");
+            let response = client
+                .sync_session(protocol_session::SyncSessionRequest {
+                    workspace_path: "/requested/remote".to_string(),
+                    session_id: "remote-session".to_string(),
+                    include_internal: false,
+                    remote_connection_id: Some("remote-1".to_string()),
+                    remote_ssh_host: Some("ssh.example.test".to_string()),
+                })
+                .await
+                .expect("sync remote session");
+            assert_eq!(
+                response.workspace_binding.remote_connection_id.as_deref(),
+                Some("remote-1")
+            );
+
+            // Host config is host-runtime state owned by the local agent
+            // runtime that executes the session, so it must NOT be rejected by
+            // the remote workspace scope gate. The harness has no global config
+            // service loaded, so the call fails later for that reason -- but
+            // crucially not with the remote-scope rejection.
+            let error = client
+                .validate_config()
+                .await
+                .expect_err("validate_config needs a global config service in the harness");
+            assert!(
+                !error.message.contains("Remote workspace"),
+                "host config must not hit the remote workspace scope gate: {}",
+                error.message
+            );
+            client.shutdown().await;
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn remote_session_allows_account_scoped_capabilities() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            let (runtime, _provider) = build_phase2_app_runtime();
+            spawn_server(runtime, server_transport);
+
+            let client = bitfun_app_server_client::connect(client_transport)
+                .await
+                .expect("connect app server client");
+            let _response = client
+                .sync_session(protocol_session::SyncSessionRequest {
+                    workspace_path: "/requested/remote".to_string(),
+                    session_id: "remote-session".to_string(),
+                    include_internal: false,
+                    remote_connection_id: Some("remote-1".to_string()),
+                    remote_ssh_host: Some("ssh.example.test".to_string()),
+                })
+                .await
+                .expect("sync remote session");
+
+            // Account and settings-sync are account-level capabilities.  The
+            // scope gate must let them through even for a remote workspace.
+            // The management service is not loaded in this test harness, so
+            // the call fails later with a generic "Host does not provide"
+            // error 鈥?but crucially NOT with the remote-scope rejection.
+            for error in [
+                client
+                    .account_snapshot(AccountSnapshotRequest {
+                        workspace_path: "/requested/remote".to_string(),
+                    })
+                    .await
+                    .expect_err("account snapshot needs a management service"),
+                client
+                    .settings_sync_snapshot(SettingsSyncSnapshotRequest {
+                        workspace_path: "/requested/remote".to_string(),
+                    })
+                    .await
+                    .expect_err("settings sync needs a management service"),
+            ] {
+                let data: AppServerErrorData = serde_json::from_value(
+                    error
+                        .data
+                        .expect("account error should carry stable data"),
+                )
+                .expect("account error data should match the wire contract");
+                assert_eq!(data.kind, AppServerErrorKind::Unsupported);
+                assert!(
+                    !error.message.contains("Remote workspace"),
+                    "account-scoped capability must not hit the remote scope gate: {}",
+                    error.message
+                );
+            }
+            client.shutdown().await;
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn phase2_mutations_route_through_runtime_owner_ports() {
     let local = LocalSet::new();
     local
@@ -1058,6 +1181,31 @@ fn spawn_server(
     });
 }
 
+fn spawn_server_with_transport_limits(
+    runtime: BitfunAppRuntime,
+    transport: impl agent_client_protocol::ConnectTo<AppServer> + 'static,
+    limits: TransportLimits,
+) {
+    tokio::task::spawn_local(async move {
+        let _ = BitfunAppServer::new(runtime)
+            .with_transport_limits(limits)
+            .serve(transport)
+            .await;
+    });
+}
+
+fn spawn_shared_server(
+    runtime: BitfunAppRuntime,
+    transport: impl agent_client_protocol::ConnectTo<AppServer> + 'static,
+) {
+    tokio::task::spawn_local(async move {
+        let _ = BitfunAppServer::new(runtime)
+            .require_session_subscriptions(true)
+            .serve(transport)
+            .await;
+    });
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn lightweight_client_negotiates_with_the_production_server() {
     let local = LocalSet::new();
@@ -1092,6 +1240,8 @@ async fn lightweight_client_negotiates_with_the_production_server() {
                 .collect::<std::collections::HashSet<_>>();
             for method in [
                 "session/sync",
+                "session/subscribe",
+                "session/unsubscribe",
                 "agent/steerTurn",
                 "agent/runUserShellCommand",
                 "agent/submitUserAnswers",
@@ -1154,6 +1304,43 @@ async fn lightweight_client_negotiates_with_the_production_server() {
             assert!(!data.retryable);
             assert!(!data.outcome_unknown);
             assert_eq!(data.capability.as_deref(), Some("app.initialize"));
+            client.shutdown().await;
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn initialize_advertises_the_host_supplied_transport_limits() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            let limits = TransportLimits {
+                max_request_bytes: 128 * 1024,
+                max_response_bytes: 8 * 1024 * 1024,
+                max_frame_bytes: 128 * 1024,
+                event_buffer_capacity: 1024,
+            };
+            spawn_server_with_transport_limits(
+                build_app_runtime(),
+                server_transport,
+                limits.clone(),
+            );
+
+            let client = bitfun_app_server_client::connect(client_transport)
+                .await
+                .expect("connect app server client");
+            let initialized = client
+                .initialize(InitializeRequest {
+                    protocol_version: PROTOCOL_VERSION,
+                    client: ClientInfo {
+                        name: "transport-limit-test".to_string(),
+                        version: env!("CARGO_PKG_VERSION").to_string(),
+                    },
+                })
+                .await
+                .expect("initialize should return Host limits");
+            assert_eq!(initialized.limits, limits);
             client.shutdown().await;
         })
         .await;
@@ -1640,6 +1827,97 @@ async fn runtime_events_are_forwarded_as_agent_event_notifications() {
             ));
         })
         .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn shared_connections_receive_only_their_subscribed_session_events() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_a, client_a_transport) = transport::in_memory_channel_pair();
+            let (server_b, client_b_transport) = transport::in_memory_channel_pair();
+            let (runtime, event_queue) = build_app_runtime_with_queue();
+            spawn_shared_server(runtime.clone(), server_a);
+            spawn_shared_server(runtime, server_b);
+
+            let client_a = bitfun_app_server_client::connect(client_a_transport)
+                .await
+                .expect("connect first shared client");
+            let client_b = bitfun_app_server_client::connect(client_b_transport)
+                .await
+                .expect("connect second shared client");
+            let mut events_a = client_a.subscribe_events();
+            let mut events_b = client_b.subscribe_events();
+
+            client_a
+                .subscribe_session("session-1")
+                .await
+                .expect("subscribe first client to session-1");
+            client_b
+                .subscribe_session("session-2")
+                .await
+                .expect("subscribe second client to session-2");
+
+            enqueue_session_state(&event_queue, "session-1", "first").await;
+            assert_eq!(next_agent_session(&mut events_a).await, "session-1");
+            assert!(
+                tokio::time::timeout(Duration::from_millis(150), events_b.recv())
+                    .await
+                    .is_err()
+            );
+
+            client_b
+                .subscribe_session("session-1")
+                .await
+                .expect("subscribe second client to session-1");
+            enqueue_session_state(&event_queue, "session-1", "second").await;
+            assert_eq!(next_agent_session(&mut events_a).await, "session-1");
+            assert_eq!(next_agent_session(&mut events_b).await, "session-1");
+
+            client_a
+                .unsubscribe_session("session-1")
+                .await
+                .expect("unsubscribe first client from session-1");
+            enqueue_session_state(&event_queue, "session-1", "third").await;
+            assert_eq!(next_agent_session(&mut events_b).await, "session-1");
+            assert!(
+                tokio::time::timeout(Duration::from_millis(150), events_a.recv())
+                    .await
+                    .is_err()
+            );
+        })
+        .await;
+}
+
+async fn enqueue_session_state(event_queue: &EventQueue, session_id: &str, state: &str) {
+    event_queue
+        .enqueue(
+            AgenticEvent::SessionStateChanged {
+                session_id: session_id.to_string(),
+                new_state: state.to_string(),
+            },
+            None,
+        )
+        .await
+        .expect("session event should enqueue");
+}
+
+async fn next_agent_session(
+    events: &mut tokio::sync::broadcast::Receiver<bitfun_app_server_client::AppServerEvent>,
+) -> String {
+    let event = tokio::time::timeout(Duration::from_secs(2), events.recv())
+        .await
+        .expect("shared client should receive an event")
+        .expect("shared client event stream should stay open");
+    let bitfun_app_server_client::AppServerEvent::Agent(notification) = event else {
+        panic!("expected Agent event");
+    };
+    notification
+        .event
+        .event
+        .session_id()
+        .expect("test Agent event should carry a Session ID")
+        .to_string()
 }
 
 #[derive(

@@ -451,7 +451,7 @@ fn terminal_event_allowed_while_local_effect_pending(event: &Event) -> bool {
 }
 
 const SESSION_OPERATION_SLOW_NOTICE: Duration = Duration::from_secs(15);
-const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, and declarative context via /reload [skills|instructions]. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Local extension, account-sync, usage, and other management remain Embedded.";
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI: connected through the Shared App Server. Multiple clients can subscribe to the same Session; independent turns remain serialized by the Runtime owner. Session and management requests run in the Shared App Server Host.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {

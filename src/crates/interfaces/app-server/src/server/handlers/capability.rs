@@ -12,11 +12,13 @@ use bitfun_product_domains::external_sources::{
 use crate::management::{AppManagementError, AppManagementErrorKind, AppManagementService};
 
 macro_rules! management_handler {
-    ($management:ident, $capability:expr, $request:ty, $method:ident) => {{
+    ($management:ident, $event_state:ident, $capability:expr, $request:ty, $method:ident) => {{
         let management = $management.clone();
+        let event_state = $event_state.clone();
         async move |request: $request, responder, _cx| {
             let management = crate::server::handlers::capability::require_management(
                 management.as_deref(),
+                event_state.as_ref(),
                 $capability,
             )?;
             responder.respond_with_result(management.$method(request).await.map_err(|error| {
@@ -29,13 +31,45 @@ pub(super) use management_handler;
 
 pub(super) fn require_management<'a>(
     management: Option<&'a AppManagementService>,
+    event_state: &crate::server::ConnectionEventState,
     capability: &str,
 ) -> Result<&'a AppManagementService, Error> {
+    require_workspace_local_scope(event_state, capability)?;
     let management = management.ok_or_else(|| unsupported(capability))?;
     match management.capabilities().availability(capability) {
         Some(CapabilityAvailability::Available) => Ok(management),
         Some(CapabilityAvailability::Unavailable { .. }) | None => Err(unsupported(capability)),
     }
+}
+
+pub(super) fn require_workspace_local_scope(
+    event_state: &crate::server::ConnectionEventState,
+    capability: &str,
+) -> Result<(), Error> {
+    if !is_workspace_bound_capability(capability) || event_state.allows_local_management() {
+        Ok(())
+    } else {
+        Err(error_with_data(
+            AppServerErrorKind::Unsupported,
+            capability,
+            "This workspace-scoped capability is unavailable for a Remote workspace",
+        ))
+    }
+}
+
+/// Only capabilities that are bound to the local workspace / execution target
+/// are unavailable for a Remote workspace. Worktree binding and per-workspace
+/// external-source catalogs operate on the local filesystem path, which is not
+/// the authoritative location when the workspace files live on a remote host.
+/// Host-runtime configuration (model, mode, skill, subagent, MCP, hooks, and
+/// account/settings-sync) is owned and consumed by the local agent runtime that
+/// executes the session, so it stays manageable regardless of where the
+/// workspace files live.
+fn is_workspace_bound_capability(capability: &str) -> bool {
+    matches!(
+        capability,
+        crate::management::WORKTREES_CAPABILITY | crate::management::EXTERNAL_SOURCES_CAPABILITY
+    )
 }
 
 fn unsupported(capability: &str) -> Error {
@@ -132,11 +166,15 @@ fn error_with_data(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::management::{EXTERNAL_SOURCES_CAPABILITY, MODELS_CAPABILITY, WORKTREES_CAPABILITY};
+    use crate::management::{
+        ACCOUNT_CAPABILITY, EXTERNAL_SOURCES_CAPABILITY, MODELS_CAPABILITY,
+        SETTINGS_SYNC_CAPABILITY, WORKTREES_CAPABILITY,
+    };
 
     #[test]
     fn missing_management_service_returns_structured_unsupported_without_fallback() {
-        let error = match require_management(None, MODELS_CAPABILITY) {
+        let event_state = crate::server::ConnectionEventState::new(true);
+        let error = match require_management(None, &event_state, MODELS_CAPABILITY) {
             Ok(_) => panic!("management service should be required"),
             Err(error) => error,
         };
@@ -151,6 +189,65 @@ mod tests {
         assert_eq!(data.capability.as_deref(), Some(MODELS_CAPABILITY));
         assert!(!data.retryable);
         assert!(!data.outcome_unknown);
+    }
+
+    #[test]
+    fn remote_workspace_rejects_workspace_bound_capabilities_before_owner_access() {
+        let event_state = crate::server::ConnectionEventState::new(true);
+        event_state.set_management_scope_from_binding(
+            &bitfun_runtime_ports::AgentSessionWorkspaceBinding {
+                workspace_id: None,
+                workspace_path: "/remote/workspace".to_string(),
+                project_workspace_path: None,
+                execution_target: None,
+                remote_connection_id: Some("remote-1".to_string()),
+                remote_ssh_host: None,
+            },
+        );
+        // Only workspace-bound capabilities (worktrees, per-workspace external
+        // sources) are unavailable for a remote workspace. They must fail
+        // closed before any local owner access.
+        for capability in [WORKTREES_CAPABILITY, EXTERNAL_SOURCES_CAPABILITY] {
+            let error = match require_management(None, &event_state, capability) {
+                Ok(_) => panic!("remote workspace-bound management must fail closed before local owner access"),
+                Err(error) => error,
+            };
+            let data: AppServerErrorData = serde_json::from_value(
+                error
+                    .data
+                    .expect("unsupported error should carry structured data"),
+            )
+            .expect("parse app server error data");
+            assert_eq!(data.kind, AppServerErrorKind::Unsupported);
+            assert_eq!(data.capability.as_deref(), Some(capability));
+            assert!(error.message.contains("Remote workspace"));
+        }
+    }
+
+    #[test]
+    fn remote_workspace_allows_host_runtime_capabilities() {
+        let event_state = crate::server::ConnectionEventState::new(true);
+        event_state.set_management_scope_from_binding(
+            &bitfun_runtime_ports::AgentSessionWorkspaceBinding {
+                workspace_id: None,
+                workspace_path: "/remote/workspace".to_string(),
+                project_workspace_path: None,
+                execution_target: None,
+                remote_connection_id: Some("remote-1".to_string()),
+                remote_ssh_host: Some("ssh.example.test".to_string()),
+            },
+        );
+        // Host-runtime config (model catalog, account, settings-sync) is owned
+        // by the local agent runtime that executes the session, so it must pass
+        // the remote scope gate regardless of where the workspace files live.
+        for capability in [
+            MODELS_CAPABILITY,
+            ACCOUNT_CAPABILITY,
+            SETTINGS_SYNC_CAPABILITY,
+        ] {
+            require_workspace_local_scope(&event_state, capability)
+                .expect("host-runtime capability must pass the remote scope gate");
+        }
     }
 
     #[test]

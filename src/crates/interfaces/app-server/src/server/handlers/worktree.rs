@@ -9,6 +9,7 @@ use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
     management: Option<Arc<AppManagementService>>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -16,6 +17,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 WORKTREES_CAPABILITY,
                 WorktreeRepositoryStatusRequest,
                 worktree_repository_status
@@ -25,6 +27,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 WORKTREES_CAPABILITY,
                 WorktreeBindSessionRequest,
                 worktree_bind_session
@@ -34,6 +37,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 WORKTREES_CAPABILITY,
                 WorktreeReleaseSessionRequest,
                 worktree_release_session

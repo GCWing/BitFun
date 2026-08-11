@@ -16,6 +16,7 @@ use crate::schema::*;
 pub(in crate::server) fn builder(
     runtime: Arc<BitfunAppRuntime>,
     management: Option<Arc<AppManagementService>>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -23,6 +24,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 MODES_CAPABILITY,
                 ListAgentModesRequest,
                 list_agent_modes
@@ -32,14 +34,33 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: CreateSessionMessage, responder, _cx| {
-                    responder.respond_with_result(runtime_call(
+                    event_state.set_local_management_scope(false);
+                    let result = runtime_call(
                         runtime
                             .runtime()
                             .create_session(request.0)
                             .await
                             .map(CreateSessionResponse),
-                    ))
+                    );
+                    if let Ok(response) = &result {
+                        let session_id = response.0.session_id.clone();
+                        event_state.subscribe_session(session_id.clone());
+                        match runtime
+                            .runtime()
+                            .resolve_session_workspace_binding(
+                                bitfun_runtime_ports::AgentSessionWorkspaceRequest { session_id },
+                            )
+                            .await
+                        {
+                            Ok(Some(binding)) => {
+                                event_state.set_management_scope_from_binding(&binding)
+                            }
+                            Ok(None) | Err(_) => event_state.set_local_management_scope(false),
+                        }
+                    }
+                    responder.respond_with_result(result)
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -67,8 +88,10 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: SubmitTurnMessage, responder, _cx| {
                     let session_id = request.0.session_id.clone();
+                    event_state.subscribe_session(session_id.clone());
                     responder.respond_with_result(
                         runtime
                             .runtime()
@@ -86,8 +109,10 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: SubmitDialogTurnMessage, responder, _cx| {
                     let session_id = request.0.session_id.clone();
+                    event_state.subscribe_session(session_id.clone());
                     responder.respond_with_result(
                         runtime
                             .runtime()
@@ -105,9 +130,14 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: RunMessage, responder, _cx| {
+                    if let RunSessionSpec::Existing { session_id } = &request.session {
+                        event_state.subscribe_session(session_id.clone());
+                    }
                     let handle =
                         runtime_call(runtime.runtime().run(request.to_run_request()).await)?;
+                    event_state.subscribe_session(handle.session_id.clone());
                     responder.respond(RunResponse::from_handle(handle))
                 }
             },
@@ -116,14 +146,16 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: CancelTurnMessage, responder, _cx| {
-                    responder.respond_with_result(runtime_call(
-                        runtime
-                            .runtime()
-                            .cancel_turn(request.0)
-                            .await
-                            .map(CancelTurnResponse),
-                    ))
+                    event_state.subscribe_session(request.0.session_id.clone());
+                    let result = runtime
+                        .runtime()
+                        .cancel_turn(request.0)
+                        .await
+                        .map(CancelTurnResponse)
+                        .map_err(BitfunAppRuntime::runtime_error);
+                    responder.respond_with_result(result)
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -131,8 +163,10 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: SteerTurnRequest, responder, _cx| {
                     let session_id = request.0.session_id.clone();
+                    event_state.subscribe_session(session_id.clone());
                     responder.respond_with_result(
                         runtime
                             .runtime()
@@ -154,8 +188,10 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: RunUserShellCommandRequest, responder, _cx| {
                     let session_id = request.0.session_id.clone();
+                    event_state.subscribe_session(session_id.clone());
                     responder.respond_with_result(
                         runtime
                             .runtime()

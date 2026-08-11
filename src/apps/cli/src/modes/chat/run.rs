@@ -710,7 +710,7 @@ impl ChatMode {
                                 }
                                 Err(error) => {
                                     let mut failure = format!(
-                                        "Shared Runtime permission state could not be resynchronized: {}",
+                                        "Shared App Server permission state could not be resynchronized: {}",
                                         error
                                     );
                                     let agent = self.agent.clone();
@@ -730,7 +730,7 @@ impl ChatMode {
                         }
                         Err(TryRecvError::Closed) => {
                             let mut failure =
-                                "Shared Runtime permission event stream closed".to_string();
+                                "Shared App Server permission event stream closed".to_string();
                             let agent = self.agent.clone();
                             if let Err(error) = tokio::task::block_in_place(|| {
                                 rt_handle.block_on(agent.cancel_current_turn())

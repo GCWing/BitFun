@@ -10,7 +10,7 @@ use anyhow::Result;
 use bitfun_app_server_client::AppServerEvent;
 use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::agent::*;
-use bitfun_app_server_protocol::event::EventStreamState;
+use bitfun_app_server_protocol::event::{EventStream, EventStreamState};
 use bitfun_app_server_protocol::external_source::*;
 use bitfun_app_server_protocol::hook::*;
 use bitfun_app_server_protocol::mcp::*;
@@ -1686,10 +1686,11 @@ fn spawn_event_bridge(
                     // The next TUI snapshot request is the authoritative recovery path.
                 }
                 Ok(AppServerEvent::StreamState(notification))
-                    if matches!(
-                        notification.state,
-                        EventStreamState::Closed | EventStreamState::Invalidated
-                    ) =>
+                    if notification.stream == EventStream::Agent
+                        && matches!(
+                            notification.state,
+                            EventStreamState::Closed | EventStreamState::Invalidated
+                        ) =>
                 {
                     send_stream_error(
                         &agent_sender,
@@ -1771,4 +1772,100 @@ fn default_session_name() -> String {
         "CLI Session - {}",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_app_server_protocol::event::{
+        AgentEventNotification, EventCursor, EventStreamStateNotification, ResyncDirective,
+    };
+
+    fn cursor(stream: EventStream, sequence: u64) -> EventCursor {
+        EventCursor {
+            connection_id: "connection-1".to_string(),
+            stream,
+            sequence,
+        }
+    }
+
+    fn stream_state(stream: EventStream, state: EventStreamState, sequence: u64) -> AppServerEvent {
+        AppServerEvent::StreamState(EventStreamStateNotification {
+            cursor: cursor(stream, sequence),
+            stream,
+            state,
+            missed: None,
+            resync: ResyncDirective {
+                method: "app/syncEvents".to_string(),
+                snapshot_available: true,
+                reason: Some("test stream state".to_string()),
+            },
+        })
+    }
+
+    #[tokio::test]
+    async fn non_agent_stream_closure_keeps_agent_delivery_alive() {
+        let (source, source_rx) = broadcast::channel(8);
+        let (agent_sender, _) = broadcast::channel(8);
+        let (permission_sender, _) = broadcast::channel(8);
+        let (external_source_sender, _) = broadcast::channel(8);
+        let agent_owner = Arc::new(RwLock::new(Some(agent_sender.clone())));
+        let permission_owner = Arc::new(RwLock::new(Some(permission_sender.clone())));
+        let external_source_owner = Arc::new(RwLock::new(Some(external_source_sender.clone())));
+        let pending = Arc::new(RwLock::new(HashMap::new()));
+        let mut agent_events = agent_sender.subscribe();
+
+        spawn_event_bridge(
+            source_rx,
+            agent_sender,
+            permission_sender,
+            external_source_sender,
+            agent_owner.clone(),
+            permission_owner,
+            external_source_owner,
+            pending,
+        );
+
+        source
+            .send(stream_state(
+                EventStream::Permission,
+                EventStreamState::Closed,
+                1,
+            ))
+            .expect("permission stream state");
+        source
+            .send(stream_state(
+                EventStream::Config,
+                EventStreamState::Invalidated,
+                1,
+            ))
+            .expect("config stream state");
+        source
+            .send(AppServerEvent::Agent(AgentEventNotification {
+                cursor: cursor(EventStream::Agent, 1),
+                event: AgenticEventEnvelope::new(
+                    AgenticEvent::SessionStateChanged {
+                        session_id: "session-1".to_string(),
+                        new_state: "idle".to_string(),
+                    },
+                    AgenticEventPriority::Normal,
+                ),
+            }))
+            .expect("agent event");
+
+        let delivered =
+            tokio::time::timeout(std::time::Duration::from_secs(1), agent_events.recv())
+                .await
+                .expect("agent event delivery timed out")
+                .expect("agent event stream closed");
+        assert!(matches!(
+            delivered.event,
+            AgenticEvent::SessionStateChanged { ref session_id, .. }
+                if session_id == "session-1"
+        ));
+        assert!(agent_owner
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_some());
+    }
 }

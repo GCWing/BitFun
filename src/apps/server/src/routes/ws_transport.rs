@@ -23,6 +23,8 @@ use futures::{Sink, Stream};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 
+use crate::app_server::MAX_WEBSOCKET_FRAME_BYTES;
+
 /// Bridge an axum WebSocket into an ACP `Lines` transport for
 /// `BitfunAppServer::serve(lines)`.
 ///
@@ -57,6 +59,12 @@ impl Sink<String> for WSSink {
 
     fn start_send(self: Pin<&mut Self>, item: String) -> Result<(), Self::Error> {
         let this = self.get_mut();
+        if item.len() > MAX_WEBSOCKET_FRAME_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "ws outgoing frame exceeds the Host transport limit",
+            ));
+        }
         this.sink
             .start_send_unpin(Message::Text(item.into()))
             .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "ws send failed"))

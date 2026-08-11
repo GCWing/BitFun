@@ -71,6 +71,19 @@ pub(super) async fn run(
         tokio::select! {
             recv = rx.recv() => match recv {
                 Ok(envelope) => {
+                    if let bitfun_events::AgenticEvent::SubagentSessionLinked {
+                        session_id,
+                        parent_session_id,
+                        ..
+                    } = &envelope.event
+                    {
+                        event_state.subscribe_descendant(parent_session_id, session_id);
+                    }
+                    if let Some(session_id) = envelope.event.session_id() {
+                        if !event_state.accepts_session(session_id) {
+                            continue;
+                        }
+                    }
                     let notification = SessionEventNotification {
                         cursor: event_state.next_cursor(EventStream::Agent),
                         event: envelope,
@@ -90,6 +103,22 @@ pub(super) async fn run(
             },
             recv = permission_recv => match recv {
                 Some(Ok(event)) => {
+                    let accepted = match &event {
+                        PermissionRequestEvent::Asked { request } => {
+                            let accepted = event_state.accepts_permission(request);
+                            if accepted {
+                                event_state.remember_permission(request.request_id.clone());
+                            }
+                            accepted
+                        }
+                        PermissionRequestEvent::Replied { request_id, .. }
+                        | PermissionRequestEvent::Cancelled { request_id, .. } => {
+                            event_state.take_permission(request_id)
+                        }
+                    };
+                    if !accepted {
+                        continue;
+                    }
                     let notification = PermissionEventNotification {
                         cursor: event_state.next_cursor(EventStream::Permission),
                         event,
@@ -127,6 +156,9 @@ pub(super) async fn run(
             },
             recv = external_source_recv => match recv {
                 Some(Ok((workspace_path, snapshot))) => {
+                    if !event_state.allows_local_management() {
+                        continue;
+                    }
                     if let Err(error) = cx.send_notification(ExternalSourceEventNotification {
                         cursor: event_state.next_cursor(EventStream::ExternalSource),
                         workspace_path,

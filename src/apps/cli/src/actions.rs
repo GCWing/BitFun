@@ -143,7 +143,7 @@ pub(crate) fn shared_tui_image_attachment_error() -> String {
     format!("Image attachments are unavailable in Shared TUI. {SHARED_TUI_EMBEDDED_HANDOFF}.")
 }
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` and `/connect` to manage models, `/skills` to manage skills, `/mcp` to manage MCP servers, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Extensions, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime through the Shared App Server and can subscribe to the same Session; independent turns remain serialized by the Runtime owner. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` and `/connect` to manage models, `/skills` to manage skills, `/mcp` to manage MCP servers, and `/reload [skills|instructions]` to refresh declarative context for the next message. Management requests run in the Shared App Server Host. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, _context: ActionContext) -> bool {
@@ -2148,7 +2148,8 @@ mod tests {
         assert!(ActionHandler::Skills.available_in_shared_tui(ActionContext::Startup));
         assert!(ActionHandler::McpServers.available_in_shared_tui(ActionContext::Startup));
         assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
-        assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("subscribe to the same Session"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("turns remain serialized"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/models`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/connect`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/skills`"));
@@ -2159,10 +2160,7 @@ mod tests {
         assert!(SHARED_TUI_HELP_NOTE.contains("`/reload [skills|instructions]`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("Ctrl+D"));
         assert!(SHARED_TUI_HELP_NOTE.contains("idle, non-current Session"));
-        assert!(SHARED_TUI_HELP_NOTE.contains("local compatibility owner"));
-        assert!(SHARED_TUI_HELP_NOTE
-            .contains("do not reconfigure an already-running Shared Runtime Host"));
-        assert!(SHARED_TUI_HELP_NOTE.contains("remain Embedded"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("Shared App Server Host"));
     }
 
     #[test]

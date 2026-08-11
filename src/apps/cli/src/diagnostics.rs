@@ -3,7 +3,6 @@
 use std::path::Path;
 
 use bitfun_agent_runtime::sdk::{PortErrorKind, RuntimeError};
-use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcErrorCode};
 
 pub(crate) const EXIT_LINE_PREFIX: &str = "BITFUN_EXIT: ";
 pub(crate) const DETAIL_MAX_LEN: usize = 500;
@@ -77,10 +76,6 @@ pub(crate) fn cli_error_code(error: &anyhow::Error) -> Option<&'static str> {
             cause.downcast_ref::<RuntimeError>(),
             Some(RuntimeError::Port(port_error))
                 if port_error.kind == PortErrorKind::SessionInUse
-        ) || matches!(
-            cause.downcast_ref::<RuntimeIpcClientError>(),
-            Some(RuntimeIpcClientError::Remote(remote))
-                if remote.code == RuntimeIpcErrorCode::SessionInUse
         )
     });
     session_in_use.then_some(SESSION_IN_USE_ERROR_CODE)
@@ -118,7 +113,6 @@ pub(crate) fn emit_exit_diagnostic(kind: ExitKind, detail: &str, ctx: &ExitConte
 mod tests {
     use super::*;
     use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
-    use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode};
 
     #[test]
     fn format_exit_line_uses_stable_prefix_and_kind() {
@@ -149,20 +143,6 @@ mod tests {
             PortErrorKind::SessionInUse,
             "Session is already open for writing: session-1",
         )));
-
-        assert_eq!(cli_error_code(&error), Some(SESSION_IN_USE_ERROR_CODE));
-        assert_eq!(
-            user_facing_error_message(&error),
-            SESSION_IN_USE_USER_MESSAGE
-        );
-    }
-
-    #[test]
-    fn shared_session_conflict_uses_the_same_cli_projection() {
-        let error = anyhow::Error::new(RuntimeIpcClientError::Remote(RuntimeIpcError {
-            code: RuntimeIpcErrorCode::SessionInUse,
-            message: "Session is already open for writing: session-1".to_string(),
-        }));
 
         assert_eq!(cli_error_code(&error), Some(SESSION_IN_USE_ERROR_CODE));
         assert_eq!(

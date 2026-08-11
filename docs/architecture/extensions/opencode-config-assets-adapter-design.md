@@ -296,7 +296,7 @@ Agent Registry 按 role 从同一个 workspace route 和 generation registry 投
 同名本地模式静默接管，但不持久化 provider、generation 或 `runtime_agent_key`。每个主 Turn 或 fresh Task 在执行前取得运行租约，
 固定 `runtime_agent_key`、prompt、工具、权限与模型绑定直到结束，更新和撤下只影响下一次调用；外部 route 不可用时保持失败关闭，
 只有用户显式选择当前冲突候选才会改变 route owner。显式模型只作为新 Session 无显式选择时的 profile 默认值，后续用户模型
-选择仍归 Session owner。Shared TUI 通过既有私有 Agent Runtime IPC 读取执行宿主的同一主 Agent 投影视图，协议只携带选择器所需
+选择仍归 Session owner。Shared TUI 通过 Shared App Server 读取执行宿主的同一主 Agent 投影视图，wire 只携带选择器所需
 摘要，不携带来源状态或 prompt；Embedded TUI、Desktop 和 Peer Host 仍消费同一个 Agent Registry owner。当前不支持外部 session
 follow-up、OpenCode 会话内核、完整 permission DSL 或 package plugin。Desktop/TUI 摘要不包含 prompt
 正文，静态 system prompt 也不因该适配而改写。来源 `description` 只进入审批和管理界面；已批准 Agent

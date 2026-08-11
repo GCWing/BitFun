@@ -14,7 +14,10 @@
 //! (cheap `Clone` via the inner `Arc`); `serve` runs once per WS connection.
 
 use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
+use bitfun_app_server::schema::TransportLimits;
 use bitfun_app_server::{BitfunAppRuntime, BitfunAppServer};
+
+pub(crate) const MAX_WEBSOCKET_FRAME_BYTES: usize = 256 * 1024;
 
 /// Build the in-process `BitfunAppServer` for the Server Host.
 ///
@@ -28,5 +31,10 @@ use bitfun_app_server::{BitfunAppRuntime, BitfunAppServer};
 /// [`BitfunAppServer`] is in use.
 pub(crate) fn build(runtime: AgentRuntime, event_source: AgentEventSource) -> BitfunAppServer {
     let app_runtime = BitfunAppRuntime::new(runtime, event_source);
-    BitfunAppServer::new(app_runtime)
+    BitfunAppServer::new(app_runtime).with_transport_limits(TransportLimits {
+        max_request_bytes: MAX_WEBSOCKET_FRAME_BYTES as u64,
+        max_response_bytes: MAX_WEBSOCKET_FRAME_BYTES as u64,
+        max_frame_bytes: MAX_WEBSOCKET_FRAME_BYTES as u64,
+        event_buffer_capacity: 1024,
+    })
 }

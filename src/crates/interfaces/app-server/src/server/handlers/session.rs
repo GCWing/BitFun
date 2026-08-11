@@ -8,8 +8,10 @@ use bitfun_app_server_protocol::session::{
     RecordLocalCommandTurnRequest, RecordLocalCommandTurnResponse, RedoSessionRequest,
     ReloadContextRequest, ReloadContextResponse, ResolveWorkspaceRequest, ResolveWorkspaceResponse,
     RevertSessionResponse, SessionLineageRequest, SessionLineageResponse, SessionProcessingPhase,
-    SessionRuntimeState, SessionUsageRequest, SessionUsageResponse, SyncSessionRequest,
-    SyncSessionResponse, UndoSessionRequest, WaitForSettlementRequest, WaitForSettlementResponse,
+    SessionRuntimeState, SessionUsageRequest, SessionUsageResponse, SubscribeSessionRequest,
+    SubscribeSessionResponse, SyncSessionRequest, SyncSessionResponse, UndoSessionRequest,
+    UnsubscribeSessionRequest, UnsubscribeSessionResponse, WaitForSettlementRequest,
+    WaitForSettlementResponse,
 };
 use bitfun_runtime_ports::{AgentSessionWorkspaceBinding, SessionExecutionTarget};
 
@@ -19,10 +21,31 @@ use crate::schema::*;
 
 pub(in crate::server) fn builder(
     runtime: Arc<BitfunAppRuntime>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
         .name("session handlers")
+        .on_receive_request(
+            {
+                let event_state = event_state.clone();
+                async move |request: SubscribeSessionRequest, responder, _cx| {
+                    event_state.subscribe_session(request.session_id);
+                    responder.respond(SubscribeSessionResponse {})
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let event_state = event_state.clone();
+                async move |request: UnsubscribeSessionRequest, responder, _cx| {
+                    event_state.unsubscribe_session(&request.session_id);
+                    responder.respond(UnsubscribeSessionResponse {})
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
         .on_receive_request(
             {
                 let runtime = runtime.clone();
@@ -102,14 +125,19 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: ForkSessionMessage, responder, _cx| {
-                    responder.respond_with_result(runtime_call(
+                    let result = runtime_call(
                         runtime
                             .runtime()
                             .fork_session(request.0)
                             .await
                             .map(ForkSessionResponse),
-                    ))
+                    );
+                    if let Ok(response) = &result {
+                        event_state.subscribe_session(response.0.session_id.clone());
+                    }
+                    responder.respond_with_result(result)
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -117,14 +145,19 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: ForkSessionAtTurnMessage, responder, _cx| {
-                    responder.respond_with_result(runtime_call(
+                    let result = runtime_call(
                         runtime
                             .runtime()
                             .fork_session_at_turn(request.0)
                             .await
                             .map(ForkSessionResponse),
-                    ))
+                    );
+                    if let Ok(response) = &result {
+                        event_state.subscribe_session(response.0.session_id.clone());
+                    }
+                    responder.respond_with_result(result)
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -132,14 +165,19 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: ForkSessionBeforeTurnMessage, responder, _cx| {
-                    responder.respond_with_result(runtime_call(
+                    let result = runtime_call(
                         runtime
                             .runtime()
                             .fork_session_before_turn(request.0)
                             .await
                             .map(ForkSessionResponse),
-                    ))
+                    );
+                    if let Ok(response) = &result {
+                        event_state.subscribe_session(response.0.session_id.clone());
+                    }
+                    responder.respond_with_result(result)
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -147,18 +185,36 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: RestoreSessionMessage, responder, _cx| {
                     let session_id = request.session_id.clone();
-                    responder.respond_with_result(
-                        runtime
+                    event_state.set_local_management_scope(false);
+                    event_state.subscribe_session(session_id.clone());
+                    let result = runtime
+                        .runtime()
+                        .restore_session(request.into())
+                        .await
+                        .map(RestoreSessionResponse::from)
+                        .map_err(|error| {
+                            BitfunAppRuntime::session_runtime_error(&session_id, error)
+                        });
+                    if result.is_ok() {
+                        match runtime
                             .runtime()
-                            .restore_session(request.into())
+                            .resolve_session_workspace_binding(
+                                bitfun_runtime_ports::AgentSessionWorkspaceRequest {
+                                    session_id: session_id.clone(),
+                                },
+                            )
                             .await
-                            .map(RestoreSessionResponse::from)
-                            .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
-                            }),
-                    )
+                        {
+                            Ok(Some(binding)) => {
+                                event_state.set_management_scope_from_binding(&binding)
+                            }
+                            Ok(None) | Err(_) => event_state.set_local_management_scope(false),
+                        }
+                    }
+                    responder.respond_with_result(result)
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -166,9 +222,14 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |request: SyncSessionRequest, responder, _cx| {
                     let session_id = request.session_id.clone();
                     let workspace_path = request.workspace_path.clone();
+                    let remote_connection_id = request.remote_connection_id.clone();
+                    let remote_ssh_host = request.remote_ssh_host.clone();
+                    event_state.set_local_management_scope(false);
+                    event_state.subscribe_session(session_id.clone());
                     let restored = runtime
                         .runtime()
                         .restore_session(AgentSessionRestoreRequest {
@@ -193,7 +254,7 @@ pub(in crate::server) fn builder(
                             )
                             .await,
                     )?;
-                    let workspace_binding = runtime_call(
+                    let authoritative_binding = match runtime_call(
                         runtime
                             .runtime()
                             .resolve_session_workspace_binding(
@@ -202,15 +263,32 @@ pub(in crate::server) fn builder(
                                 },
                             )
                             .await,
-                    )?
-                    .unwrap_or_else(|| fallback_workspace_binding(workspace_path));
-                    let pending_permissions = runtime
-                        .runtime()
-                        .pending_permission_requests()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|permission| permission.session_id == session_id)
-                        .collect();
+                    ) {
+                        Ok(binding) => binding,
+                        Err(error) => {
+                            event_state.set_local_management_scope(false);
+                            return Err(error);
+                        }
+                    };
+                    if let Some(binding) = &authoritative_binding {
+                        event_state.set_management_scope_from_binding(binding);
+                    } else {
+                        event_state.set_local_management_scope(false);
+                    }
+                    let workspace_binding = authoritative_binding.unwrap_or_else(|| {
+                        fallback_workspace_binding(
+                            workspace_path,
+                            remote_connection_id,
+                            remote_ssh_host,
+                        )
+                    });
+                    let pending_permissions = event_state.filter_session_permissions(
+                        runtime
+                            .runtime()
+                            .pending_permission_requests()
+                            .unwrap_or_default(),
+                        &session_id,
+                    );
 
                     responder.respond(SyncSessionResponse {
                         session: restored.session,
@@ -426,14 +504,23 @@ pub(in crate::server) fn builder(
         )
 }
 
-fn fallback_workspace_binding(workspace_path: String) -> AgentSessionWorkspaceBinding {
+fn fallback_workspace_binding(
+    workspace_path: String,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
+) -> AgentSessionWorkspaceBinding {
+    let execution_target = if remote_connection_id.is_none() && remote_ssh_host.is_none() {
+        Some(SessionExecutionTarget::local(workspace_path.clone()))
+    } else {
+        None
+    };
     AgentSessionWorkspaceBinding {
         workspace_id: None,
         workspace_path: workspace_path.clone(),
         project_workspace_path: Some(workspace_path.clone()),
-        execution_target: Some(SessionExecutionTarget::local(workspace_path)),
-        remote_connection_id: None,
-        remote_ssh_host: None,
+        execution_target,
+        remote_connection_id,
+        remote_ssh_host,
     }
 }
 

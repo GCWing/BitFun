@@ -54,7 +54,6 @@ bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-core-types = { path = "../../crates/contracts/core-types" }
 bitfun-acp = { path = "../../crates/interfaces/acp" }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
-bitfun-agent-runtime-ipc = { path = "../../crates/adapters/agent-runtime-ipc" }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
 bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
 bitfun-services-core = { path = "../../crates/services/services-core", default-features = false, features = ["dispatch-workspace", "local-storage", "process-runtime", "runtime-ownership"] }
@@ -63,6 +62,7 @@ bitfun-product-domains = { path = "../../crates/contracts/product-domains", defa
 bitfun-app-server = { path = "../../crates/interfaces/app-server" }
 bitfun-app-server-client = { path = "../../crates/interfaces/app-server-client" }
 bitfun-app-server-protocol = { path = "../../crates/interfaces/app-server-protocol" }
+agent-client-protocol = { workspace = true }
 
 # CLI framework
 clap = { workspace = true }
@@ -109,7 +109,7 @@ libc = { workspace = true }
 arboard = { workspace = true }
 
 # Inherited from workspace
-tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tokio = { workspace = true, features = ["macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -117,6 +117,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
+tokio-util = { workspace = true, features = ["codec"] }
 fs2 = { workspace = true }
 base64 = { workspace = true }
 image = { workspace = true }

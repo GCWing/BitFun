@@ -9,6 +9,7 @@ use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
     management: Option<Arc<AppManagementService>>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -16,6 +17,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 NATIVE_HOOKS_CAPABILITY,
                 NativeHookOverviewRequest,
                 native_hook_overview
@@ -25,6 +27,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 EXTERNAL_HOOKS_CAPABILITY,
                 ExternalHookSnapshotRequest,
                 external_hook_snapshot
@@ -34,6 +37,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 EXTERNAL_HOOKS_CAPABILITY,
                 ExternalHookPlanRequest,
                 external_hook_plan
@@ -43,6 +47,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 EXTERNAL_HOOKS_CAPABILITY,
                 ExternalHookApplyRequest,
                 external_hook_apply
@@ -52,6 +57,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 EXTERNAL_HOOKS_CAPABILITY,
                 ExternalHookMutationRequest,
                 external_hook_mutate

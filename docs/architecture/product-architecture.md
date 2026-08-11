@@ -212,7 +212,7 @@ flowchart TB
 
   subgraph AdaptersLayer[" "]
     direction LR
-    AdaptersTitle["3 · Adapters"] ~~~ RuntimeIPC["Runtime IPC"] ~~~ ModelAdapters["Model Adapters"] ~~~ SourceAdapters["Source Adapters"] ~~~ Transport["Transport"] ~~~ WebDriver["WebDriver"]
+    AdaptersTitle["3 · Adapters"] ~~~ ModelAdapters["Model Adapters"] ~~~ SourceAdapters["Source Adapters"] ~~~ Transport["Transport"] ~~~ WebDriver["WebDriver"]
   end
 
   subgraph ServicesLayer[" "]
@@ -235,7 +235,7 @@ flowchart TB
   classDef header fill:#fafafa,stroke:#404040,stroke-width:1.6px,color:#171717;
   classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
   class AppsTitle,AssemblyTitle,AdaptersTitle,ServicesTitle,ExecutionTitle,ContractsTitle header;
-  class Desktop,CLI,Server,Relay,WebUI,MobileUI,ACP,SDKHost,AgentContent,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,ModelAdapters,SourceAdapters,Transport,WebDriver,CoreServices,Integrations,MiniAppMarket,RelayService,Terminal,PageRuntime,AgentRuntime,AgentStream,ToolRuntime,PluginClient,Harness,RuntimeServices,CoreTypes,Events,RuntimePorts,ProductDomains module;
+  class Desktop,CLI,Server,Relay,WebUI,MobileUI,ACP,SDKHost,AgentContent,CoreAssembly,ExternalSources,ProductCaps,ModelAdapters,SourceAdapters,Transport,WebDriver,CoreServices,Integrations,MiniAppMarket,RelayService,Terminal,PageRuntime,AgentRuntime,AgentStream,ToolRuntime,PluginClient,Harness,RuntimeServices,CoreTypes,Events,RuntimePorts,ProductDomains module;
   style AppsLayer fill:#ffffff,stroke:#a3a3a3;
   style AssemblyLayer fill:#ffffff,stroke:#a3a3a3;
   style AdaptersLayer fill:#ffffff,stroke:#a3a3a3;
@@ -309,7 +309,7 @@ flowchart LR
 ### 2.4 Physical View · Level 0
 
 Physical View 展示当前可执行单元到设备、主机和存储的映射。Desktop、CLI、ACP 和 SDK Host 使用 Embedded Runtime；
-Embedded 交互式 TUI 已在同一 CLI 进程内通过私有 App Server 使用 Runtime，交互式 TUI 也可以显式连接当前 Shared Runtime IPC。
+Embedded 交互式 TUI 已在同一 CLI 进程内通过私有 App Server 使用 Runtime，交互式 TUI 也可以显式连接 Shared App Server Host。
 Desktop GUI 的 App Server 迁移尚未完成。当前 loopback Web Server 已承载 Embedded Runtime 和 WebSocket App Server；Relay Server
 不承载 Agent Runtime。
 
@@ -321,7 +321,7 @@ flowchart LR
       direction LR
       DesktopApp["Desktop App"] ~~~ CLIApp["CLI App"] ~~~ ACPApp["ACP"] ~~~ SDKHost["SDK Host"]
     end
-    SharedRuntime["Shared Runtime"]
+    SharedHost["Shared App Server Host"]
     WorkspaceData["Workspace Data"]
     ToolProcesses["Tool Processes"]
   end
@@ -348,22 +348,22 @@ flowchart LR
   MobileClient -->|HTTPS| RelayServer
   DesktopApp <-->|WebSocket| RelayServer
   CLIApp <-->|WebSocket| RelayServer
-  CLIApp -.->|Local IPC| SharedRuntime
+  CLIApp -.->|Authenticated loopback App Server| SharedHost
   WebServer --> WorkspaceData
   WebServer -->|spawn| ToolProcesses
   WebServer -->|HTTPS| AIProviders
   RelayServer --> RelayDB
   RelayServer --> AssetStore
   EmbeddedNodes --> WorkspaceData
-  SharedRuntime --> WorkspaceData
+  SharedHost --> WorkspaceData
   EmbeddedNodes -->|spawn| ToolProcesses
-  SharedRuntime -->|spawn| ToolProcesses
+  SharedHost -->|spawn| ToolProcesses
   EmbeddedNodes -->|HTTPS| AIProviders
-  SharedRuntime -->|HTTPS| AIProviders
+  SharedHost -->|HTTPS| AIProviders
   DesktopApp -->|SSH| RemoteHosts
 
   classDef unit fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
-  class DesktopApp,CLIApp,ACPApp,SDKHost,SharedRuntime,WorkspaceData,ToolProcesses,WebClient,MobileClient,WebServer,RelayServer,RelayDB,AssetStore,AIProviders,RemoteHosts unit;
+  class DesktopApp,CLIApp,ACPApp,SDKHost,SharedHost,WorkspaceData,ToolProcesses,WebClient,MobileClient,WebServer,RelayServer,RelayDB,AssetStore,AIProviders,RemoteHosts unit;
   style LocalHost fill:#ffffff,stroke:#737373;
   style EmbeddedNodes fill:#ffffff,stroke:#a3a3a3;
   style UserDevice fill:#ffffff,stroke:#a3a3a3;
@@ -376,7 +376,7 @@ flowchart LR
 |---|---|
 | Desktop App | Web UI、Tauri Host、embedded Agent Runtime；Rich Client App Server 迁移尚未完成 |
 | CLI App | 交互式 TUI 通过 private in-process App Server 使用 Embedded Runtime；Headless、Peer 保留独立 adapter；可显式使用 Shared TUI |
-| Shared Runtime | 私有本机 IPC；当前只有交互式 TUI consumer；是否迁入 Shared App Server transport 仍待评审与等价证据 |
+| Shared App Server Host | 认证的本机 loopback App Server；当前只有显式 `--shared` 的交互式 TUI consumer；一个 Host 持有一个 workspace Runtime owner |
 | ACP | Embedded Agent Runtime、ACP 协议生命周期 |
 | SDK Host | 私有跨进程 adapter；公开 SDK 产品尚未交付 |
 | Web Server | Embedded Agent Runtime、WebSocket App Server、Health/Info；当前只允许 loopback 单用户模式 |
@@ -480,7 +480,7 @@ client 或未来 CLI/HarmonyOS 计划，不能证明同名 Rust transport adapte
 
 前后端契约按能力语义归属，不按 Tauri command 名称归属。稳定的请求、响应、状态事实和类型化错误放在对应
 `contracts/*`、Agent Runtime API 或能力归属模块。当前 Desktop GUI 仍使用 Tauri adapter，Web UI 使用 loopback WebSocket
-App Server，Embedded TUI 使用 in-process App Server，Shared TUI 通过 `TuiBackend` 映射 private Runtime IPC v17。待评审目标是让
+App Server，Embedded TUI 使用 in-process App Server，Shared TUI 通过 `TuiBackend` 使用本机 Shared App Server。待评审目标是让
 Desktop GUI、Web UI 和交互式 TUI 复用同一 Rich Client App Server 行为与 wire contract；Tauri 和各 Rich Client Host 负责
 transport、平台能力及生命周期。ACP、Headless CLI、Peer Host 与公开 SDK 继续由各自 adapter 映射到稳定 owner 接口，不因该目标
 复用 App Server wire。该规则降低框架耦合，但不要求把 controller-local Desktop DTO 搬进共享 crate。
@@ -549,19 +549,19 @@ flowchart LR
   Web["Web UI"] --> WebHost["loopback WebSocket App Server"]
   TUI["Interactive TUI"] --> Backend["TuiBackend"]
   Backend -->|"Embedded"| EmbeddedAS["in-process App Server"]
-  Backend -->|"--shared"| SharedIPC["private Runtime IPC v17"]
+  Backend -->|"--shared"| SharedAS["authenticated Shared App Server"]
   Other["Headless CLI · ACP · Server · Remote"] --> Adapter["独立入口适配器"]
   SDK["Rust Runtime SDK / SDK Host preview"] --> SDKAdapter["独立 SDK adapter"]
   Tauri --> API["Runtime API / owner ports"]
   WebHost --> API
   EmbeddedAS --> API
-  SharedIPC --> API
+  SharedAS --> API
   Adapter --> API
   SDKAdapter --> API
   API --> Runtime["共享 Runtime"]
 ```
 
-当前 Embedded TUI 核心路径经过 App Server，Shared TUI 则由 `TuiBackend` compatibility adapter 映射到 private Runtime IPC v17。
+当前 Embedded 与 Shared TUI 都由 `TuiBackend -> AppServerClient` 进入正式 App Server handler，只在 Host 与 transport 生命周期上不同。
 Desktop GUI 尚未完成 App Server 迁移；当前 loopback Web Host 已通过 WebSocket 承载 App Server。Headless CLI/CI、ACP、Peer Host
 和 SDK Host 保留独立 adapter。所有路径最终消费同一 Runtime API 或 owner port，部署选择不能进入业务 owner。
 
@@ -592,9 +592,8 @@ flowchart LR
   API --> Runtime["共享 Runtime"]
 ```
 
-提案目标是让 Desktop GUI、Web UI 和交互式 TUI 复用 App Server 行为与 wire contract，并让 Embedded/Shared 只在 Host 与
-transport 层不同。是否用 Shared App Server 替换 v17，仍取决于鉴权、实例身份、controller/lease、事件恢复、取消、限制、性能和
-回滚门槛；目标图不表示这些能力已经交付。各入口仍各自拥有 renderer、平台能力和生命周期。Headless CLI/CI、ACP、Peer Host 和
+提案目标是让 Desktop GUI 也与当前 Web UI、Embedded/Shared TUI 复用 App Server 行为与 wire contract。Shared TUI 已完成 wire
+切换，但跨连接 replay、未知结果恢复和慢客户端治理仍需继续补齐。各入口仍各自拥有 renderer、平台能力和生命周期。Headless CLI/CI、ACP、Peer Host 和
 公开 SDK 不共享 App Server wire。
 
 ### 4.3 插件调用

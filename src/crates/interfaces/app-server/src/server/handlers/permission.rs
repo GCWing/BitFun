@@ -1,11 +1,13 @@
 use crate::agent::{runtime_call, BitfunAppRuntime};
 use crate::role::{AppClient, AppServer};
 use crate::schema::*;
-use agent_client_protocol::{Builder, HandleDispatchFrom};
+use agent_client_protocol::{Builder, Error, HandleDispatchFrom};
+use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use std::sync::Arc;
 
 pub(in crate::server) fn builder(
     runtime: Arc<BitfunAppRuntime>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -13,7 +15,11 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |r: RespondPermissionMessage, p, _| {
+                    if !event_state.can_respond_permission(&r.request_id) {
+                        return p.respond_with_result(Err(permission_scope_error(&r.request_id)));
+                    }
                     runtime_call(
                         runtime
                             .runtime()
@@ -28,7 +34,11 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |r: RespondPermissionBatchMessage, p, _| {
+                    if !event_state.can_respond_permission(&r.request_id) {
+                        return p.respond_with_result(Err(permission_scope_error(&r.request_id)));
+                    }
                     let request_ids = runtime_call(
                         runtime
                             .runtime()
@@ -43,8 +53,11 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             {
                 let runtime = runtime.clone();
+                let event_state = event_state.clone();
                 async move |_: ListPendingPermissionRequestsMessage, p, _| {
-                    let requests = runtime_call(runtime.runtime().pending_permission_requests())?;
+                    let requests = event_state.filter_pending_permissions(runtime_call(
+                        runtime.runtime().pending_permission_requests(),
+                    )?);
                     p.respond(ListPendingPermissionRequestsResponse { requests })
                 }
             },
@@ -105,4 +118,17 @@ pub(in crate::server) fn builder(
             },
             agent_client_protocol::on_receive_request!(),
         )
+}
+
+fn permission_scope_error(request_id: &str) -> Error {
+    Error::invalid_params().data(
+        serde_json::to_value(AppServerErrorData {
+            kind: AppServerErrorKind::InvalidRequest,
+            retryable: false,
+            outcome_unknown: false,
+            capability: Some("agent.respond_permission".to_string()),
+            request_id: Some(request_id.to_string()),
+        })
+        .unwrap_or(serde_json::Value::Null),
+    )
 }

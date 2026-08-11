@@ -1,7 +1,7 @@
 use agent_client_protocol::{Builder, Error, HandleDispatchFrom};
 use bitfun_app_server_protocol::app::{
     CapabilityAvailability, CapabilityDescriptor, HealthRequest, HealthResponse, HealthStatus,
-    InitializeRequest, InitializeResponse, ServerInfo, TransportLimits,
+    InitializeRequest, InitializeResponse, ServerInfo,
 };
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::event::{SyncEventsRequest, SyncEventsResponse};
@@ -10,13 +10,11 @@ use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 use crate::management::EXTERNAL_SOURCES_CAPABILITY;
 use crate::role::{AppClient, AppServer};
 
-const MAX_FRAME_BYTES: u64 = 16 * 1024 * 1024;
-const EVENT_BUFFER_CAPACITY: u32 = 1024;
-
 pub(in crate::server) fn builder(
     runtime: std::sync::Arc<crate::agent::BitfunAppRuntime>,
     event_state: std::sync::Arc<crate::server::ConnectionEventState>,
     management: Option<std::sync::Arc<crate::management::AppManagementService>>,
+    transport_limits: bitfun_app_server_protocol::app::TransportLimits,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     let capabilities = registered_capabilities(management.as_deref());
     let external_source_snapshot_available = capabilities.iter().any(|capability| {
@@ -48,10 +46,7 @@ pub(in crate::server) fn builder(
                         version: env!("CARGO_PKG_VERSION").to_string(),
                     },
                     capabilities.clone(),
-                    TransportLimits {
-                        max_frame_bytes: MAX_FRAME_BYTES,
-                        event_buffer_capacity: EVENT_BUFFER_CAPACITY,
-                    },
+                    transport_limits.clone(),
                 )))
             },
             agent_client_protocol::on_receive_request!(),
@@ -70,6 +65,7 @@ pub(in crate::server) fn builder(
                 let pending_permissions = runtime
                     .runtime()
                     .pending_permission_requests()
+                    .map(|requests| event_state.filter_pending_permissions(requests))
                     .unwrap_or_default();
                 responder.respond(SyncEventsResponse {
                     cursors: request
@@ -80,7 +76,8 @@ pub(in crate::server) fn builder(
                     pending_permissions,
                     agent_snapshot_available: false,
                     config_snapshot_available: false,
-                    external_source_snapshot_available,
+                    external_source_snapshot_available: external_source_snapshot_available
+                        && event_state.allows_local_management(),
                 })
             },
             agent_client_protocol::on_receive_request!(),
@@ -111,6 +108,8 @@ fn registered_capabilities(
             "session",
             vec![
                 "session/sync",
+                "session/subscribe",
+                "session/unsubscribe",
                 "session/readTranscript",
                 "session/resolveWorkspace",
                 "session/recordLocalCommandTurn",
