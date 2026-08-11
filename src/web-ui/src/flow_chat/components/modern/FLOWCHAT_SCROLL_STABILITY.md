@@ -167,13 +167,39 @@ and measured first, and both failed in ways worth recording:
   captures against 8 accepted ones, and a 1037px correction issued against the
   user's own gesture.
 
+**A scroll may not replace an anchor that is owed a repair.** While the anchored
+Turn is missing from the rendered window the displacement exists and cannot yet
+be measured, and re-reading the anchor from the DOM takes whatever *is* rendered
+at its already-displaced position — which files the displacement away as the
+reader's own choice. Measured across five history junctions: the anchor was owed
+104px, then 140px, then an amount never established, and at three of the five a
+scroll 77ms later replaced it before the Turn came back. Two of the three were
+never corrected at all.
+
+Refusing the scroll outright is not the answer either — paging up is something
+the reader does *while scrolling*, so the anchor would fight them for the whole
+settle. So the anchor is **carried** instead: their travel is a change to
+`scrollTop`, and it is subtracted from where the Turn is expected to be, leaving
+only the part the transcript moved outstanding. When the Turn renders, the
+correction is that part and none of their scrolling — however far they got.
+
+This is the one place the anchor works in deltas, and it is bounded: it applies
+only while the Turn is missing, and only until `ANCHOR_MISSING_TURN_ATTEMPTS`
+gives the anchor up. The baseline it measures travel from is re-taken whenever a
+settle window opens, so the prepend compensation's own shift — written from the
+layout effect just before — is never mistaken for the reader.
+
 **Restoring needs a window, not a callback.** A prepend settles over several
 frames — a margin holds the position, the real heights land in padding, then the
 margin is released — and *a margin change fires no ResizeObserver at all*, so no
 single callback covers it. Every signal that the transcript moved therefore
-opens `ANCHOR_SETTLE_FRAMES`, and a frame that had to correct refreshes it.
-Measured before the window existed: four consecutive painted frames displaced by
-896px.
+opens `ANCHOR_SETTLE_FRAMES`, and a frame that had to correct refreshes it — as
+does one still waiting for the anchored Turn to be rendered, since "not there
+yet" is neither a repair nor a failure. Without that, the settle outlasts the
+wait only for as long as `ANCHOR_SETTLE_FRAMES` and
+`ANCHOR_MISSING_TURN_ATTEMPTS` happen to be the same number, which is a
+coincidence and not a design. Measured before the window existed: four
+consecutive painted frames displaced by 896px.
 
 The observer feeding this had to be repointed. `scrollerRef.firstElementChild`
 is a viewport-sized box that stays at the scroller's height no matter how much
@@ -243,6 +269,54 @@ store cannot extend far enough, the fallback drops back to the canonical tail:
 that costs a visible re-page of the history above, which is why it is the
 fallback, but it is the only branch that always shows the message just sent.
 
+## A Page Is Asked For a Screenful Early
+
+A history page is not a quiet event, and no amount of care makes it one. The
+items arrive above the reader and everything below them moves; the virtualizer
+picks its window from a scroll offset it only learns from scroll events, so for
+one commit it renders from a position the reader has already been moved off and
+the transcript below the junction goes blank; the rows then measure and the
+whole thing settles a second time. Watched frame by frame, at 1/8 speed: the
+loading notice disappears, the tail of the previous Turn leaks out, everything
+past the junction goes white, the viewport shifts up and clips the top of a user
+message, and then it is fine. Four frames, twice, at the two junctions the
+reader crossed.
+
+Every one of those steps is correct. The reader still called it a flicker and a
+jolt, because they were looking at it.
+
+So the ask goes out while the boundary is still a screenful away —
+`HISTORY_BOUNDARY_LEAD_SCREENS`, measured against live geometry rather than an
+item count, since one item here is anything from a 38px user message to a
+5012px model round. The page then lands above the viewport: the mis-aimed
+window, the blank and the re-measurement all happen where nobody is looking, and
+the reader scrolls up into content that is already there and already measured.
+It costs one page of history fetched sooner than strictly needed, and nothing on
+session open, where the boundary is a whole transcript away.
+
+The pixel rule is a union with the item rule, not a replacement. A window short
+enough that its head is on screen has no screenful of lead to offer, and that
+case is the one the item slack was written for.
+
+**The lead widens the ask and nothing else.** `historyBoundariesReached` is a
+separate function for that reason: the arming latch below disarms a direction on
+dispatch and re-arms it when the reader is no longer at the boundary, so serving
+the latch from the wider answer leaves a boundary the reader can never be off.
+Measured, with the two sharing one predicate: a 43-Turn session loaded one
+window of five Turns, and every ask afterwards was refused as `not-rearmed` —
+39 refusals over six minutes, the reader scrolling into a wall two Turns from
+the top of what was loaded. The two questions look alike and are not: *has the
+reader arrived* is about them, *is it worth asking* is about the fetch.
+
+A pass can therefore re-arm and ask in the same breath, which is the point
+rather than an oversight — "off the boundary, and a screen from it" is exactly
+the state the lead exists to serve.
+
+The lead is one screen rather than several because it only has to outlast the
+fetch. At a brisk wheel scroll the reader covers a few hundred pixels in the
+time a page takes to arrive from local storage; a longer lead just loads history
+nobody reaches.
+
 ## Two Refusals Stand Between an Ask and a Page
 
 `flowChatHistoryBoundary.ts` decides that a boundary is worth asking about.
@@ -258,9 +332,10 @@ starts meaning something.
 the viewport back on the reader's content, but the virtualizer places its rows
 from a scroll offset it refreshes a frame later, so for one commit the visible
 range is still read against the head. A direction is disarmed on dispatch and
-armed again by the range leaving it; an ask that resolves to anything other than
-`applied` re-arms immediately, because nothing was prepended and the range
-sitting at the boundary is still the reader's own position.
+armed again by the range leaving it — by `historyBoundariesReached`, never by
+the wider ask; an ask that resolves to anything other than `applied` re-arms
+immediately, because nothing was prepended and the range sitting at the boundary
+is still the reader's own position.
 
 Both were free under react-virtuoso: `firstItemIndex` moved the reported range
 with the prepend, so the local start index jumped by the number of items added
@@ -554,8 +629,8 @@ Two things that look like they belong here do not:
   `scrollToSearchMatch`, and `data-virtual-index` all carry one and are left
   alone.
 - **When to page.** `historyBoundariesForVisibleRange` decides that a boundary
-  is worth asking about from a visible item range and nothing else. Its two
-  thresholds are the ones that decide where a junction happens, which is why
+  is worth asking about, from where the reader stands and nothing else. Its
+  thresholds are the ones that decide *where* a junction happens, which is why
   they are named and tested rather than inline.
 
 **Visible is not rendered.** `getVisibleItemRange` intersects the rows with the
@@ -658,8 +733,7 @@ design:
 | 2 | `one-shot-navigation` | a Turn, search hit, or focus request is being reached |
 | 3 | `snap-back` | the return from the reserved blank is animating |
 | 4 | `follow-output` | the continuous writer owns the viewport |
-| 5 | `layout-correction` | history arrived above the reader, or the box resized |
-| 6 | `anchor-correction` | a late measurement is being undone |
+| 5 | `layout-correction` | the scroller's box changed and a resting viewport is re-aligned |
 
 The register decides **whether**, never **where** — targets stay with the writer
 that owns them, and the anchor's correction stays idempotent. Ordering answers
@@ -667,10 +741,113 @@ what idempotency cannot: whether a movement was ours on purpose or something to
 be undone. The anchor is idempotent and still destroyed the snap back, because
 it restored a relationship we had deliberately changed.
 
+**Repairing a displacement is not on this list**, and putting it there was a
+mistake worth keeping recorded. See *A displacement is not a movement*.
+
 **Taking ownership and writing are one call.** Adding a writer without declaring
 it means not using the helper, which is visible in review — where the previous
 scheme needed the new writer added by hand to every other writer's private
 predicate, and a single missed pair was a bug.
+
+**Only an owner that releases may hold the viewport indefinitely**, and
+follow-output is the only one — a claim with no expiry and no release is a
+viewport nothing below it can ever write again. Every other writer states its
+own window: a gesture goes quiet, an animation may never report completion, a
+re-aim runs while measurements settle. Saying nothing means the write is
+instantaneous and owns only itself, which is what a correction wants; the claim
+still resolves against whoever holds the viewport, because that is the question
+deciding whether the write happens at all.
+
+The first thing this caught was its own: the virtualizer places the scroller
+against its own state on mount, before any aim of ours exists. That 0px write
+was attributed to a navigation and took an unbounded claim, so follow-output was
+refused for the whole opening reveal and a long session opened at the head of
+its loaded window instead of on the newest Turn. A library write nobody asked
+for is now attributed to `layout-correction`, which is what it is.
+
+### A displacement is not a movement
+
+Two things repair displacement rather than choose a position, and neither goes
+through the priority order: the prepend compensation, and the viewport anchor.
+Both are `viewportOwner.shift`, which asks a different question — content moving
+under the reader changes what their offset *means*, and restoring that meaning
+is not competing with anyone over where the viewport should be. So they are
+refused only by an owner that holds a target and will re-assert it:
+follow-output, a navigation still reaching its Turn, a snap back mid-animation.
+
+The two are not redundant. The compensation is a pixel delta applied in the
+commit that prepends, and it is the only thing that can act when the reader's
+Turn is not rendered. The anchor restores a relationship, so it is the only
+thing that can act on a re-measurement landing *after* that commit — which is
+the majority of the movement, since the arrived items measure over the frames
+that follow. Measured: a compensation of exactly the DOM's own growth (949px)
+still left the reader at the end of the transcript, because the transcript then
+shrank 200px in the next 21ms.
+
+**The anchor cannot act in the prepend commit itself.** The virtualizer chooses
+its rendered window from a scroll offset it only learns from scroll events
+(`calculateRange` is memoised on `getScrollOffset()`, and `scrollOffset` is
+assigned in the `observeElementOffset` callback and nowhere else), so the commit
+that prepends is still windowing the position the reader has just been moved
+off. Their Turn is in the DOM a frame later. This is why the anchor keeps an
+anchor whose Turn is missing rather than dropping it on the first miss: dropping
+threw the reading position away one frame before it could be used, at four
+junctions in a row and not one correction between them.
+
+**A gesture is not one of them, and must not be.** The reader chose a position
+in the transcript, not a number of pixels. Ranking these under `user-gesture`
+was a total failure rather than an intermittent one, because history pages in
+*only* while the reader scrolls up into the boundary — so the gesture was
+holding the viewport every single time either of them had work to do. Measured:
+2494px of history arrived and the compensation was refused, `scrollTop` held at
+40, and the transcript jumped back thirteen Turns; in the same session the
+anchor stood down 23 times and corrected nothing at all.
+
+Correcting during a gesture is safe for the reason the anchor already re-anchors
+on every scroll of the reader's: within that window the anchor is tracking them,
+so a correction is zero unless something else really moved. Outside it, nothing
+changed — the claim had already lapsed.
+
+**The amount is the smallest of three bounds**, because each of them
+over-states and they do so for different reasons:
+
+| Bound | Over-states when |
+|---|---|
+| `prependedPx` — height the arrived items measure, read back from the cache | the arrived items are not all rendered, so some of them are still estimates |
+| `scrollRangeGrowthPx` — what the scroll range actually gained | the transcript also grew *below* the reader in the same commit |
+| `contentEndPx - scrollTop` — what the range can absorb | never; content arriving above the reader cannot push them past the end |
+
+Overshooting is the expensive direction. It puts the reader below the content
+end, where the snap back correctly reads them as parked in the reserved blank
+and returns them to the tail — and since paging happens only while scrolling up,
+it then does that on every attempt, which is what "scrolling up loops back to
+the end" was. Undershooting leaves them looking at slightly earlier content,
+which the anchor removes.
+
+**The cache is measured before it is read.** Left alone it is not close:
+measured twice in one session, 2174px reserved against 670px of real growth,
+then 2494px against 949px — and the whole nineteen-item transcript came to
+1236px once measured. That gap is not a virtualizer being approximate, it is a
+guard in the library. `measureElement` resizes an item inline only when the
+reader is holding still:
+
+```js
+if ((!this.isScrolling || this.scrollState) && ...) this.resizeItem(...)
+```
+
+History pages in precisely when they are not. So at a junction the rows are in
+the DOM at their real heights, the cache holds the estimates it reserved for
+them, and the ResizeObserver that would have reconciled the two does not deliver
+until after the layout effects of the commit that added them — one frame later
+than the compensation, which has to move the reader in the same paint as the
+rows that displaced them. `virtualizer.measureRenderedItems()` does that
+reconciliation itself, first thing: the same work, a frame earlier, and free for
+any row whose height was already right (`resizeItem` returns on a zero delta).
+
+`prependCompensated` still records all three numbers, so the remaining gap
+between `prependedPx` and `scrollRangeGrowthPx` is a reading rather than an
+inference — and now it is a reading of how much of the arrived block was never
+rendered, not of how far behind the cache is.
 
 ### Why there was no coordinator before, and what changed
 
@@ -744,6 +921,31 @@ into one entry per 500ms carrying the count and travel it stands for. The key
 includes whatever makes one run a different run — the owner, the outcome, the
 direction — so a *transition* always emits immediately. A thousand copies of a
 steady state would only bury the transitions, which are the point.
+
+**A duration is reported once, when it ends.** Coalescing is what makes the
+per-frame traces readable, and it is also why they cannot answer "how long did
+that last": only the first of a run is emitted, and the rest are a count.
+`anchor.turnReturned` and `anchor.waitAbandoned` therefore report the whole of a
+wait for the anchored Turn — milliseconds, settle frames, restore attempts, and
+the reader travel carried through it — at the one moment the whole of it exists.
+That wait is what decides whether a junction is seen, so it is the number to
+read first. These are the only traces here that go through `traceViewport`
+rather than the coalescer, because they fire once per wait and their payload is
+the point rather than a sample of it.
+
+**Read the state out before the state changes.** A `data` callback is evaluated
+by `flowChatDiagnostics.trace`, synchronously, so a thunk over refs is normally
+exactly right. It is not right when the caller resets those refs on the next
+line, and the wait report does: it takes its numbers eagerly and closes over
+them.
+
+**Two numbers say whether a correction was a mistake.** `scrollRangePx` is
+recorded on `prependCompensated` and on every `anchor.correct`, because a
+correction and the reason for one read the same otherwise. Measured over five
+junctions, the correction equalled the change in the scroll range every time
+(−94/−93.4, +76/+76.5, +26/+30.7, +8/+7.6): the compensation had not over-shot,
+the transcript above the reader had re-measured, and the anchor was following
+it. A correction with the range *unchanged* would be the other diagnosis.
 
 Nothing evaluates a payload while the switch is off.
 

@@ -62,6 +62,21 @@ export interface FlowChatItemBounds {
   endPx: number;
 }
 
+/**
+ * The measurement pass, which the published types keep to themselves.
+ *
+ * `measurementsCache` is a public field, but it is only the place the memo
+ * behind `getMeasurements` leaves its answer — reading it returns whatever the
+ * last render put there, and a measurement arriving since then has invalidated
+ * the memo without re-running it. `getMeasurements` is `private` in the `.d.ts`
+ * although it is a plain instance field at runtime, so it is reached through
+ * this shape rather than through some other public call whose side effect
+ * happens to refresh the field.
+ */
+interface MeasuringVirtualizer {
+  getMeasurements: () => ReadonlyArray<{ start: number; end: number }>;
+}
+
 export interface UseFlowChatVirtualizerOptions<T> {
   items: readonly T[];
   scrollerRef: RefObject<HTMLElement | null>;
@@ -109,6 +124,13 @@ export interface FlowChatVirtualizer {
   measureRowElement: (element: HTMLElement | null) => void;
   /** Where an item sits in scroller coordinates, or null if it has no place yet. */
   getItemBounds: (index: number) => FlowChatItemBounds | null;
+  /**
+   * Bring the measurement cache level with the DOM for every rendered row.
+   *
+   * For callers that have to read a position in the same commit that changed
+   * the items, before the library's own measurement has caught up.
+   */
+  measureRenderedItems: () => void;
   /**
    * The items intersecting the viewport right now, read from live geometry.
    *
@@ -231,8 +253,15 @@ export function useFlowChatVirtualizer<T>({
    * They are still the same request, so they are attributed to whoever made
    * it — which is also what lets a gesture preempt a navigation that is still
    * chasing its Turn.
+   *
+   * Until anyone has asked for an aim, the library still writes: it places the
+   * scroller against its own state on mount. That write belongs to no request
+   * of ours, so it is attributed to the lowest authority that describes it —
+   * the library putting content where it thinks it goes. Naming a navigation
+   * here instead let a 0px write on session open outrank follow-output for the
+   * whole of the opening reveal.
    */
-  const aimOwnerRef = useRef<FlowChatViewportOwner>('one-shot-navigation');
+  const aimOwnerRef = useRef<FlowChatViewportOwner>('layout-correction');
   const aimHoldForMsRef = useRef<number | undefined>(undefined);
   const getItemKeyRef = useRef(getItemKey);
   getItemKeyRef.current = getItemKey;
@@ -324,8 +353,46 @@ export function useFlowChatVirtualizer<T>({
     return visibleRowRange(rowsRef.current, scroller.scrollTop, scroller.clientHeight);
   }, [scrollerRef]);
 
+  /**
+   * Everything rendered, measured now rather than whenever the library gets to it.
+   *
+   * The library measures a row inline as its ref attaches, but only when the
+   * reader is holding still:
+   *
+   *     if ((!this.isScrolling || this.scrollState) && ...) this.resizeItem(...)
+   *
+   * History pages in exactly when they are not: the reader scrolls up into the
+   * boundary, the rows arrive in the DOM at their real heights, and the cache
+   * keeps the estimates it reserved for them. The ResizeObserver does catch
+   * them — after the layout effects of the commit that added them, which is a
+   * frame later than the one reader of these positions that cannot wait. The
+   * prepend compensation has to move the reader in the same paint as the rows
+   * that displaced them. Measured across four junctions, height reserved
+   * against scroll range actually gained: 2174/670, 2494/949, 2346/609,
+   * 2580/1917.
+   *
+   * Rendered rows only, because only they have a height to read; the rest stay
+   * estimates, which is what a virtualizer is. A row whose height has not
+   * changed costs nothing — `resizeItem` returns on a zero delta — so this is
+   * the same work the ResizeObserver was going to do, done a frame earlier.
+   */
+  const measureRenderedItems = useCallback(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const elements = scroller.querySelectorAll<HTMLElement>('[data-virtual-index]');
+    for (const element of elements) {
+      const index = Number(element.getAttribute('data-virtual-index'));
+      if (!Number.isInteger(index)) continue;
+      virtualizer.resizeItem(
+        index,
+        virtualizer.options.measureElement(element, undefined, virtualizer),
+      );
+    }
+  }, [scrollerRef, virtualizer]);
+
   const getItemBounds = useCallback((index: number): FlowChatItemBounds | null => {
-    const measurement = virtualizer.measurementsCache[index];
+    const measurement = (virtualizer as unknown as MeasuringVirtualizer)
+      .getMeasurements()[index];
     return measurement ? { startPx: measurement.start, endPx: measurement.end } : null;
   }, [virtualizer]);
 
@@ -368,6 +435,7 @@ export function useFlowChatVirtualizer<T>({
     paddingBottomPx,
     measureRowElement,
     getItemBounds,
+    measureRenderedItems,
     getVisibleItemRange,
     scrollItemIntoView,
     scrollToOffset,

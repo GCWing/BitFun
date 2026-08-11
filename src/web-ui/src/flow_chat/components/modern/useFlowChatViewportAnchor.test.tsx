@@ -3,13 +3,30 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { USER_DRIVEN_SCROLL_WINDOW_MS } from './flowChatViewportAnchor';
+import {
+  ANCHOR_MISSING_TURN_ATTEMPTS,
+  USER_DRIVEN_SCROLL_WINDOW_MS,
+} from './flowChatViewportAnchor';
 import {
   useFlowChatViewportAnchor,
   type FlowChatViewportAnchorApi,
 } from './useFlowChatViewportAnchor';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+/*
+ * The one trace here that is asserted on rather than merely tolerated. The rest
+ * of the trail is coalesced and reports whatever the last of a series happened
+ * to hold; this one fires once per wait and its numbers are the whole point of
+ * it, so it is worth pinning that it fires exactly once and says the truth.
+ */
+const mocks = vi.hoisted(() => ({ traceViewport: vi.fn() }));
+vi.mock('@/infrastructure/diagnostics/flowChatViewportDiagnostics', async () => {
+  const actual = await vi.importActual<
+    typeof import('@/infrastructure/diagnostics/flowChatViewportDiagnostics')
+  >('@/infrastructure/diagnostics/flowChatViewportDiagnostics');
+  return { ...actual, traceViewport: mocks.traceViewport };
+});
 
 const VIEWPORT_HEIGHT = 500;
 const TURN_HEIGHT = 40;
@@ -37,11 +54,11 @@ interface HarnessProps {
 function Harness({ scroller, isViewportOwnedElsewhere, onApi }: HarnessProps) {
   const scrollerRef = React.useRef<HTMLElement | null>(scroller);
   // The anchor no longer touches the scroller itself; the register does, and
-  // here that is the plain assignment it used to make.
-  const writeViewport = React.useCallback((topPx: number) => {
-    scroller.scrollTop = topPx;
+  // here that is the plain displacement it used to apply.
+  const shiftViewport = React.useCallback((byPx: number) => {
+    scroller.scrollTop += byPx;
   }, []);
-  onApi(useFlowChatViewportAnchor({ scrollerRef, isViewportOwnedElsewhere, writeViewport }));
+  onApi(useFlowChatViewportAnchor({ scrollerRef, isViewportOwnedElsewhere, shiftViewport }));
   return null;
 }
 
@@ -87,6 +104,7 @@ describe('useFlowChatViewportAnchor', () => {
   }
 
   beforeEach(() => {
+    mocks.traceViewport.mockReset();
     container = document.createElement('div');
     scroller = document.createElement('div');
     document.body.append(container, scroller);
@@ -166,13 +184,37 @@ describe('useFlowChatViewportAnchor', () => {
     expect(scroller.scrollTop).toBe(1000);
   });
 
-  it('drops an anchor whose Turn has left the rendered window', () => {
+  it('keeps an anchor whose Turn is merely not rendered yet', () => {
+    /*
+     * One frame of absence is the normal case at a history junction: the
+     * virtualizer windows from a scroll offset it learns from scroll events, so
+     * the commit that prepends is still rendering the position the reader has
+     * just been moved off. Dropping there loses the reading position one frame
+     * before it could be used.
+     */
     scroller.scrollTop = 1000;
     layoutTurns({ 'turn-3': 980 });
     api.captureAnchor();
 
     layoutTurns({ 'turn-9': 980 });
     expect(api.restoreAnchor()).toBe(false);
+    expect(scroller.scrollTop).toBe(1000);
+
+    // The Turn arrives, and the anchor is still the one the reader had.
+    layoutTurns({ 'turn-3': 1200, 'turn-9': 980 });
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBe(1220);
+  });
+
+  it('drops an anchor whose Turn has stayed out of the rendered window', () => {
+    scroller.scrollTop = 1000;
+    layoutTurns({ 'turn-3': 980 });
+    api.captureAnchor();
+
+    layoutTurns({ 'turn-9': 980 });
+    for (let attempt = 0; attempt < ANCHOR_MISSING_TURN_ATTEMPTS; attempt += 1) {
+      expect(api.restoreAnchor()).toBe(false);
+    }
     expect(scroller.scrollTop).toBe(1000);
 
     // Dropped rather than kept: the next scroll anchors to a Turn that is
@@ -182,6 +224,77 @@ describe('useFlowChatViewportAnchor', () => {
     layoutTurns({ 'turn-9': 1700 });
     expect(api.restoreAnchor()).toBe(true);
     expect(scroller.scrollTop).toBe(1500);
+  });
+
+  it('carries the anchor through a scroll while its Turn is still unrendered', () => {
+    /*
+     * The junction case, measured. The anchor was owed 104px, then 140px, then
+     * an amount never established; at each one a scroll 77ms later replaced it
+     * with a Turn at its displaced position, and two of the three were never
+     * corrected at all. The reader is always scrolling here — paging up is what
+     * they are doing — so refusing the scroll outright is not an option either.
+     */
+    scroller.scrollTop = 1000;
+    layoutTurns({ 'turn-3': 980, 'turn-9': 3000 });
+    api.captureAnchor();
+
+    // History arrives: the transcript has moved 140px further down than it was
+    // compensated for, and the reader's own Turn is out of the rendered window,
+    // so the displacement cannot be measured yet.
+    layoutTurns({ 'turn-9': 3140 });
+    expect(api.restoreAnchor()).toBe(false);
+
+    // They keep scrolling up 200px while that repair is still owed. Re-reading
+    // the anchor here takes whatever *is* rendered, at its already-displaced
+    // position, and the 140px is gone for good.
+    scroller.scrollTop = 800;
+    api.markUserScrollIntent();
+    api.captureAnchorForScroll();
+
+    // Their Turn comes back, still 140px low. Nothing else has moved since, so
+    // the whole correction is that 140 — and none of the 200 they scrolled.
+    layoutTurns({ 'turn-3': 1120, 'turn-9': 3140 });
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBe(940);
+  });
+
+  it('reports what a wait for the anchored Turn cost, once, when it ends', async () => {
+    /*
+     * The wait is what decides whether a junction is seen: a correction that
+     * shares the prepend's frame costs nothing, and one a frame later is a
+     * visible jump. `attempts` cannot answer how long a wait ran — its trace is
+     * coalesced, so only the first of a series is ever emitted — so the whole
+     * of it is reported at the one moment it exists.
+     */
+    scroller.scrollTop = 1000;
+    layoutTurns({ 'turn-3': 980 });
+    api.captureAnchor();
+
+    layoutTurns({ 'turn-9': 980 });
+    api.openSettleWindow();
+    runFrame();
+    runFrame();
+    now += 48;
+
+    layoutTurns({ 'turn-3': 1100, 'turn-9': 980 });
+    runFrame();
+
+    const waits = mocks.traceViewport.mock.calls
+      .map(([probe]) => probe)
+      .filter(probe => probe.location === 'anchor.turnReturned');
+    expect(waits).toHaveLength(1);
+    expect(waits[0].data()).toMatchObject({
+      turnId: 'turn-3',
+      outcome: 'returned',
+      waitedForMs: 48,
+      // Two settle frames ran and still did not find it; the third did.
+      waitedFrames: 2,
+    });
+
+    // Ended, not merely reported: a second answered frame says nothing more.
+    runFrame();
+    expect(mocks.traceViewport.mock.calls
+      .filter(([probe]) => probe.location === 'anchor.turnReturned')).toHaveLength(1);
   });
 
   it('re-anchors on a scroll the user drove, and not on one they did not', () => {
@@ -226,6 +339,25 @@ describe('useFlowChatViewportAnchor', () => {
     layoutTurns({ 'turn-3': 2500 });
     runFrame();
     expect(scroller.scrollTop).toBe(2520);
+  });
+
+  it('corrects in the caller\'s own frame, so the displacement is never painted', () => {
+    /*
+     * Measured at a history junction: the prepend compensation moved the
+     * viewport 949px in a layout effect and the anchor took 177px back on the
+     * next frame, so every page up was two visible movements. The caller is a
+     * layout effect or a ResizeObserver callback — both still beat the paint.
+     */
+    scroller.scrollTop = 1000;
+    layoutTurns({ 'turn-3': 980 });
+    api.captureAnchor();
+
+    layoutTurns({ 'turn-3': 1157 });
+    api.openSettleWindow();
+
+    expect(scroller.scrollTop).toBe(1177);
+    // The window still opens, for the measurements that land after this frame.
+    expect(frames).toHaveLength(1);
   });
 
   it('opens one settle window at a time', () => {

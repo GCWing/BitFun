@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   activeViewportClaim,
   canOwnViewport,
+  canShiftViewport,
   claimViewport,
+  defaultViewportHoldMs,
   FLOWCHAT_VIEWPORT_OWNERS,
   releaseViewport,
   type ViewportClaim,
@@ -10,6 +12,10 @@ import {
 
 const NOW = 1_000;
 
+/**
+ * A claim already standing. An omitted hold is the shape only an owner that
+ * releases can have — see `defaultViewportHoldMs`.
+ */
 function heldBy(
   owner: ViewportClaim['owner'],
   options?: { holdForMs?: number; atMs?: number },
@@ -33,8 +39,14 @@ describe('the order of viewport owners', () => {
       'snap-back',
       'follow-output',
       'layout-correction',
-      'anchor-correction',
     ]);
+  });
+
+  it('does not rank a displacement repair, which is a different question', () => {
+    // Putting the reader back where a prepend or a late measurement moved them
+    // is `canShiftViewport`, and its answer for the reader's own gesture is the
+    // opposite of what any ranking here could give it.
+    expect(FLOWCHAT_VIEWPORT_OWNERS).not.toContain('anchor-correction');
   });
 
   it('does not rank the opening reveal, which is a phase and not a writer', () => {
@@ -46,9 +58,9 @@ describe('the order of viewport owners', () => {
 
 describe('claimViewport', () => {
   it('grants an unheld viewport to anyone', () => {
-    const outcome = claimViewport(null, { owner: 'anchor-correction', nowMs: NOW });
+    const outcome = claimViewport(null, { owner: 'layout-correction', nowMs: NOW });
     expect(outcome.granted).toBe(true);
-    expect(outcome.claim?.owner).toBe('anchor-correction');
+    expect(outcome.claim?.owner).toBe('layout-correction');
   });
 
   it('lets a gesture take the viewport from the follow loop', () => {
@@ -60,11 +72,12 @@ describe('claimViewport', () => {
     expect(outcome.claim?.owner).toBe('user-gesture');
   });
 
-  it('refuses the anchor while a snap back is animating', () => {
+  it('refuses a correction while a snap back is animating', () => {
     // The failure this register exists for: the anchor read the snap's own
-    // travel as a displacement, and the write cancelled the animation.
-    const outcome = claimViewport(heldBy('snap-back'), {
-      owner: 'anchor-correction',
+    // travel as a displacement, and the write cancelled the animation. It is
+    // `canShiftViewport` that refuses the anchor now, on the same grounds.
+    const outcome = claimViewport(heldBy('snap-back', { holdForMs: 1_200 }), {
+      owner: 'layout-correction',
       nowMs: NOW,
     });
     expect(outcome.granted).toBe(false);
@@ -72,7 +85,7 @@ describe('claimViewport', () => {
   });
 
   it('leaves the register untouched when it refuses', () => {
-    const held = heldBy('one-shot-navigation');
+    const held = heldBy('one-shot-navigation', { holdForMs: 600 });
     const outcome = claimViewport(held, { owner: 'follow-output', nowMs: NOW });
     expect(outcome.granted).toBe(false);
     expect(outcome.claim).toEqual(held);
@@ -92,17 +105,83 @@ describe('claimViewport', () => {
   it('grants a lapsed viewport to a lower priority', () => {
     const gesture = heldBy('user-gesture', { holdForMs: 200 });
     const outcome = claimViewport(gesture, {
-      owner: 'anchor-correction',
+      owner: 'layout-correction',
       nowMs: NOW + 201,
     });
     expect(outcome.granted).toBe(true);
-    expect(outcome.claim?.owner).toBe('anchor-correction');
+    expect(outcome.claim?.owner).toBe('layout-correction');
   });
 
   it('holds a claim without an expiry until it is released', () => {
     const outcome = claimViewport(null, { owner: 'follow-output', nowMs: NOW });
     expect(outcome.claim?.expiresAtMs).toBe(Number.POSITIVE_INFINITY);
-    expect(canOwnViewport(outcome.claim, 'anchor-correction', NOW + 1_000_000)).toBe(false);
+    expect(canOwnViewport(outcome.claim, 'layout-correction', NOW + 1_000_000)).toBe(false);
+  });
+
+  it('only lets an owner that releases hold the viewport indefinitely', () => {
+    // Follow-output is the one writer with an `exitFollowOutput`. Everything
+    // else that said nothing about a window would hold the viewport for the
+    // rest of the session, and nothing below it could ever write again.
+    for (const owner of FLOWCHAT_VIEWPORT_OWNERS) {
+      expect(defaultViewportHoldMs(owner)).toBe(
+        owner === 'follow-output' ? Number.POSITIVE_INFINITY : 0,
+      );
+    }
+  });
+
+  it('lapses a one-shot claim that named no window, rather than starving follow', () => {
+    /*
+     * Measured on session open: the virtualizer placed the scroller at 0 before
+     * any aim of ours, the write took an unbounded claim, and follow-output was
+     * refused for the whole opening reveal — the transcript stayed at the top
+     * of its loaded window instead of at the newest Turn.
+     */
+    const stray = claimViewport(null, { owner: 'one-shot-navigation', nowMs: NOW });
+    expect(stray.granted).toBe(true);
+
+    const follow = claimViewport(stray.claim, { owner: 'follow-output', nowMs: NOW });
+    expect(follow.granted).toBe(true);
+    expect(follow.claim?.owner).toBe('follow-output');
+  });
+
+  it('still resolves a correction against whoever holds the viewport', () => {
+    // A zero-length hold is not the absence of a claim: the question it answers
+    // is whether the write happens at all.
+    const outcome = claimViewport(heldBy('snap-back', { holdForMs: 1_200 }), {
+      owner: 'layout-correction',
+      nowMs: NOW + 16,
+    });
+    expect(outcome.granted).toBe(false);
+  });
+});
+
+describe('canShiftViewport', () => {
+  it('lets a displacement through while the reader holds the viewport', () => {
+    /*
+     * The failure this separates out: history pages in only while the reader
+     * scrolls up into it, so a gesture refusing the compensation refused all of
+     * them. 2494px of history arrived, `scrollTop` stayed at 40, and the
+     * transcript jumped back thirteen Turns.
+     */
+    expect(canShiftViewport(heldBy('user-gesture', { holdForMs: 200 }), NOW)).toBe(true);
+  });
+
+  it('leaves the displacement to anyone holding a target', () => {
+    // All three re-assert a position of their own, so a shift underneath is
+    // either redundant or a fight.
+    expect(canShiftViewport(heldBy('follow-output'), NOW)).toBe(false);
+    expect(canShiftViewport(heldBy('one-shot-navigation', { holdForMs: 600 }), NOW)).toBe(false);
+    expect(canShiftViewport(heldBy('snap-back', { holdForMs: 1_200 }), NOW)).toBe(false);
+  });
+
+  it('shifts an unheld viewport, and one held only by a correction', () => {
+    expect(canShiftViewport(null, NOW)).toBe(true);
+    expect(canShiftViewport(heldBy('layout-correction', { holdForMs: 0 }), NOW)).toBe(true);
+  });
+
+  it('shifts once a target holder has lapsed', () => {
+    expect(canShiftViewport(heldBy('one-shot-navigation', { holdForMs: 600 }), NOW + 601))
+      .toBe(true);
   });
 });
 

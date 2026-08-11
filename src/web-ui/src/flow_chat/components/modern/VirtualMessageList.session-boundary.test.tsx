@@ -31,14 +31,18 @@ const BOTTOM_INSET = 168;
  */
 function fakeLayout(options: {
   clientHeight: number;
-  scrollHeight: number;
+  /** A function where the range has to grow, as it does when history arrives. */
+  scrollHeight: number | (() => number);
   turnTopFromScrollerTop: number;
 }) {
+  const readScrollHeight = typeof options.scrollHeight === 'function'
+    ? options.scrollHeight
+    : () => options.scrollHeight as number;
   const originals = (['clientHeight', 'scrollHeight'] as const).map(name => {
     const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, name);
     Object.defineProperty(HTMLElement.prototype, name, {
       configurable: true,
-      get: () => (name === 'clientHeight' ? options.clientHeight : options.scrollHeight),
+      get: () => (name === 'clientHeight' ? options.clientHeight : readScrollHeight()),
     });
     return [name, descriptor] as const;
   });
@@ -93,7 +97,14 @@ vi.mock('./useFlowChatVirtualizer', async () => {
         paddingTopPx: 0,
         paddingBottomPx: 0,
         measureRowElement: () => {},
-        getItemBounds: (index: number) => ({ startPx: index * 40, endPx: index * 40 + 40 }),
+        getItemBounds: (index: number) => (
+          index >= 0 && index < rows.length
+            ? { startPx: index * 40, endPx: index * 40 + 40 }
+            : null
+        ),
+        // The real one flushes the DOM's heights into the library's cache;
+        // these rows are placed by arithmetic, so there is nothing to flush.
+        measureRenderedItems: () => {},
         getVisibleItemRange: () => {
           const scroller = options.scrollerRef.current;
           return scroller
@@ -328,7 +339,13 @@ describe('VirtualMessageList natural scroll contract', () => {
       expect(mocks.scrollToOffset).toHaveBeenCalledTimes(1);
       expect(mocks.scrollToOffset).toHaveBeenCalledWith(
         1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600,
-        { behavior: 'smooth', owner: 'one-shot-navigation' },
+        {
+          behavior: 'smooth',
+          owner: 'one-shot-navigation',
+          // The clamp is still the navigation, so it states the same window.
+          // Without one it would hold the viewport for the rest of the session.
+          holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
+        },
       );
     } finally {
       restoreLayout();
@@ -369,7 +386,11 @@ describe('VirtualMessageList natural scroll contract', () => {
       // would leave the first call's re-aim pending, and it aims at the top.
       expect(mocks.scrollToOffset).toHaveBeenCalledWith(
         1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600,
-        { behavior: 'auto', owner: 'one-shot-navigation' },
+        {
+          behavior: 'auto',
+          owner: 'one-shot-navigation',
+          holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
+        },
       );
     } finally {
       restoreLayout();
@@ -423,23 +444,94 @@ describe('VirtualMessageList natural scroll contract', () => {
   });
 
   describe('history arriving above the viewport', () => {
-    it('moves the viewport by the height that was prepended', () => {
-      act(() => root.render(<VirtualMessageList />));
-      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
-      scroller.scrollTop = 500;
+    /**
+     * A scroller whose range grows with the transcript, which is what makes the
+     * compensation measurable at all: the reserved height and the real height
+     * disagree while the arrived items are still estimates.
+     */
+    function withGrowingRange(
+      options: { scrollHeightPx: number; growthPx: number; scrollTopPx?: number },
+      run: (scroller: HTMLElement) => void,
+    ) {
+      let scrollHeightPx = options.scrollHeightPx;
+      const restoreLayout = fakeLayout({
+        clientHeight: 600,
+        scrollHeight: () => scrollHeightPx,
+        turnTopFromScrollerTop: 500,
+      });
+      try {
+        act(() => root.render(<VirtualMessageList />));
+        const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+        scroller.scrollTop = options.scrollTopPx ?? 500;
+        scrollHeightPx += options.growthPx;
+        run(scroller);
+      } finally {
+        restoreLayout();
+      }
+    }
 
+    function prependOlderTurns(count: number) {
       mocks.items = [
-        userMessage('turn-a', 'message-a', 'Older'),
-        userMessage('turn-b', 'message-b', 'Older'),
-        userMessage('turn-c', 'message-c', 'Older'),
+        ...Array.from({ length: count }, (_unused, index) => (
+          userMessage(`turn-old-${index}`, `message-old-${index}`, 'Older')
+        )),
         ...mocks.items,
       ];
       act(() => root.render(<VirtualMessageList />));
+    }
 
+    it('moves the viewport by the height that was prepended', () => {
       // Three 40px items arrived above, so the reader's content is 120px lower
       // and the viewport follows it. Anything less leaves them looking at
       // history they never asked to be shown.
-      expect(scroller.scrollTop).toBe(620);
+      withGrowingRange({ scrollHeightPx: 3000, growthPx: 120 }, scroller => {
+        prependOlderTurns(3);
+        expect(scroller.scrollTop).toBe(620);
+      });
+    });
+
+    it('moves it even while the reader is scrolling, because that is when history arrives', () => {
+      /*
+       * Paging up happens only while the reader scrolls up into the boundary,
+       * so a gesture that could refuse this would refuse all of it. Measured
+       * before this was a displacement rather than a position: 2494px arrived,
+       * `scrollTop` held at 40, the transcript jumped back thirteen Turns, and
+       * the boundary never re-armed because the reader was still at the head.
+       */
+      withGrowingRange({ scrollHeightPx: 3000, growthPx: 80 }, scroller => {
+        act(() => { scroller.dispatchEvent(new Event('wheel')); });
+        prependOlderTurns(2);
+        expect(scroller.scrollTop).toBe(580);
+      });
+    });
+
+    it('trusts the range the transcript actually gained over the height reserved for it', () => {
+      /*
+       * The arrived items are estimates in the virtualizer's cache while the
+       * DOM already holds their real heights, and the cache is the one that
+       * over-states. Measured twice in one session: 2174px reserved against
+       * 670px of real growth, then 2494px against 949px. Compensating by the
+       * reserved amount walks the reader down the transcript a page at a time.
+       */
+      withGrowingRange({ scrollHeightPx: 3000, growthPx: 50 }, scroller => {
+        prependOlderTurns(3);
+        expect(scroller.scrollTop).toBe(550);
+      });
+    });
+
+    it('never compensates past the end of real content', () => {
+      /*
+       * Content arriving above the reader cannot push them past the end of the
+       * transcript, so needing more than the range can absorb is proof the
+       * amount is wrong. Overshooting leaves them inside the reserved blank,
+       * where the snap back correctly returns them to the tail — which, since
+       * paging happens only while scrolling up, it then does every time.
+       */
+      const contentEndPx = 1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600;
+      withGrowingRange({ scrollHeightPx: 900, growthPx: 100, scrollTopPx: 0 }, scroller => {
+        prependOlderTurns(3);
+        expect(scroller.scrollTop).toBe(contentEndPx);
+      });
     });
 
     it('leaves the viewport alone when the transcript grows at the end', () => {
@@ -464,6 +556,88 @@ describe('VirtualMessageList natural scroll contract', () => {
       act(() => root.render(<VirtualMessageList />));
 
       expect(scroller.scrollTop).toBe(500);
+    });
+  });
+
+  describe('asking for older Turns', () => {
+    /** Twenty 40px rows, seen through a 200px viewport. */
+    const ROW_PX = 40;
+    const VIEWPORT_PX = 200;
+
+    /** A scroll, and the microtasks a boundary request resolves through. */
+    async function scrollTo(scroller: HTMLElement, topPx: number) {
+      await act(async () => {
+        scroller.scrollTop = topPx;
+        scroller.dispatchEvent(new Event('scroll'));
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    /**
+     * A transcript with a page already behind it.
+     *
+     * The list opens at the top, so it asks and disarms `before` on mount. That
+     * is the state both of these are about: one page dispatched, and what has
+     * to happen for the next one. `asked` is cleared afterwards so it counts
+     * only what the scrolls produced.
+     */
+    async function withPagedTranscript(
+      run: (scroller: HTMLElement, asked: string[]) => Promise<void>,
+    ) {
+      mocks.items = Array.from({ length: 20 }, (_unused, index) => (
+        userMessage(`turn-${index}`, `message-${index}`, 'Body')
+      ));
+      const restoreLayout = fakeLayout({
+        clientHeight: VIEWPORT_PX,
+        scrollHeight: 20 * ROW_PX,
+        turnTopFromScrollerTop: 0,
+      });
+      const asked: string[] = [];
+      try {
+        await act(async () => {
+          root.render(
+            <VirtualMessageList
+              onHistoryWindowBoundaryIntent={direction => {
+                asked.push(direction);
+                return 'applied';
+              }}
+            />,
+          );
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        expect(asked).toEqual(['before']);
+        asked.length = 0;
+        await run(container.querySelector<HTMLElement>('[data-flowchat-scroller]')!, asked);
+      } finally {
+        restoreLayout();
+      }
+    }
+
+    it('asks again once the reader is off the boundary, still within the lead', async () => {
+      /*
+       * The latch re-arms on the reader being *off* the boundary, and the ask
+       * goes out a screenful before they reach it — so those cannot be the same
+       * predicate. When they were, one page landed and everything after it was
+       * refused as `not-rearmed`: measured, six minutes of refusals while the
+       * reader scrolled into a wall two Turns from the top of what was loaded.
+       */
+      await withPagedTranscript(async (scroller, asked) => {
+        // Rows 3..7 are on screen, so nothing is reached; the head is 120px up,
+        // which is inside the one-screen lead.
+        await scrollTo(scroller, 120);
+        expect(asked).toEqual(['before']);
+      });
+    });
+
+    it('does not ask again while the reader is still on the head', async () => {
+      // The latch's own job, unchanged: after a prepend the visible range reads
+      // as the head for a commit, and that must not dispatch a second page.
+      await withPagedTranscript(async (scroller, asked) => {
+        await scrollTo(scroller, ROW_PX);
+        expect(asked).toEqual([]);
+      });
     });
   });
 

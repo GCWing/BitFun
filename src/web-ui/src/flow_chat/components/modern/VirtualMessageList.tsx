@@ -60,7 +60,11 @@ import {
   type FlowChatViewportOwner,
 } from './flowChatViewportOwnership';
 import { USER_DRIVEN_SCROLL_WINDOW_MS } from './flowChatViewportAnchor';
-import { historyBoundariesForVisibleRange } from './flowChatHistoryBoundary';
+import {
+  historyBoundariesForVisibleRange,
+  historyBoundariesReached,
+  type HistoryBoundaryProximity,
+} from './flowChatHistoryBoundary';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
 import {
   estimateVirtualMessageItemHeight,
@@ -486,10 +490,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const scrollToContentEndThroughVirtualizer = useCallback((
     behavior: 'auto' | 'smooth',
     owner: FlowChatViewportOwner = 'follow-output',
+    // A one-shot owner has to state its window here as anywhere else. Only a
+    // writer that releases may hold the viewport without one.
+    holdForMs?: number,
   ) => {
     const scroller = scrollerElementRef.current;
     if (!scroller) return;
-    virtualizer.scrollToOffset(readContentEndScrollTop(scroller), { behavior, owner });
+    virtualizer.scrollToOffset(readContentEndScrollTop(scroller), {
+      behavior,
+      owner,
+      holdForMs,
+    });
   }, [readContentEndScrollTop, virtualizer]);
 
   const scrollToContentEnd = useCallback((behavior: ScrollBehavior) => {
@@ -560,25 +571,32 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   isFollowingOutputRef.current = isFollowingOutput;
 
   /**
-   * The anchor stands down for anything moving the viewport on purpose.
+   * The anchor stands down for anyone aiming at a target of their own — and for
+   * nobody else, the reader included.
    *
-   * The register answers for every writer at once; the opening reveal is the
-   * one term left beside it, because it is a phase rather than a writer and
-   * the thing moving the viewport during it is follow-output — see
-   * `flowChatViewportOwnership.ts`.
+   * Its correction is a displacement repair, the same kind of act as the
+   * prepend compensation, so it asks the register the same question. Measured:
+   * with the anchor ranked under the gesture it stood down 23 times and
+   * corrected nothing at all, while the transcript shrank 200px under a reader
+   * who had not moved — and the compensation, which is a pixel delta, cannot
+   * follow a re-measurement that lands after it.
+   *
+   * The opening reveal is the one term left beside the register, because it is
+   * a phase rather than a writer and the thing moving the viewport during it is
+   * follow-output — see `flowChatViewportOwnership.ts`.
    */
   const isViewportOwnedElsewhere = useCallback(() => (
-    viewportOwner.isHeldByOther('anchor-correction') || isOpeningViewport()
+    !viewportOwner.canShift() || isOpeningViewport()
   ), [isOpeningViewport, viewportOwner]);
 
-  const writeAnchorCorrection = useCallback((topPx: number) => {
-    viewportOwner.write({ owner: 'anchor-correction', topPx });
+  const shiftAnchorCorrection = useCallback((byPx: number) => {
+    viewportOwner.shift(byPx);
   }, [viewportOwner]);
 
   const viewportAnchor = useFlowChatViewportAnchor({
     scrollerRef: scrollerElementRef,
     isViewportOwnedElsewhere,
-    writeViewport: writeAnchorCorrection,
+    shiftViewport: shiftAnchorCorrection,
   });
 
   /**
@@ -608,6 +626,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
    * Turn — takes it the rest of the way.
    */
   const firstItemKeyRef = useRef<string | null>(null);
+  /**
+   * The scroll range as of the last render, so a prepend can be told what the
+   * transcript actually grew by rather than only what was reserved for it.
+   */
+  const previousScrollHeightRef = useRef(0);
   useLayoutEffect(() => {
     const previousFirstKey = firstItemKeyRef.current;
     const nextFirstKey = virtualItems[0] ? getVirtualItemStableKey(virtualItems[0]) : null;
@@ -615,6 +638,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
     const scroller = scrollerElementRef.current;
     if (!scroller) return;
+    const previousScrollHeightPx = previousScrollHeightRef.current;
+    previousScrollHeightRef.current = scroller.scrollHeight;
     if (previousFirstKey === null || previousFirstKey === nextFirstKey) return;
     // Absent means the head was trimmed rather than extended, and there is no
     // prepended height to account for.
@@ -622,24 +647,69 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       item => getVirtualItemStableKey(item) === previousFirstKey,
     );
     if (movedTo <= 0) return;
+    /*
+     * The rows that arrived are already in the DOM at their real heights, and
+     * the cache still holds the estimates it reserved for them: the library
+     * skips its inline measurement while the reader is scrolling, and history
+     * arrives only then. Measuring here is the difference between a
+     * compensation derived from a guess and one derived from the layout the
+     * reader is looking at.
+     */
+    virtualizer.measureRenderedItems();
     const arrived = virtualizer.getItemBounds(movedTo);
     const head = virtualizer.getItemBounds(0);
     if (!arrived || !head) return;
     const prependedPx = arrived.startPx - head.startPx;
     if (prependedPx <= 0) return;
-    // Refused when something above is moving the viewport on purpose — the
-    // follow loop re-asserting its target, or a navigation reaching a Turn,
-    // both of which already say where the reader belongs.
-    const fromPx = scroller.scrollTop;
-    const compensated = viewportOwner.write({
-      owner: 'layout-correction',
-      topPx: fromPx + prependedPx,
-    });
     /*
-     * The amount is what makes this readable after the fact: the items above
-     * are estimates until they measure, so a prepend the reader felt as a jump
-     * is a `prependedPx` that disagrees with the anchor correction following
-     * it, not a compensation that never ran.
+     * A displacement, not a position, which is why it is a shift and not a
+     * write. It is left to whoever already holds a target — the follow loop
+     * re-asserting it, a navigation reaching a Turn — and to nobody else.
+     *
+     * A gesture in particular cannot refuse it. History pages in only while the
+     * reader is scrolling up into it, so routing this through the priority
+     * order refused every compensation there ever was.
+     */
+    const fromPx = scroller.scrollTop;
+    /*
+     * Three bounds on how far the reader has to move, and the smallest wins.
+     *
+     * Each is an upper bound on the true amount, and they fail in different
+     * directions, so the smallest is the only one that cannot overshoot:
+     *
+     * - `prependedPx` is what the virtualizer *reserved* for the items that
+     *   arrived. It over-states while they are estimates, and they are
+     *   estimates exactly when this runs: the DOM has already rendered them at
+     *   their real heights, and the measurement cache has not heard yet.
+     *   Measured, twice in one session: 2174px reserved against 670px of real
+     *   growth, then 2494px against 949px.
+     * - `scrollRangeGrowthPx` is what the scroll range actually gained, which
+     *   is the DOM's own answer. It over-states only if the transcript also
+     *   grew below the reader in the same commit.
+     * - What the range can absorb before the reader is inside the reserved
+     *   blank. Content arriving above them cannot push them past the end of the
+     *   transcript, so needing more than this is proof the amount is wrong.
+     *
+     * Overshooting is the expensive direction: it puts the reader below the
+     * content end, where the snap back correctly reads them as parked in the
+     * blank and returns them to the tail — which, since paging happens only
+     * while scrolling up, it then did on every attempt. Undershooting leaves
+     * them looking at slightly earlier content, which the anchor removes.
+     */
+    const contentEndPx = readContentEndScrollTop(scroller);
+    const scrollRangeGrowthPx = scroller.scrollHeight - previousScrollHeightPx;
+    const shiftedPx = Math.max(0, Math.min(
+      prependedPx,
+      scrollRangeGrowthPx,
+      contentEndPx - fromPx,
+    ));
+    const compensated = shiftedPx > 0 && viewportOwner.shift(shiftedPx);
+    /*
+     * Both amounts, because their disagreement is the diagnosis. `prependedPx`
+     * against what the scroll range actually grew by says how far the cache is
+     * ahead of the DOM; against `shiftedPx` it says how much of the
+     * compensation had to be given up, which is what the reader feels as a
+     * jump that the anchor then has to finish undoing.
      */
     traceViewport({
       location: 'virtualMessageList.prependCompensated',
@@ -647,13 +717,27 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       data: () => ({
         compensated,
         prependedPx: roundViewportPx(prependedPx),
+        shiftedPx: roundViewportPx(shiftedPx),
+        scrollRangeGrowthPx: roundViewportPx(scrollRangeGrowthPx),
         itemsAbove: movedTo,
         fromPx: roundViewportPx(fromPx),
+        contentEndPx: roundViewportPx(contentEndPx),
         scrollTopPx: roundViewportPx(scroller.scrollTop),
+        // The baseline every later `anchor.correct` in this settle is read
+        // against: a correction that arrives with the range unchanged is a
+        // compensation that over-shot, and one that arrives with the range
+        // smaller is the transcript above the reader measuring down.
+        scrollRangePx: roundViewportPx(scroller.scrollHeight),
         presentationMode,
       }),
     });
-  }, [presentationMode, viewportOwner, virtualItems, virtualizer]);
+  }, [
+    presentationMode,
+    readContentEndScrollTop,
+    viewportOwner,
+    virtualItems,
+    virtualizer,
+  ]);
 
   useLayoutEffect(() => {
     viewportAnchor.openSettleWindow();
@@ -1095,7 +1179,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       })) {
         traceNavigation(
           'rendered-clamped-to-content-end',
-          () => scrollToContentEndThroughVirtualizer(behavior, 'one-shot-navigation'),
+          () => scrollToContentEndThroughVirtualizer(
+            behavior,
+            'one-shot-navigation',
+            ONE_SHOT_NAVIGATION_HOLD_MS,
+          ),
         );
       } else {
         traceNavigation('rendered-top-aligned', alignTurnToTop, renderedTurnTopScrollTop);
@@ -1121,7 +1209,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     })) {
       traceNavigation(
         'unrendered-clamped-to-content-end',
-        () => scrollToContentEndThroughVirtualizer('auto', 'one-shot-navigation'),
+        () => scrollToContentEndThroughVirtualizer(
+          'auto',
+          'one-shot-navigation',
+          ONE_SHOT_NAVIGATION_HOLD_MS,
+        ),
       );
     }
     return 'settled';
@@ -1381,24 +1473,61 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
    * has to be a callback that both the scroll handler and the item-change
    * effect can invoke, rather than a value either of them derives.
    */
+  const readHistoryBoundaryProximity = useCallback((): HistoryBoundaryProximity | null => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) return null;
+    const head = virtualizer.getItemBounds(0);
+    const tail = virtualizer.getItemBounds(virtualItems.length - 1);
+    if (!head || !tail) return null;
+    return {
+      aboveViewportPx: scroller.scrollTop - head.startPx,
+      belowViewportPx: tail.endPx - (scroller.scrollTop + scroller.clientHeight),
+      viewportHeightPx: scroller.clientHeight,
+    };
+  }, [virtualItems.length, virtualizer]);
+
   const evaluateHistoryBoundaries = useCallback(() => {
     const range = virtualizer.getVisibleItemRange();
     if (!range) return;
-    const atBoundary = new Set(historyBoundariesForVisibleRange(
+    /*
+     * Two answers, and the latch takes the narrower one.
+     *
+     * `reached` is where the reader actually is; `asking` adds the screenful of
+     * lead. Arming from `asking` walls the latch shut, because a boundary that
+     * counts as reached from a screen away is one the reader is never off:
+     * measured, one page fetched and then `not-rearmed` for the next six
+     * minutes while they kept scrolling into it.
+     *
+     * Re-arming and asking in the same pass is the point rather than an
+     * oversight — "the reader is not on the boundary, and is a screen from it"
+     * is exactly the state the lead exists to serve.
+     */
+    const reached = new Set(historyBoundariesReached(
       range,
       virtualItems.length,
       presentationMode,
     ));
+    const asking = new Set(historyBoundariesForVisibleRange(
+      range,
+      virtualItems.length,
+      presentationMode,
+      readHistoryBoundaryProximity(),
+    ));
     for (const direction of HISTORY_WINDOW_DIRECTIONS) {
       // Off the boundary: whatever the last page added has been absorbed, and
       // arriving there again will be the reader's own doing.
-      if (!atBoundary.has(direction)) {
+      if (!reached.has(direction)) {
         boundaryArmedRef.current[direction] = true;
-        continue;
       }
-      requestHistoryBoundary(direction);
+      if (asking.has(direction)) requestHistoryBoundary(direction);
     }
-  }, [presentationMode, requestHistoryBoundary, virtualItems.length, virtualizer]);
+  }, [
+    presentationMode,
+    readHistoryBoundaryProximity,
+    requestHistoryBoundary,
+    virtualItems.length,
+    virtualizer,
+  ]);
 
   evaluateHistoryBoundariesRef.current = evaluateHistoryBoundaries;
 

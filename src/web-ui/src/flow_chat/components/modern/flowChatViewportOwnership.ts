@@ -27,14 +27,17 @@
  * - `one-shot-navigation` — a Turn, search hit, or focus request being reached.
  * - `snap-back` — returning from the reserved blank to the follow target.
  * - `follow-output` — the continuous writer that follows streaming output.
- * - `layout-correction` — the box or the content around the reader changed:
- *   history arrived above them, or the scroller was resized. One owner because
- *   both are the same act, putting the reader back where the change found them.
- * - `anchor-correction` — a late measurement moved things; put them back.
+ * - `layout-correction` — the scroller's own box changed and a viewport nobody
+ *   was following has to be re-aligned to the end it was resting against.
  *
- * The last two are corrections rather than movements: they hold the viewport
- * for the frame they act in and yield to anything above them, because a
- * movement made on purpose is not a displacement to undo.
+ * The last is a correction rather than a movement: it holds the viewport for
+ * the frame it acts in and yields to anything above it, because a movement made
+ * on purpose is not a displacement to undo.
+ *
+ * **Repairing a displacement is not on this list at all.** Putting the reader
+ * back after history arrived above them, or after a late measurement moved the
+ * transcript under them, is `canShiftViewport` — a different question, with a
+ * different answer for the reader's own gesture. See below.
  *
  * **The opening reveal is not here, and that is deliberate.** It is a phase
  * rather than a writer — the thing actually moving the viewport while the
@@ -49,7 +52,6 @@ export const FLOWCHAT_VIEWPORT_OWNERS = [
   'snap-back',
   'follow-output',
   'layout-correction',
-  'anchor-correction',
 ] as const;
 
 export type FlowChatViewportOwner = (typeof FLOWCHAT_VIEWPORT_OWNERS)[number];
@@ -79,16 +81,46 @@ export const ONE_SHOT_NAVIGATION_HOLD_MS = 600;
  */
 export const SNAP_BACK_HOLD_MS = 1_200;
 
+/**
+ * The owners that give the viewport back.
+ *
+ * This is the whole of who may hold it indefinitely, because a claim with no
+ * expiry and no release is a viewport nobody below it can ever write again.
+ * Measured, from the trail this register keeps: a library write at session open
+ * took an unbounded claim, and follow-output was refused eleven times over half
+ * a second while the transcript stood at the top of its loaded window — the
+ * session opened on the wrong Turn and stayed there.
+ *
+ * Everything else states its own window. A gesture goes quiet, an animation may
+ * never report completion, a re-aim runs while measurements settle: each of
+ * those ends by wall clock, and saying nothing means the write is instantaneous
+ * and owns only itself.
+ */
+const OWNERS_THAT_RELEASE: ReadonlySet<FlowChatViewportOwner> = new Set([
+  'follow-output',
+]);
+
+/**
+ * How long a claim stands when the writer does not say.
+ *
+ * Zero is not "no claim": the write still resolves against whoever holds the
+ * viewport, which is the question that decides whether it happens at all. It
+ * only means nothing is held afterwards.
+ */
+export function defaultViewportHoldMs(owner: FlowChatViewportOwner): number {
+  return OWNERS_THAT_RELEASE.has(owner) ? Number.POSITIVE_INFINITY : 0;
+}
+
 export interface ViewportClaim {
   owner: FlowChatViewportOwner;
   claimedAtMs: number;
   /**
    * When the claim lapses without being renewed.
    *
-   * A claim that has to be released explicitly uses `Infinity`. Anything whose
-   * end is a wall-clock fact — a gesture going quiet, an animation that may
-   * never report completion — carries its own expiry instead, so that a missed
-   * release costs a bounded wait rather than a viewport nobody may write.
+   * Only an owner that releases carries `Infinity`; see `OWNERS_THAT_RELEASE`.
+   * Anything whose end is a wall-clock fact carries its own expiry, so that a
+   * missed release costs a bounded wait rather than a viewport nobody may
+   * write.
    */
   expiresAtMs: number;
 }
@@ -96,7 +128,7 @@ export interface ViewportClaim {
 export interface ViewportClaimRequest {
   owner: FlowChatViewportOwner;
   nowMs: number;
-  /** Omitted means the claim stands until released. */
+  /** Omitted takes `defaultViewportHoldMs`, which only a releaser may hold. */
   holdForMs?: number;
 }
 
@@ -145,16 +177,55 @@ export function claimViewport(
   if (!canOwnViewport(claim, request.owner, request.nowMs)) {
     return { granted: false, claim: held };
   }
+  const holdForMs = request.holdForMs ?? defaultViewportHoldMs(request.owner);
   return {
     granted: true,
     claim: {
       owner: request.owner,
       claimedAtMs: request.nowMs,
-      expiresAtMs: request.holdForMs === undefined
-        ? Number.POSITIVE_INFINITY
-        : request.nowMs + request.holdForMs,
+      expiresAtMs: request.nowMs + holdForMs,
     },
   };
+}
+
+/**
+ * The owners that hold a target and re-assert it.
+ *
+ * `follow-output` recomputes its target every frame, a navigation's aim is
+ * re-taken by the virtualizer while the measurements under it settle, and a
+ * snap back is animating towards a resolved offset. All three already say where
+ * the reader belongs, so a displacement applied underneath them is either
+ * redundant or a fight.
+ *
+ * `user-gesture` is deliberately not one of them, and that is the whole point
+ * of this being a separate question.
+ */
+const OWNERS_THAT_HOLD_A_TARGET: ReadonlySet<FlowChatViewportOwner> = new Set([
+  'one-shot-navigation',
+  'snap-back',
+  'follow-output',
+]);
+
+/**
+ * Whether the viewport may be shifted by a displacement right now.
+ *
+ * A shift is not a movement and does not go through the priority order. It says
+ * "whatever the reader is looking at moved by this much, put it back" — content
+ * arriving above them changes what their offset *means*, and restoring that
+ * meaning is not competing with anyone for where the viewport should be.
+ *
+ * Which is why a gesture cannot refuse one. The reader chose a position in the
+ * transcript, not a number of pixels; refusing on their behalf leaves them
+ * somewhere they did not ask to be. Measured: history pages in only while the
+ * reader scrolls up into it, so a gesture holding the viewport refused every
+ * compensation there was — 2494px of history arrived, `scrollTop` stayed at 40,
+ * and the transcript jumped back thirteen Turns. The boundary then never
+ * re-armed, because the reader was still sitting at the head of the window they
+ * had just been moved to.
+ */
+export function canShiftViewport(claim: ViewportClaim | null, nowMs: number): boolean {
+  const held = activeViewportClaim(claim, nowMs);
+  return held === null || !OWNERS_THAT_HOLD_A_TARGET.has(held.owner);
 }
 
 /**

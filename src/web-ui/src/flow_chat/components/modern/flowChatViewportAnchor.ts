@@ -70,6 +70,25 @@ export const USER_DRIVEN_SCROLL_WINDOW_MS = 200;
  */
 export const ANCHOR_SETTLE_FRAMES = 20;
 
+/**
+ * Attempts an anchored Turn may be missing from the rendered window before the
+ * anchor is given up on.
+ *
+ * Absent for one frame is normal and absent for good is not, and only time
+ * tells them apart. The virtualizer windows from a scroll offset it learns from
+ * scroll events, so the commit that prepends history renders the position the
+ * reader has just been moved off — the Turn arrives a frame later. Dropping on
+ * the first miss threw the reading position away exactly there, at four
+ * junctions in a row.
+ *
+ * Long enough to outlast that, and to cover the settle window it usually runs
+ * inside; short enough that a Turn scrolled far out of the window is released
+ * rather than held onto, since a stale anchor is a correction waiting to
+ * happen. Reaching the end is not a failure — the next scroll anchors to a Turn
+ * that is actually on screen.
+ */
+export const ANCHOR_MISSING_TURN_ATTEMPTS = 20;
+
 /** Below this a correction is rounding, not movement. */
 export const ANCHOR_CORRECTION_EPSILON_PX = 0.5;
 

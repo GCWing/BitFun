@@ -18,7 +18,7 @@ import {
 } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
 import {
   activeViewportClaim,
-  canOwnViewport,
+  canShiftViewport,
   claimViewport,
   releaseViewport,
   type FlowChatViewportOwner,
@@ -50,8 +50,8 @@ export interface FlowChatViewportOwnerApi {
   claim: (owner: FlowChatViewportOwner, options?: { holdForMs?: number }) => boolean;
   /** Give it back. A writer that was preempted cannot release the new owner. */
   release: (owner: FlowChatViewportOwner) => void;
-  /** Whether something more authoritative is moving the viewport right now. */
-  isHeldByOther: (owner: FlowChatViewportOwner) => boolean;
+  /** Whether a displacement repair may act — see `canShiftViewport`. */
+  canShift: () => boolean;
   /** The owner holding the viewport, for diagnostics. Null when it is free. */
   currentOwner: () => FlowChatViewportOwner | null;
   /**
@@ -60,6 +60,16 @@ export interface FlowChatViewportOwnerApi {
    * writing the scroller itself.
    */
   write: (request: ViewportWriteRequest) => boolean;
+  /**
+   * Move the viewport *by* an amount, because what it is showing moved by that
+   * amount. Takes no ownership: a displacement has no opinion about where the
+   * viewport belongs, so there is nothing for it to hold against anyone.
+   *
+   * Refused only by an owner that holds a target — see `canShiftViewport`. A
+   * gesture is not one, and must not be: the reader chose a position in the
+   * transcript, and this is what keeps that position meaning the same thing.
+   */
+  shift: (byPx: number) => boolean;
 }
 
 export function useFlowChatViewportOwner(
@@ -114,8 +124,8 @@ export function useFlowChatViewportOwner(
     }
   }, []);
 
-  const isHeldByOther = useCallback((owner: FlowChatViewportOwner) => (
-    !canOwnViewport(claimRef.current, owner, performance.now())
+  const canShift = useCallback(() => (
+    canShiftViewport(claimRef.current, performance.now())
   ), []);
 
   const currentOwner = useCallback(() => {
@@ -162,11 +172,37 @@ export function useFlowChatViewportOwner(
     return true;
   }, [scrollerRef, takeViewport]);
 
+  const shift = useCallback((byPx: number): boolean => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return false;
+    const allowed = canShift();
+    if (isViewportDiagnosticsEnabled()) {
+      const fromPx = scroller.scrollTop;
+      traceViewportRepeating(`shift|${allowed}|${currentOwner()}`, {
+        location: 'viewportOwner.shift',
+        message: allowed
+          ? 'moved the viewport by what moved under it'
+          : 'left the displacement to whoever holds a target',
+        travelPx: byPx,
+        data: () => ({
+          allowed,
+          heldBy: currentOwner(),
+          fromPx: roundViewportPx(fromPx),
+          byPx: roundViewportPx(byPx),
+        }),
+      });
+    }
+    if (!allowed) return false;
+    scroller.scrollTop += byPx;
+    return true;
+  }, [canShift, currentOwner, scrollerRef]);
+
   return useMemo(() => ({
     claim,
     release,
-    isHeldByOther,
+    canShift,
     currentOwner,
     write,
-  }), [claim, currentOwner, isHeldByOther, release, write]);
+    shift,
+  }), [canShift, claim, currentOwner, release, shift, write]);
 }
