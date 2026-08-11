@@ -5,7 +5,7 @@
   },
   "permissionsPage": {
     "title": "Permission management",
-    "subtitle": "Accelerated workspace search, tool execution, tool definition loading, Computer use, browser control, and debug mode"
+    "subtitle": "Manage tool permissions, execution, desktop control, and browser access."
   },
   "features": {
     "externalInstructionSources": {
@@ -49,32 +49,32 @@
     },
     "workspaceSearch": {
       "title": "Accelerated workspace search",
-      "subtitle": "Use flashgrep-backed indexed search for local workspaces. When off, BitFun falls back to legacy search.",
+      "subtitle": "Speed up file search in large workspaces. Standard search remains available when this is off.",
       "enable": "Enable accelerated workspace search"
     }
   },
   "toolExecution": {
-    "sectionTitle": "Tool execution behavior",
-    "sectionDescription": "Confirmation and timeout settings when tools run in a session."
+    "sectionTitle": "Tool execution",
+    "sectionDescription": "Set tool timeouts and concurrent task limits."
   },
   "permissionPolicy": {
     "sectionTitle": "Tool permissions",
-    "sectionDescription": "Choose the default tool access policy for sessions and how permission prompts are handled.",
+    "sectionDescription": "Choose when BitFun asks you to confirm tool actions.",
     "mode": "Default permission mode",
     "ask": "Ask for confirmation",
-    "askDescription": "External access, file changes, and command execution require confirmation.",
+    "askDescription": "Confirm before files change, commands run, or external services are accessed.",
     "fullAccess": "Full access",
-    "fullAccessDescription": "Tools are allowed by default without confirmation.",
+    "fullAccessDescription": "Do not confirm each tool action.",
     "fullAccessWarningTitle": "Enable full access?",
     "fullAccessWarningMessage": "Full access allows tools by default without asking each time.",
     "fullAccessConfirm": "Enable full access",
     "cancel": "Cancel",
     "autoApprove": "Auto approve",
-    "autoApproveDescription": "Automatically approve requests that require confirmation.",
+    "autoApproveDescription": "Automatically allow actions that would normally need confirmation.",
     "showInChatInput": "Show permission mode selector",
-    "showInChatInputDescription": "Show the selector below the chat input, where the mode applies to the current session only. Hiding it does not change any session's permission mode.",
+    "showInChatInputDescription": "Show the permission mode below the chat input so it can be changed for the current session.",
     "globalRules": "Global rules",
-    "globalRulesDescription": "Define user-level rules that apply after the selected mode and before project and Agent rules.",
+    "globalRulesDescription": "Set shared allow, ask, or deny rules for every workspace.",
     "manageGlobalRules": "Manage rules",
     "globalRulesDialogTitle": "Global tool permission rules",
     "globalRulesDialogDescription": "These user-level rules apply to every workspace. Later project and Agent rules can override them; enforced product restrictions remain authoritative.",
@@ -91,7 +91,7 @@
     "discardGlobalRules": "Discard changes",
     "saveGlobalRules": "Save rules",
     "globalRulesEffects": { "allow": "Allow", "ask": "Ask", "deny": "Deny" },
-    "modeDescription": "Applies to sessions that have not chosen their own mode. Each session can override it from the chat input."
+    "modeDescription": "Used for new sessions and can be changed temporarily from the chat input."
   },
   "projectPermissions": {
     "description": "Always allow decisions are saved as remembered grants for the current project; static project rules apply before a tool runs.",
@@ -130,32 +130,38 @@
     "effects": { "allow": "Allow", "ask": "Ask", "deny": "Deny" }
   },
   "deferredToolLoading": {
-    "sectionTitle": "Deferred tool loading",
-    "sectionDescription": "Load detailed schemas for some tools only when needed, including a subset of built-in tools and all MCP tools.",
-    "warning": "Each request now sends full schemas for enabled tools. Configuring many MCP tools uses more tokens."
+    "sectionTitle": "Load tools as needed",
+    "sectionDescription": "Load tool details only when they are needed.",
+    "warning": "Turning this off loads every tool definition and may increase model usage."
   },
   "computerUse": {
-    "sectionTitle": "Computer use (desktop)",
-    "sectionDescription": "In the BitFun desktop app, the assistant can capture the screen and control the mouse and keyboard; requires a multimodal model for vision.",
-    "enable": "Enable Computer use",
-    "enableDesc": "When off, the ComputerUse tool stays disabled in every session mode. Browser control (ControlHub) is not yet gated by this switch.",
+    "sectionTitle": "Desktop control",
+    "sectionDescription": "Allow BitFun to view the screen and use the mouse and keyboard.",
+    "enable": "Allow desktop control",
+    "enableDesc": "When off, BitFun cannot control desktop apps. Browser access is managed separately.",
     "accessibility": "Accessibility",
-    "accessibilityDesc": "macOS: lets BitFun read on-screen UI elements and send mouse/keyboard input to other apps. Not applicable on Windows; on Linux this requires an X11 session.",
+    "accessibilityDesc": "Allows BitFun to identify and interact with controls in other apps.",
     "screenCapture": "Screen recording",
-    "screenCaptureDesc": "Lets BitFun capture screenshots of your screen so the assistant can see what it is controlling.",
+    "screenCaptureDesc": "Allows BitFun to see the contents of your screen.",
     "granted": "Granted",
     "notGranted": "Not granted",
-    "openSettings": "Setting",
+    "openSettings": "System settings",
     "refreshStatus": "Refresh status",
-    "desktopOnly": "Computer use settings are only available in the BitFun desktop app.",
-    "platformNote": "Note"
+    "desktopOnly": "Desktop control is only available in the BitFun desktop app.",
+    "platformNote": "Note",
+    "platformNotes": {
+      "macos": "This build still needs Accessibility permission in System Settings.",
+      "windows": "Some protected windows or remote desktop environments may not be controllable.",
+      "linux": "This desktop environment may not support full mouse, keyboard, or screen control.",
+      "generic": "Full desktop control is not available on this system."
+    }
   },
   "browserControl": {
     "sectionTitle": "Browser control",
-    "sectionDescription": "Choose which browser BitFun controls. Chrome and Edge can use the window you already have open; other browsers get a separate BitFun window.",
+    "sectionDescription": "Choose the browser BitFun uses and how it connects.",
     "desktopOnly": "Browser control is only available in the BitFun desktop app.",
     "preferredBrowser": "Browser",
-    "preferredBrowserDesc": "Choose which browser BitFun controls through CDP. Default follows the system default browser.",
+    "preferredBrowserDesc": "The default option follows your system browser.",
     "notInstalled": "not installed",
     "status": "Connection",
     "statusDesc": "",
@@ -163,28 +169,28 @@
     "readyNotConnected": "Ready, connects on use",
     "refreshStatus": "Refresh status",
     "connect": "Connect",
-    "defaultCdp": "Default CDP",
-    "defaultCdpDesc": "Let BitFun use the Chrome or Edge you already have open, with your existing tabs and signed-in accounts, instead of starting a separate empty browser. You grant this once in the browser, and the browser still asks you to confirm each connection.",
+    "defaultCdp": "Use existing browser",
+    "defaultCdpDesc": "Use an open Chrome or Edge window and keep its tabs and signed-in accounts. The browser still confirms each connection.",
     "autoConnectOnStartup": "Connect on startup",
-    "autoConnectOnStartupDesc": "Attach as soon as BitFun starts, if the browser is already running with the setting above enabled. Note: the browser forgets its approval when it restarts, so after that you get an approval prompt right away — even if you weren't going to use the browser this session. When off, BitFun attaches the first time an agent needs the browser.",
+    "autoConnectOnStartupDesc": "Connect to an open browser when BitFun starts. The browser may ask again after it restarts.",
     "defaultCdpEnabled": "Enabled",
     "defaultCdpDisabled": "Not enabled",
-    "enableDefaultCdp": "Enable default CDP",
+    "enableDefaultCdp": "Enable and connect",
     "defaultCdpEnablePrompt": "Opened {{browser}}'s Remote debugging page. Tick “Allow remote debugging for this browser instance”; BitFun will detect it and continue automatically, then choose “Allow” in the browser connection prompt.",
     "defaultCdpConnectPrompt": "Connecting to your current {{browser}}. Choose “Allow” in the browser prompt.",
     "connectSuccess": "Connected to {{browser}}",
     "connectFailed": "Failed to connect to browser",
-    "userProfileSetupRequired": "{{browser}} opened its Remote debugging page, but the switch was not detected before the wait ended. Tick “Allow remote debugging for this browser instance”, then click Enable default CDP again; your current tabs and login state are preserved.",
-    "userProfileSetupManual": "Open {{url}} in {{browser}} and tick “Allow remote debugging for this browser instance”, then click Enable default CDP again; your current tabs and login state are preserved.",
+    "userProfileSetupRequired": "{{browser}} opened its Remote debugging page, but the switch was not detected before the wait ended. Tick “Allow remote debugging for this browser instance”, then click Enable and connect again; your current tabs and login state are preserved.",
+    "userProfileSetupManual": "Open {{url}} in {{browser}} and tick “Allow remote debugging for this browser instance”, then click Enable and connect again; your current tabs and login state are preserved.",
     "userProfileConnectionFailed": "{{browser}} did not approve the connection, or the request timed out. Make sure the browser is running and Remote debugging is enabled, then connect again and choose Allow in the browser.",
-    "restartSuccess": "Restarted {{browser}} with debug mode enabled",
-    "restartFailed": "Failed to restart browser with debug mode enabled",
+    "restartSuccess": "Restarted {{browser}} and enabled browser control",
+    "restartFailed": "Could not restart and connect to {{browser}}",
     "restartModal": {
-      "title": "Enable browser debug mode",
-      "description": "{{browser}} is already running and the current instance was not started with the debug port enabled. BitFun needs to restart the browser in debug mode before it can control it.",
+      "title": "Restart browser",
+      "description": "BitFun needs to restart the current {{browser}} before it can connect.",
       "warning": "This will close the current browser windows.",
       "cancel": "Cancel",
-      "confirm": "Restart and enable debug",
+      "confirm": "Restart and connect",
       "restarting": "Restarting..."
     },
     "tabs": "tabs"

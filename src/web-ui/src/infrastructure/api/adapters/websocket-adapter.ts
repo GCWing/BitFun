@@ -158,6 +158,7 @@ export const AGENT_COMMAND_SCHEMA = {
   get_agent_profile_configs: { method: 'config/getAgentProfileConfigs' },
   get_agent_profile_config: { method: 'config/getAgentProfileConfig' },
   get_model_configs: { method: 'config/getModelConfigs' },
+  project_ai_model_reasoning_catalog: { method: 'model/projectReasoningCatalog' },
   get_config: { method: 'config/getConfig' },
   get_configs: { method: 'config/getConfigs' },
   set_agent_profile_config: {
@@ -290,6 +291,8 @@ export function decodeResponseBody(action: string, result: any): any {
       return unwrapArray(result, 'records');
     case 'git_get_branches':
       return unwrapArray(result, 'branches');
+    case 'project_ai_model_reasoning_catalog':
+      return result?.projection ?? result;
     case 'set_agent_profile_config':
       return 'Agent profile configuration updated successfully';
     case 'reset_agent_profile_config':

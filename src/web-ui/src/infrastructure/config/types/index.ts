@@ -229,6 +229,7 @@ export interface ReasoningCatalogProjection {
   status: 'unsupported' | 'known' | 'unknown';
   default_preset?: string;
   presets?: ReasoningPresetDescriptor[];
+  unavailable_presets?: ReasoningPresetDescriptor[];
 }
 
 export interface ModelMetadata {

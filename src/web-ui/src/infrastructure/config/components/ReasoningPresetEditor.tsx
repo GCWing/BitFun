@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   ArrowDown,
@@ -28,6 +29,8 @@ import type {
   ReasoningPresetAction,
 } from '../types';
 import type { ModelsDevReasoningCatalog } from '@/infrastructure/api/service-api/AIApi';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import {
   availableReasoningActionTypes,
   cloneReasoningConfig,
@@ -42,8 +45,34 @@ interface ReasoningPresetEditorProps {
   onChange: (value: ReasoningConfig) => void;
   generatedProjection?: ReasoningCatalogProjection | null;
   modelsDevReasoningCatalog?: ModelsDevReasoningCatalog | null;
+  requestFormatLabel?: string;
   disabled?: boolean;
   onValidationChange?: (invalid: boolean) => void;
+}
+
+type ModelsDevReasoningProvider = ModelsDevReasoningCatalog['providers'][number];
+type ModelsDevReasoningModel = ModelsDevReasoningProvider['models'][number];
+
+interface ModelsDevSearchResult {
+  provider: ModelsDevReasoningProvider;
+  model: ModelsDevReasoningModel;
+  rank: number;
+}
+
+const MODELS_DEV_SEARCH_SEPARATOR = /[\s/_.-]+/u;
+
+function normalizeModelsDevSearchText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .split(MODELS_DEV_SEARCH_SEPARATOR)
+    .filter(Boolean)
+    .join(' ');
+}
+
+function tokenizeModelsDevSearch(value: string): string[] {
+  const normalized = normalizeModelsDevSearchText(value);
+  return normalized ? normalized.split(' ') : [];
 }
 
 function defaultAction(
@@ -74,12 +103,19 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
   onChange,
   generatedProjection,
   modelsDevReasoningCatalog,
+  requestFormatLabel,
   disabled = false,
   onValidationChange,
 }) => {
   const { t } = useTranslation('settings/ai-model');
+  const modelsDevSearchListboxId = React.useId();
   const [jsonDrafts, setJsonDrafts] = useState<Record<string, string>>({});
   const [expandedPresetIndex, setExpandedPresetIndex] = useState<number | null>(null);
+  const [modelsDevSearch, setModelsDevSearch] = useState('');
+  const [modelsDevSearchOpen, setModelsDevSearchOpen] = useState(false);
+  const [modelsDevSearchHighlight, setModelsDevSearchHighlight] = useState(0);
+  const modelsDevSearchAnchorRef = useRef<HTMLDivElement>(null);
+  const modelsDevSearchPopoverRef = useRef<HTMLDivElement>(null);
   const invalidJsonKeysRef = useRef<Set<string>>(new Set());
   const presets = useMemo(() => value.presets ?? [], [value.presets]);
   const catalog = value.catalog ?? { source: 'auto' as const };
@@ -129,6 +165,11 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
     () => resolveDefaultReasoningEffortValue(generatedProjection),
     [generatedProjection],
   );
+  const unavailablePresetLabels = useMemo(() => (
+    generatedProjection?.unavailable_presets
+      ?.map(preset => preset.label || preset.id)
+      .filter(Boolean) ?? []
+  ), [generatedProjection?.unavailable_presets]);
 
   const modelsDevProviderOptions = useMemo<SelectOption[]>(() => {
     const options = (modelsDevReasoningCatalog?.providers ?? []).map(provider => ({
@@ -153,6 +194,61 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
     }));
   }, [modelsDevReasoningCatalog, modelsDevProviderId]);
 
+  const modelsDevSearchResults = useMemo(() => {
+    const query = normalizeModelsDevSearchText(modelsDevSearch);
+    const queryTokens = tokenizeModelsDevSearch(modelsDevSearch);
+    if (!query) return { items: [] as ModelsDevSearchResult[], total: 0 };
+    const results: ModelsDevSearchResult[] = (modelsDevReasoningCatalog?.providers ?? []).flatMap(provider => (
+      provider.models.map(model => {
+        const providerId = provider.id.toLowerCase();
+        const providerName = provider.name.toLowerCase();
+        const modelId = model.id.toLowerCase();
+        const modelName = (model.display_name ?? '').toLowerCase();
+        const providerFields = [providerId, providerName];
+        const modelFields = [modelId, modelName];
+        const searchableFields = [...providerFields, ...modelFields];
+        if (!queryTokens.every(token => searchableFields.some(field => field.includes(token)))) {
+          return null;
+        }
+
+        const normalizedModelId = normalizeModelsDevSearchText(modelId);
+        const normalizedModelName = normalizeModelsDevSearchText(modelName);
+        const modelExact = normalizedModelId === query || normalizedModelName === query;
+        const modelPrefix = normalizedModelId.startsWith(query) || normalizedModelName.startsWith(query);
+        const providerExactToken = queryTokens.some(token => (
+          token === providerId || token === normalizeModelsDevSearchText(providerName)
+        ));
+        const allTokensMatchModel = queryTokens.every(token => (
+          modelFields.some(field => field.includes(token))
+        ));
+        const rank = modelExact
+          ? 0
+          : modelPrefix
+            ? 1
+            : providerExactToken
+              ? 2
+              : allTokensMatchModel
+                ? 3
+                : 4;
+        return { provider, model, rank };
+      })
+    )).filter((result): result is ModelsDevSearchResult => result !== null);
+    results.sort((left, right) => left.rank - right.rank
+        || left.model.id.localeCompare(right.model.id)
+        || left.provider.id.localeCompare(right.provider.id));
+    return { items: results.slice(0, 50), total: results.length };
+  }, [modelsDevReasoningCatalog, modelsDevSearch]);
+  const showModelsDevSearchResults = modelsDevSearchOpen && Boolean(modelsDevSearch.trim());
+  const modelsDevSearchLayout = useAnchoredPopoverPosition({
+    open: showModelsDevSearchResults,
+    anchorRef: modelsDevSearchAnchorRef,
+    popoverRef: modelsDevSearchPopoverRef,
+    preferredPlacement: 'bottom',
+    gap: 4,
+    matchAnchorWidth: true,
+    layoutRevision: `${modelsDevSearchResults.items.length}:${modelsDevSearchResults.total}`,
+  });
+
   const update = (next: ReasoningConfig) => onChange(cloneReasoningConfig(next));
   const defaultIsCustom = presets.some(preset => (
     preset.id === value.default_preset
@@ -166,6 +262,16 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
       default_preset: defaultIsCustom ? value.default_preset : undefined,
       catalog: nextCatalog,
     });
+  };
+  const selectModelsDevSearchResult = (result: ModelsDevSearchResult) => {
+    rebindCatalog({
+      source: 'models_dev',
+      provider: result.provider.id,
+      model: result.model.id,
+    });
+    setModelsDevSearch('');
+    setModelsDevSearchOpen(false);
+    setModelsDevSearchHighlight(0);
   };
   const updatePreset = (index: number, changes: Partial<ReasoningPreset>) => {
     const next = [...presets];
@@ -318,6 +424,109 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             data-bf-component="reasoning-preset-editor"
             data-bf-part="binding"
           >
+            <div className="bitfun-reasoning-preset-editor__models-dev-search">
+              <div className="bitfun-reasoning-preset-editor__models-dev-search-field">
+                <div className="bitfun-reasoning-preset-editor__models-dev-search-input">
+                  <span>{t('reasoningPresets.catalogSearch')}</span>
+                  <div
+                    ref={modelsDevSearchAnchorRef}
+                    className="bitfun-reasoning-preset-editor__models-dev-search-control"
+                  >
+                    <Input
+                      size="small"
+                      value={modelsDevSearch}
+                      disabled={disabled}
+                      placeholder={t('reasoningPresets.catalogSearchPlaceholder')}
+                      aria-label={t('reasoningPresets.catalogSearch')}
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-controls={modelsDevSearchListboxId}
+                      aria-expanded={modelsDevSearchOpen && Boolean(modelsDevSearch.trim())}
+                      aria-activedescendant={modelsDevSearchOpen && modelsDevSearchResults.items.length > 0
+                        ? `${modelsDevSearchListboxId}-${modelsDevSearchHighlight}`
+                        : undefined}
+                      autoComplete="off"
+                      onFocus={() => setModelsDevSearchOpen(true)}
+                      onChange={(event) => {
+                        setModelsDevSearch(event.target.value);
+                        setModelsDevSearchOpen(true);
+                        setModelsDevSearchHighlight(0);
+                      }}
+                      onBlur={() => setModelsDevSearchOpen(false)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                          setModelsDevSearchOpen(false);
+                          return;
+                        }
+                        if (!modelsDevSearchOpen || modelsDevSearchResults.items.length === 0) return;
+                        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                          event.preventDefault();
+                          const direction = event.key === 'ArrowDown' ? 1 : -1;
+                          setModelsDevSearchHighlight(previous => (
+                            (previous + direction + modelsDevSearchResults.items.length)
+                            % modelsDevSearchResults.items.length
+                          ));
+                        } else if (event.key === 'Enter') {
+                          event.preventDefault();
+                          const result = modelsDevSearchResults.items[modelsDevSearchHighlight];
+                          if (result) selectModelsDevSearchResult(result);
+                        }
+                      }}
+                    />
+                    {showModelsDevSearchResults && createPortal(
+                      <div
+                        ref={modelsDevSearchPopoverRef}
+                        id={modelsDevSearchListboxId}
+                        className="bitfun-reasoning-preset-editor__models-dev-search-results"
+                        role="listbox"
+                        aria-label={t('reasoningPresets.catalogSearchResults')}
+                        data-bf-placement={modelsDevSearchLayout?.placement ?? 'bottom'}
+                        style={{
+                          top: `${modelsDevSearchLayout?.top ?? 0}px`,
+                          left: `${modelsDevSearchLayout?.left ?? 0}px`,
+                          width: modelsDevSearchLayout?.width === undefined
+                            ? undefined
+                            : `${modelsDevSearchLayout.width}px`,
+                          visibility: modelsDevSearchLayout ? 'visible' : 'hidden',
+                        }}
+                      >
+                        {modelsDevSearchResults.items.length > 0
+                          ? modelsDevSearchResults.items.map((result, index) => (
+                          <button
+                            type="button"
+                            id={`${modelsDevSearchListboxId}-${index}`}
+                            key={`${result.provider.id}/${result.model.id}`}
+                            className="bitfun-reasoning-preset-editor__models-dev-search-result"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onMouseEnter={() => setModelsDevSearchHighlight(index)}
+                            onClick={() => selectModelsDevSearchResult(result)}
+                            role="option"
+                            aria-selected={index === modelsDevSearchHighlight}
+                            data-highlighted={index === modelsDevSearchHighlight ? 'true' : undefined}
+                          >
+                            <strong>{result.model.display_name || result.model.id}</strong>
+                            <span>{result.provider.id} / {result.model.id}</span>
+                          </button>
+                        )) : (
+                          <div className="bitfun-reasoning-preset-editor__models-dev-search-empty">
+                            {t('reasoningPresets.catalogSearchEmpty')}
+                          </div>
+                        )}
+                        {modelsDevSearchResults.total > modelsDevSearchResults.items.length && (
+                          <div className="bitfun-reasoning-preset-editor__models-dev-search-limit">
+                            {t('reasoningPresets.catalogSearchLimit')}
+                          </div>
+                        )}
+                      </div>,
+                      getAppearanceOverlayHost(),
+                    )}
+                  </div>
+                </div>
+                <span className="bitfun-reasoning-preset-editor__models-dev-search-hint">
+                  {t('reasoningPresets.catalogSearchHint')}
+                </span>
+              </div>
+            </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogProvider')}</span>
               <Select
@@ -359,6 +568,26 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                     : { source: 'auto' });
                 }}
               />
+            </div>
+          </div>
+        )}
+
+        {catalog.source === 'models_dev' && unavailablePresetLabels.length > 0 && (
+          <div
+            className="bitfun-reasoning-preset-editor__unavailable-warning"
+            data-bf-component="reasoning-preset-editor"
+            data-bf-part="unavailableWarning"
+            role="status"
+          >
+            <AlertTriangle size={16} aria-hidden="true" />
+            <div>
+              <strong>{t('reasoningPresets.unavailableTitle')}</strong>
+              <span>
+                {t('reasoningPresets.unavailableDescription', {
+                  format: requestFormatLabel || t('reasoningPresets.unknownRequestFormat'),
+                  presets: unavailablePresetLabels.join(', '),
+                })}
+              </span>
             </div>
           </div>
         )}
@@ -451,13 +680,37 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                       className="bitfun-reasoning-preset-editor__row-toggle"
                       onClick={() => setExpandedPresetIndex(expanded ? null : presetIndex)}
                       aria-expanded={expanded}
+                      aria-label={preset.label?.trim() || preset.id}
                     >
                       {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                      <span className="bitfun-reasoning-preset-editor__row-summary-text">
-                        <strong>{preset.label?.trim() || preset.id}</strong>
-                        <span>{formatPresetSummary(preset)}</span>
-                      </span>
                     </button>
+                    <div className="bitfun-reasoning-preset-editor__row-content">
+                      {expanded ? (
+                        <div className="bitfun-reasoning-preset-editor__row-name-editor">
+                          <Input
+                            size="small"
+                            aria-label={t('reasoningPresets.label')}
+                            value={preset.label ?? ''}
+                            disabled={disabled}
+                            placeholder={t('reasoningPresets.labelPlaceholder')}
+                            onChange={(event) => updatePreset(presetIndex, {
+                              label: event.target.value || undefined,
+                            })}
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="bitfun-reasoning-preset-editor__row-name"
+                          onClick={() => setExpandedPresetIndex(presetIndex)}
+                        >
+                          {preset.label?.trim() || preset.id}
+                        </button>
+                      )}
+                      <span className="bitfun-reasoning-preset-editor__row-preview">
+                        {formatPresetSummary(preset)}
+                      </span>
+                    </div>
                     <div className="bitfun-reasoning-preset-editor__row-badges">
                       {value.default_preset === preset.id && (
                         <span className="bitfun-reasoning-preset-editor__badge">
@@ -508,40 +761,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                       data-bf-component="reasoning-preset-editor"
                       data-bf-part="presetEditor"
                     >
-                      <div className="bitfun-reasoning-preset-editor__row-head">
-                        <div className="bitfun-reasoning-preset-editor__row-head-field">
-                          <span>{t('reasoningPresets.id')}</span>
-                          <Input
-                            size="small"
-                            aria-label={t('reasoningPresets.id')}
-                            value={preset.id}
-                            disabled={disabled}
-                            onChange={(event) => {
-                              const nextId = event.target.value;
-                              updatePreset(presetIndex, { id: nextId });
-                              if (value.default_preset === preset.id) {
-                                update({
-                                  ...value,
-                                  default_preset: nextId,
-                                  presets: presets.map((item, index) => index === presetIndex ? { ...item, id: nextId } : item),
-                                });
-                              }
-                            }}
-                          />
-                        </div>
-                        <div className="bitfun-reasoning-preset-editor__row-head-field">
-                          <span>{t('reasoningPresets.label')}</span>
-                          <Input
-                            size="small"
-                            aria-label={t('reasoningPresets.label')}
-                            value={preset.label ?? ''}
-                            disabled={disabled}
-                            placeholder={t('reasoningPresets.labelPlaceholder')}
-                            onChange={(event) => updatePreset(presetIndex, { label: event.target.value || undefined })}
-                          />
-                        </div>
-                      </div>
-
                       <div
                         className="bitfun-reasoning-preset-editor__actions"
                         data-bf-component="reasoning-preset-editor"

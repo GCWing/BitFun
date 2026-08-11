@@ -1657,6 +1657,7 @@ pub async fn run() {
             subscribe_config_updates,
             get_model_configs,
             get_ai_model_catalog,
+            project_ai_model_reasoning_catalog,
             get_models_dev_catalog_status,
             refresh_models_dev_catalog_now,
             reveal_models_dev_cache_directory,

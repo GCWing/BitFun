@@ -533,6 +533,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "project_ai_model_reasoning_catalog",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "get_models_dev_catalog_status",
         RemoteWorkspacePolicy::LocalOnly,
     ),
