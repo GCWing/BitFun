@@ -36,6 +36,7 @@ const SceneTab: React.FC<SceneTabProps> = ({
   onClose,
 }) => {
   const { Icon, label, pinned } = def;
+  const closable = def.closable ?? !pinned;
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,24 +60,24 @@ const SceneTab: React.FC<SceneTabProps> = ({
     }
   }, [onActivate, tab.id]);
 
-  /** Middle-click closes (browser-tab style); skip on pinned tabs and the inline + action. */
+  /** Middle-click closes browser-style only when the scene contract permits closing. */
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 1) return;
-    if (pinned) return;
+    if (!closable) return;
     const target = e.target as HTMLElement;
     if (target.closest('.bitfun-scene-tab__action')) return;
     e.preventDefault();
-  }, [pinned]);
+  }, [closable]);
 
   const handleAuxClick = useCallback((e: React.MouseEvent) => {
     if (e.button !== 1) return;
-    if (pinned) return;
+    if (!closable) return;
     const target = e.target as HTMLElement;
     if (target.closest('.bitfun-scene-tab__action')) return;
     e.preventDefault();
     e.stopPropagation();
     onClose(tab.id);
-  }, [pinned, onClose, tab.id]);
+  }, [closable, onClose, tab.id]);
 
   return (
     <div
@@ -119,7 +120,7 @@ const SceneTab: React.FC<SceneTabProps> = ({
         )}
       </div>
 
-      {!pinned && (
+      {closable && (
         <button
           type="button"
           className="bitfun-scene-tab__close"

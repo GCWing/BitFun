@@ -23,6 +23,8 @@ use bitfun_services_integrations::miniapp_market::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+#[cfg(target_env = "ohos")]
+use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
@@ -31,6 +33,20 @@ use tokio::sync::Mutex;
 
 const MARKET_UPLOAD_PROGRESS_EVENT: &str = "miniapp-market-upload-progress";
 const MARKET_ACCOUNT_CHANGED_EVENT: &str = "miniapp-market-account-changed";
+
+async fn market_client() -> Result<MarketClient, String> {
+    #[cfg(target_env = "ohos")]
+    {
+        let store =
+            Arc::new(crate::api::ohos::market_credentials::OhosMarketCredentialStore::new());
+        return MarketClient::from_environment_with_credential_store(store)
+            .await
+            .map_err(market_error);
+    }
+
+    #[cfg(not(target_env = "ohos"))]
+    MarketClient::from_environment().await.map_err(market_error)
+}
 
 #[derive(Debug, Clone)]
 struct PendingDesktopAuth {
@@ -170,9 +186,7 @@ pub struct MarketPackageInspection {
 pub async fn miniapp_market_browse(
     request: MarketBrowseRequest,
 ) -> Result<CursorPage<MarketListingSummary>, String> {
-    let client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let client = market_client().await?;
     client.browse(&request).await.map_err(market_error)
 }
 
@@ -180,17 +194,13 @@ pub async fn miniapp_market_browse(
 pub async fn miniapp_market_get_listing(
     request: MarketSlugRequest,
 ) -> Result<MarketListingDetail, String> {
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     client.listing(&request.slug).await.map_err(market_error)
 }
 
 #[tauri::command]
 pub async fn miniapp_market_auth_start() -> Result<DesktopAuthStartView, String> {
-    let client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let client = market_client().await?;
     let started = client.start_desktop_auth().await.map_err(market_error)?;
     let mut pending = pending_desktop_auth().lock().await;
     let now = unix_now();
@@ -231,9 +241,7 @@ pub async fn miniapp_market_auth_poll(
         }
         pending
     };
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     let response: DesktopAuthPollResponse = client
         .poll_desktop_auth(&pending.request)
         .await
@@ -254,17 +262,13 @@ pub async fn miniapp_market_auth_poll(
 
 #[tauri::command]
 pub async fn miniapp_market_me() -> Result<Option<MarketMe>, String> {
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     client.me().await.map_err(market_error)
 }
 
 #[tauri::command]
 pub async fn miniapp_market_logout(app: AppHandle) -> Result<(), String> {
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     client.logout().await.map_err(market_error)?;
     emit_market_account_changed(&app, "signed-out");
     Ok(())
@@ -277,9 +281,7 @@ pub async fn miniapp_market_set_rating(
     if request.value.is_some_and(|value| !(1..=5).contains(&value)) {
         return Err("Rating must be between 1 and 5.".to_string());
     }
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     client
         .set_rating(&request.slug, request.value)
         .await
@@ -290,9 +292,7 @@ pub async fn miniapp_market_set_rating(
 pub async fn miniapp_market_set_favorite(
     request: MarketSetFavoriteRequest,
 ) -> Result<FavoriteAggregate, String> {
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     client
         .set_favorite(&request.slug, request.enabled)
         .await
@@ -301,9 +301,7 @@ pub async fn miniapp_market_set_favorite(
 
 #[tauri::command]
 pub async fn miniapp_market_list_submissions() -> Result<Vec<MarketSubmission>, String> {
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     client.list_submissions().await.map_err(market_error)
 }
 
@@ -311,9 +309,7 @@ pub async fn miniapp_market_list_submissions() -> Result<Vec<MarketSubmission>, 
 pub async fn miniapp_market_withdraw_submission(
     request: MarketSubmissionIdRequest,
 ) -> Result<MarketSubmission, String> {
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     client
         .withdraw_submission(&request.submission_id)
         .await
@@ -397,9 +393,7 @@ pub async fn miniapp_market_install(
     state: State<'_, AppState>,
     request: MarketInstallRequest,
 ) -> Result<MarketInstallResult, String> {
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     let detail = client.listing(&request.slug).await.map_err(market_error)?;
     let release = find_release(&detail, request.release_number)?;
     validate_minimum_bitfun_version(&release.min_bitfun_version)?;
@@ -588,7 +582,9 @@ pub async fn miniapp_market_capture_window(
             .outer_size()
             .map_err(|error| format!("Could not read the BitFun window size: {error}"))?;
         if size.width < 320 || size.height < 240 {
-            return Err("The BitFun window is too small to capture a review screenshot.".to_string());
+            return Err(
+                "The BitFun window is too small to capture a review screenshot.".to_string(),
+            );
         }
 
         let capture_dir = app
@@ -649,7 +645,6 @@ pub async fn miniapp_market_capture_window(
     {
         Err("Unable to support the ohos".to_string())
     }
-
 }
 
 #[tauri::command]
@@ -663,9 +658,7 @@ pub async fn miniapp_market_submit_installed(
         .get(&request.app_id)
         .await
         .map_err(|error| error.to_string())?;
-    let mut client = MarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = market_client().await?;
     let mut progress = |submission_id: Option<&str>, phase: &'static str, completed, total| {
         emit_upload_progress(&app, submission_id, phase, completed, total);
     };

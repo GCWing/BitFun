@@ -1,6 +1,5 @@
 use super::credentials::{
-    clear_market_credentials, load_market_credentials, save_market_credentials,
-    StoredMarketCredentials,
+    system_market_credential_store, MarketCredentialStore, StoredMarketCredentials,
 };
 use bitfun_product_domains::miniapp::market::{
     CursorPage, MarketListingDetail, MarketListingSummary, MarketSort, MarketSubmission,
@@ -9,6 +8,7 @@ use bitfun_product_domains::miniapp::market::{
 use reqwest::{Method, RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 const DEFAULT_MARKET_API_URL: &str = "https://market.openbitfun.com/miniapp/api/v1";
 
@@ -117,16 +117,30 @@ pub struct MarketClient {
     base_url: String,
     client: reqwest::Client,
     credentials: Option<StoredMarketCredentials>,
+    credential_store: Arc<dyn MarketCredentialStore>,
 }
 
 impl MarketClient {
     pub async fn from_environment() -> Result<Self, MarketClientError> {
+        Self::from_environment_with_credential_store(system_market_credential_store()).await
+    }
+
+    pub async fn from_environment_with_credential_store(
+        credential_store: Arc<dyn MarketCredentialStore>,
+    ) -> Result<Self, MarketClientError> {
         let base_url = std::env::var("BITFUN_MINIAPP_MARKET_API_URL")
             .unwrap_or_else(|_| DEFAULT_MARKET_API_URL.to_string());
-        Self::new(base_url).await
+        Self::new_with_credential_store(base_url, credential_store).await
     }
 
     pub async fn new(base_url: impl Into<String>) -> Result<Self, MarketClientError> {
+        Self::new_with_credential_store(base_url, system_market_credential_store()).await
+    }
+
+    pub async fn new_with_credential_store(
+        base_url: impl Into<String>,
+        credential_store: Arc<dyn MarketCredentialStore>,
+    ) -> Result<Self, MarketClientError> {
         let base_url = base_url.into().trim_end_matches('/').to_string();
         let parsed = reqwest::Url::parse(&base_url)
             .map_err(|error| local_error("invalid_market_url", error.to_string()))?;
@@ -145,13 +159,15 @@ impl MarketClient {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|error| local_error("market_client_init_failed", error.to_string()))?;
-        let credentials = load_market_credentials()
+        let credentials = credential_store
+            .load()
             .await
             .map_err(|error| local_error("credential_store_unavailable", error))?;
         Ok(Self {
             base_url,
             client,
             credentials,
+            credential_store,
         })
     }
 
@@ -221,7 +237,8 @@ impl MarketClient {
             .await?;
         if let Some(tokens) = response.tokens.clone() {
             let credentials: StoredMarketCredentials = tokens.into();
-            save_market_credentials(&credentials)
+            self.credential_store
+                .save(&credentials)
                 .await
                 .map_err(|error| local_error("credential_store_unavailable", error))?;
             self.credentials = Some(credentials);
@@ -245,7 +262,8 @@ impl MarketClient {
             .await
             .map_err(transport_error)?;
         if response.status() == StatusCode::UNAUTHORIZED {
-            clear_market_credentials()
+            self.credential_store
+                .clear()
                 .await
                 .map_err(|error| local_error("credential_store_unavailable", error))?;
             self.credentials = None;
@@ -398,7 +416,8 @@ impl MarketClient {
                 return Err(response_error(response).await);
             }
         }
-        clear_market_credentials()
+        self.credential_store
+            .clear()
             .await
             .map_err(|error| local_error("credential_store_unavailable", error))?;
         self.credentials = None;
@@ -432,7 +451,8 @@ impl MarketClient {
         };
         let now = chrono::Utc::now().timestamp();
         if credentials.refresh_expires_at <= now {
-            clear_market_credentials()
+            self.credential_store
+                .clear()
                 .await
                 .map_err(|error| local_error("credential_store_unavailable", error))?;
             self.credentials = None;
@@ -450,7 +470,8 @@ impl MarketClient {
             .await
             .map_err(transport_error)?;
         if response.status() == StatusCode::UNAUTHORIZED {
-            clear_market_credentials()
+            self.credential_store
+                .clear()
                 .await
                 .map_err(|error| local_error("credential_store_unavailable", error))?;
             self.credentials = None;
@@ -458,7 +479,8 @@ impl MarketClient {
         }
         let tokens: MarketTokenPair = decode_json(checked_response(response).await?).await?;
         let stored: StoredMarketCredentials = tokens.into();
-        save_market_credentials(&stored)
+        self.credential_store
+            .save(&stored)
             .await
             .map_err(|error| local_error("credential_store_unavailable", error))?;
         self.credentials = Some(stored);
@@ -525,5 +547,54 @@ fn local_error(code: impl Into<String>, message: impl Into<String>) -> MarketCli
         code: code.into(),
         message: message.into(),
         request_id: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Debug)]
+    struct EmptyCredentialStore {
+        load_count: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl MarketCredentialStore for EmptyCredentialStore {
+        async fn load(&self) -> Result<Option<StoredMarketCredentials>, String> {
+            self.load_count.fetch_add(1, Ordering::Relaxed);
+            Ok(None)
+        }
+
+        async fn save(&self, _credentials: &StoredMarketCredentials) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn clear(&self) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_credential_store_constructs_client_without_system_keyring() {
+        let store = Arc::new(EmptyCredentialStore {
+            load_count: AtomicUsize::new(0),
+        });
+
+        let client = MarketClient::new_with_credential_store(
+            "https://market.example.test/miniapp/api/v1/",
+            store.clone(),
+        )
+        .await
+        .expect("an empty injected credential store should initialize the market client");
+
+        assert_eq!(
+            client.base_url,
+            "https://market.example.test/miniapp/api/v1"
+        );
+        assert!(client.credentials.is_none());
+        assert_eq!(store.load_count.load(Ordering::Relaxed), 1);
     }
 }

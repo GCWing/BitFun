@@ -20,6 +20,8 @@ import { CommonUtils } from '../utils/CommonUtils';
 import { runDeveco } from '../utils/DevecoStart';
 import { VoiceInputService } from '../services/VoiceInputService';
 import { FeedbackCredentialStore } from '../utils/FeedbackCredentialStore';
+import { MarketCredentialStore } from '../utils/MarketCredentialStore';
+import { WindowHostRequest, WindowHostService } from '../services/WindowHostService';
 import {
   BrowserWebviewService,
   CreateRequest,
@@ -138,10 +140,35 @@ export default class EntryAbility extends RustAbility {
     const DOMAIN_NUMBER: number = 0xFF00;
     const TAG: string = '[BitfunUIAbilityComponents]';
     const feedbackCredentialStore = new FeedbackCredentialStore();
+    const marketCredentialStore = new MarketCredentialStore();
+    const windowHostService = new WindowHostService(windowStage, () => {
+      this.context.terminateSelf(() => {
+        hilog.info(DOMAIN_NUMBER, TAG, 'WebDriver requested Ability termination');
+      });
+    });
+    RustModule.registerArktsFunction('webdriver_window_ohos', async (
+      _err: Error,
+      arg: string,
+    ): Promise<string> => {
+      try {
+        const request: WindowHostRequest = JSON.parse(arg) as WindowHostRequest;
+        return await windowHostService.handle(request);
+      } catch (error) {
+        const businessError: BusinessError = error as BusinessError;
+        return JSON.stringify({
+          ok: false,
+          error: businessError.message ?? 'Invalid WebDriver window request',
+        });
+      }
+    });
     RustModule.registerArktsFunction('feedback_secure_credentials', async (
       _err: Error,
       arg: string
     ): Promise<string> => feedbackCredentialStore.handle(arg));
+    RustModule.registerArktsFunction('market_secure_credentials', async (
+      _err: Error,
+      arg: string
+    ): Promise<string> => marketCredentialStore.handle(arg));
     RustModule.registerArktsFunction('open_dialog_file', async (err: Error, arg: string): Promise<string> => {
       let res = await CommonUtils.open_file_dialog(arg);
       return res;

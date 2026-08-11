@@ -34,6 +34,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     label: 'Welcome',
     labelKey: 'welcomeScene.tabLabel',
     pinned: false,
+    closable: false,
     singleton: true,
     defaultOpen: true,
   },

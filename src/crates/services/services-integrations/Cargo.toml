@@ -208,6 +208,7 @@ miniapp-runtime = [
     "which",
 ]
 miniapp-market = [
+    "async-trait",
     "bitfun-product-domains/appearance-market",
     "chrono",
     "dep:apple-native-keyring-store",

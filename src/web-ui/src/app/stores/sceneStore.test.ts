@@ -23,4 +23,11 @@ describe('sceneStore transition snapshots', () => {
     expect(snapshots[0].openTabIds).toContain('settings');
     expect(snapshots[0].openTabIds).not.toContain('welcome');
   });
+
+  it('does not allow the welcome scene to be closed manually', () => {
+    useSceneStore.getState().closeScene('welcome');
+
+    expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toContain('welcome');
+    expect(useSceneStore.getState().activeTabId).toBe('welcome');
+  });
 });
