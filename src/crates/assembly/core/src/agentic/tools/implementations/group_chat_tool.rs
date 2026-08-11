@@ -25,6 +25,7 @@ use bitfun_runtime_ports::{
 use bitfun_services_core::session::{
     add_room_to_group_chats, remove_room_from_group_chats, GroupChatStore,
 };
+use log::warn;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -262,84 +263,22 @@ impl GroupChatTool {
         params: &GroupChatInput,
     ) -> Result<Value, BitFunError> {
         let name = params.name.as_deref().unwrap_or("").trim();
-        if name.is_empty() {
-            return Err(BitFunError::tool(
-                "group chat name is required and cannot be empty".to_string(),
-            ));
-        }
         let owner = params.owner.clone().unwrap_or(GroupChatActor::Master);
-        Self::validate_owner(&owner).map_err(BitFunError::tool)?;
         let mode = params.mode.unwrap_or(GroupChatMode::Free);
-
-        // Claw member validation (P1-7).
-        Self::validate_initial_members(coordinator, &params.initial_members)
-            .await
-            .map_err(BitFunError::tool)?;
-
-        // RoomFull (P2-2): member count must not exceed the configured limit.
-        let member_limit = Self::resolve_member_limit().await;
-        if params.initial_members.len() > member_limit {
-            return Err(BitFunError::tool(format!(
-                "group chat member count {} exceeds the limit {}",
-                params.initial_members.len(),
-                member_limit
-            )));
-        }
-
-        let store = Self::store(workspace_path).await?;
-        // DuplicateName (P2-5): reject a room whose name already exists.
-        let (rooms, _) = store.list_rooms().await.map_err(store_tool_error)?;
-        if rooms.iter().any(|room| room.name == name) {
-            return Err(BitFunError::tool(format!(
-                "group chat name '{name}' already exists"
-            )));
-        }
-
-        let room_id = format!("group-{}", uuid_v4_deterministic(name));
-        let now = current_unix_ms();
-        let members: Vec<GroupChatMember> = params
-            .initial_members
-            .iter()
-            .enumerate()
-            .map(|(index, session_id)| GroupChatMember {
-                session_id: session_id.clone(),
-                role: if index == 0 {
-                    GroupChatMemberRole::Owner
-                } else {
-                    GroupChatMemberRole::Member
-                },
-                joined_at: now,
-                agent_type: "Claw".to_string(),
-                display_name: None,
-            })
-            .collect();
-
-        let room = GroupChatRoom {
-            schema_version: 1,
-            room_id: room_id.clone(),
-            name: name.to_string(),
+        let room = Self::create_room_impl(
+            coordinator,
+            workspace_path,
+            name,
             owner,
+            &params.initial_members,
             mode,
-            round_robin_cursor: 0,
-            created_at: now,
-            last_active_at: now,
-            status: bitfun_runtime_ports::GroupChatStatus::Active,
-            member_limit,
-            members: Vec::new(), // members live in members.json (P1-11)
-        };
-
-        store.save_room(&room).await.map_err(store_tool_error)?;
-        store
-            .save_members(&room_id, &members)
+        )
+        .await?;
+        let store = Self::store(workspace_path).await?;
+        let members = store
+            .list_members(&room.room_id)
             .await
             .map_err(store_tool_error)?;
-
-        // Initial member back-index (P1-6): tag each member with the room id.
-        for member in &members {
-            self.tag_member_group_chat(coordinator, workspace_path, &member.session_id, &room_id)
-                .await?;
-        }
-
         Ok(json!({ "room": room, "members": members }))
     }
 
@@ -382,106 +321,8 @@ impl GroupChatTool {
             .as_deref()
             .ok_or_else(|| BitFunError::tool("session_id is required for join".to_string()))?;
         let actor = params.actor.clone().unwrap_or(GroupChatActor::Master);
-
-        let store = Self::store(workspace_path).await?;
-        let mut room = store.load_room(room_id).await.map_err(store_tool_error)?;
-
-        // AlreadyMember dedup (guild.rs:327 semantics).
-        if room
-            .members
-            .iter()
-            .any(|member| member.session_id == session_id)
-        {
-            return Err(BitFunError::tool(format!(
-                "session '{session_id}' is already a member of group '{room_id}'"
-            )));
-        }
-
-        // Permission: owner or master exception (P0-2 / P1-4 enum match).
-        let is_owner_or_master = match (&room.owner, &actor) {
-            (
-                GroupChatActor::Claw {
-                    session_id: owner_id,
-                    ..
-                },
-                GroupChatActor::Claw {
-                    session_id: actor_id,
-                    ..
-                },
-            ) => owner_id == actor_id,
-            _ => matches!(actor, GroupChatActor::Master),
-        };
-        if !is_owner_or_master {
-            return Err(BitFunError::tool(format!(
-                "only the owner or the master can add members to group '{room_id}'"
-            )));
-        }
-
-        // Claw validation (P1-7).
-        let agent_type = Self::session_agent_type(coordinator, session_id).await;
-        match agent_type.as_deref() {
-            Some("Claw") => {}
-            Some(other) => {
-                return Err(BitFunError::tool(format!(
-                    "member '{session_id}' is not a Claw assistant (agent_type '{other}')"
-                )));
-            }
-            None => {
-                return Err(BitFunError::tool(format!(
-                    "member session '{session_id}' does not exist"
-                )));
-            }
-        }
-
-        // RoomFull (P2-2).
-        let member_limit = Self::resolve_member_limit().await;
-        if room.members.len() >= member_limit {
-            return Err(BitFunError::tool(format!(
-                "group '{room_id}' is full (limit {member_limit})"
-            )));
-        }
-
-        let now = current_unix_ms();
-        let mut members = room.members.clone();
-        members.push(GroupChatMember {
-            session_id: session_id.to_string(),
-            role: GroupChatMemberRole::Member,
-            joined_at: now,
-            agent_type: "Claw".to_string(),
-            display_name: None,
-        });
-        store
-            .save_members(room_id, &members)
-            .await
-            .map_err(store_tool_error)?;
-        room.members = members;
-
-        // Back-index the joined member (R-GC-05).
-        self.tag_member_group_chat(coordinator, workspace_path, session_id, room_id)
+        let room = Self::join_room_impl(coordinator, workspace_path, room_id, session_id, actor)
             .await?;
-
-        // System message (成员加入).
-        store
-            .append_message(
-                room_id,
-                &GroupChatMessage {
-                    message_id: format!(
-                        "msg-{}",
-                        uuid_v4_deterministic(&format!("{room_id}-join-{session_id}-{now}"))
-                    ),
-                    room_id: room_id.to_string(),
-                    author: GroupChatActor::Master,
-                    kind: GroupChatMessageKind::System,
-                    content: format!("member '{session_id}' joined the group"),
-                    mention_targets: Vec::new(),
-                    reply_to_message_id: None,
-                    timestamp: now,
-                    status: GroupChatMessageStatus::Delivered,
-                },
-            )
-            .await
-            .map_err(store_tool_error)?;
-
         Ok(json!({ "room": room }))
     }
 
@@ -501,77 +342,9 @@ impl GroupChatTool {
             .as_deref()
             .ok_or_else(|| BitFunError::tool("session_id is required for leave".to_string()))?;
         let actor = params.actor.clone().unwrap_or(GroupChatActor::Master);
-
-        let store = Self::store(workspace_path).await?;
-        let room = store.load_room(room_id).await.map_err(store_tool_error)?;
-
-        // Permission: owner, master exception, or self-removal.
-        let can_leave = matches!(actor, GroupChatActor::Master)
-            || match (&room.owner, &actor) {
-                (
-                    GroupChatActor::Claw {
-                        session_id: owner_id,
-                        ..
-                    },
-                    GroupChatActor::Claw {
-                        session_id: actor_id,
-                        ..
-                    },
-                ) => owner_id == actor_id || actor_id == session_id,
-                _ => match &actor {
-                    GroupChatActor::Claw {
-                        session_id: claw_session,
-                        ..
-                    } => claw_session == session_id,
-                    _ => false,
-                },
-            };
-        if !can_leave {
-            return Err(BitFunError::tool(format!(
-                "only the owner, the master, or the member itself can leave group '{room_id}'"
-            )));
-        }
-
-        let members: Vec<GroupChatMember> = room
-            .members
-            .iter()
-            .filter(|member| member.session_id != session_id)
-            .cloned()
-            .collect();
-        store
-            .save_members(room_id, &members)
-            .await
-            .map_err(store_tool_error)?;
-
-        // Back-index cleanup (R-GC-05): remove the room id from the member.
-        self.untag_member_group_chat(coordinator, workspace_path, session_id, room_id)
+        let room = Self::leave_room_impl(coordinator, workspace_path, room_id, session_id, actor)
             .await?;
-
-        let now = current_unix_ms();
-        store
-            .append_message(
-                room_id,
-                &GroupChatMessage {
-                    message_id: format!(
-                        "msg-{}",
-                        uuid_v4_deterministic(&format!("{room_id}-leave-{session_id}-{now}"))
-                    ),
-                    room_id: room_id.to_string(),
-                    author: GroupChatActor::Master,
-                    kind: GroupChatMessageKind::System,
-                    content: format!("member '{session_id}' left the group"),
-                    mention_targets: Vec::new(),
-                    reply_to_message_id: None,
-                    timestamp: now,
-                    status: GroupChatMessageStatus::Delivered,
-                },
-            )
-            .await
-            .map_err(store_tool_error)?;
-
-        let mut updated_room = room;
-        updated_room.members = members;
-        Ok(json!({ "room": updated_room }))
+        Ok(json!({ "room": room }))
     }
 
     /// delete (R-GC-25): cascade-delete a room — remove the room directory
@@ -588,43 +361,7 @@ impl GroupChatTool {
             .as_deref()
             .ok_or_else(|| BitFunError::tool("room_id is required for delete".to_string()))?;
         let actor = params.actor.clone().unwrap_or(GroupChatActor::Master);
-
-        let store = Self::store(workspace_path).await?;
-        let room = store.load_room(room_id).await.map_err(store_tool_error)?;
-
-        // Permission: owner or master exception (P1-4 enum match; no string
-        // comparison against GROUP_MASTER_ACTOR).
-        let is_owner_or_master = match (&room.owner, &actor) {
-            (
-                GroupChatActor::Claw {
-                    session_id: owner_id,
-                    ..
-                },
-                GroupChatActor::Claw {
-                    session_id: actor_id,
-                    ..
-                },
-            ) => owner_id == actor_id,
-            _ => matches!(actor, GroupChatActor::Master),
-        };
-        if !is_owner_or_master {
-            return Err(BitFunError::tool(format!(
-                "only the owner or the master can delete group '{room_id}'"
-            )));
-        }
-
-        // Back-index cleanup (R-GC-05): remove the room id from every member
-        // BEFORE the room directory is deleted so member metadata never keeps a
-        // dangling reference (S-38 防幽灵).
-        for member in &room.members {
-            self.untag_member_group_chat(coordinator, workspace_path, &member.session_id, room_id)
-                .await?;
-        }
-
-        // Cascade-delete the room directory (meta/members/catalog/messages) and
-        // rebuild index.json (R-GC-04 delete_room).
-        store.delete_room(room_id).await.map_err(store_tool_error)?;
-
+        Self::delete_room_impl(coordinator, workspace_path, room_id, actor).await?;
         Ok(json!({ "deleted": true, "roomId": room_id }))
     }
 
@@ -648,21 +385,56 @@ impl GroupChatTool {
             return Err(BitFunError::tool("content cannot be empty".to_string()));
         }
         let author = params.actor.clone().unwrap_or(GroupChatActor::Master);
+        let (message_id, delivered_to, failed_to) = Self::send_message_impl(
+            coordinator,
+            workspace_path,
+            room_id,
+            &author,
+            content,
+            &params.mention_targets,
+            params.urgent,
+        )
+        .await?;
+
+        Ok(json!({
+            "messageId": message_id,
+            "deliveredTo": delivered_to,
+            "failedTo": failed_to,
+        }))
+    }
+
+    /// Shared send pipeline (P0-2/P1-4): used by the tool AND the desktop
+    /// command layer (thin wrapper) so the UI path dispatches through the same
+    /// router chain (resolve_dispatch_plan → dispatch_to_targets) and the
+    /// `urgent` flag takes effect. Persists the message first (P0-3).
+    pub async fn send_message_impl(
+        coordinator: &std::sync::Arc<ConversationCoordinator>,
+        workspace_path: &str,
+        room_id: &str,
+        author: &GroupChatActor,
+        content: &str,
+        mention_targets: &[GroupChatActor],
+        urgent: bool,
+    ) -> Result<(String, Vec<String>, Vec<serde_json::Value>), BitFunError> {
+        if content.trim().is_empty() {
+            return Err(BitFunError::tool("content cannot be empty".to_string()));
+        }
 
         let store = Self::store(workspace_path).await?;
         let room = store.load_room(room_id).await.map_err(store_tool_error)?;
 
         // EmptyMembers: an empty group cannot dispatch to anyone.
         if room.members.is_empty() {
-            return Err(BitFunError::tool(format!(
-                "group '{room_id}' has no members; cannot send"
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::EmptyMembers,
+                format!("group '{room_id}' has no members; cannot send"),
             )));
         }
 
         // Author check (P0-2): master exception; a Claw author must be a member.
         let author_is_master = matches!(author, GroupChatActor::Master);
         if !author_is_master {
-            let is_member = match &author {
+            let is_member = match author {
                 GroupChatActor::Claw { session_id, .. } => room
                     .members
                     .iter()
@@ -681,14 +453,15 @@ impl GroupChatTool {
         let plan = super::group_chat_router::GroupChatRouter::resolve_dispatch_plan(
             &store,
             &room,
-            &params.mention_targets,
-            params.urgent,
+            mention_targets,
+            urgent,
         )
         .await?;
         let targets = plan.targets;
         if targets.is_empty() {
-            return Err(BitFunError::tool(format!(
-                "no valid dispatch targets in group '{room_id}'"
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::EmptyMembers,
+                format!("no valid dispatch targets in group '{room_id}'"),
             )));
         }
 
@@ -702,13 +475,13 @@ impl GroupChatTool {
             message_id: message_id.clone(),
             room_id: room_id.to_string(),
             author: author.clone(),
-            kind: match &author {
+            kind: match author {
                 GroupChatActor::Master => GroupChatMessageKind::User,
                 GroupChatActor::Claw { .. } => GroupChatMessageKind::Agent,
                 GroupChatActor::All => GroupChatMessageKind::System,
             },
             content: content.to_string(),
-            mention_targets: params.mention_targets.clone(),
+            mention_targets: mention_targets.to_vec(),
             reply_to_message_id: None,
             timestamp: now,
             status: GroupChatMessageStatus::Pending,
@@ -719,7 +492,7 @@ impl GroupChatTool {
             .map_err(store_tool_error)?;
 
         // Dispatch with group correlation metadata (R-GC-11) via the router.
-        let group_author = match &author {
+        let group_author = match author {
             GroupChatActor::Master => bitfun_runtime_ports::GROUP_MASTER_ACTOR.to_string(),
             GroupChatActor::Claw { session_id, .. } => session_id.clone(),
             GroupChatActor::All => "__all__".to_string(),
@@ -750,16 +523,461 @@ impl GroupChatTool {
                 .map_err(store_tool_error)?;
         }
 
-        Ok(json!({
-            "messageId": message_id,
-            "deliveredTo": delivered_to,
-            "failedTo": failed_to,
-        }))
+        Ok((message_id, delivered_to, failed_to))
+    }
+}
+
+fn current_unix_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
+}
+
+/// Converts a store error into a tool error message.
+pub(crate) fn store_tool_error(
+    error: bitfun_services_core::session::GroupChatStoreError,
+) -> BitFunError {
+    BitFunError::tool(error.to_string())
+}
+
+/// Maps a `GroupChatErrorCode` to a stable machine-readable prefix that the
+/// command layer (and the frontend) can branch on. The prefix is embedded in
+/// tool/command error strings as `GroupChatErrorCode::<code>: <message>`
+/// (P1-5: contract error codes stay observable across tool/command/UI).
+pub fn group_chat_error_message(
+    code: bitfun_runtime_ports::GroupChatErrorCode,
+    message: impl Into<String>,
+) -> String {
+    format!("GroupChatErrorCode::{}: {}", code_name(code), message.into())
+}
+
+pub(crate) fn code_name(code: bitfun_runtime_ports::GroupChatErrorCode) -> &'static str {
+    use bitfun_runtime_ports::GroupChatErrorCode as Code;
+    match code {
+        Code::NotFound => "NotFound",
+        Code::AlreadyMember => "AlreadyMember",
+        Code::NotOwner => "NotOwner",
+        Code::EmptyMembers => "EmptyMembers",
+        Code::RoomFull => "RoomFull",
+        Code::DuplicateName => "DuplicateName",
+        Code::InvalidTarget => "InvalidTarget",
+        Code::NotClaw => "NotClaw",
+    }
+}
+
+/// Parses the code prefix out of an error string produced by
+/// [`group_chat_error_message`]. Returns `None` when the string carries no
+/// code (legacy/plain errors fall back to a generic branch on the frontend).
+pub fn parse_group_chat_error_code(message: &str) -> Option<bitfun_runtime_ports::GroupChatErrorCode> {
+    use bitfun_runtime_ports::GroupChatErrorCode as Code;
+    let prefix = message.strip_prefix("GroupChatErrorCode::")?;
+    let code_name = prefix.split(':').next()?;
+    Some(match code_name {
+        "NotFound" => Code::NotFound,
+        "AlreadyMember" => Code::AlreadyMember,
+        "NotOwner" => Code::NotOwner,
+        "EmptyMembers" => Code::EmptyMembers,
+        "RoomFull" => Code::RoomFull,
+        "DuplicateName" => Code::DuplicateName,
+        "InvalidTarget" => Code::InvalidTarget,
+        "NotClaw" => Code::NotClaw,
+        _ => return None,
+    })
+}
+
+/// Deterministic uuid-like id from a name (test-friendly; runtime ids are
+/// unique per call because the inputs embed timestamps).
+fn uuid_v4_deterministic(seed: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(b"bitfun-group-chat-v1\0");
+    hasher.update(seed.as_bytes());
+    let digest = hasher.finalize();
+    let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    hex.chars().take(32).collect()
+}
+
+/// Shared command-layer entry points (P0-2/P1-4 thin wrapper): the desktop
+/// Tauri commands call these instead of re-implementing validation /
+/// back-index / dispatch, so the UI path and the tool path share one pipeline.
+impl GroupChatTool {
+    /// create (P1-2 Claw check + P1-6 initial back-index).
+    pub async fn create_room_impl(
+        coordinator: &ConversationCoordinator,
+        workspace_path: &str,
+        name: &str,
+        owner: GroupChatActor,
+        initial_members: &[String],
+        mode: GroupChatMode,
+    ) -> Result<GroupChatRoom, BitFunError> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(BitFunError::tool(
+                "group chat name is required and cannot be empty".to_string(),
+            ));
+        }
+        Self::validate_owner(&owner).map_err(BitFunError::tool)?;
+        Self::validate_initial_members(coordinator, initial_members)
+            .await
+            .map_err(BitFunError::tool)?;
+
+        let member_limit = Self::resolve_member_limit().await;
+        if initial_members.len() > member_limit {
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::RoomFull,
+                format!(
+                    "group chat member count {} exceeds the limit {}",
+                    initial_members.len(),
+                    member_limit
+                ),
+            )));
+        }
+
+        let store = Self::store(workspace_path).await?;
+        let (rooms, _) = store.list_rooms().await.map_err(store_tool_error)?;
+        if rooms.iter().any(|room| room.name == name) {
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::DuplicateName,
+                format!("group chat name '{name}' already exists"),
+            )));
+        }
+
+        let room_id = format!("group-{}", uuid_v4_deterministic(name));
+        let now = current_unix_ms();
+        let members: Vec<GroupChatMember> = initial_members
+            .iter()
+            .enumerate()
+            .map(|(index, session_id)| GroupChatMember {
+                session_id: session_id.clone(),
+                role: if index == 0 {
+                    GroupChatMemberRole::Owner
+                } else {
+                    GroupChatMemberRole::Member
+                },
+                joined_at: now,
+                agent_type: "Claw".to_string(),
+                display_name: None,
+            })
+            .collect();
+
+        let room = GroupChatRoom {
+            schema_version: 1,
+            room_id: room_id.clone(),
+            name: name.to_string(),
+            owner,
+            mode,
+            round_robin_cursor: 0,
+            created_at: now,
+            last_active_at: now,
+            status: bitfun_runtime_ports::GroupChatStatus::Active,
+            member_limit,
+            members: Vec::new(), // members live in members.json (P1-11)
+        };
+
+        store.save_room(&room).await.map_err(store_tool_error)?;
+        store
+            .save_members(&room_id, &members)
+            .await
+            .map_err(store_tool_error)?;
+
+        // Initial member back-index (P1-6): tag each member with the room id.
+        for member in &members {
+            GroupChatTool::tag_member_group_chat_static(
+                coordinator, workspace_path, &member.session_id, &room_id,
+            )
+            .await?;
+        }
+
+        Ok(room)
     }
 
-    /// Back-indexes a member session with the room id (R-GC-05).
-    async fn tag_member_group_chat(
-        &self,
+    /// join (P1-2 Claw check + P1-3 back-index + P1-5 NotOwner code).
+    pub async fn join_room_impl(
+        coordinator: &ConversationCoordinator,
+        workspace_path: &str,
+        room_id: &str,
+        session_id: &str,
+        actor: GroupChatActor,
+    ) -> Result<GroupChatRoom, BitFunError> {
+        let store = Self::store(workspace_path).await?;
+        let mut room = store.load_room(room_id).await.map_err(store_tool_error)?;
+
+        if room
+            .members
+            .iter()
+            .any(|member| member.session_id == session_id)
+        {
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::AlreadyMember,
+                format!("session '{session_id}' is already a member of group '{room_id}'"),
+            )));
+        }
+
+        let is_owner_or_master = match (&room.owner, &actor) {
+            (
+                GroupChatActor::Claw {
+                    session_id: owner_id,
+                    ..
+                },
+                GroupChatActor::Claw {
+                    session_id: actor_id,
+                    ..
+                },
+            ) => owner_id == actor_id,
+            _ => matches!(actor, GroupChatActor::Master),
+        };
+        if !is_owner_or_master {
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::NotOwner,
+                format!("only the owner or the master can add members to group '{room_id}'"),
+            )));
+        }
+
+        let agent_type = Self::session_agent_type(coordinator, session_id).await;
+        match agent_type.as_deref() {
+            Some("Claw") => {}
+            Some(other) => {
+                return Err(BitFunError::tool(group_chat_error_message(
+                    bitfun_runtime_ports::GroupChatErrorCode::NotClaw,
+                    format!(
+                        "member '{session_id}' is not a Claw assistant (agent_type '{other}')"
+                    ),
+                )));
+            }
+            None => {
+                return Err(BitFunError::tool(group_chat_error_message(
+                    bitfun_runtime_ports::GroupChatErrorCode::NotClaw,
+                    format!("member session '{session_id}' does not exist"),
+                )));
+            }
+        }
+
+        let member_limit = Self::resolve_member_limit().await;
+        if room.members.len() >= member_limit {
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::RoomFull,
+                format!("group '{room_id}' is full (limit {member_limit})"),
+            )));
+        }
+
+        let now = current_unix_ms();
+        let mut members = room.members.clone();
+        members.push(GroupChatMember {
+            session_id: session_id.to_string(),
+            role: GroupChatMemberRole::Member,
+            joined_at: now,
+            agent_type: "Claw".to_string(),
+            display_name: None,
+        });
+        store
+            .save_members(room_id, &members)
+            .await
+            .map_err(store_tool_error)?;
+        room.members = members;
+
+        GroupChatTool::tag_member_group_chat_static(coordinator, workspace_path, session_id, room_id)
+            .await?;
+
+        store
+            .append_message(
+                room_id,
+                &GroupChatMessage {
+                    message_id: format!(
+                        "msg-{}",
+                        uuid_v4_deterministic(&format!("{room_id}-join-{session_id}-{now}"))
+                    ),
+                    room_id: room_id.to_string(),
+                    author: GroupChatActor::Master,
+                    kind: GroupChatMessageKind::System,
+                    content: format!("member '{session_id}' joined the group"),
+                    mention_targets: Vec::new(),
+                    reply_to_message_id: None,
+                    timestamp: now,
+                    status: GroupChatMessageStatus::Delivered,
+                },
+            )
+            .await
+            .map_err(store_tool_error)?;
+
+        Ok(room)
+    }
+
+    /// leave (P1-3 back-index cleanup + P1-5 NotOwner code).
+    pub async fn leave_room_impl(
+        coordinator: &ConversationCoordinator,
+        workspace_path: &str,
+        room_id: &str,
+        session_id: &str,
+        actor: GroupChatActor,
+    ) -> Result<GroupChatRoom, BitFunError> {
+        let store = Self::store(workspace_path).await?;
+        let room = store.load_room(room_id).await.map_err(store_tool_error)?;
+
+        let can_leave = matches!(actor, GroupChatActor::Master)
+            || match (&room.owner, &actor) {
+                (
+                    GroupChatActor::Claw {
+                        session_id: owner_id,
+                        ..
+                    },
+                    GroupChatActor::Claw {
+                        session_id: actor_id,
+                        ..
+                    },
+                ) => owner_id == actor_id || actor_id == session_id,
+                _ => match &actor {
+                    GroupChatActor::Claw {
+                        session_id: claw_session,
+                        ..
+                    } => claw_session == session_id,
+                    _ => false,
+                },
+            };
+        if !can_leave {
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::NotOwner,
+                format!(
+                    "only the owner, the master, or the member itself can leave group '{room_id}'"
+                ),
+            )));
+        }
+
+        let members: Vec<GroupChatMember> = room
+            .members
+            .iter()
+            .filter(|member| member.session_id != session_id)
+            .cloned()
+            .collect();
+        store
+            .save_members(room_id, &members)
+            .await
+            .map_err(store_tool_error)?;
+
+        GroupChatTool::untag_member_group_chat_static(
+            coordinator, workspace_path, session_id, room_id,
+        )
+        .await?;
+
+        let now = current_unix_ms();
+        store
+            .append_message(
+                room_id,
+                &GroupChatMessage {
+                    message_id: format!(
+                        "msg-{}",
+                        uuid_v4_deterministic(&format!("{room_id}-leave-{session_id}-{now}"))
+                    ),
+                    room_id: room_id.to_string(),
+                    author: GroupChatActor::Master,
+                    kind: GroupChatMessageKind::System,
+                    content: format!("member '{session_id}' left the group"),
+                    mention_targets: Vec::new(),
+                    reply_to_message_id: None,
+                    timestamp: now,
+                    status: GroupChatMessageStatus::Delivered,
+                },
+            )
+            .await
+            .map_err(store_tool_error)?;
+
+        let mut updated_room = room;
+        updated_room.members = members;
+        Ok(updated_room)
+    }
+
+    /// delete (R-GC-25): owner/master gate (P1-1) + full back-index cleanup
+    /// with per-member untag tolerance (P1-6) + cascade delete.
+    pub async fn delete_room_impl(
+        coordinator: &ConversationCoordinator,
+        workspace_path: &str,
+        room_id: &str,
+        actor: GroupChatActor,
+    ) -> Result<(), BitFunError> {
+        let store = Self::store(workspace_path).await?;
+        let room = store.load_room(room_id).await.map_err(store_tool_error)?;
+
+        let is_owner_or_master = match (&room.owner, &actor) {
+            (
+                GroupChatActor::Claw {
+                    session_id: owner_id,
+                    ..
+                },
+                GroupChatActor::Claw {
+                    session_id: actor_id,
+                    ..
+                },
+            ) => owner_id == actor_id,
+            _ => matches!(actor, GroupChatActor::Master),
+        };
+        if !is_owner_or_master {
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::NotOwner,
+                format!("only the owner or the master can delete group '{room_id}'"),
+            )));
+        }
+
+        for member in &room.members {
+            if let Err(error) = GroupChatTool::untag_member_group_chat_static(
+                coordinator,
+                workspace_path,
+                &member.session_id,
+                room_id,
+            )
+            .await
+            {
+                warn!(
+                    "Group chat delete: failed to untag member '{}' from room '{}' (continuing): {}",
+                    member.session_id, room_id, error
+                );
+            }
+        }
+
+        store.delete_room(room_id).await.map_err(store_tool_error)?;
+        Ok(())
+    }
+
+    /// set_mode (P1-1): owner/master gate + cursor reset.
+    pub async fn set_mode_impl(
+        workspace_path: &str,
+        room_id: &str,
+        mode: GroupChatMode,
+        actor: GroupChatActor,
+    ) -> Result<GroupChatRoom, BitFunError> {
+        let store = Self::store(workspace_path).await?;
+        let mut room = store.load_room(room_id).await.map_err(store_tool_error)?;
+
+        let is_owner_or_master = match (&room.owner, &actor) {
+            (
+                GroupChatActor::Claw {
+                    session_id: owner_id,
+                    ..
+                },
+                GroupChatActor::Claw {
+                    session_id: actor_id,
+                    ..
+                },
+            ) => owner_id == actor_id,
+            _ => matches!(actor, GroupChatActor::Master),
+        };
+        if !is_owner_or_master {
+            return Err(BitFunError::tool(group_chat_error_message(
+                bitfun_runtime_ports::GroupChatErrorCode::NotOwner,
+                format!("only the owner or the master can change the mode of group '{room_id}'"),
+            )));
+        }
+
+        room.mode = mode;
+        room.round_robin_cursor = 0; // 模式切换时 reset cursor (R-GC-10)
+        store
+            .save_room(&room)
+            .await
+            .map_err(store_tool_error)?;
+        Ok(room)
+    }
+
+    /// Static back-index helper (used by both tool and command paths).
+    async fn tag_member_group_chat_static(
         coordinator: &ConversationCoordinator,
         workspace_path: &str,
         session_id: &str,
@@ -778,9 +996,8 @@ impl GroupChatTool {
         Ok(())
     }
 
-    /// Removes the room id from a member session's back-index (R-GC-05).
-    async fn untag_member_group_chat(
-        &self,
+    /// Static back-index cleanup (used by both tool and command paths).
+    async fn untag_member_group_chat_static(
         coordinator: &ConversationCoordinator,
         workspace_path: &str,
         session_id: &str,
@@ -798,32 +1015,6 @@ impl GroupChatTool {
             .map_err(BitFunError::tool)?;
         Ok(())
     }
-}
-
-fn current_unix_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
-}
-
-/// Converts a store error into a tool error message.
-pub(crate) fn store_tool_error(
-    error: bitfun_services_core::session::GroupChatStoreError,
-) -> BitFunError {
-    BitFunError::tool(error.to_string())
-}
-
-/// Deterministic uuid-like id from a name (test-friendly; runtime ids are
-/// unique per call because the inputs embed timestamps).
-fn uuid_v4_deterministic(seed: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(b"bitfun-group-chat-v1\0");
-    hasher.update(seed.as_bytes());
-    let digest = hasher.finalize();
-    let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
-    hex.chars().take(32).collect()
 }
 
 #[async_trait]
@@ -1166,5 +1357,42 @@ mod tests {
             _ => false,
         };
         assert!(!stranger_ok);
+    }
+
+    #[test]
+    fn group_chat_error_code_round_trips_through_prefix() {
+        // P1-5: the command layer parses the code prefix back out of a tool
+        // error so the frontend can branch on the contract error code.
+        use bitfun_runtime_ports::GroupChatErrorCode as Code;
+        for code in [
+            Code::NotFound,
+            Code::AlreadyMember,
+            Code::NotOwner,
+            Code::EmptyMembers,
+            Code::RoomFull,
+            Code::DuplicateName,
+            Code::InvalidTarget,
+            Code::NotClaw,
+        ] {
+            let message = group_chat_error_message(code, "boom");
+            assert_eq!(parse_group_chat_error_code(&message), Some(code));
+        }
+        assert_eq!(parse_group_chat_error_code("plain error"), None);
+    }
+
+    #[test]
+    fn group_chat_error_code_helpers_cover_all_variants() {
+        // P1-5: code_name and parse must stay in lockstep with the contract
+        // enum (a new variant without a name would fail here at compile time
+        // via the exhaustive match, and at runtime via the round trip above).
+        use bitfun_runtime_ports::GroupChatErrorCode as Code;
+        assert_eq!(code_name(Code::NotOwner), "NotOwner");
+        assert_eq!(code_name(Code::NotClaw), "NotClaw");
+        assert_eq!(code_name(Code::EmptyMembers), "EmptyMembers");
+        assert_eq!(code_name(Code::DuplicateName), "DuplicateName");
+        assert_eq!(code_name(Code::RoomFull), "RoomFull");
+        assert_eq!(code_name(Code::InvalidTarget), "InvalidTarget");
+        assert_eq!(code_name(Code::AlreadyMember), "AlreadyMember");
+        assert_eq!(code_name(Code::NotFound), "NotFound");
     }
 }

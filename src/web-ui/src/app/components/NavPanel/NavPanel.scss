@@ -2730,3 +2730,21 @@ $_section-header-height: 24px;
     animation: none;
   }
 }
+
+// P0-1: group chat pane host — overlays the workspace main content area while
+// a group chat room is active (the pane itself is height:100%).
+.bitfun-nav-panel__group-chat-pane-host {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 40vw);
+  z-index: 50;
+  padding: 12px;
+  pointer-events: none;
+
+  .group-chat-pane {
+    pointer-events: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  }
+}

@@ -45,8 +45,16 @@ export interface GroupChatStore extends GroupChatState {
     urgent?: boolean,
   ) => Promise<void>;
   loadMessages: (roomId: string, cursor?: string) => Promise<void>;
-  /** P1-1 fix: timeout-reminder consumer — scan all rooms' timed-out messages (reply_timeout_secs). */
-  scanTimeouts: (replyTimeoutSecs: number) => Promise<Array<{ roomId: string; messageId: string; content: string }>>;
+  /** P1-1/P2-4 fix: timeout-reminder consumer — scan one room (or all when roomId is omitted). */
+  scanTimeouts: (replyTimeoutSecs: number, roomId?: string) => Promise<Array<{ roomId: string; messageId: string; content: string }>>;
+  /** P0-3 fix: ingest a member's reply — mark the message Replied and append the reply body to the room stream. */
+  ingestReply: (
+    roomId: string,
+    messageId: string,
+    replyContent: string,
+    author: GroupChatActor,
+    timestamp: number,
+  ) => Promise<void>;
   // state
   setActiveRoom: (roomId: string) => void;
 }
@@ -61,11 +69,24 @@ export const useGroupChatStore = create<GroupChatStore>()(
     roundRobinCursor: 0,
     workspacePath: '',
     setWorkspacePath: (workspacePath) => {
-      if (get().workspacePath === workspacePath) {
+      const previous = get().workspacePath;
+      if (previous === workspacePath) {
         return;
       }
       set((state) => {
         state.workspacePath = workspacePath;
+        // P2-9: switching BETWEEN workspaces clears stale room state (rooms
+        // reloaded by loadRooms; members/messages/activeRoomId must not leak
+        // across workspaces). The '' → first-path transition is initialization
+        // and must NOT wipe pre-seeded data (tests / first mount).
+        if (previous !== '') {
+          state.rooms = new Map();
+          state.members = new Map();
+          state.messages = new Map();
+          state.activeRoomId = null;
+          state.mode = 'free';
+          state.roundRobinCursor = 0;
+        }
       });
     },
 
@@ -190,6 +211,21 @@ export const useGroupChatStore = create<GroupChatStore>()(
         reply_timeout_secs: replyTimeoutSecs,
       })) as Array<{ roomId: string; messageId: string; content: string }>;
       return reminders;
+    },
+
+    // P0-3: reply ingestion — marks the message Replied server-side and
+    // appends the reply body; the room message list is refreshed so the UI
+    // shows the reply text and the Replied status.
+    ingestReply: async (roomId, messageId, replyContent, author, timestamp) => {
+      await api.invoke('group_chat_ingest_reply', {
+        workspace_path: get().workspacePath,
+        room_id: roomId,
+        message_id: messageId,
+        reply_content: replyContent,
+        author,
+        timestamp,
+      });
+      await get().loadMessages(roomId);
     },
 
     setActiveRoom: (roomId) => {

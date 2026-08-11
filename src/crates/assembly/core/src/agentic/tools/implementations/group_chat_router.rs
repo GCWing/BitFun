@@ -25,7 +25,7 @@ use bitfun_runtime_ports::{
     AgentDialogTurnRequest, DialogSubmissionPolicy, DialogTriggerSource, GroupChatActor,
     GroupChatMessageStatus, GroupChatMode,
 };
-use bitfun_services_core::session::GroupChatStore;
+use bitfun_services_core::session::{GroupChatStore, GroupChatStoreError};
 use serde_json::{json, Map as JsonMap, Value};
 use std::sync::Arc;
 
@@ -44,6 +44,18 @@ pub(crate) struct GroupChatDispatchPlan {
 
 /// The group-chat routing layer (R-GC-10).
 pub(crate) struct GroupChatRouter;
+
+/// Deterministic uuid-like id from a seed (mirrors group_chat_tool.rs so the
+/// message ids are stable within one room/message/timestamp combination).
+fn uuid_v4_deterministic(seed: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(b"bitfun-group-chat-v1\0");
+    hasher.update(seed.as_bytes());
+    let digest = hasher.finalize();
+    let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    hex.chars().take(32).collect()
+}
 
 impl GroupChatRouter {
     /// Resolves dispatch targets by mode + mention targets:
@@ -140,16 +152,19 @@ impl GroupChatRouter {
     }
 
     /// Ingest one member reply (P1-5): resolves the original group message via
-    /// `groupId` + `groupMessageId` metadata and marks it `Replied` (P1-2).
+    /// `groupId` + `groupMessageId` metadata, marks it `Replied` (P1-2), and
+    /// appends the reply content as a new Agent message in the room (P2-1).
     ///
     /// Returns `Ok(())` when the correlation keys are absent (a non-group reply
     /// is not a group-chat event and is ignored here — the reply still reaches
     /// the initiating session through the normal reply route).
     /// 契约 §1.3 端口方法 ingest_reply 的 router 实现；reply 路由接线消费。
-    #[allow(dead_code)]
     pub(crate) async fn ingest_reply(
         store: &GroupChatStore,
         metadata: &JsonMap<String, Value>,
+        reply_content: &str,
+        reply_author: &GroupChatActor,
+        timestamp: i64,
     ) -> BitFunResult<()> {
         let Some(room_id) = metadata.get("groupId").and_then(Value::as_str) else {
             return Ok(());
@@ -157,10 +172,42 @@ impl GroupChatRouter {
         let Some(message_id) = metadata.get("groupMessageId").and_then(Value::as_str) else {
             return Ok(());
         };
-        store
+        // P2-2: a late reply to an already-deleted message (or room) is not an
+        // error — the room/message is gone, so the ingest is a no-op instead of
+        // bubbling MessageNotFound back into the reply forwarding path.
+        match store
             .update_message_status(room_id, message_id, GroupChatMessageStatus::Replied)
             .await
-            .map_err(store_tool_error)?;
+        {
+            Ok(()) => {}
+            Err(error)
+                if matches!(error, GroupChatStoreError::MessageNotFound(_)) =>
+            {
+                return Ok(());
+            }
+            Err(error) => return Err(store_tool_error(error)),
+        }
+        // P2-1: persist the reply body into the group stream so the room shows
+        // the reply text, not just the Replied badge.
+        if !reply_content.trim().is_empty() {
+            let reply = bitfun_runtime_ports::GroupChatMessage {
+                message_id: format!(
+                    "msg-reply-{}",
+                    uuid_v4_deterministic(&format!(
+                        "{room_id}-{message_id}-{timestamp}-{reply_content}"
+                    ))
+                ),
+                room_id: room_id.to_string(),
+                author: reply_author.clone(),
+                kind: bitfun_runtime_ports::GroupChatMessageKind::Agent,
+                content: reply_content.to_string(),
+                mention_targets: Vec::new(),
+                reply_to_message_id: Some(message_id.to_string()),
+                timestamp,
+                status: GroupChatMessageStatus::Delivered,
+            };
+            store.append_message(room_id, &reply).await.map_err(store_tool_error)?;
+        }
         Ok(())
     }
 
@@ -198,6 +245,22 @@ impl GroupChatRouter {
                 bitfun_runtime_ports::DialogQueuePriority::Low
             });
 
+        // P0-3: a Claw-initiated group message carries a real reply route back
+        // to the initiating member (the reply is forwarded to that session AND
+        // ingested into the room via groupId/groupMessageId metadata). The
+        // master has no session id, so its route stays None — the reply is
+        // still ingested by the group-chat hook in process_turn_outcome.
+        let reply_route = if group_author == bitfun_runtime_ports::GROUP_MASTER_ACTOR {
+            None
+        } else {
+            Some(bitfun_runtime_ports::AgentSessionReplyRoute {
+                source_session_id: group_author.to_string(),
+                source_workspace_path: workspace_path.to_string(),
+                source_remote_connection_id: None,
+                source_remote_ssh_host: None,
+            })
+        };
+
         Ok(AgentDialogTurnRequest {
             session_id: target_session_id.to_string(),
             message: content.to_string(),
@@ -209,7 +272,7 @@ impl GroupChatRouter {
             remote_connection_id: None,
             remote_ssh_host: None,
             policy,
-            reply_route: None,
+            reply_route,
             prepended_reminders: Vec::new(),
             attachments: Vec::new(),
             metadata,
@@ -465,12 +528,18 @@ mod tests {
         assert!(futures::executor::block_on(GroupChatRouter::ingest_reply(
             &GroupChatStore::new(PathBuf::from("unused")),
             &empty,
+            "reply",
+            &GroupChatActor::Claw {
+                session_id: "m-1".to_string(),
+                agent_type: "Claw".to_string(),
+            },
+            1,
         ))
         .is_ok());
     }
 
     #[tokio::test]
-    async fn ingest_reply_marks_message_replied_via_group_correlation() {
+    async fn ingest_reply_marks_message_replied_and_persists_reply_body() {
         let root = TestTempDir::new("ingest");
         let store = GroupChatStore::new(root.path().join("group-chats"));
         store
@@ -500,16 +569,83 @@ mod tests {
         metadata.insert("groupId".to_string(), json!("room-i"));
         metadata.insert("groupMessageId".to_string(), json!("msg-1"));
         metadata.insert("groupAuthor".to_string(), json!("m-1"));
-        GroupChatRouter::ingest_reply(&store, &metadata)
-            .await
-            .expect("ingest");
+        GroupChatRouter::ingest_reply(
+            &store,
+            &metadata,
+            "here is my answer",
+            &GroupChatActor::Claw {
+                session_id: "m-1".to_string(),
+                agent_type: "Claw".to_string(),
+            },
+            42,
+        )
+        .await
+        .expect("ingest");
 
-        // The original message is now Replied (P1-5/P1-2).
+        // The original message is now Replied (P1-5/P1-2) and the reply body is
+        // appended to the room stream (P2-1).
         let window = store
             .list_messages("room-i", None, None)
             .await
             .expect("list");
-        assert_eq!(window.messages.len(), 1);
+        assert_eq!(window.messages.len(), 2);
+        assert_eq!(window.messages[0].status, GroupChatMessageStatus::Replied);
+        assert_eq!(window.messages[1].content, "here is my answer");
+        assert_eq!(
+            window.messages[1].reply_to_message_id.as_deref(),
+            Some("msg-1")
+        );
+        assert_eq!(
+            window.messages[1].status,
+            GroupChatMessageStatus::Delivered
+        );
+    }
+
+    #[tokio::test]
+    async fn ingest_reply_skips_body_when_empty() {
+        let root = TestTempDir::new("ingest-empty");
+        let store = GroupChatStore::new(root.path().join("group-chats"));
+        store
+            .save_room(&room("room-e2", GroupChatMode::Free, 0))
+            .await
+            .expect("save room");
+        let message = GroupChatMessage {
+            message_id: "msg-1".to_string(),
+            room_id: "room-e2".to_string(),
+            author: GroupChatActor::Master,
+            kind: bitfun_runtime_ports::GroupChatMessageKind::User,
+            content: "question".to_string(),
+            mention_targets: Vec::new(),
+            reply_to_message_id: None,
+            timestamp: 1,
+            status: GroupChatMessageStatus::Pending,
+        };
+        store
+            .append_message("room-e2", &message)
+            .await
+            .expect("append");
+
+        let mut metadata = JsonMap::new();
+        metadata.insert("groupId".to_string(), json!("room-e2"));
+        metadata.insert("groupMessageId".to_string(), json!("msg-1"));
+        GroupChatRouter::ingest_reply(
+            &store,
+            &metadata,
+            "   ",
+            &GroupChatActor::Claw {
+                session_id: "m-1".to_string(),
+                agent_type: "Claw".to_string(),
+            },
+            42,
+        )
+        .await
+        .expect("ingest");
+
+        let window = store
+            .list_messages("room-e2", None, None)
+            .await
+            .expect("list");
+        assert_eq!(window.messages.len(), 1, "empty body appends nothing");
         assert_eq!(window.messages[0].status, GroupChatMessageStatus::Replied);
     }
 

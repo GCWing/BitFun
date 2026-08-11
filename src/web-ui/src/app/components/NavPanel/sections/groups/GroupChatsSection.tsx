@@ -60,10 +60,19 @@ export const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
     if (!effectiveWorkspacePath) return;
     // P1-4 fix: loadRooms also syncs the store's workspacePath (consumed by actions).
     setWorkspacePath(effectiveWorkspacePath);
-    loadRooms(effectiveWorkspacePath).catch(() => {
+    loadRooms(effectiveWorkspacePath).then((_rooms) => {
+      // P2-15: eagerly fetch member counts so the list never shows 0 while
+      // members exist (member count is a separate read channel, P1-11).
+      const roomIds = Array.from(useGroupChatStore.getState().rooms.keys());
+      for (const roomId of roomIds) {
+        loadMembers(roomId).catch(() => {
+          // Best-effort: a member-count failure must not block the list.
+        });
+      }
+    }).catch(() => {
       // Best-effort: keep the empty state until store data is ready (fail-safe).
     });
-  }, [isVisible, effectiveWorkspacePath, loadRooms, setWorkspacePath]);
+  }, [isVisible, effectiveWorkspacePath, loadRooms, loadMembers, setWorkspacePath]);
 
   const handleRoomClick = useCallback(
     (roomId: string) => {

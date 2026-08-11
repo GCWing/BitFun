@@ -21,12 +21,24 @@ import './GroupChatPane.scss';
 const EMPTY_MEMBERS: GroupChatMember[] = [];
 const EMPTY_MESSAGES: GroupChatMessage[] = [];
 
+// P2-12: configurable timeout scan values (S-90 — no magic numbers in the UI).
+// Backend default is group_chat.reply_timeout_secs = 300; kept in one place so
+// the UI never hardcodes the value in the component body.
+const GROUP_CHAT_REPLY_TIMEOUT_SECS = 300;
+const GROUP_CHAT_TIMEOUT_SCAN_INTERVAL_MS = 60_000;
+
 export interface GroupChatPaneProps {
   roomId: string;
   isViewportActive?: boolean;
+  /** P2-10: addable Claw assistants (real data source wired by the host). */
+  availableAssistants?: { sessionId: string; name: string }[];
 }
 
-export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewportActive = true }) => {
+export const GroupChatPane: React.FC<GroupChatPaneProps> = ({
+  roomId,
+  isViewportActive = true,
+  availableAssistants = [],
+}) => {
   const { t } = useI18n('common');
   const room = useGroupChatStore((state) => state.rooms.get(roomId) ?? null);
   const members = useGroupChatStore(useShallow((state) => Array.from(state.members.get(roomId) ?? EMPTY_MEMBERS)));
@@ -43,20 +55,25 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
   const [timeoutReminders, setTimeoutReminders] = useState<
     Array<{ roomId: string; messageId: string; content: string }>
   >([]);
+  // P2-8: user-visible error surface (load/send/join/leave failures).
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!roomId || !isViewportActive) return;
-    loadMembers(roomId).catch(() => {});
-    loadMessages(roomId).catch(() => {});
-  }, [roomId, isViewportActive, loadMembers, loadMessages]);
+    loadMembers(roomId)
+      .catch(() => setErrorMessage(t('nav.groupChat.loadFailed')));
+    loadMessages(roomId)
+      .catch(() => setErrorMessage(t('nav.groupChat.loadFailed')));
+  }, [roomId, isViewportActive, loadMembers, loadMessages, t]);
 
-  // P1-1 fix: timeout-reminder consumer — periodic scan (default 300s,
-  // R-GC-26 reply_timeout_secs); timed-out messages surface as reminders
-  // (system-level notification semantics).
+  // P1-1/P2-4/P2-12 fix: timeout-reminder consumer — periodic scan scoped to
+  // THIS room (roomId passed so N panes never scan the whole table) using the
+  // configurable reply timeout (R-GC-26 reply_timeout_secs). Timed-out
+  // messages surface as reminders (system-level notification semantics).
   useEffect(() => {
     if (!isViewportActive) return;
     const scan = () => {
-      scanTimeouts(300).then((reminders) => {
+      scanTimeouts(GROUP_CHAT_REPLY_TIMEOUT_SECS, roomId).then((reminders) => {
         if (reminders.length > 0) {
           setTimeoutReminders((prev) => mergeReminders(prev, reminders));
         }
@@ -65,17 +82,43 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
       });
     };
     scan();
-    const timer = window.setInterval(scan, 60_000); // scan once per minute.
+    const timer = window.setInterval(scan, GROUP_CHAT_TIMEOUT_SCAN_INTERVAL_MS); // scan once per minute.
     return () => window.clearInterval(timer);
-  }, [isViewportActive, scanTimeouts]);
+  }, [isViewportActive, scanTimeouts, roomId]);
 
   const handleSubmit = useCallback(
     (text: string, author: GroupChatActor, mentionTargets: GroupChatActor[], urgent?: boolean) => {
       if (!text.trim()) return;
-      sendMessage(roomId, author, text, mentionTargets, urgent).catch(() => {});
+      sendMessage(roomId, author, text, mentionTargets, urgent).catch((error) => {
+        setErrorMessage(error instanceof Error ? error.message : String(error));
+      });
     },
     [roomId, sendMessage],
   );
+
+  const handleJoin = useCallback(
+    (sessionId: string) => {
+      joinRoom(roomId, sessionId, { kind: 'master' }).catch((error) => {
+        setErrorMessage(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [roomId, joinRoom],
+  );
+
+  const handleLeave = useCallback(
+    (sessionId: string) => {
+      leaveRoom(roomId, sessionId, { kind: 'master' }).catch((error) => {
+        setErrorMessage(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [roomId, leaveRoom],
+  );
+
+  const handleSetMode = useCallback(() => {
+    setMode(roomId, mode === 'free' ? 'round_robin' : 'free', { kind: 'master' }).catch((error) => {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    });
+  }, [roomId, mode, setMode]);
 
   const registration: GroupChatRegistration = useMemo(
     () => ({
@@ -119,7 +162,7 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
           data-bf-component="group-chat-pane"
           data-bf-part="modeToggle"
           className="group-chat-pane__mode-toggle"
-          onClick={() => setMode(roomId, mode === 'free' ? 'round_robin' : 'free', { kind: 'master' })}
+          onClick={handleSetMode}
         >
           <Repeat size={12} aria-hidden="true" />
           {mode === 'round_robin' ? t('nav.groupChat.modeRoundRobin') : t('nav.groupChat.modeFree')}
@@ -134,14 +177,27 @@ export const GroupChatPane: React.FC<GroupChatPaneProps> = ({ roomId, isViewport
           <Settings2 size={12} aria-hidden="true" />
         </button>
       </header>
+      {errorMessage ? (
+        <div data-bf-component="group-chat-pane" data-bf-part="error" className="group-chat-pane__error" role="alert">
+          <span>{errorMessage}</span>
+          <button
+            type="button"
+            className="group-chat-pane__error-dismiss"
+            aria-label={t('nav.groupChat.dismissError')}
+            onClick={() => setErrorMessage(null)}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       {memberPickerOpen ? (
         <GroupChatMemberPicker
           roomId={roomId}
           members={members}
           currentActor={{ kind: 'master' }}
-          availableAssistants={[]}
-          onJoin={(sessionId) => joinRoom(roomId, sessionId, { kind: 'master' }).catch(() => {})}
-          onLeave={(sessionId) => leaveRoom(roomId, sessionId, { kind: 'master' }).catch(() => {})}
+          availableAssistants={availableAssistants}
+          onJoin={handleJoin}
+          onLeave={handleLeave}
         />
       ) : null}
       {timeoutReminders.length > 0 ? (
