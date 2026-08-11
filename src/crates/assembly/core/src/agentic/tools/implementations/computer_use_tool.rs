@@ -119,6 +119,63 @@ const COMPUTER_USE_DEBUG_SCREENSHOTS_ENV: &str = "BITFUN_COMPUTER_USE_DEBUG_SCRE
 /// Newest debug screenshots retained in [`COMPUTER_USE_DEBUG_SUBDIR`]; older files are deleted.
 const COMPUTER_USE_DEBUG_MAX_FILES: usize = 20;
 
+/// AX depth `describe_screen` walks into the focused window.
+///
+/// This was 8, which is fine for a native Cocoa app but far too shallow for
+/// Electron / WebView clients — the ones agents are most often asked to drive.
+/// Measured against a real Electron window (focused window only):
+///
+/// | depth | nodes | actionable | tree_text |
+/// |------:|------:|-----------:|----------:|
+/// |     8 |    17 |          7 |      1 KB |
+/// |    12 |    25 |         15 |      2 KB |
+/// |    16 |    50 |         40 |      5 KB |
+/// |    20 |   207 |        197 |     27 KB |
+/// |    24 |   233 |        223 |     31 KB |
+/// |    32 |  1289 |       1279 |    206 KB |
+///
+/// At 8 the agent could see seven actionable elements in an entire app — not
+/// enough to find a search field or a send button, which reads as "this app has
+/// no AX tree" and pushes it onto OCR or screenshot guessing. The actionable
+/// layer appears around 20; past that the payload grows far faster than the
+/// number of things worth clicking.
+const DESCRIBE_SCREEN_AX_DEPTH: u32 = 20;
+
+/// Byte ceiling on the AX tree `describe_screen` returns.
+///
+/// The depth above is tuned against a typical rich window (~27 KB), but depth
+/// is a poor proxy for size: a document, a long list or a deeply nested canvas
+/// can multiply that. `describe_screen` is the action an agent calls most, so
+/// it needs a bound that does not depend on the app behaving reasonably.
+const DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES: usize = 60_000;
+
+/// Trim an AX tree to [`DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES`] on a line
+/// boundary, appending a note that says what was dropped and how to get it.
+///
+/// Silent truncation would be worse than the problem it solves: the agent would
+/// read a partial tree as the whole UI and conclude a control does not exist.
+fn clip_tree_text(text: String) -> String {
+    if text.len() <= DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES {
+        return text;
+    }
+    let cut = text[..DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES]
+        .rfind('\n')
+        .unwrap_or(DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES);
+    let kept_lines = text[..cut].lines().count();
+    let total_lines = text.lines().count();
+    format!(
+        "{}\n[truncated] showing the first {} of {} AX nodes ({} of {} bytes). \
+This is a size limit, not the end of the UI — a control you cannot find here may still exist. \
+Narrow the view with `get_app_state` (`focus_window_only`, a smaller `max_depth`) or target it \
+directly with `locate` / `move_to_text`.\n",
+        &text[..cut],
+        kept_lines,
+        total_lines,
+        cut,
+        text.len(),
+    )
+}
+
 pub struct ComputerUseTool;
 
 impl Default for ComputerUseTool {
@@ -482,14 +539,18 @@ The **primary model cannot consume images** in tool results — **do not** use *
         // tactic — which is exactly what a null `ax_tree_text` used to cause.
         let ax_tree_status: &str = match selector.as_ref() {
             None => "no_foreground_app",
-            Some(app) => match host.get_app_state(app.clone(), 8, true).await {
+            Some(app) => match host
+                .get_app_state(app.clone(), DESCRIBE_SCREEN_AX_DEPTH, true)
+                .await
+            {
                 Ok(snap) => {
                     // Deliberately drop `snap.screenshot` (JPEG) — describe_screen
                     // never returns image bytes so text-only models are safe.
                     window_title = snap.window_title.clone();
                     ax_nodes_count = Some(snap.nodes.len());
                     ax_digest = Some(snap.digest.clone());
-                    ax_tree_text = Some(snap.tree_text).filter(|t| !t.trim().is_empty());
+                    ax_tree_text =
+                        Some(clip_tree_text(snap.tree_text)).filter(|t| !t.trim().is_empty());
                     if ax_tree_text.is_some() {
                         "ok"
                     } else {
@@ -2178,7 +2239,7 @@ fn req_i32(input: &Value, key: &str) -> BitFunResult<i32> {
 
 #[cfg(test)]
 mod tests {
-    use super::ComputerUseTool;
+    use super::{clip_tree_text, ComputerUseTool, DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES};
     use crate::agentic::tools::computer_use_host::{
         ComputerScreenshot, ComputerUseForegroundApplication, ComputerUseHost,
         ComputerUsePermissionSnapshot, ComputerUseScreenshotParams, ComputerUseSessionSnapshot,
@@ -2584,6 +2645,38 @@ mod tests {
         assert!(
             host.waived.load(std::sync::atomic::Ordering::SeqCst),
             "describe_screen is the text-only observation step and must waive the guard"
+        );
+    }
+
+    #[test]
+    fn tree_text_under_the_cap_is_returned_verbatim() {
+        let small = "[0] AXApplication\n  [1] AXWindow\n".to_string();
+        assert_eq!(clip_tree_text(small.clone()), small);
+    }
+
+    /// Truncation must announce itself. An agent that reads a clipped tree as
+    /// the whole UI concludes a control does not exist and gives up on it.
+    #[test]
+    fn oversized_tree_text_is_clipped_on_a_line_boundary_and_says_so() {
+        let line = "[0] AXButton title=\"x\" frame=(0,0,10x10)\n";
+        let big = line.repeat(DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES / line.len() + 500);
+        let out = clip_tree_text(big.clone());
+
+        assert!(out.len() < big.len(), "must actually shrink");
+        assert!(
+            out.contains("[truncated]"),
+            "must announce the clip: {out:.200}"
+        );
+        assert!(
+            out.contains("not the end of the UI"),
+            "must warn that a missing control may still exist"
+        );
+        // Cutting mid-line would hand the model a malformed node.
+        let body = out.split("\n[truncated]").next().unwrap();
+        assert!(
+            body.lines()
+                .all(|l| l.is_empty() || l.starts_with("[0] AXButton")),
+            "clip must land on a line boundary"
         );
     }
 

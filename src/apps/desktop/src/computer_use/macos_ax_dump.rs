@@ -975,6 +975,83 @@ mod tests {
         assert_ne!(d1, d2);
     }
 
+    /// Measure the closed-menu pruning against a real running app rather than
+    /// trusting the unit test's synthetic frames.
+    ///
+    /// Dumps the frontmost application twice — once with menus walked, once
+    /// with the default pruning — and reports both node counts. Requires
+    /// Accessibility permission and a GUI session, so it is `#[ignore]`d.
+    #[test]
+    #[ignore]
+    fn closed_menu_pruning_shrinks_a_real_app_dump() {
+        let pid = crate::computer_use::macos_bg_input::frontmost_pid_macos()
+            .expect("a GUI session has a frontmost app");
+
+        let with_menus = dump_app_ax(
+            pid,
+            DumpOpts {
+                include_closed_menus: true,
+                ..Default::default()
+            },
+        )
+        .expect("dump with menus");
+        let pruned = dump_app_ax(pid, DumpOpts::default()).expect("pruned dump");
+
+        // What `describe_screen` actually asks for: depth 8, focused window
+        // only. Reported alongside so the cost of the observe path is visible
+        // next to the cost of a full `get_app_state`.
+        let observe = dump_app_ax(
+            pid,
+            DumpOpts {
+                max_depth: 8,
+                focus_window_only: true,
+                ..Default::default()
+            },
+        )
+        .expect("describe_screen-shaped dump");
+
+        eprintln!(
+            "pid={pid}\n  full+menus:  {:>5} nodes, {:>7} bytes\n  full pruned: {:>5} nodes, {:>7} bytes\n  observe:     {:>5} nodes, {:>7} bytes",
+            with_menus.nodes.len(),
+            with_menus.tree_text.len(),
+            pruned.nodes.len(),
+            pruned.tree_text.len(),
+            observe.nodes.len(),
+            observe.tree_text.len(),
+        );
+        // Depth profile of the focused window. Run this when retuning
+        // `DESCRIBE_SCREEN_AX_DEPTH`: "actionable" (has AX actions and a real
+        // frame) is what the agent can actually click, and it is the column
+        // that matters — node count and bytes grow long after it plateaus.
+        for d in [8u32, 12, 16, 20, 24, 32] {
+            let s = dump_app_ax(
+                pid,
+                DumpOpts {
+                    max_depth: d,
+                    focus_window_only: true,
+                    ..Default::default()
+                },
+            )
+            .expect("depth dump");
+            let actionable = s
+                .nodes
+                .iter()
+                .filter(|n| !n.actions.is_empty() && n.frame_global.is_some())
+                .count();
+            eprintln!(
+                "  depth {:>2}: {:>5} nodes, {:>4} actionable, {:>7} bytes",
+                d,
+                s.nodes.len(),
+                actionable,
+                s.tree_text.len()
+            );
+        }
+        assert!(
+            pruned.nodes.len() <= with_menus.nodes.len(),
+            "pruning must never grow the tree"
+        );
+    }
+
     /// Smoke test: dump the AX tree of *this* test process. The test process
     /// usually has no AX windows of its own, so we only assert the call
     /// returns *something* (possibly an empty tree) without panicking and
