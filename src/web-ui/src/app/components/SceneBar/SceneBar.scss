@@ -49,7 +49,7 @@
 
 .bitfun-scene-tab {
   // Measured by SceneTab and overridden per-tab; 0 until first measurement.
-  --scene-tab-close-shift: 0px;
+  --bitfun-scene-tab-close-shift: 0px;
   position: relative;
   display: flex;
   align-items: center;
@@ -142,10 +142,10 @@
     // Counter the whole-tab scale drift for the absolutely-positioned close
     // button so press/release stays under the cursor. The drift (distance
     // from the tab center × 0.015) is measured by SceneTab and exposed as
-    // --scene-tab-close-shift. The transform transition below keeps this in
-    // sync with the tab's 120ms scale.
+    // --bitfun-scene-tab-close-shift. The transform transition below keeps
+    // this in sync with the tab's 120ms scale.
     .bitfun-scene-tab__close {
-      transform: translateY(-50%) translateX(var(--scene-tab-close-shift));
+      transform: translateY(-50%) translateX(var(--bitfun-scene-tab-close-shift));
     }
   }
 

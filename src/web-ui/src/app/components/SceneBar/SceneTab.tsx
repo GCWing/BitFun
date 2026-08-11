@@ -49,7 +49,7 @@ const SceneTab: React.FC<SceneTabProps> = ({
     const el = tabRef.current;
     if (!el) return;
     const updateShift = () => {
-      el.style.setProperty('--scene-tab-close-shift', `${0.015 * (el.offsetWidth / 2 - 15)}px`);
+      el.style.setProperty('--bitfun-scene-tab-close-shift', `${0.015 * (el.offsetWidth / 2 - 15)}px`);
     };
     updateShift();
     const observer = new ResizeObserver(updateShift);
