@@ -271,12 +271,17 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 .await
                 .map(|sessions| RuntimeIpcOperationResult::Sessions { sessions })
                 .map_err(runtime_ipc_error),
-            RuntimeIpcOperation::CreateSession { request } => self
-                .runtime
-                .create_session(request)
-                .await
-                .map(|session| RuntimeIpcOperationResult::SessionCreated { session })
-                .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::CreateSession { request } => {
+                let session = self
+                    .runtime
+                    .create_session(request)
+                    .await
+                    .map_err(runtime_ipc_error)?;
+                let workspace_binding = self.session_workspace_binding(&session.session_id).await?;
+                self.ensure_plugin_workspace_ready(&workspace_binding)
+                    .await?;
+                Ok(RuntimeIpcOperationResult::SessionCreated { session })
+            }
             RuntimeIpcOperation::RestoreSession { request } => {
                 let restored = self
                     .runtime
@@ -312,6 +317,8 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     .collect();
                 let workspace_binding = self
                     .session_workspace_binding(&restored.session.session_id)
+                    .await?;
+                self.ensure_plugin_workspace_ready(&workspace_binding)
                     .await?;
                 Ok(RuntimeIpcOperationResult::SessionRestored {
                     session: restored.session,
@@ -368,6 +375,8 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     .map_err(runtime_ipc_error)?;
                 let workspace_binding = self
                     .session_workspace_binding(&restored.session.session_id)
+                    .await?;
+                self.ensure_plugin_workspace_ready(&workspace_binding)
                     .await?;
                 Ok(RuntimeIpcOperationResult::SessionForked {
                     session: restored.session,
@@ -482,6 +491,9 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 .map(|snapshot| RuntimeIpcOperationResult::WorkspaceDiff { snapshot })
                 .map_err(runtime_ipc_error),
             RuntimeIpcOperation::SubmitTurn { request } => {
+                let workspace_binding = self.session_workspace_binding(&request.session_id).await?;
+                self.ensure_plugin_workspace_ready(&workspace_binding)
+                    .await?;
                 let outcome = self
                     .runtime
                     .submit_dialog_turn(request)
@@ -518,15 +530,19 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     },
                 })
                 .map_err(runtime_ipc_error),
-            RuntimeIpcOperation::RunUserShellCommand { request } => self
-                .runtime
-                .run_user_shell_command(request)
-                .await
-                .map(|result| RuntimeIpcOperationResult::TurnAccepted {
-                    session_id: result.session_id,
-                    turn_id: result.turn_id,
-                })
-                .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::RunUserShellCommand { request } => {
+                let workspace_binding = self.session_workspace_binding(&request.session_id).await?;
+                self.ensure_plugin_workspace_ready(&workspace_binding)
+                    .await?;
+                self.runtime
+                    .run_user_shell_command(request)
+                    .await
+                    .map(|result| RuntimeIpcOperationResult::TurnAccepted {
+                        session_id: result.session_id,
+                        turn_id: result.turn_id,
+                    })
+                    .map_err(runtime_ipc_error)
+            }
             RuntimeIpcOperation::CancelTurn { request } => self
                 .runtime
                 .cancel_turn(request)
@@ -755,6 +771,15 @@ async fn await_permission_route(
 }
 
 impl SharedRuntimeHandler {
+    async fn ensure_plugin_workspace_ready(
+        &self,
+        binding: &AgentSessionWorkspaceBinding,
+    ) -> std::result::Result<(), RuntimeIpcError> {
+        crate::plugin_host_activation::ensure_plugin_workspace_ready(binding)
+            .await
+            .map_err(core_ipc_error)
+    }
+
     async fn session_workspace_binding(
         &self,
         session_id: &str,

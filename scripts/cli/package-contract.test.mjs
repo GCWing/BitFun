@@ -17,6 +17,21 @@ for (const packageScript of [
   assert.match(content, /THIRD_PARTY_NOTICES\.md/);
   assert.match(content, /models-dev\.LICENSE\.txt/);
   assert.match(content, /models-dev\.provenance\.json/);
+  assert.match(content, /extension-host/);
+  assert.match(content, /resources[\\/]ext-host/);
+  assert.match(content, /extension-host\.js/);
+}
+
+for (const workflow of [
+  '.github/workflows/cli-package.yml',
+  '.github/workflows/cli-package-manual.yml',
+  '.github/workflows/linux-binaries.yml',
+  '.github/workflows/nightly.yml',
+]) {
+  const content = read(workflow);
+  assert.match(content, /oven-sh\/setup-bun@v2/);
+  assert.match(content, /plugin Host resources/);
+  assert.match(content, /plugin-host:prepare|extension-host/);
 }
 
 for (const workflow of [

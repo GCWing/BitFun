@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@opencode-ai/extension-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "scripts": {
+    "build": "bun build ./src/main.ts --target=bun --outfile=dist/extension-host.js",
+    "generate": "bun run ./script/generate-protocol.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "1.17.18",
+    "@opencode-ai/sdk": "1.17.18",
+    "npm-package-arg": "13.0.2",
+    "semver": "7.7.4",
+    "zod": "4.1.8"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "1.0.9",
+    "@types/bun": "1.3.13",
+    "@types/npm-package-arg": "6.1.4",
+    "@types/node": "26.1.1",
+    "typescript": "5.8.2"
+  }
+}

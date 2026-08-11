@@ -33,6 +33,7 @@ bash "${REPO_ROOT}/src/apps/cli/install.sh"
 bash "${REPO_ROOT}/src/apps/cli/install.sh"
 
 "${BITFUN_CLI_BIN_DIR}/bitfun" --version >/dev/null
+[ -f "${BITFUN_CLI_BIN_DIR}/resources/ext-host/extension-host.js" ]
 LEGACY_STDERR="${TEST_ROOT}/legacy.err"
 "${BITFUN_CLI_BIN_DIR}/bitfun-cli" --version >/dev/null 2>"$LEGACY_STDERR"
 grep -Fxq 'Warning: `bitfun-cli` is deprecated; use `bitfun` instead.' "$LEGACY_STDERR"

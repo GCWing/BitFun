@@ -1065,6 +1065,7 @@ dependencies = [
  "bitfun-external-sources",
  "bitfun-harness",
  "bitfun-opencode-adapter",
+ "bitfun-opencode-plugin-host",
  "bitfun-plugin-runtime-client",
  "bitfun-product-capabilities",
  "bitfun-product-domains",
@@ -1109,6 +1110,7 @@ dependencies = [
  "tool-runtime",
  "ts-rs",
  "unic-langid",
+ "urlencoding",
  "uuid",
 ]
 
@@ -1318,6 +1320,23 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "bitfun-opencode-plugin-host"
+version = "0.2.18"
+dependencies = [
+ "base64 0.22.1",
+ "bitfun-services-core",
+ "log",
+ "rand 0.8.7",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.19",
  "tokio",

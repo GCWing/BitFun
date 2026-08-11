@@ -10,6 +10,8 @@
  * - src/mobile-web/dist missing → cargo check -p bitfun-desktop and
  *   cargo check --workspace fail with "resource path '../../mobile-web/dist'
  *   doesn't exist" in the bitfun-desktop build script
+ * - OpenCode extension Host dist missing → CLI builds cannot bundle the
+ *   Bun plugin Host resources
  * - sherpa-onnx prebuilt libs missing → sherpa-onnx-sys build script attempts
  *   a network download from GitHub that fails on poor connectivity
  *
@@ -57,7 +59,25 @@ function runChecks(rootDir) {
     });
   }
 
-  // --- Check 3: sherpa-onnx prebuilt libs ---
+  // --- Check 3: OpenCode extension Host dist (CLI bundled resource) ---
+  const pluginHostDist = join(
+    rootDir,
+    'src',
+    'apps',
+    'extension-host',
+    'dist',
+  );
+  const pluginHostEntries = [join(pluginHostDist, 'extension-host.js')];
+  if (pluginHostEntries.some((entry) => !existsSync(entry))) {
+    errors.push({
+      name: 'OpenCode extension Host dist',
+      message:
+        'src/apps/extension-host/dist is missing the Bun Host entry. CLI builds bundle this directory as the plugin Host resource.',
+      fix: ['pnpm', 'run', 'plugin-host:prepare'],
+    });
+  }
+
+  // --- Check 4: sherpa-onnx prebuilt libs ---
   // sherpa-onnx-sys build.rs auto-detects target/sherpa-onnx-prebuilt/<version>/lib/
   // and returns immediately without downloading. Only warn for the first-build
   // scenario where no prebuilt cache exists yet.
@@ -116,7 +136,15 @@ function runFixes(pendingFixes, rootDir) {
     const [cmd, ...args] = fix;
     console.log(`$ ${fix.join(' ')}`);
     try {
-      execFileSync(cmd, args, { stdio: 'inherit', cwd: rootDir });
+      if (process.platform === 'win32') {
+        execFileSync(
+          process.env.ComSpec || 'cmd.exe',
+          ['/d', '/s', '/c', fix.join(' ')],
+          { stdio: 'inherit', cwd: rootDir },
+        );
+      } else {
+        execFileSync(cmd, args, { stdio: 'inherit', cwd: rootDir });
+      }
     } catch {
       console.error(`Fix command failed: ${fix.join(' ')}\n`);
       allSucceeded = false;

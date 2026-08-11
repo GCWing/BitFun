@@ -70,6 +70,13 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   for their respective capability contracts. Product surfaces consume
   product-level views and must not import adapter or raw plugin runtime client
   types.
+- The managed OpenCode Plugin Host is an adapter/service resource. Core may
+  assemble its launch, retain opaque logical instance and PTY scope bindings,
+  and bridge matched requests to existing product owners. OpenCode route
+  matching, wire DTOs, serialization/error mapping, and physical process-tree
+  supervision stay in `opencode-plugin-host` and `services-core`; Core route
+  projections must not invent provider connectivity, VCS, permission, or other
+  owner state.
 - External-source Desktop, TUI, Peer, and Server surfaces share the versioned
   product-domain control DTO and closed generic actions. Capability-specific
   approvals and conflict choices remain typed owner operations; do not add a
@@ -104,8 +111,9 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   capability from Cargo's feature union. The Agent Runtime baseline plan is
   exactly `Basic` plus `AgentControl`, not a hidden delivery profile.
   `external-sources` adds third-party discovery/import adapters,
-  `plugin-runtime` adds executable plugin-client wiring. None may enable
-  `product-full`.
+  `plugin-runtime` adds executable plugin-client wiring,
+  `opencode-plugin-host` composes the managed Host and its reviewed route
+  owners. None may enable `product-full`.
 - CLI/ACP closure checks keep Cargo resolver-v2 normal and host
   (build/proc-macro) feature contexts separate, while treating all
   target-specific declarations within each context as one reviewed architecture
