@@ -17,6 +17,15 @@ pub(in crate::server) fn builder(
             management_handler!(
                 management,
                 MODELS_CAPABILITY,
+                ProjectReasoningCatalogRequest,
+                project_reasoning_catalog
+            ),
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            management_handler!(
+                management,
+                MODELS_CAPABILITY,
                 TuiModelCatalogRequest,
                 tui_model_catalog
             ),

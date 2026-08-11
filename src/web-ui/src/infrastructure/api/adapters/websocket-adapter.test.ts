@@ -99,6 +99,9 @@ describe('resolveWsMethod', () => {
       'config/getAgentProfileConfig'
     );
     expect(resolveWsMethod('get_model_configs')).toBe('config/getModelConfigs');
+    expect(resolveWsMethod('project_ai_model_reasoning_catalog')).toBe(
+      'model/projectReasoningCatalog',
+    );
     expect(resolveWsMethod('get_config')).toBe('config/getConfig');
     expect(resolveWsMethod('get_configs')).toBe('config/getConfigs');
     expect(resolveWsMethod('set_agent_profile_config')).toBe(
@@ -139,11 +142,11 @@ describe('resolveWsMethod', () => {
     // covers the schema methods (key count is stable; ordering is not pinned
     // because the table is a plain object). Track B Batch 1 added config write +
     // i18n and the P0 Session/Config control plane. Atomic cloud-speech save
-    // and config validation raise the count to 33.
+    // config validation, and live reasoning projection raise the count to 34.
     expect(AGENT_COMMAND_SCHEMA.start_dialog_turn.method).toBe(
       'agent/submitDialogTurn'
     );
-    expect(Object.keys(AGENT_COMMAND_SCHEMA).length).toBe(33);
+    expect(Object.keys(AGENT_COMMAND_SCHEMA).length).toBe(34);
 
     // Touch the locals so noUnusedLocals does not flag them under vitest's
     // transformed build (tsc --noEmit is the real gate; this is belt-and-suspenders).

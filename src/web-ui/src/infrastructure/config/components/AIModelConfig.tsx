@@ -3098,6 +3098,15 @@ const AIModelConfig: React.FC = () => {
     )
     ? resolveDraftCatalogEntry(reasoningPanelDraft)?.reasoning
     : undefined;
+  const reasoningPanelProjectionRequest = reasoningPanelDraft && editingConfig
+    ? {
+        provider: editingConfig.provider || 'openai',
+        modelName: reasoningPanelDraft.modelName,
+        baseUrl: editingConfig.base_url || '',
+        contextWindow: reasoningPanelDraft.contextWindow,
+        maxTokens: reasoningPanelDraft.maxTokens,
+      }
+    : undefined;
   const modelsDevSourceLabel = modelsDevStatus
     ? t(`modelsDevCatalog.source.${modelsDevStatus.active_source}`)
     : t('modelsDevCatalog.loading');
@@ -3737,6 +3746,11 @@ const AIModelConfig: React.FC = () => {
             value={reasoningPanelDraft.reasoning}
             generatedProjection={reasoningPanelProjection}
             modelsDevReasoningCatalog={modelCatalog?.models_dev_reasoning_catalog}
+            projectionRequest={reasoningPanelProjectionRequest}
+            requestFormatLabel={reasoningPanelProjectionRequest
+              ? requestFormatLabelMap[reasoningPanelProjectionRequest.provider]
+                || reasoningPanelProjectionRequest.provider
+              : undefined}
             onCancel={() => setReasoningPanelDraftKey(null)}
             onApply={(reasoning) => {
               updateModelDraft(reasoningPanelDraft.modelName, {

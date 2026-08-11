@@ -6,6 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReasoningConfig } from '../types';
 import ReasoningConfigPanel from './ReasoningConfigPanel';
 
+const { projectReasoningCatalog } = vi.hoisted(() => ({
+  projectReasoningCatalog: vi.fn(),
+}));
+
+vi.mock('@/infrastructure/api', () => ({
+  aiApi: { projectReasoningCatalog },
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -23,10 +31,12 @@ vi.mock('@/component-library', () => ({
 vi.mock('./ReasoningPresetEditor', () => ({
   default: ({
     value,
+    generatedProjection,
     onChange,
     onValidationChange,
   }: {
     value: ReasoningConfig;
+    generatedProjection?: { presets?: Array<{ id: string }> };
     onChange: (value: ReasoningConfig) => void;
     onValidationChange: (invalid: boolean) => void;
   }) => (
@@ -43,6 +53,19 @@ vi.mock('./ReasoningPresetEditor', () => ({
       </button>
       <button
         type="button"
+        data-testid="bind-models-dev"
+        onClick={() => onChange({
+          ...value,
+          catalog: { source: 'models_dev', provider: 'openai', model: 'gpt-test' },
+        })}
+      >
+        bind
+      </button>
+      <span data-testid="generated-presets">
+        {generatedProjection?.presets?.map(preset => preset.id).join(',') ?? ''}
+      </span>
+      <button
+        type="button"
         data-testid="invalidate-reasoning"
         onClick={() => onValidationChange(true)}
       >
@@ -57,6 +80,7 @@ describe('ReasoningConfigPanel', () => {
   let root: Root;
 
   beforeEach(() => {
+    projectReasoningCatalog.mockReset();
     container = document.createElement('div');
     root = createRoot(container);
   });
@@ -108,5 +132,47 @@ describe('ReasoningConfigPanel', () => {
     act(() => cancel?.click());
     expect(onCancel).toHaveBeenCalledOnce();
     expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it('refreshes generated presets after an explicit models.dev binding change', async () => {
+    projectReasoningCatalog
+      .mockResolvedValueOnce({ status: 'unknown', presets: [] })
+      .mockResolvedValueOnce({
+        status: 'known',
+        presets: [
+          { id: 'low', label: 'Low', order: 0, source: 'models_dev', actions: [] },
+          { id: 'high', label: 'High', order: 1, source: 'models_dev', actions: [] },
+        ],
+      });
+
+    await act(async () => root.render(
+      <ReasoningConfigPanel
+        value={{ catalog: { source: 'auto' }, presets: [] }}
+        projectionRequest={{
+          provider: 'responses',
+          modelName: 'gateway-alias',
+          baseUrl: 'https://gateway.example.com/v1',
+        }}
+        onCancel={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    ));
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="bind-models-dev"]')?.click();
+      await Promise.resolve();
+    });
+
+    expect(projectReasoningCatalog).toHaveBeenLastCalledWith({
+      provider: 'responses',
+      modelName: 'gateway-alias',
+      baseUrl: 'https://gateway.example.com/v1',
+      reasoning: {
+        catalog: { source: 'models_dev', provider: 'openai', model: 'gpt-test' },
+        presets: [],
+      },
+    });
+    expect(container.querySelector('[data-testid="generated-presets"]')?.textContent)
+      .toBe('low,high');
   });
 });

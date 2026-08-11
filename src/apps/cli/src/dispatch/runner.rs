@@ -221,6 +221,20 @@ pub(crate) fn process_alive(pid: u32) -> bool {
     };
     // SAFETY: signal 0 performs liveness/permission checking only.
     if unsafe { libc::kill(pid, 0) } == 0 {
+        #[cfg(target_os = "linux")]
+        {
+            // A zombie still answers to kill(0), but it has already exited and
+            // must not be treated as an authenticated leader for escalation.
+            if let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+                if stat
+                    .rsplit_once(") ")
+                    .and_then(|(_, fields)| fields.split_whitespace().next())
+                    == Some("Z")
+                {
+                    return false;
+                }
+            }
+        }
         return true;
     }
     matches!(
