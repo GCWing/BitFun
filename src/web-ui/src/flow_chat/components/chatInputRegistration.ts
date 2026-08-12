@@ -1,6 +1,6 @@
 import type { ContextItem } from '@/shared/types/context';
 import type { ComposerPresentation } from '../utils/composerPresentation';
-import type { GroupChatActor } from '../types/flow-chat';
+import type { GroupChatActor, GroupChatMember } from '../types/flow-chat';
 
 /**
  * One submission produced by the shared ChatInput surface.
@@ -44,6 +44,16 @@ export interface ChatInputRegistration {
   draft?: ChatInputDraftRegistration;
   onDraftConsumed?: (id: number) => void;
   onSubmit?: (submission: ChatInputSubmission) => void | Promise<void>;
+  /**
+   * Group chat member mention (`@@`, R-GC-15/16) host. When present, a `@@`
+   * mention opens the group member picker instead of the file/session picker.
+   * `members` feed the picker; `onMentionSelect` records the chosen member
+   * (the composer insertion of the `@name` token is owned by ChatInput).
+   */
+  groupChatMention?: {
+    members: GroupChatMember[];
+    onMentionSelect: (target: GroupChatActor) => void;
+  };
 }
 
 export async function submitThroughChatInputRegistration(
