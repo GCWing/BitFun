@@ -7,6 +7,7 @@
  */
 
 import { notificationService } from '../../../shared/notification-system';
+import { i18nService } from '@/infrastructure/i18n';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { createLogger } from '@/shared/utils/logger';
@@ -15,7 +16,6 @@ import { isProjectedSessionEmpty } from '../../utils/flowChatTurnIdentity';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import { pendingQueueManager } from './PendingQueueModule';
 import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
-import { i18nService } from '@/infrastructure/i18n';
 import { driverForSession } from '../../session-drivers/registry';
 import type { SendMessageOptions, SubmissionDraft, TurnTracker } from '../../session-drivers/types';
 
@@ -236,7 +236,13 @@ export async function sendMessage(
   } catch (error) {
     log.error('Failed to send message', { sessionId: sessionId, error });
 
-    const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
+    // Map the "workspace folder deleted/moved" backend error to a localized
+    // message; other errors pass through verbatim for diagnostics. The
+    // "Thinking process error" notification title was also hardcoded English.
+    const rawErrorMessage = error instanceof Error ? error.message : '';
+    const errorMessage = /does not resolve to a local workspace/i.test(rawErrorMessage)
+      ? i18nService.t('flow-chat:errors.workspaceNotResolvable')
+      : (rawErrorMessage || i18nService.t('flow-chat:errors.sendFailed'));
 
     const currentState = stateMachineManager.getCurrentState(sessionId);
     const activeDialogTurnId = stateMachineManager
@@ -304,7 +310,7 @@ export async function sendMessage(
         if (latestSendBySession.get(sessionId) === sendAttempt) {
           latestSendBySession.delete(sessionId);
           notificationService.error(errorMessage, {
-            title: 'Thinking process error',
+            title: i18nService.t('flow-chat:errors.thinkingProcessError'),
             duration: 5000
           });
         }

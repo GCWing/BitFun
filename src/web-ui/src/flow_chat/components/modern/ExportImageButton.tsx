@@ -183,7 +183,12 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
     
     for (const [, session] of state.sessions) {
       const turn = session.dialogTurns.find((t: DialogTurn) => t.id === turnId);
-      if (turn) return { turn, sessionTitle: session.title?.trim() || '' };
+      if (turn) {
+        const sessionTitle = session.titleSource === 'i18n' && session.titleI18nKey
+          ? (i18nService.t(session.titleI18nKey, session.titleI18nParams ?? {}) || '')
+          : (session.title?.trim() || '');
+        return { turn, sessionTitle };
+      }
     }
     return null;
   }, [turnId]);

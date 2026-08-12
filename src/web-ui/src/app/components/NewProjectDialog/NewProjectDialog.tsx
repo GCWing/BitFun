@@ -14,7 +14,9 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
-import { Modal, Button, Input } from '@/component-library';
+import { Modal, Button, Input, Tooltip } from '@/component-library';
+import { systemAPI } from "@/infrastructure";
+import { isTauriCommandError } from '@/infrastructure/api/errors/TauriCommandError';
 import './NewProjectDialog.scss';
 
 const log = createLogger('NewProjectDialog');
@@ -76,6 +78,23 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
       setError(t('newProject.errorEnterName'));
       return;
     }
+    if (projectName.trim().length > 255) {
+      setError(t('newProject.errorNameTooLong'));
+      return;
+    }
+
+    // Pre-creation existence / case-collision check. On Windows/macOS the
+    // filesystem is case-insensitive, so "MyProject" and "myproject" resolve to
+    // the same folder; createDirectory is idempotent and would silently succeed
+    // without creating a new folder. Surface a clear error before attempting.
+    try {
+      if (await systemAPI.checkPathExists(fullPath)) {
+        setError(t('newProject.errorAlreadyExists'));
+        return;
+      }
+    } catch (error) {
+      log.error('Failed to check path existence', error);
+    }
 
     setIsCreating(true);
     setError('');
@@ -87,11 +106,19 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
       onClose();
     } catch (error) {
       log.error('Failed to create project', error);
-      setError(error instanceof Error ? error.message : t('newProject.errorCreateFailed'));
+      let message: string;
+      if (isTauriCommandError(error) && error.isPermissionError()) {
+        message = t('newProject.errorParentNoAccess');
+      } else if (error instanceof Error && /does not exist|not a directory/i.test(error.message)) {
+        message = t('newProject.errorPathNotFound');
+      } else {
+        message = t('newProject.errorCreateFailed');
+      }
+      setError(message);
     } finally {
       setIsCreating(false);
     }
-  }, [parentPath, projectName, onConfirm, onClose, t]);
+  }, [parentPath, projectName, fullPath, onConfirm, onClose, t]);
 
   // Reset form and close dialog
   const handleCancel = useCallback(() => {
@@ -135,12 +162,14 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
             </label>
             <div data-bf-component="new-project-dialog" data-bf-part="pathSelector" className="new-project-dialog__path-selector">
               <div className="new-project-dialog__path-input">
-                <Input
-                  type="text"
-                  value={parentPath}
-                  readOnly
-                  placeholder={t('newProject.parentDirectoryPlaceholder')}
-                />
+                <Tooltip content={parentPath} placement="right" followCursor disabled={!parentPath}>
+                  <Input
+                    type="text"
+                    value={parentPath}
+                    readOnly
+                    placeholder={t('newProject.parentDirectoryPlaceholder')}
+                  />
+                </Tooltip>
               </div>
               <Button
                 type="button"
@@ -166,6 +195,12 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
                 type="text"
                 value={projectName}
                 onChange={handleProjectNameChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isCreating) {
+                    e.preventDefault();
+                    void handleConfirm();
+                  }
+                }}
                 placeholder={t('newProject.projectNamePlaceholder')}
                 disabled={isCreating}
                 autoFocus
@@ -181,7 +216,9 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
               </div>
               <div className="new-project-dialog__preview-content">
                 <span className="new-project-dialog__preview-label">{t('newProject.fullPath')}</span>
-                <span className="new-project-dialog__preview-path">{fullPath}</span>
+                <Tooltip content={fullPath} placement="right" followCursor>
+                  <span className="new-project-dialog__preview-path">{fullPath}</span>
+                </Tooltip>
               </div>
             </div>
           )}

@@ -301,10 +301,12 @@ export class FlowChatManager {
           nextCursor = nextPage.nextCursor;
         }
       }
-      const hasHistoricalSessions =
-        workspaceSessions.length > 0 ||
-        initialMetadataPage.totalTopLevelCount > 0 ||
-        initialMetadataPage.sessions.length > 0;
+      // Count only sessions that belong to THIS workspace (already path-filtered
+      // above). Counting all sessions in the storage dir (totalTopLevelCount /
+      // initialMetadataPage.sessions.length) incorrectly reports "has history"
+      // when another workspace shares the slug-collided sessions/ dir, which
+      // suppresses default-session creation for a newly opened workspace.
+      const hasHistoricalSessions = workspaceSessions.length > 0;
       const isCurrentInitializationRequest = () =>
         this.latestInitializationRequestKey === requestKey;
       const activeSession = state.activeSessionId

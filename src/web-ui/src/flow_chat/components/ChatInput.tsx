@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
+import { i18nService } from '@/infrastructure/i18n';
+import { resolveSessionTitle } from '../utils/sessionTitle';
 import {
   RichTextInput,
   type InlineTriggerState,
@@ -585,7 +587,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     disabled: !caps.threadGoal,
     sceneActive: isSceneActive,
   });
-  const currentSessionTitle = currentSession?.title?.trim() || t('session.untitled');
+  // Resolve via the i18n key (re-localizes on locale switch) instead of the
+  // persisted localized session.title string, so this tab stays in sync with
+  // the sidebar/header/toolbar instead of showing a stale old-locale name.
+  const currentSessionTitle = currentSession
+    ? resolveSessionTitle(currentSession, (key, options) => i18nService.t(key, options))
+    : t('session.untitled');
   const activeBtwSession = activeBtwSessionId
     ? flowChatState.sessions.get(activeBtwSessionId)
     : undefined;
@@ -601,10 +608,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const activeBtwTargetLabel = t(`childSession.kinds.${activeBtwKind}.short`, {
     defaultValue: t('chatInput.targetBtw'),
   });
+  const activeBtwFallbackKey = `childSession.kinds.${activeBtwKind}.title`;
   const activeBtwSessionTitle = activeBtwSession
-    ? activeBtwSession.title?.trim() || t(`childSession.kinds.${activeBtwKind}.title`, {
-        defaultValue: t('btw.threadLabel'),
-      })
+    ? resolveSessionTitle(activeBtwSession, (key, options) => i18nService.t(key, options), activeBtwFallbackKey) || t('btw.threadLabel')
     : '';
 
   const deferChatStripPassiveGitRefresh =
