@@ -74,6 +74,8 @@ interface UseFlowChatFollowOutputResult {
   enterFollowOutput: (reason: FollowOutputEnterReason) => void;
   exitFollowOutput: (reason: FollowOutputExitReason) => void;
   scheduleFollowToLatest: () => void;
+  /** Whether follow-output owns the viewport now, not one render ago. */
+  isFollowingOutputNow: () => boolean;
   handleUserScrollIntent: () => void;
   /** Turns were rolled back out of the session; end on the new tail. */
   handleTurnsRolledBack: () => void;
@@ -695,6 +697,17 @@ export function useFlowChatFollowOutput({
   ), []);
 
   /**
+   * Whether follow-output owns the viewport *now*.
+   *
+   * The `isFollowingOutput` state answers the same question one render later,
+   * which is a different answer inside an event handler that just released it.
+   * A reader's gesture releases ownership and then asks whether the boundary
+   * they are on is worth paging: mirroring the state into a ref at render time
+   * made that ask see the ownership it had itself just ended, and refuse.
+   */
+  const isFollowingOutputNow = useCallback(() => isFollowingOutputRef.current, []);
+
+  /**
    * The viewport was resized. Keep whatever was on the bottom edge on the
    * bottom edge.
    *
@@ -894,6 +907,7 @@ export function useFlowChatFollowOutput({
     enterFollowOutput,
     exitFollowOutput,
     scheduleFollowToLatest,
+    isFollowingOutputNow,
     handleUserScrollIntent,
     handleTurnsRolledBack,
     handleScroll,

@@ -18,6 +18,15 @@ const mocks = vi.hoisted(() => ({
   enterFollowOutput: vi.fn(),
   exitFollowOutput: vi.fn(),
   handleUserScrollIntent: vi.fn(),
+  /**
+   * The two answers to "does follow own the viewport", which the real hook
+   * gives at two different moments: `isFollowingOutput` is a render value, and
+   * `followsNow` is the ref a gesture clears synchronously before it asks.
+   * Keeping both here is what lets a test put them out of step, which is the
+   * state the paging refusal used to read from the wrong side of.
+   */
+  isFollowingOutput: false,
+  followsNow: false,
   /** False stands in for a Turn the virtualizer can place but the DOM cannot. */
   renderItemMetadata: true,
 }));
@@ -144,11 +153,17 @@ vi.mock('../../store/chatInputStateStore', () => ({
 
 vi.mock('./useFlowChatFollowOutput', () => ({
   useFlowChatFollowOutput: () => ({
-    isFollowingOutput: false,
+    isFollowingOutput: mocks.isFollowingOutput,
     enterFollowOutput: mocks.enterFollowOutput,
     exitFollowOutput: mocks.exitFollowOutput,
     scheduleFollowToLatest: vi.fn(),
-    handleUserScrollIntent: mocks.handleUserScrollIntent,
+    isFollowingOutputNow: () => mocks.followsNow,
+    handleUserScrollIntent: () => {
+      // What the real one does first: release, synchronously.
+      mocks.followsNow = false;
+      mocks.handleUserScrollIntent();
+    },
+    handleTurnsRolledBack: vi.fn(),
     handleScroll: vi.fn(),
     handleScrollSettled: vi.fn(),
     handleViewportResize: vi.fn(),
@@ -208,6 +223,8 @@ describe('VirtualMessageList natural scroll contract', () => {
       sessionId: 'session-1',
       dialogTurns: [],
     };
+    mocks.isFollowingOutput = false;
+    mocks.followsNow = false;
     mocks.scrollItemIntoView.mockReset();
     mocks.scrollToOffset.mockReset();
     mocks.enterFollowOutput.mockReset();
@@ -633,6 +650,182 @@ describe('VirtualMessageList natural scroll contract', () => {
         await scrollTo(scroller, ROW_PX);
         expect(asked).toEqual([]);
       });
+    });
+
+    it('asks on a gesture that moves nothing, because at the top none of them do', async () => {
+      /*
+       * The deadlock this closes, measured on a tail window of three Turns that
+       * fitted inside the viewport — so the whole scroll range was reserved
+       * blank and the reader sat at offset 0 with the head already on screen.
+       *
+       * A wheel there changes no offset, so the scroller emits no `scroll`
+       * event and the evaluation that hangs off it never runs. The log shows
+       * twenty `user-gesture` claims across seven seconds with no scroll event,
+       * no anchor capture and not one boundary evaluation; the only evaluations
+       * in that session landed in the three milliseconds after a snap back
+       * handed the viewport to follow-output, and were refused for exactly that
+       * reason. Scrolling up did nothing, permanently.
+       */
+      mocks.items = Array.from({ length: 20 }, (_unused, index) => (
+        userMessage(`turn-${index}`, `message-${index}`, 'Body')
+      ));
+      const restoreLayout = fakeLayout({
+        clientHeight: VIEWPORT_PX,
+        scrollHeight: 20 * ROW_PX,
+        turnTopFromScrollerTop: 0,
+      });
+      const asked: string[] = [];
+      try {
+        await act(async () => {
+          root.render(
+            <VirtualMessageList
+              onHistoryWindowBoundaryIntent={direction => {
+                asked.push(direction);
+                // Not applied, so the direction arms again rather than waiting
+                // for a prepend that never comes — the state the reader is in.
+                return 'not-ready';
+              }}
+            />,
+          );
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        expect(asked).toEqual(['before']);
+        asked.length = 0;
+
+        const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+        // A wheel and nothing else: no scroll event, because there is nowhere
+        // for the offset to go.
+        await act(async () => {
+          scroller.dispatchEvent(new Event('wheel'));
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        expect(asked).toEqual(['before']);
+      } finally {
+        restoreLayout();
+      }
+    });
+
+    it('asks as the reader, not as the ownership their own gesture just ended', async () => {
+      /*
+       * `exitFollowOutput` clears ownership synchronously, but the list mirrored
+       * `isFollowingOutput` into a ref at render time — and no render happens
+       * inside an event handler. So the gesture released the viewport and then
+       * asked, and the ask was refused for an ownership that had already ended
+       * one line earlier. In the log: `followOutput.exit` and
+       * `historyPaging.refused: follow-output-owns-the-viewport` at the same
+       * millisecond, three entries apart.
+       */
+      mocks.items = Array.from({ length: 20 }, (_unused, index) => (
+        userMessage(`turn-${index}`, `message-${index}`, 'Body')
+      ));
+      // Follow owns the viewport as of the last render — a snap back has just
+      // landed — and the gesture below releases it without a render in between.
+      mocks.isFollowingOutput = true;
+      mocks.followsNow = true;
+      const restoreLayout = fakeLayout({
+        clientHeight: VIEWPORT_PX,
+        scrollHeight: 20 * ROW_PX,
+        turnTopFromScrollerTop: 0,
+      });
+      const asked: string[] = [];
+      try {
+        await act(async () => {
+          root.render(
+            <VirtualMessageList
+              onHistoryWindowBoundaryIntent={direction => {
+                asked.push(direction);
+                return 'not-ready';
+              }}
+            />,
+          );
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        // Refused on mount, correctly: follow owned it and nobody had gestured.
+        expect(asked).toEqual([]);
+
+        const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+        await act(async () => {
+          scroller.dispatchEvent(new Event('wheel'));
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        expect(asked).toEqual(['before']);
+      } finally {
+        restoreLayout();
+      }
+    });
+
+    it('stops treating a boundary as exhausted once the window has moved', async () => {
+      /*
+       * `exhausted` is a fact about a start ordinal, not about the session.
+       * Navigating to the first Turn asks `before`, the store answers
+       * `reached-start` for `targetOrdinal: -1` — correctly — and the latch then
+       * outlived that window. Measured: 3 Turns of 43 loaded, the reader jumped
+       * back to the tail, and `before` stayed latched off for good.
+       */
+      mocks.items = Array.from({ length: 20 }, (_unused, index) => (
+        userMessage(`turn-${index}`, `message-${index}`, 'Body')
+      ));
+      const restoreLayout = fakeLayout({
+        clientHeight: VIEWPORT_PX,
+        scrollHeight: 20 * ROW_PX,
+        turnTopFromScrollerTop: 0,
+      });
+      const asked: string[] = [];
+      const atFirstTurn = { startOrdinal: 0, endOrdinalExclusive: 8, targetTurnId: null, mode: 'history-window' as const };
+      const atTail = { startOrdinal: 35, endOrdinalExclusive: 43, targetTurnId: null, mode: 'history-window' as const };
+      const list = (window: typeof atFirstTurn) => (
+        <VirtualMessageList
+          presentationMode="history-window"
+          historyWindow={window}
+          onHistoryWindowBoundaryIntent={direction => {
+            asked.push(direction);
+            // Nothing before the first Turn — true of this window, and only it.
+            return 'exhausted';
+          }}
+        />
+      );
+
+      try {
+        await act(async () => {
+          root.render(list(atFirstTurn));
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        expect(asked).toContain('before');
+        asked.length = 0;
+
+        // Latched: asking again from the same window changes nothing.
+        const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+        await act(async () => {
+          scroller.dispatchEvent(new Event('wheel'));
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        expect(asked).toEqual([]);
+
+        // The reader jumps back to the tail. The answer was about where they
+        // were, so it does not survive their leaving.
+        await act(async () => {
+          root.render(list(atTail));
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        await act(async () => {
+          scroller.dispatchEvent(new Event('wheel'));
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        expect(asked).toContain('before');
+      } finally {
+        restoreLayout();
+      }
     });
   });
 

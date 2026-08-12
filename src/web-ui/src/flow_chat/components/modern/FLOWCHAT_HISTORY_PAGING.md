@@ -83,6 +83,52 @@ Both were free under react-virtuoso: `firstItemIndex` moved the reported range
 with the prepend, so the local start index jumped by the number of items added
 and the rule stopped applying by itself.
 
+**A gesture that moves nothing still asks.** The evaluation used to hang off
+the `scroll` event, which is the one signal a reader at the top cannot produce:
+the wheel changes no offset, so no event fires, so nothing asks. Combined with
+the ownership refusal that is a closed loop, and it was measured as one. A tail
+window of three Turns fitted inside the viewport, which put the entire scroll
+range inside the reserved blank:
+
+- at the bottom of that range no row intersects the viewport at all, so
+  `getVisibleItemRange` returns nothing and there is no position to judge;
+- the snap back returns the reader to offset 0 and hands the viewport to
+  follow-output, so the one evaluation that does land at the head is refused as
+  our own placement — four times in the log, each three milliseconds after a
+  `followOutput.enter`;
+- and at offset 0 the reader's own gestures produced twenty `user-gesture`
+  claims over seven seconds with no scroll event, no anchor capture, and not
+  one evaluation.
+
+Scrolling up did nothing, permanently. So `notifyUserScrollIntent` evaluates
+too, after it has cleared follow-output's ownership — which makes the ask the
+reader's rather than our placement's, and gives the top of the range a signal
+it can actually emit.
+
+The empty visible range is traced (`historyPaging.noVisibleRange`) rather than
+returned from in silence. Reading that session, the absence of an anchor
+capture was the only way to tell "nobody asked" from "the ask was refused".
+
+**The ask reads ownership as of now, not as of the last render.** A gesture
+releases follow-output synchronously and then asks, so a render-time mirror of
+`isFollowingOutput` reports the ownership the gesture has just ended.
+`isFollowingOutputNow` is the hook's own ref, and the refusal reads it — in the
+log, `followOutput.exit` and `historyPaging.refused:
+follow-output-owns-the-viewport` sat at the same millisecond, three entries
+apart, and the ask was refused for an ownership one line older than itself.
+
+**`exhausted` describes the window that asked, not the session.** "There is
+nothing before this" is a fact about a start ordinal. Navigating to the first
+Turn asks `before`, the store answers `reached-start` for `targetOrdinal: -1`,
+and that is correct — but only until the window moves. Only `applied` used to
+clear the latch, which is the single case where the window moves *because* of
+the page; every other way it moves left the old answer standing. Measured: 3
+Turns of 43 loaded, `before` latched from a visit to Turn 1, and after jumping
+back to the tail the reader could not page at all.
+`warnHistoryPagingRefusedWithPendingTurns` fired
+(`latched-exhausted-while-partial`) and nothing acted on it. The latch is now
+cleared whenever the window's ordinals change.
+
 ## Keeping the Viewport on the Reader's Content
 
 When history is prepended, the items arriving above the reader push their content

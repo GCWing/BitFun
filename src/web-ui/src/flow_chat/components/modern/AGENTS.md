@@ -84,6 +84,16 @@ before reporting a defect as new.
 - A *visible* item range is `getVisibleItemRange`, never the rendered rows. The
   rendered window carries overscan and reports both ends present for any
   transcript short enough to render whole.
+- Boundaries are evaluated on scroll **intent**, not only on `scroll` events. A
+  reader already at the top produces no scroll event, so the one signal that
+  they want more history is the gesture itself. Evaluate after ownership has
+  been released, so the ask is theirs rather than our placement's.
+- Ownership is read through `isFollowingOutputNow()`, never a render-time mirror
+  of `isFollowingOutput`. A gesture releases it synchronously and asks in the
+  same handler; the mirror still reports the ownership that gesture just ended.
+- `exhausted` is latched per *window*, not per session. It answers "nothing
+  before this start ordinal", so the latch clears whenever the window's ordinals
+  change — not only when a page is `applied`.
 - A history prepend must be compensated for in `VirtualMessageList`, by the
   height of the items that arrived above. Keying measurements on item identity
   covers the measurements; it does not move the scroll offset. The compensation

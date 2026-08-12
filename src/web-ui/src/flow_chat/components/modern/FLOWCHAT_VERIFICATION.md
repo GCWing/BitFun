@@ -154,6 +154,11 @@ group does not renumber the others.
    transcript still tracks the gesture in both directions. Nothing on screen may
    fade or slide as rows come back — a row entering the rendered window is not
    its content arriving.
+5. Navigate to the first Turn of a long session, then jump to latest. The tail
+   window it lands on can be short enough to fit inside the viewport, which
+   puts the whole scroll range inside the reserved blank. Scroll up from there:
+   history must load. This is the case where the reader is at the top, so the
+   wheel emits no scroll event and the gesture is the only thing to go on.
 
 ### Turn navigation
 

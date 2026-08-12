@@ -333,7 +333,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   isViewportActive = true,
   presentationMode = 'tail',
   viewportMode = presentationMode === 'history-window' ? 'history-reading' : 'live-tail',
-  historyWindow: _historyWindow = null,
+  historyWindow = null,
   presentationRevision: _presentationRevision = 0,
   historyBoundaryState = IDLE_HISTORY_WINDOW_BOUNDARY_STATE,
   onHistoryWindowBoundaryIntent,
@@ -391,6 +391,29 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     before: false,
     after: false,
   });
+  /**
+   * `exhausted` describes the window that asked, not the session.
+   *
+   * "There is nothing before this" is true of a *start ordinal*. Navigate to
+   * the first Turn and the store answers `reached-start` for `targetOrdinal:
+   * -1`, correctly — and the latch then outlived the window by the rest of the
+   * session. Measured: 3 Turns of 43 loaded, `before` latched off from a visit
+   * to Turn 1, and after jumping back to the tail the reader could not page at
+   * all. The alarm fired (`latched-exhausted-while-partial`) and nothing acted
+   * on it.
+   *
+   * So the latch is cleared whenever the window moves. Only `applied` used to
+   * clear it, which is the one case where the window moves *because* of the
+   * page — every other way it moves left a stale answer behind.
+   */
+  const windowBoundsKey = historyWindow
+    ? `${historyWindow.startOrdinal}:${historyWindow.endOrdinalExclusive}`
+    : presentationMode;
+  const previousWindowBoundsKeyRef = useRef(windowBoundsKey);
+  if (previousWindowBoundsKeyRef.current !== windowBoundsKey) {
+    previousWindowBoundsKeyRef.current = windowBoundsKey;
+    exhaustedBoundaryRef.current = { before: false, after: false };
+  }
   /**
    * Whether a boundary may be asked about again.
    *
@@ -554,6 +577,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     enterFollowOutput,
     exitFollowOutput,
     scheduleFollowToLatest,
+    isFollowingOutputNow,
     handleUserScrollIntent,
     handleTurnsRolledBack,
     handleScroll,
@@ -576,8 +600,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     viewportOwner,
   });
 
-  const isFollowingOutputRef = useRef(isFollowingOutput);
-  isFollowingOutputRef.current = isFollowingOutput;
 
   /**
    * The anchor stands down for anyone aiming at a target of their own — and for
@@ -764,6 +786,23 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     viewportAnchor.markUserScrollIntent();
     handleUserScrollIntent();
     onUserScrollIntent?.();
+    /*
+     * A gesture that moves nothing is still the reader asking to go up, and it
+     * is the only signal there is once they are already at the top: the wheel
+     * emits no `scroll` event when the offset cannot change, so the scroll
+     * handler's evaluation never runs.
+     *
+     * Measured on a tail window of three Turns that fitted inside the viewport,
+     * so the whole scroll range was reserved blank: twenty gestures over seven
+     * seconds produced twenty `user-gesture` claims, no scroll events, and not
+     * one boundary evaluation. The only evaluations in that session landed in
+     * the three milliseconds after each snap back handed the viewport to
+     * follow-output, and were refused for that reason. Nothing could ever page.
+     *
+     * After `handleUserScrollIntent`, which clears follow-output's ownership
+     * synchronously — so this asks as the reader rather than as our placement.
+     */
+    evaluateHistoryBoundariesRef.current();
   }, [handleUserScrollIntent, onUserScrollIntent, viewportAnchor, viewportOwner]);
 
   const updateVisibleTurnInfoFromViewport = useCallback(() => {
@@ -1456,7 +1495,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * fired, and a boundary that never pages because the latch stayed shut — so
      * the reason is recorded rather than inferred from what did not happen.
      */
-    if (isFollowingOutputRef.current) {
+    if (isFollowingOutputNow()) {
       traceViewportRepeating(`paging|${direction}|following`, {
         location: 'historyPaging.refused',
         message: 'the boundary was reached by our own placement, not by the reader',
@@ -1517,7 +1556,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       boundaryRequestRef.current[direction] = null;
     });
     boundaryRequestRef.current[direction] = request;
-  }, [onHistoryWindowBoundaryIntent]);
+  }, [isFollowingOutputNow, onHistoryWindowBoundaryIntent]);
 
   /**
    * Whether either end of the loaded transcript is on screen, and act on it.
@@ -1548,7 +1587,28 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   const evaluateHistoryBoundaries = useCallback(() => {
     const range = virtualizer.getVisibleItemRange();
-    if (!range) return;
+    if (!range) {
+      /*
+       * No row intersects the viewport, so there is no reader position to
+       * derive a boundary from. That is a real state and not a degenerate one:
+       * a transcript shorter than the viewport puts the whole scroll range
+       * inside the reserved blank, and the bottom of it shows no Turn at all.
+       *
+       * Traced because the silence was the hard part to read. A session stuck
+       * here logged nothing for seven seconds while the reader kept scrolling,
+       * and the only way to tell "nobody asked" from "the ask was refused" was
+       * the absence of an anchor capture.
+       */
+      traceViewportRepeating('paging|no-visible-range', {
+        location: 'historyPaging.noVisibleRange',
+        message: 'no row is in the viewport, so there is no boundary to judge',
+        data: () => ({
+          itemCount: virtualItems.length,
+          scrollTopPx: roundViewportPx(scrollerElementRef.current?.scrollTop ?? 0),
+        }),
+      });
+      return;
+    }
     /*
      * Two answers, and the latch takes the narrower one.
      *
