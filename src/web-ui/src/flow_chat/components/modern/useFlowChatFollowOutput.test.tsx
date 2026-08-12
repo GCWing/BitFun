@@ -4,6 +4,11 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tailSpacerPxForViewport } from './flowChatTailFollow';
+import {
+  TAIL_EASE_ALPHA,
+  TAIL_EASE_LINE_PX,
+  TAIL_EASE_SNAP_ABOVE_PX,
+} from '../../utils/flowChatTailEase';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
 import { useFlowChatViewportOwner } from './useFlowChatViewportOwner';
 
@@ -597,6 +602,120 @@ describe('useFlowChatFollowOutput', () => {
     runNextFrame();
 
     expect(scroller.scrollTop).toBe(0);
+  });
+
+  describe('easing the follow across the frames it has', () => {
+    /** Mounts a streaming transcript resting exactly on its content end. */
+    function followFromContentEnd() {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 1000,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+    }
+
+    /** Grows real content by `byPx`, which is what moves the follow target. */
+    function growContentBy(byPx: number) {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + byPx + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: scroller.scrollTop,
+      });
+    }
+
+    it('spends a line of growth over the frames that were empty', () => {
+      // Markdown reflows a line at a time, so an outright write puts all 24px
+      // on one frame out of seven and none on the rest.
+      followFromContentEnd();
+      growContentBy(TAIL_EASE_LINE_PX);
+
+      runNextFrame();
+
+      expect(scroller.scrollTop).toBeCloseTo(1000 + TAIL_EASE_LINE_PX * TAIL_EASE_ALPHA, 5);
+      expect(scroller.scrollTop - 1000).toBeLessThan(TAIL_EASE_LINE_PX);
+    });
+
+    it('keeps stepping until it has landed on the target', () => {
+      followFromContentEnd();
+      growContentBy(TAIL_EASE_LINE_PX);
+
+      let previousPx = 1000;
+      for (let frame = 0; frame < 20; frame += 1) {
+        runNextFrame();
+        // Every step is under a line: that is the bar the ease has to clear to
+        // be worth having, since a line is what it set out to replace.
+        expect(scroller.scrollTop - previousPx).toBeLessThan(TAIL_EASE_LINE_PX);
+        previousPx = scroller.scrollTop;
+      }
+
+      // Inside the loop's own `BOTTOM_EPSILON_PX`, where it stops writing at
+      // all — the ease converges on the target rather than stalling short of
+      // it or ringing around it.
+      expect(1000 + TAIL_EASE_LINE_PX - scroller.scrollTop).toBeLessThan(2);
+      expect(scroller.scrollTop).toBeLessThanOrEqual(1000 + TAIL_EASE_LINE_PX);
+    });
+
+    it('jumps when an ease would open with a bigger step than the jump it replaces', () => {
+      // A burst arriving further behind than four lines: a quarter of that is
+      // already worse than having simply gone the whole way.
+      followFromContentEnd();
+      growContentBy(TAIL_EASE_SNAP_ABOVE_PX + 100);
+
+      runNextFrame();
+
+      expect(scroller.scrollTop).toBe(1000 + TAIL_EASE_SNAP_ABOVE_PX + 100);
+    });
+
+    it('does not ease while the transcript is still opening', () => {
+      // The reveal waits for the viewport to reach the content end, and while
+      // it waits nothing is painted — so an ease there is travel nobody sees,
+      // holding open the one phase whose whole point is to be over.
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 1000,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            scroller={scroller}
+            isOpeningViewport
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      growContentBy(TAIL_EASE_LINE_PX);
+
+      runNextFrame();
+
+      expect(scroller.scrollTop).toBe(1000 + TAIL_EASE_LINE_PX);
+    });
+
+    it('goes the whole way at once when content shrinks under the viewport', () => {
+      // Easing down through a shrink reads as the transcript being clawed
+      // backwards, which is worse than the jump it would replace.
+      followFromContentEnd();
+      setScrollerMetrics(scroller, {
+        scrollHeight: 700 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 1000,
+      });
+
+      runNextFrame();
+
+      // Past the tolerated gap, so the hold rule gives ground — in one step.
+      expect(scroller.scrollTop).toBe(200 + MAX_GAP);
+    });
   });
 
   describe('jumping to latest while the newest Turn is pinned', () => {

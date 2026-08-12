@@ -160,6 +160,9 @@ vi.mock('./useFlowChatFollowOutput', () => ({
     exitFollowOutput: mocks.exitFollowOutput,
     scheduleFollowToLatest: vi.fn(),
     isFollowingOutputNow: () => mocks.followsNow,
+    // Nothing streams here, so the frame loop is never correcting: the band is
+    // judged on the viewport itself, exactly as it is for a resting transcript.
+    isFollowCorrectingViewport: () => false,
     handleUserScrollIntent: () => {
       // What the real one does first: release, synchronously.
       mocks.followsNow = false;

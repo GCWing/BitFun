@@ -87,6 +87,14 @@ group does not renumber the others.
 4. While reading a history window, let output arrive from somewhere else. The
    viewport must not move — this is the case the submission event exists to
    stay out of.
+5. Watch a Markdown answer stream past the bottom of the viewport. It must
+   scroll rather than step: no move of a whole line, and none of the ease's
+   lag left behind once the stream stops.
+6. Stream a burst — a code fence or a table arriving at once — and confirm it
+   goes the whole way in one move rather than gliding through content nobody
+   has seen, and that the jump-to-latest bar does not flash while it does.
+7. Turn on `prefers-reduced-motion` and stream again. The follow must step
+   straight to its target, as it did before the ease.
 
 ### Collapse
 

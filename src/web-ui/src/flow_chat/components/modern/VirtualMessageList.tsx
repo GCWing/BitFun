@@ -592,6 +592,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     exitFollowOutput,
     scheduleFollowToLatest,
     isFollowingOutputNow,
+    isFollowCorrectingViewport,
     handleUserScrollIntent,
     handleTurnsRolledBack,
     handleScroll,
@@ -985,7 +986,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const scroller = scrollerElementRef.current;
     if (!scroller) return;
     const contentEnd = readContentEndScrollTop(scroller);
-    const atTail = isViewportAtTail({
+    /*
+     * A follow still travelling counts as being at the end.
+     *
+     * The follow's write is eased, so it rides a little behind the offset it
+     * owns by design, and what it is behind is arriving on its own. Judged on
+     * the raw offset, a burst of two or three lines drops the viewport out of
+     * the band for a few frames and flashes the jump-to-latest bar over a
+     * transcript that is already following the newest output — and clicking it
+     * would have nothing to do. Ownership alone cannot stand in for this: it
+     * outlives the frame loop, which is exactly the state a viewport stranded
+     * in the reserved blank is in.
+     */
+    const atTail = isFollowCorrectingViewport() || isViewportAtTail({
       scrollTop: scroller.scrollTop,
       contentEndScrollTop: contentEnd,
       // Nothing owns an offset outside follow, so the band collapses onto the
@@ -997,7 +1010,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     // the state update does not land until the next render.
     isAtTailRef.current = atTail;
     setIsAtBottom(atTail);
-  }, [getFollowTargetScrollTop, readContentEndScrollTop]);
+  }, [getFollowTargetScrollTop, isFollowCorrectingViewport, readContentEndScrollTop]);
 
   /*
    * The band's lower edge is whatever the follow rule owns, so it moves when

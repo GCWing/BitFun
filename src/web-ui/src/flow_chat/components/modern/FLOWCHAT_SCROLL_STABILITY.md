@@ -190,7 +190,50 @@ picks for the same viewport state — having the two disagree would be worse tha
 either choice. The exemption therefore outlives the Turn: a short Turn stays
 pinned until a newer one replaces it.
 
-## At Bottom Is a Band
+## The Follow Eases Its Write, Never Its Target
+
+The follow target moves when the transcript reflows, and Markdown reflows a
+line at a time. A loop that assigns the target outright therefore spends 24px
+on one frame out of seven and nothing on the other six, which is what a reader
+reports as the output jumping rather than scrolling. `flowChatTailEase.ts`
+spends the same distance over all seven.
+
+It buys latency, not speed. Under steady growth the eased offset settles where
+its per-frame catch-up equals the growth, so the visible step converges on *the
+content's growth per frame* whatever the fraction is; smoothing spreads a lumpy
+motion evenly across frames it already had. What `TAIL_EASE_ALPHA` actually
+sets is how far behind the tail the offset rides, and that lag is what has to be
+given back when the stream stops.
+
+**Only the write is eased.** `followStateRef` still holds the offset the rule
+owns, so the settle budget, the at-tail band and the snap back all keep reading
+a target rather than a position in transit. An ease that leaked into the target
+would make every one of them chase the lag.
+
+Four boundaries, and none of them is a matter of taste:
+
+- **Past `TAIL_EASE_SNAP_ABOVE_PX` it jumps.** The first frame of an ease covers
+  a quarter of the distance, so beyond four lines the ease's *opening step* is
+  already bigger than the jump it set out to replace.
+- **A target above the current offset is never eased.** That is content getting
+  shorter — a card collapsing, a table reflowing — and easing down through it
+  reads as the transcript being clawed backwards.
+- **Not while the transcript is opening.** There the target is authoritative and
+  nothing is painted, so an ease is travel nobody can see, holding open the one
+  phase whose whole point is to end. The reveal is watching for the viewport to
+  reach the content end.
+- **An ease in flight keeps the loop alive.** The settle budget is refreshed by
+  the *target* travelling, so without this a correction arriving on the last
+  budgeted frame would be abandoned partway. It terminates on its own: the ease
+  halves what is left every frame, and a write the register refuses moves
+  nothing and so books no further frame.
+
+A step of the list's own scroll offset changes no layout, but unlike the
+thinking card's it is not free: the virtualizer re-windows from the scroll
+events it produces, and every scroll event is also an anchor carry and a
+visible-Turn pass. That price is `listCommits` in the `tailFollow` probe, which
+is why both viewports are sampled over one window — see
+`flowChatTailFollowDiagnostics.ts`.
 
 "At bottom" is a band, not a point: from the end of real content down to
 whatever the follow rule owns. A pinned Turn and a held collapse gap are both
@@ -206,6 +249,15 @@ and a jump to latest that lands on a pin the viewport already sits on writes
 nothing at all. Driving the band from scroll events alone left the affordance
 visible over a viewport that was at the tail, and clicking it then had nothing
 to do — an inert button is worse than a missing one.
+
+**A follow the frame loop is still correcting is inside the band by
+definition.** The eased write rides behind the offset it owns, so a burst of
+two or three lines would otherwise drop the viewport out of the band for a few
+frames and flash the affordance over a transcript that is following the newest
+output. Ownership cannot express this: it outlives the loop deliberately, and a
+viewport stranded in the reserved blank under a sleeping loop is the case the
+snap back exists for. A gesture stops the loop before it can hide anything —
+that is what makes reading the loop safe here and reading ownership not.
 
 ## Resizing Anchors the Viewport Bottom
 
@@ -293,6 +345,17 @@ content such as history state and `RuntimeStatusSlot`.
 
 ## Known Gaps
 
+- The eased follow raises the scroll-event rate from one a line to one a frame
+  while output streams, and every one of those is an anchor carry, a
+  visible-Turn pass and a boundary evaluation. The heavy one is bounded — the
+  visible-Turn pass is coalesced to a frame and writes the store only on a
+  change — but the virtualizer re-windows from those events, so the cost is
+  real and lands in `listCommits`. Measure with the `tailFollow` probe before
+  changing `TAIL_EASE_ALPHA`.
+- Easing is bounded by the frames the display gives it. The step it converges
+  on is the content's growth *per frame*, so the same stream smooths less at
+  60Hz than at 200Hz, and a fast enough stream is a line a frame on any display
+  — at which point the ease is spending its lag and buying nothing.
 - A scrollbar drag is recognised from the gutter the bar occupies, so it is
   invisible where the platform draws overlay scrollbars that take no layout
   width — WebKit-backed builds, where `scrollbar-gutter: stable` reserves

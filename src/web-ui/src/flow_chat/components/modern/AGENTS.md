@@ -33,6 +33,14 @@ before reporting a defect as new.
 - `scheduleFollowToLatest` must not force the content end — the hold rule is
   what keeps a collapse from moving the viewport.
 - `useFlowChatFollowOutput` is the only continuous outer viewport writer.
+- The follow's **write** may be eased; its **target** may not. Everything that
+  reads the follow — the settle budget, the at-tail band, the snap back — reads
+  the offset the rule owns, never how far behind the ease is riding. The ease
+  stands down while the transcript is opening, where the target is
+  authoritative.
+- A follow the frame loop is still correcting counts as being at the tail.
+  Ownership cannot stand in for that: it outlives the loop, which is exactly the
+  state a viewport stranded in the reserved blank is in.
 - Footer height represents only the current input-stack layout and real footer
   content such as history state and `RuntimeStatusSlot`. The tail spacer is a
   separate sibling and must not be folded into it.

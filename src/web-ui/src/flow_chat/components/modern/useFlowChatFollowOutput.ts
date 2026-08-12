@@ -7,6 +7,10 @@ import {
   isTailFollowDiagnosticsEnabled,
   noteTailFollowStep,
 } from '@/infrastructure/diagnostics/flowChatTailFollowDiagnostics';
+import {
+  nextEasedScrollTopPx,
+  shouldEaseTailFollow,
+} from '../../utils/flowChatTailEase';
 import type { FlowChatViewportOwnerApi } from './useFlowChatViewportOwner';
 import { SNAP_BACK_HOLD_MS } from './flowChatViewportOwnership';
 import {
@@ -80,6 +84,13 @@ interface UseFlowChatFollowOutputResult {
   scheduleFollowToLatest: () => void;
   /** Whether follow-output owns the viewport now, not one render ago. */
   isFollowingOutputNow: () => boolean;
+  /**
+   * Whether the frame loop is actively moving the viewport right now.
+   *
+   * Not the same question as ownership, which outlives the loop on purpose so
+   * that streaming can resume following after the settle budget runs out.
+   */
+  isFollowCorrectingViewport: () => boolean;
   handleUserScrollIntent: () => void;
   /** Turns were rolled back out of the session; end on the new tail. */
   handleTurnsRolledBack: () => void;
@@ -183,6 +194,20 @@ export function useFlowChatFollowOutput({
       followFrameRef.current = null;
     }
   }, []);
+
+  /**
+   * Whether the frame loop is actively moving the viewport.
+   *
+   * Ownership is the other question and outlives this one: the loop stops once
+   * the settle budget runs out, and follow keeps the viewport so that streaming
+   * can resume. Reading ownership as "something is correcting this" hands the
+   * viewport to a loop that is not running — measured, a drag came to rest
+   * 813px into the reserved blank with `isFollowingOutput` true, the loop
+   * asleep, and nothing to bring it back.
+   */
+  const isFollowCorrectingViewport = useCallback(() => (
+    isFollowingOutputRef.current && followFrameRef.current !== null
+  ), []);
 
   const readContentEndScrollTop = useCallback((scroller: HTMLElement) => (
     contentEndScrollTop({
@@ -318,19 +343,59 @@ export function useFlowChatFollowOutput({
 
     if (!onTarget) {
       const fromPx = scroller.scrollTop;
-      viewportOwner.write({ owner: 'follow-output', topPx: next.target });
+      /*
+       * Eased across the frames the follow already has, rather than written in
+       * one step.
+       *
+       * The target moves when Markdown reflows, which is a whole line at a
+       * time with nothing in between, so an outright write spends a line of
+       * travel on one frame out of seven. This spends the same distance over
+       * all seven. It buys latency, not speed: under steady growth the offset
+       * settles where its per-frame catch-up equals the growth, so the step
+       * converges on the content's growth per frame whatever the fraction is.
+       *
+       * Only the *write* is eased. `followStateRef` still holds the true
+       * target, so the settle budget, the at-tail band and the snap back all
+       * keep reading the offset the follow rule owns rather than how far
+       * behind its own ease is riding.
+       *
+       * Not while the transcript is opening. There the target is authoritative
+       * and the transcript is hidden, so an ease would only make the reveal
+       * wait for travel nobody can see — and the reveal is watching for the
+       * viewport to reach the content end.
+       */
+      const step = !isOpeningViewport() && shouldEaseTailFollow({
+        scrollHeightPx: scroller.scrollHeight,
+        clientHeightPx: scroller.clientHeight,
+      })
+        ? nextEasedScrollTopPx(fromPx, next.target)
+        : { offsetPx: next.target, outcome: 'snapped' as const };
+      viewportOwner.write({ owner: 'follow-output', topPx: step.offsetPx });
+      /*
+       * Read back rather than taken from the step. The register can refuse
+       * this write outright, and a refused follow moves nothing — believing
+       * the step there would report a follow that is being outranked as the
+       * smoothest one in the session, and would book the frame below forever
+       * over travel that never happens.
+       */
+      const movedPx = scroller.scrollTop - fromPx;
+      /*
+       * An ease in flight is a reason to run again, and the only one it has
+       * once the target stops moving: the budget is refreshed by the *target*
+       * travelling, so a correction arriving on the last frame of a settle
+       * would otherwise be abandoned partway. Bounded by the ease itself,
+       * which halves what is left every frame and is inside `BOTTOM_EPSILON_PX`
+       * within a handful of them.
+       */
+      if (step.outcome === 'eased' && movedPx !== 0) {
+        settleFramesRef.current = Math.max(settleFramesRef.current, 1);
+      }
       if (isTailFollowDiagnosticsEnabled()) {
         noteTailFollowStep('list', {
-          /*
-           * Read back rather than taken from the target. The register can
-           * refuse this write outright, and a refused follow is a step of zero
-           * — believing the target there would report a follow that is being
-           * outranked as the smoothest one in the session.
-           */
-          stepPx: scroller.scrollTop - fromPx,
+          stepPx: movedPx,
           lagPx: next.target - fromPx,
           innerScroll: true,
-          snapped: true,
+          snapped: step.outcome === 'snapped',
         });
       }
     }
@@ -633,28 +698,23 @@ export function useFlowChatFollowOutput({
     }
 
     /*
-     * Ownership is not correction, and the difference is deliberate: the frame
-     * loop stops once the settle budget runs out, but ownership survives so
-     * that streaming can resume following. Reading ownership as "something is
-     * correcting this" hands the viewport to a loop that is not running —
-     * measured, a drag came to rest 813px into the reserved blank with
-     * `isFollowingOutput` true, the loop asleep, and nothing to bring it back.
+     * Ownership is not correction, and the difference is deliberate — see
+     * `isFollowCorrectingViewport`.
      *
-     * A live loop still gets the viewport to itself. It reaches its target in a
-     * single frame, so a snap back would only be racing it.
+     * A live loop still gets the viewport to itself. It converges on its target
+     * within a few frames, so a snap back would only be racing it.
      */
-    const isFollowCorrectingViewport = isFollowingOutputRef.current
-      && followFrameRef.current !== null;
-    if (isFollowCorrectingViewport || isOpeningViewport()) {
+    const isCorrecting = isFollowCorrectingViewport();
+    if (isCorrecting || isOpeningViewport()) {
       // "The wheel went down and nothing brought me back" is this line or the
       // one below it, and they are not the same fault.
       traceViewportRepeating(
-        `snapBack|declined|${isFollowCorrectingViewport ? 'follow-correcting' : 'opening'}`,
+        `snapBack|declined|${isCorrecting ? 'follow-correcting' : 'opening'}`,
         {
           location: 'snapBack.declined',
           message: 'gesture came to rest, but the snap back is not this settle\'s business',
           data: () => ({
-            reason: isFollowCorrectingViewport ? 'follow-correcting' : 'opening-reveal',
+            reason: isCorrecting ? 'follow-correcting' : 'opening-reveal',
             scrollTopPx: roundViewportPx(scroller.scrollTop),
           }),
         },
@@ -706,6 +766,7 @@ export function useFlowChatFollowOutput({
   }, [
     viewportOwner,
     enterFollowOutput,
+    isFollowCorrectingViewport,
     isOpeningViewport,
     resolveFollowTargetScrollTop,
     scrollerRef,
@@ -927,6 +988,7 @@ export function useFlowChatFollowOutput({
     exitFollowOutput,
     scheduleFollowToLatest,
     isFollowingOutputNow,
+    isFollowCorrectingViewport,
     handleUserScrollIntent,
     handleTurnsRolledBack,
     handleScroll,
