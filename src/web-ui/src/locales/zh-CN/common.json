@@ -123,7 +123,9 @@
       "timeoutReminder": "超时未回复",
       "manageMembers": "管理成员",
       "masterLabel": "主人",
-      "allLabel": "@全体"
+      "allLabel": "@全体",
+      "loadFailed": "加载群聊数据失败，请重试",
+      "dismissError": "关闭提示"
     },
     "search": {
       "triggerPlaceholder": "搜索",

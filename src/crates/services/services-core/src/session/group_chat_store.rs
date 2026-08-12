@@ -16,7 +16,7 @@ use log::{error, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use tokio::fs;
@@ -37,8 +37,9 @@ const RETRY_REMOVE_DIR_ATTEMPTS: u32 = 5;
 /// Delay between directory-removal retries.
 const RETRY_REMOVE_DIR_DELAY: std::time::Duration = std::time::Duration::from_millis(50);
 
-/// Per-room in-process lock registry (mirrors metadata_store.rs index locks).
-static GROUP_CHAT_ROOM_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+/// Per-room in-process lock registry (mirrors json_store.rs Weak+retain:
+/// dead entries are dropped so create/delete room cycles never leak the map).
+static GROUP_CHAT_ROOM_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Weak<Mutex<()>>>>> = OnceLock::new();
 
 /// Rebuildable derived room index (`index.json`), mirroring StoredSessionIndexFile.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,10 +214,14 @@ impl GroupChatStore {
         let room_dir = self.room_dir(room_id);
         let registry = GROUP_CHAT_ROOM_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
         let mut registry_guard = registry.lock().await;
-        Ok(registry_guard
-            .entry(room_dir)
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone())
+        if let Some(existing) = registry_guard.get(&room_dir).and_then(Weak::upgrade) {
+            return Ok(existing);
+        }
+        // Drop dead entries before inserting a new one (json_store.rs:398).
+        registry_guard.retain(|_, weak| weak.strong_count() > 0);
+        let lock = Arc::new(Mutex::new(()));
+        registry_guard.insert(room_dir, Arc::downgrade(&lock));
+        Ok(lock)
     }
 
     async fn lock_index_file(&self) -> Result<FileLock, GroupChatStoreError> {
