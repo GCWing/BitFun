@@ -45,7 +45,8 @@ internal interface AccountBackend {
         deviceName: String,
     ): AccountSessionData
 
-    suspend fun listDevices(session: AccountSessionData): List<AccountDeviceUi>
+    /** [selfDeviceId] lets the transport drop this device's own row. */
+    suspend fun listDevices(session: AccountSessionData, selfDeviceId: String): List<AccountDeviceUi>
 
     /** The account's settings document, or null when it has never synced one. */
     suspend fun fetchSettings(session: AccountSessionData): String?
@@ -124,7 +125,7 @@ public class AccountStore internal constructor(
             }
             session = restored
             try {
-                publishReady(restored, backend.listDevices(restored))
+                publishReady(restored, backend.listDevices(restored, deviceId))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: CloudAccountException) {
@@ -147,7 +148,7 @@ public class AccountStore internal constructor(
                     deviceId,
                     deviceName,
                 )
-                val devices = backend.listDevices(loggedIn)
+                val devices = backend.listDevices(loggedIn, deviceId)
                 // Never this device, even as a fallback: driving the phone from
                 // the phone is what `canSelectAccountDevice` forbids, and a
                 // target nothing can be asked of is worse than none at all.
@@ -204,7 +205,7 @@ public class AccountStore internal constructor(
         _state.value = ready.copy(refreshing = true, refreshFailure = null)
         work = scope.launch {
             try {
-                publishReady(current, backend.listDevices(current))
+                publishReady(current, backend.listDevices(current, deviceId))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: CloudAccountException) {
@@ -309,8 +310,8 @@ private class CloudBackend(
         )
     }
 
-    override suspend fun listDevices(session: AccountSessionData): List<AccountDeviceUi> =
-        client.listDevices(session.relayUrl, session.toTransportSession()).map { it.toUi() }
+    override suspend fun listDevices(session: AccountSessionData, selfDeviceId: String): List<AccountDeviceUi> =
+        client.listDevices(session.relayUrl, session.toTransportSession(), selfDeviceId).map { it.toUi() }
 
     override suspend fun fetchSettings(session: AccountSessionData): String? =
         client.fetchSettings(session.relayUrl, session.toTransportSession())?.plaintext

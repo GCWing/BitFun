@@ -58,7 +58,44 @@ class CloudAccountClientTest {
         assertFalse(requests.any { it.contains(password) })
         val expectedProof = Base64.Default.encode(PlatformArgon2id.derive(password, kdfSalt, params))
         assertEquals(expectedProof, RelayJson.parseToJsonElement(requests[1]).jsonObject["password_hash"]?.jsonPrimitive?.content)
+        // Registering as a phone is what keeps this device out of every other
+        // device's list of things it can drive.
+        assertEquals("mobile", RelayJson.parseToJsonElement(requests[1]).jsonObject["device_kind"]?.jsonPrimitive?.content)
         assertFalse(session.toString().contains("token-1"))
+    }
+
+    /**
+     * Only desktops can be driven, so only desktops are offered. A row without a
+     * kind comes from a relay that predates them: this device's own row and the
+     * names our own builds register under are dropped anyway, and anything else
+     * is kept rather than risk hiding a real desktop.
+     */
+    @Test
+    fun listDevicesOffersDesktopsAndDropsPhones() = runTest {
+        val engine = MockEngine {
+            json(
+                """[
+                  {"device_id":"desktop-1","device_name":"Studio Mac","online":true,"device_kind":"desktop"},
+                  {"device_id":"phone-2","device_name":"Pixel 8","online":true,"device_kind":"mobile"},
+                  {"device_id":"watch-1","device_name":"Watch","online":false,"device_kind":"watch"},
+                  {"device_id":"phone-1","device_name":"Pixel 8","online":true},
+                  {"device_id":"phone-3","device_name":"HarmonyOS Phone","online":true},
+                  {"device_id":"watch-2","device_name":"HarmonyOS Watch","online":false},
+                  {"device_id":"legacy-1","device_name":"DESKTOP-KM3L4UI","online":false,"last_seen_at":9}
+                ]""",
+            )
+        }
+        val client = CloudAccountClient(relayHttpClient(engine))
+
+        val devices = client.listDevices(
+            "https://relay.test/relay",
+            CloudAccountSession("token-1", "user-1", ByteArray(32)),
+            "phone-1",
+        )
+
+        assertEquals(listOf("desktop-1", "legacy-1"), devices.map { it.deviceId })
+        assertEquals("desktop", devices[0].deviceKind)
+        assertEquals(null, devices[1].deviceKind)
     }
 
     @Test

@@ -179,7 +179,7 @@ private class FakeAccountBackend : AccountBackend {
         )
     }
 
-    override suspend fun listDevices(session: AccountSessionData): List<AccountDeviceUi> {
+    override suspend fun listDevices(session: AccountSessionData, selfDeviceId: String): List<AccountDeviceUi> {
         listFailure?.let { throw CloudAccountException(it) }
         // The shape the live account returns: this device, one of the user's
         // other phones, and the desktops that are the only real targets.

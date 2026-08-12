@@ -33,6 +33,45 @@ import kotlin.random.Random
 
 public const val DEFAULT_CLOUD_RELAY_URL: String = "https://remote.openbitfun.com/relay"
 
+/** Device kinds the relay accepts; mirrors `relay-service/src/db.rs::DEVICE_KINDS`. */
+private const val DEVICE_KIND_DESKTOP = "desktop"
+
+/**
+ * What this client registers itself as. Constant rather than a parameter: the
+ * shared transport only ships inside the Android and iOS apps, and a desktop
+ * never reaches the relay through it.
+ */
+private const val DEVICE_KIND_MOBILE = "mobile"
+
+/**
+ * Device names our own non-desktop builds register under, lowercased.
+ *
+ * Only labels we hardcode ourselves belong here — the Android client reports
+ * `Build.MODEL` (`android/.../DeviceInstall.kt:27`), an arbitrary string that
+ * guessing at would hide desktops as readily as phones.
+ *
+ * Kept in step with `harmonyos/.../CloudAccountClient.ets`, which carries the
+ * same list for the HarmonyOS client.
+ */
+private val KNOWN_NON_DESKTOP_DEVICE_NAMES = setOf("harmonyos phone", "harmonyos watch")
+
+/**
+ * Whether a relay device row is a desktop, and so controllable from a phone.
+ *
+ * A row that reports its kind is taken at its word. A row without one predates
+ * the relay learning about kinds, and is judged by two weaker signals: this
+ * phone's own row is never a desktop, and neither is one carrying a name our
+ * own builds register under. Anything else stays visible — hiding a real
+ * desktop would strand the user, while a stale phone row disappears the next
+ * time that phone logs in against a relay that stores kinds.
+ */
+private fun AccountDeviceWire.isDesktop(selfDeviceId: String): Boolean {
+    val kind = deviceKind?.trim().orEmpty()
+    if (kind.isNotEmpty()) return kind == DEVICE_KIND_DESKTOP
+    if (selfDeviceId.isNotEmpty() && deviceId == selfDeviceId) return false
+    return deviceName.trim().lowercase() !in KNOWN_NON_DESKTOP_DEVICE_NAMES
+}
+
 public enum class CloudAccountFailure {
     INVALID_CREDENTIALS,
     AUTHENTICATION,
@@ -74,6 +113,8 @@ public data class CloudAccountDevice public constructor(
     public val deviceName: String,
     public val online: Boolean,
     public val lastSeenAt: Long?,
+    /** `desktop`, or null for a row the relay stored before kinds existed. */
+    public val deviceKind: String? = null,
 )
 
 /**
@@ -135,7 +176,7 @@ public class CloudAccountClient internal constructor(
             "/api/auth/login",
             HttpMethod.Post,
             LoginRequest.serializer(),
-            LoginRequest(user, Base64.Default.encode(proof), deviceId, deviceName),
+            LoginRequest(user, Base64.Default.encode(proof), deviceId, deviceName, DEVICE_KIND_MOBILE),
             AccountAuthResponse.serializer(),
             "",
             RELAY_DEFAULT_TIMEOUT_MS,
@@ -146,7 +187,18 @@ public class CloudAccountClient internal constructor(
         return CloudAccountSession(auth.token, auth.userId, masterKey)
     }
 
-    public suspend fun listDevices(relayUrl: String, session: CloudAccountSession): List<CloudAccountDevice> =
+    /**
+     * The account's controllable devices — desktops only.
+     *
+     * A relay that stores device kinds already filters this list; the client
+     * repeats the judgement so a phone stops listing itself and its peers
+     * before that relay is deployed. [selfDeviceId] is this install's own id.
+     */
+    public suspend fun listDevices(
+        relayUrl: String,
+        session: CloudAccountSession,
+        selfDeviceId: String = "",
+    ): List<CloudAccountDevice> =
         requestWithoutBody(
             relayUrl.trim().ifEmpty { DEFAULT_CLOUD_RELAY_URL }.trimEnd('/'),
             "/api/devices",
@@ -154,8 +206,14 @@ public class CloudAccountClient internal constructor(
             ListSerializer(AccountDeviceWire.serializer()),
             session.token,
             RELAY_DEFAULT_TIMEOUT_MS,
-        ).map { device ->
-            CloudAccountDevice(device.deviceId, device.deviceName.ifEmpty { device.deviceId }, device.online, device.lastSeenAt)
+        ).filter { it.isDesktop(selfDeviceId) }.map { device ->
+            CloudAccountDevice(
+                device.deviceId,
+                device.deviceName.ifEmpty { device.deviceId },
+                device.online,
+                device.lastSeenAt,
+                device.deviceKind,
+            )
         }
 
     /**
@@ -409,6 +467,7 @@ private data class LoginRequest(
     @SerialName("password_hash") val passwordHash: String,
     @SerialName("device_id") val deviceId: String,
     @SerialName("device_name") val deviceName: String,
+    @SerialName("device_kind") val deviceKind: String,
 )
 
 @Serializable
@@ -446,6 +505,7 @@ private data class AccountDeviceWire(
     @SerialName("device_name") val deviceName: String,
     val online: Boolean,
     @SerialName("last_seen_at") val lastSeenAt: Long? = null,
+    @SerialName("device_kind") val deviceKind: String? = null,
 )
 
 private fun decode(value: String): ByteArray = try {
