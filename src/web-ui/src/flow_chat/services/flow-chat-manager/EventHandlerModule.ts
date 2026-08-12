@@ -42,6 +42,7 @@ import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
 import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { FlowChatContext, DialogTurn, ModelRound, FlowToolItem } from './types';
+import type { SteeringImage } from '../../types/flow-chat';
 import {
   normalizeAiErrorDetail,
   type AiErrorDetail,
@@ -1241,10 +1242,12 @@ export function insertSteeringItemIfAbsent(params: {
   turnId: string;
   steeringId: string;
   content: string;
+  /** Images sent with the steering message, rendered under its text. */
+  images?: SteeringImage[];
   roundIndex?: number;
   status?: 'pending' | 'completed';
 }): boolean {
-  const { sessionId, turnId, steeringId, content } = params;
+  const { sessionId, turnId, steeringId, content, images } = params;
   const roundIndex = typeof params.roundIndex === 'number' ? params.roundIndex : 0;
   const status = params.status ?? 'completed';
 
@@ -1278,6 +1281,7 @@ export function insertSteeringItemIfAbsent(params: {
     status,
     steeringId,
     content,
+    images: images?.length ? images : undefined,
     roundIndex,
   };
 

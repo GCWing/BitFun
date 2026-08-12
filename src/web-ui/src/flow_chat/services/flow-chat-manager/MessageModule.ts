@@ -91,7 +91,7 @@ export async function sendMessage(
   const draft: SubmissionDraft = {
     message,
     displayMessage,
-    hasImages: (options?.imageContexts?.length ?? 0) > 0,
+    imageContexts: options?.imageContexts,
   };
 
   if (!options?.bypassPendingQueue) {

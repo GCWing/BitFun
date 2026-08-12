@@ -803,12 +803,18 @@ export class AgentAPI {
    * Mirrors Codex CLI's Esc-to-steer behavior: the message is queued on the
    * Rust side and consumed by the execution engine at the next round boundary
    * without ending the current turn.
+   *
+   * Carries the same payload a turn submission does — attachments and message
+   * metadata included — so a message keeps its content whether it is sent at a
+   * turn boundary or injected into a running turn.
    */
   async steerDialogTurn(request: {
     sessionId: string;
     dialogTurnId: string;
     content: string;
     displayContent?: string;
+    imageContexts?: unknown[];
+    userMessageMetadata?: Record<string, unknown>;
   }): Promise<{ success: boolean; steeringId: string }> {
     try {
       return await api.invoke<{ success: boolean; steeringId: string }>(

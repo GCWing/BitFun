@@ -136,6 +136,7 @@ async function appendToDispatchJob(
   jobId: string,
   message: string,
   displayMessage: string | undefined,
+  attachments?: import('@/features/dispatch/dispatchApi').DispatchInlineAttachment[],
 ): Promise<void> {
   // Keep the id stable across an ambiguous transport failure. A retry with
   // the same message can then ask the target mailbox for the same idempotent
@@ -154,6 +155,7 @@ async function appendToDispatchJob(
     message,
     displayMessage,
     retry.id,
+    attachments,
   );
   if (!response.accepted) {
     releaseSubmissionRetry(APPEND_RETRY_SCOPE, sessionId, retry.id);
@@ -629,11 +631,7 @@ export const dispatchSessionDriver: SessionDriver = {
     return [];
   },
 
-  planSubmission(
-    context: FlowChatContext,
-    sessionId: string,
-    draft: SubmissionDraft,
-  ): SubmissionPlan {
+  planSubmission(context: FlowChatContext, sessionId: string): SubmissionPlan {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (
       !isNonLocalDispatchTarget(session?.config.dispatchTarget)
@@ -644,16 +642,6 @@ export const dispatchSessionDriver: SessionDriver = {
       )
     ) {
       return { kind: 'queue' };
-    }
-    if (draft.hasImages) {
-      // Steering has no attachment channel; the runtime accepts images only
-      // at turn boundaries.
-      return {
-        kind: 'reject',
-        reason: i18nService.t(
-          'flow-chat:chatInput.dispatch.errors.imagesWhileRunning',
-        ),
-      };
     }
     return { kind: 'steer' };
   },
@@ -670,7 +658,13 @@ export const dispatchSessionDriver: SessionDriver = {
         i18nService.t('flow-chat:chatInput.dispatch.errors.sessionUnavailable'),
       );
     }
-    await appendToDispatchJob(sessionId, jobId, draft.message, draft.displayMessage);
+    await appendToDispatchJob(
+      sessionId,
+      jobId,
+      draft.message,
+      draft.displayMessage,
+      dispatchAttachments(session, draft.imageContexts),
+    );
   },
 
   async startTurn(
@@ -698,15 +692,15 @@ export const dispatchSessionDriver: SessionDriver = {
     }
     const dispatchState = readySession.config.dispatchJobState;
     if (dispatchState === 'queued' || dispatchState === 'running') {
-      if ((options?.imageContexts?.length ?? 0) > 0) {
-        // Steering has no attachment channel; images ride turn boundaries.
-        throw new Error(
-          i18nService.t('flow-chat:chatInput.dispatch.errors.imagesWhileRunning'),
-        );
-      }
       // A turn is already in flight; this message steers it rather than
-      // starting another one underneath it.
-      await appendToDispatchJob(sessionId, jobId, message, displayMessage);
+      // starting another one underneath it. Attachments ride along.
+      await appendToDispatchJob(
+        sessionId,
+        jobId,
+        message,
+        displayMessage,
+        dispatchAttachments(readySession, options?.imageContexts),
+      );
       return 'detached';
     }
     if (dispatchState && isDispatchJobTerminal(dispatchState)) {

@@ -678,7 +678,6 @@
         "sessionUnavailable": "远程任务信息不完整。请重新打开任务，或新建一个任务。",
         "compactWhileRunning": "请等待当前远程任务完成后再压缩上下文。",
         "compactRejected": "目标设备未能开始压缩，请稍后重试。",
-        "imagesWhileRunning": "图片会随下一轮消息发送。请等待当前远程任务完成后再试。",
         "sessionNotReady": "远程任务仍在准备中，请稍后再发送。",
         "submissionUnconfirmed": "暂时无法确认目标是否已接收任务。请稍后检查任务状态。"
       }
@@ -2534,7 +2533,6 @@
     },
     "errors": {
       "emptyContent": "消息内容不能为空",
-      "richContentUnsupported": "包含附件或结构化信息的消息需要等待当前对话完成后发送",
       "sendNowFailed": "立即发送失败，请稍后重试"
     }
   },

@@ -165,6 +165,10 @@ pub(crate) struct DispatchAppendRequest {
     pub(crate) content: String,
     #[serde(default)]
     pub(crate) display_content: Option<String>,
+    /// Attachments injected into the running turn with the message. An older
+    /// controller omits the field entirely, which decodes to an empty list.
+    #[serde(default)]
+    pub(crate) attachments: Vec<DispatchAttachment>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]

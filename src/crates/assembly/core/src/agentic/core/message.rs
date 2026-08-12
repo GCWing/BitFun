@@ -436,15 +436,31 @@ impl Message {
     }
 
     pub fn internal_reminder(reminder_kind: InternalReminderKind, text: impl Into<String>) -> Self {
+        Self::user(Self::render_internal_reminder(text))
+            .with_semantic_kind(MessageSemanticKind::InternalReminder)
+            .with_internal_reminder_kind(reminder_kind)
+    }
+
+    /// An internal reminder that also carries images — used when a message that
+    /// arrives mid-turn (steering) has attachments, so the model sees the same
+    /// multimodal payload it would have seen at a turn boundary.
+    pub fn internal_reminder_multimodal(
+        reminder_kind: InternalReminderKind,
+        text: impl Into<String>,
+        images: Vec<ImageContextData>,
+    ) -> Self {
+        Self::user_multimodal(Self::render_internal_reminder(text), images)
+            .with_semantic_kind(MessageSemanticKind::InternalReminder)
+            .with_internal_reminder_kind(reminder_kind)
+    }
+
+    fn render_internal_reminder(text: impl Into<String>) -> String {
         let text = text.into();
-        let rendered = if crate::agentic::core::has_prompt_markup(&text) {
+        if crate::agentic::core::has_prompt_markup(&text) {
             text
         } else {
             crate::agentic::core::render_system_reminder(&text)
-        };
-        Self::user(rendered)
-            .with_semantic_kind(MessageSemanticKind::InternalReminder)
-            .with_internal_reminder_kind(reminder_kind)
+        }
     }
 
     pub fn user_multimodal(text: String, images: Vec<ImageContextData>) -> Self {

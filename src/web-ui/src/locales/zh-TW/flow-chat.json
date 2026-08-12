@@ -678,7 +678,6 @@
         "sessionUnavailable": "遠端任務資訊不完整。請重新開啟任務，或建立新任務。",
         "compactWhileRunning": "請等待目前遠端任務完成後再壓縮上下文。",
         "compactRejected": "目標裝置未能開始壓縮，請稍後重試。",
-        "imagesWhileRunning": "圖片會隨下一輪訊息傳送。請等待目前遠端任務完成後再試。",
         "sessionNotReady": "遠端任務仍在準備中，請稍後再傳送。",
         "submissionUnconfirmed": "暫時無法確認目標是否已收到任務。請稍後檢查任務狀態。"
       }
@@ -2534,7 +2533,6 @@
     },
     "errors": {
       "emptyContent": "訊息內容不能為空",
-      "richContentUnsupported": "包含附件或結構化資訊的訊息需要等待目前對話完成後傳送",
       "sendNowFailed": "立即發送失敗，請稍後重試"
     }
   },

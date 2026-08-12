@@ -705,6 +705,8 @@ fn steer_operation(session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
             turn_id: turn_id.to_string(),
             content: "check tests".to_string(),
             display_content: None,
+            attachments: Vec::new(),
+            metadata: serde_json::Map::new(),
         },
     }
 }

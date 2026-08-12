@@ -142,6 +142,8 @@ fn protocol_round_trips_exact_turn_steering_without_replacing_turn_admission() {
             turn_id: "turn-1".to_string(),
             content: "check tests".to_string(),
             display_content: Some("Check tests".to_string()),
+            attachments: Vec::new(),
+            metadata: serde_json::Map::new(),
         },
     };
     let result = RuntimeIpcOperationResult::TurnSteered {

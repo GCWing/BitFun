@@ -1429,6 +1429,8 @@ impl TuiAgentClient {
                 turn_id,
                 content,
                 display_content,
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
             }))
             .await?
             .steering_id)

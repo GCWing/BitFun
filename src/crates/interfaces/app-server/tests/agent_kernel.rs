@@ -833,6 +833,8 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                         turn_id: "turn-active".to_string(),
                         content: "keep going".to_string(),
                         display_content: None,
+                        attachments: Vec::new(),
+                        metadata: serde_json::Map::new(),
                     },
                 ))
                 .await

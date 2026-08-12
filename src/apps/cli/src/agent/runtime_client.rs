@@ -1543,6 +1543,9 @@ impl ExecAgentRuntimeClient {
             turn_id: turn_id.clone(),
             content,
             display_content,
+            // The CLI steer prompt is text; attachments ride turn submissions.
+            attachments: Vec::new(),
+            metadata: serde_json::Map::new(),
         };
 
         match &self.backend {

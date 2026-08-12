@@ -43,18 +43,6 @@ export interface EnqueueInput {
 
 export type PendingQueueListener = (sessionId: string, items: QueuedMessage[]) => void;
 
-/**
- * The core steering contract is text-only. Keep payloads that need structured
- * attachment/reference metadata queued for the regular turn submission path.
- */
-export function queuedMessageHasUnsupportedSteeringPayload(item: QueuedMessage): boolean {
-  if ((item.imageContexts?.length ?? 0) > 0 || (item.imageDisplayData?.length ?? 0) > 0) {
-    return true;
-  }
-  const metadata = item.userMessageMetadata;
-  return metadata != null && Object.keys(metadata).length > 0;
-}
-
 class PendingQueueManager {
   private static _instance: PendingQueueManager | null = null;
   private queues = new Map<string, QueuedMessage[]>();

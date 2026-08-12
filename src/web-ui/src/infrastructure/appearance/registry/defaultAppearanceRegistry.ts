@@ -176,6 +176,7 @@ import { exploreGroupAppearanceDescriptor } from '@/flow_chat/components/modern/
 import { pendingQueuePanelAppearanceDescriptor } from '@/flow_chat/components/PendingQueuePanel.appearance';
 import { subagentProjectionAppearanceDescriptor } from '@/flow_chat/components/subagent/SubagentProjectionView.appearance';
 import { threadGoalDialogsAppearanceDescriptor } from '@/flow_chat/components/thread-goal/ThreadGoalDialogs.appearance';
+import { userSteeringBubbleAppearanceDescriptor } from '@/flow_chat/components/UserSteeringBubble.appearance';
 import { welcomePanelAppearanceDescriptor } from '@/flow_chat/components/WelcomePanel.appearance';
 import { generativeWidgetToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/GenerativeWidgetToolCard.appearance';
 import { gitToolDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/GitToolDisplay.appearance';
@@ -461,6 +462,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(pendingQueuePanelAppearanceDescriptor)
     .registerComponent(subagentProjectionAppearanceDescriptor)
     .registerComponent(threadGoalDialogsAppearanceDescriptor)
+    .registerComponent(userSteeringBubbleAppearanceDescriptor)
     .registerComponent(welcomePanelAppearanceDescriptor)
     .registerComponent(generativeWidgetToolCardAppearanceDescriptor)
     .registerComponent(gitToolDisplayAppearanceDescriptor)

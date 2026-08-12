@@ -678,7 +678,6 @@
         "sessionUnavailable": "Remote task information is incomplete. Reopen the task or create a new one.",
         "compactWhileRunning": "Wait for the current remote task to finish before compacting the context.",
         "compactRejected": "The target could not start compaction. Try again shortly.",
-        "imagesWhileRunning": "Images will be sent with the next turn. Wait for the current remote task to finish and try again.",
         "sessionNotReady": "The remote task is still being prepared. Try sending again shortly.",
         "submissionUnconfirmed": "BitFun cannot yet confirm whether the target received this task. Check the task status shortly."
       }
@@ -2534,7 +2533,6 @@
     },
     "errors": {
       "emptyContent": "Message content cannot be empty",
-      "richContentUnsupported": "Messages with attachments or structured metadata can only be sent after the active turn finishes",
       "sendNowFailed": "Send now failed; please try again"
     }
   },

@@ -163,6 +163,10 @@ pub struct DispatchAppendRequest {
     pub content: String,
     #[serde(default)]
     pub display_content: Option<String>,
+    /// Attachments injected with the message into the running turn, under the
+    /// same structural limits as a turn submission's.
+    #[serde(default)]
+    pub attachments: Vec<DispatchAttachmentPayload>,
 }
 
 /// The wire shape and structural limits come from the shared contract; the
@@ -1461,7 +1465,9 @@ pub(super) fn validate_append_request(request: &DispatchAppendRequest) -> anyhow
     if request.message_id.trim().is_empty() || request.message_id.len() > 128 {
         anyhow::bail!("Dispatch messageId must contain 1-128 bytes");
     }
-    if request.content.trim().is_empty() {
+    // An attachment-only message is a real message; only one with neither text
+    // nor attachments is empty.
+    if request.content.trim().is_empty() && request.attachments.is_empty() {
         anyhow::bail!("Dispatch appended message cannot be empty");
     }
     let total_bytes = request
@@ -1471,6 +1477,7 @@ pub(super) fn validate_append_request(request: &DispatchAppendRequest) -> anyhow
     if total_bytes > MAX_DISPATCH_TEXT_BYTES {
         anyhow::bail!("Dispatch appended message exceeds the 32 KiB request limit");
     }
+    validate_attachment_payloads(&request.attachments)?;
     Ok(())
 }
 

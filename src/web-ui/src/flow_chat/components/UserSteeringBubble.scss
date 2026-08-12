@@ -1,0 +1,26 @@
+// Attachments on a steering message, matching the turn-level user message so
+// an image reads the same whether it was sent at a turn boundary or injected
+// into a running turn.
+.bitfun-user-steering-bubble__images {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.bitfun-user-steering-bubble__image {
+  // Attachment-sized, not a hero image: the text stays the primary content.
+  width: 72px;
+  height: 72px;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid var(--bf-appearance-token-border-base);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}

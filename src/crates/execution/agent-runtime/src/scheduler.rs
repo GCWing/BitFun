@@ -4,7 +4,7 @@ use crate::events::turn_outcome_kind;
 use crate::thread_goal::{build_objective_updated_plan, build_thread_goal_continuation_plan};
 use bitfun_runtime_ports::{
     should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
-    AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
+    AgentInputAttachment, AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
     DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy, DialogTriggerSource,
     RoundInjection, RoundInjectionKind, RoundInjectionTarget, RoundInjectionToolPreemption,
     ThreadGoal,
@@ -371,7 +371,7 @@ pub enum AgentSessionReplyAction {
     Forward(AgentSessionReplyPlan),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DialogSteeringAction {
     Reject {
         error: String,
@@ -700,6 +700,8 @@ pub fn resolve_background_delivery_injection(
         target: RoundInjectionTarget::CurrentRunningTurn,
         content,
         display_content,
+        attachments: Vec::new(),
+        metadata: serde_json::Map::new(),
         created_at,
     }
 }
@@ -937,6 +939,8 @@ pub fn resolve_dialog_steering_action(
     turn_id: &str,
     content: String,
     display_content: Option<String>,
+    attachments: Vec<AgentInputAttachment>,
+    metadata: serde_json::Map<String, serde_json::Value>,
     steering_id: String,
     created_at: SystemTime,
 ) -> DialogSteeringAction {
@@ -957,6 +961,8 @@ pub fn resolve_dialog_steering_action(
             target: RoundInjectionTarget::ExactTurn(turn_id.to_string()),
             content,
             display_content: display,
+            attachments,
+            metadata,
             created_at,
         },
         outcome: DialogSteerOutcome::Buffered {

@@ -11,7 +11,8 @@ use bitfun_agent_runtime::scheduler::{
     DEFAULT_MAX_DIALOG_QUEUE_DEPTH,
 };
 use bitfun_runtime_ports::{
-    AgentSessionReplyRoute, DialogQueuePriority, DialogSessionStateFact, DialogSteerOutcome,
+    AgentInputAttachment, AgentSessionReplyRoute, DialogQueuePriority, DialogSessionStateFact,
+    DialogSteerOutcome,
     DialogSubmissionPolicy, DialogTriggerSource, RoundInjection, RoundInjectionKind,
     RoundInjectionTarget, RoundInjectionToolPreemption, ThreadGoal, ThreadGoalStatus,
 };
@@ -516,6 +517,15 @@ fn dialog_steering_action_buffers_exact_running_turn_with_display_fallback() {
         "turn-1",
         "steer content".to_string(),
         None,
+        vec![AgentInputAttachment::remote_image(
+            "image-1",
+            "shot.png",
+            "data:image/png;base64,abc",
+        )],
+        serde_json::Map::from_iter([(
+            "kind".to_string(),
+            serde_json::Value::String("steering".to_string()),
+        )]),
         "steer-id".to_string(),
         created_at,
     );
@@ -531,6 +541,14 @@ fn dialog_steering_action_buffers_exact_running_turn_with_display_fallback() {
     );
     assert_eq!(injection.content, "steer content");
     assert_eq!(injection.display_content, "steer content");
+    // Attachments and metadata ride the injection so the running turn sees the
+    // same payload a turn-boundary submission would have carried.
+    assert_eq!(injection.attachments.len(), 1);
+    assert_eq!(injection.attachments[0].id, "image-1");
+    assert_eq!(
+        injection.metadata.get("kind").and_then(|v| v.as_str()),
+        Some("steering")
+    );
     assert_eq!(injection.created_at, created_at);
     assert_eq!(
         injection.execution_policy.tool_preemption,
@@ -554,6 +572,8 @@ fn dialog_steering_action_rejects_when_target_turn_is_not_running() {
         "turn-1",
         "steer content".to_string(),
         Some("display".to_string()),
+        Vec::new(),
+        serde_json::Map::new(),
         "steer-id".to_string(),
         SystemTime::UNIX_EPOCH,
     );
@@ -658,6 +678,8 @@ fn exact_turn_msg(turn_id: &str, content: &str) -> RoundInjection {
         target: RoundInjectionTarget::ExactTurn(turn_id.to_string()),
         content: content.to_string(),
         display_content: content.to_string(),
+        attachments: Vec::new(),
+        metadata: serde_json::Map::new(),
         created_at: SystemTime::now(),
     }
 }
@@ -670,6 +692,8 @@ fn current_turn_msg(content: &str) -> RoundInjection {
         target: RoundInjectionTarget::CurrentRunningTurn,
         content: content.to_string(),
         display_content: content.to_string(),
+        attachments: Vec::new(),
+        metadata: serde_json::Map::new(),
         created_at: SystemTime::now(),
     }
 }

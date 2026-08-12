@@ -1666,8 +1666,13 @@ pub struct AgentDialogTurnRequest {
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
-/// Text-only steering request for one exact running dialog turn.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Steering request for one exact running dialog turn.
+///
+/// Carries the same payload shape as a turn submission: a mid-turn steering
+/// message is an ordinary user message that happens to arrive while a turn is
+/// running, so attachments and message metadata ride along with the text
+/// rather than forcing the user to wait for a turn boundary.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentDialogSteerRequest {
     pub session_id: String,
@@ -1675,6 +1680,10 @@ pub struct AgentDialogSteerRequest {
     pub content: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_content: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<AgentInputAttachment>,
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
 impl AgentDialogTurnExecution {
@@ -1964,7 +1973,7 @@ pub enum RoundInjectionTarget {
 
 /// A message to inject into the currently running dialog turn at the next
 /// model-round boundary.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RoundInjection {
     pub id: String,
     pub kind: RoundInjectionKind,
@@ -1972,6 +1981,13 @@ pub struct RoundInjection {
     pub target: RoundInjectionTarget,
     pub content: String,
     pub display_content: String,
+    /// Attachments that ride into the running turn with the injected message.
+    /// Consumers rebuild them into a multimodal user message, so a steering
+    /// message with images is no different from one sent at a turn boundary.
+    pub attachments: Vec<AgentInputAttachment>,
+    /// Message metadata carried alongside the injected content (same shape as
+    /// a turn submission's `metadata`).
+    pub metadata: serde_json::Map<String, serde_json::Value>,
     pub created_at: std::time::SystemTime,
 }
 
@@ -2236,6 +2252,42 @@ impl AgentInputAttachment {
             "dataUrl".to_string(),
             serde_json::Value::String(data_url.into()),
         );
+
+        Self {
+            kind: "remote_image".to_string(),
+            id: id.into(),
+            metadata,
+        }
+    }
+
+    /// Build a `remote_image` attachment from a renderer image context.
+    ///
+    /// Either `image_path` or `data_url` must be present — consumers reject an
+    /// attachment carrying neither.
+    pub fn image_context(
+        id: impl Into<String>,
+        image_path: Option<String>,
+        data_url: Option<String>,
+        mime_type: impl Into<String>,
+        context_metadata: Option<serde_json::Value>,
+    ) -> Self {
+        let mut metadata = serde_json::Map::new();
+        if let Some(image_path) = image_path {
+            metadata.insert(
+                "imagePath".to_string(),
+                serde_json::Value::String(image_path),
+            );
+        }
+        if let Some(data_url) = data_url {
+            metadata.insert("dataUrl".to_string(), serde_json::Value::String(data_url));
+        }
+        metadata.insert(
+            "mimeType".to_string(),
+            serde_json::Value::String(mime_type.into()),
+        );
+        if let Some(context_metadata) = context_metadata {
+            metadata.insert("metadata".to_string(), context_metadata);
+        }
 
         Self {
             kind: "remote_image".to_string(),
@@ -3717,6 +3769,8 @@ mod tests {
                 target: RoundInjectionTarget::CurrentRunningTurn,
                 content: "result".to_string(),
                 display_content: "result".to_string(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
                 created_at: std::time::SystemTime::UNIX_EPOCH,
             },
         };
@@ -3916,11 +3970,22 @@ mod tests {
 
     #[test]
     fn agent_dialog_steer_contract_round_trips_exact_turn_identity() {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert(
+            "kind".to_string(),
+            serde_json::Value::String("steering".to_string()),
+        );
         let request = AgentDialogSteerRequest {
             session_id: "session_1".to_string(),
             turn_id: "turn_1".to_string(),
             content: "Please also check the tests".to_string(),
             display_content: Some("Also check tests".to_string()),
+            attachments: vec![AgentInputAttachment::remote_image(
+                "image-1",
+                "shot.png",
+                "data:image/png;base64,abc",
+            )],
+            metadata,
         };
         let outcome = DialogSteerOutcome::Buffered {
             session_id: "session_1".to_string(),
@@ -3935,6 +4000,9 @@ mod tests {
         assert_eq!(request_json["turnId"], "turn_1");
         assert_eq!(request_json["content"], "Please also check the tests");
         assert_eq!(request_json["displayContent"], "Also check tests");
+        // A steering message carries the same payload a turn submission does.
+        assert_eq!(request_json["attachments"][0]["kind"], "remote_image");
+        assert_eq!(request_json["metadata"]["kind"], "steering");
         assert_eq!(outcome_json["kind"], "buffered");
         assert_eq!(outcome_json["sessionId"], "session_1");
         assert_eq!(outcome_json["turnId"], "turn_1");

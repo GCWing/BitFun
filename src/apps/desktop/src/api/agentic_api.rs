@@ -751,6 +751,14 @@ pub struct SteerDialogTurnRequest {
     /// Original user text for UI rendering (defaults to `content`).
     #[serde(default)]
     pub display_content: Option<String>,
+    /// Images attached to the steering message. Same shape the composer sends
+    /// when it starts a turn — a message keeps its attachments whether it is
+    /// submitted at a turn boundary or injected into a running turn.
+    #[serde(default)]
+    pub image_contexts: Option<Vec<ImageContextData>>,
+    /// Structured metadata carried with the steering message.
+    #[serde(default)]
+    pub user_message_metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -2749,12 +2757,23 @@ pub async fn steer_dialog_turn(
         dialog_turn_id,
         content,
         display_content,
+        image_contexts,
+        user_message_metadata,
     } = request;
 
-    let trimmed = content.trim();
-    if trimmed.is_empty() {
+    let attachments: Vec<AgentInputAttachment> = image_contexts
+        .unwrap_or_default()
+        .into_iter()
+        .map(desktop_image_attachment)
+        .collect();
+
+    // An image-only steering message is a real message; only a message with
+    // neither text nor attachments is empty.
+    if content.trim().is_empty() && attachments.is_empty() {
         return Err("Steering content cannot be empty".to_string());
     }
+
+    let metadata = desktop_user_message_metadata(user_message_metadata);
 
     let outcome = runtime
         .agent_runtime()
@@ -2763,6 +2782,8 @@ pub async fn steer_dialog_turn(
             turn_id: dialog_turn_id,
             content,
             display_content,
+            attachments,
+            metadata,
         })
         .await
         .map_err(|error| format!("Failed to steer dialog turn: {}", error.into_message()))?;

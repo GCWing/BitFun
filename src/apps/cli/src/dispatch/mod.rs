@@ -387,7 +387,9 @@ fn answer(request: DispatchAnswerRequest) -> Result<DispatchAnswerResponse> {
 }
 
 fn append(request: DispatchAppendRequest) -> Result<DispatchAppendResponse> {
-    if request.content.trim().is_empty() {
+    // An attachment-only message is a real message; only one with neither text
+    // nor attachments is empty.
+    if request.content.trim().is_empty() && request.attachments.is_empty() {
         bail!("dispatch appended message cannot be empty");
     }
     let total_bytes = request
@@ -397,6 +399,7 @@ fn append(request: DispatchAppendRequest) -> Result<DispatchAppendResponse> {
     if total_bytes > MAX_DISPATCH_TEXT_BYTES {
         bail!("dispatch appended message exceeds the 32 KiB request limit");
     }
+    validate_attachments(&request.attachments)?;
     let message_id = request.message_id.clone();
     let store = DispatchStore::open_default()?;
     let accepted = store.enqueue_append_message(request)?;

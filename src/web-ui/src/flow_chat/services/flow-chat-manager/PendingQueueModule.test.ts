@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  pendingQueueManager,
-  queuedMessageHasUnsupportedSteeringPayload,
-} from './PendingQueueModule';
+import { pendingQueueManager } from './PendingQueueModule';
 
 const sessions: string[] = [];
 
@@ -55,42 +52,5 @@ describe('PendingQueueModule', () => {
     expect(items[0]).toMatchObject(payload);
     expect(items[0].status).toBe('queued');
     expect(items[0].retryCount).toBe(0);
-  });
-
-  it('rejects only payloads that the text-only steering contract would flatten', () => {
-    const plain = {
-      id: 'plain',
-      sessionId: 'session-1',
-      content: 'plain text',
-      timestamp: 1,
-      status: 'queued' as const,
-      retryCount: 0,
-    };
-
-    expect(queuedMessageHasUnsupportedSteeringPayload(plain)).toBe(false);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        imageContexts: [{ id: 'image-1' }],
-      }),
-    ).toBe(true);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        userMessageMetadata: { deepReviewRunManifest: { requestId: 'review-1' } },
-      }),
-    ).toBe(true);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        userMessageMetadata: { sessionReferences: [{ sessionId: 'source' }] },
-      }),
-    ).toBe(true);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        userMessageMetadata: { composerPresentation: { parts: [] } },
-      }),
-    ).toBe(true);
   });
 });

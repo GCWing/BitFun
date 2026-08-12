@@ -50,7 +50,12 @@ export interface SendMessageOptions {
 export interface SubmissionDraft {
   message: string;
   displayMessage?: string;
-  hasImages: boolean;
+  /**
+   * Composer image contexts for this submission. Steering carries them just
+   * like a turn submission does, so a message with attachments does not have
+   * to wait for a turn boundary.
+   */
+  imageContexts?: ImageInputContextData[];
 }
 
 /**

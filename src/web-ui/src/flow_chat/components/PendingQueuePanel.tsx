@@ -27,15 +27,12 @@ import { Tooltip, IconButton } from '@/component-library';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { stateMachineManager } from '../state-machine';
 import { FlowChatStore } from '../store/FlowChatStore';
-import {
-  pendingQueueManager,
-  queuedMessageHasUnsupportedSteeringPayload,
-} from '../services/flow-chat-manager/PendingQueueModule';
+import { pendingQueueManager } from '../services/flow-chat-manager/PendingQueueModule';
 import { FlowChatManager } from '../services/FlowChatManager';
 import { insertSteeringItemIfAbsent } from '../services/flow-chat-manager/EventHandlerModule';
 import { notificationService } from '../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
-import type { QueuedMessage } from '../types/flow-chat';
+import type { QueuedMessage, SteeringImage } from '../types/flow-chat';
 import { isAcpFlowSession } from '../utils/acpSession';
 import './PendingQueuePanel.scss';
 
@@ -125,76 +122,67 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
   const handleSendNow = useCallback(
     async (item: QueuedMessage) => {
       if (!sessionId) return;
-      if (isAcpSession) {
-        log.warn('Steering is disabled for ACP sessions', { sessionId, itemId: item.id });
-        return;
-      }
       const machine = stateMachineManager.get(sessionId);
-      const ctx = machine?.getContext();
-      const dialogTurnId = ctx?.currentDialogTurnId ?? null;
+      const dialogTurnId = machine?.getContext().currentDialogTurnId ?? null;
 
-      if (!dialogTurnId) {
-        // Turn already finished — fall back to the regular drain path so the
-        // item starts a new turn instead.
-        log.info('Send now fallback: no active dialog turn, using drain path', {
-          sessionId,
-          itemId: item.id,
-        });
+      // A running turn takes the message through the steering channel, which
+      // carries the whole payload — text, attachments and metadata alike.
+      // ACP agents own their execution loop and expose no mid-turn injection
+      // point, so they take the drain path below instead.
+      if (dialogTurnId && !isAcpSession) {
+        pendingQueueManager.setStatus(sessionId, item.id, 'sending_now');
         try {
-          if (!pendingQueueManager.promoteForExplicitDrain(sessionId, item.id)) {
-            log.warn('Send now fallback item is no longer queued', {
-              sessionId,
-              itemId: item.id,
-            });
-            return;
+          const resp = await agentAPI.steerDialogTurn({
+            sessionId,
+            dialogTurnId,
+            content: item.content,
+            displayContent: item.displayMessage ?? item.content,
+            imageContexts: item.imageContexts,
+            userMessageMetadata: item.userMessageMetadata,
+          });
+          // Optimistically render the steering bubble in the running round so
+          // the user sees their message land immediately. The backend
+          // `UserSteeringInjected` event dedupes by the same `steeringId`.
+          if (resp?.steeringId) {
+            try {
+              insertSteeringItemIfAbsent({
+                sessionId,
+                turnId: dialogTurnId,
+                steeringId: resp.steeringId,
+                content: item.displayMessage ?? item.content,
+                images: item.imageDisplayData as SteeringImage[] | undefined,
+                status: 'pending',
+              });
+            } catch (renderErr) {
+              log.warn('Optimistic steering render failed', { renderErr });
+            }
           }
-          await FlowChatManager.getInstance().drainPendingQueueForSession(sessionId);
+          pendingQueueManager.remove(sessionId, item.id);
+          return;
         } catch (err) {
-          log.error('Send now fallback failed', { sessionId, itemId: item.id, err });
-          notificationService.error(t('pendingQueue.errors.sendNowFailed'), { duration: 4000 });
+          // Most often the turn finished between the click and the request.
+          // Fall through to the drain path rather than reporting a failure the
+          // user cannot act on.
+          log.warn('Steering rejected, falling back to the drain path', {
+            sessionId,
+            itemId: item.id,
+            err,
+          });
+          pendingQueueManager.setStatus(sessionId, item.id, 'queued');
         }
-        return;
       }
 
-      if (queuedMessageHasUnsupportedSteeringPayload(item)) {
-        log.info('Send now kept queued because steering is text-only', {
-          sessionId,
-          itemId: item.id,
-        });
-        notificationService.warning(t('pendingQueue.errors.richContentUnsupported'), {
-          duration: 4000,
-        });
-        return;
-      }
-
-      pendingQueueManager.setStatus(sessionId, item.id, 'sending_now');
+      // No turn to inject into. Move the item to the head and send it at the
+      // first opportunity: right now if the session is idle, otherwise the
+      // IDLE drain listener picks it up the moment the current turn ends.
       try {
-        const resp = await agentAPI.steerDialogTurn({
-          sessionId,
-          dialogTurnId,
-          content: item.content,
-          displayContent: item.displayMessage ?? item.content,
-        });
-        // Optimistically render the steering bubble in the running round so the
-        // user sees their message land immediately. The backend
-        // `UserSteeringInjected` event will dedupe by the same `steeringId`.
-        if (resp?.steeringId) {
-          try {
-            insertSteeringItemIfAbsent({
-              sessionId,
-              turnId: dialogTurnId,
-              steeringId: resp.steeringId,
-              content: item.displayMessage ?? item.content,
-              status: 'pending',
-            });
-          } catch (renderErr) {
-            log.warn('Optimistic steering render failed', { renderErr });
-          }
+        if (!pendingQueueManager.promoteForExplicitDrain(sessionId, item.id)) {
+          log.warn('Send now item is no longer queued', { sessionId, itemId: item.id });
+          return;
         }
-        pendingQueueManager.remove(sessionId, item.id);
+        await FlowChatManager.getInstance().drainPendingQueueForSession(sessionId);
       } catch (err) {
-        log.error('Send now (steering) failed', { sessionId, itemId: item.id, err });
-        pendingQueueManager.setStatus(sessionId, item.id, 'queued');
+        log.error('Send now fallback failed', { sessionId, itemId: item.id, err });
         notificationService.error(t('pendingQueue.errors.sendNowFailed'), { duration: 4000 });
       }
     },
@@ -364,27 +352,25 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                         <Pencil size={12} strokeWidth={2.25} />
                       </IconButton>
                     </Tooltip>
-                    {!isAcpSession && (
-                      <Tooltip content={t('pendingQueue.tooltip.sendNow')}>
-                        <IconButton
-                          data-bf-component="pending-queue-panel"
-                          data-bf-part="action"
-                          size="small"
-                          className="bitfun-pending-queue-panel__btn bitfun-pending-queue-panel__btn--primary"
-                          disabled={isSending}
-                          onClick={() => {
-                            void handleSendNow(item);
-                          }}
-                          aria-label={t('pendingQueue.actions.sendNow')}
-                        >
-                          {isSendingNow ? (
-                            <Loader2 size={12} strokeWidth={2.5} className="bitfun-pending-queue-panel__spin" />
-                          ) : (
-                            <ArrowUp size={12} strokeWidth={2.5} />
-                          )}
-                        </IconButton>
-                      </Tooltip>
-                    )}
+                    <Tooltip content={t('pendingQueue.tooltip.sendNow')}>
+                      <IconButton
+                        data-bf-component="pending-queue-panel"
+                        data-bf-part="action"
+                        size="small"
+                        className="bitfun-pending-queue-panel__btn bitfun-pending-queue-panel__btn--primary"
+                        disabled={isSending}
+                        onClick={() => {
+                          void handleSendNow(item);
+                        }}
+                        aria-label={t('pendingQueue.actions.sendNow')}
+                      >
+                        {isSendingNow ? (
+                          <Loader2 size={12} strokeWidth={2.5} className="bitfun-pending-queue-panel__spin" />
+                        ) : (
+                          <ArrowUp size={12} strokeWidth={2.5} />
+                        )}
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip content={t('pendingQueue.actions.delete')}>
                       <IconButton
                         data-bf-component="pending-queue-panel"
