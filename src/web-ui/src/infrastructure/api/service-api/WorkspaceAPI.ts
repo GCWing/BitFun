@@ -1132,6 +1132,130 @@ export class WorkspaceAPI {
     }
   }
 
+  async setAlwaysOnTopOhos(isTopmost: boolean): Promise<void> {
+    try {
+      await api.invoke('set_always_on_top_ohos', { arg: JSON.stringify({ isTopmost }) });
+    } catch (error) {
+      throw createTauriCommandError('set_always_on_top_ohos', error, { isTopmost });
+    }
+  }
+
+  async setDecorationsOhos(visible: boolean): Promise<void> {
+    try {
+      await api.invoke('set_decorations_ohos', { arg: JSON.stringify({ visible }) });
+    } catch (error) {
+      throw createTauriCommandError('set_decorations_ohos', error, { visible });
+    }
+  }
+
+  async setSkipTaskbarOhos(skip: boolean): Promise<void> {
+    try {
+      await api.invoke('set_skip_taskbar_ohos', { arg: JSON.stringify({ skip }) });
+    } catch (error) {
+      throw createTauriCommandError('set_skip_taskbar_ohos', error, { skip });
+    }
+  }
+
+  async setWindowSizeOhos(width: number, height: number): Promise<void> {
+    try {
+      await api.invoke('set_window_size_ohos', { arg: JSON.stringify({ width, height }) });
+    } catch (error) {
+      throw createTauriCommandError('set_window_size_ohos', error, { width, height });
+    }
+  }
+
+  async setWindowPositionOhos(x: number, y: number): Promise<void> {
+    try {
+      await api.invoke('set_window_position_ohos', { arg: JSON.stringify({ x, y }) });
+    } catch (error) {
+      throw createTauriCommandError('set_window_position_ohos', error, { x, y });
+    }
+  }
+
+  async outerPositionOhos(): Promise<{ x: number; y: number }> {
+    try {
+      const raw = await api.invoke<string>('outer_position_ohos');
+      return JSON.parse(raw) as { x: number; y: number };
+    } catch (error) {
+      throw createTauriCommandError('outer_position_ohos', error);
+    }
+  }
+
+  async outerSizeOhos(): Promise<{ width: number; height: number }> {
+    try {
+      const raw = await api.invoke<string>('outer_size_ohos');
+      return JSON.parse(raw) as { width: number; height: number };
+    } catch (error) {
+      throw createTauriCommandError('outer_size_ohos', error);
+    }
+  }
+
+  async innerSizeOhos(): Promise<{ width: number; height: number }> {
+    try {
+      const raw = await api.invoke<string>('inner_size_ohos');
+      return JSON.parse(raw) as { width: number; height: number };
+    } catch (error) {
+      throw createTauriCommandError('inner_size_ohos', error);
+    }
+  }
+
+  async currentMonitorOhos(): Promise<{ width: number; height: number; scaleFactor: number }> {
+    try {
+      const raw = await api.invoke<string>('current_monitor_ohos');
+      return JSON.parse(raw) as { width: number; height: number; scaleFactor: number };
+    } catch (error) {
+      throw createTauriCommandError('current_monitor_ohos', error);
+    }
+  }
+
+  async unmaximizeOhos(): Promise<void> {
+    try {
+      await api.invoke('unmaximize_ohos');
+    } catch (error) {
+      throw createTauriCommandError('unmaximize_ohos', error);
+    }
+  }
+
+  async setMinSizeOhos(width: number, height: number): Promise<void> {
+    try {
+      await api.invoke('set_min_size_ohos', { arg: JSON.stringify({ width, height }) });
+    } catch (error) {
+      throw createTauriCommandError('set_min_size_ohos', error, { width, height });
+    }
+  }
+
+  async setFocusOhos(): Promise<void> {
+    try {
+      await api.invoke('set_focus_ohos');
+    } catch (error) {
+      throw createTauriCommandError('set_focus_ohos', error);
+    }
+  }
+
+  async setResizableOhos(resizable: boolean): Promise<void> {
+    try {
+      await api.invoke('set_resizable_ohos', { arg: JSON.stringify({ resizable }) });
+    } catch (error) {
+      throw createTauriCommandError('set_resizable_ohos', error, { resizable });
+    }
+  }
+
+  async maximizeOhos(): Promise<void> {
+    try {
+      await api.invoke('maximize_ohos');
+    } catch (error) {
+      throw createTauriCommandError('maximize_ohos', error);
+    }
+  }
+
+  async centerOhos(): Promise<void> {
+    try {
+      await api.invoke('center_ohos');
+    } catch (error) {
+      throw createTauriCommandError('center_ohos', error);
+    }
+  }
+
   async revealInExplorer(path: string): Promise<void> {
     try {
       await api.invoke('reveal_in_explorer', { 

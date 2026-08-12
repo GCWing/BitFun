@@ -12,7 +12,8 @@ pub use client::{
 };
 pub use credentials::{
     clear_market_credentials, load_market_credentials, save_market_credentials,
-    StoredMarketCredentials,
+    system_market_credential_store, MarketCredentialStore, StoredMarketCredentials,
+    SystemMarketCredentialStore,
 };
 pub use package::{
     build_market_package, validate_market_package, MarketPackageError, ValidatedMarketPackage,

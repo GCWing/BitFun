@@ -1,5 +1,6 @@
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 const KEYRING_SERVICE: &str = "openbitfun.bitfun.miniapp-market.v1";
 const KEYRING_ENTRY: &str = "github-oauth";
@@ -11,6 +12,47 @@ pub struct StoredMarketCredentials {
     pub access_expires_at: i64,
     pub refresh_token: String,
     pub refresh_expires_at: i64,
+}
+
+#[async_trait]
+pub trait MarketCredentialStore: std::fmt::Debug + Send + Sync {
+    async fn load(&self) -> Result<Option<StoredMarketCredentials>, String>;
+    async fn save(&self, credentials: &StoredMarketCredentials) -> Result<(), String>;
+    async fn clear(&self) -> Result<(), String>;
+}
+
+#[derive(Debug)]
+pub struct SystemMarketCredentialStore;
+
+#[async_trait]
+impl MarketCredentialStore for SystemMarketCredentialStore {
+    async fn load(&self) -> Result<Option<StoredMarketCredentials>, String> {
+        load_system_market_credentials().await
+    }
+
+    async fn save(&self, credentials: &StoredMarketCredentials) -> Result<(), String> {
+        save_system_market_credentials(credentials).await
+    }
+
+    async fn clear(&self) -> Result<(), String> {
+        clear_system_market_credentials().await
+    }
+}
+
+pub fn system_market_credential_store() -> Arc<dyn MarketCredentialStore> {
+    Arc::new(SystemMarketCredentialStore)
+}
+
+pub async fn load_market_credentials() -> Result<Option<StoredMarketCredentials>, String> {
+    load_system_market_credentials().await
+}
+
+pub async fn save_market_credentials(credentials: &StoredMarketCredentials) -> Result<(), String> {
+    save_system_market_credentials(credentials).await
+}
+
+pub async fn clear_market_credentials() -> Result<(), String> {
+    clear_system_market_credentials().await
 }
 
 fn keyring_lock() -> &'static Mutex<()> {
@@ -48,7 +90,7 @@ fn open_entry() -> Result<keyring_core::Entry, String> {
         .map_err(|error| format!("open market credential entry: {error}"))
 }
 
-pub async fn load_market_credentials() -> Result<Option<StoredMarketCredentials>, String> {
+async fn load_system_market_credentials() -> Result<Option<StoredMarketCredentials>, String> {
     tokio::task::spawn_blocking(move || {
         let _guard = keyring_lock()
             .lock()
@@ -67,7 +109,9 @@ pub async fn load_market_credentials() -> Result<Option<StoredMarketCredentials>
     .map_err(|error| format!("join market credential read: {error}"))?
 }
 
-pub async fn save_market_credentials(credentials: &StoredMarketCredentials) -> Result<(), String> {
+async fn save_system_market_credentials(
+    credentials: &StoredMarketCredentials,
+) -> Result<(), String> {
     let secret = serde_json::to_vec(credentials)
         .map_err(|error| format!("serialize market credentials: {error}"))?;
     tokio::task::spawn_blocking(move || {
@@ -82,7 +126,7 @@ pub async fn save_market_credentials(credentials: &StoredMarketCredentials) -> R
     .map_err(|error| format!("join market credential write: {error}"))?
 }
 
-pub async fn clear_market_credentials() -> Result<(), String> {
+async fn clear_system_market_credentials() -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let _guard = keyring_lock()
             .lock()

@@ -161,7 +161,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'anyhow', ownerFeatures: ['browser-control', 'debug-log', 'feedback', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
       {
         depName: 'async-trait',
-        ownerFeatures: ['feedback','git', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
+        ownerFeatures: ['feedback', 'git', 'mcp', 'miniapp-market', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
       },
       {
         depName: 'base64',

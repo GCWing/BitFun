@@ -59,8 +59,11 @@ pub use api::*;
 
 use crate::ohos::ohos_file_system::{open_oh_file_dialog, set_theme_mode};
 use crate::ohos::window::{
-    close_window, handle_max_window, handle_min_window, handle_restore_window, window_is_maximized,
-    window_is_minimized, window_start_dragging,
+    center_ohos, close_window, current_monitor_ohos, handle_max_window, handle_min_window,
+    handle_restore_window, inner_size_ohos, maximize_ohos, outer_position_ohos, outer_size_ohos,
+    set_always_on_top_ohos, set_decorations_ohos, set_focus_ohos, set_min_size_ohos,
+    set_resizable_ohos, set_skip_taskbar_ohos, set_window_position_ohos, set_window_size_ohos,
+    unmaximize_ohos, window_is_maximized, window_is_minimized, window_start_dragging,
 };
 use api::acp_client_api::*;
 use api::clipboard_file_api::*;
@@ -342,7 +345,8 @@ fn persist_main_window_state(app: &tauri::AppHandle) -> Result<(), String> {
 
     #[cfg(target_env = "ohos")]
     {
-        Err("Unable to save main window state".to_string())
+        let _ = app;
+        Ok(())
     }
 }
 
@@ -1974,6 +1978,21 @@ pub async fn _run() {
             close_window,
             set_theme_mode,
             open_external_ohos,
+            set_always_on_top_ohos,
+            set_decorations_ohos,
+            set_skip_taskbar_ohos,
+            set_window_size_ohos,
+            set_window_position_ohos,
+            outer_position_ohos,
+            outer_size_ohos,
+            inner_size_ohos,
+            current_monitor_ohos,
+            unmaximize_ohos,
+            set_min_size_ohos,
+            set_focus_ohos,
+            set_resizable_ohos,
+            maximize_ohos,
+            center_ohos,
 
             // Debug API (no-op stubs in release builds)
             api::debug_api::debug_devtools_available,
@@ -2523,7 +2542,7 @@ fn start_event_loop_with_transport(
     event_router: Arc<bitfun_core::agentic::events::EventRouter>,
     transport: Arc<TauriTransportAdapter>,
 ) {
-    tauri::async_time::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         event_loop_driver(event_queue, event_router, |event| {
             let transport = transport.clone();
             async move {

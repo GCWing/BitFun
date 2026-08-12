@@ -13,7 +13,8 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { isOpenHarmonyRuntime } from '@/infrastructure/runtime';
+import { workspaceAPI } from '@/infrastructure/api';
 import {
   Square,
   Check,
@@ -173,8 +174,13 @@ export const ToolbarMode: React.FC = () => {
       return;
     }
     try {
-      const win = getCurrentWindow();
-      await win.startDragging();
+      if (isOpenHarmonyRuntime()) {
+        await workspaceAPI.window_start_dragging();
+      } else {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const win = getCurrentWindow();
+        await win.startDragging();
+      }
     } catch (error) {
       log.error('Failed to start dragging', error);
     }

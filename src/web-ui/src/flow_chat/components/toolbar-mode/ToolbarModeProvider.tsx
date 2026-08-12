@@ -1,6 +1,4 @@
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { currentMonitor, getCurrentWindow } from '@tauri-apps/api/window';
-import { LogicalSize, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
 import { createLogger } from '@/shared/utils/logger';
 import {
   MAIN_WINDOW_DEFAULT_SIZE,
@@ -15,6 +13,10 @@ import {
   type ToolbarModeState,
 } from './ToolbarModeContext';
 import { resolveToolbarWindowGeometry } from './toolbarWindowGeometry';
+import {
+  createWindowOps,
+  type WindowOps,
+} from './toolbarModeWindowOps';
 
 const log = createLogger('ToolbarModeContext');
 
@@ -22,7 +24,12 @@ interface ToolbarModeProviderProps {
   children: ReactNode;
 }
 
-type MainWindow = ReturnType<typeof getCurrentWindow>;
+const isMacOSPlatform = (): boolean =>
+  typeof window !== 'undefined' &&
+  '__TAURI__' in window &&
+  typeof navigator !== 'undefined' &&
+  typeof navigator.platform === 'string' &&
+  navigator.platform.toUpperCase().includes('MAC');
 
 const setMainWindowTransientGeometry = async (transient: boolean): Promise<void> => {
   const { systemAPI } = await import('@/infrastructure/api/service-api/SystemAPI');
@@ -30,58 +37,58 @@ const setMainWindowTransientGeometry = async (transient: boolean): Promise<void>
 };
 
 const restoreMainWindowFromToolbarMode = async (
-  win: MainWindow,
+  ops: WindowOps,
   saved: SavedWindowState | null,
   isMacOS: boolean,
 ): Promise<void> => {
   // Remove the toolbar constraint before restoring the normal bounds. The
   // standard client minimum is re-applied once restoration completes.
-  await win.setMinSize(null);
+  await ops.setMinSize(null);
 
   if (isMacOS) {
     try {
-      await win.setTitleBarStyle('overlay');
+      await ops.setTitleBarOverlay();
     } catch (error) {
       log.debug('Failed to restore macOS overlay title bar (early, ignored)', error);
     }
   } else {
     try {
-      await win.setDecorations(saved?.isDecorated ?? false);
+      await ops.setDecorations(saved?.isDecorated ?? false);
     } catch (error) {
       log.debug('Failed to restore window decorations (ignored)', error);
     }
   }
 
   await Promise.all([
-    win.setResizable(true),
-    win.setSkipTaskbar(false),
+    ops.setResizable(true),
+    ops.setSkipTaskbar(false),
   ]);
 
   if (saved) {
-    await win.setSize(new PhysicalSize(saved.width, saved.height));
-    await win.setPosition(new PhysicalPosition(saved.x, saved.y));
+    await ops.setSize({ width: saved.width, height: saved.height });
+    await ops.setPosition({ x: saved.x, y: saved.y });
 
     if (saved.isMaximized) {
-      await win.maximize();
+      await ops.maximize();
     }
   } else {
-    await win.setSize(new LogicalSize(
-      MAIN_WINDOW_DEFAULT_SIZE.width,
-      MAIN_WINDOW_DEFAULT_SIZE.height,
-    ));
-    await win.center();
+    await ops.setSizeLogical({
+      width: MAIN_WINDOW_DEFAULT_SIZE.width,
+      height: MAIN_WINDOW_DEFAULT_SIZE.height,
+    });
+    await ops.center();
   }
 
-  await win.setMinSize(new LogicalSize(
-    MAIN_WINDOW_MIN_SIZE.width,
-    MAIN_WINDOW_MIN_SIZE.height,
-  ));
+  await ops.setMinSizeLogical({
+    width: MAIN_WINDOW_MIN_SIZE.width,
+    height: MAIN_WINDOW_MIN_SIZE.height,
+  });
 
   if (isMacOS) {
     try {
-      await win.setTitleBarStyle('overlay');
+      await ops.setTitleBarOverlay();
       await new Promise<void>((resolve) => setTimeout(resolve, 60));
-      await win.setTitleBarStyle('overlay');
+      await ops.setTitleBarOverlay();
     } catch (error) {
       log.debug('Failed to re-apply macOS overlay title bar (ignored)', error);
     }
@@ -89,9 +96,9 @@ const restoreMainWindowFromToolbarMode = async (
 
   // Keep the native side in transient mode until all normal geometry has been
   // restored. Turning this off persists only the final standard-client state.
-  await win.setAlwaysOnTop(false);
+  await ops.setAlwaysOnTop(false);
   await setMainWindowTransientGeometry(false);
-  await win.setFocus();
+  await ops.setFocus();
 };
 
 export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ children }) => {
@@ -113,32 +120,19 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
   const savedWindowStateRef = useRef<SavedWindowState | null>(null);
 
   const enableToolbarMode = useCallback(async () => {
-    const win = getCurrentWindow();
-    const isMacOS =
-      typeof window !== 'undefined' &&
-      '__TAURI__' in window &&
-      typeof navigator !== 'undefined' &&
-      typeof navigator.platform === 'string' &&
-      navigator.platform.toUpperCase().includes('MAC');
+    const ops = createWindowOps();
+    const isMacOS = isMacOSPlatform();
 
     try {
       window.dispatchEvent(new CustomEvent('toolbar-mode-activating'));
 
       const [position, size, isMaximized, isDecorated] = await Promise.all([
-        win.outerPosition(),
+        ops.outerPosition(),
         // setSize restores the inner size, so capture the matching metric.
         // Using outerSize here grows decorated windows on every mode round-trip.
-        win.innerSize(),
-        win.isMaximized(),
-        (async () => {
-          try {
-            if (typeof (win as any).isDecorated === 'function') {
-              return await (win as any).isDecorated();
-            }
-          } catch {
-          }
-          return undefined;
-        })(),
+        ops.innerSize(),
+        ops.isMaximized(),
+        ops.isDecorated(),
       ]);
 
       savedWindowStateRef.current = {
@@ -158,30 +152,31 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
       setIsExpanded(true);
 
       if (isMaximized) {
-        await win.unmaximize();
+        await ops.unmaximize();
       }
 
-      const monitor = await currentMonitor();
+      const monitor = await ops.currentMonitor();
       const geometry = resolveToolbarWindowGeometry({
         monitor,
         targetSize: TOOLBAR_EXPANDED_SIZE,
         minSize: TOOLBAR_EXPANDED_MIN,
       });
-      await win.setMinSize(new PhysicalSize(geometry.minWidth, geometry.minHeight));
-      await win.setAlwaysOnTop(true);
+      await ops.setMinSize({ width: geometry.minWidth, height: geometry.minHeight });
+      await ops.setAlwaysOnTop(true);
 
       const toolbarWindowOps: Array<Promise<unknown>> = [
-        win.setSize(new PhysicalSize(geometry.width, geometry.height)),
-        win.setPosition(new PhysicalPosition(geometry.x, geometry.y)),
-        win.setResizable(true),
-        win.setSkipTaskbar(true),
+        ops.setSize({ width: geometry.width, height: geometry.height }),
+        ops.setPosition({ x: geometry.x, y: geometry.y }),
+        ops.setResizable(true),
+        ops.setSkipTaskbar(true),
       ];
       if (!isMacOS) {
-        toolbarWindowOps.push(win.setDecorations(false));
+        toolbarWindowOps.push(ops.setDecorations(false));
       } else {
         try {
-          await win.setTitleBarStyle('overlay');
+          await ops.setTitleBarOverlay();
         } catch {
+          // ignore macOS title bar style on platforms without it
         }
       }
       await Promise.all(toolbarWindowOps);
@@ -190,7 +185,7 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
       setIsToolbarMode(false);
       setIsExpanded(false);
       try {
-        await restoreMainWindowFromToolbarMode(win, savedWindowStateRef.current, isMacOS);
+        await restoreMainWindowFromToolbarMode(ops, savedWindowStateRef.current, isMacOS);
         savedWindowStateRef.current = null;
       } catch (restoreError) {
         // The native transient flag intentionally remains active if rollback
@@ -201,18 +196,13 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
   }, []);
 
   const disableToolbarMode = useCallback(async () => {
-    const win = getCurrentWindow();
-    const isMacOS =
-      typeof window !== 'undefined' &&
-      '__TAURI__' in window &&
-      typeof navigator !== 'undefined' &&
-      typeof navigator.platform === 'string' &&
-      navigator.platform.toUpperCase().includes('MAC');
+    const ops = createWindowOps();
+    const isMacOS = isMacOSPlatform();
 
     try {
       setIsToolbarMode(false);
       setIsExpanded(false);
-      await restoreMainWindowFromToolbarMode(win, savedWindowStateRef.current, isMacOS);
+      await restoreMainWindowFromToolbarMode(ops, savedWindowStateRef.current, isMacOS);
       savedWindowStateRef.current = null;
     } catch (error) {
       log.error('Failed to disable toolbar mode', error);
@@ -233,12 +223,12 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
     const newIsExpanded = !isExpanded;
 
     try {
-      const win = getCurrentWindow();
+      const ops = createWindowOps();
       const targetSize = newIsExpanded ? TOOLBAR_EXPANDED_SIZE : TOOLBAR_COMPACT_SIZE;
       const minSize = newIsExpanded ? TOOLBAR_EXPANDED_MIN : TOOLBAR_COMPACT_MIN;
-      const currentPosition = await win.outerPosition();
-      const currentSize = await win.outerSize();
-      const monitor = await currentMonitor();
+      const currentPosition = await ops.outerPosition();
+      const currentSize = await ops.outerSize();
+      const monitor = await ops.currentMonitor();
       const geometry = resolveToolbarWindowGeometry({
         monitor,
         targetSize,
@@ -256,9 +246,9 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
       });
       setIsExpanded(newIsExpanded);
 
-      await win.setMinSize(new PhysicalSize(geometry.minWidth, geometry.minHeight));
-      await win.setSize(new PhysicalSize(geometry.width, geometry.height));
-      await win.setPosition(new PhysicalPosition(geometry.x, geometry.y));
+      await ops.setMinSize({ width: geometry.minWidth, height: geometry.minHeight });
+      await ops.setSize({ width: geometry.width, height: geometry.height });
+      await ops.setPosition({ x: geometry.x, y: geometry.y });
     } catch (error) {
       log.error('Failed to toggle expanded state', { newIsExpanded, error });
     }
