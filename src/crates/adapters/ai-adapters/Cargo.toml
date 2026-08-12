@@ -4,10 +4,19 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "Shared AI protocol adapters for BitFun core and installer"
+autotests = false
 
 [lib]
 name = "bitfun_ai_adapters"
 crate-type = ["rlib"]
+
+[[test]]
+name = "ai_protocol_contracts"
+path = "tests/ai_protocol_contracts.rs"
+
+[[test]]
+name = "ai_stream_contracts"
+path = "tests/ai_stream_contracts.rs"
 
 [dependencies]
 anyhow = { workspace = true }

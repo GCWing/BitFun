@@ -42,7 +42,7 @@
       "models": "AI 模型、API 密钥、供应商、代理与会话标题。",
       "worktrees": "隔离 Git Worktree 与并行会话的默认设置。",
       "sessionPersonalization": "Agent 伙伴。",
-      "sessionPermissions": "加速工作区搜索、工具确认与超时、Computer use、浏览器与调试。",
+      "sessionPermissions": "工具权限、运行方式以及桌面和浏览器控制。",
       "quickActions": "代码完成后的一键 AI 动作，支持内置和自定义指令。",
       "voiceInput": "本地麦克风输入与语音转文字模型。",
       "review": "Review 策略、覆盖深度、容量、成本和耗时控制。",

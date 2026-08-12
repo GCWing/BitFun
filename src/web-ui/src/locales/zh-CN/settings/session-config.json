@@ -5,7 +5,7 @@
   },
   "permissionsPage": {
     "title": "权限管理",
-    "subtitle": "加速工作区搜索、工具执行、工具定义加载、Computer use、浏览器控制与调试模式"
+    "subtitle": "管理工具权限、运行方式以及桌面和浏览器控制。"
   },
   "features": {
     "agentCompanion": {
@@ -37,32 +37,32 @@
     },
     "workspaceSearch": {
       "title": "加速工作区搜索",
-      "subtitle": "为本地工作区启用基于 flashgrep 的索引搜索。关闭后 BitFun 会回退到原有搜索。",
+      "subtitle": "提升大型工作区中的文件搜索速度。关闭后仍可正常搜索。",
       "enable": "启用加速工作区搜索"
     }
   },
   "toolExecution": {
-    "sectionTitle": "工具执行行为",
-    "sectionDescription": "本会话中 AI 调用工具时的确认与超时策略。"
+    "sectionTitle": "工具运行",
+    "sectionDescription": "设置工具超时和并行任务数量。"
   },
   "permissionPolicy": {
     "sectionTitle": "工具权限",
-    "sectionDescription": "选择会话的默认工具访问策略，以及权限请求的处理方式。",
+    "sectionDescription": "设置 BitFun 何时需要你确认工具操作。",
     "mode": "默认权限模式",
     "ask": "需要确认",
-    "askDescription": "外部访问，修改文件和执行命令需要确认。",
+    "askDescription": "修改文件、执行命令或访问外部服务时先确认。",
     "fullAccess": "完全访问",
-    "fullAccessDescription": "默认允许工具执行，无需确认。",
+    "fullAccessDescription": "不再逐次确认工具操作。",
     "fullAccessWarningTitle": "启用完全访问？",
     "fullAccessWarningMessage": "完全访问会默认允许工具执行，不再逐次确认。",
     "fullAccessConfirm": "启用完全访问",
     "cancel": "取消",
     "autoApprove": "自动批准",
-    "autoApproveDescription": "自动批准需要确认的请求。",
+    "autoApproveDescription": "自动允许原本需要确认的操作。",
     "showInChatInput": "显示权限模式选择器",
-    "showInChatInputDescription": "在输入框下方显示选择器，在那里切换的模式仅作用于当前会话。隐藏它不会改变任何会话的权限模式。",
+    "showInChatInputDescription": "在输入框下方显示权限模式，可随时为当前会话切换。",
     "globalRules": "全局规则",
-    "globalRulesDescription": "定义用户级规则；它们在所选模式之后、项目和 Agent 规则之前应用。",
+    "globalRulesDescription": "为所有工作区设置通用的允许、询问或拒绝规则。",
     "manageGlobalRules": "管理规则",
     "globalRulesDialogTitle": "全局工具权限规则",
     "globalRulesDialogDescription": "这些用户级规则会应用于所有工作区。后续项目和 Agent 规则可以覆盖它们；产品强制限制始终优先。",
@@ -79,7 +79,7 @@
     "discardGlobalRules": "放弃更改",
     "saveGlobalRules": "保存规则",
     "globalRulesEffects": { "allow": "允许", "ask": "询问", "deny": "拒绝" },
-    "modeDescription": "作用于尚未单独设置的会话。每个会话都可以在输入框中覆盖该默认值。"
+    "modeDescription": "作为新会话的默认设置，可在输入框中临时切换。"
   },
   "projectPermissions": {
     "description": "“始终允许”会保存为当前项目的记忆授权；静态项目规则会在工具执行前直接应用。",
@@ -118,32 +118,38 @@
     "effects": { "allow": "允许", "ask": "询问", "deny": "拒绝" }
   },
   "deferredToolLoading": {
-    "sectionTitle": "工具延迟加载",
-    "sectionDescription": "仅在需要时加载部分工具的完整 Schema（包括部分内置工具及所有 MCP 工具）。",
-    "warning": "当前会在每次请求中发送启用工具的完整 Schema；如果配置了大量 MCP 工具会占用较多 Token。"
+    "sectionTitle": "按需加载工具",
+    "sectionDescription": "仅在需要时加载工具详情。",
+    "warning": "关闭后会加载所有工具详情，可能增加模型用量。"
   },
   "computerUse": {
-    "sectionTitle": "Computer use（桌面自动化）",
-    "sectionDescription": "在 BitFun 桌面端允许助理截取屏幕并控制键鼠；需多模态模型理解画面。",
-    "enable": "启用 Computer use",
-    "enableDesc": "关闭时，任何会话模式都不会启用 ComputerUse 工具；浏览器控制（ControlHub）目前不受此开关约束。",
+    "sectionTitle": "桌面控制",
+    "sectionDescription": "允许 BitFun 查看屏幕并操作鼠标和键盘。",
+    "enable": "允许桌面控制",
+    "enableDesc": "关闭后，BitFun 将不再操作桌面应用。浏览器控制可单独设置。",
     "accessibility": "辅助功能",
-    "accessibilityDesc": "macOS 上用于让 BitFun 读取屏幕上的界面元素并向其他应用发送鼠标/键盘操作；Windows 无需单独授权，Linux 需要 X11 会话。",
+    "accessibilityDesc": "允许 BitFun 识别并操作其他应用中的界面。",
     "screenCapture": "屏幕录制",
-    "screenCaptureDesc": "用于让 BitFun 截取屏幕画面，使助理能看到当前正在操作的内容。",
+    "screenCaptureDesc": "允许 BitFun 查看屏幕内容。",
     "granted": "已授权",
     "notGranted": "未授权",
     "openSettings": "系统设置",
     "refreshStatus": "刷新状态",
-    "desktopOnly": "Computer use 仅在 BitFun 桌面应用中可用。",
-    "platformNote": "说明"
+    "desktopOnly": "桌面控制仅在 BitFun 桌面应用中可用。",
+    "platformNote": "说明",
+    "platformNotes": {
+      "macos": "当前构建仍需在系统设置中授予辅助功能权限。",
+      "windows": "部分受保护的窗口或远程桌面环境可能无法控制。",
+      "linux": "当前桌面环境可能不支持完整的键鼠控制或屏幕查看。",
+      "generic": "当前系统无法使用完整的桌面控制功能。"
+    }
   },
   "browserControl": {
     "sectionTitle": "浏览器控制",
-    "sectionDescription": "选择由 BitFun 控制的浏览器。Chrome 和 Edge 可以直接使用你正在用的窗口，其他浏览器会另开一个 BitFun 专用窗口。",
+    "sectionDescription": "选择 BitFun 使用的浏览器和连接方式。",
     "desktopOnly": "浏览器控制仅在 BitFun 桌面应用中可用。",
     "preferredBrowser": "浏览器",
-    "preferredBrowserDesc": "选择要由 BitFun 通过 CDP 控制的浏览器；默认表示跟随系统默认浏览器。",
+    "preferredBrowserDesc": "默认使用系统浏览器。",
     "notInstalled": "未安装",
     "status": "连接状态",
     "statusDesc": "",
@@ -151,29 +157,29 @@
     "readyNotConnected": "已就绪，使用时自动连接",
     "refreshStatus": "刷新状态",
     "connect": "连接浏览器",
-    "defaultCdp": "默认 CDP",
-    "defaultCdpDesc": "让 BitFun 直接使用你正在用的 Chrome 或 Edge，保留已打开的标签页和登录状态，不必另开一个空白浏览器。首次需要在浏览器中授权，之后每次连接也会由浏览器向你确认。",
+    "defaultCdp": "使用现有浏览器",
+    "defaultCdpDesc": "使用已打开的 Chrome 或 Edge，并保留标签页和登录状态。连接时仍需在浏览器中确认。",
     "autoConnectOnStartup": "启动时自动连接",
-    "autoConnectOnStartupDesc": "BitFun 启动时，若浏览器正在运行且已启用上面的设置，就直接连上。注意：浏览器重启后会忘记之前的授权，这时会立刻弹出一次授权确认，即使你这次并不打算用浏览器。关闭时改为按需连接 —— Agent 第一次用到浏览器才连。",
+    "autoConnectOnStartupDesc": "BitFun 启动后自动连接已打开的浏览器。浏览器重启后可能需要重新确认。",
     "defaultCdpEnabled": "已启用",
     "defaultCdpDisabled": "未启用",
-    "enableDefaultCdp": "启用默认 CDP",
+    "enableDefaultCdp": "启用并连接",
     "defaultCdpEnablePrompt": "已打开 {{browser}} 的 Remote debugging 设置页（该页面仅有英文）。请勾选 “Allow remote debugging for this browser instance”；BitFun 检测到后会自动继续连接，再请在浏览器中选择“允许”。",
     "defaultCdpConnectPrompt": "正在连接你当前的 {{browser}}；请在浏览器弹窗中选择“允许”。",
     "connectSuccess": "已连接 {{browser}}",
     "connectFailed": "连接浏览器失败",
-    "userProfileSetupRequired": "{{browser}} 已打开 Remote debugging 设置页，但等待期间未检测到开关生效。请勾选 “Allow remote debugging for this browser instance” 后再次点击“启用默认 CDP”；当前标签页和登录状态会被保留。",
-    "userProfileSetupManual": "请在 {{browser}} 中打开 {{url}}，勾选 “Allow remote debugging for this browser instance”，然后再次点击“启用默认 CDP”；当前标签页和登录状态会被保留。",
+    "userProfileSetupRequired": "{{browser}} 已打开 Remote debugging 设置页，但等待期间未检测到开关生效。请勾选 “Allow remote debugging for this browser instance” 后再次点击“启用并连接”；当前标签页和登录状态会被保留。",
+    "userProfileSetupManual": "请在 {{browser}} 中打开 {{url}}，勾选 “Allow remote debugging for this browser instance”，然后再次点击“启用并连接”；当前标签页和登录状态会被保留。",
     "userProfileConnectionFailed": "{{browser}} 未允许连接，或连接请求已超时。请确认浏览器正在运行且已启用远程调试，然后重新连接并在浏览器中选择“允许”。",
-    "restartSuccess": "已重启 {{browser}} 并启用调试模式",
-    "restartFailed": "重启浏览器并启用调试失败",
+    "restartSuccess": "已重新启动 {{browser}} 并开启浏览器控制",
+    "restartFailed": "无法重新启动并连接 {{browser}}",
     "restartModal": {
-      "title": "启用浏览器调试模式",
-      "description": "检测到 {{browser}} 已在运行，当前实例未启用调试端口。要让 BitFun 控制浏览器，需要先重启浏览器并以调试模式启动。",
+      "title": "重新启动浏览器",
+      "description": "BitFun 需要重新启动当前的 {{browser}} 才能连接。",
       "warning": "此操作会关闭当前浏览器窗口。",
       "cancel": "取消",
-      "confirm": "重启并启用调试",
-      "restarting": "正在重启..."
+      "confirm": "重新启动并连接",
+      "restarting": "正在重新启动..."
     },
     "tabs": "个标签页"
   },

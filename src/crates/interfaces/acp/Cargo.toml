@@ -5,45 +5,59 @@ authors.workspace = true
 edition.workspace = true
 description = "BitFun Agent Client Protocol surface"
 
+[features]
+default = ["client", "server"]
+client = [
+    "dep:futures",
+    "dep:serde",
+    "dep:bitfun-core",
+    "bitfun-core/agent-runtime",
+    "bitfun-core/ssh-remote",
+]
+server = [
+    "dep:bitfun-agent-runtime",
+    "dep:bitfun-core-types",
+    "dep:bitfun-core",
+    "dep:sha2",
+    "bitfun-core/agent-runtime",
+    "bitfun-core/document-read",
+    "bitfun-core/subscription-auth",
+    "bitfun-core/deep-research",
+    "bitfun-core/lsp",
+    "bitfun-core/external-sources",
+    "bitfun-core/tools-basic",
+    "bitfun-core/tools-git",
+    "bitfun-core/tools-mcp",
+    "bitfun-core/tools-browser-web",
+    "bitfun-core/tools-computer-use",
+    "bitfun-core/tools-image-analysis",
+    "bitfun-core/tools-miniapp",
+    "bitfun-core/tools-canvas",
+    "bitfun-core/tools-agent-control",
+]
+
 [lib]
 name = "bitfun_acp"
 
 [dependencies]
-bitfun-core = { path = "../../assembly/core", default-features = false, features = [
-    "agent-runtime",
-    "document-read",
-    "subscription-auth",
-    "deep-research",
-    "lsp",
-    "external-sources",
-    "ssh-remote",
-    "tools-basic",
-    "tools-git",
-    "tools-mcp",
-    "tools-browser-web",
-    "tools-computer-use",
-    "tools-image-analysis",
-    "tools-miniapp",
-    "tools-canvas",
-    "tools-agent-control",
-] }
-bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
+bitfun-core = { path = "../../assembly/core", default-features = false, optional = true }
+bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }
-bitfun-core-types = { path = "../../contracts/core-types" }
+bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 
 agent-client-protocol = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "process", "rt", "sync", "time"] }
 tokio-util = { workspace = true, features = ["compat"] }
-futures = { workspace = true }
+futures = { workspace = true, optional = true }
 async-trait = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, optional = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
 log = { workspace = true }
 uuid = { workspace = true }
-sha2 = { workspace = true }
+sha2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

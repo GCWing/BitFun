@@ -52,7 +52,7 @@ bitfun-core = { path = "../../crates/assembly/core", default-features = false, f
 ] }
 bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-core-types = { path = "../../crates/contracts/core-types" }
-bitfun-acp = { path = "../../crates/interfaces/acp" }
+bitfun-acp = { path = "../../crates/interfaces/acp", default-features = false, features = ["client", "server"] }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
 bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
@@ -78,7 +78,6 @@ toml = { workspace = true }
 # Session management
 uuid = { workspace = true }
 chrono = { workspace = true }
-dashmap = { workspace = true }
 
 # Async trait
 async-trait = { workspace = true }
@@ -97,7 +96,6 @@ similar = { workspace = true }
 
 # Syntax highlighting for code blocks and tool cards
 syntect = { workspace = true }
-syntect-tui = { workspace = true }
 
 # Lazy initialization for syntax highlighter singleton
 once_cell = { workspace = true }

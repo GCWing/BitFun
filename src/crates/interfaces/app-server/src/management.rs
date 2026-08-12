@@ -93,6 +93,7 @@ impl AppManagementCapabilities {
                 self.models.clone(),
                 &[
                     "config/getTuiModelCatalog",
+                    "model/projectReasoningCatalog",
                     "model/list",
                     "model/get",
                     "model/add",

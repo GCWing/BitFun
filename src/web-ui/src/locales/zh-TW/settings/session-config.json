@@ -5,7 +5,7 @@
   },
   "permissionsPage": {
     "title": "權限管理",
-    "subtitle": "加速工作區搜尋、工具執行、工具定義載入、Computer use、瀏覽器控制與偵錯模式"
+    "subtitle": "管理工具權限、執行方式，以及桌面和瀏覽器控制。"
   },
   "features": {
     "agentCompanion": {
@@ -37,32 +37,32 @@
     },
     "workspaceSearch": {
       "title": "加速工作區搜尋",
-      "subtitle": "為本地工作區啟用基於 flashgrep 的索引搜尋。關閉後 BitFun 會回退到原有搜尋。",
+      "subtitle": "提升大型工作區中的檔案搜尋速度。關閉後仍可正常搜尋。",
       "enable": "啟用加速工作區搜尋"
     }
   },
   "toolExecution": {
-    "sectionTitle": "工具執行行為",
-    "sectionDescription": "本會話中 AI 調用工具時的確認與超時策略。"
+    "sectionTitle": "工具執行",
+    "sectionDescription": "設定工具逾時和並行任務數量。"
   },
   "permissionPolicy": {
     "sectionTitle": "工具權限",
-    "sectionDescription": "選擇工作階段的預設工具存取原則，以及權限請求的處理方式。",
+    "sectionDescription": "設定 BitFun 何時需要你確認工具操作。",
     "mode": "預設權限模式",
     "ask": "需要確認",
-    "askDescription": "外部存取、修改檔案和執行命令需要確認。",
+    "askDescription": "修改檔案、執行命令或存取外部服務時先確認。",
     "fullAccess": "完全存取",
-    "fullAccessDescription": "預設允許工具執行，無需確認。",
+    "fullAccessDescription": "不再逐次確認工具操作。",
     "fullAccessWarningTitle": "啟用完全存取？",
     "fullAccessWarningMessage": "完全存取會預設允許工具執行，不再逐次確認。",
     "fullAccessConfirm": "啟用完全存取",
     "cancel": "取消",
     "autoApprove": "自動批准",
-    "autoApproveDescription": "自動批准需要確認的請求。",
+    "autoApproveDescription": "自動允許原本需要確認的操作。",
     "showInChatInput": "顯示權限模式選擇器",
-    "showInChatInputDescription": "在輸入框下方顯示選擇器，在該處切換的模式僅作用於目前工作階段。隱藏它不會變更任何工作階段的權限模式。",
+    "showInChatInputDescription": "在輸入框下方顯示權限模式，可隨時為目前工作階段切換。",
     "globalRules": "全域規則",
-    "globalRulesDescription": "定義使用者級規則；它們在所選模式之後、專案和 Agent 規則之前套用。",
+    "globalRulesDescription": "為所有工作區設定通用的允許、詢問或拒絕規則。",
     "manageGlobalRules": "管理規則",
     "globalRulesDialogTitle": "全域工具權限規則",
     "globalRulesDialogDescription": "這些使用者級規則會套用至所有工作區。後續專案和 Agent 規則可以覆蓋它們；產品強制限制始終優先。",
@@ -79,7 +79,7 @@
     "discardGlobalRules": "放棄變更",
     "saveGlobalRules": "儲存規則",
     "globalRulesEffects": { "allow": "允許", "ask": "詢問", "deny": "拒絕" },
-    "modeDescription": "作用於尚未單獨設定的工作階段。每個工作階段都可以在輸入框中覆寫該預設值。"
+    "modeDescription": "作為新工作階段的預設設定，可在輸入框中暫時切換。"
   },
   "projectPermissions": {
     "description": "「始終允許」會儲存為目前專案的記憶授權；靜態專案規則會在工具執行前直接套用。",
@@ -118,29 +118,35 @@
     "effects": { "allow": "允許", "ask": "詢問", "deny": "拒絕" }
   },
   "deferredToolLoading": {
-    "sectionTitle": "工具延遲載入",
-    "sectionDescription": "僅在需要時載入部分工具的完整 Schema（包括部分內建工具及所有 MCP 工具）。",
-    "warning": "目前會在每次請求中傳送啟用工具的完整 Schema；如果設定了大量 MCP 工具會占用較多 Token。"
+    "sectionTitle": "按需載入工具",
+    "sectionDescription": "僅在需要時載入工具詳情。",
+    "warning": "關閉後會載入所有工具詳情，可能增加模型用量。"
   },
   "computerUse": {
-    "sectionTitle": "Computer use（桌面自動化）",
-    "sectionDescription": "在 BitFun 桌面端允許助理截取屏幕並控制鍵鼠；需多模態模型理解畫面。",
-    "enable": "啟用 Computer use",
-    "enableDesc": "關閉時，任何會話模式都不會啟用 ComputerUse 工具；瀏覽器控制（ControlHub）目前不受此開關約束。",
+    "sectionTitle": "桌面控制",
+    "sectionDescription": "允許 BitFun 查看螢幕並操作滑鼠和鍵盤。",
+    "enable": "允許桌面控制",
+    "enableDesc": "關閉後，BitFun 將不再操作桌面應用程式。瀏覽器控制可單獨設定。",
     "accessibility": "輔助功能",
-    "accessibilityDesc": "macOS 上用於讓 BitFun 讀取畫面上的介面元素並向其他應用傳送滑鼠/鍵盤操作；Windows 無需單獨授權，Linux 需要 X11 工作階段。",
-    "screenCapture": "屏幕錄製",
-    "screenCaptureDesc": "用於讓 BitFun 擷取畫面截圖，使助理能看到目前正在操作的內容。",
+    "accessibilityDesc": "允許 BitFun 識別並操作其他應用程式中的介面。",
+    "screenCapture": "螢幕錄製",
+    "screenCaptureDesc": "允許 BitFun 查看螢幕內容。",
     "granted": "已授權",
     "notGranted": "未授權",
     "openSettings": "系統設置",
     "refreshStatus": "重新整理狀態",
-    "desktopOnly": "Computer use 僅在 BitFun 桌面應用中可用。",
-    "platformNote": "說明"
+    "desktopOnly": "桌面控制僅在 BitFun 桌面應用程式中可用。",
+    "platformNote": "說明",
+    "platformNotes": {
+      "macos": "目前版本仍需在系統設定中授予輔助功能權限。",
+      "windows": "部分受保護的視窗或遠端桌面環境可能無法控制。",
+      "linux": "目前桌面環境可能不支援完整的滑鼠、鍵盤或螢幕控制。",
+      "generic": "目前系統無法使用完整的桌面控制功能。"
+    }
   },
   "browserControl": {
     "sectionTitle": "瀏覽器控制",
-    "sectionDescription": "選擇由 BitFun 控制的瀏覽器。Chrome 和 Edge 可以直接使用你正在用的視窗，其他瀏覽器會另開一個 BitFun 專用視窗。",
+    "sectionDescription": "選擇 BitFun 使用的瀏覽器和連線方式。",
     "desktopOnly": "瀏覽器控制僅在 BitFun 桌面應用中可用。",
     "status": "連接狀態",
     "statusDesc": "",
@@ -148,33 +154,33 @@
     "readyNotConnected": "已就緒，使用時自動連接",
     "refreshStatus": "重新整理狀態",
     "connect": "連接瀏覽器",
-    "defaultCdp": "預設 CDP",
-    "defaultCdpDesc": "讓 BitFun 直接使用你正在用的 Chrome 或 Edge，保留已開啟的分頁和登入狀態，不必另外開一個空白瀏覽器。首次需要在瀏覽器中授權，之後每次連線也會由瀏覽器向你確認。",
+    "defaultCdp": "使用現有瀏覽器",
+    "defaultCdpDesc": "使用已開啟的 Chrome 或 Edge，並保留分頁和登入狀態。連線時仍需在瀏覽器中確認。",
     "autoConnectOnStartup": "啟動時自動連接",
-    "autoConnectOnStartupDesc": "BitFun 啟動時，若瀏覽器正在執行且已啟用上面的設定，就直接連上。注意：瀏覽器重新啟動後會忘記先前的授權，這時會立刻跳出一次授權確認，即使你這次並不打算用瀏覽器。關閉時改為按需連接 —— Agent 第一次用到瀏覽器才連。",
+    "autoConnectOnStartupDesc": "BitFun 啟動後自動連線已開啟的瀏覽器。瀏覽器重新啟動後可能需要再次確認。",
     "defaultCdpEnabled": "已啟用",
     "defaultCdpDisabled": "未啟用",
-    "enableDefaultCdp": "啟用預設 CDP",
+    "enableDefaultCdp": "啟用並連線",
     "defaultCdpEnablePrompt": "已開啟 {{browser}} 的 Remote debugging 設定頁（該頁面僅有英文）。請勾選 “Allow remote debugging for this browser instance”；BitFun 偵測到後會自動繼續連線，再請在瀏覽器中選擇「允許」。",
     "defaultCdpConnectPrompt": "正在連接你目前的 {{browser}}；請在瀏覽器彈出視窗中選擇「允許」。",
     "connectSuccess": "已連接 {{browser}}",
     "connectFailed": "連接瀏覽器失敗",
-    "userProfileSetupRequired": "{{browser}} 已開啟 Remote debugging 設定頁，但等待期間未偵測到開關生效。請勾選 “Allow remote debugging for this browser instance” 後再次點擊「啟用預設 CDP」；目前的分頁和登入狀態會被保留。",
-    "userProfileSetupManual": "請在 {{browser}} 中開啟 {{url}}，勾選 “Allow remote debugging for this browser instance”，然後再次點擊「啟用預設 CDP」；目前的分頁和登入狀態會被保留。",
+    "userProfileSetupRequired": "{{browser}} 已開啟 Remote debugging 設定頁，但等待期間未偵測到開關生效。請勾選 “Allow remote debugging for this browser instance” 後再次點擊「啟用並連線」；目前的分頁和登入狀態會被保留。",
+    "userProfileSetupManual": "請在 {{browser}} 中開啟 {{url}}，勾選 “Allow remote debugging for this browser instance”，然後再次點擊「啟用並連線」；目前的分頁和登入狀態會被保留。",
     "userProfileConnectionFailed": "{{browser}} 未允許連線，或連線要求已逾時。請確認瀏覽器正在執行且已啟用遠端偵錯，然後重新連線並在瀏覽器中選擇「允許」。",
-    "restartSuccess": "已重啟 {{browser}} 並啟用調試模式",
-    "restartFailed": "重啟瀏覽器並啟用調試失敗",
+    "restartSuccess": "已重新啟動 {{browser}} 並開啟瀏覽器控制",
+    "restartFailed": "無法重新啟動並連線 {{browser}}",
     "restartModal": {
-      "title": "啟用瀏覽器調試模式",
-      "description": "檢測到 {{browser}} 已在運行，目前實例未啟用調試端口。要讓 BitFun 控制瀏覽器，需要先重啟瀏覽器並以調試模式啟動。",
+      "title": "重新啟動瀏覽器",
+      "description": "BitFun 需要重新啟動目前的 {{browser}} 才能連線。",
       "warning": "此操作會關閉目前瀏覽器視窗。",
       "cancel": "取消",
-      "confirm": "重啟並啟用調試",
-      "restarting": "正在重啟..."
+      "confirm": "重新啟動並連線",
+      "restarting": "正在重新啟動..."
     },
     "tabs": "個標籤頁",
     "preferredBrowser": "瀏覽器",
-    "preferredBrowserDesc": "選擇要由 BitFun 透過 CDP 控制的瀏覽器；預設表示跟隨系統預設瀏覽器。",
+    "preferredBrowserDesc": "預設使用系統瀏覽器。",
     "notInstalled": "未安裝"
   },
   "common": {

@@ -15,6 +15,8 @@ use bitfun_core_types::{
     ReasoningCatalogBinding, ReasoningCatalogProjection, ReasoningPresetDescriptor,
 };
 #[cfg(feature = "model-catalog")]
+use bitfun_core_types::ReasoningCatalogProjectionRequest;
+#[cfg(feature = "model-catalog")]
 use bitfun_events::{AIModelCatalogUpdatedEvent, AI_MODEL_CATALOG_UPDATED_EVENT};
 #[cfg(feature = "model-catalog")]
 use bitfun_services_integrations::models_dev::{
@@ -317,6 +319,25 @@ pub(crate) fn project_model_reasoning_catalog(
     )
 }
 
+#[cfg(feature = "model-catalog")]
+pub(crate) async fn project_reasoning_catalog_request(
+    request: ReasoningCatalogProjectionRequest,
+) -> ReasoningCatalogProjection {
+    let models_dev = load_models_dev_reasoning_catalog().await;
+    project_model_reasoning_catalog(
+        &AIModelConfig {
+            provider: request.provider,
+            model_name: request.model_name,
+            base_url: request.base_url,
+            context_window: request.context_window,
+            max_tokens: request.max_tokens,
+            reasoning: Some(request.reasoning),
+            ..Default::default()
+        },
+        models_dev.catalog.as_deref(),
+    )
+}
+
 pub(crate) fn resolve_reasoning_preset<'a>(
     projection: &'a ReasoningCatalogProjection,
     preset_id: &str,
@@ -406,8 +427,8 @@ pub(crate) fn apply_selected_reasoning_preset(
 #[cfg(test)]
 mod tests {
     use bitfun_core_types::{
-        ReasoningCatalogBinding, ReasoningConfig, ReasoningPreset, ReasoningPresetAction,
-        ReasoningPresetSource,
+        ReasoningCatalogBinding, ReasoningCatalogProjectionRequest, ReasoningConfig,
+        ReasoningPreset, ReasoningPresetAction, ReasoningPresetSource,
     };
 
     use super::{
@@ -492,6 +513,45 @@ mod tests {
             [ReasoningPresetAction::Effort { value }] if value == "high"
         ));
         assert_eq!(resolve_default_reasoning_preset(&projection), Some(high));
+    }
+
+    #[test]
+    fn projection_request_shape_projects_explicit_models_dev_presets() {
+        let request = ReasoningCatalogProjectionRequest {
+            provider: "responses".to_string(),
+            model_name: "gateway-alias".to_string(),
+            base_url: "https://gateway.example.com/v1/responses".to_string(),
+            context_window: Some(128_000),
+            max_tokens: Some(8_192),
+            reasoning: ReasoningConfig {
+                catalog: ReasoningCatalogBinding::ModelsDev {
+                    provider: "openai".to_string(),
+                    model: "gpt-test".to_string(),
+                },
+                ..Default::default()
+            },
+        };
+        let projection = project_model_reasoning_catalog(
+            &AIModelConfig {
+                provider: request.provider,
+                model_name: request.model_name,
+                base_url: request.base_url,
+                context_window: request.context_window,
+                max_tokens: request.max_tokens,
+                reasoning: Some(request.reasoning),
+                ..Default::default()
+            },
+            Some(&catalog()),
+        );
+
+        assert_eq!(
+            projection
+                .presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect::<Vec<_>>(),
+            ["low", "high"]
+        );
     }
 
     #[test]

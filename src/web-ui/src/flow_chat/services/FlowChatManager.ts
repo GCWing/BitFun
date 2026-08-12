@@ -202,7 +202,8 @@ export class FlowChatManager {
         }
       );
 
-      const initialMetadataPage = await this.context.flowChatStore.loadSessionMetadataPage(
+      const surfaceGenerationBeforeLoad = this.context.flowChatStore.getSurfaceGeneration();
+      let initialMetadataPage = await this.context.flowChatStore.loadSessionMetadataPage(
         workspacePath,
         5,
         undefined,
@@ -212,6 +213,34 @@ export class FlowChatManager {
       );
       if (this.disposed) {
         return false;
+      }
+
+      // A Peer Device surface switch during the load bumps the store surface
+      // generation, and the metadata processor then drops the page instead of
+      // applying it to a surface that no longer exists. The page still reports
+      // its sessions, so the caller would see "history exists" over an empty
+      // store, select nothing, and skip session creation as well — a chat that
+      // stays blank until the user clicks a session by hand. Reload once
+      // against the settled generation.
+      if (
+        this.context.flowChatStore.getSurfaceGeneration() !== surfaceGenerationBeforeLoad &&
+        initialMetadataPage.sessions.length > 0
+      ) {
+        log.info('Reloading session metadata after a peer surface switch discarded the page', {
+          workspacePath,
+          discardedSessionCount: initialMetadataPage.sessions.length,
+        });
+        initialMetadataPage = await this.context.flowChatStore.loadSessionMetadataPage(
+          workspacePath,
+          5,
+          undefined,
+          remoteConnectionId,
+          remoteSshHost,
+          'flow_chat_manager_surface_switch_reload'
+        );
+        if (this.disposed) {
+          return false;
+        }
       }
 
       const sessionMatchesWorkspace = (session: {
@@ -285,6 +314,29 @@ export class FlowChatManager {
         !!activeSession && sessionMatchesWorkspace(activeSession);
       const activeSessionIdAtAutoSelectStart = state.activeSessionId;
 
+      // History is only restored on the auto-select path below. A session that
+      // is already active — restored by the nav list after a Peer Device
+      // surface switch, for example — keeps its metadata-only projection, so
+      // the breadcrumb and turn rail render from the catalog while the message
+      // area stays empty until the user clicks the session by hand.
+      if (
+        activeSessionBelongsToWorkspace &&
+        activeSession &&
+        activeSession.isHistorical === true &&
+        isCurrentInitializationRequest()
+      ) {
+        await this.context.flowChatStore.loadSessionHistory(
+          activeSession.sessionId,
+          workspacePath,
+          undefined,
+          activeSession.remoteConnectionId,
+          activeSession.remoteSshHost,
+        );
+        if (this.disposed) {
+          return false;
+        }
+      }
+
       if (hasHistoricalSessions && !activeSessionBelongsToWorkspace) {
         if (!isCurrentInitializationRequest()) {
           return hasHistoricalSessions;
@@ -295,8 +347,17 @@ export class FlowChatManager {
           : undefined) || sortedWorkspaceSessions[0];
 
         if (!latestSession) {
+          // The caller reads the return value as "a session is available, do
+          // not create one". Reporting history we cannot select would leave the
+          // surface with no active session and no new one, so report no history
+          // and let the caller create against the live workspace instead.
           this.context.currentWorkspacePath = workspacePath;
-          return hasHistoricalSessions;
+          log.warn('Session metadata reported history with nothing selectable for this workspace', {
+            workspacePath,
+            metadataSessionCount: initialMetadataPage.sessions.length,
+            totalTopLevelCount: initialMetadataPage.totalTopLevelCount,
+          });
+          return false;
         }
 
         if (latestSession.isHistorical) {

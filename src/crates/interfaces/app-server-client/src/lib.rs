@@ -174,6 +174,13 @@ impl AppServerClient {
             .await
     }
 
+    pub async fn project_reasoning_catalog(
+        &self,
+        request: ProjectReasoningCatalogRequest,
+    ) -> agent_client_protocol::Result<ProjectReasoningCatalogResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
     pub async fn worktree_repository_status(
         &self,
         request: WorktreeRepositoryStatusRequest,

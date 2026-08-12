@@ -124,6 +124,12 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   `runtime-ownership`, every concrete service owner, and every `tools-*` group.
   Do not put those features on the dependency declaration, because Cargo
   feature union would force them into every core consumer.
+- Core's default feature set is empty. `product-full` is an explicit
+  compatibility assembly selected by real product entrypoints, never the
+  library's implicit default. Capability-local utility dependencies remain
+  optional and are activated by their owner features; in particular,
+  `base64`, `futures`, `regex`, and `tokio-util` belong to the Agent Runtime,
+  dispatch-store, or debug-log closures that use them.
 - Keep `cargo check -p bitfun-core --no-default-features` viable. Gate
   product-only modules at their owner feature; if a light facade operation
   cannot safely complete without a product owner, fail closed and preserve any

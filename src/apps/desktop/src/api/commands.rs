@@ -5173,6 +5173,13 @@ pub async fn get_ai_model_catalog() -> Result<bitfun_core::AIModelCatalog, Strin
 }
 
 #[tauri::command]
+pub async fn project_ai_model_reasoning_catalog(
+    request: bitfun_core_types::ReasoningCatalogProjectionRequest,
+) -> bitfun_core_types::ReasoningCatalogProjection {
+    bitfun_core::project_ai_model_reasoning_catalog(request).await
+}
+
+#[tauri::command]
 pub async fn get_models_dev_catalog_status() -> bitfun_core_types::ModelsDevCatalogStatus {
     bitfun_core::get_models_dev_catalog_status().await
 }

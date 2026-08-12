@@ -1352,6 +1352,15 @@ impl AppManagementService {
         })
     }
 
+    pub async fn project_reasoning_catalog(
+        &self,
+        request: ProjectReasoningCatalogRequest,
+    ) -> AppManagementResult<ProjectReasoningCatalogResponse> {
+        Ok(ProjectReasoningCatalogResponse {
+            projection: bitfun_core::project_ai_model_reasoning_catalog(request.0).await,
+        })
+    }
+
     pub async fn add_model(
         &self,
         request: AddModelRequest,

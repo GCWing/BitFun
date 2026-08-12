@@ -44,6 +44,10 @@ impl TeamMode {
                 "AskUserQuestion".to_string(),
                 "Git".to_string(),
                 "ControlHub".to_string(),
+                // Every mode that carries ControlHub needs Cron: ControlHub's
+                // `wait` tells the agent to schedule long or repeating work
+                // here instead of holding the turn open.
+                "Cron".to_string(),
                 "GetFileDiff".to_string(),
             ],
         }

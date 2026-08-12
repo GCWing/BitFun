@@ -79,6 +79,13 @@ pub async fn get_ai_model_catalog() -> Result<AIModelCatalog, String> {
 }
 
 #[cfg(feature = "model-catalog")]
+pub async fn project_ai_model_reasoning_catalog(
+    request: bitfun_core_types::ReasoningCatalogProjectionRequest,
+) -> bitfun_core_types::ReasoningCatalogProjection {
+    infrastructure::ai::reasoning_catalog::project_reasoning_catalog_request(request).await
+}
+
+#[cfg(feature = "model-catalog")]
 pub async fn get_models_dev_catalog_status() -> bitfun_core_types::ModelsDevCatalogStatus {
     infrastructure::ai::reasoning_catalog::get_models_dev_catalog_status().await
 }

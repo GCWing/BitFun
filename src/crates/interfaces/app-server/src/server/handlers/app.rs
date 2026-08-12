@@ -165,6 +165,7 @@ fn registered_capabilities(
                 "config/getAgentProfileConfig",
                 "config/getModelConfigs",
                 "config/getTuiModelCatalog",
+                "model/projectReasoningCatalog",
                 "config/getConfig",
                 "config/getConfigs",
                 "config/setConfig",

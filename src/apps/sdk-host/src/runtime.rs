@@ -87,9 +87,6 @@ fn bind_core_execution_ports(agentic_system: &AgenticSystem) {
     agentic_system
         .coordinator
         .set_terminal_port(CoreRuntimeServicesProvider::terminal_port());
-    agentic_system
-        .coordinator
-        .set_remote_exec_port(CoreRuntimeServicesProvider::remote_exec_port());
 }
 
 pub(crate) async fn initialize_terminal_service() {

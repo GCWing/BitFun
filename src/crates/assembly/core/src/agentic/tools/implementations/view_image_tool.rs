@@ -404,11 +404,19 @@ impl Tool for ViewImageTool {
         let mime_type = processed.mime_type.clone();
         let data_base64 = base64::engine::general_purpose::STANDARD.encode(&processed.data);
         let summary = format!("Attached image: {}", path.display_path());
+        // `width`/`height` describe the attached image, which is downscaled
+        // when the source exceeds the provider's limits — so on its own it
+        // reads as the file's size and is not. The source dimensions ride
+        // alongside so a caller reasoning about the picture knows which frame
+        // it is looking at.
         let data = json!({
             "path": path.display_path(),
             "mime_type": mime_type.clone(),
             "width": processed.width,
             "height": processed.height,
+            "original_width": processed.original_width,
+            "original_height": processed.original_height,
+            "was_resized": processed.was_resized(),
             "size": processed.data.len(),
             "summary": summary,
         });

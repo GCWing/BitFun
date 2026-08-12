@@ -56,6 +56,11 @@ impl CoworkMode {
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
                 "ControlHub".to_string(),
+                // Recurring office work ("check these channels every 30
+                // minutes") is squarely this mode's job, and ControlHub's
+                // `wait` sends schedules here rather than pinning a turn open
+                // for the interval.
+                "Cron".to_string(),
                 "InitMiniApp".to_string(),
                 "FinalizeMiniApp".to_string(),
                 "PublishMiniApp".to_string(),
@@ -118,6 +123,15 @@ mod tests {
         for tool in ["get_goal", "create_goal", "update_goal"] {
             assert!(tools.contains(&tool.to_string()));
         }
+    }
+
+    #[test]
+    fn cowork_mode_can_schedule_recurring_work() {
+        // Asked to sweep a set of channels every 30 minutes, this mode used to
+        // reply that it had no cron tool — accurately, because Cron was not in
+        // its list — and fall back to chaining long waits.
+        let tools = CoworkMode::new().default_tools();
+        assert!(tools.contains(&"Cron".to_string()));
     }
 
     #[test]

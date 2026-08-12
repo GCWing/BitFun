@@ -1,7 +1,7 @@
 /// Syntax highlighting module for TUI
 ///
-/// Uses `syntect` for syntax analysis and `syntect-tui` to convert
-/// highlighted output into ratatui `Span`s.
+/// Uses `syntect` for syntax analysis and converts highlighted output directly
+/// into ratatui `Span`s.
 use once_cell::sync::Lazy;
 use ratatui::{
     style::Style,

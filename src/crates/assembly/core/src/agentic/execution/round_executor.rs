@@ -375,7 +375,7 @@ impl RoundExecutor {
             let request_trace_config = trace_config
                 .clone()
                 .map(|config| config.with_round_attempt(attempt_id.clone(), attempt_number));
-            let send_future = ai_client.send_message_stream(
+            let send_future = ai_client.send_message_stream_once(
                 ai_messages.clone(),
                 tool_definitions.clone(),
                 request_trace_config,
@@ -404,27 +404,24 @@ impl RoundExecutor {
                     error!("AI request failed: {}", e);
                     let provider_error = e.downcast_ref::<AiProviderError>().cloned();
                     let err_msg = e.to_string();
-                    let is_structured_context_overflow = provider_error
-                        .as_ref()
-                        .is_some_and(|error| error.category == ErrorCategory::ContextOverflow);
-                    if !is_structured_context_overflow
-                        && Self::is_transient_network_error(&err_msg)
-                        && local_attempt_index < max_attempts - 1
-                    {
+                    if local_attempt_index < max_attempts - 1 {
                         self.record_retry_diagnostic(
                             &context,
                             &round_id,
                             attempt_id.clone(),
                             attempt_number,
-                            "transient_request_error",
+                            "request_error",
                             Some(err_msg.clone()),
                             &[],
                         )
                         .await;
-                        let delay_ms =
-                            Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
+                        let delay_ms = Self::retry_delay_ms_for_provider_error(
+                            local_attempt_index,
+                            &err_msg,
+                            provider_error.as_ref(),
+                        );
                         warn!(
-                            "Retrying AI request after connection failure: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, error={}",
+                            "Retrying AI request after error: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, error={}",
                             context.session_id,
                             round_id,
                             attempt_number,
@@ -437,19 +434,6 @@ impl RoundExecutor {
                         local_attempt_index += 1;
                         continue;
                     }
-                    if !is_structured_context_overflow && Self::is_transient_network_error(&err_msg)
-                    {
-                        return Err(BitFunError::AIClient(format!(
-                            "Stream retry budget exhausted after {} attempts: {}",
-                            max_attempts, err_msg
-                        )));
-                    }
-                    // Non-transient errors (429 budget exhausted, context
-                    // overflow, auth, etc.) are returned directly. The error
-                    // message is classified downstream via
-                    // `BitFunError::error_category()` into `ErrorCategory` for
-                    // frontend recovery actions (wait_and_retry, switch_model,
-                    // etc.).
                     let category = provider_error
                         .as_ref()
                         .map(|error| error.category.clone())
@@ -466,9 +450,10 @@ impl RoundExecutor {
                         BitFunError::AIClient(err_msg)
                     };
                     warn!(
-                        "AI request terminal failure: session_id={}, round_id={}, category={:?}, error={}",
+                        "AI request retry budget exhausted: session_id={}, round_id={}, attempts={}, category={:?}, error={}",
                         context.session_id,
                         round_id,
+                        max_attempts,
                         error.error_category(),
                         error
                     );
@@ -529,22 +514,23 @@ impl RoundExecutor {
             {
                 Ok(result) => {
                     let stream_processing_ms = elapsed_ms_u64(stream_started_at);
-                    if Self::has_interrupted_invalid_tool_calls(&result) {
-                        let err_msg = result.partial_recovery_reason.clone().unwrap_or_else(|| {
-                            "Interrupted while streaming tool arguments".to_string()
-                        });
-
-                        if !Self::has_user_visible_assistant_text(&result.full_text)
-                            && local_attempt_index < max_attempts - 1
-                            && Self::is_transient_network_error(&err_msg)
-                        {
+                    let has_interrupted_invalid_tool_calls =
+                        Self::has_interrupted_invalid_tool_calls(&result);
+                    if let Some(partial_recovery_reason) = result.partial_recovery_reason.as_deref()
+                    {
+                        if local_attempt_index < max_attempts - 1 {
+                            let diagnostic_category = if has_interrupted_invalid_tool_calls {
+                                "interrupted_tool_arguments"
+                            } else {
+                                "partial_stream_error"
+                            };
                             self.record_retry_diagnostic(
                                 &context,
                                 &round_id,
                                 attempt_id.clone(),
                                 attempt_number,
-                                "interrupted_tool_arguments",
-                                Some(err_msg.clone()),
+                                diagnostic_category,
+                                Some(partial_recovery_reason.to_string()),
                                 &result.tool_calls,
                             )
                             .await;
@@ -554,31 +540,36 @@ impl RoundExecutor {
                                 Self::trace_response_from_stream_result("partial", &result),
                             )
                             .await;
-                            let delay_ms =
-                                Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
+                            let delay_ms = Self::retry_delay_ms_for_error(
+                                local_attempt_index,
+                                partial_recovery_reason,
+                            );
                             warn!(
-                                "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, invalid_tool_calls={}, error={}",
+                                "Retrying stream after partial recovery error: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, effective_output={}, tool_calls={}, reason={}",
                                 context.session_id,
                                 round_id,
                                 attempt_number,
                                 local_attempt_index + 1,
                                 max_attempts,
                                 delay_ms,
-                                result
-                                    .tool_calls
-                                    .iter()
-                                    .filter(|tool_call| !tool_call.is_valid())
-                                    .count(),
-                                err_msg
+                                result.has_effective_output,
+                                result.tool_calls.len(),
+                                partial_recovery_reason
                             );
                             Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
                             local_attempt_index += 1;
                             continue;
                         }
+                    }
+
+                    if has_interrupted_invalid_tool_calls {
+                        let err_msg = result.partial_recovery_reason.clone().unwrap_or_else(|| {
+                            "Interrupted while streaming tool arguments".to_string()
+                        });
 
                         if Self::has_user_visible_assistant_text(&result.full_text) {
                             warn!(
-                                "Dropping invalid partial tool calls from interrupted stream; preserving already-streamed assistant text: session_id={}, round_id={}, invalid_tool_calls={}, error={}",
+                                "Dropping invalid partial tool calls after stream retry budget was exhausted; preserving assistant text: session_id={}, round_id={}, invalid_tool_calls={}, error={}",
                                 context.session_id,
                                 round_id,
                                 result
@@ -632,50 +623,6 @@ impl RoundExecutor {
 
                     let no_effective_output = !result.has_effective_output;
                     let is_partial_recovery = result.partial_recovery_reason.is_some();
-                    let partial_recovery_reason =
-                        result.partial_recovery_reason.as_deref().unwrap_or("");
-
-                    if is_partial_recovery
-                        && !Self::has_user_visible_assistant_text(&result.full_text)
-                        && !result.tool_calls.is_empty()
-                        && Self::is_transient_network_error(partial_recovery_reason)
-                        && local_attempt_index < max_attempts - 1
-                    {
-                        self.record_retry_diagnostic(
-                            &context,
-                            &round_id,
-                            attempt_id.clone(),
-                            attempt_number,
-                            "partial_stream_error",
-                            Some(partial_recovery_reason.to_string()),
-                            &result.tool_calls,
-                        )
-                        .await;
-                        Self::complete_model_exchange_trace(
-                            trace_config.as_ref(),
-                            trace_handle.as_ref(),
-                            Self::trace_response_from_stream_result("partial", &result),
-                        )
-                        .await;
-                        let delay_ms = Self::retry_delay_ms_for_error(
-                            local_attempt_index,
-                            partial_recovery_reason,
-                        );
-                        warn!(
-                            "Retrying stream because tool calls arrived on an interrupted network stream without assistant text: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, tool_calls={}, reason={}",
-                            context.session_id,
-                            round_id,
-                            attempt_number,
-                            local_attempt_index + 1,
-                            max_attempts,
-                            delay_ms,
-                            result.tool_calls.len(),
-                            partial_recovery_reason
-                        );
-                        Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
-                        local_attempt_index += 1;
-                        continue;
-                    }
 
                     if Self::is_invalid_tool_only_without_text(&result) {
                         let err_msg = "Provider returned only invalid tool arguments".to_string();
@@ -739,44 +686,68 @@ impl RoundExecutor {
                         )));
                     }
 
-                    if no_effective_output && local_attempt_index < max_attempts - 1 {
-                        self.record_retry_diagnostic(
-                            &context,
-                            &round_id,
-                            attempt_id.clone(),
-                            attempt_number,
-                            "no_effective_output",
-                            None,
-                            &[],
-                        )
-                        .await;
+                    if no_effective_output {
+                        let err_msg = result
+                            .partial_recovery_reason
+                            .clone()
+                            .unwrap_or_else(|| "No effective output received".to_string());
+                        if local_attempt_index < max_attempts - 1 {
+                            self.record_retry_diagnostic(
+                                &context,
+                                &round_id,
+                                attempt_id.clone(),
+                                attempt_number,
+                                "no_effective_output",
+                                Some(err_msg.clone()),
+                                &result.tool_calls,
+                            )
+                            .await;
+                            Self::complete_model_exchange_trace(
+                                trace_config.as_ref(),
+                                trace_handle.as_ref(),
+                                Self::error_trace_response_from_stream_result(
+                                    "error",
+                                    err_msg.clone(),
+                                    &result,
+                                ),
+                            )
+                            .await;
+                            let delay_ms =
+                                Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
+                            warn!(
+                                "Retrying stream because no effective output was received: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, error={}",
+                                context.session_id,
+                                round_id,
+                                attempt_number,
+                                local_attempt_index + 1,
+                                max_attempts,
+                                delay_ms,
+                                err_msg
+                            );
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
+                            local_attempt_index += 1;
+                            continue;
+                        }
+
                         Self::complete_model_exchange_trace(
                             trace_config.as_ref(),
                             trace_handle.as_ref(),
-                            Self::error_trace_response(
+                            Self::error_trace_response_from_stream_result(
                                 "error",
-                                "No effective output received".to_string(),
+                                err_msg.clone(),
+                                &result,
                             ),
                         )
                         .await;
-                        let delay_ms = Self::retry_delay_ms(local_attempt_index);
-                        warn!(
-                            "Retrying stream because no effective output was received: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}",
-                            context.session_id,
-                            round_id,
-                            attempt_number,
-                            local_attempt_index + 1,
-                            max_attempts,
-                            delay_ms
-                        );
-                        Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
-                        local_attempt_index += 1;
-                        continue;
+                        return Err(BitFunError::AIClient(format!(
+                            "Stream retry budget exhausted after {} attempts: {}",
+                            max_attempts, err_msg
+                        )));
                     }
 
                     if is_partial_recovery {
                         warn!(
-                            "Accepting stream partial recovery without retry: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, reason={}",
+                            "Accepting useful partial stream output after retry budget was exhausted: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, reason={}",
                             context.session_id,
                             round_id,
                             attempt_number,
@@ -799,54 +770,59 @@ impl RoundExecutor {
                 Err(stream_err) => {
                     let err_msg = stream_err.error.to_string();
                     let stream_error_category = stream_err.error.error_category();
-                    let can_retry = !stream_err.has_effective_output
-                        && stream_error_category != ErrorCategory::ContextOverflow
-                        && local_attempt_index < max_attempts - 1
-                        && Self::is_transient_network_error(&err_msg);
+                    let provider_error = match &stream_err.error {
+                        BitFunError::AIProvider(error)
+                        | BitFunError::RecoverableContextOverflow(error) => Some(error),
+                        _ => None,
+                    };
                     Self::complete_model_exchange_trace(
                         trace_config.as_ref(),
                         trace_handle.as_ref(),
                         Self::error_trace_response("error", err_msg.clone()),
                     )
                     .await;
-                    if can_retry {
+                    if local_attempt_index < max_attempts - 1 {
                         self.record_retry_diagnostic(
                             &context,
                             &round_id,
                             attempt_id.clone(),
                             attempt_number,
-                            "transient_stream_error",
+                            "stream_error",
                             Some(err_msg.clone()),
                             &[],
                         )
                         .await;
-                        let delay_ms =
-                            Self::retry_delay_ms_for_error(local_attempt_index, &err_msg);
+                        let delay_ms = Self::retry_delay_ms_for_provider_error(
+                            local_attempt_index,
+                            &err_msg,
+                            provider_error,
+                        );
                         warn!(
-                            "Retrying stream after transient error with no effective output: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, error={}",
+                            "Retrying stream after error: session_id={}, round_id={}, round_attempt={}, local_retry={}/{}, delay_ms={}, effective_output={}, category={:?}, error={}",
                             context.session_id,
                             round_id,
                             attempt_number,
                             local_attempt_index + 1,
                             max_attempts,
                             delay_ms,
+                            stream_err.has_effective_output,
+                            stream_error_category,
                             err_msg
                         );
                         Self::sleep_with_cancellation(delay_ms, &cancel_token).await?;
                         local_attempt_index += 1;
                         continue;
                     }
-                    if stream_error_category != ErrorCategory::ContextOverflow
-                        && Self::is_transient_network_error(&err_msg)
-                    {
-                        return Err(BitFunError::AIClient(format!(
-                            "Stream retry budget exhausted after {} attempts: {}",
-                            max_attempts, err_msg
-                        )));
-                    }
-                    if !stream_err.has_effective_output
-                        && stream_error_category == ErrorCategory::ContextOverflow
-                    {
+                    warn!(
+                        "Stream retry budget exhausted: session_id={}, round_id={}, attempts={}, effective_output={}, category={:?}, error={}",
+                        context.session_id,
+                        round_id,
+                        max_attempts,
+                        stream_err.has_effective_output,
+                        stream_error_category,
+                        err_msg
+                    );
+                    if stream_error_category == ErrorCategory::ContextOverflow {
                         let provider_error = match stream_err.error {
                             BitFunError::AIProvider(error)
                             | BitFunError::RecoverableContextOverflow(error) => error,
@@ -1489,14 +1465,25 @@ impl RoundExecutor {
     }
 
     fn retry_delay_ms_for_error(attempt_index: usize, error_message: &str) -> u64 {
+        Self::retry_delay_ms_for_provider_error(attempt_index, error_message, None)
+    }
+
+    fn retry_delay_ms_for_provider_error(
+        attempt_index: usize,
+        error_message: &str,
+        provider_error: Option<&AiProviderError>,
+    ) -> u64 {
         let shift = u32::try_from(attempt_index)
             .unwrap_or(u32::MAX)
             .min(Self::MAX_RETRY_EXPONENT_SHIFT);
         let msg = error_message.to_lowercase();
-        let is_rate_limit =
-            msg.contains("429") || msg.contains("rate limit") || msg.contains("too many requests");
+        let is_rate_limit = provider_error
+            .is_some_and(|error| error.category == ErrorCategory::RateLimit)
+            || msg.contains("429")
+            || msg.contains("rate limit")
+            || msg.contains("too many requests");
 
-        if is_rate_limit {
+        let fallback = if is_rate_limit {
             Self::RATE_LIMIT_RETRY_BASE_DELAY_MS
                 .saturating_mul(1u64 << shift)
                 .min(Self::MAX_RATE_LIMIT_DELAY_MS)
@@ -1504,113 +1491,17 @@ impl RoundExecutor {
             Self::RETRY_BASE_DELAY_MS
                 .saturating_mul(1u64 << shift)
                 .min(Self::MAX_EXPONENTIAL_DELAY_MS)
+        };
+
+        match provider_error.and_then(|error| error.retry_after_ms) {
+            Some(retry_after_ms) if is_rate_limit => retry_after_ms
+                .max(fallback)
+                .min(Self::MAX_RATE_LIMIT_DELAY_MS),
+            Some(retry_after_ms) if retry_after_ms > 0 => {
+                retry_after_ms.min(Self::MAX_RATE_LIMIT_DELAY_MS)
+            }
+            Some(_) | None => fallback,
         }
-    }
-
-    /// Check whether an error message represents a transient (retryable) condition.
-    ///
-    /// Errors that already exhausted the SSE-layer retry budget (e.g. "failed
-    /// after N attempts:" or "Stream retry budget exhausted") are **not**
-    /// transient from the round-executor perspective — the SSE transport layer
-    /// already retried with exponential backoff and `Retry-After` parsing.
-    /// Re-entering the send loop would multiply attempts (10 × 10 = 100) and
-    /// hold the user in a long silent stall.
-    fn is_transient_network_error(error_message: &str) -> bool {
-        let msg = error_message.to_lowercase();
-
-        // The SSE layer already exhausted its own retry budget — do not
-        // re-enter another round of attempts from the round executor.
-        // We require BOTH "failed after " and "attempts:" to co-occur,
-        // which uniquely identifies the SSE/round-executor budget-exhausted
-        // format without catching generic errors like "failed after timeout".
-        if msg.contains("failed after ") && msg.contains("attempts:") {
-            return false;
-        }
-        if msg.contains("retry budget exhausted") {
-            return false;
-        }
-
-        let non_retryable_keywords = [
-            "invalid api key",
-            "unauthorized",
-            "forbidden",
-            "model not found",
-            "unsupported model",
-            "invalid request",
-            "bad request",
-            "prompt is too long",
-            "content policy",
-            "proxy authentication required",
-            "provider quota",
-            "provider billing",
-            "insufficient_quota",
-            "insufficient quota",
-            "insufficient balance",
-            "not_enough_balance",
-            "not enough balance",
-            "余额不足",
-            "无可用资源包",
-            "账户已欠费",
-            "code=1113",
-            "\"code\":\"1113\"",
-            "client error 400",
-            "client error 401",
-            "client error 402",
-            "client error 403",
-            "client error 404",
-            "client error 413",
-            "client error 422",
-            "sse parsing error",
-            "schema error",
-            "unknown api format",
-        ];
-
-        let transient_keywords = [
-            "transport error",
-            "error decoding response body",
-            "stream closed before response completed",
-            "stream processing error",
-            "sse stream error",
-            "sse error",
-            "sse timeout",
-            "stream data timeout",
-            "timeout",
-            "request timeout",
-            "deadline exceeded",
-            "connection reset",
-            "connection closed",
-            "broken pipe",
-            "unexpected eof",
-            "connection refused",
-            "socket closed",
-            "temporarily unavailable",
-            "service unavailable",
-            "bad gateway",
-            "gateway timeout",
-            "overloaded",
-            "proxy",
-            "tunnel",
-            "dns",
-            "network",
-            "econnreset",
-            "econnrefused",
-            "etimedout",
-            "rate limit",
-            "too many requests",
-            "408",
-            "409",
-            "425",
-            "429",
-            "502",
-            "503",
-            "504",
-        ];
-
-        if non_retryable_keywords.iter().any(|k| msg.contains(k)) {
-            return false;
-        }
-
-        transient_keywords.iter().any(|k| msg.contains(k))
     }
 }
 
@@ -2147,16 +2038,6 @@ mod tests {
     }
 
     #[test]
-    fn is_transient_error_treats_rate_limit_as_transient() {
-        assert!(RoundExecutor::is_transient_network_error(
-            "OpenAI Streaming API error 429 Too Many Requests"
-        ));
-        assert!(RoundExecutor::is_transient_network_error(
-            "rate limit exceeded"
-        ));
-    }
-
-    #[test]
     fn retry_delay_grows_beyond_previous_four_second_cap() {
         assert_eq!(RoundExecutor::retry_delay_ms(0), 500);
         assert_eq!(RoundExecutor::retry_delay_ms(3), 4_000);
@@ -2183,43 +2064,37 @@ mod tests {
     }
 
     #[test]
-    fn is_transient_error_treats_network_errors_as_transient() {
-        assert!(RoundExecutor::is_transient_network_error(
-            "connection reset by peer"
-        ));
-        assert!(RoundExecutor::is_transient_network_error("timeout"));
-    }
+    fn provider_retry_after_is_only_a_delay_hint() {
+        let permission_error = bitfun_core_types::errors::AiProviderError::from_parts(
+            "permission denied".to_string(),
+            Some("openai".to_string()),
+            None,
+            Some(403),
+        )
+        .with_retry_after_ms(Some(1_000));
+        assert_eq!(
+            RoundExecutor::retry_delay_ms_for_provider_error(
+                5,
+                &permission_error.message,
+                Some(&permission_error),
+            ),
+            1_000
+        );
 
-    #[test]
-    fn is_transient_error_treats_context_overflow_as_non_transient() {
-        assert!(!RoundExecutor::is_transient_network_error(
-            "prompt is too long"
-        ));
-    }
-
-    #[test]
-    fn is_transient_error_treats_budget_exhausted_as_non_transient() {
-        // After SSE layer exhausts its retry budget, the round executor must
-        // NOT re-enter another round of attempts (would cause 10×10 = 100
-        // retries).
-        assert!(!RoundExecutor::is_transient_network_error(
-            "OpenAI Streaming API failed after 10 attempts: \
-             OpenAI Streaming API error 429 Too Many Requests"
-        ));
-        assert!(!RoundExecutor::is_transient_network_error(
-            "Stream retry budget exhausted after 10 attempts: timeout"
-        ));
-    }
-
-    #[test]
-    fn is_transient_error_does_not_misclassify_failed_after_without_attempts() {
-        // "failed after " without "attempts:" should NOT be treated as budget
-        // exhausted — it may be a legitimately retryable transient error.
-        assert!(RoundExecutor::is_transient_network_error(
-            "stream failed after connection reset"
-        ));
-        assert!(RoundExecutor::is_transient_network_error(
-            "request failed after timeout"
-        ));
+        let rate_limit_error = bitfun_core_types::errors::AiProviderError::from_parts(
+            "too many requests".to_string(),
+            Some("openai".to_string()),
+            None,
+            Some(429),
+        )
+        .with_retry_after_ms(Some(1_000));
+        assert_eq!(
+            RoundExecutor::retry_delay_ms_for_provider_error(
+                3,
+                &rate_limit_error.message,
+                Some(&rate_limit_error),
+            ),
+            16_000
+        );
     }
 }

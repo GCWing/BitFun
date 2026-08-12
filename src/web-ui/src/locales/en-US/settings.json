@@ -21,7 +21,7 @@
       "models": "AI models, API keys, providers, proxy, and session title.",
       "worktrees": "Defaults for isolated Git worktrees and parallel sessions.",
       "sessionPersonalization": "Agent companion.",
-      "sessionPermissions": "Accelerated workspace search, tool confirmation, Computer use, browser, and debug.",
+      "sessionPermissions": "Tool permissions, execution, desktop control, and browser access.",
       "quickActions": "One-click AI actions after coding. Built-in and customizable prompts.",
       "voiceInput": "Local microphone input and speech-to-text model.",
       "review": "Review strategy, coverage depth, capacity, cost, and latency controls.",

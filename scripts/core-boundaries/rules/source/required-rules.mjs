@@ -432,7 +432,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/contracts/core-types/tests/lsp_contracts.rs',
+    path: 'src/crates/contracts/core-types/tests/core_type_contracts/lsp_contracts.rs',
     reason:
       'core-types must keep LSP manifest serialization, default-value, and placeholder regressions',
     patterns: [
@@ -1513,7 +1513,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/product-capabilities/tests/product_capabilities.rs',
+    path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_capabilities.rs',
     reason:
       'product-capabilities tests must protect product shape facts, runtime service gap reporting, and legacy harness routing',
     patterns: [
@@ -1544,7 +1544,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
+    path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/plugin_product_shape.rs',
     reason:
       'product-capabilities plugin shape tests must protect P0 plugin-capable profiles, non-P0 rejection, default availability reasons, and runtime handoff',
     patterns: [
@@ -1571,7 +1571,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+    path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_sdk_assembly.rs',
     reason:
       'product-capabilities must prove product runtime parts can feed the SDK runtime without bitfun-core',
     patterns: [
@@ -4843,7 +4843,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_contracts.rs',
+    path: 'src/crates/contracts/runtime-ports/tests/runtime_port_contracts/plugin_runtime_contracts.rs',
     reason:
       'runtime-ports plugin contract tests must cover typed envelopes, candidate effects, and disabled/projection-only behavior',
     patterns: [
@@ -4900,7 +4900,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_diagnostics_contracts.rs',
+    path: 'src/crates/contracts/runtime-ports/tests/runtime_port_contracts/plugin_runtime_diagnostics_contracts.rs',
     reason:
       'runtime-ports plugin diagnostics contract tests must cover permission prompts, diagnostics, and quarantine facts',
     patterns: [
