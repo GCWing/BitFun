@@ -114,13 +114,3 @@ describe('FlowChat collapse spacing', () => {
     );
   });
 });
-
-describe('FlowChat initial projection alignment', () => {
-  it('reserves the scroller gutter in the handoff overlay', () => {
-    const stylesheet = readSource('./VirtualMessageList.scss');
-
-    expect(stylesheet).toMatch(
-      /&__projection-handoff-overlay\s*\{[\s\S]*?scrollbar-gutter:\s*stable;/,
-    );
-  });
-});

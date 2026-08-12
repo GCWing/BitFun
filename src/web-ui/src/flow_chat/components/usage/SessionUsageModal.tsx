@@ -68,16 +68,21 @@ export const SessionUsageModal: React.FC = () => {
       onClose={closeSessionUsageModal}
       title={t('usage.title')}
       size="large"
-      contentClassName="session-usage-modal__content"
       testId="session-usage-modal"
     >
-      <SessionUsageReportCard
-        report={report}
-        markdown={markdown}
-        generatedAt={report?.generatedAt}
-        isLoading={isLoading}
-        onOpenDetails={report ? handleOpenDetails : undefined}
-      />
+      <div
+        className="session-usage-modal__content"
+        data-bf-component="session-usage-modal"
+        data-bf-part="content"
+      >
+        <SessionUsageReportCard
+          report={report}
+          markdown={markdown}
+          generatedAt={report?.generatedAt}
+          isLoading={isLoading}
+          onOpenDetails={report ? handleOpenDetails : undefined}
+        />
+      </div>
     </Modal>
   );
 };

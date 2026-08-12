@@ -10,8 +10,7 @@ export const virtualMessageListAppearanceDescriptor: AppearanceSurfaceDescriptor
     { id: 'boundaryStatus' },
     { id: 'items' },
     { id: 'footer' },
-    { id: 'handoffOverlay' },
-    { id: 'handoffContent' },
+    { id: 'tailSpacer' },
   ],
   states: [
     { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },

@@ -149,38 +149,6 @@
     overflow-anchor: none;
   }
 
-  &__projection-handoff-items {
-    width: 100%;
-  }
-
-  &__projection-handoff-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    overflow: hidden;
-    scrollbar-gutter: stable;
-    pointer-events: none;
-    background: var(--bf-appearance-token-color-bg-scene);
-    contain: paint;
-  }
-
-  &__projection-handoff-content {
-    width: 100%;
-    will-change: transform;
-
-    &--bottom {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      min-height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      transform: none;
-    }
-  }
-
 }
 
 @keyframes history-paging-spin {
