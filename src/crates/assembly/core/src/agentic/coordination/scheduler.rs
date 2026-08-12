@@ -73,11 +73,11 @@ use bitfun_runtime_ports::{
     DialogSubmitQueueAction, DialogSubmitQueueFacts, PortError, PortErrorKind, PortResult,
     SessionStoragePathRequest, SessionStorePort, SessionTranscriptRequest,
 };
-use bitfun_services_core::session::GroupChatStore;
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
     DialogSubmitOutcome,
 };
+use bitfun_services_core::session::GroupChatStore;
 
 /// Resolve the configured goal idle-wakeup delay
 /// (`ai.thresholds.goal.idle_wakeup_delay_ms`), falling back to
@@ -3066,10 +3066,11 @@ impl DialogScheduler {
             remote_connection_id: None,
             remote_ssh_host: None,
         };
-        let resolution = crate::agentic::session::session_store_port::CoreSessionStorePort::default()
-            .resolve_session_storage_path(request)
-            .await
-            .map_err(|error| error.to_string())?;
+        let resolution =
+            crate::agentic::session::session_store_port::CoreSessionStorePort::default()
+                .resolve_session_storage_path(request)
+                .await
+                .map_err(|error| error.to_string())?;
         let sessions_root = resolution.effective_storage_path;
         let parent = sessions_root
             .parent()

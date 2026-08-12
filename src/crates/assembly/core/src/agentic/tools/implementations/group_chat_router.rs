@@ -180,9 +180,7 @@ impl GroupChatRouter {
             .await
         {
             Ok(()) => {}
-            Err(error)
-                if matches!(error, GroupChatStoreError::MessageNotFound(_)) =>
-            {
+            Err(error) if matches!(error, GroupChatStoreError::MessageNotFound(_)) => {
                 return Ok(());
             }
             Err(error) => return Err(store_tool_error(error)),
@@ -206,7 +204,10 @@ impl GroupChatRouter {
                 timestamp,
                 status: GroupChatMessageStatus::Delivered,
             };
-            store.append_message(room_id, &reply).await.map_err(store_tool_error)?;
+            store
+                .append_message(room_id, &reply)
+                .await
+                .map_err(store_tool_error)?;
         }
         Ok(())
     }
@@ -595,10 +596,7 @@ mod tests {
             window.messages[1].reply_to_message_id.as_deref(),
             Some("msg-1")
         );
-        assert_eq!(
-            window.messages[1].status,
-            GroupChatMessageStatus::Delivered
-        );
+        assert_eq!(window.messages[1].status, GroupChatMessageStatus::Delivered);
     }
 
     #[tokio::test]

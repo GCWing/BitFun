@@ -947,22 +947,17 @@ fn require_coordinator() -> Result<Arc<ConversationCoordinator>, GroupChatError>
 }
 
 #[tauri::command]
-pub async fn group_chat_list(
-    workspace_path: String,
-) -> Result<Vec<GroupChatRoom>, GroupChatError> {
+pub async fn group_chat_list(workspace_path: String) -> Result<Vec<GroupChatRoom>, GroupChatError> {
     let store = group_chat_store(&workspace_path)
         .await
         .map_err(|message| GroupChatError {
             code: GroupChatErrorCode::NotFound,
             message,
         })?;
-    let (rooms, _) = store
-        .list_rooms()
-        .await
-        .map_err(|error| GroupChatError {
-            code: group_chat_store_error_code(&error),
-            message: error.to_string(),
-        })?;
+    let (rooms, _) = store.list_rooms().await.map_err(|error| GroupChatError {
+        code: group_chat_store_error_code(&error),
+        message: error.to_string(),
+    })?;
     Ok(rooms)
 }
 
@@ -977,10 +972,13 @@ pub async fn group_chat_load(
             code: GroupChatErrorCode::NotFound,
             message,
         })?;
-    store.load_room(&room_id).await.map_err(|error| GroupChatError {
-        code: group_chat_store_error_code(&error),
-        message: error.to_string(),
-    })
+    store
+        .load_room(&room_id)
+        .await
+        .map_err(|error| GroupChatError {
+            code: group_chat_store_error_code(&error),
+            message: error.to_string(),
+        })
 }
 
 #[tauri::command]

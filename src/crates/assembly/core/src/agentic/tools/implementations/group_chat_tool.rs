@@ -321,8 +321,8 @@ impl GroupChatTool {
             .as_deref()
             .ok_or_else(|| BitFunError::tool("session_id is required for join".to_string()))?;
         let actor = params.actor.clone().unwrap_or(GroupChatActor::Master);
-        let room = Self::join_room_impl(coordinator, workspace_path, room_id, session_id, actor)
-            .await?;
+        let room =
+            Self::join_room_impl(coordinator, workspace_path, room_id, session_id, actor).await?;
         Ok(json!({ "room": room }))
     }
 
@@ -342,8 +342,8 @@ impl GroupChatTool {
             .as_deref()
             .ok_or_else(|| BitFunError::tool("session_id is required for leave".to_string()))?;
         let actor = params.actor.clone().unwrap_or(GroupChatActor::Master);
-        let room = Self::leave_room_impl(coordinator, workspace_path, room_id, session_id, actor)
-            .await?;
+        let room =
+            Self::leave_room_impl(coordinator, workspace_path, room_id, session_id, actor).await?;
         Ok(json!({ "room": room }))
     }
 
@@ -549,7 +549,11 @@ pub fn group_chat_error_message(
     code: bitfun_runtime_ports::GroupChatErrorCode,
     message: impl Into<String>,
 ) -> String {
-    format!("GroupChatErrorCode::{}: {}", code_name(code), message.into())
+    format!(
+        "GroupChatErrorCode::{}: {}",
+        code_name(code),
+        message.into()
+    )
 }
 
 pub(crate) fn code_name(code: bitfun_runtime_ports::GroupChatErrorCode) -> &'static str {
@@ -569,7 +573,9 @@ pub(crate) fn code_name(code: bitfun_runtime_ports::GroupChatErrorCode) -> &'sta
 /// Parses the code prefix out of an error string produced by
 /// [`group_chat_error_message`]. Returns `None` when the string carries no
 /// code (legacy/plain errors fall back to a generic branch on the frontend).
-pub fn parse_group_chat_error_code(message: &str) -> Option<bitfun_runtime_ports::GroupChatErrorCode> {
+pub fn parse_group_chat_error_code(
+    message: &str,
+) -> Option<bitfun_runtime_ports::GroupChatErrorCode> {
     use bitfun_runtime_ports::GroupChatErrorCode as Code;
     let prefix = message.strip_prefix("GroupChatErrorCode::")?;
     let code_name = prefix.split(':').next()?;
@@ -684,7 +690,10 @@ impl GroupChatTool {
         // Initial member back-index (P1-6): tag each member with the room id.
         for member in &members {
             GroupChatTool::tag_member_group_chat_static(
-                coordinator, workspace_path, &member.session_id, &room_id,
+                coordinator,
+                workspace_path,
+                &member.session_id,
+                &room_id,
             )
             .await?;
         }
@@ -740,9 +749,7 @@ impl GroupChatTool {
             Some(other) => {
                 return Err(BitFunError::tool(group_chat_error_message(
                     bitfun_runtime_ports::GroupChatErrorCode::NotClaw,
-                    format!(
-                        "member '{session_id}' is not a Claw assistant (agent_type '{other}')"
-                    ),
+                    format!("member '{session_id}' is not a Claw assistant (agent_type '{other}')"),
                 )));
             }
             None => {
@@ -776,8 +783,13 @@ impl GroupChatTool {
             .map_err(store_tool_error)?;
         room.members = members;
 
-        GroupChatTool::tag_member_group_chat_static(coordinator, workspace_path, session_id, room_id)
-            .await?;
+        GroupChatTool::tag_member_group_chat_static(
+            coordinator,
+            workspace_path,
+            session_id,
+            room_id,
+        )
+        .await?;
 
         store
             .append_message(
@@ -855,7 +867,10 @@ impl GroupChatTool {
             .map_err(store_tool_error)?;
 
         GroupChatTool::untag_member_group_chat_static(
-            coordinator, workspace_path, session_id, room_id,
+            coordinator,
+            workspace_path,
+            session_id,
+            room_id,
         )
         .await?;
 
@@ -969,10 +984,7 @@ impl GroupChatTool {
 
         room.mode = mode;
         room.round_robin_cursor = 0; // 模式切换时 reset cursor (R-GC-10)
-        store
-            .save_room(&room)
-            .await
-            .map_err(store_tool_error)?;
+        store.save_room(&room).await.map_err(store_tool_error)?;
         Ok(room)
     }
 
