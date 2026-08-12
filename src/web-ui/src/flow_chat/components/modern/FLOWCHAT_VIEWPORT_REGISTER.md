@@ -132,11 +132,30 @@ different alignments. The header renders at the same constant so they cannot
 drift. Both the one-shot scroll and the offset the follow loop re-asserts every
 frame carry it — if only one did, they would fight.
 
-**A gesture preempts a navigation still in flight.** The library's re-aim keeps
-computing for up to 5s after the scroll that started it, and every write it
-attempts during that window is refused once the reader takes over. The cost is
-accepted: a distant navigation that the wheel brushes stops where it is and is
-not corrected further.
+**A gesture preempts a navigation still in flight, and ends it.** The library's
+re-aim keeps computing for up to 5s after the aim that started it, recomputing
+the target offset from measurements that are still landing and writing again
+whenever it moves.
+
+Refusing those writes is not enough, and this is the one place the register's
+guarantee stops short on its own. The refusal is invisible to the library — it
+has no return value to read — so it keeps its schedule either way, and the
+gesture's hold is `USER_DRIVEN_SCROLL_WINDOW_MS`, 200ms after the last wheel
+notch. A measurement landing after the reader has stopped, and inside the
+remaining five seconds, is granted. Measured on a rail click into a long
+history window: placed at 5358, the reader took over 6ms later, and 12ms after
+that the re-aim asked for 7784 and was refused — with nothing having ended it.
+
+So `notifyUserScrollIntent` gives the aim up outright, through `cancelAim`. It
+aims at the offset the scroller already holds: an offset aim carries no index,
+the re-aim recomputes its target *from* the index, and writing again is the only
+thing it does when that target changes. The library's `scrollState` is private,
+and a cast into it is the kind of thing a version bump breaks silently.
+
+The cost is accepted, and it is what the reader asked for: a distant navigation
+the wheel brushes stops where it is and is not corrected further. In the
+measured case that is 2460px short of the Turn that was clicked — the placement
+is deliberately approximate, and the re-aim is what would have finished it.
 
 ## Why There Was No Coordinator Before, and What Changed
 

@@ -27,10 +27,24 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import {
+  roundViewportPx,
+  traceViewport,
+} from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
 import type { FlowChatViewportOwner } from './flowChatViewportOwnership';
 
 /** Item-count overscan. Roughly two Turns either side of the viewport. */
 const FLOW_CHAT_OVERSCAN_ITEMS = 6;
+
+/**
+ * How long the library goes on re-aiming after an aim, mirrored from it.
+ *
+ * `MAX_RECONCILE_MS` in `virtual-core`, which is a local constant inside
+ * `reconcileScroll` and so cannot be imported. Only ever read to decide that a
+ * cancel has nothing left to cancel, so being out of date by a version bump
+ * costs a redundant offset aim and nothing else.
+ */
+const VIRTUALIZER_REAIM_WINDOW_MS = 5_000;
 
 /**
  * The virtualizer does not compensate for its own late measurements.
@@ -164,6 +178,16 @@ export interface FlowChatVirtualizer {
       holdForMs?: number;
     },
   ) => void;
+  /**
+   * Give up an aim that is still chasing its target.
+   *
+   * For the reader taking the viewport over. The re-aim is the other half of
+   * `scrollItemIntoView` — it is what makes an aim at an item survive the
+   * measurements landing under it — and it has no idea a gesture happened.
+   *
+   * A no-op when no aim is in flight, so it is safe on every wheel notch.
+   */
+  cancelAim: () => void;
 }
 
 export interface FlowChatVisibleItemRange {
@@ -263,6 +287,16 @@ export function useFlowChatVirtualizer<T>({
    */
   const aimOwnerRef = useRef<FlowChatViewportOwner>('layout-correction');
   const aimHoldForMsRef = useRef<number | undefined>(undefined);
+  /**
+   * When the aim that is still being re-aimed at was made, if there is one.
+   *
+   * The library does not say when it stops, so this is how a cancel knows
+   * whether there is anything to cancel: cleared when it is given up, and read
+   * against the library's own window when it was not. Wrong only in the
+   * direction of cancelling an aim that had already finished, which writes
+   * nothing.
+   */
+  const aimStartedAtMsRef = useRef<number | null>(null);
   const getItemKeyRef = useRef(getItemKey);
   getItemKeyRef.current = getItemKey;
   const estimateItemHeightRef = useRef(estimateItemHeightPx);
@@ -407,6 +441,7 @@ export function useFlowChatVirtualizer<T>({
   ) => {
     aimOwnerRef.current = options.owner;
     aimHoldForMsRef.current = options.holdForMs;
+    aimStartedAtMsRef.current = performance.now();
     virtualizer.scrollToIndex(index, {
       align: options.align,
       behavior: options.behavior ?? 'auto',
@@ -423,11 +458,45 @@ export function useFlowChatVirtualizer<T>({
   ) => {
     aimOwnerRef.current = options.owner;
     aimHoldForMsRef.current = options.holdForMs;
+    aimStartedAtMsRef.current = performance.now();
     virtualizer.scrollToOffset(offsetPx, {
       align: 'start',
       behavior: options.behavior ?? 'auto',
     });
   }, [virtualizer]);
+
+  const cancelAim = useCallback(() => {
+    const startedAtMs = aimStartedAtMsRef.current;
+    if (startedAtMs === null) return;
+    aimStartedAtMsRef.current = null;
+    const scroller = scrollerRef.current;
+    // Already over, by the library's own clock. Aiming again would only start
+    // another reconcile to sit out.
+    if (!scroller || performance.now() - startedAtMs > VIRTUALIZER_REAIM_WINDOW_MS) return;
+    /*
+     * Aimed at the offset the scroller is already at, rather than by clearing
+     * the library's `scrollState`, which is private and would have to be
+     * reached through a cast that no version bump would warn us about.
+     *
+     * An offset aim carries no index, and the reconcile recomputes its target
+     * from the index — so with none, the target can never change again, and
+     * writing again is the only thing it does when the target changes. The
+     * write this makes goes to the position the scroller already holds, which
+     * is a no-op whether the register grants it or refuses it.
+     */
+    aimOwnerRef.current = 'layout-correction';
+    aimHoldForMsRef.current = undefined;
+    const givenUpAtPx = scroller.scrollTop;
+    virtualizer.scrollToOffset(givenUpAtPx, { align: 'start', behavior: 'auto' });
+    traceViewport({
+      location: 'virtualizer.aimCancelled',
+      message: 'an aim was given up because the reader took the viewport',
+      data: () => ({
+        givenUpAtPx: roundViewportPx(givenUpAtPx),
+        aimAgeMs: Math.round(performance.now() - startedAtMs),
+      }),
+    });
+  }, [scrollerRef, virtualizer]);
 
   return {
     rows,
@@ -439,5 +508,6 @@ export function useFlowChatVirtualizer<T>({
     getVisibleItemRange,
     scrollItemIntoView,
     scrollToOffset,
+    cancelAim,
   };
 }

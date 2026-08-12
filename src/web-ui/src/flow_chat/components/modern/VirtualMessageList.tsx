@@ -783,6 +783,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * hold has to end by itself or nothing below it could ever write again.
      */
     viewportOwner.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+    /*
+     * The claim alone does not reach the library's re-aim. It goes on
+     * recomputing its target for five seconds and writes again whenever a
+     * measurement moves it, and the claim only refuses those writes while the
+     * gesture's own hold is live — 200ms after the last wheel notch, against a
+     * five-second re-aim. Measured: a Turn navigation placed at 5358, the
+     * reader took over 6ms later, and 12ms after that the re-aim asked for
+     * 7784 and was refused. Nothing had ended it; it was still armed when the
+     * recording stopped.
+     */
+    virtualizer.cancelAim();
     viewportAnchor.markUserScrollIntent();
     handleUserScrollIntent();
     onUserScrollIntent?.();
@@ -803,7 +814,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * synchronously — so this asks as the reader rather than as our placement.
      */
     evaluateHistoryBoundariesRef.current();
-  }, [handleUserScrollIntent, onUserScrollIntent, viewportAnchor, viewportOwner]);
+  }, [
+    handleUserScrollIntent,
+    onUserScrollIntent,
+    viewportAnchor,
+    viewportOwner,
+    virtualizer,
+  ]);
 
   const updateVisibleTurnInfoFromViewport = useCallback(() => {
     const scroller = scrollerElementRef.current;

@@ -67,6 +67,10 @@ before reporting a defect as new.
   carve-out for a target that is not an item, and it still goes through the
   register.
 - One-shot Turn/search/history navigation remains inside `VirtualMessageList`.
+- A gesture ends an aim, it does not merely outrank it. The library's re-aim
+  runs for 5s and cannot see a refusal, while a gesture's hold lasts 200ms, so
+  `notifyUserScrollIntent` calls `cancelAim`. Anything else that hands the
+  viewport to a new owner mid-aim owes the same call.
 
 ## History Paging and the Anchor
 

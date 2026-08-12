@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   activeSession: null as Record<string, unknown> | null,
   scrollItemIntoView: vi.fn(),
   scrollToOffset: vi.fn(),
+  cancelAim: vi.fn(),
   setVisibleTurnInfo: vi.fn(),
   enterFollowOutput: vi.fn(),
   exitFollowOutput: vi.fn(),
@@ -122,6 +123,7 @@ vi.mock('./useFlowChatVirtualizer', async () => {
         },
         scrollItemIntoView: mocks.scrollItemIntoView,
         scrollToOffset: mocks.scrollToOffset,
+        cancelAim: mocks.cancelAim,
       };
     },
   };
@@ -227,6 +229,7 @@ describe('VirtualMessageList natural scroll contract', () => {
     mocks.followsNow = false;
     mocks.scrollItemIntoView.mockReset();
     mocks.scrollToOffset.mockReset();
+    mocks.cancelAim.mockReset();
     mocks.enterFollowOutput.mockReset();
     mocks.exitFollowOutput.mockReset();
     mocks.handleUserScrollIntent.mockReset();
@@ -438,6 +441,19 @@ describe('VirtualMessageList natural scroll contract', () => {
       act(() => root.render(<VirtualMessageList />));
       pressAt(CONTENT_BOX_WIDTH - 200);
       expect(mocks.handleUserScrollIntent).not.toHaveBeenCalled();
+    });
+
+    it('gives up an aim still in flight, which the claim alone cannot reach', () => {
+      /*
+       * The register refuses the re-aim's writes only while the gesture's hold
+       * is live — 200ms after the last notch, against a five-second re-aim —
+       * and the library never learns it was refused. Measured: a navigation
+       * placed at 5358, the reader took over 6ms later, and the re-aim asked
+       * for 7784 12ms after that.
+       */
+      act(() => root.render(<VirtualMessageList />));
+      pressAt(CONTENT_BOX_WIDTH + 6);
+      expect(mocks.cancelAim).toHaveBeenCalled();
     });
 
     it('disarms on release, so a later scroll is not intent', () => {
