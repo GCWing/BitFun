@@ -108,12 +108,12 @@
     border-radius: 6px;
     background: color-mix(
       in srgb,
-      var(--bf-appearance-token-color-danger-500, #e5484d) 12%,
+      var(--bf-appearance-token-color-error) 12%,
       transparent
     );
     border: 1px solid color-mix(
       in srgb,
-      var(--bf-appearance-token-color-danger-500, #e5484d) 40%,
+      var(--bf-appearance-token-color-error) 40%,
       transparent
     );
     color: var(--bf-appearance-token-color-text-primary);
