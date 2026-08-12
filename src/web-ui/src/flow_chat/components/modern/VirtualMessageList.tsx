@@ -1828,7 +1828,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     presentationMode === 'history-window' && historyBoundaryState.after !== 'idle' ? (
       <FlowChatHistoryPagingSentinel
         state={historyBoundaryState.after}
-        label={t('historyState.loadingDescription')}
+        /*
+         * By state, like the boundary above it. One label for both read as
+         * history being prepared forever whenever a page failed, which is the
+         * one case where the reader is owed the opposite of "hold on".
+         */
+        label={historyBoundaryState.after === 'error'
+          ? t('historyState.newerHistoryNotReady')
+          : t('historyState.loadingDescription')}
       />
     ) : null
   ), [historyBoundaryState.after, presentationMode, t]);

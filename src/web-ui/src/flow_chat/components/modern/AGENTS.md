@@ -97,6 +97,14 @@ before reporting a defect as new.
   scroll distance to each end. Deciding whether the ask is honoured stays in the
   container, which declines while follow-output owns the viewport and until the
   visible range has left that boundary since the last page.
+- A page asks for what lies past the *rendered* transcript, never past the
+  window the store cut. The continuous projection makes those differ, and the
+  window's end is then an ordinal already on screen.
+- Every path out of a boundary intent records an outcome and leaves the boundary
+  status in a state it can be seen in. A silent return is a status the reader
+  keeps looking at, and `loading` is not a resting state.
+- A boundary status is labelled by what it is. An `error` rendered with the
+  `loading` label is a permanent failure shown as permanent progress.
 - The ask goes out a screenful before the boundary, so the junction lands off
   screen. Do not express that lead in items: one item here is anything from a
   38px user message to a 5012px model round.

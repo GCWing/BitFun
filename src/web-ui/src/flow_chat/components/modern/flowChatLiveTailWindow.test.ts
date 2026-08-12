@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  resolveHistoryBoundaryTarget,
   resolveTailWindowGrowth,
   transcriptReachesLatestTurn,
 } from './flowChatLiveTailWindow';
@@ -109,5 +110,70 @@ describe('resolveTailWindowGrowth', () => {
       knownTurnCount: 28,
       tailAnchoredWindowEnd: 27,
     })).toBe('release');
+  });
+});
+
+describe('resolveHistoryBoundaryTarget', () => {
+  it('asks for the Turn before the transcript on screen', () => {
+    expect(resolveHistoryBoundaryTarget({
+      direction: 'before',
+      renderedRange: { startOrdinal: 12, endOrdinalExclusive: 24 },
+      knownTurnCount: 40,
+    })).toEqual({ status: 'ask', targetOrdinal: 11 });
+  });
+
+  it('asks for the Turn after the transcript on screen', () => {
+    expect(resolveHistoryBoundaryTarget({
+      direction: 'after',
+      renderedRange: { startOrdinal: 12, endOrdinalExclusive: 24 },
+      knownTurnCount: 40,
+    })).toEqual({ status: 'ask', targetOrdinal: 24 });
+  });
+
+  it('is exhausted at the head of the session', () => {
+    expect(resolveHistoryBoundaryTarget({
+      direction: 'before',
+      renderedRange: { startOrdinal: 0, endOrdinalExclusive: 24 },
+      knownTurnCount: 40,
+    })).toEqual({ status: 'exhausted', reason: 'reached-start' });
+  });
+
+  it('is exhausted at the newest Turn, and says which nothing that is', () => {
+    /*
+     * The reported case, in ordinals. A window paged in from the tail ended at
+     * 6 while the session had grown to 10, the continuous projection spliced
+     * the two so the transcript on screen ran to the newest Turn, and reaching
+     * its bottom asked to load ordinal 6 — a Turn already on screen, which the
+     * catalog could not resolve. 266 asks, every one answered `not-found`, and
+     * a boundary status the reader read as history being prepared forever.
+     *
+     * Judged against the rendered range there is nothing to ask for, which is
+     * the honest answer and the one that latches the direction quiet.
+     */
+    expect(resolveHistoryBoundaryTarget({
+      direction: 'after',
+      renderedRange: { startOrdinal: 0, endOrdinalExclusive: 10 },
+      knownTurnCount: 10,
+    })).toEqual({ status: 'exhausted', reason: 'reached-latest' });
+  });
+
+  it('would still ask against the window the store cut, which is the bug', () => {
+    // The same session, judged against the store's window instead of the
+    // transcript: an ordinal that is both already rendered and unresolvable.
+    expect(resolveHistoryBoundaryTarget({
+      direction: 'after',
+      renderedRange: { startOrdinal: 0, endOrdinalExclusive: 6 },
+      knownTurnCount: 10,
+    })).toEqual({ status: 'ask', targetOrdinal: 6 });
+  });
+
+  it('separates asking past the head from asking past the newest Turn', () => {
+    // Only the first is a symptom: it means Turns the session claims to have
+    // are not reachable, which is how history goes missing rather than late.
+    expect(resolveHistoryBoundaryTarget({
+      direction: 'before',
+      renderedRange: { startOrdinal: 41, endOrdinalExclusive: 48 },
+      knownTurnCount: 40,
+    })).toEqual({ status: 'exhausted', reason: 'beyond-known-total' });
   });
 });

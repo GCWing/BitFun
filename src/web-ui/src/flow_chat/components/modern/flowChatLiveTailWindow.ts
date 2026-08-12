@@ -69,3 +69,60 @@ export function resolveTailWindowGrowth(
     ? 'extend'
     : 'none';
 }
+
+export interface RenderedTranscriptRange {
+  startOrdinal: number;
+  endOrdinalExclusive: number;
+}
+
+export type HistoryBoundaryTargetResolution =
+  /** The ordinal a page in this direction has to load. */
+  | { status: 'ask'; targetOrdinal: number }
+  /** There is nothing in this direction, and which nothing it is. */
+  | {
+      status: 'exhausted';
+      reason: 'reached-start' | 'reached-latest' | 'beyond-known-total';
+    };
+
+/**
+ * What paging past an edge of the transcript on screen would have to load.
+ *
+ * **The range is the one the reader is looking at, never the window the store
+ * cut.** Those are the same thing only until the continuous projection splices
+ * a window that starts at ordinal 0 with the live tail: the rendered transcript
+ * then runs to the newest Turn while the store's window still ends where it was
+ * paged in.
+ *
+ * Deriving the ask from the store's window there asks to load a Turn that is
+ * already on screen, and it fails in the worst available way. Measured: a
+ * window ending at ordinal 6 against a session of 10, projected continuous, so
+ * the reader was at the newest output; reaching the bottom asked for ordinal 6,
+ * which the *catalog* — six entries, and not extended as the session streamed —
+ * could not resolve. 266 asks in one session, every one answered `not-found`,
+ * every one leaving a boundary status the reader saw as "preparing history"
+ * over a transcript that was already complete.
+ *
+ * `reached-latest` is separated from `beyond-known-total` because only the
+ * second is a symptom. Asking past the newest Turn is what the bottom edge of a
+ * live transcript does every time the reader reaches it; asking past the known
+ * total in the *other* direction means Turns have gone missing.
+ */
+export function resolveHistoryBoundaryTarget(input: {
+  direction: 'before' | 'after';
+  renderedRange: RenderedTranscriptRange;
+  knownTurnCount: number;
+}): HistoryBoundaryTargetResolution {
+  const targetOrdinal = input.direction === 'before'
+    ? input.renderedRange.startOrdinal - 1
+    : input.renderedRange.endOrdinalExclusive;
+  if (targetOrdinal < 0) {
+    return { status: 'exhausted', reason: 'reached-start' };
+  }
+  if (targetOrdinal >= input.knownTurnCount) {
+    return {
+      status: 'exhausted',
+      reason: input.direction === 'after' ? 'reached-latest' : 'beyond-known-total',
+    };
+  }
+  return { status: 'ask', targetOrdinal };
+}

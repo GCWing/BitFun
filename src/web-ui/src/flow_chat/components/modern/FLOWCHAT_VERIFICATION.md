@@ -172,6 +172,12 @@ group does not renumber the others.
    puts the whole scroll range inside the reserved blank. Scroll up from there:
    history must load. This is the case where the reader is at the top, so the
    wheel emits no scroll event and the gesture is the only thing to go on.
+6. In an `isPartial` session that paged on open and is now streaming, scroll
+   down into the reserved blank and let the snap back return you. No history
+   status may appear at either end of the transcript — the transcript already
+   reaches the newest Turn, so there is nothing past its bottom to load. This
+   is the case that showed "preparing the conversation history" under a
+   complete transcript, permanently, and survived cancelling the Turn.
 
 ### Turn navigation
 

@@ -98,8 +98,10 @@ import {
   warnHistorySessionLoadingLayerStalled,
 } from '../../services/historySessionDiagnostics';
 import {
+  resolveHistoryBoundaryTarget,
   resolveTailWindowGrowth,
   transcriptReachesLatestTurn,
+  type RenderedTranscriptRange,
 } from './flowChatLiveTailWindow';
 import './ModernFlowChatContainer.scss';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
@@ -392,6 +394,15 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       ? canonicalizedHistoryPresentation
       : null;
   const isRenderingHistoryProjection = Boolean(renderedHistoryPresentation);
+  /**
+   * The range the reader is actually looking at, for the paging ask.
+   *
+   * Deliberately the *rendered* presentation and not `historyPresentationRef`,
+   * which holds the window the store cut. The continuous projection makes those
+   * two differ — see `resolveHistoryBoundaryTarget`.
+   */
+  const renderedHistoryPresentationRef = useRef(renderedHistoryPresentation);
+  renderedHistoryPresentationRef.current = renderedHistoryPresentation;
   /*
    * Whether the transcript on screen still reaches the newest Turn.
    *
@@ -1825,12 +1836,16 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         loadedRangeCount: historyView?.loadedRanges.length ?? null,
       });
 
-      let targetOrdinal: number;
-      if (presentation) {
-        targetOrdinal = direction === 'before'
-          ? presentation.range.startOrdinal - 1
-          : presentation.range.endOrdinalExclusive;
-      } else {
+      /*
+       * The range the ask is derived from is the one on screen, which is the
+       * continuous projection when that is what is rendered. `presentation`
+       * stays the store's window, because the extension below operates on it.
+       */
+      let renderedRange: RenderedTranscriptRange | null =
+        renderedHistoryPresentationRef.current?.sessionId === sessionId
+          ? renderedHistoryPresentationRef.current.range
+          : null;
+      if (!presentation) {
         if (
           direction !== 'before'
           || session?.isPartial !== true
@@ -1852,36 +1867,60 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           });
           return 'not-ready';
         }
-        targetOrdinal = canonicalTailRange.startOrdinal - 1;
+        // No window, so the transcript on screen is the canonical tail: it
+        // starts where that range does and runs to the newest Turn.
+        renderedRange = {
+          startOrdinal: canonicalTailRange.startOrdinal,
+          endOrdinalExclusive: totalTurnCount,
+        };
         recordHistoryPagingEvent(sessionId, 'target_resolved', {
           direction,
           canonicalTailStartOrdinal: canonicalTailRange.startOrdinal,
-          targetOrdinal,
+          targetOrdinal: canonicalTailRange.startOrdinal - 1,
         });
       }
-      if (targetOrdinal < 0 || targetOrdinal >= totalTurnCount) {
-        const reason = targetOrdinal < 0 ? 'reached-start' : 'beyond-known-total';
+      if (!renderedRange) {
+        recordHistoryPagingEvent(sessionId, 'outcome_not_ready', {
+          direction,
+          reason: 'no-rendered-range',
+        });
+        return 'not-ready';
+      }
+      const target = resolveHistoryBoundaryTarget({
+        direction,
+        renderedRange,
+        knownTurnCount: totalTurnCount,
+      });
+      if (target.status === 'exhausted') {
         recordHistoryPagingEvent(sessionId, 'outcome_exhausted', {
           direction,
-          reason,
-          targetOrdinal,
+          reason: target.reason,
+          renderedStartOrdinal: renderedRange.startOrdinal,
+          renderedEndOrdinalExclusive: renderedRange.endOrdinalExclusive,
+          windowEndOrdinalExclusive: presentation?.range.endOrdinalExclusive ?? null,
           totalTurnCount,
         });
-        // `exhausted` latches the direction off for the rest of the session, so
-        // reaching it on an unknown or contradictory total is how history goes
-        // silently missing rather than merely late.
-        if (reason === 'beyond-known-total') {
+        /*
+         * `exhausted` latches the direction off until the window moves, so
+         * reaching it on an unknown or contradictory total is how history goes
+         * silently missing rather than merely late.
+         *
+         * `reached-latest` is not that. It is what the bottom edge of a live
+         * transcript answers every time the reader arrives at it.
+         */
+        if (target.reason === 'beyond-known-total') {
           warnHistoryPagingRefusedWithPendingTurns(sessionId, {
             direction,
             reason: totalTurnCount <= 0 ? 'exhausted-on-unknown-total' : 'exhausted-beyond-total',
             isPartial: session?.isPartial,
             loadedTurnCount,
             totalTurnCount,
-            targetOrdinal,
+            targetOrdinal: renderedRange.startOrdinal - 1,
           });
         }
         return 'exhausted';
       }
+      const targetOrdinal = target.targetOrdinal;
 
       setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'loading' }));
       let viewportPreparationStarted = false;
@@ -1892,6 +1931,22 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           after: direction === 'after' ? 12 : 1,
         });
         if (!result.isCurrent || activeSessionIdRef.current !== sessionId) {
+          recordHistoryPagingEvent(sessionId, 'outcome_cancelled', {
+            direction,
+            reason: 'superseded',
+            targetOrdinal,
+            resultIsCurrent: result.isCurrent,
+            activeSessionIsCurrent: activeSessionIdRef.current === sessionId,
+          });
+          /*
+           * The status is ours to clear even though the load was not ours to
+           * finish. Left as it was, this returns silently with the boundary
+           * still reading `loading`, and the reader is shown history being
+           * prepared by nobody for the rest of the session.
+           */
+          if (activeSessionIdRef.current === sessionId) {
+            setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'idle' }));
+          }
           return 'cancelled';
         }
         if (result.status !== 'ready') {
@@ -1901,10 +1956,27 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
               'sequential-history-navigation',
             );
             if (historyReady && activeSessionIdRef.current === sessionId) {
+              recordHistoryPagingEvent(sessionId, 'outcome_applied', {
+                direction,
+                targetOrdinal,
+                reason: 'full-history-hydrated',
+              });
               setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'idle' }));
               return 'applied';
             }
           }
+          /*
+           * A refusal the reader is shown. It was silent here, and a status the
+           * boundary keeps forever deserves a line saying which load produced
+           * it: 266 asks in one session all landed on `not-found` and left the
+           * status standing, with nothing in the trail between the ask and the
+           * complaint.
+           */
+          recordHistoryPagingEvent(sessionId, 'outcome_not_ready', {
+            direction,
+            reason: `load-${result.status}`,
+            targetOrdinal,
+          });
           setHistoryBoundaryState(previous => ({ ...previous, [direction]: 'error' }));
           return 'not-ready';
         }

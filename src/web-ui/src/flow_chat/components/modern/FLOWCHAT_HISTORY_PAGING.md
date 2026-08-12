@@ -459,6 +459,47 @@ nothing if the burst blocks the main thread for 295ms. That is a property of how
 unmeasured items are reserved, not of the anchor, and it is why the virtualizer
 underneath it takes a per-item estimate.
 
+## The Ask Is Derived From the Transcript, Not From the Window
+
+**A page asks for what lies past the transcript on screen.** Those are the same
+range only until the continuous projection splices a window starting at ordinal
+0 with the live tail: the rendered transcript then runs to the newest Turn while
+the store's window still ends where it was paged in. `resolveHistoryBoundaryTarget`
+therefore takes the *rendered* range, and the store's window stays what the
+extension below operates on.
+
+Deriving the ask from the store's window instead asks to load a Turn that is
+already on screen. Measured, in a live session: a window paged in from the tail
+ended at ordinal 6 while the session had grown to 10, so the reader was sitting
+on the newest output with a `history-window` presentation behind it. Reaching
+the bottom asked for ordinal 6 — which the *turn catalog* could not resolve
+either, because it still held the six entries it was built with. 266 asks, every
+one answered `not-found`, none of them recorded, and a boundary status the
+reader was shown as history being prepared for a transcript that was already
+complete.
+
+Three things had to be true for that to reach a reader, and each is fixed where
+it belongs:
+
+- The ask used the wrong range. That is the bug; the rest is how it stayed
+  visible.
+- **`reached-latest` is not `beyond-known-total`.** Asking past the newest Turn
+  is what the bottom edge of a live transcript answers every time the reader
+  arrives at it, and it must not raise the missing-history alarm. Asking past
+  the known total going *backwards* still does.
+- **A load that fails records an outcome.** `not-ready` and the superseded
+  cancel both returned silently, which is why the trail held 266 asks and no
+  answers at all. The cancel also left the boundary status reading `loading`
+  forever; the status is ours to clear even when the load was not ours to
+  finish.
+
+The status the reader sees is separate again, and is in
+`FLOWCHAT_SCROLL_STABILITY.md`'s footer contract only insofar as the sentinel
+lives there: **a boundary in `error` must not be labelled as one in
+`loading`.** Both ends now pick their label by state. One label for both is why
+a permanent failure read as permanent progress, and why cancelling the Turn did
+not clear it — nothing about the Turn was ever involved.
+
 ## Reading History Is About the Transcript, Not the Intent
 
 `viewportMode: 'history-reading'` does two things — it suppresses streaming
