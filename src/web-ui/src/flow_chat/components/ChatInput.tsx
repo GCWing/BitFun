@@ -583,6 +583,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const threadGoalController = useThreadGoalController(effectiveTargetSession, {
     isBtwSession,
     disabled: !caps.threadGoal,
+    sceneActive: isSceneActive,
   });
   const currentSessionTitle = currentSession?.title?.trim() || t('session.untitled');
   const activeBtwSession = activeBtwSessionId
