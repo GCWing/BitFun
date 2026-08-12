@@ -115,15 +115,31 @@ const BOTTOM_EPSILON_PX = 2;
 const PIN_RESOLVE_MAX_ATTEMPTS = 30;
 
 /**
- * Frames a programmatic smooth scroll owns the viewport before the follow loop
- * resumes writing.
+ * How long a programmatic smooth scroll of ours may own the viewport before the
+ * follow loop resumes writing.
  *
  * The loop assigns `scrollTop` outright, which cancels an in-flight smooth
  * scroll on the very next frame — every `'smooth'` request in this hook was in
- * practice a jump. This is a frame budget rather than a flag so that a missing
- * completion signal costs a few idle frames instead of stalling follow.
+ * practice a jump until it yielded.
+ *
+ * A backstop rather than the actual terminator: the yield normally ends when
+ * the animation stops moving the viewport, and this only covers an animation
+ * that never finishes at all. It was a *frame* count and could not be — 45
+ * frames is 0.75s at 60Hz and 0.52s on a busy 200Hz display, so the duration a
+ * caller was buying depended on the machine. Measured: a jump to latest issued
+ * for 8717px animated 5480 of them and was finished by the loop in one 3290px
+ * write, 38% short.
  */
-const SMOOTH_SCROLL_YIELD_FRAMES = 45;
+const SMOOTH_SCROLL_YIELD_MS = 1_200;
+
+/**
+ * Frames without travel that mark our animated scroll as over.
+ *
+ * Two, because the frame that issues the animation can run before the browser
+ * has ticked it once, and one stalled frame there would hand the viewport back
+ * before the animation had started.
+ */
+const SMOOTH_SCROLL_STALL_FRAMES = 2;
 
 /**
  * Frames the follow target keeps being re-asserted after a non-streaming entry,
@@ -180,7 +196,12 @@ export function useFlowChatFollowOutput({
    */
   const pendingNewTurnIdRef = useRef<string | null>(null);
   const settleFramesRef = useRef(0);
-  const smoothScrollFramesRef = useRef(0);
+  /** When the yield to our own animated scroll lapses, if it has not ended. */
+  const smoothScrollUntilMsRef = useRef(0);
+  /** Where the viewport was on the previous frame of that yield. */
+  const smoothScrollLastTopRef = useRef(0);
+  /** Consecutive frames of that yield in which the viewport did not move. */
+  const smoothScrollStallFramesRef = useRef(0);
   const pendingSnapBackTargetRef = useRef<number | null>(null);
 
   isFollowingOutputRef.current = isFollowingOutput;
@@ -287,14 +308,34 @@ export function useFlowChatFollowOutput({
   }, [readContentEndScrollTop, readPinScrollTop, retirePin]);
 
   /**
+   * Stand the frame loop down for an animated scroll this hook is about to
+   * issue. Taken from the viewport as it is now, so the first frame of the
+   * yield can tell travel from a stall.
+   */
+  const beginSmoothScrollYield = useCallback(() => {
+    smoothScrollUntilMsRef.current = performance.now() + SMOOTH_SCROLL_YIELD_MS;
+    smoothScrollLastTopRef.current = scrollerRef.current?.scrollTop ?? 0;
+    smoothScrollStallFramesRef.current = 0;
+  }, [scrollerRef]);
+
+  const endSmoothScrollYield = useCallback(() => {
+    smoothScrollUntilMsRef.current = 0;
+    smoothScrollStallFramesRef.current = 0;
+  }, []);
+
+  /**
    * Issue the one-shot content-end scroll, yielding the frame loop to it when
    * it is animated. Without the yield the next frame overwrites `scrollTop` and
    * the animation never plays.
    */
   const runContentEndScroll = useCallback((behavior: ScrollBehavior) => {
-    smoothScrollFramesRef.current = behavior === 'smooth' ? SMOOTH_SCROLL_YIELD_FRAMES : 0;
+    if (behavior === 'smooth') {
+      beginSmoothScrollYield();
+    } else {
+      endSmoothScrollYield();
+    }
     scrollToContentEnd(behavior);
-  }, [scrollToContentEnd]);
+  }, [beginSmoothScrollYield, endSmoothScrollYield, scrollToContentEnd]);
 
   /** Move the viewport to whatever the follow state currently owns. */
   const applyFollowTarget = useCallback(() => {
@@ -334,11 +375,33 @@ export function useFlowChatFollowOutput({
     }
 
     const onTarget = Math.abs(next.target - scroller.scrollTop) <= BOTTOM_EPSILON_PX;
-    if (smoothScrollFramesRef.current > 0) {
-      // An animated scroll of ours is in flight and heading for this same
-      // target. Track the state, but leave the writing to it.
-      smoothScrollFramesRef.current = onTarget ? 0 : smoothScrollFramesRef.current - 1;
-      return;
+    if (performance.now() < smoothScrollUntilMsRef.current) {
+      /*
+       * An animated scroll of ours is in flight and heading for this same
+       * target. Track the state, but leave the writing to it.
+       *
+       * It ends when it stops moving the viewport, which is the animation's
+       * own answer rather than a guess at how long it takes: the browser
+       * scales the duration with the distance, and a jump to latest from the
+       * top of a transcript takes longer than anything else this issues.
+       * Arriving on target ends it too, for an animation whose last frames
+       * land inside `BOTTOM_EPSILON_PX` and stop reporting travel.
+       */
+      const movedPx = scroller.scrollTop - smoothScrollLastTopRef.current;
+      smoothScrollLastTopRef.current = scroller.scrollTop;
+      smoothScrollStallFramesRef.current = movedPx === 0
+        ? smoothScrollStallFramesRef.current + 1
+        : 0;
+      if (!onTarget && smoothScrollStallFramesRef.current < SMOOTH_SCROLL_STALL_FRAMES) {
+        return;
+      }
+      /*
+       * The animation is over, and the target has moved on under it — it aims
+       * at the offset it was issued for, and content arrives while it travels.
+       * Falling through rather than returning is what covers that growth on
+       * this frame instead of the next one.
+       */
+      endSmoothScrollYield();
     }
 
     if (!onTarget) {
@@ -400,6 +463,7 @@ export function useFlowChatFollowOutput({
       }
     }
   }, [
+    endSmoothScrollYield,
     isOpeningViewport,
     readContentEndScrollTop,
     readPinScrollTop,
@@ -532,10 +596,10 @@ export function useFlowChatFollowOutput({
       const pinTarget = readPinScrollTop() ?? scroller?.scrollTop ?? contentEnd;
       followStateRef.current = { mode: 'pin-turn-top', target: pinTarget };
       // Animated like every other jump to latest. The frame loop would cancel
-      // the animation on its next tick, so hand it the same yield budget
-      // `runContentEndScroll` uses.
+      // the animation on its next tick, so it stands down for it exactly as it
+      // does for `runContentEndScroll`.
       if (scroller && Math.abs(scroller.scrollTop - pinTarget) > BOTTOM_EPSILON_PX) {
-        smoothScrollFramesRef.current = SMOOTH_SCROLL_YIELD_FRAMES;
+        beginSmoothScrollYield();
         viewportOwner.write({
           owner: 'follow-output',
           topPx: pinTarget,
@@ -551,7 +615,7 @@ export function useFlowChatFollowOutput({
       pinTurnIdRef.current = pinTurnId;
       pinScrollTopRef.current = null;
       pinAttemptsRef.current = 0;
-      smoothScrollFramesRef.current = 0;
+      endSmoothScrollYield();
       followStateRef.current = { mode: 'pin-turn-top', target: scroller?.scrollTop ?? contentEnd };
     } else {
       retirePin();
@@ -562,6 +626,8 @@ export function useFlowChatFollowOutput({
     startFollowFrame();
   }, [
     viewportOwner,
+    beginSmoothScrollYield,
+    endSmoothScrollYield,
     readContentEndScrollTop,
     readPinScrollTop,
     retirePin,
@@ -590,12 +656,12 @@ export function useFlowChatFollowOutput({
     }
     isFollowingOutputRef.current = false;
     setIsFollowingOutput(false);
-    smoothScrollFramesRef.current = 0;
+    endSmoothScrollYield();
     pendingSnapBackTargetRef.current = null;
     viewportOwner.release('follow-output');
     viewportOwner.release('snap-back');
     stopFollowFrame();
-  }, [scrollerRef, stopFollowFrame, viewportOwner]);
+  }, [endSmoothScrollYield, scrollerRef, stopFollowFrame, viewportOwner]);
 
   /**
    * Re-assert ownership after a layout change. This deliberately does not force

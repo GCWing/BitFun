@@ -41,6 +41,10 @@ before reporting a defect as new.
 - A follow the frame loop is still correcting counts as being at the tail.
   Ownership cannot stand in for that: it outlives the loop, which is exactly the
   state a viewport stranded in the reserved blank is in.
+- The loop's stand-down for its own animated scroll ends when the viewport stops
+  moving, never on a frame count. A frame count is not a duration, and the
+  browser scales a smooth scroll with its distance; the wall-clock constant is a
+  backstop for an animation that never ends.
 - Footer height represents only the current input-stack layout and real footer
   content such as history state and `RuntimeStatusSlot`. The tail spacer is a
   separate sibling and must not be folded into it.

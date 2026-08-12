@@ -604,6 +604,85 @@ describe('useFlowChatFollowOutput', () => {
     expect(scroller.scrollTop).toBe(0);
   });
 
+  describe('standing down for its own animated scroll', () => {
+    /**
+     * Mounts a transcript whose content ends at 4500, settles there, and then
+     * issues an animated jump to latest from the top.
+     *
+     * jsdom does not animate, so the animation is played by hand below. That is
+     * the point of these tests: what ends the stand-down is the viewport having
+     * stopped moving, and only a test that moves it can tell that apart from a
+     * budget running out.
+     */
+    function jumpToLatestFromTheTop() {
+      setScrollerMetrics(scroller, {
+        scrollHeight: 5000 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      runNextFrame();
+      expect(scroller.scrollTop).toBe(4500);
+      scroller.scrollTop = 0;
+      act(() => controller?.enterFollowOutput('jump-to-latest'));
+    }
+
+    /** One frame of an animation that has travelled `byPx` since the last. */
+    function animateFrame(byPx: number) {
+      scroller.scrollTop += byPx;
+      runNextFrame();
+    }
+
+    it('stays out of the way for as long as the animation is still travelling', () => {
+      // The stand-down used to be 45 frames, which is 0.75s at 60Hz and 0.52s
+      // on a busy 200Hz display — measured, a jump issued for 8717px animated
+      // 5480 of them and was finished by the loop in one 3290px write.
+      jumpToLatestFromTheTop();
+
+      for (let frame = 0; frame < 60; frame += 1) {
+        animateFrame(50);
+        expect(scroller.scrollTop).toBe(50 * (frame + 1));
+      }
+    });
+
+    it('resumes once the animation stops moving the viewport', () => {
+      jumpToLatestFromTheTop();
+      animateFrame(50);
+
+      // One still frame is not an answer: the frame that issues an animation
+      // can run before the browser has ticked it once.
+      animateFrame(0);
+      expect(scroller.scrollTop).toBe(50);
+
+      animateFrame(0);
+      expect(scroller.scrollTop).toBe(4500);
+    });
+
+    it('takes the viewport back on the backstop when the animation never ends', () => {
+      const nowSpy = vi.spyOn(performance, 'now');
+      try {
+        nowSpy.mockReturnValue(0);
+        jumpToLatestFromTheTop();
+        // Still travelling, so nothing but the backstop can end this.
+        nowSpy.mockReturnValue(1_300);
+
+        animateFrame(50);
+
+        expect(scroller.scrollTop).toBe(4500);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+  });
+
   describe('easing the follow across the frames it has', () => {
     /** Mounts a streaming transcript resting exactly on its content end. */
     function followFromContentEnd() {

@@ -83,7 +83,11 @@ group does not renumber the others.
    off once its answer overflows the viewport.
 2. With output streaming, scroll up and hold still. Follow must not write while
    the gesture is recent, and must resume once it goes quiet.
-3. Jump to latest is animated rather than an instant jump.
+3. Jump to latest is animated rather than an instant jump — including from the
+   top of a long transcript, which is the longest animation anything here
+   issues and the one a frame-counted stand-down used to cut short. It must
+   glide the whole way, with at most a small catch-up for content that arrived
+   while it travelled.
 4. While reading a history window, let output arrive from somewhere else. The
    viewport must not move — this is the case the submission event exists to
    stay out of.

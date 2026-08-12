@@ -326,14 +326,34 @@ throughout the transcript, because it fights the virtualizer.
 `applyFollowTarget` assigns `scrollTop` outright, which cancels an in-flight
 smooth scroll on the very next frame. Both `'smooth'` requests in
 `useFlowChatFollowOutput` — the jump to latest and the post-streaming settle —
-were therefore jumps in practice. `runContentEndScroll` now hands the loop a
-frame budget to stay quiet for.
+were therefore jumps in practice, so the loop stands down while one travels.
 
-This is a budget rather than a flag on purpose: a missing completion signal
-costs a few idle frames, where a stuck flag would stall follow entirely. It is
-also *intra-owner* and deliberately outside the register: `smoothScrollFramesRef`
-is follow-output yielding to its own animation, and the register arbitrates
-between writers rather than inside one. See `FLOWCHAT_VIEWPORT_REGISTER.md`.
+**What ends the stand-down is the viewport having stopped moving.** Two
+consecutive frames without travel say the animation is over, or was cancelled,
+or never started; either way there is nothing left to yield to. Two rather than
+one, because the frame that issues the animation can run before the browser has
+ticked it once. Arriving on target ends it as well, for an animation whose last
+frames land inside `BOTTOM_EPSILON_PX` and stop reporting travel.
+
+This used to be a *frame* budget, and a frame count is not a duration: 45
+frames is 0.75s at 60Hz and was 0.52s on a busy 200Hz display, so what a caller
+bought depended on the machine it ran on. The browser scales a smooth scroll's
+duration with its distance, and a jump to latest from the top of a transcript
+is the longest thing this issues — measured, one aimed at 8717px animated 5480
+of them and was finished by the loop in a single 3290px write, 38% short.
+`SMOOTH_SCROLL_YIELD_MS` remains as a backstop for an animation that never ends
+at all, which is a wall-clock fact and now written as one.
+
+The stand-down ends *by falling through to the write*, not by returning. An
+animation aims at the offset it was issued for, and content arrives while it
+travels, so the frame that reclaims the viewport is also the frame that covers
+whatever grew — one catch-up step rather than one wasted frame and then a
+bigger one.
+
+The whole mechanism is *intra-owner* and deliberately outside the register:
+this is follow-output yielding to its own animation, and the register
+arbitrates between writers rather than inside one. See
+`FLOWCHAT_VIEWPORT_REGISTER.md`.
 
 ## Footer Contract
 
@@ -366,11 +386,11 @@ content such as history state and `RuntimeStatusSlot`.
   60Hz than on the ~200Hz display these numbers come from, and a fast enough
   stream is a line a frame anywhere — at which point the ease is spending its
   lag and buying nothing.
-- `SMOOTH_SCROLL_YIELD_FRAMES` is a frame budget, so on a 200Hz display it
-  covers 0.22s where at 60Hz it covers 0.75s. Measured: a jump to latest from
-  the top of a transcript animated for its budget and was then finished by the
-  frame loop in one 3290px write. The animation is cut short rather than
-  cancelled outright, and the follow lands on the right offset either way.
+- `SMOOTH_SCROLL_YIELD_MS` is only a backstop now, but it is still a guess: an
+  animation that stalls mid-flight without ever resuming holds the follow off
+  for its whole duration. Nothing observed has done that — the stall check ends
+  every real animation long before it — and the cost if one did is the follow
+  resuming late, not the viewport landing wrong.
 - A scrollbar drag is recognised from the gutter the bar occupies, so it is
   invisible where the platform draws overlay scrollbars that take no layout
   width — WebKit-backed builds, where `scrollbar-gutter: stable` reserves
@@ -384,7 +404,8 @@ content such as history state and `RuntimeStatusSlot`.
   excess only.
 - An animated scroll aims at the target it was issued for. Jumping to latest
   while output is arriving therefore ends with one catch-up step covering
-  whatever content grew during the animation.
+  whatever content grew during the animation — under the ease's snap threshold
+  at ordinary streaming rates, and a visible jump above them.
 - A width change anchors the viewport bottom only for a viewport that was at the
   end of the transcript. Everywhere else the reflow moves content out from under
   the bottom edge and nothing puts it back, because the anchor would have to be
