@@ -149,20 +149,35 @@ const DESCRIBE_SCREEN_AX_DEPTH: u32 = 20;
 /// it needs a bound that does not depend on the app behaving reasonably.
 const DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES: usize = 60_000;
 
-/// Trim an AX tree to [`DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES`] on a line
-/// boundary, appending a note that says what was dropped and how to get it.
+/// Byte ceiling on the AX tree carried by `get_app_state` and every `app_*`
+/// action result.
+///
+/// Higher than the `describe_screen` cap because these are explicit requests
+/// for an app's tree rather than a routine observation — but still a ceiling.
+/// Measured unbounded output on a real Electron app was 390 KB from a single
+/// `get_app_state`, roughly 100k tokens, which is most of a context window
+/// spent on one look at one app.
+pub(crate) const APP_STATE_TREE_TEXT_MAX_BYTES: usize = 120_000;
+
+/// A routine observation must never be allowed a bigger tree than an explicit
+/// query for one. Checked at compile time so reordering the two constants is a
+/// build error rather than something a test has to notice.
+const _: () = assert!(DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES < APP_STATE_TREE_TEXT_MAX_BYTES);
+
+/// Trim an AX tree to `max_bytes` on a line boundary, appending a note that
+/// says what was dropped and how to get it.
 ///
 /// Silent truncation would be worse than the problem it solves: the agent would
 /// read a partial tree as the whole UI and conclude a control does not exist.
-fn clip_tree_text(text: String) -> String {
-    if text.len() <= DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES {
+pub(crate) fn clip_tree_text(text: String, max_bytes: usize) -> String {
+    if text.len() <= max_bytes {
         return text;
     }
     // Walk back to a char boundary before slicing. The cap is a byte count, and
     // slicing a `str` at a byte index inside a multi-byte character panics —
     // which CJK app trees (the ones most likely to be large) would hit
     // constantly.
-    let mut end = DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES;
+    let mut end = max_bytes;
     while end > 0 && !text.is_char_boundary(end) {
         end -= 1;
     }
@@ -556,8 +571,11 @@ The **primary model cannot consume images** in tool results — **do not** use *
                     window_title = snap.window_title.clone();
                     ax_nodes_count = Some(snap.nodes.len());
                     ax_digest = Some(snap.digest.clone());
-                    ax_tree_text =
-                        Some(clip_tree_text(snap.tree_text)).filter(|t| !t.trim().is_empty());
+                    ax_tree_text = Some(clip_tree_text(
+                        snap.tree_text,
+                        DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES,
+                    ))
+                    .filter(|t| !t.trim().is_empty());
                     if ax_tree_text.is_some() {
                         "ok"
                     } else {
@@ -2246,7 +2264,10 @@ fn req_i32(input: &Value, key: &str) -> BitFunResult<i32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{clip_tree_text, ComputerUseTool, DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES};
+    use super::{
+        clip_tree_text, ComputerUseTool, APP_STATE_TREE_TEXT_MAX_BYTES,
+        DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES,
+    };
     use crate::agentic::tools::computer_use_host::{
         ComputerScreenshot, ComputerUseForegroundApplication, ComputerUseHost,
         ComputerUsePermissionSnapshot, ComputerUseScreenshotParams, ComputerUseSessionSnapshot,
@@ -2658,7 +2679,34 @@ mod tests {
     #[test]
     fn tree_text_under_the_cap_is_returned_verbatim() {
         let small = "[0] AXApplication\n  [1] AXWindow\n".to_string();
-        assert_eq!(clip_tree_text(small.clone()), small);
+        assert_eq!(
+            clip_tree_text(small.clone(), DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES),
+            small
+        );
+    }
+
+    /// Both caps must actually bound the payload. `get_app_state` is allowed a
+    /// larger tree than a routine `describe_screen` because it is an explicit
+    /// request for one, but "larger" is not "unbounded" — an uncapped
+    /// `get_app_state` measured 390 KB on a real Electron app, roughly 100k
+    /// tokens for a single look.
+    #[test]
+    fn both_ax_tree_caps_bound_the_payload() {
+        let line = "[0] AXButton title=\"x\" frame=(0,0,10x10)\n";
+        let huge = line.repeat(APP_STATE_TREE_TEXT_MAX_BYTES / line.len() + 5_000);
+        for cap in [
+            DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES,
+            APP_STATE_TREE_TEXT_MAX_BYTES,
+        ] {
+            let out = clip_tree_text(huge.clone(), cap);
+            assert!(out.contains("[truncated]"), "cap={cap}");
+            let body = out.split("\n[truncated]").next().unwrap();
+            assert!(
+                body.len() <= cap,
+                "cap={cap} but kept {} bytes of tree",
+                body.len()
+            );
+        }
     }
 
     /// Truncation must announce itself. An agent that reads a clipped tree as
@@ -2667,7 +2715,7 @@ mod tests {
     fn oversized_tree_text_is_clipped_on_a_line_boundary_and_says_so() {
         let line = "[0] AXButton title=\"x\" frame=(0,0,10x10)\n";
         let big = line.repeat(DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES / line.len() + 500);
-        let out = clip_tree_text(big.clone());
+        let out = clip_tree_text(big.clone(), DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES);
 
         assert!(out.len() < big.len(), "must actually shrink");
         assert!(
@@ -2697,7 +2745,7 @@ mod tests {
             let big = line.repeat(DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES / line.len() + 500);
             assert!(big.len() > DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES);
 
-            let out = clip_tree_text(big.clone());
+            let out = clip_tree_text(big.clone(), DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES);
             assert!(out.contains("[truncated]"), "must announce the clip");
             assert!(out.len() < big.len(), "must actually shrink");
         }
@@ -2720,7 +2768,7 @@ mod tests {
             s.push_str(&"范".repeat(DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES / 3 + 10));
             assert!(s.len() > DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES);
 
-            let out = clip_tree_text(s.clone());
+            let out = clip_tree_text(s.clone(), DESCRIBE_SCREEN_TREE_TEXT_MAX_BYTES);
             assert!(out.contains("[truncated]"), "pad={pad}");
             let body = out.split("\n[truncated]").next().unwrap();
             assert!(

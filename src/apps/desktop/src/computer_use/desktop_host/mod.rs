@@ -48,6 +48,55 @@ const OPEN_APP_WINDOW_WAIT_MS: u64 = 8_000;
 #[cfg(target_os = "macos")]
 const OPEN_APP_POLL_INTERVAL_MS: u64 = 150;
 
+/// How long an `open_app` AppleScript may run before it is killed.
+///
+/// `activate` sends an AppleEvent to the target app and waits for it to answer.
+/// A hung or busy app simply does not answer, and macOS's default AppleEvent
+/// timeout is **120 seconds** — during which `open_app` occupies a blocking
+/// thread and the agent has no idea anything is wrong. An app that has not
+/// acknowledged activation in a few seconds is not going to.
+#[cfg(target_os = "macos")]
+const OSASCRIPT_TIMEOUT_MS: u64 = 10_000;
+
+/// Run `osascript -e <script>`, killing it if it outlives `timeout_ms`.
+///
+/// `Command::output()` has no timeout, so a wedged AppleEvent blocks until
+/// macOS gives up. Polling `try_wait` lets us bound it. Output here is a bundle
+/// id or an error line, far below the pipe buffer, so draining after exit
+/// cannot deadlock — and a child that did fill the buffer would stop making
+/// progress and get killed by this same deadline.
+#[cfg(target_os = "macos")]
+fn run_osascript_bounded(script: &str, timeout_ms: u64) -> std::io::Result<std::process::Output> {
+    use std::process::Stdio;
+
+    let mut child = std::process::Command::new("/usr/bin/osascript")
+        .args(["-e", script])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    loop {
+        match child.try_wait()? {
+            // Exited: `wait_with_output` below returns the recorded status.
+            Some(_) => break,
+            None => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!("osascript did not finish within {}ms", timeout_ms),
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        }
+    }
+    child.wait_with_output()
+}
+
 /// Quote a string as an AppleScript literal.
 ///
 /// App names reach us from the model and can contain quotes or backslashes;
@@ -191,6 +240,33 @@ mod macos_applescript_tests {
   return (try (bundle identifier of p as text) on error "" end try)
 end tell"#;
         assert!(compiles(broken).is_err());
+    }
+
+    /// A wedged AppleEvent must not pin a blocking thread for macOS's 120s
+    /// default. `delay` inside osascript is a real hang from our side: the
+    /// process is alive and unresponsive, exactly like an app that never
+    /// acknowledges activation.
+    #[test]
+    fn a_hung_applescript_is_killed_at_the_deadline() {
+        let started = std::time::Instant::now();
+        let err = run_osascript_bounded("delay 30", 700)
+            .expect_err("a 30s script under a 700ms budget must not succeed");
+
+        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut, "{err}");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "returned after {:?} — the deadline did not take effect",
+            started.elapsed()
+        );
+    }
+
+    /// The bounded runner must stay a drop-in for the normal path: same stdout,
+    /// same exit status.
+    #[test]
+    fn a_normal_applescript_still_returns_its_output() {
+        let out = run_osascript_bounded("return \"ok\"", OSASCRIPT_TIMEOUT_MS).expect("should run");
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "ok");
     }
 
     #[test]
@@ -576,24 +652,33 @@ impl DesktopComputerUseHost {
         // `id of application "X"` asks LaunchServices to resolve the name the
         // same way `tell application "X"` will, so the bundle id we report is
         // guaranteed to describe the app we are about to activate.
-        let bundle_id = std::process::Command::new("/usr/bin/osascript")
-            .args([
-                "-e",
-                &format!("id of application {}", applescript_quote(&name)),
-            ])
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .filter(|s| !s.is_empty());
+        let bundle_id = run_osascript_bounded(
+            &format!("id of application {}", applescript_quote(&name)),
+            OSASCRIPT_TIMEOUT_MS,
+        )
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty());
 
-        let activate = std::process::Command::new("/usr/bin/osascript")
-            .args([
-                "-e",
-                &format!("tell application {} to activate", applescript_quote(&name)),
-            ])
-            .output()
-            .map_err(|e| BitFunError::tool(format!("open_app osascript: {}", e)))?;
+        let activate = match run_osascript_bounded(
+            &format!("tell application {} to activate", applescript_quote(&name)),
+            OSASCRIPT_TIMEOUT_MS,
+        ) {
+            Ok(out) => out,
+            // A timeout is a real outcome, not an internal error: the app is
+            // installed but not answering. Report it as a failed launch the
+            // agent can act on rather than bubbling an opaque io error.
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                return Ok(failure(format!(
+                    "'{}' did not respond to activation within {}s — it may be hung or showing a modal dialog. \
+Check the app directly, or ask the user to bring it up.",
+                    name,
+                    OSASCRIPT_TIMEOUT_MS / 1000
+                )));
+            }
+            Err(e) => return Err(BitFunError::tool(format!("open_app osascript: {}", e))),
+        };
         if !activate.status.success() {
             return Ok(failure(
                 String::from_utf8_lossy(&activate.stderr).trim().to_string(),
@@ -1274,6 +1359,18 @@ impl ComputerUseHost for DesktopComputerUseHost {
         if pending_verify && recommended_next_action.is_none() {
             recommended_next_action = Some("screenshot".to_string());
         }
+
+        // `interaction_state` rides on *every* ComputerUse result, and the
+        // display list is the bulk of it. On a single-screen machine it is pure
+        // repetition: `active_display_id` already names the only screen, and
+        // there is nothing to disambiguate. It earns its bytes only when the
+        // model actually has to choose, so send it only then — `list_displays`
+        // and `describe_screen` still report the full list on demand.
+        let displays = if displays.len() > 1 {
+            displays
+        } else {
+            Vec::new()
+        };
 
         ComputerUseInteractionState {
             click_ready,
