@@ -36,8 +36,10 @@ export interface TodoOccurrence {
   atMs: number;
   /** True when the scheduler has this exact run queued as its next action. */
   isNextRun: boolean;
-  /** True when the run time has passed but the scheduler has not cleared it. */
+  /** True when the run time has passed and the job is not currently running. */
   isOverdue: boolean;
+  /** True while the scheduler is executing this run. */
+  isRunning: boolean;
 }
 
 /**
@@ -54,12 +56,32 @@ export interface InactiveTodo {
 }
 
 export interface TodoBuckets {
-  /** Due within 24 hours (including overdue), ascending. */
+  /** Due within 24 hours (including overdue and running), ascending. */
   upcoming: TodoOccurrence[];
   /** More than 24 hours out, ascending. */
   later: TodoOccurrence[];
+  /**
+   * Everything still scheduled, near-term included, for the calendar tier.
+   *
+   * The calendar shows the whole agenda rather than only the far half: a run
+   * happening today is exactly what someone opening a calendar expects to see.
+   * Only jobs with nothing left to run stay out of it.
+   */
+  calendar: TodoOccurrence[];
   /** Jobs with no upcoming run at all. */
   inactive: InactiveTodo[];
+}
+
+/**
+ * Whether the scheduler is executing this job right now.
+ *
+ * A running job keeps its pending trigger timestamp in the past until the turn
+ * finishes, so without this check an in-flight run reads as overdue.
+ */
+export function isJobRunning(job: CronJob): boolean {
+  return job.state.activeTurnId != null
+    || job.state.lastRunStatus === 'running'
+    || job.state.lastRunStatus === 'queued';
 }
 
 export interface BuildTodoBucketsOptions {
@@ -263,12 +285,17 @@ export function buildTodoBuckets(
       occurrenceTimes.sort((a, b) => a - b);
     }
 
+    const running = isJobRunning(job);
+
     for (const atMs of occurrenceTimes) {
       const occurrence: TodoOccurrence = {
         job,
         atMs,
         isNextRun: atMs === scheduledAtMs,
-        isOverdue: atMs < nowMs,
+        // A run that is executing is late only in the clock sense; surfacing it
+        // as overdue misreports healthy work as a problem.
+        isOverdue: atMs < nowMs && !running,
+        isRunning: running && atMs === scheduledAtMs,
       };
       if (atMs <= listBoundaryMs) {
         upcoming.push(occurrence);
@@ -285,7 +312,9 @@ export function buildTodoBuckets(
   later.sort(byTime);
   inactive.sort((a, b) => b.job.configUpdatedAtMs - a.job.configUpdatedAtMs);
 
-  return { upcoming, later, inactive };
+  const calendar = [...upcoming, ...later].sort(byTime);
+
+  return { upcoming, later, calendar, inactive };
 }
 
 /** Local calendar-day key (`YYYY-MM-DD`) used to bucket occurrences into cells. */

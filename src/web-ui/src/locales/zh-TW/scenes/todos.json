@@ -17,7 +17,7 @@
   },
   "calendar": {
     "title": "更晚",
-    "hint": "24 小時之後執行的任務。",
+    "hint": "全部排程執行時間，含 24 小時內的任務。",
     "previousMonth": "上個月",
     "nextMonth": "下個月",
     "today": "今天",
@@ -41,13 +41,22 @@
   },
   "schedule": {
     "once": "單次：{{at}}",
-    "every": "每 {{everyMinutes}} 分鐘",
     "cron": "Cron：{{expr}}",
     "cronWithTz": "Cron：{{expr}} · {{tz}}",
     "kinds": {
       "at": "單次",
       "every": "間隔",
       "cron": "Cron"
+    },
+    "everyUnit": {
+      "minute": "每 {{value}} 分鐘",
+      "hour": "每 {{value}} 小時",
+      "day": "每 {{value}} 天"
+    },
+    "intervalUnits": {
+      "minute": "分鐘",
+      "hour": "小時",
+      "day": "天"
     }
   },
   "target": {
@@ -68,13 +77,13 @@
       "agentType": "Agent 類型",
       "scheduleKind": "排程類型",
       "at": "執行時間",
-      "everyMinutes": "間隔（分鐘）",
       "anchor": "起算時間（選填）",
       "cronExpr": "Cron 運算式",
       "timezone": "時區（選填）",
       "enabled": "啟用",
       "prompt": "提示詞",
-      "runsIn": "執行位置"
+      "runsIn": "執行位置",
+      "every": "間隔"
     },
     "placeholders": {
       "name": "例如：每日站立會議摘要",

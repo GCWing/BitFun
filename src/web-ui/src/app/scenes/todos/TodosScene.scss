@@ -166,6 +166,10 @@ $todos-stack-breakpoint: 1080px;
       box-shadow: inset 2px 0 0 var(--bf-appearance-token-color-warning);
     }
 
+    &--running {
+      box-shadow: inset 2px 0 0 var(--bf-appearance-token-color-accent-500);
+    }
+
     &--disabled {
       opacity: 0.62;
     }
@@ -232,6 +236,11 @@ $todos-stack-breakpoint: 1080px;
     &--warn {
       background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 16%, transparent);
       color: var(--bf-appearance-token-color-warning);
+    }
+
+    &--running {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 16%, transparent);
+      color: var(--bf-appearance-token-color-success);
     }
   }
 
@@ -526,6 +535,13 @@ $todos-stack-breakpoint: 1080px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__interval {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(84px, auto);
+    gap: $size-gap-2;
+    align-items: center;
   }
 
   &__workspace-option {

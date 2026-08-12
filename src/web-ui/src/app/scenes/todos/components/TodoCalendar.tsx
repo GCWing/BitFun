@@ -1,9 +1,10 @@
 /**
- * Month calendar for Todos scheduled more than 24 hours out.
+ * Month calendar covering the whole remaining agenda.
  *
- * Near-term runs deliberately do not appear here — they live in the list tier —
- * so the header states the cut-off rather than leaving today's cell looking
- * mysteriously empty.
+ * Near-term runs appear here as well as in the 24-hour list: the list answers
+ * "what is about to happen", the calendar answers "when is everything
+ * happening", and hiding today's runs from it only made day cells look wrong.
+ * Jobs with nothing left to run are the only ones left out.
  */
 
 import React, { useMemo } from 'react';

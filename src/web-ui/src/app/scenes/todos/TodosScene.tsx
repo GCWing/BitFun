@@ -2,8 +2,9 @@
  * TodosScene — one place for every scheduled task across all workspaces.
  *
  * Two tiers, as the panel's contract:
- *   - anything due within 24 hours is listed, newest deadline first;
- *   - anything further out is placed on a month calendar.
+ *   - anything due within 24 hours is listed, soonest first;
+ *   - the month calendar carries the whole remaining agenda, near-term runs
+ *     included, so a day cell is never mysteriously empty.
  *
  * Todos are scheduled jobs, so this reads and writes the same cron service the
  * agent's own scheduling tool and the per-workspace editors use. Changes here
@@ -147,8 +148,8 @@ const TodosScene: React.FC = () => {
 
   const selectedDayOccurrences = useMemo(() => {
     if (!selectedDayKey) return [];
-    return groupOccurrencesByDay(buckets.later).get(selectedDayKey) ?? [];
-  }, [buckets.later, selectedDayKey]);
+    return groupOccurrencesByDay(buckets.calendar).get(selectedDayKey) ?? [];
+  }, [buckets.calendar, selectedDayKey]);
 
   const resetEditor = useCallback(() => {
     setEditorOpen(false);
@@ -392,6 +393,7 @@ const TodosScene: React.FC = () => {
                   atMs={occurrence.atMs}
                   isOverdue={occurrence.isOverdue}
                   isNextRun={occurrence.isNextRun}
+                  isRunning={occurrence.isRunning}
                   nowMs={nowMs}
                   workspaces={openedWorkspacesList}
                   isSelected={editingJob?.id === occurrence.job.id}
@@ -435,7 +437,7 @@ const TodosScene: React.FC = () => {
           data-bf-part="calendarPane"
         >
           <TodoCalendar
-            occurrences={buckets.later}
+            occurrences={buckets.calendar}
             monthAnchorMs={monthAnchorMs}
             selectedDayKey={selectedDayKey}
             nowMs={nowMs}
@@ -474,6 +476,7 @@ const TodosScene: React.FC = () => {
                       job={occurrence.job}
                       atMs={occurrence.atMs}
                       isNextRun={occurrence.isNextRun}
+                      isRunning={occurrence.isRunning}
                       nowMs={nowMs}
                       workspaces={openedWorkspacesList}
                       isSelected={editingJob?.id === occurrence.job.id}

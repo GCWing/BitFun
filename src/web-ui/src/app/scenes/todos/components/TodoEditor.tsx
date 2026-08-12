@@ -21,6 +21,12 @@ import {
   type JobDraftValidationErrors,
   type ScheduleKind,
 } from '@/app/components/scheduled-jobs/scheduledJobDraft';
+import {
+  INTERVAL_UNIT_OPTIONS,
+  type IntervalUnit,
+} from '@/app/components/scheduled-jobs/scheduledJobDraft';
+import LocalizedDateTimeField from '@/app/components/scheduled-jobs/LocalizedDateTimeField';
+import '@/app/components/scheduled-jobs/LocalizedDateTimeField.scss';
 import type { TodoWorkspaceOption } from '../todoPresentation';
 
 const log = createLogger('TodoEditor');
@@ -230,7 +236,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
               onValidationErrorsChange((current) => ({
                 ...current,
                 at: false,
-                everyMinutes: false,
+                everyValue: false,
                 cronExpr: false,
               }));
               onDraftChange((current) => ({
@@ -248,13 +254,10 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
         {draft.scheduleKind === 'at' ? (
           <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
             <span className="bf-todos__field-label">{t('editor.fields.at')}</span>
-            <Input
-              size="small"
-              type="datetime-local"
+            <LocalizedDateTimeField
               value={draft.at}
               error={validationErrors.at}
-              onChange={(event) => {
-                const at = event.currentTarget.value;
+              onChange={(at) => {
                 clearError('at');
                 // Re-enable a Todo that was left off after its time passed.
                 onDraftChange((current) => ({
@@ -270,28 +273,37 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
         {draft.scheduleKind === 'every' ? (
           <>
             <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-              <span className="bf-todos__field-label">{t('editor.fields.everyMinutes')}</span>
-              <Input
-                size="small"
-                type="number"
-                value={draft.everyMinutes}
-                error={validationErrors.everyMinutes}
-                placeholder="60"
-                onChange={(event) => {
-                  const everyMinutes = event.currentTarget.value;
-                  clearError('everyMinutes');
-                  updateDraft({ everyMinutes });
-                }}
-              />
+              <span className="bf-todos__field-label">{t('editor.fields.every')}</span>
+              <div className="bf-todos__interval">
+                <Input
+                  size="small"
+                  type="number"
+                  value={draft.everyValue}
+                  error={validationErrors.everyValue}
+                  placeholder="1"
+                  onChange={(event) => {
+                    const everyValue = event.currentTarget.value;
+                    clearError('everyValue');
+                    updateDraft({ everyValue });
+                  }}
+                />
+                <Select
+                  size="small"
+                  value={draft.everyUnit}
+                  options={INTERVAL_UNIT_OPTIONS.map((unit) => ({
+                    value: unit,
+                    label: t(`schedule.intervalUnits.${unit}`),
+                  }))}
+                  onChange={(value) => updateDraft({ everyUnit: value as IntervalUnit })}
+                />
+              </div>
             </label>
             <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
               <span className="bf-todos__field-label">{t('editor.fields.anchor')}</span>
-              <Input
-                size="small"
-                type="datetime-local"
+              <LocalizedDateTimeField
                 value={draft.anchorMs}
-                placeholder={t('editor.placeholders.anchor')}
-                onChange={(event) => updateDraft({ anchorMs: event.currentTarget.value })}
+                aria-label={t('editor.fields.anchor')}
+                onChange={(anchorMs) => updateDraft({ anchorMs })}
               />
             </label>
           </>

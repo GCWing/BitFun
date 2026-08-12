@@ -330,6 +330,70 @@ describe('buildTodoBuckets', () => {
     expect(later[0].isNextRun).toBe(true);
   });
 
+  it('puts near-term runs on the calendar as well as in the list', () => {
+    const job = makeJob({
+      schedule: { kind: 'cron', expr: '0 9 * * *' },
+      state: { consecutiveFailures: 0, coalescedRunCount: 0, nextRunAtMs: localMs(2026, 8, 13, 9, 0) },
+    });
+
+    const { upcoming, later, calendar } = buildTodoBuckets([job], { nowMs, rangeEndMs });
+
+    // The list keeps its 24-hour scope, but the calendar carries the whole
+    // agenda so today's and tomorrow's cells are not mysteriously empty.
+    expect(upcoming).toHaveLength(1);
+    expect(calendar).toHaveLength(upcoming.length + later.length);
+    expect(calendar.map((o) => o.atMs)).toContain(localMs(2026, 8, 13, 9, 0));
+    expect(calendar).toEqual([...calendar].sort((a, b) => a.atMs - b.atMs));
+  });
+
+  it('keeps a finished job off the calendar', () => {
+    const firedAtMs = nowMs - 2 * HOUR_IN_MS;
+    const job = makeJob({
+      schedule: { kind: 'at', at: new Date(firedAtMs).toISOString() },
+      state: {
+        consecutiveFailures: 0,
+        coalescedRunCount: 0,
+        lastEnqueuedAtMs: firedAtMs,
+        lastRunStatus: 'ok',
+      },
+    });
+
+    const { calendar, inactive } = buildTodoBuckets([job], { nowMs, rangeEndMs });
+
+    expect(calendar).toHaveLength(0);
+    expect(inactive[0].reason).toBe('completed');
+  });
+
+  it('marks an in-flight run as running rather than overdue', () => {
+    const pendingTriggerAtMs = nowMs - 10 * MINUTE_IN_MS;
+    const job = makeJob({
+      schedule: { kind: 'every', everyMs: DAY_IN_MS, anchorMs: pendingTriggerAtMs },
+      state: {
+        consecutiveFailures: 0,
+        coalescedRunCount: 0,
+        pendingTriggerAtMs,
+        activeTurnId: 'cronjob_test_1',
+        lastRunStatus: 'running',
+      },
+    });
+
+    const { upcoming } = buildTodoBuckets([job], { nowMs, rangeEndMs });
+    const current = upcoming.find((o) => o.atMs === pendingTriggerAtMs);
+
+    expect(current?.isRunning).toBe(true);
+    expect(current?.isOverdue).toBe(false);
+    // A job past its time but not executing is still genuinely overdue.
+    expect(
+      buildTodoBuckets(
+        [makeJob({
+          schedule: { kind: 'at', at: new Date(pendingTriggerAtMs).toISOString() },
+          state: { consecutiveFailures: 0, coalescedRunCount: 0, pendingTriggerAtMs },
+        })],
+        { nowMs, rangeEndMs },
+      ).upcoming[0].isOverdue,
+    ).toBe(true);
+  });
+
   it('reports an unparseable expression as invalid with its error', () => {
     const job = makeJob({ schedule: { kind: 'cron', expr: 'not a cron' } });
 

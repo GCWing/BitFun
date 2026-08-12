@@ -25,6 +25,8 @@ export interface TodoItemRowProps {
   atMs: number | null;
   isOverdue?: boolean;
   isNextRun?: boolean;
+  /** The scheduler is executing this run right now. */
+  isRunning?: boolean;
   nowMs: number;
   workspaces: WorkspaceInfo[];
   /** Replaces the countdown, used for inactive rows ("Paused", "Done"). */
@@ -40,6 +42,7 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
   atMs,
   isOverdue = false,
   isNextRun = false,
+  isRunning = false,
   nowMs,
   workspaces,
   statusLabel,
@@ -48,13 +51,16 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
   onDelete,
   onToggleEnabled,
 }) => {
-  const { t, formatDate } = useI18n('scenes/todos');
+  const { t, formatDate } = useI18n(['scenes/todos', 'shared']);
 
   const timeLabel = atMs != null ? formatTimeOfDay(atMs, formatDate) : null;
-  const relativeLabel = statusLabel ?? (atMs != null ? formatCountdown(atMs, nowMs, t) : null);
+  const relativeLabel = statusLabel
+    ?? (isRunning ? t('shared:statuses.running') : null)
+    ?? (atMs != null ? formatCountdown(atMs, nowMs, t) : null);
 
   const rowState = [
     isSelected ? 'selected' : null,
+    isRunning ? 'running' : null,
     isOverdue ? 'overdue' : null,
     job.enabled ? null : 'disabled',
   ].filter(Boolean).join(' ');
@@ -63,6 +69,7 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
     <div
       className={[
         'bf-todos__row',
+        isRunning ? 'bf-todos__row--running' : '',
         isOverdue ? 'bf-todos__row--overdue' : '',
         job.enabled ? '' : 'bf-todos__row--disabled',
         isSelected ? 'bf-todos__row--selected' : '',
@@ -92,7 +99,15 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
       <div className="bf-todos__row-body" data-bf-scene="todos" data-bf-part="rowBody">
         <div className="bf-todos__row-title-line">
           <span className="bf-todos__row-name">{job.name}</span>
-          {isNextRun ? (
+          {isRunning ? (
+            <span
+              className="bf-todos__row-badge bf-todos__row-badge--running"
+              data-bf-scene="todos"
+              data-bf-part="rowBadge"
+            >
+              {t('shared:statuses.running')}
+            </span>
+          ) : isNextRun ? (
             <span className="bf-todos__row-badge" data-bf-scene="todos" data-bf-part="rowBadge">
               {t('badges.nextRun')}
             </span>

@@ -17,7 +17,7 @@
   },
   "calendar": {
     "title": "Later",
-    "hint": "Runs more than 24 hours away.",
+    "hint": "Every scheduled run, including the next 24 hours.",
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
     "today": "Today",
@@ -41,13 +41,22 @@
   },
   "schedule": {
     "once": "Once at {{at}}",
-    "every": "Every {{everyMinutes}} minutes",
     "cron": "Cron: {{expr}}",
     "cronWithTz": "Cron: {{expr}} · {{tz}}",
     "kinds": {
       "at": "One-time",
       "every": "Interval",
       "cron": "Cron"
+    },
+    "everyUnit": {
+      "minute": "Every {{value}} minutes",
+      "hour": "Every {{value}} hours",
+      "day": "Every {{value}} days"
+    },
+    "intervalUnits": {
+      "minute": "Minutes",
+      "hour": "Hours",
+      "day": "Days"
     }
   },
   "target": {
@@ -68,13 +77,13 @@
       "agentType": "Agent type",
       "scheduleKind": "Schedule",
       "at": "Run at",
-      "everyMinutes": "Interval (minutes)",
       "anchor": "Anchor time (optional)",
       "cronExpr": "Cron expression",
       "timezone": "Timezone (optional)",
       "enabled": "Enabled",
       "prompt": "Prompt",
-      "runsIn": "Runs in"
+      "runsIn": "Runs in",
+      "every": "Interval"
     },
     "placeholders": {
       "name": "For example: Daily standup summary",

@@ -16,8 +16,37 @@ import type {
 import { normalizePath } from '@/shared/utils/pathUtils';
 
 export const MINUTE_IN_MS = 60_000;
+export const HOUR_IN_MS = 60 * MINUTE_IN_MS;
+export const DAY_IN_MS = 24 * HOUR_IN_MS;
 export const DEFAULT_AGENT_TYPE = 'agentic';
 export const ASSISTANT_WORKSPACE_AGENT_TYPE = 'Claw';
+
+/**
+ * Interval units offered by the editors.
+ *
+ * The wire format stays milliseconds; the unit only decides how a value is
+ * entered and read back, so a daily job reads "every 1 day" rather than
+ * "every 1440 minutes".
+ */
+export type IntervalUnit = 'minute' | 'hour' | 'day';
+
+/** Selector order, coarsest-last so the common "every N minutes" stays first. */
+export const INTERVAL_UNIT_OPTIONS: readonly IntervalUnit[] = ['minute', 'hour', 'day'];
+
+export const INTERVAL_UNIT_MS: Record<IntervalUnit, number> = {
+  minute: MINUTE_IN_MS,
+  hour: HOUR_IN_MS,
+  day: DAY_IN_MS,
+};
+
+/** Largest unit that divides the interval evenly, so the value stays whole. */
+export function splitInterval(everyMs: number): { value: number; unit: IntervalUnit } {
+  if (Number.isFinite(everyMs) && everyMs > 0) {
+    if (everyMs % DAY_IN_MS === 0) return { value: everyMs / DAY_IN_MS, unit: 'day' };
+    if (everyMs % HOUR_IN_MS === 0) return { value: everyMs / HOUR_IN_MS, unit: 'hour' };
+  }
+  return { value: everyMs / MINUTE_IN_MS, unit: 'minute' };
+}
 
 /** Emitted after any create/update/delete so other mounted views reload. */
 export const SCHEDULED_JOBS_CHANGED_EVENT = 'bitfun:scheduled-jobs-changed';
@@ -32,7 +61,9 @@ export interface JobDraft {
   agentType: string;
   scheduleKind: ScheduleKind;
   at: string;
-  everyMinutes: string;
+  /** Interval value in `everyUnit`; kept as a string so the input stays free-form. */
+  everyValue: string;
+  everyUnit: IntervalUnit;
   anchorMs: string;
   expr: string;
   tz: string;
@@ -44,7 +75,7 @@ export interface JobDraftValidationErrors {
   agentType: boolean;
   text: boolean;
   at: boolean;
-  everyMinutes: boolean;
+  everyValue: boolean;
   cronExpr: boolean;
 }
 
@@ -55,7 +86,7 @@ export const EMPTY_VALIDATION_ERRORS: JobDraftValidationErrors = Object.freeze({
   agentType: false,
   text: false,
   at: false,
-  everyMinutes: false,
+  everyValue: false,
   cronExpr: false,
 });
 
@@ -79,10 +110,10 @@ export function isFutureLocalDateTimeInput(value: string, nowMs = Date.now()): b
   return Number.isFinite(timestampMs) && timestampMs > nowMs;
 }
 
-export function formatEveryMinutes(everyMs: number): string {
-  const everyMinutes = everyMs / MINUTE_IN_MS;
-  if (Number.isInteger(everyMinutes)) return String(everyMinutes);
-  return everyMinutes.toFixed(2).replace(/\.?0+$/, '');
+/** Trims a possibly fractional interval value to a short display string. */
+export function formatIntervalValue(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(2).replace(/\.?0+$/, '');
 }
 
 export function createEmptyDraft(
@@ -97,7 +128,8 @@ export function createEmptyDraft(
     agentType: defaultAgentType,
     scheduleKind: 'at',
     at: getCurrentLocalDateTimeInput(),
-    everyMinutes: '60',
+    everyValue: '1',
+    everyUnit: 'hour',
     anchorMs: '',
     expr: '0 8 * * *',
     tz: '',
@@ -122,7 +154,9 @@ export function jobToDraft(job: CronJob, defaultAgentType: string): JobDraft {
     draft.at = toLocalDateTimeInput(job.schedule.at);
   } else if (job.schedule.kind === 'every') {
     draft.scheduleKind = 'every';
-    draft.everyMinutes = formatEveryMinutes(job.schedule.everyMs);
+    const interval = splitInterval(job.schedule.everyMs);
+    draft.everyValue = formatIntervalValue(interval.value);
+    draft.everyUnit = interval.unit;
     draft.anchorMs = job.schedule.anchorMs != null
       ? timestampMsToLocalDateTimeInput(job.schedule.anchorMs)
       : '';
@@ -139,9 +173,13 @@ export function buildScheduleFromDraft(draft: JobDraft): CronSchedule {
     return { kind: 'at', at: new Date(draft.at).toISOString() };
   }
   if (draft.scheduleKind === 'every') {
-    const everyMinutes = Number(draft.everyMinutes);
+    const everyValue = Number(draft.everyValue);
     const anchorMs = draft.anchorMs.trim() ? new Date(draft.anchorMs).getTime() : undefined;
-    return { kind: 'every', everyMs: Math.round(everyMinutes * MINUTE_IN_MS), anchorMs };
+    return {
+      kind: 'every',
+      everyMs: Math.round(everyValue * INTERVAL_UNIT_MS[draft.everyUnit]),
+      anchorMs,
+    };
   }
   return { kind: 'cron', expr: draft.expr.trim(), tz: draft.tz.trim() || undefined };
 }
@@ -191,16 +229,16 @@ export function validateDraft(
   targetKind: CronJobTargetKind,
   draft: JobDraft,
 ): JobDraftValidationErrors {
-  const everyMinutes = Number(draft.everyMinutes);
+  const everyValue = Number(draft.everyValue);
   return {
     name: !draft.name.trim(),
     sessionId: targetKind === 'session' && !draft.sessionId.trim(),
     agentType: targetKind === 'workspace' && !draft.agentType.trim(),
     text: !draft.text.trim(),
     at: draft.scheduleKind === 'at' && !draft.at.trim(),
-    everyMinutes:
+    everyValue:
       draft.scheduleKind === 'every'
-      && (!draft.everyMinutes.trim() || !Number.isFinite(everyMinutes) || everyMinutes <= 0),
+      && (!draft.everyValue.trim() || !Number.isFinite(everyValue) || everyValue <= 0),
     cronExpr: draft.scheduleKind === 'cron' && !draft.expr.trim(),
   };
 }
@@ -212,7 +250,7 @@ export function hasValidationErrors(errors: JobDraftValidationErrors): boolean {
     || errors.agentType
     || errors.text
     || errors.at
-    || errors.everyMinutes
+    || errors.everyValue
     || errors.cronExpr
   );
 }

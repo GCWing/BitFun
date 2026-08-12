@@ -284,7 +284,7 @@
         "enabledHint": "启用该任务",
         "scheduleKind": "调度方式",
         "at": "执行时间",
-        "everyMs": "间隔（分钟）",
+        "everyMs": "间隔",
         "anchorMs": "锚点时间（可选）",
         "cronExpr": "Cron 表达式",
         "timezone": "时区（可选）",
@@ -309,9 +309,13 @@
         "cron": "Cron"
       },
       "scheduleSummary": {
-        "every": "每 {{everyMinutes}} 分钟",
         "cron": "Cron: {{expr}}",
-        "cronWithTz": "Cron: {{expr}} · {{tz}}"
+        "cronWithTz": "Cron: {{expr}} · {{tz}}",
+        "everyUnit": {
+          "minute": "每 {{value}} 分钟",
+          "hour": "每 {{value}} 小时",
+          "day": "每 {{value}} 天"
+        }
       },
       "targets": {
         "session": "会话",
@@ -358,6 +362,11 @@
         "promptRequired": "请输入任务内容",
         "workspaceRequired": "请输入工作区路径",
         "sessionRequired": "请选择会话"
+      },
+      "intervalUnits": {
+        "minute": "分钟",
+        "hour": "小时",
+        "day": "天"
       }
     },
     "workspaces": {
@@ -1541,5 +1550,15 @@
   },
   "collapse": "折叠",
   "expand": "展开",
-  "retry": "重试"
+  "retry": "重试",
+  "dateTimeField": {
+    "label": "日期与时间",
+    "segments": {
+      "year": "年",
+      "month": "月",
+      "day": "日",
+      "hour": "时",
+      "minute": "分"
+    }
+  }
 }

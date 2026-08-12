@@ -5,7 +5,7 @@
  */
 
 import type { CronJob, CronSchedule } from '@/infrastructure/api';
-import { formatEveryMinutes } from '@/app/components/scheduled-jobs/scheduledJobDraft';
+import { formatIntervalValue, splitInterval } from '@/app/components/scheduled-jobs/scheduledJobDraft';
 import { WorkspaceKind, type WorkspaceInfo, isRemoteWorkspace } from '@/shared/types';
 import { normalizePath } from '@/shared/utils/pathUtils';
 
@@ -22,6 +22,15 @@ export function formatDateTime(timestampMs: number, formatDate: FormatDate): str
   });
 }
 
+/**
+ * "Every 30 minutes" / "Every 1 day", using the largest unit that divides the
+ * interval evenly so a daily job does not read as 1440 minutes.
+ */
+export function formatIntervalSummary(everyMs: number, t: Translate): string {
+  const { value, unit } = splitInterval(everyMs);
+  return t(`schedule.everyUnit.${unit}`, { value: formatIntervalValue(value) });
+}
+
 /** Human summary of the recurrence rule, independent of any single run. */
 export function formatScheduleSummary(
   schedule: CronSchedule,
@@ -32,7 +41,7 @@ export function formatScheduleSummary(
     case 'at':
       return t('schedule.once', { at: formatDateTime(new Date(schedule.at).getTime(), formatDate) });
     case 'every':
-      return t('schedule.every', { everyMinutes: formatEveryMinutes(schedule.everyMs) });
+      return formatIntervalSummary(schedule.everyMs, t);
     case 'cron':
       return schedule.tz
         ? t('schedule.cronWithTz', { expr: schedule.expr, tz: schedule.tz })

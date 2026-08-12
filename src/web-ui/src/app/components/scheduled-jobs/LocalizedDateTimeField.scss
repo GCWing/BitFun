@@ -1,0 +1,67 @@
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.bf-datetime-field {
+  display: inline-flex;
+  align-items: center;
+  gap: $size-gap-2;
+  box-sizing: border-box;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: $size-radius-base;
+  background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 82%, transparent);
+  transition: border-color $motion-fast $easing-standard;
+
+  &:focus-within {
+    border-color: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &--error {
+    border-color: var(--bf-appearance-token-color-error);
+  }
+
+  &--disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  &__group {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+  }
+
+  &__segment {
+    min-width: 0;
+    padding: 3px 2px;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    outline: none;
+
+    &::placeholder {
+      color: var(--bf-appearance-token-color-text-muted);
+    }
+
+    &:focus {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent);
+    }
+
+    // Width tracks the digit count so segments do not jitter while typing.
+    &--year { width: 4ch; }
+    &--month,
+    &--day,
+    &--hour,
+    &--minute { width: 2.4ch; }
+  }
+
+  &__sep {
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    user-select: none;
+  }
+}

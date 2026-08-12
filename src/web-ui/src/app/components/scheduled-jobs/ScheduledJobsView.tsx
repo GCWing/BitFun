@@ -41,12 +41,14 @@ import {
   ASSISTANT_WORKSPACE_AGENT_TYPE,
   DEFAULT_AGENT_TYPE,
   EMPTY_VALIDATION_ERRORS,
+  INTERVAL_UNIT_OPTIONS,
   SCHEDULED_JOBS_CHANGED_EVENT,
   buildScheduleFromDraft,
   buildTargetFromDraft,
   buildWorkspaceRef,
   createEmptyDraft,
-  formatEveryMinutes,
+  formatIntervalValue,
+  splitInterval,
   getCurrentLocalDateTimeInput,
   getNextExecutionAtMs,
   hasValidationErrors,
@@ -54,10 +56,13 @@ import {
   jobToDraft,
   notifyScheduledJobsChanged as emitScheduledJobsChanged,
   validateDraft,
+  type IntervalUnit,
   type JobDraft,
   type JobDraftValidationErrors,
   type ScheduleKind,
 } from './scheduledJobDraft';
+import LocalizedDateTimeField from './LocalizedDateTimeField';
+import './LocalizedDateTimeField.scss';
 import './ScheduledJobsView.scss';
 
 const log = createLogger('ScheduledJobsView');
@@ -97,8 +102,12 @@ function formatScheduleSummary(
   switch (schedule.kind) {
     case 'at':
       return `${t('nav.scheduledJobs.scheduleKinds.at')}: ${formatTimestamp(new Date(schedule.at).getTime(), formatDate, t)}`;
-    case 'every':
-      return t('nav.scheduledJobs.scheduleSummary.every', { everyMinutes: formatEveryMinutes(schedule.everyMs) });
+    case 'every': {
+      const interval = splitInterval(schedule.everyMs);
+      return t(`nav.scheduledJobs.scheduleSummary.everyUnit.${interval.unit}`, {
+        value: formatIntervalValue(interval.value),
+      });
+    }
     case 'cron':
       return schedule.tz
         ? t('nav.scheduledJobs.scheduleSummary.cronWithTz', { expr: schedule.expr, tz: schedule.tz })
@@ -760,7 +769,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                   setValidationErrors(current => ({
                     ...current,
                     at: false,
-                    everyMinutes: false,
+                    everyValue: false,
                     cronExpr: false,
                   }));
                   setDraft(c => ({
@@ -793,13 +802,10 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.at')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <Input
-                size="small"
-                type="datetime-local"
+              <LocalizedDateTimeField
                 value={draft.at}
                 error={validationErrors.at}
-                onChange={e => {
-                  const at = e.currentTarget.value;
+                onChange={at => {
                   setValidationErrors(current => ({ ...current, at: false }));
                   setDraft(c => ({
                     ...c,
@@ -819,18 +825,31 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 <span className="asv__field-label">{t('nav.scheduledJobs.fields.everyMs')}</span>
               </div>
               <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-                <Input
-                  size="small"
-                  type="number"
-                  value={draft.everyMinutes}
-                  error={validationErrors.everyMinutes}
-                  onChange={e => {
-                    const everyMinutes = e.currentTarget.value;
-                    setValidationErrors(current => ({ ...current, everyMinutes: false }));
-                    setDraft(c => ({ ...c, everyMinutes }));
-                  }}
-                  placeholder="60"
-                />
+                <div className="asv__control-grid asv__control-grid--interval">
+                  <Input
+                    size="small"
+                    type="number"
+                    value={draft.everyValue}
+                    error={validationErrors.everyValue}
+                    onChange={e => {
+                      const everyValue = e.currentTarget.value;
+                      setValidationErrors(current => ({ ...current, everyValue: false }));
+                      setDraft(c => ({ ...c, everyValue }));
+                    }}
+                    placeholder="1"
+                  />
+                  <Select
+                    size="small"
+                    value={draft.everyUnit}
+                    options={INTERVAL_UNIT_OPTIONS.map(unit => ({
+                      value: unit,
+                      label: t(`nav.scheduledJobs.intervalUnits.${unit}`),
+                    }))}
+                    onChange={value => {
+                      setDraft(c => ({ ...c, everyUnit: value as IntervalUnit }));
+                    }}
+                  />
+                </div>
               </div>
             </div>
             <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
@@ -838,15 +857,10 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 <span className="asv__field-label">{t('nav.scheduledJobs.fields.anchorMs')}</span>
               </div>
               <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-                <Input
-                  size="small"
-                  type="datetime-local"
+                <LocalizedDateTimeField
                   value={draft.anchorMs}
-                  onChange={e => {
-                    const anchorMs = e.currentTarget.value;
-                    setDraft(c => ({ ...c, anchorMs }));
-                  }}
-                  placeholder={t('nav.scheduledJobs.placeholders.anchorMs')}
+                  onChange={anchorMs => setDraft(c => ({ ...c, anchorMs }))}
+                  aria-label={t('nav.scheduledJobs.fields.anchorMs')}
                 />
               </div>
             </div>

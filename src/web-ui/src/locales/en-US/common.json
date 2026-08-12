@@ -284,7 +284,7 @@
         "enabledHint": "Enable this job",
         "scheduleKind": "Schedule type",
         "at": "Run at",
-        "everyMs": "Interval (minutes)",
+        "everyMs": "Interval",
         "anchorMs": "Anchor time (optional)",
         "cronExpr": "Cron expression",
         "timezone": "Timezone (optional)",
@@ -309,9 +309,13 @@
         "cron": "Cron"
       },
       "scheduleSummary": {
-        "every": "Every {{everyMinutes}} minutes",
         "cron": "Cron: {{expr}}",
-        "cronWithTz": "Cron: {{expr}} · {{tz}}"
+        "cronWithTz": "Cron: {{expr}} · {{tz}}",
+        "everyUnit": {
+          "minute": "Every {{value}} minutes",
+          "hour": "Every {{value}} hours",
+          "day": "Every {{value}} days"
+        }
       },
       "targets": {
         "session": "Session",
@@ -358,6 +362,11 @@
         "promptRequired": "Please enter the job prompt",
         "workspaceRequired": "Please enter a workspace path",
         "sessionRequired": "Please select a session"
+      },
+      "intervalUnits": {
+        "minute": "Minutes",
+        "hour": "Hours",
+        "day": "Days"
       }
     },
     "workspaces": {
@@ -1541,5 +1550,15 @@
   },
   "collapse": "Collapse",
   "expand": "Expand",
-  "retry": "Retry"
+  "retry": "Retry",
+  "dateTimeField": {
+    "label": "Date and time",
+    "segments": {
+      "year": "YYYY",
+      "month": "MM",
+      "day": "DD",
+      "hour": "HH",
+      "minute": "mm"
+    }
+  }
 }
