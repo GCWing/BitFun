@@ -317,7 +317,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ isOpen, onClose 
         closeOnOverlayClick={!submitting && !replyState.sending}
         testId="feedback-dialog"
       >
-        <div data-bf-component="feedback-dialog" data-bf-part="root">
+        <div className="bitfun-feedback__root" data-bf-component="feedback-dialog" data-bf-part="root">
         {completed ? (
           <div className="bitfun-feedback__complete" role="status">
             <CheckCircle2 size={34} aria-hidden="true" />
