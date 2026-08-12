@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -7,7 +7,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import type { Options as RehypeSanitizeOptions } from 'rehype-sanitize';
-import type { Pluggable } from 'unified';
+import type { Pluggable, PluggableList } from 'unified';
 import 'katex/dist/katex.min.css';
 
 interface MarkdownMathRendererProps {
@@ -22,16 +22,27 @@ export const MarkdownMathRenderer: React.FC<MarkdownMathRendererProps> = ({
   components,
   sanitizeSchema,
   remarkAutolinkComputerFileLinks,
-}) => (
-  <div data-bf-component="markdown" data-bf-part="math">
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}
-      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
-      components={components}
-    >
-      {markdownContent}
-    </ReactMarkdown>
-  </div>
-);
+}) => {
+  const remarkPlugins = useMemo<PluggableList>(
+    () => [remarkGfm, remarkMath, remarkAutolinkComputerFileLinks],
+    [remarkAutolinkComputerFileLinks],
+  );
+  const rehypePlugins = useMemo<PluggableList>(
+    () => [rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex],
+    [sanitizeSchema],
+  );
+
+  return (
+    <div data-bf-component="markdown" data-bf-part="math">
+      <ReactMarkdown
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+        components={components}
+      >
+        {markdownContent}
+      </ReactMarkdown>
+    </div>
+  );
+};
 
 export default MarkdownMathRenderer;

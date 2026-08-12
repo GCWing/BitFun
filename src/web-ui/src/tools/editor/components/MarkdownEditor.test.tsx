@@ -109,8 +109,9 @@ describe('MarkdownEditor', () => {
     expect(html).toContain('data-mode="preview"');
   });
 
-  it('uses source mode only above the rich markdown size limit', () => {
-    expect(shouldUseLargeMarkdownSourceMode(MARKDOWN_RICH_EDITOR_MAX_BYTES)).toBe(false);
+  it('uses source mode at and above the rich markdown size limit', () => {
+    expect(shouldUseLargeMarkdownSourceMode(MARKDOWN_RICH_EDITOR_MAX_BYTES - 1)).toBe(false);
+    expect(shouldUseLargeMarkdownSourceMode(MARKDOWN_RICH_EDITOR_MAX_BYTES)).toBe(true);
     expect(shouldUseLargeMarkdownSourceMode(MARKDOWN_RICH_EDITOR_MAX_BYTES + 1)).toBe(true);
     expect(shouldUseLargeMarkdownSourceMode(undefined)).toBe(false);
   });

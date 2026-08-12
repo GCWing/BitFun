@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
+import type { PluggableList } from 'unified';
 import { visit } from 'unist-util-visit';
 import { i18nService } from '@/infrastructure/i18n';
 import { MermaidBlock } from './MermaidBlock';
@@ -254,6 +255,9 @@ const sanitizeSchema = {
     src: [...(defaultSchema.protocols?.src || []), 'asset', 'data', 'http', 'https', 'tauri'],
   },
 };
+
+const MARKDOWN_REMARK_PLUGINS: PluggableList = [remarkGfm, remarkAutolinkComputerFileLinks];
+const MARKDOWN_REHYPE_PLUGINS: PluggableList = [rehypeRaw, [rehypeSanitize, sanitizeSchema]];
 
 function remarkAutolinkComputerFileLinks() {
   return (tree: any) => {
@@ -1420,15 +1424,15 @@ export const Markdown = React.memo<MarkdownProps>(({
   ]);
   
   const wrapperClassName = `markdown-renderer ${className}`.trim();
-  const basicMarkdownRenderer = (
+  const basicMarkdownRenderer = useMemo(() => (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkAutolinkComputerFileLinks]}
-      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+      remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+      rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
       components={components}
     >
       {markdownContent}
     </ReactMarkdown>
-  );
+  ), [components, markdownContent]);
 
   return (
     <div className={wrapperClassName} data-bf-component="markdown" data-bf-part="root" data-bf-state={isStreaming ? 'streaming' : undefined}>

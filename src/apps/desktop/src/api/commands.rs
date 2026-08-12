@@ -3467,20 +3467,10 @@ fn build_remote_path_exists_command(parent: &str, candidate: &str) -> String {
     )
 }
 
-fn build_remote_extraction_destination_available_command(
-    parent: &str,
-    candidate: &str,
-    allow_existing_directory: bool,
-) -> String {
+fn build_remote_extraction_destination_available_command(parent: &str, candidate: &str) -> String {
     let parent = shell_quote_posix(parent);
     let candidate = shell_quote_posix(&format!("./{}", candidate));
-    if allow_existing_directory {
-        format!(
-            "cd -- {parent} || exit 2; if [ -L {candidate} ]; then exit 1; fi; [ -d {candidate} ] || [ ! -e {candidate} ]"
-        )
-    } else {
-        format!("cd -- {parent} || exit 2; test ! -e {candidate} && test ! -L {candidate}")
-    }
+    format!("cd -- {parent} || exit 2; test ! -e {candidate} && test ! -L {candidate}")
 }
 
 fn next_available_local_archive_path(parent: &Path, base_name: &str, extension: &str) -> PathBuf {
@@ -3719,11 +3709,8 @@ pub async fn decompress_path(
         let remote_dest_dir_name = loop {
             let candidate =
                 extraction_destination_name_with_suffix(&remote_dest_base_name, remote_dest_suffix);
-            let check_command = build_remote_extraction_destination_available_command(
-                &remote_parent,
-                &candidate,
-                remote_dest_suffix == 0,
-            );
+            let check_command =
+                build_remote_extraction_destination_available_command(&remote_parent, &candidate);
             let (stdout, stderr, code) = manager
                 .execute_command(cid, &check_command)
                 .await
@@ -4268,13 +4255,6 @@ fn next_available_local_extraction_path(parent: &Path, base_name: &str) -> Resul
     for suffix in 0.. {
         let candidate = parent.join(extraction_destination_name_with_suffix(base_name, suffix));
         match std::fs::symlink_metadata(&candidate) {
-            Ok(metadata)
-                if suffix == 0
-                    && metadata.file_type().is_dir()
-                    && !metadata.file_type().is_symlink() =>
-            {
-                return Ok(candidate);
-            }
             Ok(_) => continue,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(candidate),
             Err(error) => {
@@ -4336,7 +4316,7 @@ mod archive_tests {
     }
 
     #[test]
-    fn local_extraction_path_avoids_existing_files_but_reuses_base_directory() {
+    fn local_extraction_path_uses_incrementing_suffixes_for_any_existing_item() {
         let temp = tempfile::tempdir().expect("create temp dir");
         std::fs::write(temp.path().join("aa"), "source").expect("write source file");
         std::fs::create_dir(temp.path().join("aa (1)")).expect("create existing directory");
@@ -4347,11 +4327,11 @@ mod archive_tests {
             temp.path().join("aa (2)")
         );
 
-        std::fs::create_dir(temp.path().join("project")).expect("create merge destination");
+        std::fs::create_dir(temp.path().join("project")).expect("create existing directory");
         assert_eq!(
             next_available_local_extraction_path(temp.path(), "project")
-                .expect("reuse existing destination directory"),
-            temp.path().join("project")
+                .expect("choose unique extraction destination"),
+            temp.path().join("project (1)")
         );
     }
 
@@ -4368,17 +4348,14 @@ mod archive_tests {
         let command = build_remote_extraction_destination_available_command(
             "/home/work tree",
             "中 文@!# (2)",
-            false,
         );
         assert!(command.contains("test ! -e './中 文@!# (2)'"));
         assert!(command.contains("test ! -L './中 文@!# (2)'"));
 
-        let command = build_remote_extraction_destination_available_command(
-            "/home/work tree",
-            "中 文@!#",
-            true,
-        );
-        assert!(command.contains("[ -d './中 文@!#' ] || [ ! -e './中 文@!#' ]"));
+        let command =
+            build_remote_extraction_destination_available_command("/home/work tree", "中 文@!#");
+        assert!(command.contains("test ! -e './中 文@!#'"));
+        assert!(command.contains("test ! -L './中 文@!#'"));
     }
 
     #[test]

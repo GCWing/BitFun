@@ -148,6 +148,8 @@
     "pasteSuccessFolders": "成功粘貼 {{count}} 個資料夾",
     "pasteSuccessItems": "成功粘貼 {{count}} 項",
     "pasteFailed": "{{count}} 個檔案粘貼失敗",
+    "pastePermissionDenied": "沒有權限。請檢查來源檔案和目標資料夾的存取權限。",
+    "pasteErrorDetail": "{{name}}：{{error}}",
     "pasteNoFiles": "剪貼板中沒有檔案",
     "pastingFiles": "正在粘貼 {{count}} 個檔案到 {{target}}...",
     "openExplorerFailed": "開啟檔案管理器失敗: {{error}}",
