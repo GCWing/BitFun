@@ -113,7 +113,6 @@ fn registered_capabilities(
                 "session/sync",
                 "session/readTranscript",
                 "session/resolveWorkspace",
-                "session/recordLocalCommandTurn",
                 "session/rename",
                 "session/setArchived",
                 "session/updateModel",

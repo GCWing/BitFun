@@ -301,7 +301,6 @@ struct Phase2Provider {
     steers: Mutex<Vec<ports::AgentDialogSteerRequest>>,
     shell_commands: Mutex<Vec<ports::AgentUserShellCommandRequest>>,
     answers: Mutex<Vec<ports::AgentUserAnswersRequest>>,
-    local_commands: Mutex<Vec<ports::AgentLocalCommandTurnRecordRequest>>,
     compactions: Mutex<Vec<ports::AgentSessionCompactionRequest>>,
     settlements: Mutex<Vec<ports::AgentTurnSettlementRequest>>,
     reloads: Mutex<Vec<ports::AgentContextReloadRequest>>,
@@ -468,7 +467,6 @@ impl ports::AgentLocalCommandTurnPort for Phase2Provider {
         &self,
         request: ports::AgentLocalCommandTurnRecordRequest,
     ) -> PortResult<ports::AgentLocalCommandTurnRecordResult> {
-        self.local_commands.lock().unwrap().push(request.clone());
         Ok(ports::AgentLocalCommandTurnRecordResult {
             turn_id: request
                 .turn_id
@@ -860,20 +858,6 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                 })
                 .await
                 .expect("submit user answers");
-            let local_turn = client
-                .record_local_command_turn(protocol_session::RecordLocalCommandTurnRequest(
-                    ports::AgentLocalCommandTurnRecordRequest {
-                        session_id: "session-1".to_string(),
-                        content: "usage: 12 tokens".to_string(),
-                        turn_id: Some("local-turn".to_string()),
-                        timestamp_ms: Some(100),
-                        metadata: serde_json::Map::new(),
-                    },
-                ))
-                .await
-                .expect("record local command turn");
-            assert_eq!(local_turn.0.turn_id, "local-turn");
-
             client
                 .compact_session(protocol_session::CompactSessionRequest(
                     ports::AgentSessionCompactionRequest {
@@ -922,7 +906,6 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                 "cargo test"
             );
             assert_eq!(provider.answers.lock().unwrap().len(), 1);
-            assert_eq!(provider.local_commands.lock().unwrap().len(), 1);
             assert_eq!(provider.compactions.lock().unwrap().len(), 1);
             assert_eq!(provider.reloads.lock().unwrap().len(), 1);
             client.shutdown().await;

@@ -5,7 +5,7 @@ use bitfun_agent_runtime::sdk::{AgentSessionRestoreRequest, ProcessingPhase, Ses
 use bitfun_app_server_protocol::session::{
     CancelLineageRequest, CancelLineageResponse, CompactSessionRequest, CompactSessionResponse,
     InspectLineageRequest, InspectLineageResponse, ReadTranscriptRequest, ReadTranscriptResponse,
-    RecordLocalCommandTurnRequest, RecordLocalCommandTurnResponse, RedoSessionRequest,
+    RedoSessionRequest,
     ReloadContextRequest, ReloadContextResponse, ResolveWorkspaceRequest, ResolveWorkspaceResponse,
     RevertSessionResponse, SessionLineageRequest, SessionLineageResponse, SessionProcessingPhase,
     SessionRuntimeState, SessionUsageRequest, SessionUsageResponse, SyncSessionRequest,
@@ -223,25 +223,7 @@ pub(in crate::server) fn builder(
             },
             agent_client_protocol::on_receive_request!(),
         )
-        .on_receive_request(
-            {
-                let runtime = runtime.clone();
-                async move |request: RecordLocalCommandTurnRequest, responder, _cx| {
-                    let session_id = request.0.session_id.clone();
-                    responder.respond_with_result(
-                        runtime
-                            .runtime()
-                            .record_completed_local_command_turn(request.0)
-                            .await
-                            .map(RecordLocalCommandTurnResponse)
-                            .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
-                            }),
-                    )
-                }
-            },
-            agent_client_protocol::on_receive_request!(),
-        )
+
         .on_receive_request(
             {
                 let runtime = runtime.clone();

@@ -4,8 +4,7 @@ use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use bitfun_core_types::SessionUsageReport;
 use bitfun_product_domains::tool_permissions::PermissionRequest;
 use bitfun_runtime_ports::{
-    AgentContextReloadRequest, AgentLocalCommandTurnRecordRequest,
-    AgentLocalCommandTurnRecordResult, AgentSessionCompactionRequest, AgentSessionCompactionResult,
+    AgentContextReloadRequest, AgentSessionCompactionRequest, AgentSessionCompactionResult,
     AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
     AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
     AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
@@ -91,13 +90,6 @@ pub struct ResolveWorkspaceRequest(pub AgentSessionWorkspaceRequest);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
 pub struct ResolveWorkspaceResponse(pub Option<AgentSessionWorkspaceBinding>);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
-#[request(method = "session/recordLocalCommandTurn", response = RecordLocalCommandTurnResponse)]
-pub struct RecordLocalCommandTurnRequest(pub AgentLocalCommandTurnRecordRequest);
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
-pub struct RecordLocalCommandTurnResponse(pub AgentLocalCommandTurnRecordResult);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "session/rename", response = RenameSessionResponse)]

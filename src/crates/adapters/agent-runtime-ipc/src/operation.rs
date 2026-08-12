@@ -1,7 +1,6 @@
 use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionRequest};
 use bitfun_runtime_ports::{
     AgentContextReloadRequest, AgentDialogSteerRequest, AgentDialogTurnRequest,
-    AgentLocalCommandTurnRecordRequest, AgentLocalCommandTurnRecordResult,
     AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionLineageCancellationRequest,
     AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
@@ -183,9 +182,6 @@ pub enum RuntimeIpcOperation {
     SubmitUserAnswers {
         request: RuntimeUserAnswersRequest,
     },
-    RecordLocalCommandTurn {
-        request: AgentLocalCommandTurnRecordRequest,
-    },
 }
 
 impl RuntimeIpcOperation {
@@ -229,7 +225,6 @@ impl RuntimeIpcOperation {
             Self::PendingPermissions { session_id }
             | Self::RespondPermission { session_id, .. } => Some(session_id),
             Self::SubmitUserAnswers { request } => Some(&request.session_id),
-            Self::RecordLocalCommandTurn { request } => Some(&request.session_id),
             Self::Health
             | Self::ListAgentModes { session_id: None }
             | Self::ListSessions { .. }
@@ -279,9 +274,6 @@ impl RuntimeIpcOperation {
             | Self::RespondPermission { .. }
             | Self::SubmitUserAnswers { .. } => {
                 RuntimeIpcOperationRules::new(CurrentController, false, false, true)
-            }
-            Self::RecordLocalCommandTurn { .. } => {
-                RuntimeIpcOperationRules::new(CurrentController, true, false, true)
             }
             Self::PendingPermissions { .. } => {
                 RuntimeIpcOperationRules::new(CurrentController, false, false, false)
@@ -403,9 +395,6 @@ pub enum RuntimeIpcOperationResult {
     },
     WorkspaceDiff {
         snapshot: WorkspaceDiffSnapshot,
-    },
-    LocalCommandTurnRecorded {
-        record: AgentLocalCommandTurnRecordResult,
     },
 }
 

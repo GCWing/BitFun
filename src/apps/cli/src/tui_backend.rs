@@ -147,10 +147,6 @@ pub(crate) trait TuiBackend: Send + Sync {
         &self,
         request: SubmitUserAnswersRequest,
     ) -> Result<SubmitUserAnswersResponse, TuiBackendError>;
-    async fn record_local_command_turn(
-        &self,
-        request: RecordLocalCommandTurnRequest,
-    ) -> Result<RecordLocalCommandTurnResponse, TuiBackendError>;
     async fn respond_permission(
         &self,
         request: RespondPermissionRequest,
@@ -501,13 +497,6 @@ impl TuiBackend for AppServerTuiBackend {
         request: SubmitUserAnswersRequest,
     ) -> Result<SubmitUserAnswersResponse, TuiBackendError> {
         map_client(self.client.submit_user_answers(request).await)
-    }
-
-    async fn record_local_command_turn(
-        &self,
-        request: RecordLocalCommandTurnRequest,
-    ) -> Result<RecordLocalCommandTurnResponse, TuiBackendError> {
-        map_client(self.client.record_local_command_turn(request).await)
     }
 
     async fn respond_permission(

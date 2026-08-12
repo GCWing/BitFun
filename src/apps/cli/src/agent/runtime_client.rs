@@ -13,8 +13,8 @@ use tokio::sync::{broadcast, Mutex};
 
 use bitfun_agent_runtime::sdk::{
     AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest, AgentEventReceiver,
-    AgentInputAttachment, AgentLocalCommandTurnRecordRequest,
-    AgentMessageWorkspaceReferencesRequest, AgentRuntime, AgentSessionCompactionRequest,
+    AgentInputAttachment, AgentMessageWorkspaceReferencesRequest, AgentRuntime,
+    AgentSessionCompactionRequest,
     AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
     AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
     AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
@@ -483,17 +483,6 @@ impl ExecAgentRuntimeClient {
                 )
             }
         }
-    }
-
-    pub(crate) async fn record_completed_local_command_turn(
-        &self,
-        request: AgentLocalCommandTurnRecordRequest,
-    ) -> Result<()> {
-        self.embedded_runtime("recording local command turns")?
-            .record_completed_local_command_turn(request)
-            .await
-            .map(|_| ())
-            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
     pub(crate) fn set_approval_policy(&self, policy: CliApprovalPolicy) {

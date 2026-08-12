@@ -502,21 +502,6 @@ impl TuiBackend for SharedTuiBackend {
         Ok(SubmitUserAnswersResponse {})
     }
 
-    async fn record_local_command_turn(
-        &self,
-        request: RecordLocalCommandTurnRequest,
-    ) -> Result<RecordLocalCommandTurnResponse, TuiBackendError> {
-        match self
-            .request(RuntimeIpcOperation::RecordLocalCommandTurn { request: request.0 })
-            .await?
-        {
-            RuntimeIpcOperationResult::LocalCommandTurnRecorded { record } => {
-                Ok(RecordLocalCommandTurnResponse(record))
-            }
-            other => Err(unexpected("record_local_command_turn", other)),
-        }
-    }
-
     async fn respond_permission(
         &self,
         request: RespondPermissionRequest,
@@ -1209,7 +1194,6 @@ fn tui_capabilities(management: &AppManagementCapabilities) -> Vec<CapabilityDes
             "session",
             vec![
                 "session/sync",
-                "session/recordLocalCommandTurn",
                 "session/rename",
                 "session/updateModel",
                 "session/updateMode",

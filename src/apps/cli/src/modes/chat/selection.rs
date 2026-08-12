@@ -92,20 +92,6 @@ fn apply_agent_mode_feedback(
     }
 }
 
-fn usage_report_metadata(report: &SessionUsageReport) -> Result<serde_json::Value> {
-    let usage_report = serde_json::to_value(report)
-        .map_err(|error| anyhow!("Failed to serialize usage report: {error}"))?;
-    Ok(serde_json::json!({
-        "localCommandKind": "usage_report",
-        "reportId": report.report_id,
-        "schemaVersion": report.schema_version,
-        "generatedAt": report.generated_at,
-        "modelVisible": false,
-        "usageReport": usage_report,
-        "usageReportStatus": "completed",
-    }))
-}
-
 fn apply_model_selection_feedback(
     chat_state: &mut ChatState,
     selected_display_name: &str,
@@ -252,6 +238,17 @@ impl ChatMode {
             .or_else(|| Some(self.agent.workspace_path_string()));
         let agent = self.agent.clone();
 
+        /*
+         * Rendered into the conversation view and nowhere else. A report about
+         * a session is not an event in it, and this used to write one as a
+         * `local_command` Turn as well — which the desktop then loaded from
+         * disk and gave a numbered slot in its Turn rail, because the ordinals
+         * come from the backend catalog and the catalog counts what is stored.
+         *
+         * `add_assistant_message` is already the UI-only path: `turn_id: None`,
+         * never persisted, never in model context. In a terminal the scrollback
+         * is the record, so nothing here needs to replace what is being removed.
+         */
         let report_result: Result<bitfun_core::service::session_usage::SessionUsageReport> =
             tokio::task::block_in_place(|| {
                 let session_id = session_id.clone();
@@ -262,39 +259,21 @@ impl ChatMode {
                         .filter(|path| !path.trim().is_empty())
                         .ok_or_else(|| anyhow!("Workspace path is required for usage reports"))?;
 
-                    let report = agent
+                    agent
                         .generate_session_usage_report(AgentSessionUsageRequest {
-                            session_id: session_id.clone(),
+                            session_id,
                             workspace_path: Some(workspace_path),
                             remote_connection_id: None,
                             remote_ssh_host: None,
                             include_hidden_subagents: true,
                         })
-                        .await?;
-
-                    let markdown = render_usage_report_markdown(&report);
-                    let generated_at = u64::try_from(report.generated_at).unwrap_or_default();
-                    let metadata = usage_report_metadata(&report)?;
-                    agent
-                        .record_completed_local_command_turn(AgentLocalCommandTurnRecordRequest {
-                            session_id,
-                            content: markdown,
-                            turn_id: Some(format!("local-usage-{}", report.report_id)),
-                            timestamp_ms: Some(generated_at),
-                            metadata: metadata.as_object().cloned().ok_or_else(|| {
-                                anyhow!("Usage report metadata must be an object")
-                            })?,
-                        })
-                        .await?;
-
-                    Ok(report)
+                        .await
                 })
             });
 
         match report_result {
             Ok(report) => {
-                let markdown = render_usage_report_markdown(&report);
-                chat_state.add_assistant_message(markdown);
+                chat_state.add_assistant_message(render_usage_report_markdown(&report));
                 chat_view.set_status(Some("Usage report added to conversation".to_string()));
             }
             Err(error) => {
@@ -857,10 +836,7 @@ fn session_update_unavailable_message(setting_name: &str, is_processing: bool) -
 
 #[cfg(test)]
 mod usage_metadata_tests {
-    use super::{
-        session_update_allowed, session_update_unavailable_message, usage_report_metadata,
-        SessionUsageReport,
-    };
+    use super::{session_update_allowed, session_update_unavailable_message};
 
     #[test]
     fn session_update_is_rechecked_when_an_idle_popup_outlives_turn_start() {
@@ -877,22 +853,5 @@ mod usage_metadata_tests {
             message,
             "Agent mode cannot be changed during the current turn."
         );
-    }
-
-    #[test]
-    fn usage_metadata_preserves_the_existing_tui_transcript_schema() {
-        let mut report = SessionUsageReport::partial_unavailable("session-1", 1_778_347_200_000);
-        report.report_id = "usage-session-1-1778347200000".to_string();
-
-        let metadata = usage_report_metadata(&report).expect("usage metadata");
-
-        assert_eq!(metadata["localCommandKind"], "usage_report");
-        assert_eq!(metadata["reportId"], report.report_id);
-        assert_eq!(metadata["schemaVersion"], report.schema_version);
-        assert_eq!(metadata["generatedAt"], report.generated_at);
-        assert_eq!(metadata["modelVisible"], false);
-        assert_eq!(metadata["usageReportStatus"], "completed");
-        assert_eq!(metadata["usageReport"]["sessionId"], "session-1");
-        assert_eq!(metadata.as_object().map(serde_json::Map::len), Some(7));
     }
 }
