@@ -349,10 +349,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("create_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
     ("create_session", RemoteWorkspacePolicy::LegacyUnaudited),
     ("create_subagent", RemoteWorkspacePolicy::LegacyUnaudited),
-    (
-        "create_legion_preset",
-        RemoteWorkspacePolicy::LocalOnly,
-    ),
+    ("create_legion_preset", RemoteWorkspacePolicy::LocalOnly),
     ("debug_close_devtools", RemoteWorkspacePolicy::LocalOnly),
     ("debug_devtools_available", RemoteWorkspacePolicy::LocalOnly),
     ("debug_element_picked", RemoteWorkspacePolicy::LocalOnly),
@@ -511,6 +508,24 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "generate_session_title",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    ("group_chat_create", RemoteWorkspacePolicy::RemoteRouted),
+    ("group_chat_delete", RemoteWorkspacePolicy::RemoteRouted),
+    (
+        "group_chat_ingest_reply",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
+    ("group_chat_join", RemoteWorkspacePolicy::RemoteRouted),
+    ("group_chat_leave", RemoteWorkspacePolicy::RemoteRouted),
+    ("group_chat_list", RemoteWorkspacePolicy::RemoteRouted),
+    ("group_chat_load", RemoteWorkspacePolicy::RemoteRouted),
+    ("group_chat_members", RemoteWorkspacePolicy::RemoteRouted),
+    ("group_chat_messages", RemoteWorkspacePolicy::RemoteRouted),
+    (
+        "group_chat_scan_timeouts",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
+    ("group_chat_send", RemoteWorkspacePolicy::RemoteRouted),
+    ("group_chat_set_mode", RemoteWorkspacePolicy::RemoteRouted),
     ("get_acp_clients", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "get_acp_session_commands",
@@ -903,10 +918,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "list_agent_companion_pets",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    (
-        "list_legion_presets",
-        RemoteWorkspacePolicy::LocalOnly,
-    ),
+    ("list_legion_presets", RemoteWorkspacePolicy::LocalOnly),
     (
         "list_agent_tool_names",
         RemoteWorkspacePolicy::LegacyUnaudited,

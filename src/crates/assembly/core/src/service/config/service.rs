@@ -755,10 +755,7 @@ mod tests {
             .get_config(Some("ai.legion_max_nodes"))
             .await
             .unwrap();
-        assert_eq!(
-            max_nodes_after, 5,
-            "误写 thresholds 子域不得影响顶层键"
-        );
+        assert_eq!(max_nodes_after, 5, "误写 thresholds 子域不得影响顶层键");
     }
 
     #[tokio::test]

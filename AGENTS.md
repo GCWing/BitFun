@@ -206,6 +206,34 @@ Per-scenario obligations:
 State which remote scenarios a change was exercised in. Local-only tests are not
 evidence of remote behavior.
 
+### Upgrade compatibility
+
+Users upgrade in place, and the remote scenarios above routinely put two
+different BitFun versions on the same connection. Every change must keep
+existing installs working without manual repair.
+
+- **Persisted shapes are read by older and newer code.** Config, settings,
+  sessions, connection profiles, worktree and dispatch records: add fields with
+  defaults, keep deserialization tolerant, and never repurpose or narrow the
+  meaning of a field that is already on disk. A field old data cannot supply
+  must not become required.
+- **Never delete or reset user data to recover from something you cannot
+  parse.** Keep the record, degrade the feature, and surface a clear state.
+  Missing credentials, an unreadable profile, a timeout, or an offline host are
+  not reasons to drop a session, workspace, or connection. Destructive removal
+  stays an explicit user action.
+- **Cross-version boundaries negotiate; they do not assume.** Peer HostInvoke,
+  the dispatch protocol, relay and mobile web, and IM bots all talk to a build
+  you do not control. Advertise a capability and check it before using it —
+  package version equality is not evidence of behavior — and keep the older
+  side on a working path instead of failing it.
+- **A rename is a migration.** Keep reading the old name, id, or record shape
+  until no supported peer can still send it, and migrate referenced data
+  (vault entries, workspace pointers) together with the thing being renamed.
+- **Prove it with tests.** Cover legacy deserialization and an old-payload
+  round trip, not just the new shape. A test that only exercises data written
+  by the current code is not upgrade coverage.
+
 ### Agent loop behavior
 
 - Do not add hard-coded limits or pattern checks to the agent loop as a first response to looping behavior, such as blocking repeated tool calls by string or count alone.

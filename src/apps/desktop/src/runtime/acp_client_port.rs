@@ -17,11 +17,11 @@ use bitfun_core::agentic::coordination::ConversationCoordinator;
 use bitfun_core::service::remote_ssh::workspace_state::get_effective_session_path;
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
-    acp_backend_error, AcpClientBitfunMessageRequest, AcpClientCancelRequest, AcpClientCreateRequest,
-    AcpClientCreateResult, AcpClientHistoryEntry, AcpClientHistoryRequest, AcpClientHistoryResult,
-    AcpClientListResult, AcpClientMessageRequest, AcpClientMessageResult, AcpClientPort,
-    AcpClientReleaseRequest, AcpClientStreamChunk, AcpClientStreamChunkSink, AcpClientSummary,
-    PortErrorKind, PortResult, RuntimeServiceCapability, RuntimeServicePort,
+    acp_backend_error, AcpClientBitfunMessageRequest, AcpClientCancelRequest,
+    AcpClientCreateRequest, AcpClientCreateResult, AcpClientHistoryEntry, AcpClientHistoryRequest,
+    AcpClientHistoryResult, AcpClientListResult, AcpClientMessageRequest, AcpClientMessageResult,
+    AcpClientPort, AcpClientReleaseRequest, AcpClientStreamChunk, AcpClientStreamChunkSink,
+    AcpClientSummary, PortErrorKind, PortResult, RuntimeServiceCapability, RuntimeServicePort,
 };
 
 /// Desktop implementation of [`AcpClientPort`] over the real ACP client service.
@@ -42,7 +42,10 @@ impl std::fmt::Debug for DesktopAcpClientPort {
             )
             .field(
                 "coordinator",
-                &self.coordinator.as_ref().map(|_| "<ConversationCoordinator>"),
+                &self
+                    .coordinator
+                    .as_ref()
+                    .map(|_| "<ConversationCoordinator>"),
             )
             .finish()
     }
@@ -436,7 +439,9 @@ impl AcpClientPort for DesktopAcpClientPort {
         request: AcpClientHistoryRequest,
     ) -> PortResult<AcpClientHistoryResult> {
         let coordinator = self.coordinator()?.clone();
-        let session_storage_path = self.session_storage_path(request.workspace_path.as_deref()).await?;
+        let session_storage_path = self
+            .session_storage_path(request.workspace_path.as_deref())
+            .await?;
         let turns = coordinator
             .load_visible_persisted_session_turns(&session_storage_path, &request.session_id)
             .await
@@ -448,7 +453,8 @@ impl AcpClientPort for DesktopAcpClientPort {
         // 最需要续接的上下文），truncated 置 true 如实上报。
         const MAX_HISTORY_ENTRIES: usize = 100;
 
-        let mut entries = Vec::with_capacity(turns.len().min(MAX_HISTORY_ENTRIES).saturating_mul(2));
+        let mut entries =
+            Vec::with_capacity(turns.len().min(MAX_HISTORY_ENTRIES).saturating_mul(2));
         for turn in turns.iter().rev().take(MAX_HISTORY_ENTRIES).rev() {
             entries.push(AcpClientHistoryEntry {
                 role: "user".to_string(),
@@ -527,8 +533,6 @@ mod tests {
         assert!(client_id_from_session_id("acp_codex_s1").is_none());
         assert!(client_id_from_session_id("acp_codex_7f0e1a2b-3c4d-4e5f-8a9b").is_none());
         // acp__<uuid> 解析出空 client_id，拒绝
-        assert!(
-            client_id_from_session_id("acp__7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b").is_none()
-        );
+        assert!(client_id_from_session_id("acp__7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b").is_none());
     }
 }

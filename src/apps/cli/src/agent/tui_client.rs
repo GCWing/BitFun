@@ -817,15 +817,21 @@ impl TuiAgentClient {
         &self,
         workspace_path: String,
     ) -> Result<WorktreeRepositoryStatusResponse> {
-        let paths = self
-            .workspace_paths
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let (remote_connection_id, remote_ssh_host) = {
+            let paths = self
+                .workspace_paths
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            (
+                paths.remote_connection_id.clone(),
+                paths.remote_ssh_host.clone(),
+            )
+        };
         self.backend
             .worktree_repository_status(WorktreeRepositoryStatusRequest {
                 workspace_path,
-                remote_connection_id: paths.remote_connection_id.clone(),
-                remote_ssh_host: paths.remote_ssh_host.clone(),
+                remote_connection_id,
+                remote_ssh_host,
             })
             .await
             .map_err(Into::into)

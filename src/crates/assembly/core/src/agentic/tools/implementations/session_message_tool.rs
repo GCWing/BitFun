@@ -1,6 +1,6 @@
 use super::session_control_tool::{
     get_available_agent_type_ids_for_creation, resolve_session_mutation_authorization,
-    SessionMutationAuthOptions,
+    SessionControlWorkspaceTarget, SessionMutationAuthOptions, SessionWorktreeCreateResult,
 };
 use super::util::normalize_path;
 use crate::agentic::agents::AcpAgent;
@@ -17,23 +17,25 @@ use crate::agentic::tools::framework::{
 };
 use crate::agentic::tools::restrictions::get_session_role;
 use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
+use crate::service::workspace::get_global_workspace_service;
+use crate::service::worktree::WorktreeService;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_core_types::SessionExecutionTarget;
+use bitfun_core_types::{SessionExecutionTarget, WorktreeSessionOptions};
 use bitfun_runtime_ports::{
     AcpClientBitfunMessageRequest, AcpClientMessageRequest, AcpClientMessageResult, AcpClientPort,
     AcpClientStreamChunk, AcpClientStreamChunkSink, AgentDialogPrependedReminder,
-    AgentDialogSteerRequest, AgentDialogTurnPort, AgentDialogTurnRequest, AgentSessionCreateRequest,
-    AgentSessionListRequest, AgentSessionReplyRoute, AgentSessionSummary, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, PortResult,
+    AgentDialogSteerRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
+    AgentSessionCreateRequest, AgentSessionListRequest, AgentSessionReplyRoute,
+    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, PortResult,
 };
+use log::{info, warn};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
-use log::{info, warn};
 use uuid::Uuid;
 
 /// Primary channel for legion communication. With a session_id, messages can be sent and received across conversations.
@@ -163,6 +165,7 @@ impl SessionMessageTool {
     fn forwarded_user_input_metadata(
         context: &ToolUseContext,
         sender: &SenderIdentity,
+        group: &GroupChatForwardMetadata,
     ) -> serde_json::Map<String, Value> {
         use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 
@@ -192,6 +195,17 @@ impl SessionMessageTool {
             .filter(|value| !value.trim().is_empty())
         {
             metadata.insert("senderName".to_string(), json!(name));
+        }
+        // Group chat reply correlation keys (R-GC-11, contract §1.4): only
+        // written when present so non-group dispatch stays zero-pollution.
+        if let Some(group_id) = &group.group_id {
+            metadata.insert("groupId".to_string(), json!(group_id));
+        }
+        if let Some(group_message_id) = &group.group_message_id {
+            metadata.insert("groupMessageId".to_string(), json!(group_message_id));
+        }
+        if let Some(group_author) = &group.group_author {
+            metadata.insert("groupAuthor".to_string(), json!(group_author));
         }
         metadata
     }
@@ -466,7 +480,6 @@ impl SessionMessageTool {
             }],
         )
     }
-
 }
 
 /// Identity of the session that sent a forwarded message.
@@ -480,6 +493,21 @@ struct SenderIdentity {
     depth: Option<u32>,
     /// Session name, or the agent type fallback, when available.
     name: Option<String>,
+}
+
+/// Optional group-chat reply correlation keys forwarded with a dispatched turn
+/// (R-GC-11, contract §1.4: groupId / groupMessageId / groupAuthor).
+///
+/// All fields are optional: a non-group dispatch carries the default empty
+/// metadata and never writes the keys (zero pollution).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct GroupChatForwardMetadata {
+    /// The group chat room id the message belongs to.
+    pub group_id: Option<String>,
+    /// The group chat message id being replied to.
+    pub group_message_id: Option<String>,
+    /// Sender identifier: `__master__` or a member session id.
+    pub group_author: Option<String>,
 }
 
 impl SenderIdentity {
@@ -497,7 +525,11 @@ impl SenderIdentity {
     /// display name is unavailable.
     fn display_label(&self) -> String {
         let mut label = self.role_label();
-        if let Some(name) = self.name.as_deref().filter(|value| !value.trim().is_empty()) {
+        if let Some(name) = self
+            .name
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
             label.push(' ');
             label.push_str(name);
         }
@@ -560,6 +592,13 @@ struct SessionMessageInput {
     plan_file: Option<String>,
     #[serde(default)]
     todo_id: Option<String>,
+    /// Optional worktree options for create: when present (and session_id is
+    /// omitted), a managed worktree is created together with the session via
+    /// WorktreeService and the session is bound to it. `None` keeps the legacy
+    /// behavior (session runs in the project checkout). Rejected for remote
+    /// workspaces and for session_id-based sends.
+    #[serde(default)]
+    worktree: Option<WorktreeSessionOptions>,
     /// Batch dispatch: perform multiple create+send (or send-to-existing)
     /// operations in a single tool call. All items are validated up front (the
     /// whole batch is rejected when any item is structurally invalid), then each
@@ -597,6 +636,11 @@ struct BatchItem {
     /// requires plan_file).
     #[serde(default)]
     todo_id: Option<String>,
+    /// Per-item worktree options for a new session (only when session_id is
+    /// omitted; rejected for remote workspaces). Same semantics as the
+    /// top-level worktree field.
+    #[serde(default)]
+    worktree: Option<WorktreeSessionOptions>,
 }
 
 /// Delivery decision for an urgent message against a target session.
@@ -705,9 +749,25 @@ Allowed agent types when creating a session are dynamically resolved from the av
                     "type": "string",
                     "description": "Optional todo id within plan_file for a created session (only when session_id is omitted, and requires plan_file)."
                 },
+                "worktree": {
+                    "type": "object",
+                    "description": "Optional worktree options for a created session (only when session_id is omitted; not supported for remote workspaces): creates a managed Git worktree together with the session and binds the session to it. Shape: {baseRef?, copyLocalChanges?}.",
+                    "properties": {
+                        "baseRef": {
+                            "type": "string",
+                            "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                        },
+                        "copyLocalChanges": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                        }
+                    },
+                    "additionalProperties": false
+                },
                 "batch": {
                     "type": "array",
-                    "description": "Batch dispatch: perform multiple create+send (or send-to-existing) operations in one tool call. Mutually exclusive with the top-level message and session fields; the top-level workspace is shared by items that create a session. All items validate up front; each item then runs independently (a failed item never rolls back succeeded ones). Item shape: {session_id?, session_name?, message, agent_type?, plan_file?, todo_id?, urgent?}.",
+                    "description": "Batch dispatch: perform multiple create+send (or send-to-existing) operations in one tool call. Mutually exclusive with the top-level message and session fields; the top-level workspace is shared by items that create a session. All items validate up front; each item then runs independently (a failed item never rolls back succeeded ones). Item shape: {session_id?, session_name?, message, agent_type?, plan_file?, todo_id?, urgent?, worktree?}.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -738,6 +798,22 @@ Allowed agent types when creating a session are dynamically resolved from the av
                             "todo_id": {
                                 "type": "string",
                                 "description": "Per-item todo id within plan_file (only when session_id is omitted, and requires plan_file)."
+                            },
+                            "worktree": {
+                                "type": "object",
+                                "description": "Per-item worktree options for a new session (only when session_id is omitted; not supported for remote workspaces). Shape: {baseRef?, copyLocalChanges?}.",
+                                "properties": {
+                                    "baseRef": {
+                                        "type": "string",
+                                        "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                                    },
+                                    "copyLocalChanges": {
+                                        "type": "boolean",
+                                        "default": false,
+                                        "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                                    }
+                                },
+                                "additionalProperties": false
                             }
                         },
                         "required": ["message"],
@@ -790,9 +866,25 @@ Allowed agent types when creating a session are dynamically resolved from the av
                     "type": "string",
                     "description": "Optional todo id within plan_file for a created session (only when session_id is omitted, and requires plan_file)."
                 },
+                "worktree": {
+                    "type": "object",
+                    "description": "Optional worktree options for a created session (only when session_id is omitted; not supported for remote workspaces): creates a managed Git worktree together with the session and binds the session to it. Shape: {baseRef?, copyLocalChanges?}.",
+                    "properties": {
+                        "baseRef": {
+                            "type": "string",
+                            "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                        },
+                        "copyLocalChanges": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                        }
+                    },
+                    "additionalProperties": false
+                },
                 "batch": {
                     "type": "array",
-                    "description": "Batch dispatch: perform multiple create+send (or send-to-existing) operations in one tool call. Mutually exclusive with the top-level message and session fields; the top-level workspace is shared by items that create a session. All items validate up front; each item then runs independently (a failed item never rolls back succeeded ones). Item shape: {session_id?, session_name?, message, agent_type?, plan_file?, todo_id?, urgent?}.",
+                    "description": "Batch dispatch: perform multiple create+send (or send-to-existing) operations in one tool call. Mutually exclusive with the top-level message and session fields; the top-level workspace is shared by items that create a session. All items validate up front; each item then runs independently (a failed item never rolls back succeeded ones). Item shape: {session_id?, session_name?, message, agent_type?, plan_file?, todo_id?, urgent?, worktree?}.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -823,6 +915,22 @@ Allowed agent types when creating a session are dynamically resolved from the av
                             "todo_id": {
                                 "type": "string",
                                 "description": "Per-item todo id within plan_file (only when session_id is omitted, and requires plan_file)."
+                            },
+                            "worktree": {
+                                "type": "object",
+                                "description": "Per-item worktree options for a new session (only when session_id is omitted; not supported for remote workspaces). Shape: {baseRef?, copyLocalChanges?}.",
+                                "properties": {
+                                    "baseRef": {
+                                        "type": "string",
+                                        "description": "Optional Git ref for the new worktree. Defaults to HEAD."
+                                    },
+                                    "copyLocalChanges": {
+                                        "type": "boolean",
+                                        "default": false,
+                                        "description": "Copy staged, unstaged, untracked, and .worktreeinclude-selected ignored files when the selected base equals source HEAD."
+                                    }
+                                },
+                                "additionalProperties": false
                             }
                         },
                         "required": ["message"],
@@ -918,6 +1026,17 @@ Allowed agent types when creating a session are dynamically resolved from the av
                     };
                 }
 
+                if parsed.worktree.is_some() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(
+                            "worktree is only allowed when session_id is omitted".to_string(),
+                        ),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
                 if let Some(workspace) = parsed.workspace.as_deref() {
                     let workspace_validation = self.validate_workspace_shape(workspace, context);
                     if !workspace_validation.result {
@@ -961,6 +1080,50 @@ Allowed agent types when creating a session are dynamically resolved from the av
                         error_code: Some(400),
                         meta: None,
                     };
+                }
+
+                if let Some(worktree) = parsed.worktree.as_ref() {
+                    if worktree
+                        .base_ref
+                        .as_deref()
+                        .is_some_and(|base_ref| base_ref.trim().is_empty())
+                    {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(
+                                "worktree.base_ref must not be empty when provided".to_string(),
+                            ),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
+                    if context.is_some_and(|context| context.is_remote()) {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(
+                                "worktree is not supported for remote workspaces".to_string(),
+                            ),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
+                    // worktree 与 ACP 真会话（agent_type `acp__<client>`）互斥：
+                    // ACP 会话是外部进程记录，不承载本地 worktree
+                    // execution_target，同时携带会导致 worktree 成为孤儿。
+                    if parsed
+                        .agent_type
+                        .as_ref()
+                        .is_some_and(|agent_type| agent_type.as_str().starts_with("acp__"))
+                    {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(
+                                "worktree is not supported with acp__ agent types".to_string(),
+                            ),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
                 }
 
                 let Some(workspace) = parsed.workspace.as_deref() else {
@@ -1017,11 +1180,7 @@ Allowed agent types when creating a session are dynamically resolved from the av
             .and_then(|value| value.as_str())
             .unwrap_or("resolved workspace");
         if let Some(batch) = input.get("batch").and_then(|value| value.as_array()) {
-            return format!(
-                "Batch dispatch {} message(s) in {}",
-                batch.len(),
-                workspace
-            );
+            return format!("Batch dispatch {} message(s) in {}", batch.len(), workspace);
         }
         if let Some(session_id) = input.get("session_id").and_then(|value| value.as_str()) {
             format!("Send message to session {} in {}", session_id, workspace)
@@ -1337,7 +1496,9 @@ impl SessionMessageTool {
             || parsed.todo_id.is_some()
             || parsed.urgent
         {
-            return Self::invalid("session fields must be provided per batch item when batch is used");
+            return Self::invalid(
+                "session fields must be provided per batch item when batch is used",
+            );
         }
 
         // The shared workspace must be present (and well-formed) when any item
@@ -1380,6 +1541,12 @@ impl SessionMessageTool {
                             field("plan_file/todo_id")
                         ));
                     }
+                    if item.worktree.is_some() {
+                        return Self::invalid(format!(
+                            "{} is only allowed when session_id is omitted",
+                            field("worktree")
+                        ));
+                    }
                     if let Some(source_session_id) = source_session_id {
                         if source_session_id == session_id {
                             return Self::invalid(format!(
@@ -1412,6 +1579,34 @@ impl SessionMessageTool {
                             "{} is required when session_id is omitted",
                             field("agent_type")
                         ));
+                    }
+                    if let Some(worktree) = item.worktree.as_ref() {
+                        if worktree
+                            .base_ref
+                            .as_deref()
+                            .is_some_and(|base_ref| base_ref.trim().is_empty())
+                        {
+                            return Self::invalid(format!(
+                                "{} must not be empty when provided",
+                                field("worktree.base_ref")
+                            ));
+                        }
+                        if context.is_some_and(|context| context.is_remote()) {
+                            return Self::invalid(format!(
+                                "{} is not supported for remote workspaces",
+                                field("worktree")
+                            ));
+                        }
+                        if item
+                            .agent_type
+                            .as_ref()
+                            .is_some_and(|agent_type| agent_type.as_str().starts_with("acp__"))
+                        {
+                            return Self::invalid(format!(
+                                "{} is not supported with acp__ agent types",
+                                field("worktree")
+                            ));
+                        }
                     }
                 }
             }
@@ -1539,7 +1734,9 @@ impl SessionMessageTool {
         let Some(custom) = metadata.custom_metadata.as_ref() else {
             return Ok(AcpFlowSessionRegistryStatus::NotAcpFlow);
         };
-        if custom.get(ACP_FLOW_METADATA_PROVIDER_KEY).and_then(Value::as_str)
+        if custom
+            .get(ACP_FLOW_METADATA_PROVIDER_KEY)
+            .and_then(Value::as_str)
             != Some(ACP_FLOW_METADATA_PROVIDER_VALUE)
         {
             return Ok(AcpFlowSessionRegistryStatus::NotAcpFlow);
@@ -1569,7 +1766,8 @@ impl SessionMessageTool {
         match op {
             AcpDirectSendOp::Flow(request) => port.send_message_stream(request, chunk_sink).await,
             AcpDirectSendOp::Bitfun(request) => {
-                port.send_message_to_bitfun_session_stream(request, chunk_sink).await
+                port.send_message_to_bitfun_session_stream(request, chunk_sink)
+                    .await
             }
         }
     }
@@ -1947,7 +2145,8 @@ impl SessionMessageTool {
                     let source = AcpDirectReplySource {
                         source_session_id: source_session_id.clone(),
                         source_workspace: source_workspace.clone(),
-                        source_remote_connection_id: source_remote_connection_id.map(ToOwned::to_owned),
+                        source_remote_connection_id: source_remote_connection_id
+                            .map(ToOwned::to_owned),
                         source_remote_ssh_host: source_remote_ssh_host.map(ToOwned::to_owned),
                     };
                     Self::spawn_acp_direct_delivery(
@@ -2065,6 +2264,39 @@ impl SessionMessageTool {
                     })?
                     .as_str()
                     .to_string();
+
+                // W9: worktree 参数授权 + remote 互斥拒绝（SessionMessage create
+                // 与 SessionControl create 同一语义）。
+                let mut created_worktree: Option<SessionWorktreeCreateResult> = None;
+                if params.worktree.is_some() {
+                    super::session_control_tool::ensure_worktree_creation_authorized(context)?;
+                    super::session_control_tool::ensure_worktree_not_remote(context)?;
+                    let worktree_options = params.worktree.as_ref().expect("checked above");
+                    let request_id = context
+                        .tool_call_id
+                        .as_deref()
+                        .map(|tool_call_id| format!("session-message:{tool_call_id}:worktree"))
+                        .unwrap_or_else(|| {
+                            format!("session-message:{}:worktree", uuid::Uuid::new_v4())
+                        });
+                    created_worktree = Some(
+                        super::session_control_tool::create_worktree_for_session(
+                            &request_id,
+                            &SessionControlWorkspaceTarget {
+                                display_workspace: workspace_target.workspace_path.clone(),
+                                project_workspace: workspace_target.project_workspace_path.clone(),
+                                execution_target: workspace_target.execution_target.clone(),
+                                workspace_id: workspace_target.workspace_id.clone(),
+                                remote_connection_id: workspace_target.remote_connection_id.clone(),
+                                remote_ssh_host: workspace_target.remote_ssh_host.clone(),
+                            },
+                            worktree_options,
+                            context,
+                        )
+                        .await?,
+                    );
+                }
+
                 let created_by = self.creator_session_marker(context)?;
                 let mut metadata = serde_json::Map::new();
                 metadata.insert("createdBy".to_string(), json!(created_by));
@@ -2087,25 +2319,66 @@ impl SessionMessageTool {
                 if let Some(todo_id) = params.todo_id.as_deref() {
                     metadata.insert(TODO_ID_METADATA_KEY.to_string(), json!(todo_id));
                 }
-                let session = runtime
+                let session = match runtime
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type: agent_type.clone(),
-                        workspace_path: Some(workspace_target.workspace_path.clone()),
-                        project_workspace_path: Some(
-                            workspace_target.project_workspace_path.clone(),
+                        workspace_path: Some(
+                            created_worktree
+                                .as_ref()
+                                .map(|wt| wt.execution_target.root_path.clone())
+                                .unwrap_or_else(|| workspace_target.workspace_path.clone()),
                         ),
-                        execution_target: workspace_target.execution_target.clone(),
-                        workspace_id: workspace_target.workspace_id.clone(),
+                        project_workspace_path: Some(
+                            created_worktree
+                                .as_ref()
+                                .map(|wt| wt.project_workspace_path.clone())
+                                .unwrap_or_else(|| workspace_target.project_workspace_path.clone()),
+                        ),
+                        execution_target: created_worktree
+                            .as_ref()
+                            .map(|wt| wt.execution_target.clone())
+                            .or_else(|| workspace_target.execution_target.clone()),
+                        workspace_id: created_worktree
+                            .as_ref()
+                            .and_then(|wt| wt.tracked_workspace_id.clone())
+                            .or_else(|| workspace_target.workspace_id.clone()),
                         remote_connection_id: workspace_target.remote_connection_id.clone(),
                         remote_ssh_host: workspace_target.remote_ssh_host.clone(),
                         model_id: None,
                         metadata,
                     })
                     .await
-                    .map_err(|error| {
-                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
-                    })?;
+                {
+                    Ok(session) => session,
+                    Err(create_error) => {
+                        // 会话创建失败 → 回滚已创建的 worktree（仅当本次确实创建）。
+                        if let Some(worktree) = created_worktree.as_ref() {
+                            if worktree.created {
+                                if let Some(workspace_service) = get_global_workspace_service() {
+                                    if let Some(workspace_id) =
+                                        worktree.tracked_workspace_id.as_deref()
+                                    {
+                                        let _ =
+                                            workspace_service.remove_workspace(workspace_id).await;
+                                    }
+                                }
+                                if let Some(worktree_id) =
+                                    worktree.execution_target.worktree_id.as_deref()
+                                {
+                                    let _ = WorktreeService::rollback_created(
+                                        &worktree.project_workspace_path,
+                                        worktree_id,
+                                    )
+                                    .await;
+                                }
+                            }
+                        }
+                        return Err(BitFunError::tool(
+                            CoreServiceAgentRuntime::runtime_error_message(create_error),
+                        ));
+                    }
+                };
 
                 // A2（幽灵会话删除修复）：创建后挂树——持久化 SessionRelationship 并
                 // 注册内存树，对齐 SessionControl create 的 lineage 写入（R-001/R-002/R-003）。
@@ -2177,10 +2450,11 @@ impl SessionMessageTool {
                     }
                     // 内存树注册是 best-effort（R-003 语义，同 SessionControl create）：
                     // 注册失败只 warn，lineage 已持久化，重启后由 list 重建树。
-                    if let Err(error) = coordinator
-                        .session_tree()
-                        .register_child(parent_session_id, &session.session_id, child_depth)
-                    {
+                    if let Err(error) = coordinator.session_tree().register_child(
+                        parent_session_id,
+                        &session.session_id,
+                        child_depth,
+                    ) {
                         log::warn!(
                             "SessionMessage create: failed to register child {} under {} in tree: {:?}",
                             session.session_id,
@@ -2318,9 +2592,13 @@ impl SessionMessageTool {
         // through the normal submission path so the message is never dropped.
         let mut steering_turn_id: Option<String> = None;
         let has_plan_todo_binding = params.plan_file.is_some() || params.todo_id.is_some();
-        if should_attempt_steering(params.urgent, created_session_id.as_deref(), has_plan_todo_binding)
-        {
-            match resolve_urgent_delivery(scheduler.current_processing_turn_id(&target_session_id)) {
+        if should_attempt_steering(
+            params.urgent,
+            created_session_id.as_deref(),
+            has_plan_todo_binding,
+        ) {
+            match resolve_urgent_delivery(scheduler.current_processing_turn_id(&target_session_id))
+            {
                 UrgentDelivery::Steer { turn_id } => {
                     match scheduler
                         .steer_dialog_turn(AgentDialogSteerRequest {
@@ -2356,8 +2634,11 @@ impl SessionMessageTool {
             // dispatched session to a plan todo, carry planFile/todoId in the
             // forwarded turn metadata so the scheduler can auto-mark the todo
             // (in_progress at turn start, completed on a Completed outcome).
-            let mut forwarded_metadata =
-                Self::forwarded_user_input_metadata(context, &sender_identity);
+            let mut forwarded_metadata = Self::forwarded_user_input_metadata(
+                context,
+                &sender_identity,
+                &GroupChatForwardMetadata::default(),
+            );
             if let Some(plan_file) = params.plan_file.as_deref() {
                 forwarded_metadata.insert(PLAN_FILE_METADATA_KEY.to_string(), json!(plan_file));
             }
@@ -2379,7 +2660,8 @@ impl SessionMessageTool {
                     reply_route: Some(AgentSessionReplyRoute {
                         source_session_id: source_session_id.clone(),
                         source_workspace_path: source_workspace.clone(),
-                        source_remote_connection_id: source_remote_connection_id.map(ToOwned::to_owned),
+                        source_remote_connection_id: source_remote_connection_id
+                            .map(ToOwned::to_owned),
                         source_remote_ssh_host: source_remote_ssh_host.map(ToOwned::to_owned),
                     }),
                     prepended_reminders: prepended_messages,
@@ -2392,9 +2674,8 @@ impl SessionMessageTool {
                 })?;
         }
 
-        let urgent_fell_back = params.urgent
-            && steering_turn_id.is_none()
-            && created_session_id.is_none();
+        let urgent_fell_back =
+            params.urgent && steering_turn_id.is_none() && created_session_id.is_none();
         let mut result_text = if let Some(steered_turn_id) = steering_turn_id.as_ref() {
             format!(
                 "Urgent message injected into the running turn '{}' of session '{}' in workspace '{}' using agent type '{}'.",
@@ -2454,6 +2735,7 @@ impl SessionMessageTool {
                 urgent: item.urgent,
                 plan_file: item.plan_file.clone(),
                 todo_id: item.todo_id.clone(),
+                worktree: item.worktree.clone(),
                 batch: None,
             };
             match self.dispatch_single(item_params, shared, context).await {
@@ -2622,6 +2904,79 @@ mod tests {
     }
 
     #[test]
+    fn session_message_input_parses_worktree_options_and_keeps_legacy_compat() {
+        // 旧 payload（无 worktree 字段）解析兼容。
+        let legacy: SessionMessageInput = serde_json::from_value(json!({
+            "workspace": "/repo",
+            "session_name": "legacy",
+            "message": "hello",
+            "agent_type": "agentic",
+        }))
+        .expect("legacy payload must parse");
+        assert!(legacy.worktree.is_none());
+
+        // 新 payload：worktree 对象解析。
+        let with_worktree: SessionMessageInput = serde_json::from_value(json!({
+            "workspace": "/repo",
+            "session_name": "task-a",
+            "message": "hello",
+            "agent_type": "agentic",
+            "worktree": {
+                "baseRef": "main",
+                "copyLocalChanges": true
+            }
+        }))
+        .expect("worktree payload must parse");
+        assert!(with_worktree.worktree.is_some());
+        assert_eq!(
+            with_worktree
+                .worktree
+                .as_ref()
+                .and_then(|w| w.base_ref.as_deref()),
+            Some("main")
+        );
+        assert!(with_worktree
+            .worktree
+            .as_ref()
+            .is_some_and(|w| w.copy_local_changes));
+
+        // batch item 的 worktree 解析。
+        let batch: SessionMessageInput = serde_json::from_value(json!({
+            "workspace": "/repo",
+            "batch": [{
+                "session_name": "item-a",
+                "message": "hi",
+                "agent_type": "agentic",
+                "worktree": {"copyLocalChanges": false}
+            }]
+        }))
+        .expect("batch payload must parse");
+        let item = batch.batch.as_ref().expect("batch").first().expect("item");
+        assert!(item.worktree.is_some());
+    }
+
+    #[tokio::test]
+    async fn session_message_worktree_rejected_for_existing_session_send() {
+        // 发送到既有 session_id 时 worktree 被拒绝（create-only 语义）。
+        let input = json!({
+            "workspace": "/repo",
+            "session_id": "existing_1",
+            "message": "hello",
+            "worktree": {"baseRef": "main"}
+        });
+        let tool = SessionMessageTool::new();
+        let result = tool
+            .validate_input(&input, Some(&session_context("caller_1")))
+            .await;
+        assert!(!result.result);
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("worktree is only allowed when session_id is omitted"));
+    }
+
+    #[test]
     fn creating_in_current_worktree_inherits_project_scope_and_target() {
         let worktree_path = PathBuf::from("/worktrees/wt-1");
         let project_path = PathBuf::from("/repo");
@@ -2713,9 +3068,7 @@ mod tests {
             None
         );
         assert_eq!(
-            SessionMessageTool::acp_flow_client_id_from_session_id(
-                "acp_codebuddy_not-a-uuid"
-            ),
+            SessionMessageTool::acp_flow_client_id_from_session_id("acp_codebuddy_not-a-uuid"),
             None
         );
         assert_eq!(
@@ -2732,7 +3085,9 @@ mod tests {
     fn looks_like_uuid_accepts_only_canonical_shape() {
         assert!(looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b"));
         assert!(!looks_like_uuid("7f0e1a2b3c4d4e5f8a9b0c1d2e3f4a5b"));
-        assert!(!looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b-extra"));
+        assert!(!looks_like_uuid(
+            "7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b-extra"
+        ));
         assert!(!looks_like_uuid(""));
         assert!(!looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5"));
     }
@@ -2753,16 +3108,29 @@ mod tests {
             name: Some("Assistant".to_string()),
         };
 
-        let metadata = SessionMessageTool::forwarded_user_input_metadata(&context, &sender);
+        let metadata = SessionMessageTool::forwarded_user_input_metadata(
+            &context,
+            &sender,
+            &GroupChatForwardMetadata::default(),
+        );
 
         assert_eq!(
             metadata.get(USER_INPUT_AVAILABLE_CONTEXT_KEY),
             Some(&Value::Bool(false))
         );
-        assert_eq!(metadata.get("senderSessionId"), Some(&Value::String("source-1".to_string())));
-        assert_eq!(metadata.get("senderRole"), Some(&Value::String("Commander".to_string())));
+        assert_eq!(
+            metadata.get("senderSessionId"),
+            Some(&Value::String("source-1".to_string()))
+        );
+        assert_eq!(
+            metadata.get("senderRole"),
+            Some(&Value::String("Commander".to_string()))
+        );
         assert_eq!(metadata.get("senderDepth"), Some(&Value::from(0)));
-        assert_eq!(metadata.get("senderName"), Some(&Value::String("Assistant".to_string())));
+        assert_eq!(
+            metadata.get("senderName"),
+            Some(&Value::String("Assistant".to_string()))
+        );
     }
 
     #[test]
@@ -2775,12 +3143,71 @@ mod tests {
             name: None,
         };
 
-        let metadata = SessionMessageTool::forwarded_user_input_metadata(&context, &sender);
+        let metadata = SessionMessageTool::forwarded_user_input_metadata(
+            &context,
+            &sender,
+            &GroupChatForwardMetadata::default(),
+        );
 
-        assert_eq!(metadata.get("senderSessionId"), Some(&Value::String("source-2".to_string())));
+        assert_eq!(
+            metadata.get("senderSessionId"),
+            Some(&Value::String("source-2".to_string()))
+        );
         assert!(!metadata.contains_key("senderRole"));
         assert!(!metadata.contains_key("senderDepth"));
         assert!(!metadata.contains_key("senderName"));
+    }
+
+    #[test]
+    fn forwarded_metadata_carries_group_chat_keys_when_present() {
+        let context = empty_context();
+        let sender = SenderIdentity {
+            session_id: "source-3".to_string(),
+            role: None,
+            depth: None,
+            name: None,
+        };
+        let group = GroupChatForwardMetadata {
+            group_id: Some("room-1".to_string()),
+            group_message_id: Some("msg-42".to_string()),
+            group_author: Some("__master__".to_string()),
+        };
+
+        let metadata = SessionMessageTool::forwarded_user_input_metadata(&context, &sender, &group);
+
+        assert_eq!(
+            metadata.get("groupId"),
+            Some(&Value::String("room-1".to_string()))
+        );
+        assert_eq!(
+            metadata.get("groupMessageId"),
+            Some(&Value::String("msg-42".to_string()))
+        );
+        assert_eq!(
+            metadata.get("groupAuthor"),
+            Some(&Value::String("__master__".to_string()))
+        );
+    }
+
+    #[test]
+    fn forwarded_metadata_omits_group_chat_keys_when_absent() {
+        let context = empty_context();
+        let sender = SenderIdentity {
+            session_id: "source-4".to_string(),
+            role: None,
+            depth: None,
+            name: None,
+        };
+
+        let metadata = SessionMessageTool::forwarded_user_input_metadata(
+            &context,
+            &sender,
+            &GroupChatForwardMetadata::default(),
+        );
+
+        assert!(!metadata.contains_key("groupId"));
+        assert!(!metadata.contains_key("groupMessageId"));
+        assert!(!metadata.contains_key("groupAuthor"));
     }
 
     #[test]
@@ -3038,10 +3465,7 @@ mod tests {
         }))
         .expect("payload with plan-todo binding must parse");
 
-        assert_eq!(
-            input.plan_file.as_deref(),
-            Some("my_plan_1234.plan.md")
-        );
+        assert_eq!(input.plan_file.as_deref(), Some("my_plan_1234.plan.md"));
         assert_eq!(input.todo_id.as_deref(), Some("setup-auth"));
     }
 
@@ -3144,7 +3568,11 @@ mod tests {
     #[test]
     fn non_urgent_message_never_attempts_steering_channel() {
         assert!(!should_attempt_steering(false, None, false));
-        assert!(!should_attempt_steering(false, Some("new-session-1"), false));
+        assert!(!should_attempt_steering(
+            false,
+            Some("new-session-1"),
+            false
+        ));
         assert!(!should_attempt_steering(false, None, true));
     }
 
@@ -3224,7 +3652,10 @@ mod tests {
     #[test]
     fn role_display_title_cases_snake_case_keys() {
         assert_eq!(format_role_display("commander"), "Commander");
-        assert_eq!(format_role_display("punishment_executor"), "PunishmentExecutor");
+        assert_eq!(
+            format_role_display("punishment_executor"),
+            "PunishmentExecutor"
+        );
     }
 
     #[test]
@@ -3250,7 +3681,10 @@ mod tests {
         assert_eq!(batch.len(), 2);
         assert_eq!(batch[0].session_name.as_deref(), Some("Worker One"));
         assert_eq!(batch[0].message, "hello one");
-        assert_eq!(batch[0].agent_type.as_ref().map(AgentType::as_str), Some("agentic"));
+        assert_eq!(
+            batch[0].agent_type.as_ref().map(AgentType::as_str),
+            Some("agentic")
+        );
         assert!(batch[0].session_id.is_none());
         assert!(!batch[0].urgent);
         assert_eq!(batch[1].session_id.as_deref(), Some("worker_2"));
@@ -3285,7 +3719,10 @@ mod tests {
         .expect("batch payload without top-level message must parse");
 
         assert!(input.message.is_none());
-        assert_eq!(input.batch.as_ref().expect("batch must be present").len(), 1);
+        assert_eq!(
+            input.batch.as_ref().expect("batch must be present").len(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -3777,9 +4214,7 @@ mod tests {
             ))
         }
 
-        async fn list_clients(
-            &self,
-        ) -> PortResult<bitfun_runtime_ports::AcpClientListResult> {
+        async fn list_clients(&self) -> PortResult<bitfun_runtime_ports::AcpClientListResult> {
             Err(PortError::new(
                 PortErrorKind::Backend,
                 "not exercised by the ACP direct-path tests",
@@ -3984,7 +4419,10 @@ mod tests {
             SessionMessageTool::acp_client_id_from_agent_type("agentic"),
             None
         );
-        assert_eq!(SessionMessageTool::acp_client_id_from_agent_type("Plan"), None);
+        assert_eq!(
+            SessionMessageTool::acp_client_id_from_agent_type("Plan"),
+            None
+        );
         // A flow session id (acp_<client>_<uuid>) is not an agent type prefix.
         assert_eq!(
             SessionMessageTool::acp_client_id_from_agent_type("acp_codex_abc123"),
@@ -3992,7 +4430,10 @@ mod tests {
         );
         assert_eq!(SessionMessageTool::acp_client_id_from_agent_type(""), None);
         // A bare prefix with no client id is rejected (empty client id).
-        assert_eq!(SessionMessageTool::acp_client_id_from_agent_type("acp__"), None);
+        assert_eq!(
+            SessionMessageTool::acp_client_id_from_agent_type("acp__"),
+            None
+        );
     }
 
     #[tokio::test]
@@ -4022,7 +4463,10 @@ mod tests {
         assert_eq!(messages[0].workspace_path.as_deref(), Some("/repo/project"));
         // The async direct path now carries a bounded window instead of the
         // old unbounded `None`.
-        assert_eq!(messages[0].timeout_seconds, Some(ACP_DIRECT_TIMEOUT_SECONDS));
+        assert_eq!(
+            messages[0].timeout_seconds,
+            Some(ACP_DIRECT_TIMEOUT_SECONDS)
+        );
 
         // The external response is returned verbatim, no re-translation.
         assert_eq!(response.response, "external response");
@@ -4127,9 +4571,9 @@ mod tests {
                     {
                         saw_round_started = true;
                     }
-                    AgenticEvent::TextChunk { session_id, text, .. }
-                        if session_id == &target_session_id =>
-                    {
+                    AgenticEvent::TextChunk {
+                        session_id, text, ..
+                    } if session_id == &target_session_id => {
                         saw_text = text == "external response";
                     }
                     AgenticEvent::ModelRoundCompleted { session_id, .. }
@@ -4222,7 +4666,10 @@ mod tests {
         assert_eq!(turn.model_rounds.len(), 1);
         assert_eq!(turn.model_rounds[0].round_index, 0);
         assert_eq!(turn.model_rounds[0].text_items.len(), 1);
-        assert_eq!(turn.model_rounds[0].text_items[0].content, "external response");
+        assert_eq!(
+            turn.model_rounds[0].text_items[0].content,
+            "external response"
+        );
         assert_eq!(turn.status, crate::service::session::TurnStatus::Completed);
         assert!(turn.end_time.is_some());
         assert!(turn.error.is_none());
@@ -4314,7 +4761,10 @@ mod tests {
             .await
             .expect("load should succeed")
             .expect("delivery turn should be persisted, not dropped");
-        assert_eq!(saved.user_message.content, "【acp 会话存活测试】只回『alive』");
+        assert_eq!(
+            saved.user_message.content,
+            "【acp 会话存活测试】只回『alive』"
+        );
         assert_eq!(saved.model_rounds[0].text_items[0].content, "alive");
         assert_eq!(saved.status, crate::service::session::TurnStatus::Completed);
     }
@@ -4362,7 +4812,10 @@ mod tests {
             .expect("turn should be persisted");
         assert_eq!(saved.turn_id, "turn-1");
         assert_eq!(saved.user_message.content, "hello");
-        assert_eq!(saved.model_rounds[0].text_items[0].content, "external response");
+        assert_eq!(
+            saved.model_rounds[0].text_items[0].content,
+            "external response"
+        );
         assert_eq!(saved.status, crate::service::session::TurnStatus::Completed);
 
         // 幂等：同 turn 再次落盘为 no-op（不覆盖已保存内容、不报错）。
@@ -4402,10 +4855,8 @@ mod tests {
             Arc::new(SessionContextStore::new()),
             Arc::new(
                 PersistenceManager::new(Arc::new(PathManager::with_user_root_for_tests(
-                    std::env::temp_dir().join(format!(
-                        "bitfun-session-message-authz-{}",
-                        Uuid::new_v4()
-                    )),
+                    std::env::temp_dir()
+                        .join(format!("bitfun-session-message-authz-{}", Uuid::new_v4())),
                 )))
                 .expect("persistence manager"),
             ),
@@ -4456,7 +4907,9 @@ mod tests {
         .await
         .expect_err("daemon session delivery must be rejected");
         assert!(
-            error.to_string().contains("cannot deliver to daemon/warden"),
+            error
+                .to_string()
+                .contains("cannot deliver to daemon/warden"),
             "{error}"
         );
     }
@@ -4495,7 +4948,9 @@ mod tests {
         .await
         .expect_err("warden session delivery must be rejected");
         assert!(
-            error.to_string().contains("cannot deliver to daemon/warden"),
+            error
+                .to_string()
+                .contains("cannot deliver to daemon/warden"),
             "{error}"
         );
     }
@@ -4523,7 +4978,9 @@ mod tests {
         .expect_err("unrelated caller without metadata must be rejected");
         assert!(
             error.to_string().contains("not authorized to deliver to")
-                || error.to_string().contains("cannot verify ancestor relationship"),
+                || error
+                    .to_string()
+                    .contains("cannot verify ancestor relationship"),
             "{error}"
         );
     }

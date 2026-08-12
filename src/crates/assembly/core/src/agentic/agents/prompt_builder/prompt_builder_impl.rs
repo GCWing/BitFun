@@ -794,10 +794,11 @@ mod tests {
     #[test]
     fn build_runtime_facts_reminder_includes_time_weekday_and_offset_shape() {
         let context = PromptBuilderContext::new(r"workspace\root", None, None);
-        let reminder = PromptBuilder::new(context).build_runtime_facts_reminder(RuntimeFactsUsage {
-            context_usage_ratio: Some(0.5),
-            compression_preview_ratio: Some(0.9),
-        });
+        let reminder =
+            PromptBuilder::new(context).build_runtime_facts_reminder(RuntimeFactsUsage {
+                context_usage_ratio: Some(0.5),
+                compression_preview_ratio: Some(0.9),
+            });
 
         // Time facts come from chrono::Local at build time; assert the key
         // shape (date/time/weekday/offset) without locking specific seconds.

@@ -226,7 +226,9 @@ impl EventQueue {
 
         // PERF-02: lock-free counters — no async Mutex on the hot path.
         self.stats.total_enqueued.fetch_add(1, Ordering::Relaxed);
-        self.stats.pending_events.store(queue_len as u64, Ordering::Relaxed);
+        self.stats
+            .pending_events
+            .store(queue_len as u64, Ordering::Relaxed);
 
         if queued {
             self.notify.notify_one();

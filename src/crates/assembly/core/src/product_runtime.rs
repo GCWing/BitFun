@@ -736,7 +736,8 @@ impl CoreAgentRuntimeCompatibility {
         include_internal: bool,
     ) -> BitFunResult<Session> {
         validate_persisted_session_id(session_id)?;
-        self.reject_tombstoned_session(storage_path, session_id).await?;
+        self.reject_tombstoned_session(storage_path, session_id)
+            .await?;
         if include_internal {
             self.coordinator
                 .restore_internal_session_from_storage_path(storage_path, session_id)
@@ -762,7 +763,8 @@ impl CoreAgentRuntimeCompatibility {
         SessionViewRestoreTiming,
     )> {
         validate_persisted_session_id(session_id)?;
-        self.reject_tombstoned_session(storage_path, session_id).await?;
+        self.reject_tombstoned_session(storage_path, session_id)
+            .await?;
         let (session, turns, total_turn_count, mut timing) = if let Some(tail_turn_count) =
             tail_turn_count
         {
@@ -845,7 +847,8 @@ impl CoreAgentRuntimeCompatibility {
         include_internal: bool,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         validate_persisted_session_id(session_id)?;
-        self.reject_tombstoned_session(storage_path, session_id).await?;
+        self.reject_tombstoned_session(storage_path, session_id)
+            .await?;
         if include_internal {
             self.coordinator
                 .restore_internal_session_with_turns_from_storage_path(storage_path, session_id)
@@ -891,7 +894,8 @@ impl CoreAgentRuntimeCompatibility {
         let storage_path = self
             .resolve_persisted_session_storage_path(request.clone())
             .await?;
-        self.reject_tombstoned_session(&storage_path, session_id).await?;
+        self.reject_tombstoned_session(&storage_path, session_id)
+            .await?;
         if include_internal {
             self.coordinator
                 .restore_internal_session_with_turns_for_workspace(request, session_id)
@@ -956,7 +960,12 @@ impl CoreAgentRuntimeCompatibility {
     ) -> BitFunResult<SessionMetadataPage> {
         let mut page = self
             .persistence
-            .list_session_metadata_page_with_options(workspace_path, cursor, limit, include_internal)
+            .list_session_metadata_page_with_options(
+                workspace_path,
+                cursor,
+                limit,
+                include_internal,
+            )
             .await?;
         let tombstoned = self.tombstoned_session_ids(workspace_path).await?;
         if !tombstoned.is_empty() {
@@ -964,9 +973,7 @@ impl CoreAgentRuntimeCompatibility {
             page.sessions
                 .retain(|metadata| !tombstoned.contains(&metadata.session_id));
             if page.sessions.len() < visible_before {
-                page.loaded_top_level_count = page
-                    .loaded_top_level_count
-                    .min(page.sessions.len());
+                page.loaded_top_level_count = page.loaded_top_level_count.min(page.sessions.len());
             }
         }
         Ok(page)
@@ -982,15 +989,14 @@ impl CoreAgentRuntimeCompatibility {
     /// returning nothing to filter would let tombstoned sessions reappear in
     /// listings (torn write masking). The corrupt-registry case is pinned by
     /// `corrupt_tombstone_surfaces_error_and_keeps_file_untouched`.
-    async fn tombstoned_session_ids(
-        &self,
-        workspace_path: &Path,
-    ) -> BitFunResult<Vec<String>> {
+    async fn tombstoned_session_ids(&self, workspace_path: &Path) -> BitFunResult<Vec<String>> {
         let session_manager = self.coordinator.get_session_manager();
         let storage_path = session_manager
             .resolve_storage_path_for_workspace_path(workspace_path)
             .await;
-        session_manager.list_deleted_session_ids(&storage_path).await
+        session_manager
+            .list_deleted_session_ids(&storage_path)
+            .await
     }
 
     /// Rejects restoring a session id recorded in the deletion tombstone
@@ -1107,7 +1113,8 @@ impl CoreAgentRuntimeCompatibility {
         if self.is_session_loaded_from_storage_path(storage_path, session_id)? {
             return Ok(());
         }
-        self.reject_tombstoned_session(storage_path, session_id).await?;
+        self.reject_tombstoned_session(storage_path, session_id)
+            .await?;
         if include_internal {
             self.coordinator
                 .restore_internal_session_from_storage_path(storage_path, session_id)
@@ -2596,7 +2603,11 @@ mod tests {
 
     fn build_compatibility(
         workspace: &TestWorkspace,
-    ) -> (CoreAgentRuntimeCompatibility, Arc<SessionManager>, Arc<PersistenceManager>) {
+    ) -> (
+        CoreAgentRuntimeCompatibility,
+        Arc<SessionManager>,
+        Arc<PersistenceManager>,
+    ) {
         let persistence_manager = Arc::new(
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
@@ -2656,8 +2667,7 @@ mod tests {
         let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
             WorkspaceRuntimeService::new(workspace.path_manager()),
         ));
-        let (compatibility, session_manager, persistence_manager) =
-            build_compatibility(&workspace);
+        let (compatibility, session_manager, persistence_manager) = build_compatibility(&workspace);
         let keep_id = format!("tombstone-keep-{}", Uuid::new_v4());
         let deleted_id = format!("tombstone-deleted-{}", Uuid::new_v4());
 

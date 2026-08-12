@@ -172,6 +172,9 @@ fn build_default_role_permissions() -> RolePermissionMap {
         // review/探索形态附加只读工具（不在 subagent_default_tools() 内）：
         // LaunchReviewAgent（review 编排入口，deferred）+ LS（目录形态只读）。
         allowed_tools.insert("LaunchReviewAgent".to_string());
+        // DeepReview：后台 CodeReview 派发工具（指挥官/任意会话可用），
+        // 子代理侧 review 形态同样需要（DeepReview 会话内可再派发审查）。
+        allowed_tools.insert("DeepReview".to_string());
         allowed_tools.insert("LS".to_string());
         let mut restrictions = ToolRuntimeRestrictions {
             allowed_operation_classes: allowed_ops,
@@ -204,6 +207,8 @@ fn build_default_role_permissions() -> RolePermissionMap {
         allowed_tools.insert("submit_code_review".to_string());
         // review/探索形态附加只读工具（与 Executor 同源）。
         allowed_tools.insert("LaunchReviewAgent".to_string());
+        // DeepReview：后台 CodeReview 派发工具（审查官可再派发审查）。
+        allowed_tools.insert("DeepReview".to_string());
         allowed_tools.insert("LS".to_string());
         // Deferred 工具链核心（与 Executor/Commander 同源）。
         allowed_tools.insert("GetToolSpec".to_string());
@@ -377,7 +382,11 @@ pub fn set_session_role(session_id: &str, role: AgentRole) -> BitFunResult<()> {
         .write()
         .map_err(|e| BitFunError::tool(format!("Session role lock poisoned: {e}")))?
         .insert(session_id.to_string(), role.clone());
-    update_restrictions(session_id, Some(role), ToolRuntimeRestrictionsPatch::default())
+    update_restrictions(
+        session_id,
+        Some(role),
+        ToolRuntimeRestrictionsPatch::default(),
+    )
 }
 
 /// 注册角色并直接设置指定权限模板（不加载角色默认模板）。
@@ -422,7 +431,10 @@ pub fn register_main_session(session_id: &str, role: AgentRole) -> BitFunResult<
 /// 主会话是终端用户直接发起的主流程会话，非任何子代理/委派工作。
 /// 子代理（Subagent/EphemeralSubagent）或有 creator 的会话不属于此类，
 /// 继续走完整 RBAC 角色模板注册。
-pub(crate) fn is_main_session(kind: crate::agentic::core::SessionKind, created_by: Option<&str>) -> bool {
+pub(crate) fn is_main_session(
+    kind: crate::agentic::core::SessionKind,
+    created_by: Option<&str>,
+) -> bool {
     kind == crate::agentic::core::SessionKind::Standard && created_by.is_none()
 }
 
@@ -432,6 +444,20 @@ pub fn get_session_role(session_id: &str) -> Option<AgentRole> {
         .read()
         .ok()
         .and_then(|map| map.get(session_id).cloned())
+}
+
+/// W9: worktree 参数授权判定（SessionControl/SessionMessage `create` 带
+/// worktree 参数时）。worktree 创建 = git 文件系统操作（git worktree add），
+/// 是服务层调用不走工具权限门，因此独立判定：仅 Commander owner（或 RBAC
+/// 关闭）允许——对齐 `resolve_session_mutation_authorization` 的 owner 语义
+/// （Commander 角色或 RBAC-off 豁免）。非 owner 调用者（Executor/Reviewer/
+/// Warden 等）携带 worktree 参数一律拒绝，防止子代理以会话创建为名执行
+/// git 文件系统变更。
+pub fn worktree_creation_authorized(caller_session_id: &str) -> bool {
+    matches!(
+        get_session_role(caller_session_id),
+        Some(AgentRole::Commander)
+    ) || !crate::service::config::rbac_enabled()
 }
 
 /// Remove the assigned RBAC role for a session (session-end cleanup).
@@ -631,6 +657,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    #[test]
+    fn worktree_creation_is_owner_gated() {
+        let caller = format!("wt-auth-{}", uuid::Uuid::new_v4());
+        crate::service::config::set_rbac_enabled(true);
+        // RBAC 开启时：未注册角色 ≠ Commander owner → 拒绝。
+        assert!(
+            !worktree_creation_authorized(&caller),
+            "unregistered role must not be treated as owner when RBAC is on"
+        );
+
+        set_session_role(&caller, AgentRole::Commander).expect("register commander");
+        assert!(worktree_creation_authorized(&caller));
+
+        let executor = format!("wt-auth-exec-{}", uuid::Uuid::new_v4());
+        set_session_role(&executor, AgentRole::Executor).expect("register executor");
+        assert!(
+            !worktree_creation_authorized(&executor),
+            "non-owner roles must be rejected for worktree creation"
+        );
+
+        clear_session_role(&executor);
+        crate::service::config::set_rbac_enabled(false);
+        assert!(
+            worktree_creation_authorized(&executor),
+            "RBAC off must allow worktree creation"
+        );
+        crate::service::config::set_rbac_enabled(true);
+        clear_session_role(&caller);
+    }
+
     // ── Role→Permission template tests ─────────────────────────────
 
     #[test]
@@ -689,15 +745,11 @@ mod tests {
             "Commander should allow ExecuteCode (全工具语义)"
         );
         assert!(
-            permissions
-                .allowed_tool_names
-                .contains("GetToolSpec"),
+            permissions.allowed_tool_names.contains("GetToolSpec"),
             "Commander should allow GetToolSpec (deferred 工具链解锁)"
         );
         assert!(
-            permissions
-                .allowed_tool_names
-                .contains("CallDeferredTool"),
+            permissions.allowed_tool_names.contains("CallDeferredTool"),
             "Commander should allow CallDeferredTool (deferred 工具链执行)"
         );
     }
@@ -808,7 +860,9 @@ mod tests {
             "review 形态 GetFileDiff 必须可见可用（显式白名单包含）"
         );
         assert!(
-            permissions.ensure_tool_allowed("submit_code_review").is_ok(),
+            permissions
+                .ensure_tool_allowed("submit_code_review")
+                .is_ok(),
             "review 形态 submit_code_review 必须可见可用（显式白名单包含）"
         );
         assert!(
@@ -954,8 +1008,14 @@ mod tests {
         // 子代理 / 有 creator 的会话不是主会话，必须走完整 RBAC 模板注册。
         assert!(!is_main_session(SessionKind::Subagent, None));
         assert!(!is_main_session(SessionKind::EphemeralSubagent, None));
-        assert!(!is_main_session(SessionKind::Standard, Some("parent-session")));
-        assert!(!is_main_session(SessionKind::Subagent, Some("parent-session")));
+        assert!(!is_main_session(
+            SessionKind::Standard,
+            Some("parent-session")
+        ));
+        assert!(!is_main_session(
+            SessionKind::Subagent,
+            Some("parent-session")
+        ));
     }
 
     #[test]
@@ -966,8 +1026,8 @@ mod tests {
         // profile for every session.
         let session_id = "test-session-role-template-01";
         set_session_role(session_id, AgentRole::Commander).expect("set role should succeed");
-        let restrictions = get_session_restrictions(session_id)
-            .expect("role registration must land the template");
+        let restrictions =
+            get_session_restrictions(session_id).expect("role registration must land the template");
         assert!(
             restrictions
                 .allowed_operation_classes
@@ -1031,10 +1091,7 @@ mod tests {
         assert!(
             restrictions
                 .ensure_operation_allowed(
-                    bitfun_agent_tools::classify_tool_call(
-                        "GetToolSpec",
-                        &serde_json::json!({})
-                    ),
+                    bitfun_agent_tools::classify_tool_call("GetToolSpec", &serde_json::json!({})),
                     "GetToolSpec"
                 )
                 .is_ok(),
@@ -1055,7 +1112,11 @@ mod tests {
         // Session-end cleanup clears both the role and the landed template so a
         // recycled session id cannot inherit stale restrictions.
         clear_session_role(session_id);
-        assert_eq!(get_session_role(session_id), None, "role must be unregistered");
+        assert_eq!(
+            get_session_role(session_id),
+            None,
+            "role must be unregistered"
+        );
         assert_eq!(
             get_session_restrictions(session_id),
             None,
@@ -1069,7 +1130,11 @@ mod tests {
         set_session_role(session_id, AgentRole::Executor).expect("set role should succeed");
         assert_eq!(get_session_role(session_id), Some(AgentRole::Executor));
         clear_session_role(session_id);
-        assert_eq!(get_session_role(session_id), None, "role must be unregistered");
+        assert_eq!(
+            get_session_role(session_id),
+            None,
+            "role must be unregistered"
+        );
         // Clearing a missing entry is a no-op (idempotent).
         clear_session_role(session_id);
     }

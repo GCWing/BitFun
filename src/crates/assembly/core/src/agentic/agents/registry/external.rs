@@ -121,13 +121,19 @@ impl ExternalSubagentRegistryState {
     fn read_generations(
         &self,
     ) -> tokio::sync::RwLockReadGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
-        super::spin_read(&self.generations, "ExternalSubagentRegistryState generations")
+        super::spin_read(
+            &self.generations,
+            "ExternalSubagentRegistryState generations",
+        )
     }
 
     fn write_generations(
         &self,
     ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<String, ExternalSubagentGenerationEntry>> {
-        super::spin_write(&self.generations, "ExternalSubagentRegistryState generations")
+        super::spin_write(
+            &self.generations,
+            "ExternalSubagentRegistryState generations",
+        )
     }
 
     // Synchronous helper; see read_generations for the lock-contention contract.
@@ -135,14 +141,20 @@ impl ExternalSubagentRegistryState {
         &self,
     ) -> tokio::sync::RwLockReadGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
     {
-        super::spin_read(&self.workspace_routes, "ExternalSubagentRegistryState workspace_routes")
+        super::spin_read(
+            &self.workspace_routes,
+            "ExternalSubagentRegistryState workspace_routes",
+        )
     }
 
     fn write_routes(
         &self,
     ) -> tokio::sync::RwLockWriteGuard<'_, HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>
     {
-        super::spin_write(&self.workspace_routes, "ExternalSubagentRegistryState workspace_routes")
+        super::spin_write(
+            &self.workspace_routes,
+            "ExternalSubagentRegistryState workspace_routes",
+        )
     }
 
     pub(super) fn find_generation_entry(&self, runtime_key: &str) -> Option<AgentEntry> {
@@ -522,10 +534,12 @@ impl AgentRegistry {
                         // 候选已撤回时保持 fail-closed：不回落同名本地实现，
                         // 并携带明确原因供调用方诊断。
                         ExternalSubagentRoute::Unavailable => {
-                            return Err(ExternalPrimaryAgentResolutionError::CandidateUnavailable {
-                                logical_id: logical_key,
-                                reason: "external candidate withdrawn (fail-closed route)",
-                            });
+                            return Err(
+                                ExternalPrimaryAgentResolutionError::CandidateUnavailable {
+                                    logical_id: logical_key,
+                                    reason: "external candidate withdrawn (fail-closed route)",
+                                },
+                            );
                         }
                     };
                     if let Some(expected_owner) = expected_owner {
@@ -572,7 +586,8 @@ impl AgentRegistry {
                 if is_shadowed_builtin_review_primary_id(&entry) {
                     return Err(ExternalPrimaryAgentResolutionError::CandidateUnavailable {
                         logical_id: logical_key,
-                        reason: "non-Builtin entry shadows a builtin review primary id (fail-closed)",
+                        reason:
+                            "non-Builtin entry shadows a builtin review primary id (fail-closed)",
                     });
                 }
                 if is_local_session_primary_entry(&entry) {
@@ -761,8 +776,7 @@ fn is_local_session_primary_entry(entry: &AgentEntry) -> bool {
 /// Non-reserved custom subagent ids (e.g. `custom-handoff`) stay full-open via
 /// the local customization branch.
 fn is_shadowed_builtin_review_primary_id(entry: &AgentEntry) -> bool {
-    entry.source != AgentSource::Builtin
-        && is_builtin_session_primary_agent(entry.agent.id())
+    entry.source != AgentSource::Builtin && is_builtin_session_primary_agent(entry.agent.id())
 }
 
 fn local_primary_binding(runtime_agent_key: &str) -> ExternalPrimaryAgentTurnBinding {

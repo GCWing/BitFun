@@ -773,11 +773,8 @@ Usage:
                 coverage.repeat_served_count,
                 coverage.file_served_count,
             );
-            force_served_after_review_spin = Some(
-                coverage
-                    .file_served_count
-                    .max(coverage.repeat_served_count),
-            );
+            force_served_after_review_spin =
+                Some(coverage.file_served_count.max(coverage.repeat_served_count));
             // d5-P1-2: 强制放行一次即清零——本次真正读取内容后重置该文件的
             // 空转计数（保留已读 ranges），后续对同一修订的其他范围请求仍走
             // 已读回执省 token，而不是对同一文件永久强制真读。
@@ -878,10 +875,7 @@ Usage:
                 "注意：本文件已被已读回执拦截 {} 次（含不同行段），疑似空转。已强制返回内容。若内容仍不在上下文中，请压缩上下文或缩小审查范围后继续，勿重复读取同一文件。",
                 served_count
             );
-            result_for_assistant = format!(
-                "{}\n\n{}",
-                spin_warning, result_for_assistant
-            );
+            result_for_assistant = format!("{}\n\n{}", spin_warning, result_for_assistant);
         }
         if let Some(metadata) = document_metadata.as_ref() {
             let extraction_note = if metadata.source_format == "pdf" {

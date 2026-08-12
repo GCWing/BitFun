@@ -233,7 +233,9 @@ fn search_dir(
             stats.file_cap_reached = true;
             break;
         }
-        let Some(file_name) = path.file_name().map(|name| name.to_string_lossy().into_owned())
+        let Some(file_name) = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
         else {
             continue;
         };
@@ -484,7 +486,10 @@ Examples:
             .get("scope")
             .and_then(|value| value.as_str())
             .unwrap_or("all");
-        format!("Search knowledge base for '{}' (scope '{}')", keyword, scope)
+        format!(
+            "Search knowledge base for '{}' (scope '{}')",
+            keyword, scope
+        )
     }
 
     async fn call_impl(
@@ -663,9 +668,7 @@ mod tests {
         assert!(!validation.result);
         assert_eq!(validation.error_code, Some(400));
 
-        let validation = tool
-            .validate_input(&json!({ "keyword": "  " }), None)
-            .await;
+        let validation = tool.validate_input(&json!({ "keyword": "  " }), None).await;
         assert!(!validation.result);
         assert_eq!(validation.error_code, Some(400));
     }
@@ -735,7 +738,16 @@ mod tests {
         if make_symlink(&outside, &link).is_ok() {
             let mut results = Vec::new();
             let mut stats = ScanStats::default();
-            search_dir(&root, "secret", 50, &mut results, &mut stats, 0, MAX_SCAN_DEPTH, MAX_SCAN_FILE_SIZE);
+            search_dir(
+                &root,
+                "secret",
+                50,
+                &mut results,
+                &mut stats,
+                0,
+                MAX_SCAN_DEPTH,
+                MAX_SCAN_FILE_SIZE,
+            );
             assert!(
                 results
                     .iter()
@@ -773,7 +785,9 @@ mod tests {
         );
         assert_eq!(stats.file_cap_reached, true);
         assert!(
-            results.iter().all(|result| !result["path"].to_string().contains("deep")),
+            results
+                .iter()
+                .all(|result| !result["path"].to_string().contains("deep")),
             "files deeper than MAX_SCAN_DEPTH must not be searched"
         );
     }

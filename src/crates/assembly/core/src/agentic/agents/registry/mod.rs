@@ -205,11 +205,17 @@ impl AgentRegistry {
 
     // Synchronous helper; see spin_read for the lock-contention contract.
     fn user_custom_agents_loaded(&self) -> bool {
-        *spin_read(&self.user_custom_agents_loaded, "AgentRegistry user_custom_agents_loaded")
+        *spin_read(
+            &self.user_custom_agents_loaded,
+            "AgentRegistry user_custom_agents_loaded",
+        )
     }
 
     fn set_user_custom_agents_loaded(&self, loaded: bool) {
-        *spin_write(&self.user_custom_agents_loaded, "AgentRegistry user_custom_agents_loaded") = loaded;
+        *spin_write(
+            &self.user_custom_agents_loaded,
+            "AgentRegistry user_custom_agents_loaded",
+        ) = loaded;
     }
 }
 

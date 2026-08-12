@@ -5365,10 +5365,8 @@ pub async fn create_legion_preset(
 /// previously the component and its appearance descriptor existed but no
 /// consumer rendered them, so the registry entry was a no-op contract).
 #[tauri::command]
-pub async fn list_legion_presets() -> Result<
-    Vec<bitfun_core::agentic::agents::team_presets::LegionPreset>,
-    String,
-> {
+pub async fn list_legion_presets(
+) -> Result<Vec<bitfun_core::agentic::agents::team_presets::LegionPreset>, String> {
     bitfun_core::agentic::agents::team_presets::list_presets()
         .map_err(|e| format!("Failed to list legion presets: {e}"))
 }

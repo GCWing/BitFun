@@ -148,8 +148,12 @@ async fn probe_npm_adapter_with_path(
     }
 
     let offline_args = npm_offline_probe_args(package, bin);
-    match run_command_with_timeout(npm_path.as_os_str(), offline_args.iter().map(String::as_str), timeout)
-        .await
+    match run_command_with_timeout(
+        npm_path.as_os_str(),
+        offline_args.iter().map(String::as_str),
+        timeout,
+    )
+    .await
     {
         Ok(output) if output.status.success() => {
             item.installed = true;
@@ -315,8 +319,12 @@ pub(crate) async fn predownload_npm_adapter_with_timeout(
         .ok_or_else(|| BitFunError::service("npm is not available on PATH".to_string()))?;
     let args = npm_predownload_args(package, bin);
 
-    match run_command_with_timeout(npm_path.as_os_str(), args.iter().map(String::as_str), timeout)
-        .await
+    match run_command_with_timeout(
+        npm_path.as_os_str(),
+        args.iter().map(String::as_str),
+        timeout,
+    )
+    .await
     {
         Ok(output) if output.status.success() => Ok(()),
         Ok(output) => Err(BitFunError::service(format!(
@@ -801,7 +809,10 @@ mod tests {
         );
         assert_eq!(
             expand_env_vars(r"%APPDATA%\BitFun\skills\acp-agent-dispatcher\acp_call.cjs"),
-            format!(r"{}\BitFun\skills\acp-agent-dispatcher\acp_call.cjs", appdata)
+            format!(
+                r"{}\BitFun\skills\acp-agent-dispatcher\acp_call.cjs",
+                appdata
+            )
         );
     }
 
@@ -817,7 +828,10 @@ mod tests {
     fn expand_env_vars_escapes_double_percent_and_keeps_plain_input() {
         assert_eq!(expand_env_vars("100%%done"), "100%done");
         assert_eq!(expand_env_vars("plain-command"), "plain-command");
-        assert_eq!(expand_env_vars("unclosed-%placeholder"), "unclosed-%placeholder");
+        assert_eq!(
+            expand_env_vars("unclosed-%placeholder"),
+            "unclosed-%placeholder"
+        );
     }
 
     #[test]
@@ -834,11 +848,7 @@ mod tests {
         let executable = test_dir.join(file_name);
         std::fs::write(&executable, b"").expect("test executable should be written");
 
-        let command = format!(
-            "%{TEST_VAR}%{}{}",
-            std::path::MAIN_SEPARATOR,
-            file_name
-        );
+        let command = format!("%{TEST_VAR}%{}{}", std::path::MAIN_SEPARATOR, file_name);
         std::env::set_var(TEST_VAR, &test_dir);
         let resolved = resolve_configured_command(&command, &HashMap::new());
         std::env::remove_var(TEST_VAR);

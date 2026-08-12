@@ -39,6 +39,10 @@ impl DeepResearchMode {
                 "WriteStdin".to_string(),
                 "ExecControl".to_string(),
                 "ControlHub".to_string(),
+                // Standing research ("re-check these sources every morning")
+                // belongs on a schedule, and ControlHub's `wait` points here
+                // rather than at an hour-long turn.
+                "Cron".to_string(),
                 "TodoWrite".to_string(),
                 "AskUserQuestion".to_string(),
             ],

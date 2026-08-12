@@ -28,13 +28,13 @@
 //! All thresholds are configurable; the runtime never hard-codes rules beyond
 //! the defaults below.
 
-use crate::agentic::core::{InternalReminderKind, Message};
 use crate::agentic::coordination::turn_outcome::TurnOutcomeStatus;
+use crate::agentic::core::{InternalReminderKind, Message};
 use crate::agentic::session::SessionManager;
 use crate::agentic::warden::punishment_executor::PunishmentExecutor;
 use crate::agentic::warden::{
-    ChallengePokeConfig, PenaltyLevel, PenaltyRequest, PokeMessage, PokePriorityManager,
-    PokeType, ShameWallRegistry, ViolationRecord, WARDEN_RUNTIME_SESSION,
+    ChallengePokeConfig, PenaltyLevel, PenaltyRequest, PokeMessage, PokePriorityManager, PokeType,
+    ShameWallRegistry, ViolationRecord, WARDEN_RUNTIME_SESSION,
 };
 use chrono::Utc;
 use log::warn;
@@ -168,7 +168,10 @@ impl WardenRuntime {
             challenge: ChallengePokeConfig::new(
                 6.5,
                 42,
-                DEFAULT_CHALLENGE_RULES.iter().map(|s| s.to_string()).collect(),
+                DEFAULT_CHALLENGE_RULES
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
             ),
             violation_policy: ViolationPolicy::default(),
             consecutive_failures: HashMap::new(),
@@ -231,10 +234,9 @@ impl WardenRuntime {
         self.poke_priority = PokePriorityManager::with_max_defer_count(max_defer_count);
         let max_rate = warden.max_rate;
         if max_rate > 0.0 {
-            self.challenge.scheduler.set_rate_with_cap(
-                self.challenge.scheduler.rate(),
-                max_rate,
-            );
+            self.challenge
+                .scheduler
+                .set_rate_with_cap(self.challenge.scheduler.rate(), max_rate);
         }
     }
 
@@ -288,8 +290,8 @@ impl WardenRuntime {
             let poke = self
                 .challenge
                 .build_challenge_message(Uuid::new_v4().to_string());
-            let text = serde_json::to_string(&poke)
-                .unwrap_or_else(|_| format_challenge_fallback(&poke));
+            let text =
+                serde_json::to_string(&poke).unwrap_or_else(|_| format_challenge_fallback(&poke));
             self.push_reminder(
                 session_id,
                 Message::internal_reminder(InternalReminderKind::ChallengePoke, text),
@@ -351,7 +353,9 @@ impl WardenRuntime {
 
     /// Take (and clear) the queued reminders for `session_id`.
     pub fn take_pending_reminders(&mut self, session_id: &str) -> Vec<Message> {
-        self.pending_reminders.remove(session_id).unwrap_or_default()
+        self.pending_reminders
+            .remove(session_id)
+            .unwrap_or_default()
     }
 
     /// Drop all per-session Warden state for `session_id` (session-end cleanup).
@@ -438,8 +442,7 @@ impl WardenRuntime {
         // signature, so all turn failures share the single "turn" scene. When
         // a phase/target fingerprint becomes available at the call site it can
         // be passed through without changing the counting model.
-        let count =
-            bump_scene_failure(&mut self.consecutive_failures, session_id, TURN_SCENE_KEY);
+        let count = bump_scene_failure(&mut self.consecutive_failures, session_id, TURN_SCENE_KEY);
 
         let Some(level) = self.violation_policy.level_for(count) else {
             return;
@@ -518,7 +521,10 @@ impl WardenRuntime {
                 for reminder in outcome.prepended_reminders {
                     self.push_reminder(
                         session_id,
-                        Message::internal_reminder(InternalReminderKind::PokePenalty, reminder.text),
+                        Message::internal_reminder(
+                            InternalReminderKind::PokePenalty,
+                            reminder.text,
+                        ),
                     );
                 }
                 // WARDEN-10: the `notify_user` flag on the outcome must not be
@@ -597,10 +603,7 @@ fn bump_scene_failure(
 }
 
 /// Highest failure count across all scenes of a session (observation hook).
-fn max_failure_count_for_session(
-    map: &HashMap<(String, String), u32>,
-    session_id: &str,
-) -> u32 {
+fn max_failure_count_for_session(map: &HashMap<(String, String), u32>, session_id: &str) -> u32 {
     map.iter()
         .filter(|((sid, _), _)| sid == session_id)
         .map(|(_, count)| *count)
@@ -655,9 +658,7 @@ fn content_fingerprint(value: &serde_json::Value) -> u64 {
 /// Serialized length of a value (fingerprint input; 0 on a serialization
 /// failure that cannot realistically happen for JSON values).
 fn content_len(value: &serde_json::Value) -> usize {
-    serde_json::to_string(value)
-        .map(|s| s.len())
-        .unwrap_or(0)
+    serde_json::to_string(value).map(|s| s.len()).unwrap_or(0)
 }
 
 /// Scalar representation of a non-nested JSON value, used verbatim in the
@@ -858,7 +859,9 @@ mod tests {
         use std::time::Duration;
 
         let root = std::env::temp_dir().join(format!("bitfun-warden-test-{}", Uuid::new_v4()));
-        let path_manager = Arc::new(PathManager::with_user_root_for_tests(root.join("user-root")));
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.join("user-root"),
+        ));
         let persistence_manager =
             Arc::new(PersistenceManager::new(path_manager).expect("persistence manager"));
         Arc::new(SessionManager::new(
@@ -901,44 +904,53 @@ mod tests {
     async fn consecutive_failures_escalate_l1_l2_l3() {
         let mut rt = runtime();
         // Challenge disabled for deterministic penalty assertions.
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         // The first failure of a session is exploratory and is not counted.
-        rt.on_turn_outcome("sess-a", TurnOutcomeStatus::Failed, "t0").await;
+        rt.on_turn_outcome("sess-a", TurnOutcomeStatus::Failed, "t0")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-a"), 0);
         assert!(
             rt.take_pending_reminders("sess-a").is_empty(),
             "no penalty for the exploratory first failure"
         );
 
-        rt.on_turn_outcome("sess-a", TurnOutcomeStatus::Failed, "t1").await;
+        rt.on_turn_outcome("sess-a", TurnOutcomeStatus::Failed, "t1")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-a"), 1);
         let reminders = rt.take_pending_reminders("sess-a");
         assert_eq!(reminders.len(), 1, "L1 fires on the repeated failure");
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-a").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-a")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L1
         );
 
-        rt.on_turn_outcome("sess-a", TurnOutcomeStatus::Failed, "t2").await;
+        rt.on_turn_outcome("sess-a", TurnOutcomeStatus::Failed, "t2")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-a"), 2);
         let reminders = rt.take_pending_reminders("sess-a");
         assert_eq!(reminders.len(), 1, "L2 fires on the third failure");
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-a").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-a")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L2
         );
 
-        rt.on_turn_outcome("sess-a", TurnOutcomeStatus::Failed, "t3").await;
+        rt.on_turn_outcome("sess-a", TurnOutcomeStatus::Failed, "t3")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-a"), 3);
         let reminders = rt.take_pending_reminders("sess-a");
         assert_eq!(reminders.len(), 1, "L3 fires on the fourth failure");
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-a").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-a")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L3
         );
     }
@@ -946,29 +958,41 @@ mod tests {
     #[tokio::test]
     async fn completed_turn_resets_failure_state() {
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         // Two failures: first exploratory (not counted), second fires L1.
-        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Failed, "t1").await;
+        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Failed, "t1")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-b"), 0);
-        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Failed, "t2").await;
+        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Failed, "t2")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-b"), 1);
         rt.take_pending_reminders("sess-b");
 
-        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Completed, "t3").await;
-        assert_eq!(rt.consecutive_failures("sess-b"), 0, "completed resets failures");
+        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Completed, "t3")
+            .await;
+        assert_eq!(
+            rt.consecutive_failures("sess-b"),
+            0,
+            "completed resets failures"
+        );
 
         // Next failure starts exploratory again: two failures reach L1.
-        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Failed, "t4").await;
-        assert_eq!(rt.consecutive_failures("sess-b"), 0, "first failure after reset is exploratory");
-        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Failed, "t5").await;
+        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Failed, "t4")
+            .await;
+        assert_eq!(
+            rt.consecutive_failures("sess-b"),
+            0,
+            "first failure after reset is exploratory"
+        );
+        rt.on_turn_outcome("sess-b", TurnOutcomeStatus::Failed, "t5")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-b"), 1);
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-b").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-b")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L1
         );
     }
@@ -983,7 +1007,8 @@ mod tests {
             BTreeSet::from(["iron-rules-compliance".to_string()]),
         ));
 
-        rt.on_turn_outcome("sess-c", TurnOutcomeStatus::Completed, "t1").await;
+        rt.on_turn_outcome("sess-c", TurnOutcomeStatus::Completed, "t1")
+            .await;
         let reminders = rt.take_pending_reminders("sess-c");
         assert_eq!(reminders.len(), 1, "rate=1.0 must poke every turn");
         let MessageContent::Text(text) = &reminders[0].content else {
@@ -1004,7 +1029,8 @@ mod tests {
             BTreeSet::from(["iron-rules-compliance".to_string()]),
         ));
 
-        rt.on_turn_outcome("sess-d", TurnOutcomeStatus::Completed, "t1").await;
+        rt.on_turn_outcome("sess-d", TurnOutcomeStatus::Completed, "t1")
+            .await;
         let first = rt.take_pending_reminders("sess-d");
         assert_eq!(first.len(), 1);
         let second = rt.take_pending_reminders("sess-d");
@@ -1014,20 +1040,28 @@ mod tests {
     #[tokio::test]
     async fn cleanup_session_drops_all_per_session_state() {
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         // Build per-session state: failure counters, tool failures, reminders.
-        rt.on_turn_outcome("sess-e", TurnOutcomeStatus::Failed, "t1").await;
-        rt.on_turn_outcome("sess-e", TurnOutcomeStatus::Failed, "t2").await;
+        rt.on_turn_outcome("sess-e", TurnOutcomeStatus::Failed, "t1")
+            .await;
+        rt.on_turn_outcome("sess-e", TurnOutcomeStatus::Failed, "t2")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-e"), 1);
-        rt.on_tool_outcome("sess-e", "Write", "Write:{}", WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-e", "Write", "Write:{}", WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-e",
+            "Write",
+            "Write:{}",
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-e",
+            "Write",
+            "Write:{}",
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-e"), 1);
         // Failure paths above queue escalation reminders; drain them so the
         // count below covers only the explicit push.
@@ -1038,8 +1072,10 @@ mod tests {
         );
         assert_eq!(rt.take_pending_reminders("sess-e").len(), 1);
         // A sibling session must be untouched.
-        rt.on_turn_outcome("sess-f", TurnOutcomeStatus::Failed, "t1").await;
-        rt.on_turn_outcome("sess-f", TurnOutcomeStatus::Failed, "t2").await;
+        rt.on_turn_outcome("sess-f", TurnOutcomeStatus::Failed, "t1")
+            .await;
+        rt.on_turn_outcome("sess-f", TurnOutcomeStatus::Failed, "t2")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-f"), 1);
 
         rt.cleanup_session("sess-e");
@@ -1062,15 +1098,13 @@ mod tests {
 
         {
             let mut rt = WardenRuntime::with_shame_wall_path(test_session_manager(), path.clone());
-            rt.set_challenge_config(ChallengePokeConfig::new(
-                f64::INFINITY,
-                1,
-                BTreeSet::new(),
-            ));
-            rt.on_turn_outcome("sess-e", TurnOutcomeStatus::Failed, "t1").await;
+            rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
+            rt.on_turn_outcome("sess-e", TurnOutcomeStatus::Failed, "t1")
+                .await;
             // The first failure is exploratory; the second fires L1 and
             // persists the registry.
-            rt.on_turn_outcome("sess-e", TurnOutcomeStatus::Failed, "t2").await;
+            rt.on_turn_outcome("sess-e", TurnOutcomeStatus::Failed, "t2")
+                .await;
             rt.take_pending_reminders("sess-e");
             assert!(path.exists(), "penalty must persist the registry");
         }
@@ -1078,7 +1112,10 @@ mod tests {
         // A second runtime loads the persisted registry.
         let rt = WardenRuntime::with_shame_wall_path(test_session_manager(), path.clone());
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-e").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-e")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L1,
             "loaded registry keeps the recorded penalty"
         );
@@ -1091,7 +1128,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("warden-test-missing-{}", Uuid::new_v4()));
         let path = dir.join("shame-wall-registry.json");
         let rt = WardenRuntime::with_shame_wall_path(test_session_manager(), path.clone());
-        assert!(rt.shame_wall().entries.is_empty(), "missing file -> empty registry");
+        assert!(
+            rt.shame_wall().entries.is_empty(),
+            "missing file -> empty registry"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1099,49 +1139,74 @@ mod tests {
     async fn tool_failures_escalate_l1_l2_l3() {
         let mut rt = runtime();
         // Challenge disabled for deterministic penalty assertions.
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         let scene = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
         // The first failure of a scene is exploratory and is not counted.
-        rt.on_tool_outcome("sess-f", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-f",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-f"), 0);
         assert!(
             rt.take_pending_reminders("sess-f").is_empty(),
             "no penalty for the exploratory first failure"
         );
 
-        rt.on_tool_outcome("sess-f", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-f",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-f"), 1);
         let reminders = rt.take_pending_reminders("sess-f");
         assert_eq!(reminders.len(), 1, "L1 fires on the repeated failure");
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-f").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-f")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L1
         );
 
-        rt.on_tool_outcome("sess-f", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-f",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-f"), 2);
         let reminders = rt.take_pending_reminders("sess-f");
         assert_eq!(reminders.len(), 1, "L2 fires on the third failure");
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-f").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-f")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L2
         );
 
-        rt.on_tool_outcome("sess-f", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-f",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-f"), 3);
         let reminders = rt.take_pending_reminders("sess-f");
         assert_eq!(reminders.len(), 1, "L3 fires on the fourth failure");
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-f").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-f")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L3
         );
     }
@@ -1149,37 +1214,61 @@ mod tests {
     #[tokio::test]
     async fn successful_tool_resets_failure_count() {
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         let scene = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
         // Two failures: first exploratory, second fires L1.
-        rt.on_tool_outcome("sess-g", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-g", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-g",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-g",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-g"), 1);
         rt.take_pending_reminders("sess-g");
 
-        rt.on_tool_outcome("sess-g", "ExecCommand", &scene, WardenToolOutcome::Success).await;
-        assert_eq!(rt.tool_failures("sess-g"), 0, "success clears tool failures");
+        rt.on_tool_outcome("sess-g", "ExecCommand", &scene, WardenToolOutcome::Success)
+            .await;
+        assert_eq!(
+            rt.tool_failures("sess-g"),
+            0,
+            "success clears tool failures"
+        );
 
         // Next failure starts exploratory again: two failures reach L1.
-        rt.on_tool_outcome("sess-g", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-g",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(
             rt.tool_failures("sess-g"),
             0,
             "first failure after reset is exploratory"
         );
-        rt.on_tool_outcome("sess-g", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-g",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-g"), 1);
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-g").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-g")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L1
         );
     }
@@ -1187,45 +1276,67 @@ mod tests {
     #[tokio::test]
     async fn tool_failures_independent_from_turn_failures() {
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         let scene = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
         // Two failed turns: turn counter = 1, tool counter untouched.
-        rt.on_turn_outcome("sess-h", TurnOutcomeStatus::Failed, "t1").await;
-        rt.on_turn_outcome("sess-h", TurnOutcomeStatus::Failed, "t2").await;
+        rt.on_turn_outcome("sess-h", TurnOutcomeStatus::Failed, "t1")
+            .await;
+        rt.on_turn_outcome("sess-h", TurnOutcomeStatus::Failed, "t2")
+            .await;
         rt.take_pending_reminders("sess-h");
         assert_eq!(rt.consecutive_failures("sess-h"), 1);
-        assert_eq!(rt.tool_failures("sess-h"), 0, "tool counter untouched by turn failure");
+        assert_eq!(
+            rt.tool_failures("sess-h"),
+            0,
+            "tool counter untouched by turn failure"
+        );
 
         // A successful tool must not reset the turn counter.
-        rt.on_tool_outcome("sess-h", "ExecCommand", &scene, WardenToolOutcome::Success).await;
-        assert_eq!(rt.consecutive_failures("sess-h"), 1, "turn counter unaffected by tool success");
+        rt.on_tool_outcome("sess-h", "ExecCommand", &scene, WardenToolOutcome::Success)
+            .await;
+        assert_eq!(
+            rt.consecutive_failures("sess-h"),
+            1,
+            "turn counter unaffected by tool success"
+        );
 
         // Two failed tools increment only the tool counter.
-        rt.on_tool_outcome("sess-h", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-h", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-h",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-h",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         rt.take_pending_reminders("sess-h");
         assert_eq!(rt.tool_failures("sess-h"), 1);
-        assert_eq!(rt.consecutive_failures("sess-h"), 1, "tool failure does not touch turn counter");
+        assert_eq!(
+            rt.consecutive_failures("sess-h"),
+            1,
+            "tool failure does not touch turn counter"
+        );
     }
 
     #[tokio::test]
     async fn admission_rejected_never_counts_as_tool_failure() {
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
-        rt.on_tool_outcome("sess-i", "ExecCommand", "ExecCommand:{}", WardenToolOutcome::AdmissionRejected)
-            .await;
+        rt.on_tool_outcome(
+            "sess-i",
+            "ExecCommand",
+            "ExecCommand:{}",
+            WardenToolOutcome::AdmissionRejected,
+        )
+        .await;
         assert_eq!(
             rt.tool_failures("sess-i"),
             0,
@@ -1244,24 +1355,35 @@ mod tests {
     #[tokio::test]
     async fn admission_rejected_is_neutral_to_in_progress_escalation_ladder() {
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         let scene = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
         // Two real failures: first exploratory, second fires L1; ladder in progress.
-        rt.on_tool_outcome("sess-j", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-j", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-j",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-j",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-j"), 1);
         rt.take_pending_reminders("sess-j");
 
         // F3: a stale/admission-rejected wave must not reset the ladder...
-        rt.on_tool_outcome("sess-j", "ExecCommand", &scene, WardenToolOutcome::AdmissionRejected)
-            .await;
+        rt.on_tool_outcome(
+            "sess-j",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::AdmissionRejected,
+        )
+        .await;
         assert_eq!(
             rt.tool_failures("sess-j"),
             1,
@@ -1269,13 +1391,21 @@ mod tests {
         );
 
         // ...and the next real failure still escalates to L2.
-        rt.on_tool_outcome("sess-j", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-j",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-j"), 2);
         let reminders = rt.take_pending_reminders("sess-j");
         assert_eq!(reminders.len(), 1, "L2 fires on the third real failure");
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-j").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-j")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L2
         );
     }
@@ -1283,13 +1413,10 @@ mod tests {
     #[tokio::test]
     async fn first_turn_failure_of_session_is_exploratory_not_counted() {
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
-        rt.on_turn_outcome("sess-k", TurnOutcomeStatus::Failed, "t1").await;
+        rt.on_turn_outcome("sess-k", TurnOutcomeStatus::Failed, "t1")
+            .await;
         assert_eq!(
             rt.consecutive_failures("sess-k"),
             0,
@@ -1308,47 +1435,82 @@ mod tests {
     #[tokio::test]
     async fn tool_failures_on_different_scenes_count_independently() {
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         let scene_a = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
         let scene_b = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "ls"}));
-        assert_ne!(scene_a, scene_b, "different arguments must be different scenes");
+        assert_ne!(
+            scene_a, scene_b,
+            "different arguments must be different scenes"
+        );
 
         // Two failures on scene A: first exploratory, second counted.
-        rt.on_tool_outcome("sess-l", "ExecCommand", &scene_a, WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-l", "ExecCommand", &scene_a, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-l",
+            "ExecCommand",
+            &scene_a,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-l",
+            "ExecCommand",
+            &scene_a,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-l"), 1, "scene A ladder at 1");
         rt.take_pending_reminders("sess-l");
 
         // A first failure on scene B stays exploratory and must not touch A.
-        rt.on_tool_outcome("sess-l", "ExecCommand", &scene_b, WardenToolOutcome::ExecutionFailed)
-            .await;
-        assert_eq!(rt.tool_failures("sess-l"), 1, "scene B exploratory, A ladder unchanged");
+        rt.on_tool_outcome(
+            "sess-l",
+            "ExecCommand",
+            &scene_b,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        assert_eq!(
+            rt.tool_failures("sess-l"),
+            1,
+            "scene B exploratory, A ladder unchanged"
+        );
         assert!(
             rt.take_pending_reminders("sess-l").is_empty(),
             "no penalty for the exploratory scene-B failure"
         );
 
         // The second scene-B failure starts its own ladder at 1 (fires L1).
-        rt.on_tool_outcome("sess-l", "ExecCommand", &scene_b, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-l",
+            "ExecCommand",
+            &scene_b,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-l"), 1, "scene B ladder at 1");
         rt.take_pending_reminders("sess-l");
 
         // Scene A keeps escalating independently.
-        rt.on_tool_outcome("sess-l", "ExecCommand", &scene_a, WardenToolOutcome::ExecutionFailed)
-            .await;
-        assert_eq!(rt.tool_failures("sess-l"), 2, "scene A ladder escalates to 2");
+        rt.on_tool_outcome(
+            "sess-l",
+            "ExecCommand",
+            &scene_a,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        assert_eq!(
+            rt.tool_failures("sess-l"),
+            2,
+            "scene A ladder escalates to 2"
+        );
         let reminders = rt.take_pending_reminders("sess-l");
         assert_eq!(reminders.len(), 1, "scene A third failure fires L2");
         assert_eq!(
-            rt.shame_wall().entry_for_session("sess-l").unwrap().cumulative_penalty_level,
+            rt.shame_wall()
+                .entry_for_session("sess-l")
+                .unwrap()
+                .cumulative_penalty_level,
             PenaltyLevel::L2
         );
     }
@@ -1381,49 +1543,73 @@ mod tests {
     #[tokio::test]
     async fn cleanup_session_clears_all_scenes() {
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         let scene_a = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
         let scene_b = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "ls"}));
         // Build two independent tool scenes plus a turn scene.
-        rt.on_tool_outcome("sess-m", "ExecCommand", &scene_a, WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-m", "ExecCommand", &scene_a, WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-m", "ExecCommand", &scene_b, WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-m", "ExecCommand", &scene_b, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-m",
+            "ExecCommand",
+            &scene_a,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-m",
+            "ExecCommand",
+            &scene_a,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-m",
+            "ExecCommand",
+            &scene_b,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-m",
+            "ExecCommand",
+            &scene_b,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures("sess-m"), 1);
-        rt.on_turn_outcome("sess-m", TurnOutcomeStatus::Failed, "t1").await;
-        rt.on_turn_outcome("sess-m", TurnOutcomeStatus::Failed, "t2").await;
+        rt.on_turn_outcome("sess-m", TurnOutcomeStatus::Failed, "t1")
+            .await;
+        rt.on_turn_outcome("sess-m", TurnOutcomeStatus::Failed, "t2")
+            .await;
         assert_eq!(rt.consecutive_failures("sess-m"), 1);
         rt.take_pending_reminders("sess-m");
 
         rt.cleanup_session("sess-m");
-        assert_eq!(rt.consecutive_failures("sess-m"), 0, "all turn scenes cleared");
+        assert_eq!(
+            rt.consecutive_failures("sess-m"),
+            0,
+            "all turn scenes cleared"
+        );
         assert_eq!(rt.tool_failures("sess-m"), 0, "all tool scenes cleared");
     }
 
     #[test]
     fn warden_enforcement_applies_only_for_active_goal() {
-        let goal = |status| Some(ThreadGoal {
-            goal_id: "g1".to_string(),
-            session_id: "s1".to_string(),
-            objective: "ship".to_string(),
-            status,
-            token_budget: None,
-            tokens_used: 0,
-            time_used_seconds: 0,
-            created_at: 1,
-            updated_at: 2,
-            auto_continuation_count: 0,
-            reference_files: Vec::new(),
-        });
+        let goal = |status| {
+            Some(ThreadGoal {
+                goal_id: "g1".to_string(),
+                session_id: "s1".to_string(),
+                objective: "ship".to_string(),
+                status,
+                token_budget: None,
+                tokens_used: 0,
+                time_used_seconds: 0,
+                created_at: 1,
+                updated_at: 2,
+                auto_continuation_count: 0,
+                reference_files: Vec::new(),
+            })
+        };
 
         assert!(
             warden_enforcement_for_goal(goal(ThreadGoalStatus::Active).as_ref()),
@@ -1518,21 +1704,30 @@ mod tests {
         // must be dropped so a later (new) goal generation starts from a
         // clean ladder instead of inheriting the previous goal's L2/L3 count.
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         let scene = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
         // Build an in-progress escalation ladder: repeated turn + tool failures.
-        rt.on_turn_outcome("sess-goal", TurnOutcomeStatus::Failed, "t1").await;
-        rt.on_turn_outcome("sess-goal", TurnOutcomeStatus::Failed, "t2").await;
-        rt.on_turn_outcome("sess-goal", TurnOutcomeStatus::Failed, "t3").await;
-        rt.on_tool_outcome("sess-goal", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
+        rt.on_turn_outcome("sess-goal", TurnOutcomeStatus::Failed, "t1")
             .await;
-        rt.on_tool_outcome("sess-goal", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
+        rt.on_turn_outcome("sess-goal", TurnOutcomeStatus::Failed, "t2")
             .await;
+        rt.on_turn_outcome("sess-goal", TurnOutcomeStatus::Failed, "t3")
+            .await;
+        rt.on_tool_outcome(
+            "sess-goal",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-goal",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         rt.record_tool_error("sess-goal", &scene, "boom");
         rt.take_pending_reminders("sess-goal");
         assert_eq!(rt.consecutive_failures("sess-goal"), 2);
@@ -1541,7 +1736,11 @@ mod tests {
 
         // The goal switched away: the gate calls clear_failure_counts.
         rt.clear_failure_counts("sess-goal");
-        assert_eq!(rt.consecutive_failures("sess-goal"), 0, "turn count cleared");
+        assert_eq!(
+            rt.consecutive_failures("sess-goal"),
+            0,
+            "turn count cleared"
+        );
         assert_eq!(
             rt.tool_failures_for_scene("sess-goal", &scene),
             0,
@@ -1563,31 +1762,47 @@ mod tests {
         // a completed turn starts a fresh exploration (count 0) instead of
         // inheriting the stale zero and immediately counting as a repeat.
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         let scene = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
-        rt.on_tool_outcome("sess-z", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
-        assert_eq!(rt.tool_failures_for_scene("sess-z", &scene), 0, "exploratory");
+        rt.on_tool_outcome(
+            "sess-z",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        assert_eq!(
+            rt.tool_failures_for_scene("sess-z", &scene),
+            0,
+            "exploratory"
+        );
 
         // A completed turn cleans the zero placeholder...
-        rt.on_turn_outcome("sess-z", TurnOutcomeStatus::Completed, "t1").await;
+        rt.on_turn_outcome("sess-z", TurnOutcomeStatus::Completed, "t1")
+            .await;
 
         // ...so the next same-scene failure is again exploratory (0), and only
         // the failure after that counts toward L1.
-        rt.on_tool_outcome("sess-z", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-z",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(
             rt.tool_failures_for_scene("sess-z", &scene),
             0,
             "stale zero was cleaned; a fresh exploration starts"
         );
-        rt.on_tool_outcome("sess-z", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-z",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         assert_eq!(rt.tool_failures_for_scene("sess-z", &scene), 1);
         rt.take_pending_reminders("sess-z");
     }
@@ -1597,21 +1812,28 @@ mod tests {
         // The WARDEN-09 cleanup must not reset a real (>=1) tool ladder: tool
         // and turn counters stay independent.
         let mut rt = runtime();
-        rt.set_challenge_config(ChallengePokeConfig::new(
-            f64::INFINITY,
-            1,
-            BTreeSet::new(),
-        ));
+        rt.set_challenge_config(ChallengePokeConfig::new(f64::INFINITY, 1, BTreeSet::new()));
 
         let scene = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
-        rt.on_tool_outcome("sess-z", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-z", "ExecCommand", &scene, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-z",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-z",
+            "ExecCommand",
+            &scene,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         rt.take_pending_reminders("sess-z");
         assert_eq!(rt.tool_failures_for_scene("sess-z", &scene), 1);
 
-        rt.on_turn_outcome("sess-z", TurnOutcomeStatus::Completed, "t1").await;
+        rt.on_turn_outcome("sess-z", TurnOutcomeStatus::Completed, "t1")
+            .await;
         assert_eq!(
             rt.tool_failures_for_scene("sess-z", &scene),
             1,
@@ -1661,10 +1883,7 @@ mod tests {
         }))
         .expect("object args summarize to some value");
         assert_eq!(small["file_path"], "a.md");
-        assert_eq!(
-            small["content"]["contentLength"],
-            serde_json::json!(7)
-        );
+        assert_eq!(small["content"]["contentLength"], serde_json::json!(7));
         assert!(!small.to_string().contains("hello"), "content masked");
 
         let huge = summarize_judgement_tool_args(&serde_json::json!({
@@ -1682,10 +1901,7 @@ mod tests {
         // The size cap only applies to the non-masked remainder.
         let mut big_map = serde_json::Map::new();
         for i in 0..40 {
-            big_map.insert(
-                format!("key_{i}"),
-                serde_json::json!("y".repeat(200)),
-            );
+            big_map.insert(format!("key_{i}"), serde_json::json!("y".repeat(200)));
         }
         let capped = summarize_judgement_tool_args(&serde_json::Value::Object(big_map))
             .expect("object args summarize");
@@ -1709,10 +1925,20 @@ mod tests {
         let scene_a = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "pwd"}));
         let scene_b = tool_failure_scene_key("ExecCommand", &serde_json::json!({"cmd": "ls"}));
 
-        rt.on_tool_outcome("sess-ev", "ExecCommand", &scene_a, WardenToolOutcome::ExecutionFailed)
-            .await;
-        rt.on_tool_outcome("sess-ev", "ExecCommand", &scene_a, WardenToolOutcome::ExecutionFailed)
-            .await;
+        rt.on_tool_outcome(
+            "sess-ev",
+            "ExecCommand",
+            &scene_a,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
+        rt.on_tool_outcome(
+            "sess-ev",
+            "ExecCommand",
+            &scene_a,
+            WardenToolOutcome::ExecutionFailed,
+        )
+        .await;
         rt.record_tool_error("sess-ev", &scene_a, "permission denied");
         assert_eq!(rt.tool_failures_for_scene("sess-ev", &scene_a), 1);
         assert_eq!(

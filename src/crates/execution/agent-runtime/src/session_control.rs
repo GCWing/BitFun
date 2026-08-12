@@ -4,6 +4,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
 
+/// Worktree options accepted by `create` for automatically creating a managed
+/// worktree together with the session (re-exported from core-types so the
+/// portable session-control decisions share the wire contract).
+pub use bitfun_core_types::WorktreeSessionOptions as SessionControlWorktreeOptions;
+
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SessionControlAction {
@@ -48,6 +53,13 @@ pub struct SessionControlInput {
     /// `create`; forwarded to the session config so the session is created
     /// with the requested model (mirrors the Task(spawn) model_id parameter).
     pub model_id: Option<String>,
+    /// Optional worktree options for `create`: when present, a managed
+    /// worktree is created together with the session (git worktree add via
+    /// WorktreeService) and the session is bound to it. `None` keeps the
+    /// legacy behavior (session runs in the project checkout). Only allowed
+    /// for `create` and rejected for remote workspaces.
+    #[serde(default)]
+    pub worktree: Option<SessionControlWorktreeOptions>,
     /// When true, `list` emits the full session tree (session_name included)
     /// instead of the compact per-session line output. Only meaningful for
     /// `list`.
@@ -201,6 +213,9 @@ fn validate_mutating_action_target(
     if input.model_id.is_some() {
         return invalid("model_id is only allowed for create");
     }
+    if input.worktree.is_some() {
+        return invalid("worktree is only allowed for create");
+    }
     if input.detail.is_some() {
         return invalid("detail is only allowed for list");
     }
@@ -283,6 +298,25 @@ pub fn validate_session_control_input(
             {
                 return invalid("model_id must not be empty when provided");
             }
+            if let Some(worktree) = input.worktree.as_ref() {
+                if worktree
+                    .base_ref
+                    .as_deref()
+                    .is_some_and(|base_ref| base_ref.trim().is_empty())
+                {
+                    return invalid("worktree.base_ref must not be empty when provided");
+                }
+                // worktree 与 ACP 真会话（agent_type `acp__<client>`）互斥：
+                // ACP 会话是外部进程记录，不承载本地 worktree execution_target，
+                // 同时携带会导致 worktree 被静默忽略/成为孤儿。
+                if input
+                    .agent_type
+                    .as_ref()
+                    .is_some_and(|agent_type| agent_type.as_str().starts_with("acp__"))
+                {
+                    return invalid("worktree is not supported with acp__ agent types");
+                }
+            }
             if context.current_session_id.is_none() {
                 return invalid("create requires a creator session in tool context");
             }
@@ -310,6 +344,9 @@ pub fn validate_session_control_input(
             }
             if input.model_id.is_some() {
                 return invalid("model_id is only allowed for create");
+            }
+            if input.worktree.is_some() {
+                return invalid("worktree is only allowed for create");
             }
             if input.session_id.is_some() {
                 return invalid("session_id is not allowed for list");
@@ -350,9 +387,7 @@ pub fn session_control_renamed_result_message(
     workspace: &str,
     session_name: &str,
 ) -> String {
-    format!(
-        "Renamed session '{session_id}' to '{session_name}' in workspace '{workspace}'."
-    )
+    format!("Renamed session '{session_id}' to '{session_name}' in workspace '{workspace}'.")
 }
 
 pub fn session_control_created_result_message(
@@ -425,17 +460,16 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: None,
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(None));
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("session_id is required")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_id is required"));
     }
 
     #[test]
@@ -448,6 +482,7 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: None,
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(None));
@@ -470,10 +505,15 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: None,
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(Some("self_1")));
-        assert!(result.result, "compact of the current session must be allowed: {:?}", result.message);
+        assert!(
+            result.result,
+            "compact of the current session must be allowed: {:?}",
+            result.message
+        );
     }
 
     #[test]
@@ -486,6 +526,7 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: None,
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(None));
@@ -526,6 +567,7 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: Some("   ".to_string()),
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(Some("creator_1")));
@@ -534,6 +576,111 @@ mod tests {
             result.message.as_deref(),
             Some("model_id must not be empty when provided")
         );
+    }
+
+    #[test]
+    fn create_deserializes_and_validates_worktree_options() {
+        let input: SessionControlInput = serde_json::from_value(json!({
+            "action": "create",
+            "workspace": std::env::temp_dir().to_string_lossy().to_string(),
+            "worktree": {
+                "baseRef": "main",
+                "copyLocalChanges": true
+            }
+        }))
+        .expect("create payload with worktree options must parse");
+        assert_eq!(
+            input.worktree.as_ref().and_then(|w| w.base_ref.as_deref()),
+            Some("main")
+        );
+        assert!(input
+            .worktree
+            .as_ref()
+            .is_some_and(|w| w.copy_local_changes));
+
+        let result = validate_session_control_input(&input, context(Some("creator_1")));
+        assert!(result.result, "{:?}", result.message);
+    }
+
+    #[test]
+    fn create_rejects_blank_worktree_base_ref() {
+        let input = SessionControlInput {
+            action: SessionControlAction::Create,
+            workspace: Some(std::env::temp_dir().to_string_lossy().to_string()),
+            session_id: None,
+            session_name: None,
+            agent_type: None,
+            short_name: None,
+            model_id: None,
+            worktree: Some(bitfun_core_types::WorktreeSessionOptions {
+                base_ref: Some("   ".to_string()),
+                copy_local_changes: false,
+            }),
+            detail: None,
+        };
+        let result = validate_session_control_input(&input, context(Some("creator_1")));
+        assert!(!result.result);
+        assert_eq!(
+            result.message.as_deref(),
+            Some("worktree.base_ref must not be empty when provided")
+        );
+    }
+
+    #[test]
+    fn non_create_actions_reject_worktree() {
+        let input = SessionControlInput {
+            action: SessionControlAction::Delete,
+            workspace: None,
+            session_id: Some("worker_1".to_string()),
+            session_name: None,
+            agent_type: None,
+            short_name: None,
+            model_id: None,
+            worktree: Some(bitfun_core_types::WorktreeSessionOptions::default()),
+            detail: None,
+        };
+        let result = validate_session_control_input(&input, context(None));
+        assert!(!result.result);
+        assert_eq!(
+            result.message.as_deref(),
+            Some("worktree is only allowed for create")
+        );
+    }
+
+    #[test]
+    fn create_rejects_worktree_with_acp_agent_type() {
+        let input = SessionControlInput {
+            action: SessionControlAction::Create,
+            workspace: Some(std::env::temp_dir().to_string_lossy().to_string()),
+            session_id: None,
+            session_name: None,
+            agent_type: Some(SessionControlAgentType::from("acp__codebuddy")),
+            short_name: None,
+            model_id: None,
+            worktree: Some(bitfun_core_types::WorktreeSessionOptions::default()),
+            detail: None,
+        };
+        let result = validate_session_control_input(&input, context(Some("creator_1")));
+        assert!(!result.result);
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("worktree is not supported with acp__ agent types"));
+    }
+
+    #[test]
+    fn create_legacy_payload_without_worktree_is_compatible() {
+        // 向后兼容：无 worktree 参数的旧 payload 正常解析且 worktree = None。
+        let input: SessionControlInput = serde_json::from_value(json!({
+            "action": "create",
+            "workspace": std::env::temp_dir().to_string_lossy().to_string(),
+            "session_name": "legacy",
+        }))
+        .expect("legacy payload without worktree must parse");
+        assert!(input.worktree.is_none());
+        let result = validate_session_control_input(&input, context(Some("creator_1")));
+        assert!(result.result, "{:?}", result.message);
     }
 
     #[test]
@@ -546,6 +693,7 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: Some("claude-sonnet-4".to_string()),
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(None));
@@ -580,17 +728,16 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: None,
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(None));
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("session_id is required")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_id is required"));
     }
 
     #[test]
@@ -603,17 +750,16 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: None,
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(None));
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("session_name is required for rename")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("session_name is required for rename"));
     }
 
     #[test]
@@ -626,6 +772,7 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: None,
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(None));
@@ -646,6 +793,7 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: None,
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(None));
@@ -662,17 +810,16 @@ mod tests {
             agent_type: None,
             short_name: None,
             model_id: None,
+            worktree: None,
             detail: None,
         };
         let result = validate_session_control_input(&input, context(Some("self_1")));
         assert!(!result.result);
-        assert!(
-            result
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("cannot rename the current session")
-        );
+        assert!(result
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("cannot rename the current session"));
     }
 
     #[test]

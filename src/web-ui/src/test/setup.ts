@@ -8,6 +8,12 @@
  * throws `localStorage.getItem is not a function`. Replace the shell with a
  * working in-memory Storage before any store module loads.
  */
+import { enableMapSet } from 'immer';
+
+// groupChatStore state uses Map (rooms/members/messages, contract §2.2).
+// immer needs the MapSet plugin enabled explicitly to draft-change Maps.
+enableMapSet();
+
 if (
   typeof globalThis.localStorage === 'undefined'
   || typeof globalThis.localStorage.getItem !== 'function'

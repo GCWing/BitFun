@@ -125,16 +125,26 @@ fn runtime_facts_reminder_renders_time_and_offset_facts() {
 
 #[test]
 fn runtime_facts_reminder_formats_usage_percent_with_rounding_and_clamping() {
-    assert!(render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.35)))
-        .contains("当前上下文占比: 35%"));
-    assert!(render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.0)))
-        .contains("当前上下文占比: 0%"));
-    assert!(render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.004)))
-        .contains("当前上下文占比: 0%"));
-    assert!(render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.999)))
-        .contains("当前上下文占比: 100%"));
-    assert!(render_runtime_facts_reminder(&sample_runtime_facts_input(Some(1.5)))
-        .contains("当前上下文占比: 100%"));
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.35)))
+            .contains("当前上下文占比: 35%")
+    );
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.0)))
+            .contains("当前上下文占比: 0%")
+    );
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.004)))
+            .contains("当前上下文占比: 0%")
+    );
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(0.999)))
+            .contains("当前上下文占比: 100%")
+    );
+    assert!(
+        render_runtime_facts_reminder(&sample_runtime_facts_input(Some(1.5)))
+            .contains("当前上下文占比: 100%")
+    );
 }
 
 #[test]

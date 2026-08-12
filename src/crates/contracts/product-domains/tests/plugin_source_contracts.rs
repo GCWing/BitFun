@@ -1,3 +1,5 @@
+#![cfg(feature = "plugin-source")]
+
 use bitfun_product_domains::plugin_source::{
     PluginPackageInput, PluginPackageManifest, PluginPackageSourceIdentity,
     PluginPackageTrustLevel, PluginTrustDecision, PluginTrustStore,
@@ -428,7 +430,8 @@ fn activation_lifecycle_is_exact_independent_and_idempotent() {
     assert_eq!((store.epoch(), store.activation_epoch()), (trust_epoch, 9));
     assert!(store
         .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, None)
-        .expect("repeat deactivation").is_none());
+        .expect("repeat deactivation")
+        .is_none());
     assert_eq!((store.epoch(), store.activation_epoch()), (trust_epoch, 9));
 }
 
@@ -496,7 +499,8 @@ fn stale_residual_cleanup_cannot_clear_a_newer_activation() {
 
     assert!(store
         .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, Some(stale_epoch),)
-        .expect("stale cleanup is a no-op").is_none());
+        .expect("stale cleanup is a no-op")
+        .is_none());
     assert!(store.is_activated(PROJECT, WORKSPACE, &package));
     assert_eq!(store.activation_epoch(), current_epoch);
 }

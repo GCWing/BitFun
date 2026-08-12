@@ -34,7 +34,6 @@ ignore = [
     { id = "RUSTSEC-2026-0195", reason = "quick-xml NsReader OOM advisory; same quick-xml version constraint as RUSTSEC-2026-0194" },
     { id = "RUSTSEC-2026-0186", reason = "memmap2 0.7/0.8 pinned by screenshots/enigo on Linux desktop; fix 0.9.11 is a breaking jump" },
     { id = "RUSTSEC-2026-0187", reason = "lopdf 0.41 pinned by anydoc 0.1.6 (document conversion); fix 0.42 is a breaking jump" },
-    { id = "RUSTSEC-2026-0002", reason = "lru 0.12 pinned by ratatui 0.29 (CLI TUI); fix 0.16.3 is a breaking jump" },
 ]
 
 [bans]

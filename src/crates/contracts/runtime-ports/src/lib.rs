@@ -23,6 +23,13 @@ mod local_workspace_snapshot;
 mod permission;
 mod plugin;
 mod script_tool;
+pub use acp_client_port::{
+    acp_backend_error, acp_flow_client_id_from_session_id, looks_like_uuid,
+    AcpClientBitfunMessageRequest, AcpClientCancelRequest, AcpClientCreateRequest,
+    AcpClientCreateResult, AcpClientHistoryEntry, AcpClientHistoryRequest, AcpClientHistoryResult,
+    AcpClientListResult, AcpClientMessageRequest, AcpClientMessageResult, AcpClientPort,
+    AcpClientReleaseRequest, AcpClientStreamChunk, AcpClientStreamChunkSink, AcpClientSummary,
+};
 #[cfg(feature = "permission")]
 pub use bitfun_product_domains::tool_permissions::{
     deserialize_optional_permission_mode, resolve_child_permission_policy, resolve_permission_mode,
@@ -35,13 +42,6 @@ pub use bitfun_product_domains::tool_permissions::{
     PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule,
     PermissionRuleset, PermissionRuntimeCeiling, PermissionRuntimeCeilingValidationError,
     ResolvedPermissionMode, ResolvedPermissionPolicy, ToolPermissionConfig,
-};
-pub use acp_client_port::{
-    acp_backend_error, acp_flow_client_id_from_session_id, looks_like_uuid,
-    AcpClientBitfunMessageRequest, AcpClientCancelRequest, AcpClientCreateRequest,
-    AcpClientCreateResult, AcpClientHistoryEntry, AcpClientHistoryRequest, AcpClientHistoryResult,
-    AcpClientListResult, AcpClientMessageRequest, AcpClientMessageResult, AcpClientPort,
-    AcpClientReleaseRequest, AcpClientStreamChunk, AcpClientStreamChunkSink, AcpClientSummary,
 };
 pub use local_workspace_snapshot::{
     LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
@@ -137,7 +137,11 @@ pub enum AgentType {
     #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
     Cowork,
     /// Known built-in variant: `DeepResearch` (official research agent).
-    #[serde(rename = "DeepResearch", alias = "deepresearch", alias = "DEEPRESEARCH")]
+    #[serde(
+        rename = "DeepResearch",
+        alias = "deepresearch",
+        alias = "DEEPRESEARCH"
+    )]
     DeepResearch,
     /// Catch-all for any agent type string not in the known set (custom / external).
     #[serde(untagged)]
@@ -163,7 +167,10 @@ impl AgentType {
 
     /// Returns `true` if this is one of the three known built-in variants.
     pub fn is_known_builtin(&self) -> bool {
-        matches!(self, Self::Agentic | Self::Plan | Self::Cowork | Self::DeepResearch)
+        matches!(
+            self,
+            Self::Agentic | Self::Plan | Self::Cowork | Self::DeepResearch
+        )
     }
 }
 
@@ -1985,6 +1992,257 @@ pub struct AgentSessionReplyRoute {
     pub source_remote_ssh_host: Option<String>,
 }
 
+/// 主人保留字（P0-2 修复）：主人无 Claw session_id，用保留字标识。
+/// 权限校验对主人开例外通道（建群/拉人/发言全通）。
+pub const GROUP_MASTER_ACTOR: &str = "__master__";
+
+/// 群聊房间（持久化于 group-chats/<room_id>/meta.json）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatRoom {
+    pub schema_version: u32,       // 存储格式版本（P1-11 修复）
+    pub room_id: String,           // 群 ID（uuid，校验复用 validate_session_id 语义）
+    pub name: String,              // 群名
+    pub owner: GroupChatActor,     // 群主（创建者，主人或 Claw）
+    pub mode: GroupChatMode,       // 通信模式
+    pub round_robin_cursor: usize, // 轮转游标（P1-10 修复，后端落盘）
+    pub created_at: i64,           // Unix ms
+    pub last_active_at: i64,
+    pub status: GroupChatStatus,
+    pub member_limit: usize, // 成员上限（R-GC-26 配置化落地）
+    #[serde(skip)] // members 唯一权威源 = members.json（P1-11 修复）
+    pub members: Vec<GroupChatMember>,
+}
+
+/// 群聊参与者（P0-2 修复 + 复审 P0-1 修复：tag 化序列化，对齐 runtime-ports lib.rs:938/:2814 惯例）
+/// 序列化形态（internally tagged，与 TS 一致）：
+///   Master → {"kind":"master"}
+///   Claw   → {"kind":"claw","sessionId":"...","agentType":"Claw"}
+///   All    → {"kind":"all"}（@全体，复审 P1-4 修复：显式语义，非空数组哨兵）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum GroupChatActor {
+    Master, // 主人（__master__ 保留字）
+    #[serde(rename_all = "camelCase")]
+    Claw {
+        session_id: String,
+        agent_type: String,
+    }, // Claw 助理会话（字段 camelCase 对齐 TS）
+    All,    // @全体（P1-4 修复）
+}
+
+/// 通信模式（A+B 混合）
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupChatMode {
+    Free,       // A：自由聊天（全员可见，任何成员随时发言）
+    RoundRobin, // B：轮转调度（cursor 点名发言）
+}
+
+/// 群聊成员（Claw 助理）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatMember {
+    pub session_id: String, // 成员会话 ID（Claw 助理会话）
+    pub role: GroupChatMemberRole,
+    pub joined_at: i64,
+    pub agent_type: String,           // 必须 "Claw"（P1-7 后端强制校验）
+    pub display_name: Option<String>, // 来自 identity.name
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupChatMemberRole {
+    Owner,  // 群主（创建者为 Owner）
+    Member, // 普通成员
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupChatStatus {
+    Active,
+    Archived,
+}
+
+/// 群聊消息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatMessage {
+    pub message_id: String,         // 消息 ID（uuid）
+    pub room_id: String,            // 所属群
+    pub author: GroupChatActor,     // 发送者（主人或 Claw，P0-2 修复）
+    pub kind: GroupChatMessageKind, // user | agent | system
+    pub content: String,
+    pub mention_targets: Vec<GroupChatActor>, // @ 目标（成员或全体；P1-6 语义明确）
+    pub reply_to_message_id: Option<String>,  // 回复关联
+    pub timestamp: i64,
+    pub status: GroupChatMessageStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupChatMessageKind {
+    User,   // 主人发言
+    Agent,  // Claw 助理发言
+    System, // 系统事件（成员加入/退出/模式切换/群删除）
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupChatMessageStatus {
+    Pending,   // 派发中
+    Delivered, // 已送达成员
+    Replied,   // 已有成员回复（P1-6 修复）
+    Failed,    // 派发失败
+}
+
+#[async_trait::async_trait]
+pub trait GroupChatPort: Send + Sync {
+    /// 创建群
+    async fn create_room(
+        &self,
+        req: GroupChatCreateRequest,
+    ) -> Result<GroupChatRoom, GroupChatError>;
+    /// 加载群列表
+    async fn list_rooms(&self, workspace_path: &str) -> Result<Vec<GroupChatRoom>, GroupChatError>;
+    /// 加载单群
+    async fn load_room(&self, room_id: &str) -> Result<GroupChatRoom, GroupChatError>;
+    /// 读成员列表（P1-1 修复：serde(skip) 后 members 需独立读取通道）
+    async fn list_members(&self, room_id: &str) -> Result<Vec<GroupChatMember>, GroupChatError>;
+    /// 拉人进群
+    async fn join_room(&self, req: GroupChatJoinRequest) -> Result<GroupChatRoom, GroupChatError>;
+    /// 踢人出群
+    async fn leave_room(&self, req: GroupChatLeaveRequest)
+        -> Result<GroupChatRoom, GroupChatError>;
+    /// 删除群（P0-3 修复：级联清消息 + 成员反标清理）
+    async fn delete_room(&self, req: GroupChatDeleteRequest) -> Result<(), GroupChatError>;
+    /// 切换模式（自由/轮转）
+    async fn set_mode(&self, req: GroupChatModeRequest) -> Result<GroupChatRoom, GroupChatError>;
+    /// 发消息（广播/定向/轮转）
+    async fn send_message(
+        &self,
+        req: GroupChatSendRequest,
+    ) -> Result<GroupChatSendResult, GroupChatError>;
+    /// 读消息历史
+    async fn list_messages(
+        &self,
+        req: GroupChatMessagesRequest,
+    ) -> Result<GroupChatMessagesResponse, GroupChatError>;
+    /// 回执写入（P1-5 修复：成员回复聚合回房间，驱动 Replied 状态）
+    async fn ingest_reply(&self, req: GroupChatIngestReplyRequest) -> Result<(), GroupChatError>;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatCreateRequest {
+    pub name: String,
+    pub owner: GroupChatActor,        // 主人或 Claw（P0-2 修复）
+    pub initial_members: Vec<String>, // 初始成员 session_id（Claw）
+    pub mode: GroupChatMode,          // 默认 Free（P2-9 修复：前端不传时用 Free）
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatJoinRequest {
+    pub room_id: String,
+    pub session_id: String,    // 新成员（Claw）
+    pub actor: GroupChatActor, // 操作者（Owner 或主人）
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatLeaveRequest {
+    pub room_id: String,
+    pub session_id: String,    // 被移出者
+    pub actor: GroupChatActor, // 操作者（Owner/主人/自己）
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatDeleteRequest {
+    pub room_id: String,
+    pub actor: GroupChatActor, // Owner 或主人
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatModeRequest {
+    pub room_id: String,
+    pub mode: GroupChatMode,
+    pub actor: GroupChatActor,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatSendRequest {
+    pub room_id: String,
+    pub author: GroupChatActor, // 主人或成员（P0-2 修复）
+    pub content: String,
+    pub mention_targets: Vec<GroupChatActor>, // 空 = 全员
+    pub urgent: bool,                         // @ 某人打断
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatSendResult {
+    pub message_id: String,
+    pub delivered_to: Vec<String>, // 已派发成员 session_id
+    pub failed_to: Vec<GroupChatDeliveryFailure>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatDeliveryFailure {
+    pub session_id: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatMessagesRequest {
+    pub room_id: String,
+    pub limit: Option<usize>,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatMessagesResponse {
+    pub messages: Vec<GroupChatMessage>,
+    pub next_cursor: Option<String>,
+}
+
+/// 回执写入请求（P1-5 修复：成员回复聚合回房间）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatIngestReplyRequest {
+    pub room_id: String,
+    pub message_id: String,     // 被回复的群聊消息 ID
+    pub reply_content: String,  // 成员回复内容
+    pub author: GroupChatActor, // 回复者（Claw）
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupChatError {
+    pub code: GroupChatErrorCode,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupChatErrorCode {
+    NotFound,      // 群不存在
+    AlreadyMember, // 已入群（去重）
+    NotOwner,      // 非群主（无权限拉人/踢人/删群/切模式）
+    EmptyMembers,  // 空群发消息
+    RoomFull,      // 成员上限（R-GC-26 配置化）
+    DuplicateName, // 群名重复
+    InvalidTarget, // @ 目标无效
+    NotClaw,       // 非 Claw 助理（P1-7 强制校验）
+}
+
 /// Outcome for steering a message into an already-running dialog turn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -2091,9 +2349,8 @@ impl RoundInjection {
     pub fn dedup_key(&self) -> Option<&str> {
         match self.kind {
             RoundInjectionKind::UserSteering => Some(self.id.as_str()),
-            RoundInjectionKind::BackgroundResult | RoundInjectionKind::ThreadGoalObjectiveUpdated => {
-                None
-            }
+            RoundInjectionKind::BackgroundResult
+            | RoundInjectionKind::ThreadGoalObjectiveUpdated => None,
         }
     }
 }
@@ -4813,5 +5070,51 @@ mod tests {
             format!("{:?}", handles),
             "ToolRuntimeHandles { workspace_services: Some(\"<WorkspaceServices>\"), cancellation_token: Some(\"<CancellationToken>\"), terminal_port: None, remote_exec_port: None }"
         );
+    }
+
+    #[test]
+    fn group_chat_actor_master_round_trips_as_tagged_kind_master() {
+        let actor = GroupChatActor::Master;
+
+        let value = serde_json::to_value(&actor).expect("master actor should serialize");
+        assert_eq!(value, serde_json::json!({ "kind": "master" }));
+
+        let back: GroupChatActor =
+            serde_json::from_value(value).expect("master actor should deserialize");
+        assert_eq!(back, GroupChatActor::Master);
+    }
+
+    #[test]
+    fn group_chat_actor_claw_round_trips_with_camel_case_session_and_agent_type() {
+        let actor = GroupChatActor::Claw {
+            session_id: "x".to_string(),
+            agent_type: "Claw".to_string(),
+        };
+
+        let value = serde_json::to_value(&actor).expect("claw actor should serialize");
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "kind": "claw",
+                "sessionId": "x",
+                "agentType": "Claw"
+            })
+        );
+
+        let back: GroupChatActor =
+            serde_json::from_value(value).expect("claw actor should deserialize");
+        assert_eq!(back, actor);
+    }
+
+    #[test]
+    fn group_chat_actor_all_round_trips_as_tagged_kind_all() {
+        let actor = GroupChatActor::All;
+
+        let value = serde_json::to_value(&actor).expect("all actor should serialize");
+        assert_eq!(value, serde_json::json!({ "kind": "all" }));
+
+        let back: GroupChatActor =
+            serde_json::from_value(value).expect("all actor should deserialize");
+        assert_eq!(back, GroupChatActor::All);
     }
 }

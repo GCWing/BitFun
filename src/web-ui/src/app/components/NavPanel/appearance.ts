@@ -31,11 +31,12 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'workspaceMenuDivider', propertyProfile: 'paint', visualRole: 'divider' },
     { id: 'workspaceMenuTitle', propertyProfile: 'paint', visualRole: 'content' },
     { id: 'workspaceMenuEmpty', visualRole: 'content' },
+    { id: 'groupChatPaneHost', propertyProfile: 'layout', visualRole: 'continuous-surface', continuityGroup: 'nav-panel' },
   ],
   facets: [
     { id: 'layer', attribute: 'data-bf-layer', values: ['main', 'scene'] },
     { id: 'action', attribute: 'data-bf-action', values: ['code', 'cowork', 'assistant', 'extensions', 'agents', 'skills'] },
-    { id: 'section', attribute: 'data-bf-section', values: ['assistant-sessions', 'workspace'] },
+    { id: 'section', attribute: 'data-bf-section', values: ['assistant-sessions', 'workspace', 'group-chat'] },
   ],
   states: [
     { id: 'scene', selector: { kind: 'self', suffix: '[data-bf-state~="scene"]' } },

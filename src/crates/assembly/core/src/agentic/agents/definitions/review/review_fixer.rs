@@ -1,4 +1,6 @@
-use crate::agentic::agents::{subagent_default_tools, Agent, AgentToolPolicyOverrides, UserContextPolicy};
+use crate::agentic::agents::{
+    subagent_default_tools, Agent, AgentToolPolicyOverrides, UserContextPolicy,
+};
 use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 

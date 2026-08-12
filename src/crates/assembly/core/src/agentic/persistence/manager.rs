@@ -818,7 +818,11 @@ impl PersistenceManager {
     /// direct overwrite on Windows permission transients (d4-P2-8). Used by
     /// durability-critical registries (deletion tombstones) where a torn
     /// write must be impossible.
-    pub(crate) async fn write_text_atomic_strict(&self, path: &Path, text: &str) -> BitFunResult<()> {
+    pub(crate) async fn write_text_atomic_strict(
+        &self,
+        path: &Path,
+        text: &str,
+    ) -> BitFunResult<()> {
         JsonFileStore
             .write_text_atomic_strict(path, text)
             .await
@@ -2162,11 +2166,10 @@ impl PersistenceManager {
         let mut metadata = self
             .build_session_metadata(workspace_path, session, existing_metadata.as_ref())
             .await;
-        metadata.runtime_state =
-            Some(serde_json::to_value(sanitize_persisted_session_state(
-                &session.state,
-            ))
-            .unwrap_or(serde_json::Value::Null));
+        metadata.runtime_state = Some(
+            serde_json::to_value(sanitize_persisted_session_state(&session.state))
+                .unwrap_or(serde_json::Value::Null),
+        );
         self.save_session_metadata_locked(workspace_path, &metadata)
             .await?;
 
@@ -4704,7 +4707,12 @@ mod tests {
             assert!(
                 transcript.trim_end().ends_with(")") || transcript.trim_end().ends_with("]"),
                 "export {index} must not be truncated mid-line; tail: {:?}",
-                transcript.trim_end().chars().rev().take(40).collect::<String>()
+                transcript
+                    .trim_end()
+                    .chars()
+                    .rev()
+                    .take(40)
+                    .collect::<String>()
             );
             // The structural closing marker of a rendered transcript is the
             // "(omitted turn(s) N-M)" note or the last turn's closing tag —

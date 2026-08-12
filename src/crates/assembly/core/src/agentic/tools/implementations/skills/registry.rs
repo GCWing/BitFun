@@ -936,11 +936,11 @@ impl SkillRegistry {
             0
         })
         .saturating_add(
-                USER_HOME_SKILL_ROOTS
-                    .iter()
-                    .position(|root| root.source_id == "opencode")
-                    .expect("OpenCode user Skill root is registered"),
-            );
+            USER_HOME_SKILL_ROOTS
+                .iter()
+                .position(|root| root.source_id == "opencode")
+                .expect("OpenCode user Skill root is registered"),
+        );
 
         for candidate in &mut standard {
             let original_priority = candidate.priority;

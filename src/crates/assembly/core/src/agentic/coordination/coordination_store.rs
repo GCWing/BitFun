@@ -483,9 +483,8 @@ WHERE task_pk = ?5 AND status = 'running'
             }
             let mut all_records = Vec::with_capacity(task_pks.len());
             for chunk in task_pks.chunks(990) {
-                let placeholders: Vec<String> = (1..=chunk.len())
-                    .map(|i| format!("?{i}"))
-                    .collect();
+                let placeholders: Vec<String> =
+                    (1..=chunk.len()).map(|i| format!("?{i}")).collect();
                 let sql = format!(
                     "{} WHERE tasks.task_pk IN ({})",
                     BACKGROUND_TASK_SELECT,
@@ -493,7 +492,10 @@ WHERE task_pk = ?5 AND status = 'running'
                 );
                 let mut statement = connection.prepare(&sql).map_err(db_error)?;
                 let rows = statement
-                    .query_map(rusqlite::params_from_iter(chunk.iter().copied()), background_task_from_row)
+                    .query_map(
+                        rusqlite::params_from_iter(chunk.iter().copied()),
+                        background_task_from_row,
+                    )
                     .map_err(db_error)?;
                 for row in rows {
                     all_records.push(row.map_err(db_error)?);
@@ -591,9 +593,8 @@ WHERE task_pk = ?5 AND status = 'running'
             }
             let mut all_records = Vec::new();
             for chunk in parent_session_ids.chunks(990) {
-                let placeholders: Vec<String> = (1..=chunk.len())
-                    .map(|i| format!("?{i}"))
-                    .collect();
+                let placeholders: Vec<String> =
+                    (1..=chunk.len()).map(|i| format!("?{i}")).collect();
                 let sql = format!(
                     "{} WHERE tasks.parent_session_id IN ({}) ORDER BY tasks.task_pk",
                     BACKGROUND_TASK_SELECT,
@@ -1426,7 +1427,12 @@ mod tests {
             .await
             .expect("completed task");
         store
-            .update_task_status(completed.task_pk, BackgroundTaskStatus::Completed, None, None)
+            .update_task_status(
+                completed.task_pk,
+                BackgroundTaskStatus::Completed,
+                None,
+                None,
+            )
             .await
             .expect("complete the second task");
         let cancelled = store
@@ -1694,12 +1700,7 @@ mod tests {
             .await
             .expect("register grandchild");
         store
-            .register_background_task(registration(
-                "unrelated",
-                "other-child",
-                "turn-3",
-                None,
-            ))
+            .register_background_task(registration("unrelated", "other-child", "turn-3", None))
             .await
             .expect("register unrelated branch");
 

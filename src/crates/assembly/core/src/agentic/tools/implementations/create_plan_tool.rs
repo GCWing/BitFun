@@ -403,9 +403,10 @@ mod tests {
         assert!(!intents.is_empty(), "edit intent must be emitted");
         assert_eq!(intents[0].action, "edit");
         assert!(
-            intents[0].resources.iter().any(|resource| {
-                resource.replace('\\', "/").contains("/plans/")
-            }),
+            intents[0]
+                .resources
+                .iter()
+                .any(|resource| { resource.replace('\\', "/").contains("/plans/") }),
             "intent must target the plans directory: {:?}",
             intents[0].resources
         );

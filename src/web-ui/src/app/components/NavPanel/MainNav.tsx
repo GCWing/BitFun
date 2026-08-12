@@ -26,6 +26,10 @@ import AssistantSessionCreateMenu from './components/AssistantSessionCreateMenu'
 import MiniAppEntry from './components/MiniAppEntry';
 import WorkspaceListSection from './sections/workspaces/WorkspaceListSection';
 import SessionsSection from './sections/sessions/SessionsSection';
+import GroupChatsSection from './sections/groups/GroupChatsSection';
+import GroupChatCreateDialog from './sections/groups/GroupChatCreateDialog';
+import { GroupChatPane } from '@/flow_chat/components/GroupChatPane';
+import { useGroupChatStore } from '@/flow_chat/store/groupChatStore';
 import { useSceneStore } from '../../stores/sceneStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
@@ -105,7 +109,7 @@ const MainNav: React.FC<MainNavProps> = ({
 
   // Section expand state
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    () => new Set(['assistant-sessions', 'workspace'])
+    () => new Set(['assistant-sessions', 'group-chat', 'workspace'])
   );
 
   const workspaceMenuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -115,6 +119,7 @@ const MainNav: React.FC<MainNavProps> = ({
   const [workspaceMenuPos, setWorkspaceMenuPos] = useState({ top: 0, left: 0 });
   const [isExtensionsOpen, setIsExtensionsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [groupChatCreateOpen, setGroupChatCreateOpen] = useState(false);
 
   const toggleSection = useCallback((id: string) => {
     setExpandedSections(prev => {
@@ -515,6 +520,21 @@ const MainNav: React.FC<MainNavProps> = ({
   const agentsTooltip = t('nav.tooltips.agents');
   const skillsTooltip = t('nav.tooltips.skills');
   const extensionsLabel = t('nav.sections.extensions');
+
+  // P0-1/P2-10: real addable-assistant data source for the group chat member
+  // picker / create dialog — Claw assistant workspaces (sessionId = assistantId
+  // when the assistant session exists, else the workspace id as fallback).
+  const groupChatAvailableAssistants = useMemo(
+    () =>
+      assistantWorkspacesList
+        .map((workspace) => ({
+          sessionId: workspace.assistantId || workspace.id,
+          name: workspace.identity?.name?.trim() || workspace.name,
+        })),
+    [assistantWorkspacesList],
+  );
+  const groupChatActiveRoomId = useGroupChatStore((state) => state.activeRoomId);
+
   return (
     <>
       {/* ── Workspace search ───────────────────────── */}
@@ -730,6 +750,37 @@ const MainNav: React.FC<MainNavProps> = ({
           </div>
         </div>
 
+        {/* Group chat (R-GC-20, P0-1: entry must be reachable from the real host) */}
+        <div className="bitfun-nav-panel__section" data-bf-component="nav-panel" data-bf-part="section" data-bf-section="group-chat">
+          <SectionHeader
+            label={t('nav.sections.groupChat')}
+            collapsible
+            isOpen={expandedSections.has('group-chat')}
+            onToggle={() => toggleSection('group-chat')}
+            actions={
+              <Tooltip content={t('nav.groupChat.createTitle')} placement="right" followCursor>
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__section-action"
+                  aria-label={t('nav.groupChat.createTitle')}
+                  onClick={() => setGroupChatCreateOpen(true)}
+                  data-testid="nav-group-chat-add-btn"
+                >
+                  <Plus size={13} />
+                </button>
+              </Tooltip>
+            }
+          />
+          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('group-chat') ? '' : ' is-collapsed'}`} data-bf-component="nav-panel" data-bf-part="sectionContent" data-bf-state={expandedSections.has('group-chat') ? 'open' : ''}>
+            <div className="bitfun-nav-panel__collapsible-inner">
+              <GroupChatsSection
+                workspacePath={currentWorkspace?.rootPath}
+                isVisible={expandedSections.has('group-chat')}
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Workspace */}
         <div className="bitfun-nav-panel__section" data-bf-component="nav-panel" data-bf-part="section" data-bf-section="workspace">
           <SectionHeader
@@ -818,6 +869,28 @@ const MainNav: React.FC<MainNavProps> = ({
           }}
         />
       )}
+
+      {/* Group chat (P0-1): create dialog + active-room pane (real host wiring) */}
+      {groupChatCreateOpen ? (
+        <GroupChatCreateDialog
+          workspacePath={currentWorkspace?.rootPath ?? ''}
+          availableAssistants={groupChatAvailableAssistants}
+          onClose={() => setGroupChatCreateOpen(false)}
+        />
+      ) : null}
+      {groupChatActiveRoomId ? (
+        <div
+          data-bf-component="nav-panel"
+          data-bf-part="groupChatPaneHost"
+          className="bitfun-nav-panel__group-chat-pane-host"
+        >
+          <GroupChatPane
+            roomId={groupChatActiveRoomId}
+            isViewportActive
+            availableAssistants={groupChatAvailableAssistants}
+          />
+        </div>
+      ) : null}
     </>
   );
 };

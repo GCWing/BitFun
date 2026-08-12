@@ -32,9 +32,7 @@ pub(crate) struct AcpSessionLifecycleSubscriber {
 
 impl AcpSessionLifecycleSubscriber {
     pub(crate) fn new(acp_client_service: Option<Arc<bitfun_acp::AcpClientService>>) -> Self {
-        let subscriber = Self {
-            acp_client_service,
-        };
+        let subscriber = Self { acp_client_service };
         subscriber.spawn_startup_orphan_scan();
         subscriber
     }
@@ -75,7 +73,10 @@ impl AcpSessionLifecycleSubscriber {
         let path_manager = match PathManager::new() {
             Ok(path_manager) => path_manager,
             Err(error) => {
-                log::warn!("ACP orphan scan: failed to initialize PathManager: {}", error);
+                log::warn!(
+                    "ACP orphan scan: failed to initialize PathManager: {}",
+                    error
+                );
                 return 0;
             }
         };

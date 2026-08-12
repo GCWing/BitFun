@@ -5,6 +5,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "Codex static source adapter for BitFun"
+autotests = false
 
 [lib]
 name = "bitfun_codex_adapter"
@@ -24,6 +25,10 @@ url = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[[test]]
+name = "codex_source_contracts"
+path = "tests/codex_source_contracts.rs"
 
 [lints]
 workspace = true

@@ -230,9 +230,7 @@ fn search_file(
             mat: &SinkMatch<'_>,
         ) -> Result<bool, Self::Error> {
             let line_number = mat.line_number().unwrap_or(0) as usize;
-            let line_text = String::from_utf8_lossy(mat.bytes())
-                .trim_end()
-                .to_string();
+            let line_text = String::from_utf8_lossy(mat.bytes()).trim_end().to_string();
             self.outcome.line_matches.push(RgLineMatch {
                 path: self.path_display.to_string(),
                 line_number,
@@ -335,14 +333,11 @@ fn build_types(
 
 /// 未知类型名按 `*.{name}` 兜底注册（与 tool-execution grep_search 对齐）。
 fn ensure_type(builder: &mut TypesBuilder, name: &str) -> Result<(), String> {
-    let exists = builder
-        .definitions()
-        .iter()
-        .any(|def| def.name() == name);
+    let exists = builder.definitions().iter().any(|def| def.name() == name);
     if !exists {
-        builder
-            .add(name, &format!("*.{name}"))
-            .map_err(|error| format!("rg cross-validation failed to add file type '{name}': {error}"))?;
+        builder.add(name, &format!("*.{name}")).map_err(|error| {
+            format!("rg cross-validation failed to add file type '{name}': {error}")
+        })?;
     }
     Ok(())
 }
@@ -378,7 +373,11 @@ mod tests {
     fn rg_search_finds_matches_flashgrep_missed() {
         let temp = tempfile::tempdir().expect("tempdir");
         let root = temp.path();
-        write_file(root, "src/lib.rs", "fn main() {\n    hello_target_symbol();\n}\n");
+        write_file(
+            root,
+            "src/lib.rs",
+            "fn main() {\n    hello_target_symbol();\n}\n",
+        );
         write_file(root, "docs/readme.md", "no match here\n");
 
         let request = test_request(root, "hello_target_symbol");
@@ -390,7 +389,9 @@ mod tests {
         assert_eq!(outcome.files.len(), 1);
         assert!(outcome.line_matches[0].path.ends_with("src/lib.rs"));
         assert_eq!(outcome.line_matches[0].line_number, 2);
-        assert!(outcome.line_matches[0].line_text.contains("hello_target_symbol"));
+        assert!(outcome.line_matches[0]
+            .line_text
+            .contains("hello_target_symbol"));
         assert_eq!(outcome.file_counts[0].matched_lines, 1);
     }
 

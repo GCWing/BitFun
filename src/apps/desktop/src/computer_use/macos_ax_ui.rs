@@ -48,24 +48,17 @@ unsafe extern "C" {
 const K_AX_VALUE_CGPOINT: u32 = 1;
 const K_AX_VALUE_CGSIZE: u32 = 2;
 
+/// Pid of the frontmost application, via `NSWorkspace.frontmostApplication`.
+///
+/// Reads in-process in microseconds. The previous implementation shelled out to
+/// `osascript` on every call — and this is on the hot path for
+/// `describe_screen` (which reaches it up to three times per call), so a single
+/// observation used to cost several hundred milliseconds of process spawns plus
+/// the risk of a System Events AppleEvent timeout.
 fn frontmost_pid() -> BitFunResult<i32> {
-    let out = std::process::Command::new("/usr/bin/osascript")
-        .args([
-            "-e",
-            "tell application \"System Events\" to get unix id of first process whose frontmost is true",
-        ])
-        .output()
-        .map_err(|e| BitFunError::tool(format!("osascript spawn: {}", e)))?;
-    if !out.status.success() {
-        return Err(BitFunError::tool(format!(
-            "osascript failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )));
-    }
-    let s = String::from_utf8_lossy(&out.stdout);
-    s.trim()
-        .parse::<i32>()
-        .map_err(|_| BitFunError::tool("Could not parse frontmost process id.".to_string()))
+    crate::computer_use::macos_bg_input::frontmost_pid_macos().ok_or_else(|| {
+        BitFunError::tool("NSWorkspace reported no frontmost application.".to_string())
+    })
 }
 
 unsafe fn ax_release(v: CFTypeRef) {
@@ -525,8 +518,10 @@ unsafe fn is_ax_hidden(elem: AXUIElementRef) -> bool {
             return false; // No AXHidden attribute = not hidden
         };
         // AXHidden is a CFBoolean
-        let hidden =
-            std::ptr::eq(val, core_foundation::boolean::kCFBooleanTrue as *const c_void);
+        let hidden = std::ptr::eq(
+            val,
+            core_foundation::boolean::kCFBooleanTrue as *const c_void,
+        );
         ax_release(val);
         hidden
     }
@@ -1121,6 +1116,37 @@ pub(super) fn accessibility_hit_at_global_point(gx: f64, gy: f64) -> Option<OcrA
 pub(super) fn frontmost_window_bounds_global() -> BitFunResult<(i32, i32, u32, u32)> {
     let pid = frontmost_pid()?;
     window_bounds_global_for_pid(pid)
+}
+
+/// Number of windows the app currently owns, per the AX `AXWindows` attribute.
+///
+/// A launched-but-windowless app — common for Electron clients whose window was
+/// closed while the process kept running — is otherwise indistinguishable from a
+/// healthy launch: `open_app` reports `success: true` with a live pid while
+/// there is nothing on screen to act on. Returning the count lets `open_app`
+/// detect that case and re-open the app instead of leaving the agent to
+/// discover it by trial and error.
+///
+/// `None` means the AX handle could not be created at all (dead pid, no
+/// Accessibility trust); `Some(0)` means the app is alive with no windows.
+pub(super) fn window_count_for_pid(pid: i32) -> Option<usize> {
+    // SAFETY: `AXUIElementCreateApplication` accepts any pid and returns null
+    // rather than an invalid handle, which we check before use.
+    let app = unsafe { AXUIElementCreateApplication(pid) };
+    if app.is_null() {
+        return None;
+    }
+    // SAFETY: `app` is a live non-null AXUIElementRef we own. `ax_copy_attr`
+    // follows the CF *Copy* rule, so the returned array carries a +1 retain that
+    // `wrap_under_create_rule` takes over. `app` is released as soon as the
+    // attribute has been copied out of it, on both the Some and None paths.
+    unsafe {
+        let arr_ref = ax_copy_attr(app, "AXWindows");
+        ax_release(app as CFTypeRef);
+        let arr_ref = arr_ref?;
+        let arr = CFArray::<*const c_void>::wrap_under_create_rule(arr_ref as CFArrayRef);
+        Some(arr.len() as usize)
+    }
 }
 
 /// Bounds of the selected app's focused or main window in global screen coordinates.

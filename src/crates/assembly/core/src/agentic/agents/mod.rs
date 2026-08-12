@@ -155,6 +155,10 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "Git".to_string(),
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
+        // Pairs with ControlHub: its `wait` sends anything repeating, or
+        // further out than an hour, to Cron rather than holding the turn open
+        // for the interval.
+        "Cron".to_string(),
         "InitMiniApp".to_string(),
         "FinalizeMiniApp".to_string(),
         "PublishMiniApp".to_string(),
@@ -176,6 +180,9 @@ pub fn subagent_default_tools() -> Vec<String> {
     let mut tools = shared_coding_mode_tools();
     if !tools.contains(&"SessionControl".to_string()) {
         tools.push("SessionControl".to_string());
+    }
+    if !tools.contains(&"group_chat".to_string()) {
+        tools.push("group_chat".to_string());
     }
     tools
 }

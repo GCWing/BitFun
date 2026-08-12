@@ -114,9 +114,10 @@ Product-source boundary:
 ## Verification
 
 - `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`
-- `cargo test -p bitfun-opencode-adapter --test opencode_command_adapter`
+- `cargo test -p bitfun-opencode-adapter --test opencode_mcp_adapter`
+- `cargo test -p bitfun-opencode-adapter --test opencode_static_source_contracts opencode_command_adapter::`
+- `cargo test -p bitfun-opencode-adapter --test opencode_static_source_contracts opencode_subagent_adapter::`
 - `cargo test -p bitfun-opencode-adapter --test tool_source_contracts`
-- `cargo test -p bitfun-opencode-adapter --test opencode_subagent_adapter`
-- `cargo test -p bitfun-opencode-adapter p0_c2_fixture`
-- `cargo test -p bitfun-opencode-adapter client_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
+- `cargo test -p bitfun-opencode-adapter --lib p0_c2_fixture`
+- `cargo test -p bitfun-opencode-adapter --lib client_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
 - `node scripts/check-core-boundaries.mjs`

@@ -1,7 +1,5 @@
-mod common;
-
-use common::sse_fixture_server::FixtureSseServerOptions;
-use common::stream_test_harness::{
+use crate::common::sse_fixture_server::FixtureSseServerOptions;
+use crate::common::stream_test_harness::{
     run_stream_fixture_with_options, StreamFixtureProvider, StreamFixtureRunOptions,
 };
 use std::time::Duration;

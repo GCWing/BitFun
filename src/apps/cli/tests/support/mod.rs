@@ -303,6 +303,7 @@ enum MockModelResponse {
     Gated,
     Http403 { reason: String },
     DisconnectThenHttp403,
+    MalformedSseThenImmediate,
 }
 
 impl MockOpenAiServer {
@@ -322,6 +323,10 @@ impl MockOpenAiServer {
 
     pub(crate) fn disconnect_then_http_403() -> Self {
         Self::spawn(MockModelResponse::DisconnectThenHttp403)
+    }
+
+    pub(crate) fn malformed_sse_then_immediate() -> Self {
+        Self::spawn(MockModelResponse::MalformedSseThenImmediate)
     }
 
     pub(crate) fn base_url(&self) -> &str {
@@ -405,11 +410,14 @@ impl MockOpenAiServer {
                             &disconnect_tx,
                         );
                         attempt += 1;
-                        if matches!(
-                            response,
-                            MockModelResponse::Http403 { .. }
-                                | MockModelResponse::DisconnectThenHttp403
-                        ) {
+                        let accepts_more_requests =
+                            matches!(
+                                response,
+                                MockModelResponse::Http403 { .. }
+                                    | MockModelResponse::DisconnectThenHttp403
+                            ) || (matches!(response, MockModelResponse::MalformedSseThenImmediate)
+                                && attempt < 2);
+                        if accepts_more_requests {
                             continue;
                         }
                         break;
@@ -472,6 +480,13 @@ fn serve_model_response(
             b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
         )
         .expect("write mock response headers");
+
+    if matches!(response, MockModelResponse::MalformedSseThenImmediate) && attempt == 0 {
+        write_chunk(stream, b"data: not-json\n\n").expect("write malformed SSE frame");
+        let _ = stream.write_all(b"0\r\n\r\n");
+        let _ = stream.flush();
+        return;
+    }
 
     write_sse_chunk(
         stream,

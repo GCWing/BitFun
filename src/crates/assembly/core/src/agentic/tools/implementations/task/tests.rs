@@ -1007,7 +1007,10 @@ async fn call_impl_allows_nested_subagent_within_fission_depth() {
     // R-001: spawn_child() now allows nesting up to MAX_FISSION_DEPTH=10.
     // At depth=1 (<10), delegation is permitted.
     let policy = DelegationPolicy::top_level().spawn_child();
-    assert!(policy.allow_subagent_spawn, "nesting at depth=1 should be allowed (1 < MAX_FISSION_DEPTH=10)");
+    assert!(
+        policy.allow_subagent_spawn,
+        "nesting at depth=1 should be allowed (1 < MAX_FISSION_DEPTH=10)"
+    );
     assert_eq!(policy.nesting_depth, 1);
 }
 
@@ -1018,7 +1021,10 @@ async fn call_impl_rejects_nested_subagent_at_max_depth() {
     for _ in 0..10 {
         policy = policy.spawn_child();
     }
-    assert!(!policy.allow_subagent_spawn, "nesting at depth=10 should be blocked (reached MAX_FISSION_DEPTH)");
+    assert!(
+        !policy.allow_subagent_spawn,
+        "nesting at depth=10 should be blocked (reached MAX_FISSION_DEPTH)"
+    );
     assert_eq!(policy.nesting_depth, 10);
 }
 

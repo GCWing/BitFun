@@ -75,12 +75,8 @@ mod tests {
 
     #[test]
     fn on_leaf_completed_without_parent_returns_none() {
-        let action = ReviewPropagationManager::on_leaf_completed(
-            "child-1",
-            "GeneralPurpose",
-            "done",
-            None,
-        );
+        let action =
+            ReviewPropagationManager::on_leaf_completed("child-1", "GeneralPurpose", "done", None);
         assert!(matches!(action, ReviewPropagationAction::None));
 
         let empty_parent = ReviewPropagationManager::on_leaf_completed(

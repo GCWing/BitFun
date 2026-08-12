@@ -94,7 +94,9 @@ mod tests {
         assert_eq!(agent.prompt_template_name(None), "computer_use_mode");
         assert!(agent.default_tools().contains(&"ControlHub".to_string()));
         assert!(agent.default_tools().contains(&"ComputerUse".to_string()));
-        assert!(agent.default_tools().contains(&"AskUserQuestion".to_string()));
+        assert!(agent
+            .default_tools()
+            .contains(&"AskUserQuestion".to_string()));
         // 工具模板改 agentic 全工具后，基础工作工具（Write 等）
         // 一并纳入，不再是最小集合。
         assert!(agent.default_tools().contains(&"Write".to_string()));

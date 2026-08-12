@@ -118,6 +118,7 @@ fn http_provider_error(
     status: StatusCode,
     error_text: &str,
     error_kind: &str,
+    retry_after_ms: Option<u64>,
 ) -> AiProviderError {
     AiProviderError::from_parts(
         format!("{} {} {}: {}", label, error_kind, status, error_text),
@@ -125,6 +126,7 @@ fn http_provider_error(
         provider_error_code(error_text),
         Some(status.as_u16()),
     )
+    .with_retry_after_ms(retry_after_ms)
 }
 
 fn exponential_retry_delay_ms(attempt: usize) -> u64 {
@@ -289,8 +291,13 @@ where
                     } else {
                         "error"
                     };
-                    let provider_error =
-                        http_provider_error(label, status, &error_text, error_kind);
+                    let provider_error = http_provider_error(
+                        label,
+                        status,
+                        &error_text,
+                        error_kind,
+                        retry_after_delay_ms(&headers),
+                    );
                     let error = anyhow!(provider_error);
                     warn!(
                         "{} request failed: {}ms, transport_attempt {}/{}, error: {}",
@@ -414,14 +421,10 @@ where
         });
     }
 
-    let error_msg = format!(
-        "{} failed after {} attempts: {}",
-        label,
-        max_tries,
-        last_error.unwrap_or_else(|| anyhow!("Unknown error"))
-    );
-    error!("{}", error_msg);
-    Err(anyhow!(error_msg))
+    let last_error = last_error.unwrap_or_else(|| anyhow!("Unknown error"));
+    let error_context = format!("{} failed after {} attempts", label, max_tries);
+    error!("{}: {}", error_context, last_error);
+    Err(last_error.context(error_context))
 }
 
 #[cfg(test)]
@@ -475,6 +478,21 @@ mod tests {
         }
     }
 
+    async fn forbidden_with_retry_after(Json(body): Json<serde_json::Value>) -> impl IntoResponse {
+        assert_eq!(body["model"], "configured-model");
+        (
+            StatusCode::FORBIDDEN,
+            [("retry-after", "7")],
+            Json(serde_json::json!({
+                "error": {
+                    "message": "provider authorization denied",
+                    "type": "permission_error",
+                    "code": "permission_denied"
+                }
+            })),
+        )
+    }
+
     #[test]
     fn http_error_uses_structured_code_before_generic_message() {
         let error = http_provider_error(
@@ -482,6 +500,7 @@ mod tests {
             StatusCode::BAD_REQUEST,
             r#"{"error":{"code":"context_length_exceeded","message":"Request failed"}}"#,
             "client error",
+            None,
         );
 
         assert_eq!(error.category, ErrorCategory::ContextOverflow);
@@ -499,6 +518,7 @@ mod tests {
             StatusCode::BAD_REQUEST,
             "400 status code (no body)",
             "client error",
+            None,
         );
 
         assert_eq!(error.category, ErrorCategory::InvalidRequest);
@@ -589,6 +609,48 @@ mod tests {
             "ordinary and context-overflow 400 responses should both retry"
         );
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn single_attempt_preserves_retry_after_metadata_for_outer_budget() {
+        let app = Router::new().route("/chat/completions", post(forbidden_with_retry_after));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind retry-after fixture");
+        let address = listener.local_addr().expect("retry-after fixture address");
+        let server_task = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("retry-after fixture should run");
+        });
+        let url = format!("http://{address}/chat/completions");
+        let client = reqwest::Client::new();
+        let request_body = serde_json::json!({"model": "configured-model"});
+
+        let result = execute_sse_request(
+            "OpenAI Streaming API",
+            &url,
+            &request_body,
+            1,
+            None,
+            None,
+            || client.post(&url),
+            |_response, tx, _tx_raw, _remaining_ttft_timeout| async move {
+                drop(tx);
+            },
+        )
+        .await;
+
+        server_task.abort();
+        let error = match result {
+            Ok(_) => panic!("single forbidden response should fail"),
+            Err(error) => error,
+        };
+        let provider_error = error
+            .downcast_ref::<AiProviderError>()
+            .expect("structured provider error should survive retry context");
+        assert_eq!(provider_error.http_status, Some(403));
+        assert_eq!(provider_error.retry_after_ms, Some(7_000));
     }
 
     #[test]

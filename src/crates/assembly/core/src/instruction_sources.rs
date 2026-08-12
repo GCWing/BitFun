@@ -196,10 +196,8 @@ pub(crate) mod test_support {
             workspace_instruction_files: Option<bool>,
             external_instruction_sources: Option<bool>,
         ) -> Self {
-            let previous_workspace =
-                crate::service::config::workspace_instruction_files_enabled();
-            let previous_external =
-                crate::service::config::external_instruction_sources_enabled();
+            let previous_workspace = crate::service::config::workspace_instruction_files_enabled();
+            let previous_external = crate::service::config::external_instruction_sources_enabled();
             if let Some(enabled) = workspace_instruction_files {
                 crate::service::config::set_workspace_instruction_files_enabled(enabled);
             }

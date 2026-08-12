@@ -43,6 +43,10 @@ interface WorkspaceIdentityChangedEvent {
   changedFields: string[];
 }
 
+interface WorktreeChangedEvent {
+  projectWorkspacePath: string;
+}
+
 export type WorkspaceEvent =
   | { type: 'workspace:opened'; workspace: WorkspaceInfo }
   | { type: 'workspace:closed'; workspaceId: string }
@@ -81,6 +85,8 @@ class WorkspaceManager {
   private identityListenerReady = false;
   private identityListenerRegistrationPromise: Promise<void> | null = null;
   private identityListenerReadyResyncPending = false;
+  private worktreeChangeListening = false;
+  private worktreeChangeRegistrationPromise: Promise<void> | null = null;
   private startupLegacyRemoteWorkspaceSnapshotAvailable = false;
   private startupLegacyRemoteWorkspaceSnapshotConsumed = false;
   private startupLegacyRemoteWorkspace: RemoteWorkspaceSnapshot | null = null;
@@ -392,6 +398,71 @@ class WorkspaceManager {
     return this.identityListenerRegistrationPromise;
   }
 
+  private async ensureWorktreeChangeListener(): Promise<void> {
+    if (this.worktreeChangeRegistrationPromise) {
+      return this.worktreeChangeRegistrationPromise;
+    }
+    if (this.worktreeChangeListening) {
+      return;
+    }
+
+    this.worktreeChangeListening = true;
+    try {
+      this.worktreeChangeRegistrationPromise = listen<WorktreeChangedEvent>(
+        'worktree://changed',
+        () => {
+          void this.refreshOpenedWorkspacesFromWorktreeChange();
+        }
+      )
+        .then(() => undefined)
+        .catch(error => {
+          this.worktreeChangeListening = false;
+          log.warn('Failed to subscribe worktree change events', { error });
+        })
+        .finally(() => {
+          this.worktreeChangeRegistrationPromise = null;
+        });
+    } catch (error) {
+      this.worktreeChangeListening = false;
+      log.warn('Failed to subscribe worktree change events', { error });
+      this.worktreeChangeRegistrationPromise = null;
+      return;
+    }
+
+    return this.worktreeChangeRegistrationPromise;
+  }
+
+  /**
+   * A worktree was created/removed/recreated on the backend, which registers or
+   * unregisters its workspace in the opened list. Re-fetch the opened/recent
+   * snapshots so the left workspace panel stays in sync without a restart.
+   */
+  private async refreshOpenedWorkspacesFromWorktreeChange(): Promise<void> {
+    try {
+      const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
+        globalStateAPI.getCurrentWorkspace(),
+        globalStateAPI.getRecentWorkspaces(),
+        globalStateAPI.getOpenedWorkspaces(),
+      ]);
+      this.updateWorkspaceState(
+        currentWorkspace,
+        recentWorkspaces,
+        openedWorkspaces,
+        this.state.loading,
+        this.state.error
+      );
+      const refreshedWorkspace =
+        currentWorkspace ?? openedWorkspaces[0] ?? recentWorkspaces[0];
+      this.emit(
+        refreshedWorkspace
+          ? { type: 'workspace:updated', workspace: refreshedWorkspace }
+          : { type: 'workspace:recent-updated' }
+      );
+    } catch (error) {
+      log.warn('Failed to refresh workspaces after worktree change', { error });
+    }
+  }
+
   private async syncWorkspaceStateAfterIdentityListenerReady(): Promise<void> {
     if (!this.identityListenerReadyResyncPending || !this.isInitialized || !this.identityListenerReady) {
       return;
@@ -497,6 +568,12 @@ class WorkspaceManager {
       const identityListenerStartedAt = markWorkspaceStartupStepStart('ensure_identity_listener');
       void this.ensureIdentityChangeListener();
       markWorkspaceStartupStepEnd('ensure_identity_listener', identityListenerStartedAt, {
+        blocking: false,
+      });
+
+      const worktreeListenerStartedAt = markWorkspaceStartupStepStart('ensure_worktree_listener');
+      void this.ensureWorktreeChangeListener();
+      markWorkspaceStartupStepEnd('ensure_worktree_listener', worktreeListenerStartedAt, {
         blocking: false,
       });
 

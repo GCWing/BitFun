@@ -125,8 +125,10 @@ describe('WorkspaceManager startup initialization', () => {
         }) => void)
       | null = null;
     let resolveListener: ((unlisten: () => void) => void) | null = null;
-    listenMock.mockImplementation((_eventName, handler) => {
-      identityHandler = handler;
+    listenMock.mockImplementation((eventName, handler) => {
+      if (eventName === 'workspace-identity-changed') {
+        identityHandler = handler;
+      }
       return new Promise(resolve => {
         resolveListener = resolve;
       });
@@ -232,8 +234,10 @@ describe('WorkspaceManager startup initialization', () => {
           };
         }) => void)
       | null = null;
-    listenMock.mockImplementation((_eventName, handler) => {
-      identityHandler = handler;
+    listenMock.mockImplementation((eventName, handler) => {
+      if (eventName === 'workspace-identity-changed') {
+        identityHandler = handler;
+      }
       return Promise.resolve(() => undefined);
     });
 
@@ -333,6 +337,136 @@ describe('WorkspaceManager startup initialization', () => {
       available: false,
       workspace: null,
     });
+  });
+
+  it('registers a worktree change listener without blocking startup', async () => {
+    const workspace = {
+      id: 'project-1',
+      name: 'Project 1',
+      rootPath: 'D:/workspace/project-1',
+      workspaceKind: 'normal',
+    };
+    globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [workspace],
+      openedWorkspaces: [workspace],
+      currentWorkspace: workspace,
+      legacyRemoteWorkspace: null,
+    });
+    listenMock.mockResolvedValue(() => undefined);
+    const manager = await getFreshWorkspaceManager();
+
+    const initializePromise = manager.initialize();
+    const initializeResult = await Promise.race([
+      initializePromise.then(() => 'initialized'),
+      new Promise(resolve => setTimeout(() => resolve('timeout'), 20)),
+    ]);
+
+    expect(initializeResult).toBe('initialized');
+    expect(listenMock).toHaveBeenCalledWith('worktree://changed', expect.any(Function));
+  });
+
+  it('refreshes the opened workspace list when a worktree appears', async () => {
+    const projectWorkspace = {
+      id: 'project-1',
+      name: 'Project 1',
+      rootPath: 'D:/workspace/project-1',
+      workspaceKind: 'normal',
+    };
+    const worktreeWorkspace = {
+      id: 'wt-workspace-1',
+      name: 'wt-workspace-1',
+      rootPath: 'D:/worktrees/repo/wt-1',
+      workspaceKind: 'normal',
+      worktree: { path: 'D:/worktrees/repo/wt-1', mainRepoPath: 'D:/workspace/project-1', isMain: false },
+    };
+    globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [projectWorkspace],
+      openedWorkspaces: [projectWorkspace],
+      currentWorkspace: projectWorkspace,
+      legacyRemoteWorkspace: null,
+    });
+
+    let worktreeHandler:
+      | ((event: { payload: { projectWorkspacePath: string } }) => void)
+      | null = null;
+    listenMock.mockImplementation((eventName, handler) => {
+      if (eventName === 'worktree://changed') {
+        worktreeHandler = handler;
+      }
+      return Promise.resolve(() => undefined);
+    });
+
+    const manager = await getFreshWorkspaceManager();
+    await manager.initialize();
+    expect(manager.getState().openedWorkspaces.has('wt-workspace-1')).toBe(false);
+
+    globalStateMocks.getCurrentWorkspace.mockResolvedValue(projectWorkspace);
+    globalStateMocks.getRecentWorkspaces.mockResolvedValue([projectWorkspace, worktreeWorkspace]);
+    globalStateMocks.getOpenedWorkspaces.mockResolvedValue([projectWorkspace, worktreeWorkspace]);
+
+    worktreeHandler?.({ payload: { projectWorkspacePath: 'D:/workspace/project-1' } });
+    await flushAsyncWork();
+
+    const state = manager.getState();
+    expect(state.openedWorkspaces.has('wt-workspace-1')).toBe(true);
+    expect(state.openedWorkspaces.size).toBe(2);
+  });
+
+  it('keeps the opened list in sync when a worktree is removed', async () => {
+    const projectWorkspace = {
+      id: 'project-1',
+      name: 'Project 1',
+      rootPath: 'D:/workspace/project-1',
+      workspaceKind: 'normal',
+    };
+    const worktreeWorkspace = {
+      id: 'wt-workspace-1',
+      name: 'wt-workspace-1',
+      rootPath: 'D:/worktrees/repo/wt-1',
+      workspaceKind: 'normal',
+      worktree: { path: 'D:/worktrees/repo/wt-1', mainRepoPath: 'D:/workspace/project-1', isMain: false },
+    };
+    globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [projectWorkspace],
+      openedWorkspaces: [projectWorkspace],
+      currentWorkspace: projectWorkspace,
+      legacyRemoteWorkspace: null,
+    });
+
+    let worktreeHandler:
+      | ((event: { payload: { projectWorkspacePath: string } }) => void)
+      | null = null;
+    listenMock.mockImplementation((eventName, handler) => {
+      if (eventName === 'worktree://changed') {
+        worktreeHandler = handler;
+      }
+      return Promise.resolve(() => undefined);
+    });
+
+    const manager = await getFreshWorkspaceManager();
+    await manager.initialize();
+    expect(manager.getState().openedWorkspaces.has('wt-workspace-1')).toBe(false);
+
+    globalStateMocks.getCurrentWorkspace.mockResolvedValue(projectWorkspace);
+    globalStateMocks.getRecentWorkspaces.mockResolvedValue([projectWorkspace, worktreeWorkspace]);
+    globalStateMocks.getOpenedWorkspaces.mockResolvedValue([projectWorkspace, worktreeWorkspace]);
+
+    worktreeHandler?.({ payload: { projectWorkspacePath: 'D:/workspace/project-1' } });
+    await flushAsyncWork();
+    expect(manager.getState().openedWorkspaces.has('wt-workspace-1')).toBe(true);
+
+    globalStateMocks.getRecentWorkspaces.mockResolvedValue([projectWorkspace]);
+    globalStateMocks.getOpenedWorkspaces.mockResolvedValue([projectWorkspace]);
+
+    worktreeHandler?.({ payload: { projectWorkspacePath: 'D:/workspace/project-1' } });
+    await flushAsyncWork();
+
+    const state = manager.getState();
+    expect(state.openedWorkspaces.has('wt-workspace-1')).toBe(false);
+    expect(state.openedWorkspaces.size).toBe(1);
   });
 });
 
