@@ -328,21 +328,37 @@ smooth scroll on the very next frame. Both `'smooth'` requests in
 `useFlowChatFollowOutput` — the jump to latest and the post-streaming settle —
 were therefore jumps in practice, so the loop stands down while one travels.
 
-**What ends the stand-down is the viewport having stopped moving.** Two
-consecutive frames without travel say the animation is over, or was cancelled,
-or never started; either way there is nothing left to yield to. Two rather than
-one, because the frame that issues the animation can run before the browser has
-ticked it once. Arriving on target ends it as well, for an animation whose last
-frames land inside `BOTTOM_EPSILON_PX` and stop reporting travel.
+**What ends the stand-down is the viewport having sat still for
+`SMOOTH_SCROLL_STALL_MS`.** That says the animation is over, or was cancelled,
+or never started; either way there is nothing left to yield to. Arriving on
+target ends it as well, and sooner.
 
-This used to be a *frame* budget, and a frame count is not a duration: 45
-frames is 0.75s at 60Hz and was 0.52s on a busy 200Hz display, so what a caller
-bought depended on the machine it ran on. The browser scales a smooth scroll's
-duration with its distance, and a jump to latest from the top of a transcript
-is the longest thing this issues — measured, one aimed at 8717px animated 5480
-of them and was finished by the loop in a single 3290px write, 38% short.
-`SMOOTH_SCROLL_YIELD_MS` remains as a backstop for an animation that never ends
-at all, which is a wall-clock fact and now written as one.
+**Neither half of this may be counted in frames, and both were.** A frame count
+is not a duration, and the two failures are the same mistake at opposite ends
+of the animation:
+
+- The budget was 45 frames — 0.75s at 60Hz, 0.52s on a busy 200Hz display — so
+  what a caller bought depended on the machine. The browser scales a smooth
+  scroll's duration with its distance, and a jump to latest from the top of a
+  transcript is the longest thing this issues; measured, one aimed at 8717px
+  animated 5480 of them and was finished by the loop in a single 3290px write,
+  38% short.
+- The stall check was then two frames, which is 10ms at 200Hz. A programmatic
+  smooth scroll *eases in* — measured, 2px in its first 50ms against 9734px to
+  travel — and with scroll offsets quantised to 0.8px the early frames
+  genuinely do not move. So the stand-down ended 21ms after it began, having
+  animated nothing, and the jump to latest lost its animation entirely.
+
+`SMOOTH_SCROLL_STALL_MS` is therefore derived from the curve's start rather
+than from the platform's startup latency, which is the shorter of the two:
+visible increments arrive up to ~40ms apart early on, and the constant is that
+doubled. `SMOOTH_SCROLL_YIELD_MS` remains as a backstop for an animation that
+never ends at all — also a wall-clock fact, and now written as one.
+
+`followOutput.animatedScrollEnded` says which of the three ended it and how far
+the animation actually got. Both bugs above were a stand-down ending early, and
+both were invisible in the trail: the loop simply started writing, exactly as
+it does when an animation finishes properly.
 
 The stand-down ends *by falling through to the write*, not by returning. An
 animation aims at the offset it was issued for, and content arrives while it

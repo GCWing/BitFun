@@ -133,13 +133,28 @@ const PIN_RESOLVE_MAX_ATTEMPTS = 30;
 const SMOOTH_SCROLL_YIELD_MS = 1_200;
 
 /**
- * Frames without travel that mark our animated scroll as over.
+ * How long the viewport may sit still before our animated scroll counts as over.
  *
- * Two, because the frame that issues the animation can run before the browser
- * has ticked it once, and one stalled frame there would hand the viewport back
- * before the animation had started.
+ * A duration and not a frame count, for the same reason the backstop above is:
+ * this was two frames, and two frames is 33ms at 60Hz and 10ms at 200Hz, where
+ * a smooth scroll has not visibly started. Measured on WebView2: a jump issued
+ * for 9734px was taken back 21ms after it was asked for, having animated
+ * nothing at all, and the reader saw an instant jump where the whole point was
+ * an animation.
+ *
+ * The number comes from the shape of the curve rather than from the platform's
+ * startup latency, which is the shorter of the two. A programmatic smooth
+ * scroll eases in: measured, 2px in its first 50ms against 9734px to travel.
+ * With scroll offsets quantised to 0.8px on that display, the early frames
+ * genuinely do not move, and visible increments arrive up to ~40ms apart. This
+ * is that, doubled.
+ *
+ * What it costs is the follow resuming this late after an animation that ends
+ * somewhere other than its target — which only happens while streaming moves
+ * the target underneath it, and is then a dozen pixels the ease absorbs.
+ * Arriving ends the yield immediately and does not wait for this.
  */
-const SMOOTH_SCROLL_STALL_FRAMES = 2;
+export const SMOOTH_SCROLL_STALL_MS = 120;
 
 /**
  * Frames the follow target keeps being re-asserted after a non-streaming entry,
@@ -200,8 +215,10 @@ export function useFlowChatFollowOutput({
   const smoothScrollUntilMsRef = useRef(0);
   /** Where the viewport was on the previous frame of that yield. */
   const smoothScrollLastTopRef = useRef(0);
-  /** Consecutive frames of that yield in which the viewport did not move. */
-  const smoothScrollStallFramesRef = useRef(0);
+  /** When that yield last saw the viewport move, which is what ends it. */
+  const smoothScrollLastMoveAtMsRef = useRef(0);
+  /** Where the animation started, so the trace can say how far it got. */
+  const smoothScrollFromPxRef = useRef(0);
   const pendingSnapBackTargetRef = useRef<number | null>(null);
 
   isFollowingOutputRef.current = isFollowingOutput;
@@ -313,15 +330,41 @@ export function useFlowChatFollowOutput({
    * yield can tell travel from a stall.
    */
   const beginSmoothScrollYield = useCallback(() => {
-    smoothScrollUntilMsRef.current = performance.now() + SMOOTH_SCROLL_YIELD_MS;
+    const nowMs = performance.now();
+    smoothScrollUntilMsRef.current = nowMs + SMOOTH_SCROLL_YIELD_MS;
+    smoothScrollLastMoveAtMsRef.current = nowMs;
     smoothScrollLastTopRef.current = scrollerRef.current?.scrollTop ?? 0;
-    smoothScrollStallFramesRef.current = 0;
+    smoothScrollFromPxRef.current = smoothScrollLastTopRef.current;
   }, [scrollerRef]);
 
-  const endSmoothScrollYield = useCallback(() => {
+  /**
+   * Take the viewport back, and say why.
+   *
+   * Every way this ends looks the same from outside — the follow simply starts
+   * writing again — and they are not the same fact. `stalled` after no travel
+   * at all is an animation that never ran, which is what a reader reports as
+   * the jump to latest having lost its animation; the same reason after most
+   * of the distance is the ordinary end of one.
+   */
+  const endSmoothScrollYield = useCallback((
+    reason: 'arrived' | 'stalled' | 'backstop' | 'superseded',
+  ) => {
+    if (smoothScrollUntilMsRef.current !== 0 && reason !== 'superseded') {
+      const travelledPx = (scrollerRef.current?.scrollTop ?? 0) - smoothScrollFromPxRef.current;
+      traceViewportRepeating(`smoothYield|${reason}|${Math.abs(travelledPx) < 1}`, {
+        location: 'followOutput.animatedScrollEnded',
+        message: 'the frame loop took the viewport back from its own animation',
+        travelPx: travelledPx,
+        data: () => ({
+          reason,
+          travelledPx: roundViewportPx(travelledPx),
+          fromPx: roundViewportPx(smoothScrollFromPxRef.current),
+          scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+        }),
+      });
+    }
     smoothScrollUntilMsRef.current = 0;
-    smoothScrollStallFramesRef.current = 0;
-  }, []);
+  }, [scrollerRef]);
 
   /**
    * Issue the one-shot content-end scroll, yielding the frame loop to it when
@@ -332,7 +375,8 @@ export function useFlowChatFollowOutput({
     if (behavior === 'smooth') {
       beginSmoothScrollYield();
     } else {
-      endSmoothScrollYield();
+      // An instant scroll of ours replaces whatever was travelling.
+      endSmoothScrollYield('superseded');
     }
     scrollToContentEnd(behavior);
   }, [beginSmoothScrollYield, endSmoothScrollYield, scrollToContentEnd]);
@@ -375,24 +419,29 @@ export function useFlowChatFollowOutput({
     }
 
     const onTarget = Math.abs(next.target - scroller.scrollTop) <= BOTTOM_EPSILON_PX;
-    if (performance.now() < smoothScrollUntilMsRef.current) {
+    if (smoothScrollUntilMsRef.current !== 0) {
       /*
        * An animated scroll of ours is in flight and heading for this same
        * target. Track the state, but leave the writing to it.
        *
-       * It ends when it stops moving the viewport, which is the animation's
-       * own answer rather than a guess at how long it takes: the browser
-       * scales the duration with the distance, and a jump to latest from the
-       * top of a transcript takes longer than anything else this issues.
-       * Arriving on target ends it too, for an animation whose last frames
-       * land inside `BOTTOM_EPSILON_PX` and stop reporting travel.
+       * It ends when the viewport stops moving for `SMOOTH_SCROLL_STALL_MS`,
+       * which is the animation's own answer rather than a guess at how long it
+       * takes: the browser scales the duration with the distance, and a jump to
+       * latest from the top of a transcript takes longer than anything else
+       * this issues. Arriving ends it too, and sooner.
        */
-      const movedPx = scroller.scrollTop - smoothScrollLastTopRef.current;
-      smoothScrollLastTopRef.current = scroller.scrollTop;
-      smoothScrollStallFramesRef.current = movedPx === 0
-        ? smoothScrollStallFramesRef.current + 1
-        : 0;
-      if (!onTarget && smoothScrollStallFramesRef.current < SMOOTH_SCROLL_STALL_FRAMES) {
+      const nowMs = performance.now();
+      if (scroller.scrollTop !== smoothScrollLastTopRef.current) {
+        smoothScrollLastTopRef.current = scroller.scrollTop;
+        smoothScrollLastMoveAtMsRef.current = nowMs;
+      }
+      if (onTarget) {
+        endSmoothScrollYield('arrived');
+      } else if (nowMs >= smoothScrollUntilMsRef.current) {
+        endSmoothScrollYield('backstop');
+      } else if (nowMs - smoothScrollLastMoveAtMsRef.current >= SMOOTH_SCROLL_STALL_MS) {
+        endSmoothScrollYield('stalled');
+      } else {
         return;
       }
       /*
@@ -401,7 +450,6 @@ export function useFlowChatFollowOutput({
        * Falling through rather than returning is what covers that growth on
        * this frame instead of the next one.
        */
-      endSmoothScrollYield();
     }
 
     if (!onTarget) {
@@ -615,7 +663,7 @@ export function useFlowChatFollowOutput({
       pinTurnIdRef.current = pinTurnId;
       pinScrollTopRef.current = null;
       pinAttemptsRef.current = 0;
-      endSmoothScrollYield();
+      endSmoothScrollYield('superseded');
       followStateRef.current = { mode: 'pin-turn-top', target: scroller?.scrollTop ?? contentEnd };
     } else {
       retirePin();
@@ -656,7 +704,7 @@ export function useFlowChatFollowOutput({
     }
     isFollowingOutputRef.current = false;
     setIsFollowingOutput(false);
-    endSmoothScrollYield();
+    endSmoothScrollYield('superseded');
     pendingSnapBackTargetRef.current = null;
     viewportOwner.release('follow-output');
     viewportOwner.release('snap-back');

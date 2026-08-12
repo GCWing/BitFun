@@ -9,7 +9,7 @@ import {
   TAIL_EASE_LINE_PX,
   TAIL_EASE_SNAP_ABOVE_PX,
 } from '../../utils/flowChatTailEase';
-import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
+import { SMOOTH_SCROLL_STALL_MS, useFlowChatFollowOutput } from './useFlowChatFollowOutput';
 import { useFlowChatViewportOwner } from './useFlowChatViewportOwner';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -606,6 +606,25 @@ describe('useFlowChatFollowOutput', () => {
 
   describe('standing down for its own animated scroll', () => {
     /**
+     * A clock the test moves by hand.
+     *
+     * The stand-down ends on a *duration* without travel, so a test that runs
+     * its frames in microseconds of real time proves nothing about it either
+     * way. Every frame below states how much time it took.
+     */
+    let nowMs = 0;
+    let nowSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      nowMs = 1_000;
+      nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    });
+
+    afterEach(() => {
+      nowSpy.mockRestore();
+    });
+
+    /**
      * Mounts a transcript whose content ends at 4500, settles there, and then
      * issues an animated jump to latest from the top.
      *
@@ -635,8 +654,9 @@ describe('useFlowChatFollowOutput', () => {
       act(() => controller?.enterFollowOutput('jump-to-latest'));
     }
 
-    /** One frame of an animation that has travelled `byPx` since the last. */
-    function animateFrame(byPx: number) {
+    /** One frame, `forMs` after the last, in which the animation moved `byPx`. */
+    function animateFrame(byPx: number, forMs = 5) {
+      nowMs += forMs;
       scroller.scrollTop += byPx;
       runNextFrame();
     }
@@ -653,33 +673,47 @@ describe('useFlowChatFollowOutput', () => {
       }
     });
 
+    it('sits through the frames a smooth scroll takes to visibly start', () => {
+      /*
+       * The regression this pair of constants exists for. A programmatic smooth
+       * scroll eases in — measured on WebView2, 2px in its first 50ms against
+       * 9734px to travel — and with scroll offsets quantised to 0.8px the early
+       * frames genuinely do not move. Counting two still *frames* took the
+       * viewport back 21ms after asking for the animation, and the reader saw
+       * an instant jump.
+       */
+      jumpToLatestFromTheTop();
+
+      for (let frame = 0; frame < 20; frame += 1) {
+        animateFrame(0);
+      }
+      expect(scroller.scrollTop).toBe(0);
+
+      // 100ms in, still inside the window, and the animation finally shows.
+      animateFrame(0.8);
+      expect(scroller.scrollTop).toBe(0.8);
+    });
+
     it('resumes once the animation stops moving the viewport', () => {
       jumpToLatestFromTheTop();
       animateFrame(50);
 
-      // One still frame is not an answer: the frame that issues an animation
-      // can run before the browser has ticked it once.
-      animateFrame(0);
+      // Still inside the window a stalling animation is given.
+      animateFrame(0, SMOOTH_SCROLL_STALL_MS - 10);
       expect(scroller.scrollTop).toBe(50);
 
-      animateFrame(0);
+      animateFrame(0, 20);
       expect(scroller.scrollTop).toBe(4500);
     });
 
     it('takes the viewport back on the backstop when the animation never ends', () => {
-      const nowSpy = vi.spyOn(performance, 'now');
-      try {
-        nowSpy.mockReturnValue(0);
-        jumpToLatestFromTheTop();
-        // Still travelling, so nothing but the backstop can end this.
-        nowSpy.mockReturnValue(1_300);
-
-        animateFrame(50);
-
-        expect(scroller.scrollTop).toBe(4500);
-      } finally {
-        nowSpy.mockRestore();
+      jumpToLatestFromTheTop();
+      // Travelling the whole time, so nothing but the backstop can end this.
+      for (let frame = 0; frame < 12; frame += 1) {
+        animateFrame(1, 100);
       }
+
+      expect(scroller.scrollTop).toBe(4500);
     });
   });
 
