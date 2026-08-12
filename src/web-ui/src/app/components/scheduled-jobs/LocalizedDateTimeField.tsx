@@ -4,21 +4,24 @@
  * A native `<input type="datetime-local">` renders in the *browser's* locale,
  * which Chromium takes from the OS and does not read from the `lang`
  * attribute. Running the UI in Chinese on an English system therefore shows
- * `08/12/2026, 04:48 AM` inside an otherwise Chinese form. This control keeps
- * the same `YYYY-MM-DDTHH:mm` value contract as the native input so callers are
- * unchanged, but lays the segments out in the order the active locale reads.
+ * `08/12/2026, 04:48 AM` inside an otherwise Chinese form.
+ *
+ * This is an ordinary text input so it looks and behaves like every other field
+ * in the form, showing `2026/08/12 04:48` in Chinese and `08/12/2026 04:48` in
+ * English. A calendar button opens the browser's own picker for anyone who
+ * would rather click than type. Callers keep the native
+ * `YYYY-MM-DDTHH:mm` value contract.
  */
 
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays } from 'lucide-react';
+import { IconButton, Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import {
-  SEGMENTS,
-  clampSegmentToRange,
-  composeDateTimeValue,
-  parseDateTimeValue,
-  resolveDateSegmentOrder,
-  type ParsedValue,
-  type SegmentId,
+  dateTimeFormatHint,
+  formatDateTimeText,
+  parseDateTimeText,
+  resolveDateFieldOrder,
 } from './localizedDateTime';
 
 export interface LocalizedDateTimeFieldProps {
@@ -40,89 +43,105 @@ const LocalizedDateTimeField: React.FC<LocalizedDateTimeFieldProps> = ({
   'aria-label': ariaLabel,
 }) => {
   const { t, currentLanguage } = useI18n('common');
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const pickerRef = useRef<HTMLInputElement | null>(null);
+  const editingRef = useRef(false);
 
-  const parsed = useMemo(() => parseDateTimeValue(value), [value]);
-  const dateOrder = useMemo(() => resolveDateSegmentOrder(currentLanguage), [currentLanguage]);
+  const order = useMemo(() => resolveDateFieldOrder(currentLanguage), [currentLanguage]);
 
-  const emit = useCallback((next: ParsedValue) => {
-    const composed = composeDateTimeValue(next);
-    // Hold the edit until every segment is filled; a partial date has no
-    // meaningful timestamp and clearing one field should not wipe the value.
-    if (composed !== null) onChange(composed);
-  }, [onChange]);
+  // Local text so partial input survives; a fully controlled field would reject
+  // every keystroke until the whole date parsed, which makes it untypable.
+  const [text, setText] = useState(() => formatDateTimeText(value, order));
 
-  const handleSegmentChange = useCallback((id: SegmentId, raw: string) => {
-    const spec = SEGMENTS[id];
-    const digits = raw.replace(/\D/g, '').slice(0, spec.length);
-    emit({ ...parsed, [id]: digits });
+  // Adopt external changes (loading a job, switching locale) unless the user is
+  // mid-edit, where overwriting their keystrokes would fight them.
+  useEffect(() => {
+    if (editingRef.current) return;
+    setText(formatDateTimeText(value, order));
+  }, [order, value]);
 
-    // Advance once a segment is unambiguously complete, so typing flows across
-    // the row the way the native control does.
-    if (digits.length === spec.length) {
-      const inputs = containerRef.current?.querySelectorAll<HTMLInputElement>('input');
-      if (!inputs) return;
-      const current = Array.from(inputs).findIndex(input => input.dataset.segment === id);
-      inputs[current + 1]?.focus();
+  const commitText = useCallback((nextText: string) => {
+    setText(nextText);
+
+    if (!nextText.trim()) {
+      onChange('');
+      return;
     }
-  }, [emit, parsed]);
 
-  const handleSegmentBlur = useCallback((id: SegmentId, raw: string) => {
-    const normalized = clampSegmentToRange(raw, SEGMENTS[id]);
-    if (!normalized) return;
-    emit({ ...parsed, [id]: normalized });
-  }, [emit, parsed]);
+    const parsed = parseDateTimeText(nextText, order);
+    if (parsed) onChange(parsed);
+  }, [onChange, order]);
 
-  const renderSegment = (id: SegmentId) => {
-    const spec = SEGMENTS[id];
-    return (
-      <input
-        key={id}
-        type="text"
-        inputMode="numeric"
-        data-segment={id}
-        className={`bf-datetime-field__segment bf-datetime-field__segment--${id}`}
-        value={parsed[id]}
-        disabled={disabled}
-        maxLength={spec.length}
-        size={spec.length}
-        placeholder={t(`dateTimeField.segments.${id}`)}
-        aria-label={t(`dateTimeField.segments.${id}`)}
-        onChange={event => handleSegmentChange(id, event.currentTarget.value)}
-        onBlur={event => handleSegmentBlur(id, event.currentTarget.value)}
-        onFocus={event => event.currentTarget.select()}
-      />
-    );
-  };
+  const handleBlur = useCallback(() => {
+    editingRef.current = false;
+
+    // Normalize whatever parsed into the canonical rendering, so `2026/8/2 4:8`
+    // settles as `2026/08/02 04:08` instead of staying half-typed.
+    const parsed = text.trim() ? parseDateTimeText(text, order) : null;
+    setText(parsed ? formatDateTimeText(parsed, order) : text);
+  }, [order, text]);
+
+  const openPicker = useCallback(() => {
+    const picker = pickerRef.current;
+    if (!picker) return;
+    picker.value = value;
+    picker.showPicker?.();
+  }, [value]);
+
+  const canOpenPicker = typeof HTMLInputElement !== 'undefined'
+    && 'showPicker' in HTMLInputElement.prototype;
 
   return (
     <div
-      ref={containerRef}
-      className={[
-        'bf-datetime-field',
-        error ? 'bf-datetime-field--error' : '',
-        disabled ? 'bf-datetime-field--disabled' : '',
-        className ?? '',
-      ].filter(Boolean).join(' ')}
+      className={['bf-datetime-field', className ?? ''].filter(Boolean).join(' ')}
       data-bf-component="localized-datetime-field"
       data-bf-part="root"
       data-bf-state={error ? 'error' : undefined}
-      role="group"
-      aria-label={ariaLabel ?? t('dateTimeField.label')}
     >
-      <span className="bf-datetime-field__group" data-bf-component="localized-datetime-field" data-bf-part="date">
-        {dateOrder.map((id, index) => (
-          <React.Fragment key={id}>
-            {index > 0 ? <span className="bf-datetime-field__sep" aria-hidden="true">/</span> : null}
-            {renderSegment(id)}
-          </React.Fragment>
-        ))}
-      </span>
-      <span className="bf-datetime-field__group" data-bf-component="localized-datetime-field" data-bf-part="time">
-        {renderSegment('hour')}
-        <span className="bf-datetime-field__sep" aria-hidden="true">:</span>
-        {renderSegment('minute')}
-      </span>
+      <Input
+        size="small"
+        value={text}
+        error={error}
+        disabled={disabled}
+        inputMode="numeric"
+        placeholder={dateTimeFormatHint(order)}
+        aria-label={ariaLabel ?? t('dateTimeField.label')}
+        className="bf-datetime-field__input"
+        onFocus={() => { editingRef.current = true; }}
+        onChange={event => commitText(event.currentTarget.value)}
+        onBlur={handleBlur}
+      />
+
+      {canOpenPicker ? (
+        <>
+          <IconButton
+            type="button"
+            size="xs"
+            disabled={disabled}
+            aria-label={t('dateTimeField.openPicker')}
+            tooltip={t('dateTimeField.openPicker')}
+            onClick={openPicker}
+          >
+            <CalendarDays size={14} />
+          </IconButton>
+          {/*
+            Only ever opened programmatically: the browser picker is a good
+            input surface, its inline text rendering is the part we replaced.
+          */}
+          <input
+            ref={pickerRef}
+            type="datetime-local"
+            className="bf-datetime-field__picker"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={event => {
+              editingRef.current = false;
+              const picked = event.currentTarget.value;
+              setText(formatDateTimeText(picked, order));
+              onChange(picked);
+            }}
+          />
+        </>
+      ) : null}
     </div>
   );
 };

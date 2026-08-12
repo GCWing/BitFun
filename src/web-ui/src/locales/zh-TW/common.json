@@ -1553,12 +1553,6 @@
   "retry": "重試",
   "dateTimeField": {
     "label": "日期與時間",
-    "segments": {
-      "year": "年",
-      "month": "月",
-      "day": "日",
-      "hour": "時",
-      "minute": "分"
-    }
+    "openPicker": "開啟日期選擇器"
   }
 }

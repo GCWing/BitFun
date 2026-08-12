@@ -1553,12 +1553,6 @@
   "retry": "Retry",
   "dateTimeField": {
     "label": "Date and time",
-    "segments": {
-      "year": "YYYY",
-      "month": "MM",
-      "day": "DD",
-      "hour": "HH",
-      "minute": "mm"
-    }
+    "openPicker": "Open the date picker"
   }
 }

@@ -1553,12 +1553,6 @@
   "retry": "重试",
   "dateTimeField": {
     "label": "日期与时间",
-    "segments": {
-      "year": "年",
-      "month": "月",
-      "day": "日",
-      "hour": "时",
-      "minute": "分"
-    }
+    "openPicker": "打开日期选择器"
   }
 }

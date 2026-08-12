@@ -1,86 +1,99 @@
 /**
- * Pure date-time segment helpers for `LocalizedDateTimeField`.
+ * Text <-> timestamp helpers for `LocalizedDateTimeField`.
  *
- * Kept out of the component file so the ordering and value rules can be tested
- * directly, and so the component module only exports a component.
+ * The field shows and accepts a plain localized string (`2026/08/12 04:48` in
+ * Chinese, `08/12/2026 04:48` in English) while callers keep the native
+ * `YYYY-MM-DDTHH:mm` value contract.
+ *
+ * Kept apart from the component so the parsing rules can be tested directly.
  */
 
 /** Locales that read year-first. Everything else falls back to month-first. */
 const YEAR_FIRST_LOCALE_PREFIXES = ['zh', 'ja', 'ko'];
 
-export type SegmentId = 'year' | 'month' | 'day' | 'hour' | 'minute';
+export type DateFieldOrder = 'year-first' | 'month-first';
 
-export interface SegmentSpec {
-  id: SegmentId;
-  length: number;
-  min: number;
-  max: number;
+/**
+ * Field order for a locale, driven by the app's language rather than the
+ * browser's — which is the whole reason this control exists.
+ */
+export function resolveDateFieldOrder(locale: string | null | undefined): DateFieldOrder {
+  const language = String(locale ?? '').toLowerCase();
+  return YEAR_FIRST_LOCALE_PREFIXES.some(prefix => language.startsWith(prefix))
+    ? 'year-first'
+    : 'month-first';
 }
 
-export const SEGMENTS: Record<SegmentId, SegmentSpec> = {
-  year: { id: 'year', length: 4, min: 1970, max: 9999 },
-  month: { id: 'month', length: 2, min: 1, max: 12 },
-  day: { id: 'day', length: 2, min: 1, max: 31 },
-  hour: { id: 'hour', length: 2, min: 0, max: 23 },
-  minute: { id: 'minute', length: 2, min: 0, max: 59 },
-};
-
-export interface ParsedValue {
-  year: string;
-  month: string;
-  day: string;
-  hour: string;
-  minute: string;
-}
-
-const EMPTY_PARSED: ParsedValue = { year: '', month: '', day: '', hour: '', minute: '' };
-
-export function parseDateTimeValue(value: string): ParsedValue {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value.trim());
-  if (!match) return EMPTY_PARSED;
-  return { year: match[1], month: match[2], day: match[3], hour: match[4], minute: match[5] };
-}
-
-export function clampSegmentToRange(raw: string, spec: SegmentSpec): string {
-  const digits = raw.replace(/\D/g, '').slice(0, spec.length);
-  if (!digits) return '';
-  const numeric = Math.min(Math.max(Number(digits), spec.min), spec.max);
-  return String(numeric).padStart(spec.length, '0');
-}
-
-/** Days in the given month, so 31 February normalizes instead of rolling over. */
+/** Days in the given month, so 31 February clamps instead of rolling over. */
 function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-export function composeDateTimeValue(parsed: ParsedValue): string | null {
-  const { year, month, day, hour, minute } = parsed;
-  if (!year || !month || !day || !hour || !minute) return null;
+function pad(value: number, length = 2): string {
+  return String(value).padStart(length, '0');
+}
 
-  const yearNumber = Number(year);
-  const monthNumber = Math.min(Math.max(Number(month), 1), 12);
-  const dayNumber = Math.min(
-    Math.max(Number(day), 1),
-    daysInMonth(yearNumber, monthNumber),
-  );
+/** Renders a native datetime-local value as localized display text. */
+export function formatDateTimeText(value: string, order: DateFieldOrder): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value.trim());
+  if (!match) return '';
 
-  return [
-    String(yearNumber).padStart(4, '0'),
-    String(monthNumber).padStart(2, '0'),
-    String(dayNumber).padStart(2, '0'),
-  ].join('-')
-    + 'T'
-    + [hour, minute].join(':');
+  const [, year, month, day, hour, minute] = match;
+  const date = order === 'year-first'
+    ? `${year}/${month}/${day}`
+    : `${month}/${day}/${year}`;
+  return `${date} ${hour}:${minute}`;
 }
 
 /**
- * Date segment order for a locale: year-first for CJK, month-first otherwise.
+ * Reads localized display text back into a native datetime-local value.
  *
- * Driven by the app's own locale rather than the browser's, which is the whole
- * point of this control.
+ * Deliberately forgiving about separators, so `2026-08-12 04:48`,
+ * `2026/8/12 4:8` and `2026.08.12 04:48` all work. The four-digit group
+ * identifies the year wherever it sits, which keeps a value pasted in the other
+ * locale's order readable instead of silently landing on the wrong date.
+ * Returns null when the text cannot be read as a complete date and time.
  */
-export function resolveDateSegmentOrder(locale: string | null | undefined): SegmentId[] {
-  const language = String(locale ?? '').toLowerCase();
-  const yearFirst = YEAR_FIRST_LOCALE_PREFIXES.some(prefix => language.startsWith(prefix));
-  return yearFirst ? ['year', 'month', 'day'] : ['month', 'day', 'year'];
+export function parseDateTimeText(text: string, order: DateFieldOrder): string | null {
+  const groups = text.match(/\d+/g);
+  if (!groups || groups.length < 5) return null;
+
+  const [a, b, c, hourText, minuteText] = groups;
+
+  let yearText: string;
+  let monthText: string;
+  let dayText: string;
+
+  if (a.length === 4) {
+    [yearText, monthText, dayText] = [a, b, c];
+  } else if (c.length === 4) {
+    [monthText, dayText, yearText] = [a, b, c];
+  } else if (order === 'year-first') {
+    [yearText, monthText, dayText] = [a, b, c];
+  } else {
+    [monthText, dayText, yearText] = [a, b, c];
+  }
+
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (![year, month, day, hour, minute].every(Number.isFinite)) return null;
+  if (year < 1970 || year > 9999) return null;
+  if (month < 1 || month > 12) return null;
+  if (day < 1) return null;
+  if (hour > 23 || minute > 59) return null;
+
+  // Clamp rather than reject: someone typing 31 in a 30-day month means the end
+  // of that month, and rolling into the next one would be a silent wrong date.
+  const clampedDay = Math.min(day, daysInMonth(year, month));
+
+  return `${pad(year, 4)}-${pad(month)}-${pad(clampedDay)}T${pad(hour)}:${pad(minute)}`;
+}
+
+/** Example string used as the field placeholder, in the locale's own order. */
+export function dateTimeFormatHint(order: DateFieldOrder): string {
+  return order === 'year-first' ? 'YYYY/MM/DD HH:mm' : 'MM/DD/YYYY HH:mm';
 }
