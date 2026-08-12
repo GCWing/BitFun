@@ -315,7 +315,9 @@
     },
     "slowestLabels": {
       "modelCall": "Turn {{turn}} model call",
-      "modelCallUnknown": "Model call"
+      "modelCallUnknown": "Model call",
+      "turn": "Turn {{turn}}",
+      "turnUnknown": "Turn"
     },
     "slowest": {
       "details": {

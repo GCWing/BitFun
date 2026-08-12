@@ -280,7 +280,9 @@
     },
     "slowestLabels": {
       "modelCall": "第 {{turn}} 回合模型呼叫",
-      "modelCallUnknown": "模型呼叫"
+      "modelCallUnknown": "模型呼叫",
+      "turn": "第 {{turn}} 回合",
+      "turnUnknown": "回合"
     },
     "slowest": {
       "details": {

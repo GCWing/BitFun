@@ -201,6 +201,19 @@ export function getModelHelp(
   return undefined;
 }
 
+/**
+ * The Turn number a reader sees, from the report's own zero-based index.
+ *
+ * Exported because the report is read in two files and the offset used to be a
+ * convention rather than a function: every call site in the panel applied it,
+ * `getSlowSpanLabel` did not, and a row therefore read "Turn 7" while its own
+ * jump asked for Turn 8 — which is the Turn the rail, numbering the same way,
+ * calls 8. The label was the outlier; the navigation was right.
+ */
+export function getDisplayTurnIndex(rawTurnIndex: number): number {
+  return Math.max(0, Math.trunc(rawTurnIndex)) + 1;
+}
+
 export function getSlowSpanLabel(
   span: SessionUsageReport['slowest'][number],
   t: Translator
@@ -210,8 +223,20 @@ export function getSlowSpanLabel(
   }
   if (span.kind === 'model') {
     return typeof span.turnIndex === 'number' && Number.isFinite(span.turnIndex)
-      ? t('usage.slowestLabels.modelCall', { turn: span.turnIndex })
+      ? t('usage.slowestLabels.modelCall', { turn: getDisplayTurnIndex(span.turnIndex) })
       : t('usage.slowestLabels.modelCallUnknown');
+  }
+  /*
+   * A Turn span's `label` is the one display string the report synthesises
+   * itself — `format!("turn {}", turn.turn_index)` — so it arrives hard-coded
+   * in English and numbered from zero, and rendering it put "turn 7" beside a
+   * row this file had already numbered 8. Built here instead, from the same
+   * index and the same offset as every other reader.
+   */
+  if (span.kind === 'turn') {
+    return typeof span.turnIndex === 'number' && Number.isFinite(span.turnIndex)
+      ? t('usage.slowestLabels.turn', { turn: getDisplayTurnIndex(span.turnIndex) })
+      : t('usage.slowestLabels.turnUnknown');
   }
   return span.label;
 }

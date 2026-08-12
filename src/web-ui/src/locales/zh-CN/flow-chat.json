@@ -280,7 +280,9 @@
     },
     "slowestLabels": {
       "modelCall": "第 {{turn}} 轮模型调用",
-      "modelCallUnknown": "模型调用"
+      "modelCallUnknown": "模型调用",
+      "turn": "第 {{turn}} 轮",
+      "turnUnknown": "轮次"
     },
     "slowest": {
       "details": {
