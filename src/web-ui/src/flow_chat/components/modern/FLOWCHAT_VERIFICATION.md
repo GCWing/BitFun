@@ -170,3 +170,6 @@ group does not renumber the others.
 4. Navigate to a far Turn and start scrolling with the wheel before it comes to
    rest. The gesture wins immediately and nothing pulls the viewport back to
    the Turn afterwards, including several seconds later.
+5. From the Session Usage report, click a tool call and a slow span. Each must
+   come to rest with that item centred, in **one** movement — no landing on the
+   Turn followed by a slide onto the item a few frames later.

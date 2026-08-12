@@ -159,6 +159,11 @@ export interface VirtualMessageListRef {
     turnId: string,
     options?: TurnNavigationOptions,
   ) => FlowChatTurnNavigationStatus;
+  /**
+   * Centre a flow item inside its Turn, through the register.
+   * `false` means it is not rendered yet, so the caller should ask again.
+   */
+  focusFlowItem: (flowItemId: string) => boolean;
 }
 
 export interface VirtualMessageListProps {
@@ -1254,6 +1259,38 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     navigateToTurnWithStatus(turnId, options) !== 'rejected'
   ), [navigateToTurnWithStatus]);
 
+  /**
+   * Centre a flow item — a tool call, a text block — inside its Turn.
+   *
+   * The virtualizer cannot be asked for this: it aligns *items*, and a flow
+   * item lives inside one, so a centred model round is not a centred tool call.
+   * That is the carve-out the contract already makes for a target that is not
+   * an item, and the offset goes through the register like every other write.
+   *
+   * Returns whether the item was there to aim at. A focus request arriving
+   * before its Turn has rendered asks again on the next frame.
+   */
+  const focusFlowItem = useCallback((flowItemId: string): boolean => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller || !flowItemId) return false;
+    const element = scroller.querySelector<HTMLElement>(
+      `[data-flow-item-id="${CSS.escape(flowItemId)}"]`,
+    );
+    if (!element) return false;
+
+    exitFollowOutput('scroll-to-index');
+    const scrollerRect = scroller.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    const centred = scroller.scrollTop + elementRect.top - scrollerRect.top
+      - Math.max(0, (scroller.clientHeight - elementRect.height) / 2);
+    viewportOwner.write({
+      owner: 'one-shot-navigation',
+      holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
+      topPx: Math.max(0, Math.min(scroller.scrollHeight - scroller.clientHeight, centred)),
+    });
+    return true;
+  }, [exitFollowOutput, viewportOwner]);
+
   const prepareTurnNavigation = useCallback((
     turnId: string,
     options?: TurnNavigationOptions,
@@ -1618,8 +1655,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     navigateToTurn,
     navigateToTurnWithStatus,
     prepareTurnNavigation,
+    focusFlowItem,
   }), [
     clearSearchMatch,
+    focusFlowItem,
     isTurnRenderedInViewport,
     isTurnTextRenderedInViewport,
     navigateToTurn,

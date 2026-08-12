@@ -54,10 +54,18 @@ before reporting a defect as new.
   that never happened is invisible everywhere else, and "nothing happened" is
   the more common report. Anything reachable every frame goes through
   `traceViewportRepeating`, keyed by what distinguishes one run from another.
-- A viewport write that does not go through the register is wrapped in
-  `traceViewportPlacement`, which samples what became of it. There is exactly
-  one — the cross-session focus request — and it may not become two without
-  evidence that a second is needed.
+- There are no viewport writes outside the register. Adding one means wrapping
+  it in `traceViewportPlacement` and having a reason it cannot be a register
+  write; both writers that used to be outside are gone.
+- One user action gets one painted placement. A focus request that first
+  navigates to a Turn and then aims at an item inside it does both in the same
+  task — two placements a few frames apart are two movements the reader sees,
+  and the sampled drift lands on the first one, not the second.
+- Centring a flow item is `VirtualMessageListRef.focusFlowItem`, not
+  `element.scrollIntoView`. The virtualizer aligns *items*, so it cannot express
+  "this tool call inside this Turn"; the computed offset is the contract's
+  carve-out for a target that is not an item, and it still goes through the
+  register.
 - One-shot Turn/search/history navigation remains inside `VirtualMessageList`.
 
 ## History Paging and the Anchor

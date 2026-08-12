@@ -7,7 +7,6 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
-import { traceViewportPlacement } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { useModernFlowChatStore, type VirtualItem } from '../../store/modernFlowChatStore';
 import { flowChatManager } from '../../services/FlowChatManager';
@@ -35,14 +34,6 @@ async function waitForCondition(predicate: () => boolean, timeoutMs: number): Pr
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
   }
   return predicate();
-}
-
-async function waitForAnimationFrames(frameCount: number): Promise<void> {
-  let remaining = Math.max(0, frameCount);
-  while (remaining > 0) {
-    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-    remaining -= 1;
-  }
 }
 
 function navigateToResolvedTarget(
@@ -149,8 +140,6 @@ export function useFlowChatNavigation({
 
       if (!itemId) return;
 
-      await waitForAnimationFrames(2);
-
       const maxAttempts = 120;
       let attempts = 0;
       let expandedExploreGroupId: string | null = null;
@@ -170,7 +159,7 @@ export function useFlowChatNavigation({
         }
         const focusItemId = currentTarget.focusItemId ?? itemId;
         const element = document.querySelector(`[data-flow-item-id="${CSS.escape(focusItemId)}"]`) as HTMLElement | null;
-        if (!element) {
+        if (!element || !virtualListRef.current?.focusFlowItem(focusItemId)) {
           if (
             attempts % 12 === 0
             && !delegatedTurnNavigationAttempted
@@ -184,26 +173,24 @@ export function useFlowChatNavigation({
           return;
         }
 
-        /*
-         * Not routed through the viewport register, and traced because of it.
-         * A focus request carries no user gesture, so nothing tells the anchor
-         * this movement was deliberate — a drift in the outcome sample is that
-         * placement being undone a frame later.
-         */
-        traceViewportPlacement(
-          document.querySelector<HTMLElement>('[data-flowchat-scroller]'),
-          {
-            location: 'navigation.scrollIntoView',
-            message: 'focus request centred an item',
-            data: () => ({ sessionId, focusItemId, attempts }),
-          },
-          () => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' }),
-        );
         element.classList.add('flowchat-flow-item--focused');
         window.setTimeout(() => element.classList.remove('flowchat-flow-item--focused'), 1600);
       };
 
-      requestAnimationFrame(tryFocus);
+      /*
+       * Tried in this task before yielding a frame, because the Turn navigation
+       * above has already placed the viewport and every frame between the two
+       * placements is one the reader watches the transcript land and jump
+       * again. Measured from two usage-report clicks: the Turn navigation
+       * settled 178px and 334.7px away from where it put itself, because this
+       * aim arrived 41ms — three frames — later, and the intermediate position
+       * was painted (`nextFramePx` equalled it both times).
+       *
+       * When the item is not rendered yet the retry loop below is unchanged,
+       * and the Turn placement is what the reader looks at until it is. That
+       * part is unavoidable: something has to be on screen while we wait.
+       */
+      tryFocus();
     });
 
     return unsubscribe;

@@ -188,19 +188,37 @@ which.
 **A placement is recorded with what became of it.** `traceViewportPlacement`
 samples the offset on the next frame and again once things have settled, and
 reports the drift from the target. Read against the register's writes in the
-same window, the drift says *who* took it away. This is how the one writer that
-does not go through the register — the cross-session focus request in
-`useFlowChatNavigation`, which lands an `element.scrollIntoView` with no gesture
-behind it — is watched without being changed.
+same window, the drift says *who* took it away. Every deliberate write now goes
+through the register; the two that did not are both gone, and what the sampling
+found before they went is worth keeping, because in both cases it was not what
+the probe was written to catch.
 
-There were two. The other was a sticky indicator naming the Task you were
-reading inside, and it turned out never to have run: its selector wanted
+**The focus request was overriding, not overridden.** A usage-report click
+lands a Turn navigation through the register and then centres the flow item
+that was actually clicked — a tool call inside the Turn. The comment on the
+second write predicted the anchor undoing it, since a focus request carries no
+gesture. It never did: measured over four clicks the anchor stood down 93 times
+and the register refused nothing, and the two item aims drifted 0px. The drift
+was on the *first* write. The Turn navigation settled 178px and 334.7px from
+where it had put itself, because the item aim arrived 41ms — three frames —
+later, and `nextFramePx` equalled the Turn placement both times, so the reader
+watched the transcript land and then move. The aim now goes through
+`focusFlowItem` on the list, which is a register write, and is attempted in the
+same task as the Turn navigation so that only the final position is painted.
+When the item is not rendered yet the retry loop still runs, and the Turn
+placement is what is on screen until it lands — that part is unavoidable.
+
+**The sticky Task indicator had never run at all.** Its selector wanted
 `.flowchat-flow-item[data-flow-item-id][data-tool-name]` on one element, and
 `data-tool-name` has only ever been on the tool card *inside* that wrapper —
 added two months later, by a commit adding e2e locators, for an unrelated
-reason. So the probe written to gather evidence about it could not have fired
-either. Deleted rather than repaired; if the affordance is wanted again it
+reason. So its probe could not have fired either, which is why there was no
+evidence rather than no problem. Deleted; if the affordance is wanted again it
 needs registering as well as fixing.
+
+`traceViewportPlacement` stays for the next writer that has to sit outside the
+register, and for what it proved here: read against the register's writes, it
+answers *which of two placements won* as readily as *who undid one*.
 
 Everything here can fire on every frame, so repeated identical events collapse
 into one entry per 500ms carrying the count and travel it stands for. The key
