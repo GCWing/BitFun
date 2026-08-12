@@ -1,0 +1,106 @@
+{
+  "title": "待办事项",
+  "header": {
+    "summary": "共 {{total}} 项 · {{dueSoon}} 项将在 24 小时内执行"
+  },
+  "actions": {
+    "newTodo": "新建待办",
+    "refresh": "刷新",
+    "edit": "编辑待办",
+    "delete": "删除待办",
+    "toggleEnabled": "切换启用状态"
+  },
+  "list": {
+    "title": "24 小时内",
+    "hint": "一天内将要执行的任务，按时间先后排列。",
+    "empty": "未来 24 小时内没有待执行的任务。"
+  },
+  "calendar": {
+    "title": "更晚",
+    "hint": "24 小时之后执行的任务。",
+    "previousMonth": "上个月",
+    "nextMonth": "下个月",
+    "today": "今天",
+    "dayDetailTitle": "选中日期",
+    "dayEmpty": "这一天没有安排任务。",
+    "clearDay": "清除选择",
+    "dayCount": "已安排 {{total}} 项",
+    "moreCount": "还有 {{total}} 项"
+  },
+  "badges": {
+    "nextRun": "下次执行",
+    "overdue": "已逾期"
+  },
+  "relative": {
+    "now": "即将执行",
+    "overdue": "已逾期",
+    "inMinutes": "{{value}} 分钟后",
+    "inHours": "{{value}} 小时后",
+    "inOneDay": "1 天后",
+    "inDays": "{{value}} 天后"
+  },
+  "schedule": {
+    "once": "单次：{{at}}",
+    "every": "每 {{everyMinutes}} 分钟",
+    "cron": "Cron：{{expr}}",
+    "cronWithTz": "Cron：{{expr}} · {{tz}}",
+    "kinds": {
+      "at": "单次",
+      "every": "间隔",
+      "cron": "Cron"
+    }
+  },
+  "target": {
+    "existingSession": "已有会话",
+    "newSession": "新建 {{agentType}} 会话"
+  },
+  "inactive": {
+    "disabled": "已暂停",
+    "invalid": "计划无效",
+    "title": "没有后续执行（{{total}}）"
+  },
+  "editor": {
+    "createTitle": "新建待办",
+    "editTitle": "编辑待办",
+    "noWorkspace": "请先打开一个工作区：定时执行需要有运行的位置。",
+    "fields": {
+      "name": "名称",
+      "agentType": "Agent 类型",
+      "scheduleKind": "计划类型",
+      "at": "执行时间",
+      "everyMinutes": "间隔（分钟）",
+      "anchor": "起算时间（可选）",
+      "cronExpr": "Cron 表达式",
+      "timezone": "时区（可选）",
+      "enabled": "启用",
+      "prompt": "提示词",
+      "runsIn": "运行位置"
+    },
+    "placeholders": {
+      "name": "例如：每日站会总结",
+      "workspace": "选择工作区",
+      "agentType": "例如：agentic 或 Cowork",
+      "anchor": "留空则以创建时间为准",
+      "timezone": "例如：Asia/Shanghai",
+      "prompt": "到点时希望 Agent 做什么？"
+    },
+    "hints": {
+      "cronExpr": "字段依次为：分 时 日 月 周。星期取值 1-7，其中 1 表示周日，因此 0 8 * * 2 表示每周一 08:00。",
+      "boundSession": "该待办绑定了已有会话，保存后仍在该会话中执行。"
+    },
+    "actions": {
+      "create": "创建待办",
+      "save": "保存修改"
+    }
+  },
+  "deleteDialog": {
+    "title": "确定删除「{{name}}」？"
+  },
+  "messages": {
+    "loadFailed": "加载待办失败：{{error}}",
+    "saveFailed": "保存待办失败：{{error}}",
+    "deleteFailed": "删除待办失败：{{error}}",
+    "updateFailed": "更新待办失败：{{error}}",
+    "workspaceRequired": "请先为该待办选择一个工作区。"
+  }
+}

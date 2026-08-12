@@ -1,0 +1,106 @@
+{
+  "title": "Todos",
+  "header": {
+    "summary": "{{total}} scheduled · {{dueSoon}} due within 24 hours"
+  },
+  "actions": {
+    "newTodo": "New Todo",
+    "refresh": "Refresh",
+    "edit": "Edit Todo",
+    "delete": "Delete Todo",
+    "toggleEnabled": "Toggle enabled state"
+  },
+  "list": {
+    "title": "Next 24 hours",
+    "hint": "Runs due within a day, soonest first.",
+    "empty": "Nothing is due in the next 24 hours."
+  },
+  "calendar": {
+    "title": "Later",
+    "hint": "Runs more than 24 hours away.",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today",
+    "dayDetailTitle": "Selected day",
+    "dayEmpty": "Nothing scheduled on this day.",
+    "clearDay": "Clear",
+    "dayCount": "Scheduled: {{total}}",
+    "moreCount": "+{{total}} more"
+  },
+  "badges": {
+    "nextRun": "Next run",
+    "overdue": "Overdue"
+  },
+  "relative": {
+    "now": "Any moment",
+    "overdue": "Overdue",
+    "inMinutes": "in {{value}} min",
+    "inHours": "in {{value}} hr",
+    "inOneDay": "in 1 day",
+    "inDays": "in {{value}} days"
+  },
+  "schedule": {
+    "once": "Once at {{at}}",
+    "every": "Every {{everyMinutes}} minutes",
+    "cron": "Cron: {{expr}}",
+    "cronWithTz": "Cron: {{expr}} · {{tz}}",
+    "kinds": {
+      "at": "One-time",
+      "every": "Interval",
+      "cron": "Cron"
+    }
+  },
+  "target": {
+    "existingSession": "Existing session",
+    "newSession": "New {{agentType}} session"
+  },
+  "inactive": {
+    "disabled": "Paused",
+    "invalid": "Invalid schedule",
+    "title": "No upcoming run ({{total}})"
+  },
+  "editor": {
+    "createTitle": "New Todo",
+    "editTitle": "Edit Todo",
+    "noWorkspace": "Open a workspace before creating a Todo — a scheduled run needs somewhere to execute.",
+    "fields": {
+      "name": "Name",
+      "agentType": "Agent type",
+      "scheduleKind": "Schedule",
+      "at": "Run at",
+      "everyMinutes": "Interval (minutes)",
+      "anchor": "Anchor time (optional)",
+      "cronExpr": "Cron expression",
+      "timezone": "Timezone (optional)",
+      "enabled": "Enabled",
+      "prompt": "Prompt",
+      "runsIn": "Runs in"
+    },
+    "placeholders": {
+      "name": "For example: Daily standup summary",
+      "workspace": "Select a workspace",
+      "agentType": "For example: agentic or Cowork",
+      "anchor": "Leave blank to use the creation time",
+      "timezone": "For example: Asia/Shanghai",
+      "prompt": "What should the agent do when this Todo fires?"
+    },
+    "hints": {
+      "cronExpr": "Fields are minute hour day month weekday. Weekday runs 1-7 with Sunday as 1, so 0 8 * * 2 is every Monday at 08:00.",
+      "boundSession": "This Todo is bound to an existing session and keeps running there."
+    },
+    "actions": {
+      "create": "Create Todo",
+      "save": "Save changes"
+    }
+  },
+  "deleteDialog": {
+    "title": "Delete \"{{name}}\"?"
+  },
+  "messages": {
+    "loadFailed": "Failed to load Todos: {{error}}",
+    "saveFailed": "Failed to save Todo: {{error}}",
+    "deleteFailed": "Failed to delete Todo: {{error}}",
+    "updateFailed": "Failed to update Todo: {{error}}",
+    "workspaceRequired": "Select a workspace for this Todo first."
+  }
+}

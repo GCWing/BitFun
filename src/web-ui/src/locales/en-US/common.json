@@ -77,6 +77,7 @@
       "sessions": "Sessions",
       "project": "Directory",
       "persona": "Assistant",
+      "todos": "Todos",
       "agents": "Agents",
       "skills": "Skills",
       "tools": "Tools",
@@ -87,6 +88,7 @@
     },
     "tooltips": {
       "persona": "Assistant — create and manage all assistant instances",
+      "todos": "Todos — every scheduled task, by list and calendar",
       "agents": "Which agents it can call",
       "skills": "What it knows — specialized knowledge files",
       "tools": "What it can use — built-in tools & MCP services",
@@ -1173,6 +1175,7 @@
     "browser": "Browser",
     "insights": "Insights",
     "assistant": "Assistant",
+    "todos": "Todos",
     "shell": "Shell",
     "panelView": "Panel View"
   },

@@ -14,7 +14,7 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, ChevronDown, Search } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, CalendarClock, ChevronDown, Search } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import { Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
@@ -399,6 +399,10 @@ const MainNav: React.FC<MainNavProps> = ({
     switchLeftPanelTab,
   ]);
 
+  const handleOpenTodos = useCallback(() => {
+    openScene('todos');
+  }, [openScene]);
+
   const handleOpenAgents = useCallback(() => {
     openScene('agents');
   }, [openScene]);
@@ -510,8 +514,10 @@ const MainNav: React.FC<MainNavProps> = ({
   const createCodeTooltip = t('nav.sessions.newCodeSession');
   const createCoworkTooltip = t('nav.sessions.newCoworkSession');
   const assistantTooltip = t('nav.items.persona');
+  const todosTooltip = t('nav.tooltips.todos');
   const addWorkspaceTooltip = t('nav.tooltips.addWorkspace');
   const isAssistantActive = activeTabId === 'assistant';
+  const isTodosActive = activeTabId === 'todos';
   const agentsTooltip = t('nav.tooltips.agents');
   const skillsTooltip = t('nav.tooltips.skills');
   const extensionsLabel = t('nav.sections.extensions');
@@ -598,6 +604,25 @@ const MainNav: React.FC<MainNavProps> = ({
               <User size={15} />
             </span>
             <span>{t('nav.items.persona')}</span>
+          </button>
+        </Tooltip>
+
+        <Tooltip content={todosTooltip} placement="right" followCursor>
+          <button
+            type="button"
+            className={`bitfun-nav-panel__top-action-btn${isTodosActive ? ' is-active' : ''}`}
+            data-bf-component="nav-panel"
+            data-bf-part="topAction"
+            data-bf-action="todos"
+            data-bf-state={isTodosActive ? 'active' : ''}
+            onClick={handleOpenTodos}
+            aria-label={todosTooltip}
+            data-testid="nav-todos-btn"
+          >
+            <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+              <CalendarClock size={15} />
+            </span>
+            <span>{t('nav.items.todos')}</span>
           </button>
         </Tooltip>
 

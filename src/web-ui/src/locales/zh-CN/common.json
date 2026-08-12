@@ -77,6 +77,7 @@
       "sessions": "会话",
       "project": "目录",
       "persona": "助理",
+      "todos": "待办事项",
       "agents": "专业智能体",
       "skills": "技能",
       "tools": "工具",
@@ -87,6 +88,7 @@
     },
     "tooltips": {
       "persona": "助理 — 创建与管理所有助理实例",
+      "todos": "待办 — 汇总所有定时任务，列表与日历两层查看",
       "agents": "它能调用哪些 Agent",
       "skills": "它懂什么专项知识 — 技能知识文件",
       "tools": "它能用什么工具 — 内置工具与 MCP 服务",
@@ -1173,6 +1175,7 @@
     "browser": "浏览器",
     "insights": "洞察",
     "assistant": "助理",
+    "todos": "待办事项",
     "shell": "Shell",
     "panelView": "面板视图"
   },

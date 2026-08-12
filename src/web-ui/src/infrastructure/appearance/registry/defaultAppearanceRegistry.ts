@@ -118,6 +118,7 @@ import { filesPanelAppearanceDescriptor } from '@/app/components/panels/FilesPan
 import { reviewPlatformAppearanceDescriptor } from '@/app/components/panels/review-platform/appearance';
 import { remoteAccountPanelAppearanceDescriptor, remoteConnectDialogAppearanceDescriptor } from '@/app/components/RemoteConnectDialog/appearance';
 import { scheduledJobsViewAppearanceDescriptor } from '@/app/components/scheduled-jobs/appearance';
+import { todosSceneAppearanceDescriptor } from '@/app/scenes/todos/appearance';
 import { flexiblePanelAppearanceDescriptor } from '@/app/components/panels/base/FlexiblePanel.appearance';
 import { btwSessionPanelAppearanceDescriptor } from '@/flow_chat/components/btw/BtwSessionPanel.appearance';
 import { modernFlowChatAppearanceDescriptor, virtualMessageListAppearanceDescriptor } from '@/flow_chat/components/modern/appearance';
@@ -551,6 +552,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerScene(settingsAppearanceDescriptor)
     .registerScene(skillsAppearanceDescriptor)
     .registerScene(terminalAppearanceDescriptor)
+    .registerScene(todosSceneAppearanceDescriptor)
     .registerRenderer(cssTokenAppearanceAdapter)
     .registerRenderer(monacoAppearanceAdapter)
     .registerRenderer(xtermAppearanceAdapter)
