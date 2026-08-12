@@ -106,6 +106,13 @@ Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品
 - DTO、事件和端口属于 contracts，保持行为轻量且不得依赖上层；
 - Assembly 选择和连接 capability，不实现具体 adapter、OS 或 service 细节；
 - app 只拥有入口、平台生命周期和产品呈现，不复制可复用服务逻辑。
+- 稳定 contract 与具体运行时实现位于同一 crate 时，优先用单一 owner feature 隔离实现依赖；不得为
+  feature-free DTO、fallback 或纯事实强拉解析器、全局状态、网络或 host adapter。
+- 平台 host 已直接拥有的 adapter 不通过 Assembly facade 二次依赖或 re-export；上层只共享稳定
+  contract，具体 emitter/transport 由真实 host 直接构造。
+- Services Core 的 feature-free surface 只保留同步稳定 contract、JSONC 和路径规范化；诊断脱敏、
+  Diff 计算和异步 workspace 文本读取分别由 `diagnostics`、`diff`、`workspace-text-runtime` owner
+  选择。Assembly 可用同名 feature 保留兼容 facade，但不得把这些实现依赖放回默认闭包。
 
 新增依赖或显著扩大已有依赖 feature 时，PR 描述至少给出：
 

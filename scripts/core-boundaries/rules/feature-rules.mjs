@@ -35,8 +35,19 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'ignore', ownerFeatures: ['filesystem'] },
       { depName: 'libc', ownerFeatures: ['local-storage', 'process-runtime'] },
       { depName: 'notify', ownerFeatures: ['lsp'] },
+      {
+        depName: 'regex',
+        ownerFeatures: [
+          'diagnostics',
+          'filesystem',
+          'local-storage',
+          'markdown',
+          'workspace-instructions',
+        ],
+      },
       { depName: 'rusqlite', ownerFeatures: ['permission'] },
       { depName: 'serde_yaml', ownerFeatures: ['markdown', 'workspace-instructions'] },
+      { depName: 'similar', ownerFeatures: ['diff', 'local-storage'] },
       {
         depName: 'sha2',
         ownerFeatures: [
@@ -51,6 +62,21 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'win32job', ownerFeatures: ['process-runtime'] },
       { depName: 'windows', ownerFeatures: ['json-io', 'local-storage', 'process-runtime'] },
       { depName: 'zip', ownerFeatures: ['lsp'] },
+      {
+        depName: 'tokio',
+        ownerFeatures: [
+          'diff',
+          'filesystem',
+          'json-io',
+          'local-storage',
+          'lsp',
+          'permission',
+          'process-runtime',
+          'workspace-instructions',
+          'workspace-runtime',
+          'workspace-text-runtime',
+        ],
+      },
     ],
   },
   {
@@ -74,6 +100,7 @@ export const optionalDependencyFeatureOwnerRules = [
       },
       { depName: 'bitfun-agent-runtime', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-agent-tools', ownerFeatures: ['agent-runtime', 'local-storage'] },
       { depName: 'bitfun-claude-code-adapter', ownerFeatures: ['external-sources'] },
       { depName: 'bitfun-codex-adapter', ownerFeatures: ['external-sources'] },
       { depName: 'bitfun-external-sources', ownerFeatures: ['external-sources'] },
@@ -139,6 +166,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'dashmap', ownerFeatures: ['agent-runtime'] },
       { depName: 'filetime', ownerFeatures: ['agent-runtime'] },
       { depName: 'flate2', ownerFeatures: ['agent-runtime'] },
+      { depName: 'fluent-bundle', ownerFeatures: ['i18n-runtime'] },
       { depName: 'fs2', ownerFeatures: ['agent-runtime'] },
       { depName: 'futures', ownerFeatures: ['agent-runtime'] },
       { depName: 'image', ownerFeatures: ['agent-runtime'] },
@@ -156,6 +184,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'tokio-tungstenite', ownerFeatures: ['browser-control'] },
       { depName: 'tokio-util', ownerFeatures: ['agent-runtime', 'debug-log'] },
       { depName: 'tower-http', ownerFeatures: ['debug-log'] },
+      { depName: 'unic-langid', ownerFeatures: ['i18n-runtime'] },
       {
         depName: 'tool-runtime',
         ownerFeatures: ['agent-runtime', 'document-read', 'web-tools'],
@@ -252,8 +281,11 @@ export const coreProductFullFeatureAssemblyRule = {
   featureName: 'product-full',
   requiredFeatureRefs: [
     'agent-runtime',
+    'diagnostics',
+    'diff',
     'document-read',
     'subscription-auth',
+    'i18n-runtime',
     'browser-control',
     'deep-research',
     'mcp-runtime',
@@ -370,6 +402,7 @@ export const coreClosedFeatureProfileRules = [
       'dep:bitfun-agent-runtime',
       'dep:bitfun-agent-content',
       'dep:bitfun-agent-stream',
+      'dep:bitfun-agent-tools',
       'dep:base64',
       'dep:bitfun-harness',
       'dep:dashmap',
@@ -389,6 +422,7 @@ export const coreClosedFeatureProfileRules = [
       'bitfun-services-core/permission',
       'bitfun-services-core/runtime-ownership',
       'bitfun-services-core/session-git',
+      'bitfun-services-core/workspace-text-runtime',
       'filesystem',
       'local-storage',
       'process-runtime',
@@ -401,6 +435,10 @@ export const coreClosedFeatureProfileRules = [
       'tool-packs',
       'tools-basic',
       'tools-agent-control',
+      'tokio/io-util',
+      'tokio/macros',
+      'tokio/rt',
+      'tokio/time',
     ],
     allowedTransitiveFeatureRefs: [
       'workspace-search',
@@ -409,6 +447,28 @@ export const coreClosedFeatureProfileRules = [
     exact: true,
     reason:
       'bitfun-core agent-runtime is the reviewed Core Agent Runtime owner closure, not a product-full alias',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'i18n-runtime',
+    requiredFeatureRefs: ['dep:fluent-bundle', 'dep:unic-langid'],
+    exact: true,
+    reason:
+      'i18n-runtime must own only the backend Fluent bundle and language identifier implementation',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'diagnostics',
+    requiredFeatureRefs: ['bitfun-services-core/diagnostics'],
+    exact: true,
+    reason: 'bitfun-core diagnostics must preserve only the reusable diagnostic redaction facade',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'diff',
+    requiredFeatureRefs: ['bitfun-services-core/diff'],
+    exact: true,
+    reason: 'bitfun-core diff must preserve only the reusable local diff facade',
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
@@ -565,7 +625,13 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'browser-control',
-    requiredFeatureRefs: ['dep:tokio-tungstenite', 'bitfun-services-integrations/browser-control'],
+    requiredFeatureRefs: [
+      'dep:tokio-tungstenite',
+      'bitfun-services-integrations/browser-control',
+      'tokio/net',
+      'tokio/rt',
+      'tokio/time',
+    ],
     exact: true,
     reason: 'browser-control must own only the CDP browser adapter',
   },
@@ -773,6 +839,10 @@ export const coreClosedFeatureProfileRules = [
       'dep:tokio-util',
       'dep:tower-http',
       'bitfun-services-integrations/debug-log',
+      'tokio/macros',
+      'tokio/net',
+      'tokio/rt',
+      'tokio/time',
     ],
     exact: true,
     reason: 'bitfun-core debug-log must own only the debug ingest HTTP capability',
@@ -786,8 +856,31 @@ export const coreClosedFeatureProfileRules = [
   },
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',
+    featureName: 'diagnostics',
+    requiredFeatureRefs: ['dep:regex'],
+    exact: true,
+    reason: 'services-core diagnostics must own only deterministic diagnostic-log redaction',
+  },
+  {
+    manifestPath: 'src/crates/services/services-core/Cargo.toml',
+    featureName: 'diff',
+    requiredFeatureRefs: ['dep:similar', 'dep:tokio', 'tokio/rt', 'tokio/time'],
+    exact: true,
+    reason: 'services-core diff must own only local text diff calculation and its bounded async runtime',
+  },
+  {
+    manifestPath: 'src/crates/services/services-core/Cargo.toml',
     featureName: 'filesystem',
-    requiredFeatureRefs: ['dep:base64', 'dep:chrono', 'dep:ignore', 'dep:sha2', 'tokio/fs'],
+    requiredFeatureRefs: [
+      'dep:base64',
+      'dep:chrono',
+      'dep:ignore',
+      'dep:regex',
+      'dep:sha2',
+      'dep:tokio',
+      'tokio/fs',
+      'tokio/rt',
+    ],
     exact: true,
     reason: 'services-core filesystem must own only local file operations and recursive search dependencies',
   },
@@ -796,9 +889,12 @@ export const coreClosedFeatureProfileRules = [
     featureName: 'json-io',
     requiredFeatureRefs: [
       'dep:fs2',
+      'dep:tokio',
       'dep:windows',
       'tokio/fs',
+      'tokio/rt',
       'tokio/sync',
+      'tokio/time',
       'windows/Win32_Foundation',
       'windows/Win32_Storage_FileSystem',
     ],
@@ -814,10 +910,15 @@ export const coreClosedFeatureProfileRules = [
       'dep:chrono',
       'dep:fs2',
       'dep:libc',
+      'dep:regex',
       'dep:sha2',
+      'dep:similar',
+      'dep:tokio',
       'dep:windows',
       'tokio/fs',
+      'tokio/rt',
       'tokio/sync',
+      'tokio/time',
       'windows/Win32_Foundation',
       'windows/Win32_Storage_FileSystem',
     ],
@@ -829,11 +930,14 @@ export const coreClosedFeatureProfileRules = [
     featureName: 'process-runtime',
     requiredFeatureRefs: [
       'dep:libc',
+      'dep:tokio',
       'dep:which',
       'dep:win32job',
       'dep:windows',
       'tokio/io-util',
       'tokio/process',
+      'tokio/rt',
+      'tokio/time',
       'windows/Win32_Foundation',
       'windows/Win32_System_Diagnostics_ToolHelp',
       'windows/Win32_System_Threading',
@@ -844,9 +948,24 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',
     featureName: 'workspace-instructions',
-    requiredFeatureRefs: ['dep:globset', 'dep:serde_yaml', 'tokio/fs', 'tokio/io-util'],
+    requiredFeatureRefs: [
+      'dep:globset',
+      'dep:regex',
+      'dep:serde_yaml',
+      'dep:tokio',
+      'tokio/fs',
+      'tokio/io-util',
+      'tokio/rt',
+    ],
     exact: true,
     reason: 'services-core workspace-instructions must own declarative instruction discovery, scope parsing, and glob expansion only',
+  },
+  {
+    manifestPath: 'src/crates/services/services-core/Cargo.toml',
+    featureName: 'workspace-text-runtime',
+    requiredFeatureRefs: ['dep:tokio', 'tokio/rt'],
+    exact: true,
+    reason: 'services-core workspace-text-runtime must own only bounded asynchronous local workspace reads',
   },
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',
@@ -915,7 +1034,7 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'local-storage',
-    requiredFeatureRefs: ['bitfun-services-core/local-storage'],
+    requiredFeatureRefs: ['dep:bitfun-agent-tools', 'bitfun-services-core/local-storage'],
     exact: true,
     reason: 'bitfun-core local-storage must select only reusable local persistence owners',
   },
@@ -929,7 +1048,7 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'lsp',
-    requiredFeatureRefs: ['dep:notify', 'bitfun-services-core/lsp'],
+    requiredFeatureRefs: ['dep:notify', 'bitfun-services-core/lsp', 'tokio/macros'],
     exact: true,
     reason: 'bitfun-core lsp must select only the LSP owner and its workspace watcher dependency',
   },
@@ -1051,6 +1170,13 @@ export const ownerCrateFeatureAssemblyRules = [
   {
     manifestPath: 'src/crates/services/services-integrations/Cargo.toml',
     reason: 'services-integrations must keep integration feature groups explicit and default-light',
+    optionalDependencyAggregateFeatures: [
+      'function-agents',
+      'mcp',
+      'miniapp-market',
+      'remote-ssh-concrete',
+      'script-tool-runtime',
+    ],
     requiredProductFullFeatures: [
       'announcement',
       'browser-control',
@@ -1080,3 +1206,23 @@ export const ownerCrateFeatureAssemblyRules = [
     requiredProductFullFeatures: ['appearance-market', 'plugin-source', 'miniapp', 'function-agents', 'external-sources'],
   },
 ];
+
+export function reviewedOptionalDependencyAggregateFeatures(manifestPath) {
+  const features = new Set(
+    coreClosedFeatureProfileRules
+      .filter((profile) => profile.manifestPath === manifestPath)
+      .map((profile) => profile.featureName),
+  );
+  if (coreProductFullFeatureAssemblyRule.manifestPath === manifestPath) {
+    features.add(coreProductFullFeatureAssemblyRule.featureName);
+  }
+  const ownerAssembly = ownerCrateFeatureAssemblyRules.find((profile) =>
+    profile.manifestPath === manifestPath);
+  if (ownerAssembly) {
+    features.add('product-full');
+    for (const feature of ownerAssembly.optionalDependencyAggregateFeatures ?? []) {
+      features.add(feature);
+    }
+  }
+  return features;
+}

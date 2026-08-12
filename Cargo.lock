@@ -1071,7 +1071,6 @@ dependencies = [
  "bitfun-services-core",
  "bitfun-services-integrations",
  "bitfun-tool-packs",
- "bitfun-transport",
  "chrono",
  "chrono-tz",
  "cron",

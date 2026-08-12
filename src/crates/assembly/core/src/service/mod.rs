@@ -62,9 +62,12 @@ pub use terminal_core as terminal;
 // Re-export main components.
 #[cfg(feature = "announcement")]
 pub use announcement::{AnnouncementCard, AnnouncementScheduler, AnnouncementSchedulerRef};
+#[cfg(feature = "diagnostics")]
+pub use bitfun_services_core::diagnostics;
+#[cfg(feature = "diff")]
+pub use bitfun_services_core::diff;
 #[cfg(feature = "process-runtime")]
 pub use bitfun_services_core::system;
-pub use bitfun_services_core::{diagnostics, diff};
 #[cfg(feature = "file-watch")]
 pub use bitfun_services_integrations::file_watch;
 #[cfg(feature = "workspace-runtime")]
@@ -76,6 +79,7 @@ pub use config::{ConfigManager, ConfigProvider, ConfigService};
 pub use cron::{
     get_global_cron_service, set_global_cron_service, CronEventSubscriber, CronService,
 };
+#[cfg(feature = "diff")]
 pub use diff::{
     DiffConfig, DiffHunk, DiffLine, DiffLineType, DiffOptions, DiffResult, DiffService,
 };
@@ -89,7 +93,9 @@ pub use file_watch::{
 pub use filesystem::{DirectoryStats, FileSystemService, FileSystemServiceFactory};
 #[cfg(feature = "git")]
 pub use git::GitService;
-pub use i18n::{get_global_i18n_service, I18nConfig, I18nService, LocaleId, LocaleMetadata};
+#[cfg(feature = "i18n-runtime")]
+pub use i18n::{get_global_i18n_service, I18nService};
+pub use i18n::{I18nConfig, LocaleId, LocaleMetadata};
 #[cfg(feature = "lsp")]
 pub use lsp::LspManager;
 #[cfg(feature = "mcp-runtime")]

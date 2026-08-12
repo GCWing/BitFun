@@ -2551,7 +2551,7 @@ fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
 fn create_event_emitter(
     transport: Arc<TauriTransportAdapter>,
 ) -> Arc<dyn bitfun_core::infrastructure::events::EventEmitter> {
-    use bitfun_core::infrastructure::events::TransportEmitter;
+    use bitfun_transport::TransportEmitter;
     let inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
         Arc::new(TransportEmitter::new(transport));
     api::remote_connect_api::wrap_peer_aware_emitter(inner)

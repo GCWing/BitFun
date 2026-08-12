@@ -20,6 +20,7 @@ import {
   coreProductFullFeatureAssemblyRule,
   optionalDependencyFeatureOwnerRules,
   ownerCrateFeatureAssemblyRules,
+  reviewedOptionalDependencyAggregateFeatures,
 } from './rules/feature-rules.mjs';
 import {
   facadeOnlyFiles,
@@ -515,11 +516,13 @@ function checkForbiddenManifestDependencyRule(rule) {
 
 function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const manifestPath = join(crateDir, 'Cargo.toml');
+  const repoManifestPath = toRepoPath(manifestPath);
   const lines = readText(manifestPath).split(/\r?\n/);
   const deps = parseManifestDependencies(lines);
   const normalDeps = deps.filter((dep) => dep.kind === 'normal');
   const depsByName = new Map(normalDeps.map((dep) => [dep.name, dep]));
   const features = parseManifestFeatures(lines);
+  const reviewedAggregateFeatures = reviewedOptionalDependencyAggregateFeatures(repoManifestPath);
   const declaredOwnerDeps = new Set(rule.dependencies.map((dependency) => dependency.depName));
 
   for (const dependency of rule.dependencies) {
@@ -557,7 +560,11 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
         });
       }
     }
-    for (const [featureName, feature] of unexpectedDependencyOwnerFeatures(features, dependency)) {
+    for (const [featureName, feature] of unexpectedDependencyOwnerFeatures(
+      features,
+      dependency,
+      reviewedAggregateFeatures,
+    )) {
       failures.push({
         path: manifestPath,
         line: feature.line,

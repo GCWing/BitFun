@@ -84,9 +84,68 @@ test('Core feature-free dependencies stay attached to their exact runtime owners
   assert.deepEqual(ownersByDependency.get('futures'), new Set(['agent-runtime']));
   assert.deepEqual(ownersByDependency.get('regex'), new Set(['agent-runtime']));
   assert.deepEqual(
+    ownersByDependency.get('bitfun-agent-tools'),
+    new Set(['agent-runtime', 'local-storage']),
+  );
+  assert.deepEqual(ownersByDependency.get('fluent-bundle'), new Set(['i18n-runtime']));
+  assert.deepEqual(ownersByDependency.get('unic-langid'), new Set(['i18n-runtime']));
+  assert.deepEqual(
     ownersByDependency.get('tokio-util'),
     new Set(['agent-runtime', 'debug-log']),
   );
+});
+
+test('Services Core feature-free dependencies stay behind exact text and async IO owners', () => {
+  const ownerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'services-core',
+  );
+  const ownersByDependency = new Map(
+    ownerRule.dependencies.map((dependency) => [
+      dependency.depName,
+      new Set(dependency.ownerFeatures),
+    ]),
+  );
+
+  assert.deepEqual(
+    ownersByDependency.get('regex'),
+    new Set(['diagnostics', 'filesystem', 'local-storage', 'markdown', 'workspace-instructions']),
+  );
+  assert.deepEqual(ownersByDependency.get('similar'), new Set(['diff', 'local-storage']));
+  assert.deepEqual(
+    ownersByDependency.get('tokio'),
+    new Set([
+      'diff',
+      'filesystem',
+      'json-io',
+      'local-storage',
+      'lsp',
+      'permission',
+      'process-runtime',
+      'workspace-instructions',
+      'workspace-runtime',
+      'workspace-text-runtime',
+    ]),
+  );
+});
+
+test('Services Core text runtime features keep independent exact owner profiles', () => {
+  const profiles = new Map(
+    coreClosedFeatureProfileRules
+      .filter((rule) => rule.manifestPath === 'src/crates/services/services-core/Cargo.toml')
+      .map((rule) => [rule.featureName, rule.requiredFeatureRefs]),
+  );
+
+  assert.deepEqual(profiles.get('diagnostics'), ['dep:regex']);
+  assert.deepEqual(profiles.get('diff'), [
+    'dep:similar',
+    'dep:tokio',
+    'tokio/rt',
+    'tokio/time',
+  ]);
+  assert.deepEqual(profiles.get('workspace-text-runtime'), [
+    'dep:tokio',
+    'tokio/rt',
+  ]);
 });
 
 function parseManifestFeatures(manifest) {
@@ -674,6 +733,7 @@ test('Core product-full explicitly assembles service and tool capability owners'
   for (const required of [
     'document-read',
     'subscription-auth',
+    'i18n-runtime',
     'model-catalog',
     'mcp-runtime',
     'remote-connect',
@@ -741,6 +801,48 @@ test('explicit product entrypoint bitfun-core feature selections pass', () => {
     ),
     [],
   );
+});
+
+test('Desktop and Server must retain the full product Core capability closure', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+
+  for (const [name, manifestPath] of [
+    ['bitfun-desktop', 'src/apps/desktop/Cargo.toml'],
+    ['bitfun-server', 'src/apps/server/Cargo.toml'],
+  ]) {
+    const product = packageAt(name, manifestPath, [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        usesDefaultFeatures: false,
+        features: ['i18n-runtime'],
+      }),
+    ]);
+    const messages = findProductEntrypointCoreFeatureViolations(
+      [product, core],
+      { root: TEST_ROOT, crateLayoutRules },
+    ).map((violation) => violation.message);
+
+    assert.deepEqual(messages, [
+      `${name} Core capability closure must select exactly product-full`,
+    ]);
+  }
+});
+
+test('Desktop and Server must retain their Core product dependency', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  for (const [name, manifestPath] of [
+    ['bitfun-desktop', 'src/apps/desktop/Cargo.toml'],
+    ['bitfun-server', 'src/apps/server/Cargo.toml'],
+  ]) {
+    const product = packageAt(name, manifestPath);
+    assert.deepEqual(
+      findProductEntrypointCoreFeatureViolations(
+        [product, core],
+        { root: TEST_ROOT, crateLayoutRules },
+      ).map((violation) => violation.message),
+      [`${name} Core capability closure must keep the bitfun-core dependency`],
+    );
+  }
 });
 
 test('Desktop must select only the ACP client role', () => {
@@ -1040,6 +1142,7 @@ const CLI_REVIEWED_CORE_FEATURES = [
 const APP_SERVER_REVIEWED_CORE_FEATURES = [
   'external-sources',
   'git',
+  'i18n-runtime',
   'remote-connect',
 ];
 
@@ -1182,6 +1285,30 @@ test('App Server Core capability closure keeps its production Git owner', () => 
 
   assert.deepEqual(violations.map((violation) => violation.message), [
     'bitfun-app-server Core capability closure must include git',
+  ]);
+});
+
+test('App Server Core capability closure keeps its backend i18n runtime', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const appServer = packageAt(
+    'bitfun-app-server',
+    'src/crates/interfaces/app-server/Cargo.toml',
+    [pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: APP_SERVER_REVIEWED_CORE_FEATURES.filter(
+        (feature) => feature !== 'i18n-runtime',
+      ),
+    })],
+  );
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [appServer, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.deepEqual(violations.map((violation) => violation.message), [
+    'bitfun-app-server Core capability closure must include i18n-runtime',
   ]);
 });
 
@@ -2017,6 +2144,21 @@ test('workspace Tokio capabilities stay crate-owned', async () => {
   assert.doesNotMatch(workspaceTokio, /(?:^|,\s*)features\s*=/);
   const packages = collectCargoMetadataPackages({ root: repositoryRoot });
   assert.deepEqual(findTokioDependencyFeatureViolations(packages), []);
+
+  const integrations = packages.find((pkg) => pkg.name === 'bitfun-services-integrations');
+  const mutatedPackages = packages.map((pkg) => pkg === integrations
+    ? {
+        ...pkg,
+        dependencies: pkg.dependencies.map((dependency) =>
+          dependency.name === 'tokio' && (dependency.kind ?? null) === null
+            ? { ...dependency, features: ['net'] }
+            : dependency),
+      }
+    : pkg);
+  assert.ok(
+    findTokioDependencyFeatureViolations(mutatedPackages).some((violation) =>
+      violation.message === 'bitfun-services-integrations has unexpected base Tokio capabilities: net'),
+  );
 });
 
 test('services integrations Tokio owner contracts reject feature-union masking', async () => {
@@ -2674,6 +2816,27 @@ test('optional dependency ownership rejects undeclared direct feature owners', a
   assert.equal(featureReferencesOptionalDependencyOwner(features.get('unrelated'), 'example'), false);
 });
 
+test('optional dependency ownership rejects hidden aliases but permits reviewed aggregates', async () => {
+  const { unexpectedDependencyOwnerFeatures } = await import(
+    './core-boundaries/manifest-feature-helpers.mjs'
+  );
+  const features = new Map([
+    ['owner', { refs: ['dep:example'], line: 1 }],
+    ['reviewed-aggregate', { refs: ['owner'], line: 2 }],
+    ['sneaky', { refs: ['owner'], line: 3 }],
+    ['bad-aggregate', { refs: ['owner', 'dep:example'], line: 4 }],
+  ]);
+
+  assert.deepEqual(
+    unexpectedDependencyOwnerFeatures(
+      features,
+      { depName: 'example', ownerFeatures: ['owner'] },
+      new Set(['reviewed-aggregate', 'bad-aggregate']),
+    ).map(([featureName]) => featureName),
+    ['sneaky', 'bad-aggregate'],
+  );
+});
+
 test('services-core capability profiles keep heavy owners out of the empty profile', async () => {
   const { coreClosedFeatureProfileRules } = await import(
     './core-boundaries/rules/feature-rules.mjs'
@@ -2695,14 +2858,20 @@ test('services-core capability profiles keep heavy owners out of the empty profi
     'dep:base64',
     'dep:chrono',
     'dep:ignore',
+    'dep:regex',
     'dep:sha2',
+    'dep:tokio',
     'tokio/fs',
+    'tokio/rt',
   ]);
   assert.deepEqual(profiles.get('json-io'), [
     'dep:fs2',
+    'dep:tokio',
     'dep:windows',
     'tokio/fs',
+    'tokio/rt',
     'tokio/sync',
+    'tokio/time',
     'windows/Win32_Foundation',
     'windows/Win32_Storage_FileSystem',
   ]);
@@ -2712,29 +2881,40 @@ test('services-core capability profiles keep heavy owners out of the empty profi
     'dep:chrono',
     'dep:fs2',
     'dep:libc',
+    'dep:regex',
     'dep:sha2',
+    'dep:similar',
+    'dep:tokio',
     'dep:windows',
     'tokio/fs',
+    'tokio/rt',
     'tokio/sync',
+    'tokio/time',
     'windows/Win32_Foundation',
     'windows/Win32_Storage_FileSystem',
   ]);
   assert.deepEqual(profiles.get('process-runtime'), [
     'dep:libc',
+    'dep:tokio',
     'dep:which',
     'dep:win32job',
     'dep:windows',
     'tokio/io-util',
     'tokio/process',
+    'tokio/rt',
+    'tokio/time',
     'windows/Win32_Foundation',
     'windows/Win32_System_Diagnostics_ToolHelp',
     'windows/Win32_System_Threading',
   ]);
   assert.deepEqual(profiles.get('workspace-instructions'), [
     'dep:globset',
+    'dep:regex',
     'dep:serde_yaml',
+    'dep:tokio',
     'tokio/fs',
     'tokio/io-util',
+    'tokio/rt',
   ]);
   assert.deepEqual(profiles.get('lsp'), [
     'dep:anyhow',
@@ -2769,7 +2949,9 @@ test('services-core capability profiles keep heavy owners out of the empty profi
     'globset',
     'ignore',
     'libc',
+    'regex',
     'sha2',
+    'similar',
     'which',
     'win32job',
     'windows',
@@ -2785,6 +2967,8 @@ test('services-core capability profiles keep heavy owners out of the empty profi
   );
   const sourceContracts = sourceRule?.patterns.map((pattern) => pattern.regex.source).join('\n') ?? '';
   for (const moduleName of [
+    'diagnostics',
+    'diff',
     'filesystem',
     'json_store',
     'managed_runtime',
@@ -2844,6 +3028,186 @@ test('services-core Tokio capabilities stay owner-scoped', () => {
     messages.some((message) => message.includes('lsp missing effective Tokio capabilities')),
     'services-core must require lsp to declare its complete effective Tokio profile',
   );
+});
+
+test('Services Core accepts only the reviewed feature-owned Tokio runtime graph', () => {
+  const validPackage = {
+    name: 'bitfun-services-core',
+    manifest_path: 'src/crates/services/services-core/Cargo.toml',
+    dependencies: [
+      {
+        name: 'tokio',
+        kind: null,
+        optional: true,
+        features: [],
+      },
+    ],
+    features: {
+      diff: ['dep:tokio', 'tokio/rt', 'tokio/time'],
+      filesystem: ['dep:tokio', 'tokio/fs', 'tokio/rt'],
+      'json-io': ['dep:tokio', 'tokio/fs', 'tokio/rt', 'tokio/sync', 'tokio/time'],
+      'local-storage': [
+        'dep:tokio',
+        'tokio/fs',
+        'tokio/rt',
+        'tokio/sync',
+        'tokio/time',
+      ],
+      permission: ['dep:tokio', 'tokio/rt'],
+      'process-runtime': [
+        'dep:tokio',
+        'tokio/io-util',
+        'tokio/process',
+        'tokio/rt',
+        'tokio/time',
+      ],
+      'workspace-instructions': ['dep:tokio', 'tokio/fs', 'tokio/io-util', 'tokio/rt'],
+      'workspace-text-runtime': ['dep:tokio', 'tokio/rt'],
+      lsp: ['process-runtime', 'tokio/fs', 'tokio/io-util', 'tokio/sync'],
+      'workspace-runtime': [
+        'process-runtime',
+        'tokio/fs',
+        'tokio/io-util',
+        'tokio/sync',
+      ],
+      'session-git': ['local-storage'],
+    },
+  };
+
+  assert.deepEqual(findTokioDependencyFeatureViolations([validPackage]), []);
+});
+
+test('Services Core Tokio owners cannot be hidden behind an unreviewed alias', () => {
+  const invalidPackage = {
+    name: 'bitfun-services-core',
+    manifest_path: 'src/crates/services/services-core/Cargo.toml',
+    dependencies: [
+      {
+        name: 'tokio',
+        kind: null,
+        optional: true,
+        features: [],
+      },
+    ],
+    features: {
+      diff: ['dep:tokio', 'tokio/rt', 'tokio/time'],
+      filesystem: ['dep:tokio', 'tokio/fs', 'tokio/rt'],
+      'json-io': ['dep:tokio', 'tokio/fs', 'tokio/rt', 'tokio/sync', 'tokio/time'],
+      'local-storage': [
+        'dep:tokio',
+        'tokio/fs',
+        'tokio/rt',
+        'tokio/sync',
+        'tokio/time',
+      ],
+      permission: ['dep:tokio', 'tokio/rt'],
+      'process-runtime': [
+        'dep:tokio',
+        'tokio/io-util',
+        'tokio/process',
+        'tokio/rt',
+        'tokio/time',
+      ],
+      'workspace-instructions': ['dep:tokio', 'tokio/fs', 'tokio/io-util', 'tokio/rt'],
+      'workspace-text-runtime': ['dep:tokio', 'tokio/rt'],
+      lsp: ['process-runtime', 'tokio/fs', 'tokio/io-util', 'tokio/sync'],
+      'workspace-runtime': [
+        'process-runtime',
+        'tokio/fs',
+        'tokio/io-util',
+        'tokio/sync',
+      ],
+      sneaky: ['filesystem', 'local-storage'],
+      'sneaky-weak': ['tokio?/full'],
+    },
+  };
+
+  const messages = findTokioDependencyFeatureViolations([invalidPackage]).map(
+    (violation) => violation.message,
+  );
+  assert.ok(
+    messages.includes('bitfun-services-core:sneaky Tokio capabilities require an explicit owner contract'),
+  );
+  assert.ok(
+    messages.includes('bitfun-services-core:sneaky-weak Tokio capabilities require an explicit owner contract'),
+  );
+});
+
+test('Core feature-free Tokio capabilities stay limited to baseline path and state IO', () => {
+  const invalidPackage = {
+    name: 'bitfun-core',
+    manifest_path: 'src/crates/assembly/core/Cargo.toml',
+    dependencies: [
+      {
+        name: 'tokio',
+        kind: null,
+        optional: false,
+        features: ['fs', 'io-util', 'macros', 'net', 'rt', 'sync', 'time'],
+      },
+    ],
+    features: {},
+  };
+
+  const messages = findTokioDependencyFeatureViolations([invalidPackage]).map(
+    (violation) => violation.message,
+  );
+  assert.ok(
+    messages.some((message) => message.includes('unexpected base Tokio capabilities')),
+    'Core must reject async runtime, networking, and timing capabilities in its feature-free profile',
+  );
+});
+
+test('Core Tokio capabilities cannot hide behind an unreviewed owner feature', () => {
+  const invalidPackage = {
+    name: 'bitfun-core',
+    manifest_path: 'src/crates/assembly/core/Cargo.toml',
+    dependencies: [
+      {
+        name: 'tokio',
+        kind: null,
+        optional: false,
+        features: ['fs', 'sync'],
+      },
+    ],
+    features: {
+      'agent-runtime': ['tokio/io-util', 'tokio/macros', 'tokio/rt', 'tokio/time'],
+      'mcp-runtime': ['agent-runtime', 'tokio/rt-multi-thread'],
+      'browser-control': ['tokio/net', 'tokio/rt', 'tokio/time'],
+      'debug-log': ['tokio/macros', 'tokio/net', 'tokio/rt', 'tokio/time'],
+      lsp: ['tokio/macros'],
+      sneaky: ['agent-runtime', 'browser-control'],
+    },
+  };
+
+  const messages = findTokioDependencyFeatureViolations([invalidPackage]).map(
+    (violation) => violation.message,
+  );
+  assert.deepEqual(messages, [
+    'bitfun-core:sneaky Tokio capabilities require an explicit owner contract',
+  ]);
+});
+
+test('reviewed Tokio aggregates cannot declare runtime capabilities directly', () => {
+  const invalidPackage = {
+    name: 'bitfun-core',
+    manifest_path: 'src/crates/assembly/core/Cargo.toml',
+    dependencies: [{ name: 'tokio', kind: null, optional: false, features: ['fs', 'sync'] }],
+    features: {
+      'agent-runtime': ['tokio/io-util', 'tokio/macros', 'tokio/rt', 'tokio/time'],
+      'mcp-runtime': ['agent-runtime', 'tokio/rt-multi-thread'],
+      'browser-control': ['tokio/net', 'tokio/rt', 'tokio/time'],
+      'debug-log': ['tokio/macros', 'tokio/net', 'tokio/rt', 'tokio/time'],
+      lsp: ['tokio/macros'],
+      'product-full': ['agent-runtime', 'tokio/net'],
+    },
+  };
+
+  const messages = findTokioDependencyFeatureViolations([invalidPackage]).map(
+    (violation) => violation.message,
+  );
+  assert.deepEqual(messages, [
+    'bitfun-core:product-full Tokio aggregate must compose reviewed owners instead of declaring Tokio capabilities directly',
+  ]);
 });
 
 test('services-core Windows API capabilities stay feature-owned', async () => {

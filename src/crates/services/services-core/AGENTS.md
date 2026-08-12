@@ -18,17 +18,19 @@ crate.
 - Prefer `bitfun-core-types` for shared DTOs and `bitfun-runtime-ports` for
   cross-layer traits.
 - Keep dependency features explicit and keep `default = []`. The coarse service
-  capability owners are `filesystem` (local file operations/search),
+  capability owners are `diagnostics` (diagnostic-log redaction), `diff`
+  (local text diff calculation), `filesystem` (local file operations/search),
   `json-io` (generic locked and atomic JSON file IO), `local-storage`
   (JSON/session/usage persistence), `process-runtime` (command
   lookup and supervised child lifecycle), and `workspace-instructions`
   (declarative instruction discovery). Consumers enable those or the narrower
   `lsp`, `workspace-runtime`, `workspace-identity`, `runtime-ownership`,
-  `permission`, `dispatch-workspace`, `markdown`, and `session-git` extensions
+  `permission`, `dispatch-workspace`, `markdown`, `session-git`, and
+  `workspace-text-runtime` extensions
   only for behavior they use. In particular, session metadata consumers must
   not compile libgit2 unless they use the memory-workspace baseline/diff API.
   Keep Tokio and platform API capabilities owner-scoped too: the empty profile
-  carries only Tokio runtime/time support, `lsp` and `workspace-runtime`
+  carries no Tokio dependency, `lsp` and `workspace-runtime`
   explicitly compose `process-runtime`, and Windows storage/process bindings
   must not be enabled from one shared dependency feature union.
 - LSP manifest and protocol DTOs belong in `bitfun-core-types`; reusable LSP
@@ -69,6 +71,9 @@ target. Representative stable entry points are:
 ```bash
 cargo check -p bitfun-services-core --no-default-features
 cargo check -p bitfun-services-core --no-default-features --features filesystem
+cargo test -p bitfun-services-core --no-default-features --features diagnostics --lib diagnostics::contract_tests::
+cargo test -p bitfun-services-core --no-default-features --features diff --lib diff::contract_tests::
+cargo test -p bitfun-services-core --no-default-features --features workspace-text-runtime --lib workspace_text::tests::
 cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_contracts session_metadata_contracts::
 cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_write_lock_contracts
 cargo test -p bitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts

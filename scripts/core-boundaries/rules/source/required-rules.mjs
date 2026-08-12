@@ -25,6 +25,14 @@ export const requiredContentRules = [
       'services-core must compile concrete service owners only through their declared capability features',
     patterns: [
       {
+        regex: /#\[cfg\(feature = "diagnostics"\)\]\s*pub mod diagnostics;/,
+        message: 'missing diagnostic redaction capability source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "diff"\)\]\s*pub mod diff;/,
+        message: 'missing local diff capability source gate',
+      },
+      {
         regex: /#\[cfg\(any\(feature = "local-storage", feature = "runtime-ownership"\)\)\]\s*mod file_lock;/,
         message: 'missing shared file lock owner source gate',
       },
@@ -75,6 +83,25 @@ export const requiredContentRules = [
       {
         regex: /#\[cfg\(feature = "workspace-instructions"\)\]\s*pub mod workspace_instructions;/,
         message: 'missing workspace-instructions source gate',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/workspace_text.rs',
+    reason:
+      'workspace text contracts stay synchronous while bounded local IO requires its runtime owner',
+    patterns: [
+      {
+        regex: /pub fn normalize_workspace_relative_path\b/,
+        message: 'missing feature-free workspace path normalization contract',
+      },
+      {
+        regex: /#\[cfg\(feature = "workspace-text-runtime"\)\]\s*pub async fn read_workspace_relative_text_bounded\b/s,
+        message: 'bounded workspace text reads must stay behind workspace-text-runtime',
+      },
+      {
+        regex: /#\[cfg\(feature = "workspace-text-runtime"\)\]\s*pub async fn resolve_workspace_relative_entry\b/s,
+        message: 'workspace entry resolution must stay behind workspace-text-runtime',
       },
     ],
   },
@@ -187,7 +214,7 @@ export const requiredContentRules = [
         message: 'serde_yaml must remain optional in services-core',
       },
       {
-        regex: /markdown = \["dep:serde_yaml"\]/,
+        regex: /markdown = \[[^\]]*"dep:serde_yaml"[^\]]*\]/,
         message: 'missing explicit markdown feature for services-core',
       },
     ],
@@ -4094,6 +4121,14 @@ export const requiredContentRules = [
       {
         regex: /#\[cfg\(feature = "file-watch"\)\]\s*pub use bitfun_services_integrations::file_watch\b/s,
         message: 'file-watch facade must stay behind its exact feature',
+      },
+      {
+        regex: /#\[cfg\(feature = "diagnostics"\)\]\s*pub use bitfun_services_core::diagnostics\b/s,
+        message: 'diagnostics compatibility facade must stay behind diagnostics',
+      },
+      {
+        regex: /#\[cfg\(feature = "diff"\)\]\s*pub use bitfun_services_core::diff\b/s,
+        message: 'diff compatibility facade must stay behind diff',
       },
       {
         regex: /#\[cfg\(feature = "git"\)\]\s*pub mod git\b/s,

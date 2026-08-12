@@ -150,17 +150,41 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
 ]);
 
 const SERVICES_CORE_TOKIO_FEATURES = new Map([
-  ['filesystem', ['fs']],
-  ['json-io', ['fs', 'sync']],
-  ['local-storage', ['fs', 'sync']],
-  ['process-runtime', ['io-util', 'process']],
-  ['workspace-instructions', ['fs', 'io-util']],
-  ['lsp', ['fs', 'io-util', 'process', 'sync']],
-  ['workspace-runtime', ['fs', 'io-util', 'process', 'sync']],
+  ['diff', ['rt', 'time']],
+  ['filesystem', ['fs', 'rt']],
+  ['json-io', ['fs', 'rt', 'sync', 'time']],
+  ['local-storage', ['fs', 'rt', 'sync', 'time']],
+  ['permission', ['rt']],
+  ['process-runtime', ['io-util', 'process', 'rt', 'time']],
+  ['workspace-instructions', ['fs', 'io-util', 'rt']],
+  ['workspace-text-runtime', ['rt']],
+  ['lsp', ['fs', 'io-util', 'process', 'rt', 'sync', 'time']],
+  ['workspace-runtime', ['fs', 'io-util', 'process', 'rt', 'sync', 'time']],
 ]);
-const SERVICES_CORE_BASE_TOKIO_FEATURES = ['rt', 'time'];
+const SERVICES_CORE_BASE_TOKIO_FEATURES = [];
+const SERVICES_INTEGRATIONS_TOKIO_AGGREGATES = new Set(['product-full']);
+const SERVICES_CORE_TOKIO_AGGREGATES = new Set(['session-git']);
+const CORE_TOKIO_FEATURES = new Map([
+  ['agent-runtime', ['io-util', 'macros', 'rt', 'time']],
+  ['mcp-runtime', ['io-util', 'macros', 'rt', 'rt-multi-thread', 'time']],
+  ['browser-control', ['net', 'rt', 'time']],
+  ['debug-log', ['macros', 'net', 'rt', 'time']],
+  ['lsp', ['macros']],
+]);
+const CORE_TOKIO_AGGREGATES = new Set([
+  'external-sources',
+  'plugin-runtime',
+  'product-full',
+  'remote-connect',
+  'tools-browser-web',
+  'tools-mcp',
+]);
 
 const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set();
+
+function tokioCapabilityReference(value) {
+  return value.match(/^tokio\??\/(.+)$/)?.[1];
+}
 
 function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set()) {
   if (visiting.has(feature)) {
@@ -170,8 +194,9 @@ function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set())
 
   const capabilities = new Set();
   for (const value of featureGraph[feature] ?? []) {
-    if (value.startsWith('tokio/')) {
-      capabilities.add(value.slice('tokio/'.length));
+    const capability = tokioCapabilityReference(value);
+    if (capability) {
+      capabilities.add(capability);
     } else if (Object.hasOwn(featureGraph, value)) {
       for (const capability of effectiveTokioCapabilities(value, featureGraph, visiting)) {
         capabilities.add(capability);
@@ -183,7 +208,7 @@ function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set())
   return capabilities;
 }
 
-function findOwnedTokioFeatureViolations(pkg, ownerProfiles) {
+function findOwnedTokioFeatureViolations(pkg, ownerProfiles, aggregateFeatures = new Set()) {
   const violations = [];
   const featureGraph = pkg.features ?? {};
 
@@ -221,7 +246,17 @@ function findOwnedTokioFeatureViolations(pkg, ownerProfiles) {
     if (ownerProfiles.has(feature)) {
       continue;
     }
-    if (values.some((value) => value.startsWith('tokio/'))) {
+    if (aggregateFeatures.has(feature)) {
+      if (values.some((value) => tokioCapabilityReference(value))) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name}:${feature} Tokio aggregate must compose reviewed owners instead of declaring Tokio capabilities directly`,
+        });
+      }
+      continue;
+    }
+    if (effectiveTokioCapabilities(feature, featureGraph).size > 0) {
       violations.push({
         path: pkg.manifest_path,
         line: 1,
@@ -234,7 +269,11 @@ function findOwnedTokioFeatureViolations(pkg, ownerProfiles) {
 }
 
 export function findServicesIntegrationsTokioFeatureViolations(pkg) {
-  return findOwnedTokioFeatureViolations(pkg, SERVICES_INTEGRATIONS_TOKIO_FEATURES);
+  return findOwnedTokioFeatureViolations(
+    pkg,
+    SERVICES_INTEGRATIONS_TOKIO_FEATURES,
+    SERVICES_INTEGRATIONS_TOKIO_AGGREGATES,
+  );
 }
 
 function reqwestDependencyFeatureReferences(references) {
@@ -621,7 +660,11 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
 
 
 export function findServicesCoreTokioFeatureViolations(pkg) {
-  return findOwnedTokioFeatureViolations(pkg, SERVICES_CORE_TOKIO_FEATURES);
+  return findOwnedTokioFeatureViolations(
+    pkg,
+    SERVICES_CORE_TOKIO_FEATURES,
+    SERVICES_CORE_TOKIO_AGGREGATES,
+  );
 }
 
 export function findServicesCorePlatformDependencyFeatureViolations(packages) {
@@ -672,9 +715,18 @@ export function findTokioDependencyFeatureViolations(packages) {
       const featureOwnedServicesCoreRuntime =
         pkg.name === 'bitfun-services-core'
         && (dependency.kind ?? null) === null;
-      if (featureOwnedServicesCoreRuntime) {
+      const featureOwnedCoreRuntime =
+        pkg.name === 'bitfun-core'
+        && (dependency.kind ?? null) === null;
+      if (
+        featureOwnedIntegrationRuntime
+        || featureOwnedServicesCoreRuntime
+        || featureOwnedCoreRuntime
+      ) {
         const actual = [...features].sort();
-        const expected = [...SERVICES_CORE_BASE_TOKIO_FEATURES].sort();
+        const expected = [...(featureOwnedCoreRuntime
+          ? ['fs', 'sync']
+          : SERVICES_CORE_BASE_TOKIO_FEATURES)].sort();
         const missing = expected.filter((feature) => !actual.includes(feature));
         const unexpected = actual.filter((feature) => !expected.includes(feature));
         if (missing.length > 0) {
@@ -705,6 +757,13 @@ export function findTokioDependencyFeatureViolations(packages) {
     }
     if (pkg.name === 'bitfun-services-core') {
       violations.push(...findServicesCoreTokioFeatureViolations(pkg));
+    }
+    if (pkg.name === 'bitfun-core') {
+      violations.push(...findOwnedTokioFeatureViolations(
+        pkg,
+        CORE_TOKIO_FEATURES,
+        CORE_TOKIO_AGGREGATES,
+      ));
     }
   }
 
@@ -841,10 +900,13 @@ export function findProductEntrypointCoreFeatureViolations(
     ['bitfun-app-server', [
       'external-sources',
       'git',
+      'i18n-runtime',
       'remote-connect',
     ]],
     ['bitfun-sdk-host-app', coreCompatibilityReviewedFeatures],
   ]);
+  const fullProductCoreEntrypoints = new Set(['bitfun-desktop', 'bitfun-server']);
+  const fullProductCoreEntrypointsFound = new Set();
   const coreCompatibilityActiveFeatures = [
     'agent-runtime',
     'ai-adapter-runtime',
@@ -890,7 +952,12 @@ export function findProductEntrypointCoreFeatureViolations(
     'ssh-remote',
   ];
   const reviewedActiveCoreFeatureClosures = new Map([
-    ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime', 'remote-connect']],
+    ['bitfun-cli', [
+      ...acpActiveCoreFeatures,
+      'i18n-runtime',
+      'plugin-runtime',
+      'remote-connect',
+    ]],
     ['bitfun-acp', acpActiveCoreFeatures],
     ['bitfun-sdk-host-app', coreCompatibilityActiveFeatures],
     ['bitfun-app-server', [
@@ -900,6 +967,7 @@ export function findProductEntrypointCoreFeatureViolations(
       'file-watch',
       'filesystem',
       'git',
+      'i18n-runtime',
       'local-storage',
       'mcp-runtime',
       'model-catalog',
@@ -1081,6 +1149,17 @@ export function findProductEntrypointCoreFeatureViolations(
           message: `product entrypoint ${sourcePackage.name} must select at least one explicit feature for its bitfun-core ${dependencyDescription(dependency)}`,
         });
       }
+      if (fullProductCoreEntrypoints.has(sourcePackage.name)) {
+        fullProductCoreEntrypointsFound.add(sourcePackage.name);
+        const selectedFeatures = [...new Set(dependency.features ?? [])].sort();
+        if (selectedFeatures.length !== 1 || selectedFeatures[0] !== 'product-full') {
+          violations.push({
+            path: sourcePackage.manifest_path,
+            line: 1,
+            message: `${sourcePackage.name} Core capability closure must select exactly product-full`,
+          });
+        }
+      }
       const reviewedClosure = roleOwnedAcpDependency
         ? undefined
         : reviewedCoreFeatureClosures.get(sourcePackage.name);
@@ -1105,6 +1184,18 @@ export function findProductEntrypointCoreFeatureViolations(
           }
         }
       }
+    }
+  }
+  for (const sourceName of packages.some((pkg) => pkg.name === 'bitfun-core')
+    ? fullProductCoreEntrypoints
+    : []) {
+    const sourcePackage = packages.find((pkg) => pkg.name === sourceName);
+    if (sourcePackage && !fullProductCoreEntrypointsFound.has(sourceName)) {
+      violations.push({
+        path: sourcePackage.manifest_path,
+        line: 1,
+        message: `${sourceName} Core capability closure must keep the bitfun-core dependency`,
+      });
     }
   }
 

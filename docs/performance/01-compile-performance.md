@@ -1,8 +1,8 @@
 # BitFun 编译与依赖治理计划
 
-> 最近核实：2026-08-11
+> 最近核实：2026-08-12
 >
-> 实现复核基线：`gcwing/main@7345619ac`
+> 实现复核基线：`gcwing/main@a4e06cae3`
 >
 > 性能 A/B 基线：`gcwing/main@1f538b96d`
 >
@@ -20,9 +20,9 @@
 | Agent Runtime 基线不再隐藏重型 capability | `bitfun-core/agent-runtime` 只保留生命周期和基础工具 owner；文档转换与订阅认证也改为产品显式 modifier。在最新主线 A/B 中，三平台 normal/build 闭包进一步减少 69/64/110 个版本化 package instance |
 | App Server 不继承未消费能力 | App Server 保持现有 Agent/Git/外部来源 handler 边界，不再因 Core 基线携带文档转换和本地订阅凭据，三平台闭包减少 61/56/78 |
 | SDK Host 使用显式能力闭包 | SDK Host 保留当前本机协议和工具能力，但不再通过 `product-full` 携带协议未暴露的 Remote Connect、SSH、Function Agent 等能力；Windows/macOS/Linux normal/build 闭包减少 66/68/76 |
-| Core 默认值不再代表完整产品 | Core library 的默认 feature 集合为空，四条能力内部工具依赖回到实际 owner；`product-full` 仍由真实产品入口显式选择且三平台闭包不变 |
+| Core 默认值不再代表完整产品 | Core library 的默认 feature 集合为空，能力内部实现依赖回到实际 owner；最新三平台 feature-free 闭包继续减少 30/31/31 个 package instance |
 | ACP 按实际宿主拆分角色 | 兼容默认值仍为 client + server；Desktop 只选择 client，CLI 选择两者。Desktop 独立构建不再编译 ACP 的 4,211 行 server/runtime 源码，产品协议与远程行为不变 |
-| 完整产品行为保持 | `product-full` 显式组合全部 owner且三平台闭包不变；CLI 删除未调用适配层时显式保留原先实际生效的 Oniguruma 高亮后端，三平台闭包进一步减少 6/7/7。ACP 默认组合保持原能力 |
+| 完整产品行为保持 | `product-full` 显式组合全部 capability owner；Core 自身不再携带 Desktop host transport而减少 1 个 package，Desktop 闭包不变。CLI 显式保留原先实际生效的 Oniguruma 高亮后端，ACP 默认组合保持原能力 |
 | Installer 删除未使用的直接能力 | 独立 manifest 的直接 dependency 从 18 降到 10，Windows normal/build 闭包减少 6；不把 Installer 并入根 workspace，本 PR 按要求不提交其生成 lockfile |
 | focused test 仍保持精确 | 同 owner、feature、平台和进程语义的源文件进入分组 target；使用 `--test <target> <module>::<filter>` 运行单模块 |
 
@@ -208,6 +208,44 @@ Plugin Source 由各自 owner 选择，完整产品仍经 `product-full` 显式�
 `yaml-rust`、`linked-hash-map`、`tauri-plugin-global-shortcut` 和 `global-hotkey`；没有新增、升级或
 降级 package。本轮 feature/角色边界调整保持该 lockfile 字节不变，也没有新增第三方 package。
 Installer 自己生成的 `BitFun-Installer/src-tauri/Cargo.lock` 不提交。
+
+以下以 `gcwing/main@a4e06cae3` 为变更前基线，完成 Core feature-free 依赖基线的剩余 owner
+收敛。统计仍使用相同三个 target triple、`normal,build` 边和版本化 package instance 去重口径：
+
+| 最新闭包 | Windows | macOS | Linux | 行为边界 |
+|---|---:|---:|---:|---|
+| Core `--no-default-features` | 93 → 63 | 82 → 51 | 81 → 50 | Fluent runtime、Tool Contracts、host transport、诊断/Diff 实现与非基线 Tokio 子图退出；locale/config/path 稳定契约保留 |
+| Core `product-full` | 570 → 569 | 557 → 556 | 601 → 600 | 显式恢复 I18n、Agent 与全部产品 owner；仅不再经 Core 携带 Desktop host transport |
+| Desktop | 790 → 790 | 805 → 805 | 887 → 887 | Desktop 原本已直接拥有 transport，完整宿主依赖图和行为不变 |
+| Services Core feature-free | 22 → 15 | 22 → 15 | 22 → 15 | Regex、Similar 与 Tokio 全部退出；只保留同步稳定 contract、JSONC 与路径规范化 |
+| Codex Adapter | 79 → 72 | 78 → 71 | 78 → 71 | 只使用同步 workspace path contract，不再继承 Services Core 的文本实现依赖 |
+| Static Hook Support | 72 → 65 | 73 → 66 | 72 → 65 | feature-free Services Core 依赖边不再携带未消费的文本实现依赖 |
+| Claude Code Adapter | 85 → 82 | 84 → 81 | 84 → 81 | Markdown owner 仍保留 Regex；Diff 与 Tokio 退出 |
+| OpenCode Adapter | 141 → 140 | 140 → 139 | 140 → 139 | 既有 Markdown/Tokio owner 保留，仅未消费的 Similar 退出 |
+
+Core 的直接 Tokio capability 从 `fs/io-util/macros/net/rt/sync/time` 收敛为 `fs/sync`；异步宏、
+网络以及产品 runtime 能力由现有 `agent-runtime`、`browser-control`、`debug-log`、`lsp` owner
+显式选择。feature-free Core 仍通过 `bitfun-services-core/json-io` 获得其原子 JSON 写入所需的
+`rt/time`，测试使用的多线程运行时只留在 dev-dependency。`runtime-ports/permission` 没有被机械移出：`GlobalConfig` 与项目权限文件公开 DTO
+确实在 feature-free facade 中使用它，继续保留比制造条件 API 更符合契约稳定性。
+
+Services Core 的 feature-free profile 进一步不再依赖 Tokio。同步路径规范化仍可直接使用；异步受限
+workspace 读取由 `workspace-text-runtime` 选择，诊断日志脱敏与本地 Diff 分别由独立 owner feature
+选择。Core 继续通过同名 feature 保留原 facade，`product-full` 显式组合两者，避免把依赖收敛变成
+完整产品的源码或行为回归。
+
+本轮有意收紧了数项编译期契约。直接使用 feature-free Core 的仓外 consumer 若调用
+`I18nService`，必须显式选择 `i18n-runtime`；旧的
+`bitfun_core::infrastructure::events::TransportEmitter` 导入路径不再提供，host adapter 应直接从
+`bitfun-transport` 导入。直接依赖 feature-free `bitfun-services-core` 的 consumer 若调用诊断脱敏、
+本地 Diff 或异步 workspace 文本 API，必须分别选择 `diagnostics`、`diff` 或
+`workspace-text-runtime`；通过 Core 兼容 facade 调用前两者时选择同名 Core feature。仓内真实 consumer
+已全部迁移，完整产品的运行时事件、翻译和服务行为不变，但这些源码迁移不能描述为对未知外部
+consumer 零影响。
+
+根 lock package 仍为 1169，新增、升级、降级 package 均为 0。由于 Core 删除本地
+`bitfun-transport` 直接边，`Cargo.lock` 的 Core dependency record 同步删除这一行；这是依赖边
+收敛，不是 package 集合增长，也不通过保留无 owner 的 optional dependency 伪造字节不变。
 
 | 状态 | 范围 | 处理结论 |
 |---|---|---|

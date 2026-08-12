@@ -364,6 +364,8 @@ export function runManifestParserSelfTest({
 
   for (const featureName of [
     'agent-runtime',
+    'diagnostics',
+    'diff',
     'announcement',
     'canvas-runtime',
     'debug-log',
@@ -371,6 +373,7 @@ export function runManifestParserSelfTest({
     'file-watch',
     'filesystem',
     'git',
+    'i18n-runtime',
     'lsp',
     'local-storage',
     'process-runtime',
@@ -401,11 +404,29 @@ export function runManifestParserSelfTest({
   const servicesCoreManifest = 'src/crates/services/services-core/Cargo.toml';
   const expectedClosedCoreProfiles = [
     [coreManifest, 'default', []],
+    [coreManifest, 'i18n-runtime', ['dep:fluent-bundle', 'dep:unic-langid']],
+    [coreManifest, 'diagnostics', ['bitfun-services-core/diagnostics']],
+    [coreManifest, 'diff', ['bitfun-services-core/diff']],
     [servicesCoreManifest, 'default', []],
+    [servicesCoreManifest, 'diagnostics', ['dep:regex']],
+    [
+      servicesCoreManifest,
+      'diff',
+      ['dep:similar', 'dep:tokio', 'tokio/rt', 'tokio/time'],
+    ],
     [
       servicesCoreManifest,
       'filesystem',
-      ['dep:base64', 'dep:chrono', 'dep:ignore', 'dep:sha2', 'tokio/fs'],
+      [
+        'dep:base64',
+        'dep:chrono',
+        'dep:ignore',
+        'dep:regex',
+        'dep:sha2',
+        'dep:tokio',
+        'tokio/fs',
+        'tokio/rt',
+      ],
     ],
     [
       servicesCoreManifest,
@@ -416,10 +437,15 @@ export function runManifestParserSelfTest({
         'dep:chrono',
         'dep:fs2',
         'dep:libc',
+        'dep:regex',
         'dep:sha2',
+        'dep:similar',
+        'dep:tokio',
         'dep:windows',
         'tokio/fs',
+        'tokio/rt',
         'tokio/sync',
+        'tokio/time',
         'windows/Win32_Foundation',
         'windows/Win32_Storage_FileSystem',
       ],
@@ -429,11 +455,14 @@ export function runManifestParserSelfTest({
       'process-runtime',
       [
         'dep:libc',
+        'dep:tokio',
         'dep:which',
         'dep:win32job',
         'dep:windows',
         'tokio/io-util',
         'tokio/process',
+        'tokio/rt',
+        'tokio/time',
         'windows/Win32_Foundation',
         'windows/Win32_System_Diagnostics_ToolHelp',
         'windows/Win32_System_Threading',
@@ -442,7 +471,20 @@ export function runManifestParserSelfTest({
     [
       servicesCoreManifest,
       'workspace-instructions',
-      ['dep:globset', 'dep:serde_yaml', 'tokio/fs', 'tokio/io-util'],
+      [
+        'dep:globset',
+        'dep:regex',
+        'dep:serde_yaml',
+        'dep:tokio',
+        'tokio/fs',
+        'tokio/io-util',
+        'tokio/rt',
+      ],
+    ],
+    [
+      servicesCoreManifest,
+      'workspace-text-runtime',
+      ['dep:tokio', 'tokio/rt'],
     ],
     [
       servicesCoreManifest,
@@ -480,9 +522,13 @@ export function runManifestParserSelfTest({
       ['dep:base64', 'local-storage', 'bitfun-services-core/dispatch-workspace'],
     ],
     [coreManifest, 'filesystem', ['bitfun-services-core/filesystem']],
-    [coreManifest, 'local-storage', ['bitfun-services-core/local-storage']],
+    [
+      coreManifest,
+      'local-storage',
+      ['dep:bitfun-agent-tools', 'bitfun-services-core/local-storage'],
+    ],
     [coreManifest, 'process-runtime', ['bitfun-services-core/process-runtime']],
-    [coreManifest, 'lsp', ['dep:notify', 'bitfun-services-core/lsp']],
+    [coreManifest, 'lsp', ['dep:notify', 'bitfun-services-core/lsp', 'tokio/macros']],
     [coreManifest, 'terminal', ['dep:terminal-core']],
     [
       coreManifest,
@@ -1021,6 +1067,7 @@ export function runManifestParserSelfTest({
     'schannel',
     'win32job',
     'bitfun-relay-service',
+    'bitfun-transport',
     'htmd',
     'legible',
     'readability-js',
@@ -1039,6 +1086,7 @@ export function runManifestParserSelfTest({
     'aes',
     'aes-gcm',
     'bitfun-relay-service',
+    'bitfun-transport',
     'eventsource-stream',
     'git2',
     'glob',
@@ -1098,8 +1146,13 @@ export function runManifestParserSelfTest({
     ['ignore', ['filesystem']],
     ['libc', ['local-storage', 'process-runtime']],
     ['notify', ['lsp']],
+    [
+      'regex',
+      ['diagnostics', 'filesystem', 'local-storage', 'markdown', 'workspace-instructions'],
+    ],
     ['rusqlite', ['permission']],
     ['serde_yaml', ['markdown', 'workspace-instructions']],
+    ['similar', ['diff', 'local-storage']],
     [
       'sha2',
       [
@@ -1114,6 +1167,21 @@ export function runManifestParserSelfTest({
     ['win32job', ['process-runtime']],
     ['windows', ['json-io', 'local-storage', 'process-runtime']],
     ['zip', ['lsp']],
+    [
+      'tokio',
+      [
+        'diff',
+        'filesystem',
+        'json-io',
+        'local-storage',
+        'lsp',
+        'permission',
+        'process-runtime',
+        'workspace-instructions',
+        'workspace-runtime',
+        'workspace-text-runtime',
+      ],
+    ],
   ]);
   for (const [dependencyName, ownerFeatures] of expectedServicesCoreOwners) {
     const dependency = servicesCoreOptionalOwnerRule?.dependencies.find(

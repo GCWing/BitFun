@@ -1,6 +1,8 @@
 //! Safe bounded reads for explicitly referenced local workspace text files.
 
+#[cfg(feature = "workspace-text-runtime")]
 use crate::bounded_fs::{is_symlink_or_reparse, read_bounded_text, BoundedTextRead};
+#[cfg(feature = "workspace-text-runtime")]
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -45,6 +47,7 @@ pub enum WorkspaceTextReadError {
     Io(String),
 }
 
+#[cfg(feature = "workspace-text-runtime")]
 pub async fn read_workspace_relative_text_bounded(
     workspace_root: &Path,
     relative_path: &str,
@@ -83,6 +86,7 @@ pub async fn read_workspace_relative_text_bounded(
 /// Every path component is checked with `symlink_metadata`, so callers cannot
 /// turn a structured workspace reference into a symlink or reparse-point
 /// escape after it was selected by the UI.
+#[cfg(feature = "workspace-text-runtime")]
 pub async fn resolve_workspace_relative_entry(
     workspace_root: &Path,
     relative_path: &str,
@@ -134,6 +138,7 @@ pub fn normalize_workspace_relative_path(value: &str) -> Result<String, Workspac
     Ok(components.join("/"))
 }
 
+#[cfg(feature = "workspace-text-runtime")]
 fn resolve_workspace_file(
     workspace_root: &Path,
     components: &[String],
@@ -145,6 +150,7 @@ fn resolve_workspace_file(
     Ok(path)
 }
 
+#[cfg(feature = "workspace-text-runtime")]
 fn resolve_workspace_entry(
     workspace_root: &Path,
     components: &[String],
@@ -207,6 +213,7 @@ fn resolve_workspace_entry(
     Ok((canonical_entry, kind))
 }
 
+#[cfg(feature = "workspace-text-runtime")]
 fn map_read_error(error: std::io::Error) -> WorkspaceTextReadError {
     if error.kind() == std::io::ErrorKind::NotFound {
         WorkspaceTextReadError::NotFound
@@ -215,7 +222,7 @@ fn map_read_error(error: std::io::Error) -> WorkspaceTextReadError {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "workspace-text-runtime"))]
 mod tests {
     use super::{
         read_workspace_relative_text_bounded, resolve_workspace_relative_entry, WorkspaceEntryKind,
@@ -376,5 +383,45 @@ mod tests {
     #[cfg(windows)]
     fn create_file_symlink(target: &Path, link: &Path) -> bool {
         std::os::windows::fs::symlink_file(target, link).is_ok()
+    }
+}
+
+#[cfg(test)]
+mod path_contract_tests {
+    use super::{
+        normalize_workspace_relative_path, WorkspaceEntry, WorkspaceEntryKind, WorkspaceTextFile,
+        WorkspaceTextReadError,
+    };
+
+    #[test]
+    fn normalizes_only_safe_workspace_relative_paths_without_async_runtime() {
+        assert_eq!(
+            normalize_workspace_relative_path(r"src\.\lib.rs").unwrap(),
+            "src/lib.rs"
+        );
+        assert_eq!(
+            WorkspaceEntry {
+                relative_path: "src".to_string(),
+                kind: WorkspaceEntryKind::Directory,
+            }
+            .kind,
+            WorkspaceEntryKind::Directory
+        );
+        assert_eq!(
+            WorkspaceTextFile {
+                relative_path: "src/lib.rs".to_string(),
+                content: "fn main() {}".to_string(),
+                byte_len: 12,
+            }
+            .byte_len,
+            12
+        );
+        for invalid in ["", ".", "../secret.md", "/etc/passwd", r"C:\secret.md"] {
+            assert_eq!(
+                normalize_workspace_relative_path(invalid),
+                Err(WorkspaceTextReadError::InvalidRelativePath),
+                "{invalid:?}"
+            );
+        }
     }
 }

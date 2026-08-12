@@ -67,8 +67,19 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   否则 Cargo feature union 会迫使所有 core consumer 编译它们。
 - Core 的默认 feature 集合为空。`product-full` 是由真实产品入口显式选择的兼容组装，不能再作为
   library 的隐式默认值。能力内部使用的工具依赖必须保持 optional 并由 owner feature 激活；
-  `base64`、`futures`、`regex` 与 `tokio-util` 分别归实际使用它们的 Agent Runtime、
-  dispatch-store 或 debug-log 闭包。
+  `base64`、`futures`、`regex`、`tokio-util` 与 `bitfun-agent-tools` 分别归实际使用它们的
+  Agent Runtime、local-storage、dispatch-store 或 debug-log 闭包。Core 的 feature-free 直接 Tokio
+  依赖只保留 config 与 app-path 状态所需的文件系统和同步能力；被显式选择的 Services Core
+  `json-io` owner 另外持有受限原子 JSON 写入所需的 runtime/time capability。
+- 后端 Fluent bundle 与可变翻译状态归 `i18n-runtime`；locale id、别名、fallback、metadata 与
+  面向模型的语言文案仍是 feature-free 契约。调用 `I18nService` 的 host 必须显式选择
+  `i18n-runtime`。
+- 可复用诊断脱敏和本地 Diff 实现分别通过精确的 `diagnostics`、`diff` feature 保留兼容 facade。
+  Agent Runtime 为受限异步 workspace 读取选择 `bitfun-services-core/workspace-text-runtime`；
+  contract-only consumer 使用同步路径规范化时不需要 Tokio。
+- 平台 transport emitter 属于 host adapter。Desktop 直接导入
+  `bitfun_transport::TransportEmitter`；Core 只暴露稳定的
+  `bitfun_events::EventEmitter` 契约，不得重新导出 host adapter。
 - 保持 `cargo check -p bitfun-core --no-default-features` 可用。产品专属模块必须由 owner feature 控制；轻量 facade
   操作在缺少产品 owner 时若无法安全完成，应明确 fail-closed 并保留持久化恢复状态，不得隐式启用 `product-full`。
 

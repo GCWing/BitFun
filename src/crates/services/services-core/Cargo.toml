@@ -16,7 +16,7 @@ async-trait = { workspace = true, optional = true }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 bitfun-events = { path = "../../contracts/events", optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
-tokio = { workspace = true, features = ["rt", "time"] }
+tokio = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true, optional = true }
@@ -33,8 +33,8 @@ ignore = { workspace = true, optional = true }
 globset = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 which = { workspace = true, optional = true }
-similar = { workspace = true }
-regex = { workspace = true }
+similar = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
 rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
@@ -50,12 +50,26 @@ libc = { workspace = true, optional = true }
 
 [features]
 default = []
-filesystem = ["dep:base64", "dep:chrono", "dep:ignore", "dep:sha2", "tokio/fs"]
+diagnostics = ["dep:regex"]
+diff = ["dep:similar", "dep:tokio", "tokio/rt", "tokio/time"]
+filesystem = [
+    "dep:base64",
+    "dep:chrono",
+    "dep:ignore",
+    "dep:regex",
+    "dep:sha2",
+    "dep:tokio",
+    "tokio/fs",
+    "tokio/rt",
+]
 json-io = [
     "dep:fs2",
+    "dep:tokio",
     "dep:windows",
     "tokio/fs",
+    "tokio/rt",
     "tokio/sync",
+    "tokio/time",
     "windows/Win32_Foundation",
     "windows/Win32_Storage_FileSystem",
 ]
@@ -65,25 +79,41 @@ local-storage = [
     "dep:chrono",
     "dep:fs2",
     "dep:libc",
+    "dep:regex",
     "dep:sha2",
+    "dep:similar",
+    "dep:tokio",
     "dep:windows",
     "tokio/fs",
+    "tokio/rt",
     "tokio/sync",
+    "tokio/time",
     "windows/Win32_Foundation",
     "windows/Win32_Storage_FileSystem",
 ]
 process-runtime = [
     "dep:libc",
+    "dep:tokio",
     "dep:which",
     "dep:win32job",
     "dep:windows",
     "tokio/io-util",
     "tokio/process",
+    "tokio/rt",
+    "tokio/time",
     "windows/Win32_Foundation",
     "windows/Win32_System_Diagnostics_ToolHelp",
     "windows/Win32_System_Threading",
 ]
-workspace-instructions = ["dep:globset", "dep:serde_yaml", "tokio/fs", "tokio/io-util"]
+workspace-instructions = [
+    "dep:globset",
+    "dep:regex",
+    "dep:serde_yaml",
+    "dep:tokio",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/rt",
+]
 lsp = [
     "dep:anyhow",
     "dep:bitfun-core-types",
@@ -94,7 +124,7 @@ lsp = [
     "tokio/io-util",
     "tokio/sync",
 ]
-markdown = ["dep:serde_yaml"]
+markdown = ["dep:regex", "dep:serde_yaml"]
 workspace-runtime = [
     "dep:anyhow",
     "dep:async-trait",
@@ -107,14 +137,22 @@ workspace-runtime = [
 ]
 workspace-identity = ["dep:dunce", "dep:sha2"]
 runtime-ownership = ["dep:dunce", "dep:fs2", "dep:sha2"]
-permission = ["dep:async-trait", "dep:bitfun-runtime-ports", "dep:rusqlite", "bitfun-runtime-ports/permission"]
+permission = [
+    "dep:async-trait",
+    "dep:bitfun-runtime-ports",
+    "dep:rusqlite",
+    "dep:tokio",
+    "bitfun-runtime-ports/permission",
+    "tokio/rt",
+]
 dispatch-workspace = ["dep:anyhow", "dep:sha2"]
 session-git = ["local-storage", "dep:git2"]
+workspace-text-runtime = ["dep:tokio", "tokio/rt"]
 
 [dev-dependencies]
 filetime = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros", "time"] }
 
 [[test]]
 name = "markdown_owner_contracts"

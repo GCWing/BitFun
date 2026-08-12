@@ -11,7 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 # Inherit shared dependencies from workspace
-tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["fs", "sync"] }
 tokio-util = { workspace = true, optional = true }
 async-trait = { workspace = true }
 futures = { workspace = true, optional = true }
@@ -79,7 +79,7 @@ bitfun-product-capabilities = { path = "../product-capabilities", default-featur
 bitfun-external-sources = { path = "../external-sources", optional = true }
 
 # Agent tool contracts
-bitfun-agent-tools = { path = "../../execution/tool-contracts" }
+bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
 
 # Tool pack provider plan
 bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false, optional = true }
@@ -100,8 +100,8 @@ tool-runtime = { path = "../../execution/tool-execution", default-features = fal
 terminal-core = { path = "../../services/terminal", optional = true }
 
 # I18n internationalization
-fluent-bundle = { workspace = true }
-unic-langid = { workspace = true }
+fluent-bundle = { workspace = true, optional = true }
+unic-langid = { workspace = true, optional = true }
 
 sha2 = { workspace = true }
 
@@ -121,9 +121,6 @@ bitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional =
 bitfun-claude-code-adapter = { path = "../../adapters/claude-code-adapter", optional = true }
 bitfun-codex-adapter = { path = "../../adapters/codex-adapter", optional = true }
 bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client", optional = true }
-
-# Transport layer dependency
-bitfun-transport = { path = "../../adapters/transport" }
 
 [features]
 # Full product runtime compatibility set. Product entrypoints with a narrower
@@ -148,7 +145,10 @@ ts = [
 product-full = [
     "agent-runtime",
     "document-read",
+    "diagnostics",
+    "diff",
     "subscription-auth",
+    "i18n-runtime",
     "model-catalog",
     "mcp-runtime",
     "remote-connect",
@@ -197,6 +197,7 @@ agent-runtime = [
     "dep:bitfun-agent-runtime",
     "dep:bitfun-agent-content",
     "dep:bitfun-agent-stream",
+    "dep:bitfun-agent-tools",
     "dep:base64",
     "dep:bitfun-harness",
     "dep:dashmap",
@@ -215,6 +216,7 @@ agent-runtime = [
     "dep:tool-runtime",
     "bitfun-services-core/permission",
     "bitfun-services-core/runtime-ownership",
+    "bitfun-services-core/workspace-text-runtime",
     "bitfun-services-core/session-git",
     "filesystem",
     "local-storage",
@@ -228,7 +230,14 @@ agent-runtime = [
     "tool-packs",
     "tools-basic",
     "tools-agent-control",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/rt",
+    "tokio/time",
 ]
+# Backend Fluent translation state. Locale contracts and model-facing language
+# facts remain available without this runtime implementation.
+i18n-runtime = ["dep:fluent-bundle", "dep:unic-langid"]
 external-sources = [
     "agent-runtime",
     "model-catalog",
@@ -271,6 +280,9 @@ workspace-search = [
 browser-control = [
     "dep:tokio-tungstenite",
     "bitfun-services-integrations/browser-control",
+    "tokio/net",
+    "tokio/rt",
+    "tokio/time",
 ]
 web-tools = [
     "bitfun-services-integrations/web-tools",
@@ -341,6 +353,10 @@ debug-log = [
     "dep:tokio-util",
     "dep:tower-http",
     "bitfun-services-integrations/debug-log",
+    "tokio/macros",
+    "tokio/net",
+    "tokio/rt",
+    "tokio/time",
 ]
 ai-adapter-runtime = [
     "dep:bitfun-ai-adapters",
@@ -368,11 +384,13 @@ file-watch = ["bitfun-services-integrations/file-watch"]
 git = ["bitfun-services-integrations/git"]
 review-platform = ["bitfun-services-integrations/review-platform"]
 service-integrations = ["announcement", "file-watch", "git", "review-platform"]
+diagnostics = ["bitfun-services-core/diagnostics"]
+diff = ["bitfun-services-core/diff"]
 dispatch-store = ["dep:base64", "local-storage", "bitfun-services-core/dispatch-workspace"]
 filesystem = ["bitfun-services-core/filesystem"]
-local-storage = ["bitfun-services-core/local-storage"]
+local-storage = ["dep:bitfun-agent-tools", "bitfun-services-core/local-storage"]
 process-runtime = ["bitfun-services-core/process-runtime"]
-lsp = ["dep:notify", "bitfun-services-core/lsp"]
+lsp = ["dep:notify", "bitfun-services-core/lsp", "tokio/macros"]
 terminal = ["dep:terminal-core"]
 workspace-runtime = [
     "dep:serde_yaml",
@@ -402,7 +420,7 @@ ssh-remote = [
 [dev-dependencies]
 bitfun-runtime-services = { path = "../../execution/runtime-services", features = ["test-support"] }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [[test]]
 name = "git_contracts"
