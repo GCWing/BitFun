@@ -422,6 +422,14 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 name = "git_contracts"
 required-features = ["git"]
 
+[[test]]
+name = "rbac_poke_integration"
+required-features = ["agent-runtime"]
+
+[[test]]
+name = "rbac_master_switch"
+required-features = ["agent-runtime"]
+
 [build-dependencies]
 sha2 = { workspace = true }
 
