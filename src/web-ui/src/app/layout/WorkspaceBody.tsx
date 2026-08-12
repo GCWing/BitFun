@@ -32,6 +32,7 @@ interface WorkspaceBodyProps {
   onMaximize?: () => void;
   onClose?: () => void;
   isMaximized?: boolean;
+  reserveNativeWindowControls?: boolean;
   sceneOverlay?: React.ReactNode;
 }
 
@@ -43,6 +44,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
   onMaximize,
   onClose,
   isMaximized = false,
+  reserveNativeWindowControls = false,
   sceneOverlay,
 }) => {
   const { workspace: currentWorkspace } = useCurrentWorkspace();
@@ -177,6 +179,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
           onMaximize={onMaximize}
           onClose={onClose}
           isMaximized={isMaximized}
+          reserveNativeWindowControls={reserveNativeWindowControls}
         />
         <SceneViewport
           workspacePath={currentWorkspace?.rootPath}

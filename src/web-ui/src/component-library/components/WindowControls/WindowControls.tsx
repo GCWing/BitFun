@@ -23,6 +23,8 @@ export interface WindowControlsProps extends React.HTMLAttributes<HTMLDivElement
   'data-testid-minimize'?: string;
   'data-testid-maximize'?: string;
   'data-testid-close'?: string;
+  /** Render only the native-titlebar spacer used by the OHOS host. */
+  nativePlaceholder?: boolean;
 }
 
 /**
@@ -46,9 +48,15 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
   'data-testid-minimize': testIdMinimize,
   'data-testid-maximize': testIdMaximize,
   'data-testid-close': testIdClose,
+  nativePlaceholder = false,
   ...props
 }) => {
   const { t } = useTranslation('common');
+
+  if (nativePlaceholder) {
+    return <div className={`window-controls ${className}`} style={{ width: 128 }} {...props} />;
+  }
+
   const defaultMinimizeIcon = (
     <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
       <line x1="3" y1="7" x2="11" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
