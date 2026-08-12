@@ -80,6 +80,7 @@ import {
   traceViewportPlacement,
   traceViewportRepeating,
 } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
+import { noteFlowListCommit } from '@/infrastructure/diagnostics/flowChatTailFollowDiagnostics';
 import './VirtualMessageList.scss';
 
 const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
@@ -342,6 +343,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   onUserScrollIntent,
 }, ref) => {
   const { t } = useTranslation('flow-chat');
+  /**
+   * This render, counted.
+   *
+   * The price of following the tail by growing an item is paid here: a height
+   * change makes the virtualizer re-measure, which lands back in this component.
+   * A follow that scrolls inside an item instead claims to cost nothing, and
+   * this is the counter that claim is checked against. Deliberately dependency
+   * free — every commit counts, whatever caused it.
+   */
+  useEffect(() => {
+    noteFlowListCommit();
+  });
   const canonicalVirtualItems = useVirtualItems();
   const virtualItems = items ?? canonicalVirtualItems;
   const activeSession = useActiveSession();

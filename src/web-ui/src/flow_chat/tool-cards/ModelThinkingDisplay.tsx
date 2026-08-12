@@ -14,6 +14,10 @@ import type { FlowThinkingItem } from '../types/flow-chat';
 import { useTypewriter } from '../hooks/useTypewriter';
 import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import {
+  isTailFollowDiagnosticsEnabled,
+  noteTailFollowStep,
+} from '@/infrastructure/diagnostics/flowChatTailFollowDiagnostics';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import './ModelThinkingDisplay.scss';
 
@@ -85,8 +89,27 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
       return;
     }
 
+    // Sampled around the write rather than derived from it: the browser clamps
+    // `scrollTop` to the scrollable range, so what the follow asked for and what
+    // it got are not the same number, and the second one is the visible step.
+    const measuring = isTailFollowDiagnosticsEnabled();
+    const beforePx = measuring ? el.scrollTop : 0;
+    const maxScrollTopPx = measuring ? el.scrollHeight - el.clientHeight : 0;
+
     el.scrollTop = el.scrollHeight;
     shouldFollowTailRef.current = true;
+
+    if (measuring) {
+      noteTailFollowStep('thinking', {
+        stepPx: el.scrollTop - beforePx,
+        lagPx: maxScrollTopPx - beforePx,
+        // Below the card's `max-height` the box is still growing, so each of
+        // these steps also costs the list a re-measure. Above it, none do.
+        innerScroll: el.scrollHeight > el.clientHeight,
+        // Today every write jumps the whole way. This stays true until it does not.
+        snapped: true,
+      });
+    }
   }, []);
 
   const pauseTailFollowForUserScroll = useCallback(() => {
