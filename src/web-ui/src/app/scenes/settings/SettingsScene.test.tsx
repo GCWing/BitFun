@@ -99,14 +99,20 @@ describe('SettingsScene lazy tab routing', () => {
    * The scene holds its very first paint until the active tab's lazy chunk and
    * i18n namespaces are in memory, so a cold entry cannot flash a skeleton and a
    * frame of raw i18n keys. Both land off a macrotask, past what act() flushes.
+   *
+   * On CI runners the preload promise chain can take longer than a burst of
+   * macrotasks, so poll with a real delay instead of a fixed loop of
+   * setTimeout(0) to avoid flaking under load.
    */
   async function waitForPanelContent(testId: string) {
-    for (let attempt = 0; attempt < 50; attempt += 1) {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
       if (container.querySelector(`[data-testid="${testId}"]`)) return;
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 10));
       });
     }
+    throw new Error(`Timed out waiting for panel content: ${testId}`);
   }
 
   async function renderActiveTab(

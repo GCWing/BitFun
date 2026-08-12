@@ -16,6 +16,6 @@ export const groupChatPaneAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'messageAuthor' },
     { id: 'messageContent' },
     { id: 'input' },
-    { id: 'textInput' },
+    { id: 'error' },
   ],
 };
