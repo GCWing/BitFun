@@ -53,7 +53,12 @@ before reporting a defect as new.
   `flowChatViewportDiagnostics.ts`. The register records the writes; a write
   that never happened is invisible everywhere else, and "nothing happened" is
   the more common report. Anything reachable every frame goes through
-  `traceViewportRepeating`, keyed by what distinguishes one run from another.
+  `traceViewportRepeating`, keyed by what distinguishes one run from another —
+  **including the magnitude a reader would feel and the subject it is about**. A
+  run collapses to its first sample and turns the rest into a sum, so a key too
+  coarse to separate a rounding correction from a 400px one hides exactly the
+  events worth having: two rounds of diagnosis in a row read `0.7px` against
+  458.7px of suppressed travel spanning three different anchors.
 - There are no viewport writes outside the register. Adding one means wrapping
   it in `traceViewportPlacement` and having a reason it cannot be a register
   write; both writers that used to be outside are gone.

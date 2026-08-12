@@ -179,3 +179,16 @@ group does not renumber the others.
 5. From the Session Usage report, click a tool call and a slow span. Each must
    come to rest with that item centred, in **one** movement — no landing on the
    Turn followed by a slide onto the item a few frames later.
+6. **While a Turn is streaming**, click a Turn well up the history. It must land
+   on that Turn and stay there — not drift back to where you were reading half a
+   second later, which is when the navigation's hold lapses. Then click the same
+   Turn again from where you land: the second and later clicks used to fail
+   where the first appeared to work.
+7. While a Turn is streaming, scroll up with the wheel and let it stop. The
+   viewport stays where the gesture left it. Repeat several times in a row and
+   keep going after streaming ends: the failure was a scroll that came to rest
+   and was then returned, in full, to where that gesture had started.
+8. Scroll **down** through a long answer in several flicks, in a session with
+   enough history to keep re-measuring. Each flick keeps its distance — the
+   failure was arriving and then sliding back part of the way, every time, so
+   that a given point in the transcript could not be passed at all.

@@ -110,6 +110,12 @@ describe('useFlowChatViewportAnchor', () => {
     scroller = document.createElement('div');
     document.body.append(container, scroller);
     scroller.getBoundingClientRect = () => rect(0, VIEWPORT_HEIGHT);
+    // jsdom leaves this at 0, and the anchor uses it to tell a marker on screen
+    // from one past the bottom edge.
+    Object.defineProperty(scroller, 'clientHeight', {
+      configurable: true,
+      value: VIEWPORT_HEIGHT,
+    });
     Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 0 });
     frames = [];
     now = 10_000;
@@ -320,6 +326,160 @@ describe('useFlowChatViewportAnchor', () => {
     layoutTurns({ 'turn-3': 2360, 'turn-4': 3880 });
     expect(api.restoreAnchor()).toBe(true);
     expect(scroller.scrollTop).toBe(3900);
+  });
+
+  it('credits a scroll to the reader when its event arrives after the window', () => {
+    /*
+     * The window is measured from the *input* event and the scrolling it
+     * authorises outlives it: a wheel notch smooth-scrolls for longer than the
+     * window, and a busy main thread delivers the scroll event carrying the
+     * whole travel after it has closed. Measured over 181 seconds: fourteen
+     * gestures, one capture, and seven corrections between 308px and 618px that
+     * each returned the viewport to exactly where its gesture had started.
+     *
+     * Nobody else can account for it — no owner holds the viewport — so it is
+     * theirs, and the anchor goes with them rather than undoing them.
+     */
+    scroller.scrollTop = 1450;
+    layoutTurns({ 'turn-3': 1500 });
+    api.captureAnchor();
+
+    api.markUserScrollIntent();
+    now += USER_DRIVEN_SCROLL_WINDOW_MS * 2;
+    scroller.scrollTop = 834;
+    api.captureAnchorForScroll();
+
+    // In place, not corrected: their 616px is where they asked to be.
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBe(834);
+  });
+
+  it('leaves a registered writer where it put the viewport, and still repairs', () => {
+    /*
+     * The other thing that changes `scrollTop`, and it is not drift either: a
+     * writer that owns the viewport chose that position, which is the whole
+     * point of the register. So its travel is taken out of the correction the
+     * same way the reader's is, and what is left is the displacement — here the
+     * 100px the transcript really moved while `scrollTop` stood still.
+     */
+    scroller.scrollTop = 1450;
+    layoutTurns({ 'turn-3': 1500 });
+    api.captureAnchor();
+
+    isOwnedElsewhere = true;
+    now += USER_DRIVEN_SCROLL_WINDOW_MS * 2;
+    scroller.scrollTop = 834;
+    api.captureAnchorForScroll();
+    isOwnedElsewhere = false;
+
+    layoutTurns({ 'turn-3': 1400 });
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBe(734);
+  });
+
+  it('does not undo a scroll the settle loop beat the scroll event to', () => {
+    /*
+     * The measured shape, and the one that survived two rounds of fixes. The
+     * settle loop reads `scrollTop` from the DOM, a commit opens a window on
+     * almost every frame, and the scroll event carrying the reader's travel is
+     * delivered after all of that — so a correction runs against a reading
+     * position agreed hundreds of pixels ago, with no capture in between.
+     *
+     * Measured: an anchor agreed at scrollTop 144.7 corrected by -515.8px with
+     * the reader at 652.7, of which 7.8px was the transcript actually moving.
+     */
+    scroller.scrollTop = 144.7;
+    layoutTurns({ 'turn-3': 303.5 });
+    api.captureAnchor();
+
+    // They scroll 508px and no scroll event has been delivered yet, so nothing
+    // re-anchors. Meanwhile the transcript moves 7.8px up underneath them.
+    scroller.scrollTop = 652.7;
+    layoutTurns({ 'turn-3': 295.7 });
+
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBeCloseTo(644.9, 6);
+  });
+
+  it('does not bank a frame with nothing to correct as a debt against the reader', () => {
+    /*
+     * The offset and the viewport position it was agreed at are two halves of
+     * one fact, and a frame that advances only one of them leaves the anchor
+     * claiming a repair it does not have. It is reached constantly: a frame in
+     * which only the reader moved has a correction of exactly zero, so this is
+     * the ordinary outcome of a settle rather than a rarity.
+     *
+     * Measured over one reproduction: a 32px scroll and an 81px scroll, each
+     * reported back a frame later as a correction of exactly itself, with the
+     * anchored Turn provably not having moved.
+     */
+    scroller.scrollTop = 414.7;
+    layoutTurns({ 'turn-3': 603.9 });
+    api.captureAnchor();
+
+    // They scroll 32px. Nothing else moved, so there is nothing to correct.
+    scroller.scrollTop = 446.7;
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBeCloseTo(446.7, 6);
+
+    // And still nothing on the frame after it.
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBeCloseTo(446.7, 6);
+  });
+
+  it('does not re-owe a correction it has just made', () => {
+    /*
+     * The same two halves, on the other branch. The shift puts the Turn back at
+     * the stored offset, so the position advances by the correction and the
+     * offset stays. Get that pair wrong and the repair is read as movement on
+     * the frame after it and undone — which only shows up when the reader has
+     * travelled since the anchor was agreed, so it is the case a repair made
+     * while they are scrolling always falls into.
+     */
+    scroller.scrollTop = 1_000;
+    layoutTurns({ 'turn-3': 980 });
+    api.captureAnchor();
+
+    // They scroll 100px with no scroll event delivered to re-anchor them, and
+    // the transcript moves 40px down underneath them in the same frame.
+    scroller.scrollTop = 1_100;
+    layoutTurns({ 'turn-3': 1_020 });
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBe(1_140);
+
+    // Their 100px is theirs and the repair is not movement to undo.
+    expect(api.restoreAnchor()).toBe(true);
+    expect(scroller.scrollTop).toBe(1_140);
+  });
+
+  it('takes a new reading position from where a navigation landed', () => {
+    /*
+     * A navigation is not a displacement, and standing down for it only
+     * postpones the correction. Measured over four clicks on one Turn: the aim
+     * placed the viewport at 287px each time, and each time the anchor put it
+     * back 1653px away on the first frame after the hold lapsed, still anchored
+     * to the Turn the reader had jumped away from.
+     */
+    scroller.scrollTop = 1894;
+    layoutTurns({ 'turn-9': 2295 });
+    api.captureAnchor();
+
+    api.reanchorAfterNavigation();
+    // Nothing to restore in between, which is the point: the position being
+    // left has stopped being the one to put back.
+    expect(api.restoreAnchor()).toBe(false);
+    expect(scroller.scrollTop).toBe(1894);
+
+    // The aim lands, and the commit that renders it opens a settle window.
+    scroller.scrollTop = 287;
+    layoutTurns({ 'turn-1': 300, 'turn-9': 2295 });
+    api.openSettleWindow();
+
+    // A late measurement moves the transcript under the Turn they navigated to,
+    // and the correction is that displacement — not the jump.
+    layoutTurns({ 'turn-1': 400, 'turn-9': 2395 });
+    runFrame();
+    expect(scroller.scrollTop).toBe(387);
   });
 
   it('re-asserts the anchor across the frames a settle takes', () => {

@@ -35,6 +35,7 @@ import {
 import {
   ANCHOR_CORRECTION_EPSILON_PX,
   ANCHOR_MISSING_TURN_ATTEMPTS,
+  ANCHOR_NOTABLE_CORRECTION_PX,
   ANCHOR_SETTLE_FRAMES,
   findRenderedTurnAnchorElement,
   readTurnAnchorOffsetPx,
@@ -92,16 +93,57 @@ export interface FlowChatViewportAnchorApi {
   /** Anchor to wherever the viewport is now, unconditionally. */
   captureAnchor: () => void;
   /**
-   * Anchor to wherever the viewport is now, if this scroll was the user's.
+   * Somebody else moved the viewport to keep the reading position, and this
+   * much of where it now sits is not the reader.
+   *
+   * The anchor measures a correction against the viewport position its offset
+   * was agreed at, and treats every other change to `scrollTop` as somebody's
+   * deliberate movement rather than drift. A compensation is the one movement
+   * made *on the anchor's behalf*, so it has to be told, or the repair it was
+   * half of gets credited away and never finishes.
+   *
+   * This used to be a blanket "the viewport as of now is the baseline",
+   * re-taken every time a settle window opened. That also discarded whatever
+   * the reader had scrolled since the last capture — and a commit opens a
+   * window on almost every frame, so the discard was the common case, not the
+   * rare one.
+   */
+  absorbViewportShift: (byPx: number) => void;
+  /**
+   * The reader asked to be somewhere else, so the position they were at stops
+   * being the one to restore.
+   *
+   * A navigation is not a displacement. The anchor cannot tell the two apart by
+   * geometry — both are the viewport ending up somewhere it was not — and while
+   * a navigation holds the register the anchor merely stands down, which
+   * postpones the correction rather than cancelling it. Measured over four
+   * clicks on one Turn: the aim placed the viewport at 287px each time, and
+   * each time the anchor put it back 1653px away on the first frame after the
+   * hold lapsed, still anchored to the Turn the reader had jumped away from.
+   *
+   * So the old anchor is dropped here and a new one is taken from the placement
+   * once it has been rendered, in the settle window the commit opens. Between
+   * the two there is no anchor, which is the one state that cannot restore
+   * anything.
+   */
+  reanchorAfterNavigation: () => void;
+  /**
+   * Account for a scroll, by whichever of three answers fits it.
    *
    * A scroll event alone cannot say whether the user moved or the transcript
-   * moved under them, so the qualifier is a recent intent event — the same
-   * distinction follow-output draws.
+   * moved under them, and the reading position has to survive either way:
    *
-   * With one exception, and it is the case this hook exists for: while the
-   * anchored Turn is missing from the rendered window a correction is owed and
-   * cannot yet be measured, so the anchor is carried through the scroll rather
-   * than replaced by it. Only the reader's own travel is credited.
+   * - **Captured**, when a recent intent event says the scroll was theirs. The
+   *   Turn they arrived at becomes the new reading position.
+   * - **Carried**, when it was not provably theirs and nobody else can account
+   *   for it. The anchored Turn is kept and only its expected offset moves, so
+   *   a repair that was still owed survives the scroll instead of being
+   *   forgotten at the displaced position. This covers both a Turn still
+   *   missing from the rendered window and a gesture whose scroll event was
+   *   delivered after the intent window closed.
+   * - **Left alone**, when a registered writer owns the viewport. That
+   *   movement is theirs and crediting it to the reader would drag the anchor
+   *   along with every follow, snap back and aim.
    */
   captureAnchorForScroll: () => void;
   /** The user did something that scrolls, by their own hand. */
@@ -181,6 +223,15 @@ export function useFlowChatViewportAnchor({
   const lastUserScrollIntentAtRef = useRef(0);
   /** Frames left in which the anchor is still being re-asserted. */
   const settleFramesRef = useRef(0);
+  /**
+   * The next settle window takes a reading position instead of restoring one.
+   *
+   * Set by a navigation, consumed by the commit that renders where it landed.
+   * Nothing else can say when the placement is on screen: the target is
+   * commonly outside the rendered window when the aim is issued, so reading the
+   * DOM in that same task anchors to whatever the reader was moved off.
+   */
+  const recaptureOnNextSettleRef = useRef(false);
   const settleFrameRef = useRef<number | null>(null);
   /*
    * The settle loop is installed once and outlives every render, so it cannot
@@ -250,11 +301,14 @@ export function useFlowChatViewportAnchor({
    * source matters as much as the value — a scroll event carries no proof of
    * whose scroll it was, and this hook's own writes produce them too.
    */
-  const captureAnchorAt = useCallback((source: 'explicit' | 'scroll') => {
+  const captureAnchorAt = useCallback((source: 'explicit' | 'scroll' | 'navigation') => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
     const previous = anchorRef.current;
-    const next = selectViewportAnchor(readViewportAnchorCandidates(scroller));
+    const next = selectViewportAnchor(
+      readViewportAnchorCandidates(scroller),
+      scroller.clientHeight,
+    );
     anchorRef.current = next;
     anchorScrollTopRef.current = scroller.scrollTop;
     // A new reading position is not the old one arriving, so whatever the old
@@ -272,6 +326,10 @@ export function useFlowChatViewportAnchor({
           ? null
           : roundViewportPx(previous.offsetFromScrollerTop),
         scrollTopPx: roundViewportPx(scroller.scrollTop),
+        // Read against the offset: an anchor is only a proxy for what the
+        // reader sees while it is on screen, and the offset alone cannot say
+        // whether it is.
+        viewportHeightPx: roundViewportPx(scroller.clientHeight),
       }),
     });
   }, [endMissingTurnWait, scrollerRef]);
@@ -280,6 +338,28 @@ export function useFlowChatViewportAnchor({
     captureAnchorAt('explicit');
   }, [captureAnchorAt]);
 
+  const absorbViewportShift = useCallback((byPx: number) => {
+    anchorScrollTopRef.current += byPx;
+  }, []);
+
+  const reanchorAfterNavigation = useCallback(() => {
+    const previous = anchorRef.current;
+    anchorRef.current = null;
+    endMissingTurnWait();
+    recaptureOnNextSettleRef.current = true;
+    traceViewport({
+      location: 'anchor.releasedForNavigation',
+      message: 'the reader asked to be somewhere else, so the old reading position was dropped',
+      data: () => ({
+        replacedTurnId: previous?.turnId ?? null,
+        replacedOffsetPx: previous === null
+          ? null
+          : roundViewportPx(previous.offsetFromScrollerTop),
+        scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+      }),
+    });
+  }, [endMissingTurnWait, scrollerRef]);
+
   const markUserScrollIntent = useCallback(() => {
     lastUserScrollIntentAtRef.current = performance.now();
   }, []);
@@ -287,36 +367,51 @@ export function useFlowChatViewportAnchor({
   /**
    * Carry the anchor through a scroll instead of replacing it.
    *
-   * Used only while the anchored Turn is missing from the rendered window,
-   * which is to say while a correction is owed and cannot yet be measured. A
-   * scroll then means two things at once — the reader moved, and the transcript
-   * moved under them — and re-reading the anchor from the DOM accepts both. So
-   * only the reader's half is credited: their travel is a change to
-   * `scrollTop`, and it is subtracted from where the Turn is expected to be.
-   * Whatever remains when the Turn renders is the displacement, unchanged by
-   * however far they scrolled while waiting for it.
+   * Take a movement of the viewport into the anchor instead of measuring
+   * against it.
    *
-   * Measured at three junctions in one session: the anchor was owed 104px, then
-   * 140px, then an amount never established, and at each of them a scroll
-   * 77ms later replaced it with a Turn at its displaced position. Two of the
-   * three were never corrected at all.
+   * The offset and the viewport position it was agreed at are two halves of one
+   * fact, and this is the only thing that advances both. A change to
+   * `scrollTop` is somebody moving the viewport — the reader, most of the time
+   * — and never a displacement, because a displacement moves the transcript
+   * underneath a `scrollTop` that stays put. So it is subtracted from where the
+   * Turn is expected to be, and whatever remains is the drift to repair.
+   *
+   * Two callers, one rule:
+   *
+   * - **`awaiting-turn`** — a scroll while the anchored Turn is missing from
+   *   the rendered window, where a correction is owed and cannot yet be
+   *   measured. Re-reading the anchor from the DOM there accepts the reader's
+   *   movement *and* the transcript's as one, and files the displacement away
+   *   as the reader's own choice. Measured at three junctions in one session:
+   *   the anchor was owed 104px, then 140px, then an amount never established,
+   *   and at each of them a scroll 77ms later replaced it with a Turn at its
+   *   displaced position. Two of the three were never corrected at all.
+   * - **`viewport-moved`** — every restore, before anything is measured. The
+   *   settle loop reads the DOM directly and a commit opens a window on almost
+   *   every frame, so a correction routinely runs before the scroll event
+   *   carrying the reader's travel has been delivered.
    */
-  const carryAnchorThroughScroll = useCallback((scroller: HTMLElement) => {
+  const carryAnchorThroughScroll = useCallback((
+    scroller: HTMLElement,
+    reason: 'awaiting-turn' | 'unclaimed-scroll' | 'viewport-moved',
+  ) => {
     const anchor = anchorRef.current;
     if (!anchor) return;
     const travelledPx = scroller.scrollTop - anchorScrollTopRef.current;
     anchorScrollTopRef.current = scroller.scrollTop;
     if (travelledPx === 0) return;
-    carriedDuringWaitPxRef.current += travelledPx;
+    if (missingSinceMsRef.current !== null) carriedDuringWaitPxRef.current += travelledPx;
     anchorRef.current = {
       ...anchor,
       offsetFromScrollerTop: anchor.offsetFromScrollerTop - travelledPx,
     };
-    traceViewportRepeating(`anchor|carried|${anchor.turnId}`, {
+    traceViewportRepeating(`anchor|carried|${reason}|${anchor.turnId}`, {
       location: 'anchor.carried',
-      message: 'the reader scrolled while a correction was still owed',
+      message: 'the reader scrolled and the anchor went with them',
       travelPx: travelledPx,
       data: () => ({
+        reason,
         turnId: anchor.turnId,
         travelledPx: roundViewportPx(travelledPx),
         expectedOffsetPx: roundViewportPx(anchor.offsetFromScrollerTop - travelledPx),
@@ -330,14 +425,50 @@ export function useFlowChatViewportAnchor({
     const scroller = scrollerRef.current;
     if (!scroller) return;
     if (missingTurnAttemptsRef.current > 0) {
-      carryAnchorThroughScroll(scroller);
+      carryAnchorThroughScroll(scroller, 'awaiting-turn');
       return;
     }
-    const captures = shouldCaptureViewportAnchorOnScroll(
-      anchorRef.current !== null,
-      performance.now() - lastUserScrollIntentAtRef.current,
-    );
-    if (captures) captureAnchorAt('scroll');
+    const msSinceUserScrollIntent = performance.now() - lastUserScrollIntentAtRef.current;
+    if (shouldCaptureViewportAnchorOnScroll(anchorRef.current !== null, msSinceUserScrollIntent)) {
+      captureAnchorAt('scroll');
+      return;
+    }
+    /*
+     * Not provably the reader's — and still theirs, if nobody else can account
+     * for it.
+     *
+     * The window is measured from the *input* event, and the scrolling it
+     * authorises outlives it: a wheel notch smooth-scrolls for longer than the
+     * window, and under a busy main thread the scroll event carrying the whole
+     * travel is delivered after it has closed. Ignoring the event then leaves
+     * the reader's own movement credited to nobody, and the next settle undoes
+     * it in full. Measured over 181 seconds: fourteen gestures, one capture, and
+     * seven corrections of 308px to 618px that each returned the viewport to
+     * exactly where the gesture had started.
+     *
+     * Carrying is what "credited to nobody" was missing, and it is safe where a
+     * capture is not: it keeps the anchored Turn and only moves its expected
+     * offset, so a repair that was still owed survives instead of being
+     * forgotten at the displaced position.
+     *
+     * Owned elsewhere is the case this must not touch. A registered writer
+     * moving the viewport is the one other thing that changes `scrollTop`
+     * without the reader, and crediting *that* to them would carry the anchor
+     * along with every follow, snap back and aim.
+     */
+    if (!isViewportOwnedElsewhereRef.current()) {
+      carryAnchorThroughScroll(scroller, 'unclaimed-scroll');
+      return;
+    }
+    traceViewportRepeating('anchor|scroll-left-alone', {
+      location: 'anchor.scrollLeftAlone',
+      message: 'a scroll was neither the reader\'s nor ours to credit',
+      data: () => ({
+        turnId: anchorRef.current?.turnId ?? null,
+        msSinceUserScrollIntent: Math.round(msSinceUserScrollIntent),
+        scrollTopPx: roundViewportPx(scroller.scrollTop),
+      }),
+    });
   }, [captureAnchorAt, carryAnchorThroughScroll, scrollerRef]);
 
   const attemptRestore = useCallback((): AnchorRestoreOutcome => {
@@ -397,22 +528,81 @@ export function useFlowChatViewportAnchor({
     // The wait is reported before the correction it made possible, so the two
     // read as cause and effect in the order they are written down.
     reportMissingTurnWait(scroller, anchor.turnId, 'returned');
+    /*
+     * Whatever moved the viewport since the offset was agreed is taken into the
+     * anchor before anything is measured against it, and it is never a
+     * displacement — a displacement moves the transcript under a `scrollTop`
+     * that stays put. Almost always it is the reader, whose scroll event has
+     * simply not been delivered yet: the settle loop reads the DOM directly and
+     * a commit can open a window before the event arrives, so a correction gets
+     * there first and undoes them.
+     *
+     * Taken in *here* rather than subtracted in the correction, because the
+     * offset and the position it was agreed at are two halves of one fact and
+     * every writer has to move both. Subtracting it left the two branches below
+     * advancing only the position, and a frame with nothing to correct then
+     * banked the reader's travel as a debt the next frame collected. Measured:
+     * a 32px scroll and an 81px scroll, each reported back as a correction of
+     * exactly itself with `scrolledSincePx: 0`.
+     */
+    const scrolledSincePx = scroller.scrollTop - anchorScrollTopRef.current;
+    carryAnchorThroughScroll(scroller, 'viewport-moved');
+    const rebased = anchorRef.current ?? anchor;
     const correction = viewportAnchorCorrectionPx(
-      anchor,
+      rebased,
       readTurnAnchorOffsetPx(scroller, element),
     );
-    // Already where it belongs, which still counts as answered.
+    /*
+     * Already where it belongs, which still counts as answered — and is now the
+     * common outcome rather than a rarity, since a frame in which only the
+     * reader moved lands here exactly. Traced for that reason: it is reached
+     * every frame of every settle, and it is where a reading position that has
+     * quietly stopped meaning anything would sit unnoticed.
+     */
     if (Math.abs(correction) < ANCHOR_CORRECTION_EPSILON_PX) {
-      anchorScrollTopRef.current = scroller.scrollTop;
+      traceViewportRepeating(`anchor|in-place|${rebased.turnId}`, {
+        location: 'anchor.inPlace',
+        message: 'the reading position is where it belongs',
+        data: () => ({
+          turnId: rebased.turnId,
+          anchoredOffsetPx: roundViewportPx(rebased.offsetFromScrollerTop),
+          scrolledSincePx: roundViewportPx(scrolledSincePx),
+          scrollTopPx: roundViewportPx(scroller.scrollTop),
+        }),
+      });
       return 'in-place';
     }
-    traceViewportRepeating('anchor|correcting', {
+    /*
+     * Keyed by which anchor and by whether the reader can feel it, because a
+     * coalesced run collapses to its first sample and the rest becomes a sum.
+     * Under one key, two rounds of diagnosis in a row read `correctionPx: 0.7`
+     * against 458.7px of suppressed travel spanning three different anchors —
+     * every correction that mattered was inside the summary, attributable to
+     * nothing.
+     */
+    const felt = Math.abs(correction) >= ANCHOR_NOTABLE_CORRECTION_PX;
+    traceViewportRepeating(`anchor|correcting|${felt ? 'felt' : 'rounding'}|${rebased.turnId}`, {
       location: 'anchor.correct',
       message: 'anchor put the reading position back',
       travelPx: correction,
       data: () => ({
-        turnId: anchor.turnId,
+        turnId: rebased.turnId,
         correctionPx: roundViewportPx(correction),
+        /*
+         * Where the anchored Turn is being held, against how much of the
+         * scroller there is to hold it in. A correction restores a marker the
+         * reader cannot see if this falls outside the viewport, and then it is
+         * reporting movement that never reached the screen.
+         */
+        anchoredOffsetPx: roundViewportPx(rebased.offsetFromScrollerTop),
+        viewportHeightPx: roundViewportPx(scroller.clientHeight),
+        /*
+         * The part of the drift that was somebody moving the viewport rather
+         * than the transcript moving. Read against `correctionPx`: what is
+         * left over is the displacement, and the two being equal and opposite
+         * is a correction that would have undone a scroll.
+         */
+        scrolledSincePx: roundViewportPx(scrolledSincePx),
         frameStartMs: correctionFrameStartMsRef.current === null
           ? null
           : Math.round(correctionFrameStartMsRef.current),
@@ -429,9 +619,14 @@ export function useFlowChatViewportAnchor({
       }),
     });
     shiftViewportRef.current(correction);
+    /*
+     * The shift put the Turn back at the stored offset, so advancing only the
+     * position keeps the two halves agreeing. This is the one movement of
+     * `scrollTop` that must not be taken into the offset — it is the repair.
+     */
     anchorScrollTopRef.current = scroller.scrollTop;
     return 'corrected';
-  }, [reportMissingTurnWait, scrollerRef]);
+  }, [carryAnchorThroughScroll, reportMissingTurnWait, scrollerRef]);
 
   const attemptRestoreRef = useRef(attemptRestore);
   attemptRestoreRef.current = attemptRestore;
@@ -448,18 +643,21 @@ export function useFlowChatViewportAnchor({
 
   const openSettleWindow = useCallback(() => {
     settleFramesRef.current = ANCHOR_SETTLE_FRAMES;
-    /*
-     * The viewport as of the change being settled, before anything the reader
-     * does about it. Whoever moved the viewport on account of this change — the
-     * prepend compensation, from its own layout effect just before this one —
-     * has already written, and that write is not the reader scrolling.
-     */
-    const scroller = scrollerRef.current;
-    if (scroller) anchorScrollTopRef.current = scroller.scrollTop;
-    // In the caller's own frame, so the displacement and its correction are one
-    // paint rather than two. Callers are a layout effect or a ResizeObserver
-    // callback; both still run before the browser paints.
-    attemptRestoreRef.current();
+    if (recaptureOnNextSettleRef.current) {
+      /*
+       * The first commit after a navigation, which is where the placement is
+       * finally on screen. Taking the reading position here rather than
+       * restoring one is the whole difference between a jump that holds and a
+       * jump that is undone the moment the register lets go.
+       */
+      recaptureOnNextSettleRef.current = false;
+      captureAnchorAt('navigation');
+    } else {
+      // In the caller's own frame, so the displacement and its correction are
+      // one paint rather than two. Callers are a layout effect or a
+      // ResizeObserver callback; both still run before the browser paints.
+      attemptRestoreRef.current();
+    }
     if (settleFrameRef.current !== null) return;
     const step = (frameStartMs: number) => {
       settleFrameRef.current = null;
@@ -506,7 +704,7 @@ export function useFlowChatViewportAnchor({
       }
     };
     settleFrameRef.current = requestAnimationFrame(step);
-  }, [scrollerRef]);
+  }, [captureAnchorAt]);
 
   useEffect(() => () => {
     if (settleFrameRef.current !== null) {
@@ -517,15 +715,19 @@ export function useFlowChatViewportAnchor({
 
   return useMemo(() => ({
     captureAnchor,
+    absorbViewportShift,
+    reanchorAfterNavigation,
     captureAnchorForScroll,
     markUserScrollIntent,
     restoreAnchor,
     openSettleWindow,
   }), [
+    absorbViewportShift,
     captureAnchor,
     captureAnchorForScroll,
     markUserScrollIntent,
     openSettleWindow,
+    reanchorAfterNavigation,
     restoreAnchor,
   ]);
 }

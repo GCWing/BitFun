@@ -74,6 +74,7 @@ import {
 import { resolveVisibleFlowChatTurnIds } from './flowChatVisibleTurns';
 import { warnHistoryPagingRefusedWithPendingTurns } from '../../services/historySessionDiagnostics';
 import {
+  VIEWPORT_PLACEMENT_SETTLE_MS,
   roundViewportPx,
   traceViewport,
   traceViewportPlacement,
@@ -736,6 +737,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     ));
     const compensated = shiftedPx > 0 && viewportOwner.shift(shiftedPx);
     /*
+     * This one movement is made on the anchor's behalf, so it is the one it
+     * must not read as the reader having scrolled. Everything else that changes
+     * `scrollTop` between two of its corrections is somebody's deliberate
+     * movement, and the anchor is right to leave those alone.
+     */
+    if (compensated) viewportAnchor.absorbViewportShift(shiftedPx);
+    /*
      * Both amounts, because their disagreement is the diagnosis. `prependedPx`
      * against what the scroll range actually grew by says how far the cache is
      * ahead of the DOM; against `shiftedPx` it says how much of the
@@ -765,6 +773,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [
     presentationMode,
     readContentEndScrollTop,
+    viewportAnchor,
     viewportOwner,
     virtualItems,
     virtualizer,
@@ -1217,6 +1226,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return 'rejected';
     }
     exitFollowOutput('scroll-to-turn');
+    /*
+     * Ahead of the placement, so that nothing between here and the commit that
+     * renders it can restore the position being left. The reading position the
+     * reader is choosing is the one they are about to land on.
+     */
+    viewportAnchor.reanchorAfterNavigation();
 
     const behavior = options?.behavior === 'smooth' ? 'smooth' : 'auto';
     const alignTurnToTop = () => virtualizer.scrollItemIntoView(targetIndex, {
@@ -1242,7 +1257,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           location: 'turnNavigation.placed',
           message: 'Turn navigation placed the viewport',
           targetPx,
-          settleAfterMs: behavior === 'smooth' ? 900 : undefined,
+          /*
+           * Past the navigation's own hold, always. Everything the hold is
+           * postponing happens on the frame it lapses, so a sample taken
+           * inside it can only ever report success — measured: a placement
+           * reported `driftPx: 0` at 400ms and was dragged 1653px away 11ms
+           * later, while three identical placements that were sampled after
+           * the hold all reported the drift.
+           */
+          settleAfterMs: ONE_SHOT_NAVIGATION_HOLD_MS
+            + (behavior === 'smooth' ? 900 : VIEWPORT_PLACEMENT_SETTLE_MS),
           data: () => ({
             branch,
             turnId,
@@ -1307,6 +1331,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     readContentEndScrollTop,
     resolveTurnTopScrollTop,
     scrollToContentEndThroughVirtualizer,
+    viewportAnchor,
     virtualItems,
     virtualizer,
   ]);

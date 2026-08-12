@@ -157,6 +157,22 @@ the wheel brushes stops where it is and is not corrected further. In the
 measured case that is 2460px short of the Turn that was clicked — the placement
 is deliberately approximate, and the re-aim is what would have finished it.
 
+**A hold postpones a corrector; it does not cancel one.** Standing down for the
+register keeps a correction from landing while the hold is live, and hands it
+over intact the moment the hold lapses. Where the movement being held off was a
+*change of intent* rather than a displacement, that is not what was wanted, and
+the register cannot know the difference — it ranks writers, it does not carry
+meaning. Whoever changes the intent has to say so: a Turn navigation drops the
+viewport anchor before it aims, because otherwise the anchor spends the hold
+waiting and then undoes the jump. Measured over four clicks on one Turn: 1653px
+back, four times out of four, each on the first frame after
+`ONE_SHOT_NAVIGATION_HOLD_MS` lapsed.
+
+This is also why a placement's outcome is sampled *after* the hold rather than
+inside it. `turnNavigation.placed.outcome` used to read back at 400ms against a
+600ms hold and reported `driftPx: 0` on a placement that was dragged 1653px away
+11ms later — the probe could not see the one thing the hold was postponing.
+
 ## Why There Was No Coordinator Before, and What Changed
 
 There was one — `FlowChatViewportCoordinator.ts`, removed alongside the

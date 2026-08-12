@@ -274,10 +274,11 @@ intercepted at `scrollBy` and answered by re-anchoring. **Do not reintroduce a
 compensator whose amount is a total rather than a delta.**
 
 **Capture is qualified by intent, not by geometry.** A scroll event cannot say
-whether the user moved or the transcript moved under them, so the anchor is
-re-taken only within `USER_DRIVEN_SCROLL_WINDOW_MS` of a wheel, touch, key, or
-scrollbar press — the same distinction follow-output draws. Two rules were tried
-and measured first, and both failed in ways worth recording:
+whether the user moved or the transcript moved under them, so a *new* Turn is
+taken as the reading position only within `USER_DRIVEN_SCROLL_WINDOW_MS` of a
+wheel, touch, key, or scrollbar press — the same distinction follow-output
+draws. Two rules were tried and measured first, and both failed in ways worth
+recording:
 
 - Capturing at the intent event itself records the position *before* the scroll
   it causes, which drags a scrolling viewport backwards.
@@ -302,11 +303,104 @@ settle. So the anchor is **carried** instead: their travel is a change to
 only the part the transcript moved outstanding. When the Turn renders, the
 correction is that part and none of their scrolling — however far they got.
 
-This is the one place the anchor works in deltas, and it is bounded: it applies
-only while the Turn is missing, and only until `ANCHOR_MISSING_TURN_ATTEMPTS`
-gives the anchor up. The baseline it measures travel from is re-taken whenever a
-settle window opens, so the prepend compensation's own shift — written from the
-layout effect just before — is never mistaken for the reader.
+**Falling outside the intent window is not grounds for ignoring a scroll.** The
+window runs from the *input* event while the scrolling it authorises outlives
+it: a wheel notch smooth-scrolls for longer than 200ms, and a main thread busy
+with streaming delivers one coalesced event carrying the whole travel after the
+window has closed. Ignoring it leaves the reader's own movement credited to
+nobody, and the next settle undoes it in full. Measured over 181 seconds of
+reading: fourteen gestures, **one** capture, and seven corrections between 308px
+and 618px that each returned the viewport to exactly where its gesture had
+started — the reader could not get anywhere.
+
+So a scroll has three answers, not two, and the third is the same **carry**:
+
+| | |
+|---|---|
+| **Captured** | A recent intent event. The Turn they arrived at is the new reading position. |
+| **Carried** | Not provably theirs, and no registered writer owns the viewport. Nothing else changes `scrollTop`, so it is theirs. |
+| **Left alone** | A registered writer owns the viewport. It chose that position; the stored relationship is not rewritten on its account. |
+
+Carrying is safe here for the same reason it is safe anywhere: a displacement
+moves the transcript *under* a viewport whose `scrollTop` does not change, so
+carrying is a no-op for exactly the case the anchor exists to repair.
+
+The third row changes nothing the reader can see — a restore carries the anchor
+through whatever moved the viewport anyway, by the rule below — and it is kept
+because the stored offset then goes on meaning "where the Turn was when the
+reader last agreed to it", which is what the trail is read as.
+
+**A displacement moves the transcript under a `scrollTop` that stays put.** That
+is what makes it a displacement, and it is the rule the correction is computed
+from: whatever `scrollTop` has changed by since the anchor's offset was agreed
+belongs to whoever changed it, and only what is left over is drift to repair.
+
+The alternative was in place for a long time and is what "scrolling down pulls
+me back" turned out to be. The settle loop reads `scrollTop` from the DOM; a
+commit opens a window on almost every frame; the scroll event carrying the
+reader's travel is delivered after all of that. So a correction routinely runs
+against a reading position agreed hundreds of pixels ago, with no capture in
+between, and reads their own scrolling as drift. Measured over one reproduction,
+ten corrections: **every one of them was the reader's travel**, the largest
+putting a 508px scroll back where it started while the transcript had really
+moved 7.8px.
+
+Note what this does *not* weaken. A displacement contributes nothing to
+`scrollTop`, so taking the movement out never takes any of the repair with it —
+when the reader has not moved, the correction is what it always was.
+
+**The offset and the viewport position it was agreed at are two halves of one
+fact, and every writer moves both.** That is the invariant, and it is the whole
+of why the movement is taken *into* the anchor at the top of a restore rather
+than subtracted inside the correction. Subtracting it leaves the two halves free
+to drift apart: a frame with nothing to correct advanced only the position, and
+the reader's travel became a debt the next frame collected. Measured, with the
+subtraction in place: a 32px scroll and an 81px scroll each reported back a
+frame later as a correction of exactly itself, the anchored Turn provably not
+having moved. Worse, the subtraction made that frame the *ordinary* outcome —
+with the movement taken out, a frame in which only the reader moved corrects by
+exactly zero.
+
+There is one movement of `scrollTop` that must not be taken into the offset, and
+it is the repair itself: the shift puts the Turn back at the stored offset, so
+the position advances by the correction and the offset stays.
+
+The baseline is therefore carried, not re-taken. It used to be re-set to the
+current position every time a settle window opened, on the grounds that the
+prepend compensation had written from the layout effect just before and that
+write is not the reader — which was true of the compensation and false of
+everything else the reset swallowed, the reader's own travel first among them.
+The compensation now says so itself, through `absorbViewportShift`: it is the
+one movement made on the anchor's behalf, so it is the one that must not count
+as somebody moving the viewport.
+
+**The anchor must be a Turn the reader can see, at both edges.** A Turn's marker
+is its user message, which is short, so a reader inside an answer taller than
+the viewport has no marker on screen — and "the first marker below the top
+edge" then answers with the *next* Turn, however far down it is. Measured: an
+anchor held at an offset of 1695.5px in a scroller at most 1325.7px tall, at
+least 370px past the bottom edge.
+
+The two directions are not symmetrical, which is why the bottom edge is a bound
+and not a preference. Content above the viewport re-measuring moves everything
+below it, the on-screen transcript included, so a marker above the fold is a
+faithful proxy for what the reader sees. Content *below* the viewport
+re-measuring moves nothing they can see — so a marker down there reports
+movement that never reached the screen, and correcting to it **creates** a
+displacement instead of repairing one. No anchor is the honest answer, and it is
+what this already gave once every marker had gone off the top.
+
+**A navigation replaces the reading position; it does not displace it.** Standing
+down for the register is not enough — that postpones the correction for the
+length of the hold and no longer. A Turn navigation therefore drops the anchor
+outright before it aims, and the settle window opened by the commit that renders
+the placement takes the new one. Measured over four clicks on one Turn: the aim
+placed the viewport at 287px each time, and each time the anchor put it back
+1653px away on the first frame after `ONE_SHOT_NAVIGATION_HOLD_MS` lapsed, still
+anchored to the Turn the reader had jumped away from. The re-capture cannot
+happen in the aim's own task: the target is commonly outside the rendered window
+when the aim is issued, so reading the DOM there anchors to whatever the reader
+was moved off.
 
 **Restoring needs a window, not a callback.** A prepend settles over several
 frames — a margin holds the position, the real heights land in padding, then the
