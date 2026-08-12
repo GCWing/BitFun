@@ -8,16 +8,15 @@ Scope: this guide applies to `src/crates/interfaces/acp`.
 runtime. Keep ACP protocol/client details here or in app-surface adapters;
 share only stable capability facts through contract crates.
 
-The CLI-hosted ACP server consumes `DeliveryProfile::Acp` through
-`ProductAssembler` and uses the Agent Runtime SDK for session creation/listing,
-active session model/mode updates, dialog submission/cancellation, interaction
-responses, and agent event subscription. `bitfun-acp` still depends directly on
-the `bitfun-core` `agent-runtime`, `canvas-runtime`, `external-sources`, and
-`ssh-remote` owner features for single-pass full persisted-history restore,
-model/mode catalog, Canvas tool materialization, provider and compatible
-instruction-source reads, MCP provisioning, remote workspace support, and the
-ACP client half of this crate. Do not describe the crate as Core-independent
-until those production paths have separately proven portable replacements.
+The crate exposes two additive roles. `client` owns ACP process discovery,
+configuration, remote probing, session transport, and tool-card projection; it
+selects the Core Agent Runtime plus concrete SSH support. `server` owns the
+CLI-hosted ACP server and runtime projection through `DeliveryProfile::Acp`; it
+selects the exact Core tool, document, subscription, LSP, and external-source
+owners used by that path, but does not select SSH. The compatibility default is
+exactly `client + server`. Desktop selects only `client`; CLI selects both.
+Keep these role features additive and do not replace either closure with
+`product-full`.
 
 ## Guardrails
 
@@ -39,6 +38,7 @@ until those production paths have separately proven portable replacements.
 ## Verification
 
 ```bash
-cargo check -p bitfun-acp
+cargo check -p bitfun-acp --no-default-features --features client
+cargo check -p bitfun-acp --no-default-features --features server
 cargo test -p bitfun-acp
 ```

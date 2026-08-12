@@ -31,7 +31,7 @@ bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
 bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-webdriver = { path = "../../crates/adapters/webdriver" }
-bitfun-acp = { path = "../../crates/interfaces/acp" }
+bitfun-acp = { path = "../../crates/interfaces/acp", default-features = false, features = ["client"] }
 
 # Tauri
 tauri = { workspace = true }

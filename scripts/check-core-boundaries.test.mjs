@@ -34,6 +34,7 @@ import { crateLayoutRules } from './core-boundaries/rules/crate-layout.mjs';
 import {
   coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
+  optionalDependencyFeatureOwnerRules,
 } from './core-boundaries/rules/feature-rules.mjs';
 
 const ENTRYPOINT = new URL('./check-core-boundaries.mjs', import.meta.url);
@@ -54,6 +55,39 @@ const MODULES = [
 ];
 
 const TEST_ROOT = join('C:', 'repo');
+
+test('Core and ACP defaults preserve their explicit assembly contracts', async () => {
+  const [coreManifest, acpManifest] = await Promise.all([
+    readFile(new URL('../src/crates/assembly/core/Cargo.toml', import.meta.url), 'utf8'),
+    readFile(new URL('../src/crates/interfaces/acp/Cargo.toml', import.meta.url), 'utf8'),
+  ]);
+
+  assert.deepEqual(parseManifestFeatures(coreManifest).default, []);
+  assert.deepEqual(
+    new Set(parseManifestFeatures(acpManifest).default),
+    new Set(['client', 'server']),
+  );
+});
+
+test('Core feature-free dependencies stay attached to their exact runtime owners', () => {
+  const coreOwnerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'core',
+  );
+  const ownersByDependency = new Map(
+    coreOwnerRule.dependencies.map((dependency) => [
+      dependency.depName,
+      new Set(dependency.ownerFeatures),
+    ]),
+  );
+
+  assert.deepEqual(ownersByDependency.get('base64'), new Set(['agent-runtime', 'dispatch-store']));
+  assert.deepEqual(ownersByDependency.get('futures'), new Set(['agent-runtime']));
+  assert.deepEqual(ownersByDependency.get('regex'), new Set(['agent-runtime']));
+  assert.deepEqual(
+    ownersByDependency.get('tokio-util'),
+    new Set(['agent-runtime', 'debug-log']),
+  );
+});
 
 function parseManifestFeatures(manifest) {
   const section = manifest.match(/^\[features\]\s*$([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? '';
@@ -707,6 +741,271 @@ test('explicit product entrypoint bitfun-core feature selections pass', () => {
     ),
     [],
   );
+});
+
+test('Desktop must select only the ACP client role', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: {
+      default: ['client', 'server'],
+      client: [],
+      server: [],
+    },
+  };
+  const desktop = packageAt('bitfun-desktop', 'src/apps/desktop/Cargo.toml', [
+    pathDependency('src/crates/interfaces/acp', {
+      name: 'bitfun-acp',
+      usesDefaultFeatures: false,
+      features: ['client', 'server'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [desktop, acp],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /Desktop ACP role selection must not include server/);
+});
+
+test('ACP consumers must disable compatibility default roles', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: { default: ['client', 'server'], client: [], server: [] },
+  };
+  const desktop = packageAt('bitfun-desktop', 'src/apps/desktop/Cargo.toml', [
+    pathDependency('src/crates/interfaces/acp', {
+      name: 'bitfun-acp',
+      usesDefaultFeatures: true,
+      features: ['client'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [desktop, acp],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /must set default-features = false on every dependency/);
+});
+
+test('CLI must select both ACP roles explicitly', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: {
+      default: ['client', 'server'],
+      client: [],
+      server: [],
+    },
+  };
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/interfaces/acp', {
+      name: 'bitfun-acp',
+      usesDefaultFeatures: false,
+      features: ['client'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, acp],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /CLI ACP role selection must include server/);
+});
+
+test('new product entrypoints must register an explicit ACP role selection', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: {
+      default: ['client', 'server'],
+      client: [],
+      server: [],
+    },
+  };
+  const newHost = packageAt('bitfun-new-host', 'src/apps/new-host/Cargo.toml', [
+    pathDependency('src/crates/interfaces/acp', {
+      name: 'bitfun-acp',
+      usesDefaultFeatures: false,
+      features: ['client'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [newHost, acp],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /must register an explicit role selection/);
+});
+
+test('ACP roles must be selected by an unconditional normal dependency', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: {
+      default: ['client', 'server'],
+      client: [],
+      server: [],
+    },
+  };
+  const desktop = packageAt('bitfun-desktop', 'src/apps/desktop/Cargo.toml', [
+    pathDependency('src/crates/interfaces/acp', {
+      name: 'bitfun-acp',
+      kind: 'dev',
+      usesDefaultFeatures: false,
+      features: ['client'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [desktop, acp],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(
+    violations[0].message,
+    /Desktop ACP role selection must keep an unconditional normal bitfun-acp dependency/,
+  );
+});
+
+test('reviewed ACP roles require an unconditional normal dependency', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: { default: ['client', 'server'], client: [], server: [] },
+  };
+  const desktop = packageAt('bitfun-desktop', 'src/apps/desktop/Cargo.toml', [
+    pathDependency('src/crates/interfaces/acp', {
+      name: 'bitfun-acp',
+      target: 'cfg(windows)',
+      usesDefaultFeatures: false,
+      features: ['client'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [desktop, acp],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /must keep an unconditional normal bitfun-acp dependency/);
+});
+
+test('target-specific ACP edges cannot expand a reviewed product role', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: { default: ['client', 'server'], client: [], server: [] },
+  };
+  const desktop = packageAt('bitfun-desktop', 'src/apps/desktop/Cargo.toml', [
+    pathDependency('src/crates/interfaces/acp', {
+      name: 'bitfun-acp',
+      usesDefaultFeatures: false,
+      features: ['client'],
+    }),
+    pathDependency('src/crates/interfaces/acp', {
+      name: 'bitfun-acp',
+      target: 'cfg(windows)',
+      usesDefaultFeatures: false,
+      features: ['server'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [desktop, acp],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /Desktop ACP role selection must not include server/);
+});
+
+test('dev and build ACP edges cannot expand a reviewed product role', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: { default: ['client', 'server'], client: [], server: [] },
+  };
+
+  for (const kind of ['dev', 'build']) {
+    const desktop = packageAt('bitfun-desktop', 'src/apps/desktop/Cargo.toml', [
+      pathDependency('src/crates/interfaces/acp', {
+        name: 'bitfun-acp',
+        usesDefaultFeatures: false,
+        features: ['client'],
+      }),
+      pathDependency('src/crates/interfaces/acp', {
+        name: 'bitfun-acp',
+        kind,
+        usesDefaultFeatures: false,
+        features: ['server'],
+      }),
+    ]);
+
+    const violations = findProductEntrypointCoreFeatureViolations(
+      [desktop, acp],
+      { root: TEST_ROOT, crateLayoutRules },
+    );
+
+    assert.equal(violations.length, 1, `${kind} dependency must not widen Desktop ACP roles`);
+    assert.match(violations[0].message, /Desktop ACP role selection must not include server/);
+  }
+});
+
+test('reviewed ACP product dependencies must not become optional', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: { default: ['client', 'server'], client: [], server: [] },
+  };
+  const desktop = packageAt('bitfun-desktop', 'src/apps/desktop/Cargo.toml', [
+    pathDependency('src/crates/interfaces/acp', {
+      name: 'bitfun-acp',
+      optional: true,
+      usesDefaultFeatures: false,
+      features: ['client'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [desktop, acp],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 2);
+  assert.match(violations[0].message, /must keep an unconditional normal bitfun-acp dependency/);
+  assert.match(violations[1].message, /must not make a bitfun-acp dependency optional/);
+});
+
+test('target, dev, and build ACP consumers must still register their role selection', () => {
+  const acp = {
+    ...packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml'),
+    features: { default: ['client', 'server'], client: [], server: [] },
+  };
+  for (const dependency of [
+    { target: 'cfg(windows)' },
+    { kind: 'dev' },
+    { kind: 'build' },
+  ]) {
+    const newHost = packageAt('bitfun-new-host', 'src/apps/new-host/Cargo.toml', [
+      pathDependency('src/crates/interfaces/acp', {
+        name: 'bitfun-acp',
+        ...dependency,
+        usesDefaultFeatures: false,
+        features: ['client'],
+      }),
+    ]);
+
+    const violations = findProductEntrypointCoreFeatureViolations(
+      [newHost, acp],
+      { root: TEST_ROOT, crateLayoutRules },
+    );
+
+    assert.equal(violations.length, 1);
+    assert.match(violations[0].message, /must register an explicit role selection/);
+  }
 });
 
 const SDK_HOST_REVIEWED_CORE_FEATURES = [

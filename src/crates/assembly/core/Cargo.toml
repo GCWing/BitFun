@@ -13,9 +13,9 @@ crate-type = ["rlib"]
 [dependencies]
 # Inherit shared dependencies from workspace
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
-tokio-util = { workspace = true }
+tokio-util = { workspace = true, optional = true }
 async-trait = { workspace = true }
-futures = { workspace = true }
+futures = { workspace = true, optional = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -31,8 +31,8 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true, optional = true }
 cron = { workspace = true, optional = true }
-regex = { workspace = true }
-base64 = { workspace = true }
+regex = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
 hex = { workspace = true }
@@ -131,7 +131,7 @@ bitfun-transport = { path = "../../adapters/transport" }
 # Full product runtime compatibility set. Product entrypoints with a narrower
 # construction path select stable owner features instead of inheriting this
 # union.
-default = ["product-full"]
+default = []
 # Derive `ts_rs::TS` on selected wire types (e.g. `AgentProfileView`) for
 # downstream TypeScript binding export. Propagates `ts` to the upstream crates
 # whose types core re-exports (git types live in `services-integrations`,
@@ -207,11 +207,13 @@ agent-runtime = [
     "dep:bitfun-agent-runtime",
     "dep:bitfun-agent-content",
     "dep:bitfun-agent-stream",
+    "dep:base64",
     "dep:bitfun-harness",
     "dep:dashmap",
     "dep:filetime",
     "dep:flate2",
     "dep:fs2",
+    "dep:futures",
     "dep:include_dir",
     "dep:indexmap",
     "dep:image",
@@ -221,7 +223,9 @@ agent-runtime = [
     # services-integrations, but core warden keeps it owned by agent-runtime).
     "dep:rand",
     "dep:rusqlite",
+    "dep:regex",
     "dep:similar",
+    "dep:tokio-util",
     "dep:tool-runtime",
     "bitfun-services-core/permission",
     "bitfun-services-core/runtime-ownership",
@@ -348,6 +352,7 @@ plugin-runtime = [
 ]
 debug-log = [
     "dep:axum",
+    "dep:tokio-util",
     "dep:tower-http",
     "bitfun-services-integrations/debug-log",
 ]
@@ -377,7 +382,7 @@ file-watch = ["bitfun-services-integrations/file-watch"]
 git = ["bitfun-services-integrations/git"]
 review-platform = ["bitfun-services-integrations/review-platform"]
 service-integrations = ["announcement", "file-watch", "git", "review-platform"]
-dispatch-store = ["local-storage", "bitfun-services-core/dispatch-workspace"]
+dispatch-store = ["dep:base64", "local-storage", "bitfun-services-core/dispatch-workspace"]
 filesystem = ["bitfun-services-core/filesystem"]
 local-storage = ["bitfun-services-core/local-storage"]
 process-runtime = ["bitfun-services-core/process-runtime"]

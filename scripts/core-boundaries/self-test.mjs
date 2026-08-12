@@ -7,6 +7,7 @@ export function runManifestParserSelfTest({
   parseManifestDependencies,
   manifestDependencyMatches,
   matchingForbiddenDependency,
+  acpClosedFeatureProfileRules,
   coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
   ownerCrateFeatureAssemblyRules,
@@ -399,6 +400,7 @@ export function runManifestParserSelfTest({
   const coreManifest = 'src/crates/assembly/core/Cargo.toml';
   const servicesCoreManifest = 'src/crates/services/services-core/Cargo.toml';
   const expectedClosedCoreProfiles = [
+    [coreManifest, 'default', []],
     [servicesCoreManifest, 'default', []],
     [
       servicesCoreManifest,
@@ -472,7 +474,11 @@ export function runManifestParserSelfTest({
     ],
     [servicesCoreManifest, 'session-git', ['local-storage', 'dep:git2']],
     [servicesCoreManifest, 'workspace-identity', ['dep:dunce', 'dep:sha2']],
-    [coreManifest, 'dispatch-store', ['local-storage', 'bitfun-services-core/dispatch-workspace']],
+    [
+      coreManifest,
+      'dispatch-store',
+      ['dep:base64', 'local-storage', 'bitfun-services-core/dispatch-workspace'],
+    ],
     [coreManifest, 'filesystem', ['bitfun-services-core/filesystem']],
     [coreManifest, 'local-storage', ['bitfun-services-core/local-storage']],
     [coreManifest, 'process-runtime', ['bitfun-services-core/process-runtime']],
@@ -537,6 +543,61 @@ export function runManifestParserSelfTest({
         .some((reference) => reference.includes('product-full'))
     ) {
       throw new Error(`core closed feature profile must not reach product-full in ${featureName}`);
+    }
+  }
+  const acpProfiles = new Map(
+    acpClosedFeatureProfileRules.map((rule) => [rule.featureName, rule]),
+  );
+  const expectedAcpProfiles = new Map([
+    ['default', ['client', 'server']],
+    [
+      'client',
+      [
+        'dep:futures',
+        'dep:serde',
+        'dep:bitfun-core',
+        'bitfun-core/agent-runtime',
+        'bitfun-core/ssh-remote',
+      ],
+    ],
+    [
+      'server',
+      [
+        'dep:bitfun-agent-runtime',
+        'dep:bitfun-core-types',
+        'dep:bitfun-core',
+        'dep:sha2',
+        'bitfun-core/agent-runtime',
+        'bitfun-core/document-read',
+        'bitfun-core/subscription-auth',
+        'bitfun-core/deep-research',
+        'bitfun-core/lsp',
+        'bitfun-core/external-sources',
+        'bitfun-core/tools-basic',
+        'bitfun-core/tools-git',
+        'bitfun-core/tools-mcp',
+        'bitfun-core/tools-browser-web',
+        'bitfun-core/tools-computer-use',
+        'bitfun-core/tools-image-analysis',
+        'bitfun-core/tools-miniapp',
+        'bitfun-core/tools-canvas',
+        'bitfun-core/tools-agent-control',
+      ],
+    ],
+  ]);
+  for (const [featureName, expectedReferences] of expectedAcpProfiles) {
+    const rule = acpProfiles.get(featureName);
+    if (!rule?.exact) {
+      throw new Error(`ACP closed feature profile must cover ${featureName} exactly`);
+    }
+    if (
+      rule.requiredFeatureRefs.length !== expectedReferences.length
+      || expectedReferences.some((reference) => !rule.requiredFeatureRefs.includes(reference))
+    ) {
+      throw new Error(`ACP closed feature profile has stale references for ${featureName}`);
+    }
+    if (rule.requiredFeatureRefs.some((reference) => reference.includes('product-full'))) {
+      throw new Error(`ACP closed feature profile must not reach product-full in ${featureName}`);
     }
   }
   const ownerFeatureRulePaths = new Set(

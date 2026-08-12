@@ -53,7 +53,7 @@ bitfun-core = { path = "../../crates/assembly/core", default-features = false, f
 ] }
 bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-core-types = { path = "../../crates/contracts/core-types" }
-bitfun-acp = { path = "../../crates/interfaces/acp" }
+bitfun-acp = { path = "../../crates/interfaces/acp", default-features = false, features = ["client", "server"] }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
 bitfun-agent-runtime-ipc = { path = "../../crates/adapters/agent-runtime-ipc" }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }

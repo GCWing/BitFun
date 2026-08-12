@@ -2,7 +2,7 @@
 
 > 最近核实：2026-08-11
 >
-> 实现复核基线：`gcwing/main@3d8ee4bc0`
+> 实现复核基线：`gcwing/main@7345619ac`
 >
 > 性能 A/B 基线：`gcwing/main@1f538b96d`
 >
@@ -20,7 +20,9 @@
 | Agent Runtime 基线不再隐藏重型 capability | `bitfun-core/agent-runtime` 只保留生命周期和基础工具 owner；文档转换与订阅认证也改为产品显式 modifier。在最新主线 A/B 中，三平台 normal/build 闭包进一步减少 69/64/110 个版本化 package instance |
 | App Server 不继承未消费能力 | App Server 保持现有 Agent/Git/外部来源 handler 边界，不再因 Core 基线携带文档转换和本地订阅凭据，三平台闭包减少 61/56/78 |
 | SDK Host 使用显式能力闭包 | SDK Host 保留当前本机协议和工具能力，但不再通过 `product-full` 携带协议未暴露的 Remote Connect、SSH、Function Agent 等能力；Windows/macOS/Linux normal/build 闭包减少 66/68/76 |
-| 完整产品行为保持 | `product-full` 显式组合全部 owner且三平台闭包不变；CLI 删除未调用适配层时显式保留原先实际生效的 Oniguruma 高亮后端，三平台闭包进一步减少 6/7/7。ACP 只退出未选择或未使用的隐含能力 |
+| Core 默认值不再代表完整产品 | Core library 的默认 feature 集合为空，四条能力内部工具依赖回到实际 owner；`product-full` 仍由真实产品入口显式选择且三平台闭包不变 |
+| ACP 按实际宿主拆分角色 | 兼容默认值仍为 client + server；Desktop 只选择 client，CLI 选择两者。Desktop 独立构建不再编译 ACP 的 4,211 行 server/runtime 源码，产品协议与远程行为不变 |
+| 完整产品行为保持 | `product-full` 显式组合全部 owner且三平台闭包不变；CLI 删除未调用适配层时显式保留原先实际生效的 Oniguruma 高亮后端，三平台闭包进一步减少 6/7/7。ACP 默认组合保持原能力 |
 | Installer 删除未使用的直接能力 | 独立 manifest 的直接 dependency 从 18 降到 10，Windows normal/build 闭包减少 6；不把 Installer 并入根 workspace，本 PR 按要求不提交其生成 lockfile |
 | focused test 仍保持精确 | 同 owner、feature、平台和进程语义的源文件进入分组 target；使用 `--test <target> <module>::<filter>` 运行单模块 |
 
@@ -167,6 +169,31 @@ SSH、密钥和连接子图退出。完整产品 package 集合不变，
 | MiniApp Market | 205 → 204 | 208 → 207 | 206 → 205 | 删除服务从未消费的 `urlencoding` 直接边 |
 | Page Function tests | 38 → 35 | 38 → 35 | 38 → 35 | 删除同步 Rust 测试未使用的 dev-only Tokio 闭包 |
 
+以下继续以 `gcwing/main@7345619ac` 为变更前基线，记录 Core 默认值与 ACP 角色边界收敛。三平台、
+依赖类型与去重口径与上表一致：
+
+| 本轮闭包 | Windows | macOS | Linux | 行为边界 |
+|---|---:|---:|---:|---|
+| Core 隐式默认 | 570 → 93 | 557 → 82 | 601 → 81 | library 默认不再冒充完整产品；只保留 feature-free facade 与 build dependency |
+| Core `--no-default-features` | 102 → 93 | 91 → 82 | 90 → 81 | 四条 Core 直接边退出并回到实际 owner；package 集合净减 9 |
+| Core `product-full` | 570 → 570 | 557 → 557 | 601 → 601 | Desktop/Server 等完整产品入口仍显式恢复全部能力 |
+| ACP 默认兼容组合 | 587 → 587 | 572 → 572 | 592 → 592 | 默认仍精确组合 client + server，独立 ACP 测试与外部兼容行为不缩小 |
+| Desktop | 790 → 790 | 805 → 805 | 887 → 887 | package 集合不变；ACP 仅编译 client 模块，server/runtime 4,211 行退出该 package build |
+| CLI | 643 → 643 | 642 → 642 | 665 → 665 | 显式选择 ACP client + server，既有 CLI-hosted server 行为不变 |
+
+ACP 两个新角色的当前独立闭包为 client 397/390/391、server 533/518/539（Windows/macOS/Linux）。
+它们不能直接相加：Cargo 会对共同依赖去重。该拆分的确定收益是 Desktop 独立构建不再编译 ACP server
+模块，而不是 Desktop package 数下降；因此不宣称完整 Desktop wall-clock 提速。
+
+Core 空闭包减少的 9 个 package instance 主要来自 `base64` 与 `futures` 的独有子图；`regex` 和
+`tokio-util` 的 Core 直接边虽然已经移除，但 package 仍由 feature-free contracts/services 路径传递保留。
+因此本轮证明的是 direct owner 边界收敛，不能把四条 direct edge 都描述成 package 完全退出。
+
+Core 的 bare/default 编译契约本轮发生了有意变化：仓内产品消费者此前已经全部关闭默认 feature 并显式
+选择 owner，因此运行行为不变；仓外若有 path/git consumer 依赖旧的隐式完整表面，需要显式选择
+`product-full`，或改为列出实际使用的 owner。该迁移属于编译期契约变化，不能描述成对未知外部 consumer
+完全无影响。
+
 Syntect 不能机械地只删适配层：旧 feature union 同时启用 `regex-fancy` 与 `regex-onig` 时，实际由
 Oniguruma 后端处理。当前 manifest 直接选择 `regex-onig`，因此运行后端、默认 syntax/theme 和
 Syntect→Ratatui 样式转换保持不变，同时让未生效的 fancy 后端与未消费的 YAML loader 退出。
@@ -177,14 +204,15 @@ Package instance 会低估“同一个大 crate 少编译了多少 feature 代�
 只保留 Agent Runtime 实际使用的 external-subagent contract slice。Function Agent、MiniApp、
 Plugin Source 由各自 owner 选择，完整产品仍经 `product-full` 显式恢复。
 
-根 `Cargo.lock` 从 1176 降到 1169，精确删除 `syntect-tui`、`custom_error`、`fancy-regex`、
+上一轮根 `Cargo.lock` 从 1176 降到 1169，精确删除 `syntect-tui`、`custom_error`、`fancy-regex`、
 `yaml-rust`、`linked-hash-map`、`tauri-plugin-global-shortcut` 和 `global-hotkey`；没有新增、升级或
-降级 package。Installer 自己生成的 `BitFun-Installer/src-tauri/Cargo.lock` 本 PR 不提交。
+降级 package。本轮 feature/角色边界调整保持该 lockfile 字节不变，也没有新增第三方 package。
+Installer 自己生成的 `BitFun-Installer/src-tauri/Cargo.lock` 不提交。
 
 | 状态 | 范围 | 处理结论 |
 |---|---|---|
 | 已稳定 | 根 `Cargo.lock`、Reqwest Rustls 单栈、workspace Tokio 最小基线 | 不重复治理 |
-| 本轮完成 | Core Agent Runtime capability、文档转换与订阅认证 modifier、SDK Host 显式 owner closure、Installer/CLI/Desktop/Core/MiniApp Market/Page Function 未使用直接依赖 | 以真实入口 closure 收敛，不建立新的产品 umbrella；根 lock 只减少 package |
+| 本轮完成 | Core 空默认与 capability-local 工具依赖、ACP client/server 角色、Core Agent Runtime capability、文档转换与订阅认证 modifier、SDK Host 显式 owner closure、Installer/CLI/Desktop/Core/MiniApp Market/Page Function 未使用直接依赖 | 以真实入口 closure 收敛，不建立新的产品 umbrella；根 lock 不增加 package |
 | 当前不动 | App Server / Server | 只为保持现有 handler 编译显式声明其已消费的 Core owner；不在改造稳定前继续拆其生产路径 |
 | 明确保留 | Desktop screenshots backend | 替换方案必须同时保持三平台坐标/权限/区域捕获语义且不增加根 lock package；当前候选不满足 |
 | 明确保留 | `portable-pty 0.8/0.9` | 非 OHOS 与 OHOS 的平台兼容选择，不为去重破坏 |
@@ -209,6 +237,7 @@ Plugin Source 由各自 owner 选择，完整产品仍经 `product-full` 显式�
 | CI 拓扑 | Rust job 不再等待完整前端构建，自建 Tauri 检查所需资源目录 |
 | 依赖收敛 | Desktop 直接 image 版本和 Reqwest TLS 双栈已治理 |
 | Agent Runtime 闭包 | Core 基线不再暗带具体 capability；完整产品和 CLI 显式保持原能力，ACP 退出未选择闭包 |
+| Core/ACP 默认与角色 | Core 默认 feature 为空；ACP 默认精确保持 client + server，Desktop client-only、CLI 双角色均由现有边界检查锁定 |
 | 重型可选能力 | 文档转换和本地订阅凭据由弱 modifier 细化已有 runtime owner；Core 基线和 App Server 退出未消费闭包 |
 | Installer 闭包 | 删除 8 个未使用直接 dependency；独立 workspace 和发布生命周期不变，本 PR 不提交其生成 lockfile |
 | SDK Host 闭包 | 从 `product-full` 改为与当前协议/构造路径一致的显式 Core owner closure；保留 ring TLS 初始化，本机 SDK 行为不变，未交付的远程执行能力不再进入构建图 |
