@@ -9,6 +9,15 @@ const ASSET_ALREADY_EXISTS = 24000003;
 const LOG_DOMAIN = 0x0000;
 const LOG_TAG = 'MarketCredentialStore';
 
+class MarketAssetOperationError extends Error {
+  readonly code: number;
+
+  constructor(code: number) {
+    super('Market asset operation failed');
+    this.code = code;
+  }
+}
+
 interface CredentialRequest {
   action: string;
   value?: string;
@@ -74,7 +83,7 @@ export class MarketCredentialStore {
       if (businessError.code === ASSET_NOT_FOUND) {
         return { status: 'not_found' };
       }
-      throw error;
+      throw new MarketAssetOperationError(businessError.code ?? -1);
     }
   }
 
@@ -89,7 +98,7 @@ export class MarketCredentialStore {
     } catch (error) {
       const businessError = error as BusinessError;
       if (businessError.code !== ASSET_NOT_FOUND) {
-        throw error;
+        throw new MarketAssetOperationError(businessError.code ?? -1);
       }
     }
 
@@ -104,7 +113,7 @@ export class MarketCredentialStore {
     } catch (error) {
       const businessError = error as BusinessError;
       if (businessError.code !== ASSET_ALREADY_EXISTS) {
-        throw error;
+        throw new MarketAssetOperationError(businessError.code ?? -1);
       }
       await asset.update(query, update);
     }
@@ -121,7 +130,7 @@ export class MarketCredentialStore {
       if (businessError.code === ASSET_NOT_FOUND) {
         return { status: 'not_found' };
       }
-      throw error;
+      throw new MarketAssetOperationError(businessError.code ?? -1);
     }
   }
 }
