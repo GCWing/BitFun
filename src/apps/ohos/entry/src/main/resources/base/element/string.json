@@ -54,6 +54,10 @@
         {
             "name": "permission_microphone_reason",
             "value": "Used to capture microphone audio for voice input transcription in the chat composer"
+        },
+        {
+            "name": "permission_window_topmost_reason",
+            "value": "Used to keep the floating toolbar window above other application windows"
         }
     ]
 }

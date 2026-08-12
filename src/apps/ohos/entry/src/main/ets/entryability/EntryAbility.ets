@@ -6,7 +6,7 @@ import {
   Want
 } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { window } from '@kit.ArkUI';
+import { window, display } from '@kit.ArkUI';
 import { RustAbility } from '@ohos-rs/ability';
 import { CommonEventListener } from '../utils/CommonEventListener';
 import { harmonyShare, systemShare } from '@kit.ShareKit';
@@ -31,6 +31,44 @@ import {
 
 
 const DOMAIN = 0x0000;
+
+interface SetAlwaysOnTopArg {
+  isTopmost: boolean;
+}
+interface SetDecorationsArg {
+  visible: boolean;
+}
+interface SetSkipTaskbarArg {
+  skip: boolean;
+}
+interface SetWindowSizeArg {
+  width: number;
+  height: number;
+}
+interface SetWindowPositionArg {
+  x: number;
+  y: number;
+}
+interface SetMinSizeArg {
+  width: number;
+  height: number;
+}
+interface SetResizableArg {
+  resizable: boolean;
+}
+interface PointResult {
+  x: number;
+  y: number;
+}
+interface SizeResult {
+  width: number;
+  height: number;
+}
+interface MonitorResult {
+  width: number;
+  height: number;
+  scaleFactor: number;
+}
 
 export default class EntryAbility extends RustAbility {
   public moduleName: string = "bitfun_desktop_lib";
@@ -181,6 +219,134 @@ export default class EntryAbility extends RustAbility {
     });
     RustModule.registerArktsFunction('window_start_dragging', async (err: Error, arg: string): Promise<string> => {
       windowStage.getMainWindowSync().startMoving();
+      return '';
+    });
+    RustModule.registerArktsFunction('set_always_on_top_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: SetAlwaysOnTopArg = JSON.parse(arg);
+      const mainWin = windowStage.getMainWindowSync();
+      try {
+        await mainWin.setWindowTopmost(req.isTopmost);
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `setWindowTopmost failed (code=${be.code}), falling back to showWindow: ${be.message}`);
+        try {
+          await mainWin.showWindow();
+        } catch (e2) {
+          const be2 = e2 as BusinessError;
+          hilog.warn(DOMAIN, TAG, `showWindow fallback failed: ${be2.message}`);
+        }
+      }
+      return '';
+    });
+    RustModule.registerArktsFunction('set_decorations_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: SetDecorationsArg = JSON.parse(arg);
+      try {
+        await windowStage.getMainWindowSync().setWindowDecorVisible(req.visible);
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `setWindowDecorVisible failed: ${be.message}`);
+      }
+      return '';
+    });
+    RustModule.registerArktsFunction('set_skip_taskbar_ohos', async (err: Error, arg: string): Promise<string> => {
+      return '';
+    });
+    RustModule.registerArktsFunction('set_window_size_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: SetWindowSizeArg = JSON.parse(arg);
+      try {
+        await windowStage.getMainWindowSync().resize(req.width, req.height);
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `resize failed: ${be.message}`);
+      }
+      return '';
+    });
+    RustModule.registerArktsFunction('set_window_position_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: SetWindowPositionArg = JSON.parse(arg);
+      try {
+        await windowStage.getMainWindowSync().moveWindowTo(req.x, req.y);
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `moveWindowTo failed: ${be.message}`);
+      }
+      return '';
+    });
+    RustModule.registerArktsFunction('outer_position_ohos', async (err: Error, arg: string): Promise<string> => {
+      const rect = windowStage.getMainWindowSync().getWindowProperties().windowRect;
+      const result: PointResult = { x: rect.left, y: rect.top };
+      return JSON.stringify(result);
+    });
+    RustModule.registerArktsFunction('outer_size_ohos', async (err: Error, arg: string): Promise<string> => {
+      const rect = windowStage.getMainWindowSync().getWindowProperties().windowRect;
+      const result: SizeResult = { width: rect.width, height: rect.height };
+      return JSON.stringify(result);
+    });
+    RustModule.registerArktsFunction('inner_size_ohos', async (err: Error, arg: string): Promise<string> => {
+      const rect = windowStage.getMainWindowSync().getWindowProperties().windowRect;
+      const result: SizeResult = { width: rect.width, height: rect.height };
+      return JSON.stringify(result);
+    });
+    RustModule.registerArktsFunction('current_monitor_ohos', async (err: Error, arg: string): Promise<string> => {
+      let dispWidth: number = 0;
+      let dispHeight: number = 0;
+      let scale: number = 1;
+      try {
+        const disp = display.getDefaultDisplaySync();
+        dispWidth = disp.width;
+        dispHeight = disp.height;
+        scale = disp.densityPixels > 0 ? disp.densityPixels : 1;
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `getDefaultDisplaySync failed: ${be.message}`);
+      }
+      const result: MonitorResult = { width: dispWidth, height: dispHeight, scaleFactor: scale };
+      return JSON.stringify(result);
+    });
+    RustModule.registerArktsFunction('unmaximize_ohos', async (err: Error, arg: string): Promise<string> => {
+      try {
+        await windowStage.getMainWindowSync().recover();
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `recover failed: ${be.message}`);
+      }
+      return '';
+    });
+    RustModule.registerArktsFunction('set_min_size_ohos', async (err: Error, arg: string): Promise<string> => {
+      return '';
+    });
+    RustModule.registerArktsFunction('set_focus_ohos', async (err: Error, arg: string): Promise<string> => {
+      try {
+        await windowStage.getMainWindowSync().showWindow();
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `showWindow failed: ${be.message}`);
+      }
+      return '';
+    });
+    RustModule.registerArktsFunction('set_resizable_ohos', async (err: Error, arg: string): Promise<string> => {
+      return '';
+    });
+    RustModule.registerArktsFunction('maximize_ohos', async (err: Error, arg: string): Promise<string> => {
+      try {
+        await windowStage.getMainWindowSync().maximize();
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `maximize failed: ${be.message}`);
+      }
+      return '';
+    });
+    RustModule.registerArktsFunction('center_ohos', async (err: Error, arg: string): Promise<string> => {
+      try {
+        const mainWin = windowStage.getMainWindowSync();
+        const rect = mainWin.getWindowProperties().windowRect;
+        const disp = display.getDefaultDisplaySync();
+        const x: number = Math.max(0, Math.floor((disp.width - rect.width) / 2));
+        const y: number = Math.max(0, Math.floor((disp.height - rect.height) / 2));
+        await mainWin.moveWindowTo(x, y);
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `center failed: ${be.message}`);
+      }
       return '';
     });
     RustModule.registerArktsFunction('call_calendar', async (err: Error, arg: string): Promise<string> => {
