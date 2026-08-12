@@ -9,14 +9,13 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
     ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelProfileRequest,
     ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
-    ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider,
-    ExternalSubagentToolCapability, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
-    SecretText,
+    ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
+    ExternalSubagentToolSelector, SecretText,
 };
 use bitfun_services_core::markdown::FrontMatterMarkdown;
 use bitfun_static_hook_support::{
-    collect_bounded_regular_files, read_bounded_text, BoundedDirectoryWalkError,
-    BoundedDirectoryWalkLimits, BoundedTextRead,
+    collect_bounded_regular_files, common_external_subagent_tool_capability, read_bounded_text,
+    BoundedDirectoryWalkError, BoundedDirectoryWalkLimits, BoundedTextRead,
 };
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -630,9 +629,7 @@ fn tool_request(
         selectors: selectors
             .into_iter()
             .map(|(source_name, allowed)| ExternalSubagentToolSelector {
-                canonical_capability: ExternalSubagentToolCapability::from_common_name(
-                    &source_name,
-                ),
+                canonical_capability: common_external_subagent_tool_capability(&source_name),
                 source_name,
                 allowed,
             })

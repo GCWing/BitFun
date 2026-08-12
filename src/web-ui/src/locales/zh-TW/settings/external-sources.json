@@ -245,6 +245,7 @@
       "unreadableSource": "BitFun 無法讀取來源中的部分內容。請檢查檔案存取權限後重新整理。",
       "notSupported": "BitFun 暫不支援此類外部內容，因此沒有載入或執行它。",
       "checkFailed": "BitFun 未能檢查一個來源，其他來源仍可使用。請重新整理後重試。",
+      "runtimeUnavailable": "此來源中的一個 MCP 伺服器無法使用。請先停用，修正設定或驗證後再啟用。",
       "sourceIssue": "BitFun 未能完成一個來源的檢查；現有可用內容保持不變。你可以重新整理或查看技術詳細資料。"
     }
   },

@@ -319,6 +319,23 @@ function staticSourceSupportEntry(symbol) {
   };
 }
 
+function commonExternalSubagentToolMappingEntry(symbol) {
+  return {
+    symbol,
+    owner: 'static-hook-support shared declarative source adapter utility owner',
+    consumer: 'reviewed OpenCode and Claude Code declarative subagent adapters',
+    verification:
+      'shared mapping unit tests, ecosystem subagent adapter fixtures, and core-boundary public API budget checks',
+    p0: 'runtime-free common external Agent tool capability normalization',
+    contractSlice: contractSlices.externalSourceControlContract,
+    wireImpact: false,
+    rationale:
+      'sibling declarative adapters need one static mapping while provider-specific aliases remain adapter-owned',
+    exit:
+      'remove only if every reviewed consumer moves to an equivalent adapter-layer mapping owner',
+  };
+}
+
 function declarativeSourceAdapterEntry(
   symbol,
   owner,
@@ -477,7 +494,9 @@ export const staticHookSupportPublicApiEntries = [
   'BoundedDirectoryWalkLimit',
   'BoundedDirectoryWalkError',
   'collect_bounded_regular_files',
-].map(staticSourceSupportEntry));
+].map(staticSourceSupportEntry)).concat([
+  'common_external_subagent_tool_capability',
+].map(commonExternalSubagentToolMappingEntry));
 
 function externalHookContractEntry(symbol, owner, consumer, wireImpact = false) {
   return {

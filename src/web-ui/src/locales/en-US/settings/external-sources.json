@@ -245,6 +245,7 @@
       "unreadableSource": "BitFun could not read part of a source. Check file access, then refresh.",
       "notSupported": "This type of external content is not supported yet, so BitFun did not load or run it.",
       "checkFailed": "BitFun could not check one source. Other sources remain available; refresh to retry.",
+      "runtimeUnavailable": "An MCP server from this source is unavailable. Disable it, fix its configuration or authentication, then enable it again.",
       "sourceIssue": "BitFun could not finish checking one source. Existing usable content remains available; refresh or review the technical details."
     }
   },

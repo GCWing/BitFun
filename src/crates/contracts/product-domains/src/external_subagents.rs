@@ -429,21 +429,6 @@ pub enum ExternalSubagentToolCapability {
     WriteFile,
 }
 
-impl ExternalSubagentToolCapability {
-    pub fn from_common_name(name: &str) -> Option<Self> {
-        match name.to_ascii_lowercase().as_str() {
-            "ls" | "list" => Some(Self::DirectoryList),
-            "read" => Some(Self::ReadFile),
-            "glob" => Some(Self::GlobFiles),
-            "grep" => Some(Self::SearchText),
-            "bash" => Some(Self::ExecuteCommand),
-            "edit" => Some(Self::EditFile),
-            "write" => Some(Self::WriteFile),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSubagentToolSelector {

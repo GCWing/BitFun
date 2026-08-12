@@ -4207,6 +4207,7 @@ export const forbiddenContentUnderRules = [
         'src/crates/adapters/static-hook-support/tests/parser.rs',
         'src/crates/adapters/opencode-adapter/src/hook_source.rs',
         'src/crates/adapters/opencode-adapter/src/command_source.rs',
+        'src/crates/adapters/opencode-adapter/src/agent_source.rs',
         'src/crates/adapters/opencode-adapter/src/mcp_source.rs',
         'src/crates/adapters/claude-code-adapter/src/hook_source.rs',
         'src/crates/adapters/claude-code-adapter/src/command_source.rs',

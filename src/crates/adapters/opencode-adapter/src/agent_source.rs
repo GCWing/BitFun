@@ -23,6 +23,7 @@ use bitfun_product_domains::tool_permissions::{
     PermissionResourceCaseSensitivity, PermissionRule,
 };
 use bitfun_services_core::{jsonc::strip_jsonc, markdown::FrontMatterMarkdown};
+use bitfun_static_hook_support::common_external_subagent_tool_capability;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -1002,7 +1003,7 @@ fn tool_request(
             }
             continue;
         }
-        let canonical_capability = ExternalSubagentToolCapability::from_common_name(name);
+        let canonical_capability = common_external_subagent_tool_capability(name);
         selectors.push(ExternalSubagentToolSelector {
             source_name: name.clone(),
             canonical_capability,

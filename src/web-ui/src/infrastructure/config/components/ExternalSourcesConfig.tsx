@@ -63,6 +63,7 @@ import {
   ExternalCommandConflicts,
   ExternalSourceSection,
   buildExternalApplicationsView,
+  sourceDiagnosticCategory,
   type ExternalApplicationView,
 } from './external-sources';
 import './ExternalSourcesConfig.scss';
@@ -212,31 +213,6 @@ const MCP_START_FAILURE_TRANSLATIONS: Record<string, string> = {
 
 function localizedMcpFailureReason(reason: string, t: TFunction): string {
   return t(MCP_START_FAILURE_TRANSLATIONS[reason] ?? 'mcp.failureReasons.other');
-}
-
-function sourceDiagnosticCategory(code: string): string {
-  if (code.includes('preference_read_failed')) return 'confirmationStateUnavailable';
-  if (code.includes('conflict_history_write_failed')) return 'conflictHistoryUnavailable';
-  if (code.includes('discovery_in_progress')) return 'checkInProgress';
-  if (code.includes('timeout')) return 'checkTimedOut';
-  if (code.includes('trust_required')) return 'confirmationRequired';
-  if (code.includes('too_large') || code.includes('file_limit') || code.includes('bytes_limit')) {
-    return 'sourceTooLarge';
-  }
-  if (code.includes('invalid') || code.includes('parse') || code.includes('definition')
-    || code.includes('export_missing') || code.includes('name_unsupported')) {
-    return 'invalidSettings';
-  }
-  if (code.includes('unreadable') || code.includes('read_failed')
-    || code.includes('metadata_failed') || code.includes('directory_')) {
-    return 'unreadableSource';
-  }
-  if (code.includes('projection_only') || code.includes('unsupported')
-    || code.includes('restricted')) {
-    return 'notSupported';
-  }
-  if (code.includes('failed')) return 'checkFailed';
-  return 'sourceIssue';
 }
 
 function sourceScopeLabel(scope: string, t: TFunction): string {

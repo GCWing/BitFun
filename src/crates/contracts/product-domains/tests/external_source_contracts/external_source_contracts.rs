@@ -579,28 +579,6 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
 }
 
 #[test]
-fn common_external_tool_names_map_to_provider_neutral_capabilities() {
-    use ExternalSubagentToolCapability::{EditFile, ExecuteCommand, WriteFile};
-
-    assert_eq!(
-        ExternalSubagentToolCapability::from_common_name("bash"),
-        Some(ExecuteCommand)
-    );
-    assert_eq!(
-        ExternalSubagentToolCapability::from_common_name("EDIT"),
-        Some(EditFile)
-    );
-    assert_eq!(
-        ExternalSubagentToolCapability::from_common_name("write"),
-        Some(WriteFile)
-    );
-    assert_eq!(
-        ExternalSubagentToolCapability::from_common_name("provider-specific-tool"),
-        None
-    );
-}
-
-#[test]
 fn external_subagent_model_contract_preserves_control_and_opaque_reference_semantics() {
     let requests = [
         ExternalSubagentModelRequest::Default,
