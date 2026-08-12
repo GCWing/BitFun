@@ -417,12 +417,39 @@ pub fn external_subagent_model_binding_key(
     ))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalSubagentToolCapability {
+    DirectoryList,
+    ReadFile,
+    GlobFiles,
+    SearchText,
+    ExecuteCommand,
+    EditFile,
+    WriteFile,
+}
+
+impl ExternalSubagentToolCapability {
+    pub fn from_common_name(name: &str) -> Option<Self> {
+        match name.to_ascii_lowercase().as_str() {
+            "ls" | "list" => Some(Self::DirectoryList),
+            "read" => Some(Self::ReadFile),
+            "glob" => Some(Self::GlobFiles),
+            "grep" => Some(Self::SearchText),
+            "bash" => Some(Self::ExecuteCommand),
+            "edit" => Some(Self::EditFile),
+            "write" => Some(Self::WriteFile),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSubagentToolSelector {
     pub source_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub canonical_host_name: Option<String>,
+    pub canonical_capability: Option<ExternalSubagentToolCapability>,
     pub allowed: bool,
 }
 
@@ -571,14 +598,8 @@ impl ExternalSubagentDefinition {
                     && !value.chars().any(char::is_control)
             };
             if !valid_name(&selector.source_name)
-                || selector
-                    .canonical_host_name
-                    .as_deref()
-                    .is_some_and(|name| !valid_name(name))
-                || !tool_selectors.insert((
-                    selector.source_name.as_str(),
-                    selector.canonical_host_name.as_deref(),
-                ))
+                || !tool_selectors
+                    .insert((selector.source_name.as_str(), selector.canonical_capability))
             {
                 return Err(ExternalSourceContractError::InvalidText(
                     "external subagent tool selector",

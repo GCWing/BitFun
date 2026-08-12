@@ -9,8 +9,9 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
     ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelProfileRequest,
     ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
-    ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
-    ExternalSubagentToolSelector, SecretText,
+    ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider,
+    ExternalSubagentToolCapability, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
+    SecretText,
 };
 use bitfun_services_core::markdown::FrontMatterMarkdown;
 use bitfun_static_hook_support::{
@@ -27,7 +28,6 @@ const ECOSYSTEM_ID: &str = "claude-code";
 const MAX_AGENT_FILES: usize = 2048;
 const MAX_AGENT_FILE_BYTES: usize = 256 * 1024;
 const MAX_TOTAL_PROMPT_BYTES: usize = 8 * 1024 * 1024;
-
 const KNOWN_FIELDS: &[&str] = &[
     "name",
     "description",
@@ -630,7 +630,9 @@ fn tool_request(
         selectors: selectors
             .into_iter()
             .map(|(source_name, allowed)| ExternalSubagentToolSelector {
-                canonical_host_name: canonical_tool_name(&source_name).map(str::to_string),
+                canonical_capability: ExternalSubagentToolCapability::from_common_name(
+                    &source_name,
+                ),
                 source_name,
                 allowed,
             })
@@ -653,16 +655,6 @@ fn string_list(value: &Value) -> Option<Vec<String>> {
             .iter()
             .map(|value| value.as_str().map(str::to_string))
             .collect(),
-        _ => None,
-    }
-}
-
-fn canonical_tool_name(name: &str) -> Option<&'static str> {
-    match name.to_ascii_lowercase().as_str() {
-        "ls" | "list" => Some("LS"),
-        "read" => Some("Read"),
-        "glob" => Some("Glob"),
-        "grep" => Some("Grep"),
         _ => None,
     }
 }

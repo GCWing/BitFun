@@ -868,6 +868,7 @@ export const externalSubagentContractPublicApiEntries = [
   'ExternalSubagentModelBindingMethod',
   'ExternalSubagentModelBindingOption',
   'ExternalSubagentModelBindingGroup',
+  'ExternalSubagentToolCapability',
   'ExternalSubagentToolSelector',
   'ExternalSubagentToolRequest',
   'ExternalSubagentCompatibilityState',
@@ -1102,6 +1103,7 @@ export const externalSourceCorePublicApiEntries = [
     'ExternalToolConflictCandidateKind',
     'ExternalToolRuntimeKind',
     'set_external_tool_target_decision',
+    'set_external_tool_targets_enabled',
     'set_external_tool_conflict_choice',
   ].map((symbol) =>
     externalToolEntry(
@@ -1123,6 +1125,7 @@ export const externalSourceCorePublicApiEntries = [
     'ExternalSubagentModelRequest',
     'ExternalSubagentSummary',
     'set_external_subagent_activation',
+    'set_external_subagents_enabled',
     'set_external_subagent_model_binding',
     'choose_external_subagent_conflict',
   ].map((symbol) =>
@@ -1140,6 +1143,7 @@ export const externalSourceCorePublicApiEntries = [
     'ExternalMcpTransportKind',
     'native_mcp_candidate_id',
     'set_external_mcp_server_decision',
+    'set_external_mcp_servers_enabled',
     'choose_external_mcp_conflict',
   ].map((symbol) =>
     externalMcpEntry(

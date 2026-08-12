@@ -705,7 +705,7 @@ describe('ExternalMcpOverview', () => {
     }
   });
 
-  it('surfaces stale source health ahead of a misleading active status', async () => {
+  it('shows a neutral stale badge when an active server uses the last working content', async () => {
     getSnapshotMock.mockResolvedValue({
       ...snapshot,
       sources: [{
@@ -724,8 +724,10 @@ describe('ExternalMcpOverview', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('external.status.stale');
-    expect(container.textContent).toContain('external.status.active');
+    const stale = container.querySelector('[data-bf-state="stale"]');
+    expect(stale?.textContent).toContain('external.status.stale');
+    expect(stale?.classList.contains('is-error')).toBe(false);
+    expect(stale?.classList.contains('is-pending')).toBe(false);
   });
 
   it('surfaces degraded source diagnostics ahead of a misleading active status', async () => {

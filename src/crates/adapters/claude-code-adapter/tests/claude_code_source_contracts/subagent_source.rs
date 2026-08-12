@@ -5,7 +5,7 @@ use bitfun_product_domains::external_sources::{
 use bitfun_product_domains::external_subagents::{
     ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput, ExternalSubagentMode,
     ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
-    ExternalSubagentSourceProvider,
+    ExternalSubagentSourceProvider, ExternalSubagentToolCapability,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -68,6 +68,32 @@ fn write(path: impl AsRef<Path>, contents: &str) {
     let path = path.as_ref();
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, contents).unwrap();
+}
+
+#[test]
+fn claude_code_builtin_tools_map_to_provider_neutral_capabilities() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("agents/worker.md"),
+        "---\nname: worker\ndescription: Worker\ntools: [Bash, Edit, Write]\n---\nMake the requested change",
+    );
+
+    let snapshot = fixture.discover(BTreeSet::new());
+    let mappings = snapshot.definitions[0]
+        .requested_tools
+        .selectors
+        .iter()
+        .map(|selector| (selector.source_name.as_str(), selector.canonical_capability))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        mappings,
+        vec![
+            ("Bash", Some(ExternalSubagentToolCapability::ExecuteCommand)),
+            ("Edit", Some(ExternalSubagentToolCapability::EditFile)),
+            ("Write", Some(ExternalSubagentToolCapability::WriteFile)),
+        ]
+    );
 }
 
 #[test]

@@ -24,7 +24,7 @@ use crate::service::mcp::protocol::{MCPError, MCPPrompt, MCPResource};
 use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_services_integrations::mcp::server::MCPConnectionEvent;
-use bitfun_services_integrations::mcp::server::MCPServerRuntimeState;
+use bitfun_services_integrations::mcp::server::{MCPServerRuntimeState, MCPServerStartFailure};
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -155,6 +155,13 @@ impl MCPServerManager {
                 .await
                 .contains(server_id),
         )
+    }
+
+    pub async fn external_server_start_failure(
+        &self,
+        server_id: &str,
+    ) -> Option<MCPServerStartFailure> {
+        self.runtime.start_failure(server_id).await
     }
 }
 
