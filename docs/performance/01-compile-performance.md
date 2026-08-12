@@ -247,6 +247,38 @@ consumer 零影响。
 `bitfun-transport` 直接边，`Cargo.lock` 的 Core dependency record 同步删除这一行；这是依赖边
 收敛，不是 package 集合增长，也不通过保留无 owner 的 optional dependency 伪造字节不变。
 
+以下以 `gcwing/main@aeb8099ae` 为变更前基线，继续收敛两个稳定契约 crate 的源码与依赖可见面。
+统计仍使用 `x86_64-pc-windows-msvc`、`aarch64-apple-darwin`、`x86_64-unknown-linux-gnu`，并按
+`cargo tree -e normal,build --no-dedupe` 的版本化 package instance 去重：
+
+| 契约/消费闭包 | Windows | macOS | Linux | 边界结果 |
+|---|---:|---:|---:|---|
+| Runtime Ports feature-free | 21 → 13 | 21 → 13 | 21 → 13 | Agent API、服务端口、插件与脚本端口按 owner feature 退出；common marker/结果契约保留 |
+| Tool Contracts feature-free | 25 → 18 | 25 → 18 | 25 → 18 | ACP/MCP bridge、Computer Use 与 element-token 源码按独立 feature 退出 |
+| Terminal Core | 94 → 92 | 82 → 80 | 81 → 79 | 只选择 terminal port，不再编译无关 Session/Git/Remote workspace 表面 |
+| Plugin Runtime Client | 22 → 16 | 22 → 16 | 22 → 16 | 只选择 plugin-runtime contract，不再继承完整 Runtime Ports 表面 |
+| Tool Runtime | 78 → 78 | 66 → 66 | 65 → 65 | 真实 owner 仍消费稳定 handle 组合，package 闭包不变 |
+| ACP client | 385 → 385 | 378 → 378 | 379 → 379 | 依赖重叠使 package 数不变；组合闭包启用 ACP bridge 与 Core 所需 Computer Use contract，不启用 MCP/element-token |
+| ACP server | 522 → 522 | 507 → 507 | 528 → 528 | 组合闭包启用 Core 所需 Computer Use/MCP contract，不继承 ACP client bridge 或 element-token |
+
+Package instance 会低估同一 crate 内源码切片的收益。Runtime Ports 变更前约 6,045 行源码全部进入任意
+consumer；当前 feature-free 非测试表面约 314 行，约 95% 的 Agent/服务/plugin/script 端口源码退出最小编译。
+Tool Contracts 约 6,846 行源码中，ACP/MCP bridge、Computer Use 与 element-token 共约 2,861 行
+（41.8%）由各自 feature 控制。这里报告的是解析、类型检查和增量重编译输入收敛；没有重复的冷/热构建
+样本，因此不宣称完整产品 wall-clock 提速。完整产品和真实 owner 显式恢复原 API，runtime ownership、
+wire shape 与行为不变。
+
+`bitfun-agent-runtime` 的直接 Runtime Ports 边也不再选择其源码未消费的 `remote-exec-port` 与
+`tool-runtime-handles`；Core 的 `agent-runtime` owner 仍显式选择二者，因为具体 assembly 路径确实使用这些句柄。
+
+这次切片包含有意的编译期可见性收紧：直接依赖 Runtime Ports 或 Tool Contracts 的仓外 consumer 需要
+显式选择所用 port/bridge/Computer Use/element-token feature。启用相应 owner 后原公开路径保持不变，
+仓内 consumer 已逐项闭合；不能把 feature-free 构建下的源码不可见描述为对未知外部 consumer 零影响。
+
+本轮没有新增、升级或降级第三方 package，根 `Cargo.lock` 保持字节不变；也没有新增 CI job、矩阵或命令。
+Runtime Ports 的 owner-specific integration targets 保持彼此独立，避免为了减少 executable 数重新制造
+feature union。
+
 | 状态 | 范围 | 处理结论 |
 |---|---|---|
 | 已稳定 | 根 `Cargo.lock`、Reqwest Rustls 单栈、workspace Tokio 最小基线 | 不重复治理 |

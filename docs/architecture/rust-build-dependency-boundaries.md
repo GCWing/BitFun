@@ -96,6 +96,24 @@ Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品
 - 边界检查以 Cargo metadata 的解码结果看护全部直接 consumer，并检查 resolved Reqwest feature union，防止传递依赖重新激活 Native TLS；
 - 不并列启用 native-tls 兼容栈。只有真实产品场景无法由 Rustls 平台证书验证承载时，才以明确行为证据评审替换方案，而不是重新叠加第二后端。
 
+### 3.5 稳定契约 crate 按消费能力切片
+
+稳定 DTO、port 和纯契约继续由原 contract/execution crate 拥有；当同一 crate 的公开表面覆盖多个互不相关的
+能力域时，优先在原 crate 内用 additive owner feature 隔离源码和可选依赖，不为了构建数字迁移 runtime owner
+或复制公共类型。feature 关闭时 API 不可见是明确的编译期契约变化；feature 开启后必须保留原公开路径、序列化
+形状和错误语义。
+
+- contract crate 的 `default` 保持空，consumer 的每条 normal/dev/build/target dependency edge 都显式关闭
+  default features，并只选择实际消费的切片；
+- feature 名描述稳定能力，例如 Agent API、workspace/terminal/remote/Git port、协议 bridge 或 Computer Use
+  contract，不描述某个临时调用方、PR 或测试；
+- 不提供 `full`、`service-ports`、`all-contracts` 等重新合并全部表面的 umbrella。只有多个 owner 共同消费且
+  无法合理拆开的稳定复合类型可以保留一个窄 aggregate，并明确列出其组成；
+- 同一依赖的 Cargo feature 会在完整图中相加，因此窄 consumer 必须独立 `cargo check/test`。完整产品构建
+  只能证明组合闭包可用，不能证明单个 consumer 的声明完整；
+- 边界检查看护目标 crate 的空默认、feature surface、consumer edge 及强/弱 feature 转发；不得依赖包名文本
+  而漏掉 rename、optional、dev/build 或 target-specific edge。
+
 ## 4. 依赖 owner 与准入检查
 
 第三方库应位于调用外部系统或实现具体能力的最低合理 owner：

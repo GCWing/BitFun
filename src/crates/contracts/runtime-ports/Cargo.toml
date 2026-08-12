@@ -11,22 +11,52 @@ name = "bitfun_runtime_ports"
 crate-type = ["rlib"]
 
 [[test]]
-name = "runtime_port_contracts"
+name = "plugin_runtime_contracts"
 path = "tests/runtime_port_contracts.rs"
+required-features = ["plugin-runtime"]
+
+[[test]]
+name = "git_port_contracts"
+path = "tests/git_port_contracts.rs"
+required-features = ["git-port"]
+
+[[test]]
+name = "script_tool_port_contracts"
+path = "tests/script_tool_port_contracts.rs"
+required-features = ["script-tool-runtime"]
+
+[[test]]
+name = "session_store_contracts"
+path = "tests/session_store_contracts.rs"
+required-features = ["workspace-ports"]
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true }
 bitfun-product-domains = { path = "../product-domains", default-features = false, optional = true }
-bitfun-core-types = { path = "../core-types" }
+bitfun-core-types = { path = "../core-types", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
-tokio-util = { workspace = true }
+tokio = { workspace = true, features = ["sync"], optional = true }
+tokio-util = { workspace = true, optional = true }
 ts-rs = { workspace = true, optional = true }
 
 [features]
 default = []
+agent-api = ["dep:bitfun-core-types"]
+plugin-runtime = []
+script-tool-runtime = []
+workspace-ports = ["dep:anyhow", "dep:tokio-util"]
+terminal-port = ["dep:tokio"]
+remote-exec-port = ["dep:tokio"]
+tool-runtime-handles = [
+    "workspace-ports",
+    "terminal-port",
+    "remote-exec-port",
+]
+remote-workspace-ports = []
+git-port = []
+runtime-event-port = []
 permission = ["dep:bitfun-product-domains"]
 # Derive `ts_rs::TS` on the wire types so downstream crates (app-server) can
 # export TypeScript bindings. The `permission` feature gates the product
@@ -37,6 +67,7 @@ permission = ["dep:bitfun-product-domains"]
 # undeclared owner of the optional product-domain dependency.
 ts = [
     "dep:ts-rs",
+    "agent-api",
     "permission",
     "bitfun-core-types/ts",
     "bitfun-product-domains?/ts",

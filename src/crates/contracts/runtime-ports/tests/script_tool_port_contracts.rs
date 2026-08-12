@@ -1,3 +1,5 @@
+#![cfg(feature = "script-tool-runtime")]
+
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
     PortResult, ScriptToolDescriptor, ScriptToolExpectedExport, ScriptToolInvokeRequest,

@@ -79,7 +79,7 @@ bitfun-product-capabilities = { path = "../product-capabilities", default-featur
 bitfun-external-sources = { path = "../external-sources", optional = true }
 
 # Agent tool contracts
-bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
+bitfun-agent-tools = { path = "../../execution/tool-contracts", default-features = false, optional = true }
 
 # Tool pack provider plan
 bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false, optional = true }
@@ -113,7 +113,7 @@ tokio-tungstenite = { workspace = true, optional = true }
 # Event layer dependency (lowest layer)
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-events = { path = "../../contracts/events" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, features = ["permission", "workspace-ports"] }
 bitfun-runtime-services = { path = "../../execution/runtime-services", optional = true }
 
 # Reviewed product-full plugin composition root.
@@ -198,6 +198,15 @@ agent-runtime = [
     "dep:bitfun-agent-content",
     "dep:bitfun-agent-stream",
     "dep:bitfun-agent-tools",
+    "bitfun-agent-tools/computer-use-contract",
+    "bitfun-runtime-ports/agent-api",
+    "bitfun-runtime-ports/git-port",
+    "bitfun-runtime-ports/remote-exec-port",
+    "bitfun-runtime-ports/remote-workspace-ports",
+    "bitfun-runtime-ports/runtime-event-port",
+    "bitfun-runtime-ports/terminal-port",
+    "bitfun-runtime-ports/tool-runtime-handles",
+    "bitfun-runtime-ports/workspace-ports",
     "dep:base64",
     "dep:bitfun-harness",
     "dep:dashmap",
@@ -262,6 +271,7 @@ model-catalog = [
 ]
 mcp-runtime = [
     "agent-runtime",
+    "bitfun-agent-tools/mcp-bridge",
     "dep:axum",
     "dep:reqwest",
     "bitfun-services-integrations/mcp",
@@ -289,7 +299,10 @@ web-tools = [
     "tool-runtime/web-readable",
 ]
 deep-research = ["bitfun-services-integrations/deep-research"]
-script-tool-runtime = ["bitfun-services-integrations/script-tool-runtime"]
+script-tool-runtime = [
+    "bitfun-runtime-ports/script-tool-runtime",
+    "bitfun-services-integrations/script-tool-runtime",
+]
 scheduled-jobs = [
     "dep:chrono-tz",
     "dep:cron",
@@ -347,6 +360,7 @@ tools-agent-control = [
 plugin-runtime = [
     "external-sources",
     "dep:bitfun-plugin-runtime-client",
+    "bitfun-runtime-ports/plugin-runtime",
 ]
 debug-log = [
     "dep:axum",

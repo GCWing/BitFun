@@ -17,11 +17,11 @@ serde_json = { workspace = true }
 log = { workspace = true }
 ts-rs = { workspace = true, optional = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
-bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
+bitfun-agent-tools = { path = "../../execution/tool-contracts", default-features = false, optional = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, optional = true }
 aes-gcm = { workspace = true, optional = true }
 aes = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
@@ -124,7 +124,7 @@ debug-log = ["anyhow", "chrono", "reqwest", "reqwest/json", "reqwest/rustls", "t
 deep-research = ["bitfun-agent-runtime", "tokio/fs"]
 git = [
     "async-trait",
-    "bitfun-runtime-ports",
+    "bitfun-runtime-ports/git-port",
     "bitfun-services-core/process-runtime",
     "chrono",
     "git2",
@@ -146,7 +146,7 @@ mcp = [
     "anyhow",
     "async-trait",
     "base64",
-    "bitfun-agent-tools",
+    "bitfun-agent-tools/mcp-bridge",
     "bitfun-services-core/process-runtime",
     "futures",
     "hex",
@@ -244,11 +244,12 @@ remote-connect = [
     "argon2",
     "async-trait",
     "base64",
-    "bitfun-agent-tools",
+    "dep:bitfun-agent-tools",
     "dep:bitfun-core-types",
     "bitfun-services-core/local-storage",
     "bitfun-services-core/process-runtime",
-    "bitfun-runtime-ports",
+    "bitfun-runtime-ports/agent-api",
+    "bitfun-runtime-ports/remote-workspace-ports",
     "chrono",
     "dirs",
     "futures",
@@ -288,7 +289,9 @@ remote-ssh = [
     "bitfun-services-core/filesystem",
     "bitfun-services-core/process-runtime",
     "bitfun-services-core/workspace-identity",
-    "bitfun-runtime-ports",
+    "bitfun-runtime-ports/remote-exec-port",
+    "bitfun-runtime-ports/remote-workspace-ports",
+    "bitfun-runtime-ports/workspace-ports",
     "sha2",
     "terminal-core",
     "thiserror",
@@ -308,7 +311,7 @@ remote-ssh-concrete = [
     "anyhow",
     "async-trait",
     "base64",
-    "bitfun-runtime-ports",
+    "dep:bitfun-runtime-ports",
     "chrono",
     "dirs",
     "minisign-verify",
@@ -381,7 +384,7 @@ workspace-search = [
 process-tree = ["bitfun-services-core/process-runtime"]
 script-tool-runtime = [
     "async-trait",
-    "bitfun-runtime-ports",
+    "bitfun-runtime-ports/script-tool-runtime",
     "process-tree",
     "tokio/io-util",
     "tokio/process",

@@ -15,7 +15,7 @@ test-support = []
 
 [dependencies]
 bitfun-events = { path = "../../contracts/events" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, features = ["git-port", "remote-exec-port", "remote-workspace-ports", "runtime-event-port", "terminal-port", "workspace-ports"] }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 log = { workspace = true }

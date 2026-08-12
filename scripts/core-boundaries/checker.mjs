@@ -522,7 +522,10 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const normalDeps = deps.filter((dep) => dep.kind === 'normal');
   const depsByName = new Map(normalDeps.map((dep) => [dep.name, dep]));
   const features = parseManifestFeatures(lines);
-  const reviewedAggregateFeatures = reviewedOptionalDependencyAggregateFeatures(repoManifestPath);
+  const reviewedAggregateFeatures = new Set([
+    ...reviewedOptionalDependencyAggregateFeatures(repoManifestPath),
+    ...(rule.reviewedAggregateFeatures ?? []),
+  ]);
   const declaredOwnerDeps = new Set(rule.dependencies.map((dependency) => dependency.depName));
 
   for (const dependency of rule.dependencies) {
@@ -872,14 +875,14 @@ function checkForbiddenContent(repoPath, patterns) {
     }
   });
 }
-
 function checkRequiredContent(repoPath, patterns, reason) {
   const path = repoPathToFsPath(repoPath);
-  const text = readText(path);
   for (const pattern of patterns) {
+    const patternPath = pattern.path ? repoPathToFsPath(pattern.path) : path;
+    const text = readText(patternPath);
     if (!pattern.regex.test(text)) {
       failures.push({
-        path,
+        path: patternPath,
         line: 1,
         message: `${reason}; ${pattern.message}`,
       });
@@ -1180,7 +1183,6 @@ export function runCoreBoundaryCheck() {
   for (const rule of requiredContentRules) {
     checkRequiredContent(rule.path, rule.patterns, rule.reason);
   }
-
   for (const rule of publicApiAllowlistRules) {
     checkPublicApiAllowlist(rule);
   }

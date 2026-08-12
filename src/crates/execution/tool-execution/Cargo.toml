@@ -10,9 +10,9 @@ web-readable = ["dep:htmd", "dep:legible", "dep:readability-js", "dep:regex"]
 
 [dependencies]
 anydoc = { workspace = true, optional = true }
-bitfun-agent-tools = { path = "../tool-contracts" }
+bitfun-agent-tools = { path = "../tool-contracts", default-features = false }
 bitfun-events = { path = "../../contracts/events" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false }
 dashmap = { workspace = true }
 globset = { workspace = true }
 dunce = { workspace = true }

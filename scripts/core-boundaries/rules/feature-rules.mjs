@@ -81,10 +81,16 @@ export const optionalDependencyFeatureOwnerRules = [
   },
   {
     crateName: 'runtime-ports',
+    reviewedAggregateFeatures: ['tool-runtime-handles'],
     reason:
-      'runtime-ports may expose product-domain permission ports only through the explicit permission contract slice',
+      'runtime-ports optional capabilities must stay behind their exact contract slice',
     dependencies: [
+      { depName: 'anyhow', ownerFeatures: ['workspace-ports'] },
+      { depName: 'bitfun-core-types', ownerFeatures: ['agent-api', 'ts'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['permission', 'ts'] },
+      { depName: 'tokio', ownerFeatures: ['remote-exec-port', 'terminal-port'] },
+      { depName: 'tokio-util', ownerFeatures: ['workspace-ports'] },
+      { depName: 'ts-rs', ownerFeatures: ['ts'] },
     ],
   },
   {
@@ -100,7 +106,7 @@ export const optionalDependencyFeatureOwnerRules = [
       },
       { depName: 'bitfun-agent-runtime', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
-      { depName: 'bitfun-agent-tools', ownerFeatures: ['agent-runtime', 'local-storage'] },
+      { depName: 'bitfun-agent-tools', ownerFeatures: ['agent-runtime', 'local-storage', 'mcp-runtime'] },
       { depName: 'bitfun-claude-code-adapter', ownerFeatures: ['external-sources'] },
       { depName: 'bitfun-codex-adapter', ownerFeatures: ['external-sources'] },
       { depName: 'bitfun-external-sources', ownerFeatures: ['external-sources'] },
@@ -276,6 +282,210 @@ export const optionalDependencyFeatureOwnerRules = [
   },
 ];
 
+function capabilityEdge(features = [], overrides = {}) {
+  return {
+    kind: 'normal',
+    optional: false,
+    rename: null,
+    target: null,
+    features,
+    ...overrides,
+  };
+}
+
+function capabilityForwarder(sourceFeature, feature, weak = false) {
+  return { sourceFeature, feature, weak };
+}
+
+function capabilityConsumer(edges, forwarders = [], activators = [], aggregates = []) {
+  return { edges, forwarders, activators, aggregates };
+}
+
+export const capabilityContractDependencyRules = [
+  {
+    packageName: 'bitfun-runtime-ports',
+    manifestPath: 'src/crates/contracts/runtime-ports/Cargo.toml',
+    featureProfiles: {
+      default: [],
+      'agent-api': ['dep:bitfun-core-types'],
+      'git-port': [],
+      permission: ['dep:bitfun-product-domains'],
+      'plugin-runtime': [],
+      'remote-exec-port': ['dep:tokio'],
+      'remote-workspace-ports': [],
+      'runtime-event-port': [],
+      'script-tool-runtime': [],
+      'terminal-port': ['dep:tokio'],
+      'tool-runtime-handles': ['workspace-ports', 'terminal-port', 'remote-exec-port'],
+      ts: [
+        'dep:ts-rs',
+        'agent-api',
+        'permission',
+        'bitfun-core-types/ts',
+        'bitfun-product-domains?/ts',
+      ],
+      'workspace-ports': ['dep:anyhow', 'dep:tokio-util'],
+    },
+    consumers: new Map([
+      ['bitfun-agent-runtime', capabilityConsumer([
+        capabilityEdge([
+          'agent-api',
+          'git-port',
+          'permission',
+          'plugin-runtime',
+          'remote-workspace-ports',
+          'runtime-event-port',
+          'terminal-port',
+          'workspace-ports',
+        ]),
+      ])],
+      ['bitfun-agent-runtime-ipc', capabilityConsumer([
+        capabilityEdge(['agent-api', 'git-port']),
+      ])],
+      ['bitfun-agent-tools', capabilityConsumer([capabilityEdge()])],
+      ['bitfun-app-server', capabilityConsumer(
+        [capabilityEdge(['agent-api'])],
+        [capabilityForwarder('ts', 'ts')],
+      )],
+      ['bitfun-app-server-protocol', capabilityConsumer([
+        capabilityEdge(['agent-api', 'git-port']),
+      ])],
+      ['bitfun-cli', capabilityConsumer([
+        capabilityEdge(['agent-api', 'git-port', 'permission', 'plugin-runtime', 'workspace-ports']),
+      ])],
+      ['bitfun-core', capabilityConsumer(
+        [capabilityEdge(['permission', 'workspace-ports'])],
+        [
+          capabilityForwarder('agent-runtime', 'agent-api'),
+          capabilityForwarder('agent-runtime', 'git-port'),
+          capabilityForwarder('agent-runtime', 'remote-exec-port'),
+          capabilityForwarder('agent-runtime', 'remote-workspace-ports'),
+          capabilityForwarder('agent-runtime', 'runtime-event-port'),
+          capabilityForwarder('agent-runtime', 'terminal-port'),
+          capabilityForwarder('agent-runtime', 'tool-runtime-handles'),
+          capabilityForwarder('agent-runtime', 'workspace-ports'),
+          capabilityForwarder('plugin-runtime', 'plugin-runtime'),
+          capabilityForwarder('script-tool-runtime', 'script-tool-runtime'),
+          capabilityForwarder('ts', 'ts'),
+        ],
+        [],
+        ['external-sources', 'mcp-runtime', 'product-full', 'remote-connect', 'tools-mcp'],
+      )],
+      ['bitfun-desktop', capabilityConsumer([
+        capabilityEdge(['agent-api', 'permission', 'workspace-ports']),
+      ])],
+      ['bitfun-opencode-adapter', capabilityConsumer([
+        capabilityEdge(['plugin-runtime']),
+        capabilityEdge(['script-tool-runtime'], { kind: 'dev' }),
+      ])],
+      ['bitfun-plugin-runtime-client', capabilityConsumer([
+        capabilityEdge(['plugin-runtime']),
+      ])],
+      ['bitfun-product-capabilities', capabilityConsumer([
+        capabilityEdge(['plugin-runtime']),
+        capabilityEdge(['agent-api'], { kind: 'dev' }),
+      ])],
+      ['bitfun-runtime-services', capabilityConsumer([
+        capabilityEdge([
+          'git-port',
+          'remote-exec-port',
+          'remote-workspace-ports',
+          'runtime-event-port',
+          'terminal-port',
+          'workspace-ports',
+        ]),
+      ])],
+      ['bitfun-sdk-host', capabilityConsumer([
+        capabilityEdge(['agent-api']),
+        capabilityEdge(['permission'], { kind: 'dev' }),
+      ])],
+      ['bitfun-services-core', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('permission', 'permission'),
+          capabilityForwarder('workspace-runtime', 'runtime-event-port'),
+          capabilityForwarder('workspace-runtime', 'workspace-ports'),
+        ],
+        ['permission', 'workspace-runtime'],
+      )],
+      ['bitfun-services-integrations', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('git', 'git-port'),
+          capabilityForwarder('remote-connect', 'agent-api'),
+          capabilityForwarder('remote-connect', 'remote-workspace-ports'),
+          capabilityForwarder('remote-ssh', 'remote-exec-port'),
+          capabilityForwarder('remote-ssh', 'remote-workspace-ports'),
+          capabilityForwarder('remote-ssh', 'workspace-ports'),
+          capabilityForwarder('script-tool-runtime', 'script-tool-runtime'),
+        ],
+        ['remote-ssh-concrete'],
+        ['function-agents', 'product-full'],
+      )],
+      ['terminal-core', capabilityConsumer([
+        capabilityEdge(['terminal-port']),
+      ])],
+      ['tool-runtime', capabilityConsumer([capabilityEdge()])],
+    ]),
+  },
+  {
+    packageName: 'bitfun-agent-tools',
+    manifestPath: 'src/crates/execution/tool-contracts/Cargo.toml',
+    featureProfiles: {
+      default: [],
+      'acp-bridge': [],
+      'computer-use-contract': [],
+      'element-token': [],
+      'mcp-bridge': [],
+    },
+    consumers: new Map([
+      ['bitfun-acp', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [capabilityForwarder('client', 'acp-bridge')],
+        ['server'],
+        ['default'],
+      )],
+      ['bitfun-agent-runtime', capabilityConsumer([capabilityEdge()])],
+      ['bitfun-agent-stream', capabilityConsumer([
+        capabilityEdge([], { kind: 'dev' }),
+      ])],
+      ['bitfun-cli', capabilityConsumer([capabilityEdge()])],
+      ['bitfun-core', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('agent-runtime', 'computer-use-contract'),
+          capabilityForwarder('mcp-runtime', 'mcp-bridge'),
+        ],
+        ['agent-runtime', 'local-storage'],
+        [
+          'dispatch-store',
+          'external-sources',
+          'plugin-runtime',
+          'product-full',
+          'remote-connect',
+          'remote-workspace',
+          'ssh-remote',
+          'tools-basic',
+          'tools-mcp',
+          'workspace-runtime',
+          'workspace-search',
+          'workspace-watch',
+        ],
+      )],
+      ['bitfun-desktop', capabilityConsumer([
+        capabilityEdge(['element-token']),
+      ])],
+      ['bitfun-services-integrations', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [capabilityForwarder('mcp', 'mcp-bridge')],
+        ['remote-connect'],
+        ['product-full'],
+      )],
+      ['tool-runtime', capabilityConsumer([capabilityEdge()])],
+    ]),
+  },
+];
+
 export const coreProductFullFeatureAssemblyRule = {
   manifestPath: 'src/crates/assembly/core/Cargo.toml',
   featureName: 'product-full',
@@ -363,6 +573,7 @@ export const acpClosedFeatureProfileRules = [
     manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
     featureName: 'client',
     requiredFeatureRefs: [
+      'bitfun-agent-tools/acp-bridge',
       'dep:futures',
       'dep:serde',
       'dep:bitfun-core',
@@ -375,6 +586,7 @@ export const acpClosedFeatureProfileRules = [
     manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
     featureName: 'server',
     requiredFeatureRefs: [
+      'dep:bitfun-agent-tools',
       'dep:bitfun-agent-runtime',
       'dep:bitfun-core-types',
       'dep:bitfun-core',
@@ -403,6 +615,15 @@ export const coreClosedFeatureProfileRules = [
       'dep:bitfun-agent-content',
       'dep:bitfun-agent-stream',
       'dep:bitfun-agent-tools',
+      'bitfun-agent-tools/computer-use-contract',
+      'bitfun-runtime-ports/agent-api',
+      'bitfun-runtime-ports/git-port',
+      'bitfun-runtime-ports/remote-exec-port',
+      'bitfun-runtime-ports/remote-workspace-ports',
+      'bitfun-runtime-ports/runtime-event-port',
+      'bitfun-runtime-ports/terminal-port',
+      'bitfun-runtime-ports/tool-runtime-handles',
+      'bitfun-runtime-ports/workspace-ports',
       'dep:base64',
       'dep:bitfun-harness',
       'dep:dashmap',
@@ -514,7 +735,11 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'plugin-runtime',
-    requiredFeatureRefs: ['external-sources', 'dep:bitfun-plugin-runtime-client'],
+    requiredFeatureRefs: [
+      'external-sources',
+      'dep:bitfun-plugin-runtime-client',
+      'bitfun-runtime-ports/plugin-runtime',
+    ],
     allowedTransitiveFeatureRefs: [
       'agent-runtime',
       'model-catalog',
@@ -561,6 +786,7 @@ export const coreClosedFeatureProfileRules = [
     featureName: 'mcp-runtime',
     requiredFeatureRefs: [
       'agent-runtime',
+      'bitfun-agent-tools/mcp-bridge',
       'dep:axum',
       'dep:reqwest',
       'bitfun-services-integrations/mcp',
@@ -652,7 +878,10 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'script-tool-runtime',
-    requiredFeatureRefs: ['bitfun-services-integrations/script-tool-runtime'],
+    requiredFeatureRefs: [
+      'bitfun-runtime-ports/script-tool-runtime',
+      'bitfun-services-integrations/script-tool-runtime',
+    ],
     exact: true,
     reason: 'script-tool-runtime must own only external script tool execution support',
   },
@@ -990,6 +1219,8 @@ export const coreClosedFeatureProfileRules = [
       'dep:anyhow',
       'dep:async-trait',
       'dep:bitfun-runtime-ports',
+      'bitfun-runtime-ports/runtime-event-port',
+      'bitfun-runtime-ports/workspace-ports',
       'dep:dunce',
       'process-runtime',
       'tokio/fs',

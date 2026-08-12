@@ -13,7 +13,7 @@ agent-client-protocol = { workspace = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources"] }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, features = ["agent-api", "git-port"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ts-rs = { workspace = true, optional = true }

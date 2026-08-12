@@ -15,7 +15,7 @@ anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 bitfun-events = { path = "../../contracts/events", optional = true }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, optional = true }
 tokio = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -129,6 +129,8 @@ workspace-runtime = [
     "dep:anyhow",
     "dep:async-trait",
     "dep:bitfun-runtime-ports",
+    "bitfun-runtime-ports/runtime-event-port",
+    "bitfun-runtime-ports/workspace-ports",
     "dep:dunce",
     "process-runtime",
     "tokio/fs",

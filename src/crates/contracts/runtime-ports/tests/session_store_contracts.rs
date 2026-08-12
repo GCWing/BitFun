@@ -1,3 +1,5 @@
+#![cfg(feature = "workspace-ports")]
+
 use std::path::PathBuf;
 
 use bitfun_runtime_ports::{

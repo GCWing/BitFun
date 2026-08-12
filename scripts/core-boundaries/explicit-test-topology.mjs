@@ -124,16 +124,28 @@ export const coreTypesIntegrationTestTargets = [
 
 export const runtimePortsIntegrationTestTargets = [
   {
-    name: 'runtime_port_contracts',
+    name: 'plugin_runtime_contracts',
     path: 'tests/runtime_port_contracts.rs',
     leaves: [
-      'tests/runtime_port_contracts/git_port_contracts.rs',
       'tests/runtime_port_contracts/plugin_runtime_contracts.rs',
       'tests/runtime_port_contracts/plugin_runtime_diagnostics_contracts.rs',
-      'tests/runtime_port_contracts/script_tool_port_contracts.rs',
-      'tests/runtime_port_contracts/session_store_contracts.rs',
     ],
-    forbidRequiredFeatures: true,
+    requiredFeatures: ['plugin-runtime'],
+  },
+  {
+    name: 'git_port_contracts',
+    path: 'tests/git_port_contracts.rs',
+    requiredFeatures: ['git-port'],
+  },
+  {
+    name: 'script_tool_port_contracts',
+    path: 'tests/script_tool_port_contracts.rs',
+    requiredFeatures: ['script-tool-runtime'],
+  },
+  {
+    name: 'session_store_contracts',
+    path: 'tests/session_store_contracts.rs',
+    requiredFeatures: ['workspace-ports'],
   },
 ];
 

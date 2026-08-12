@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import {
   acpClientCoreFeatures,
   acpServerCoreFeatures,
+  capabilityContractDependencyRules,
   servicesReqwestOwnerFeatures,
 } from './rules/feature-rules.mjs';
 
@@ -1397,6 +1398,281 @@ export function findProductEntrypointCoreFeatureViolations(
   return violations;
 }
 
+function normalizedDependencyKind(dependency) {
+  return dependency.kind ?? 'normal';
+}
+
+function normalizedDependencyTarget(dependency) {
+  return dependency.target ?? null;
+}
+
+function sameStringSet(actual, expected) {
+  const left = [...new Set(actual ?? [])].sort();
+  const right = [...new Set(expected ?? [])].sort();
+  return left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
+function featureForwardingReferences(featureGraph, dependency) {
+  const alias = dependencyAlias(dependency);
+  const references = [];
+  for (const [sourceFeature, values] of Object.entries(featureGraph ?? {})) {
+    for (const value of values) {
+      const match = value.match(/^([^/?]+)(\?)?\/(.+)$/);
+      if (match?.[1] === alias) {
+        references.push({
+          sourceFeature,
+          feature: match[3],
+          weak: Boolean(match[2]),
+        });
+      }
+    }
+  }
+  return references;
+}
+
+function featureDependencyActivations(featureGraph, dependency) {
+  const alias = dependencyAlias(dependency);
+  const activations = [];
+  for (const [sourceFeature, values] of Object.entries(featureGraph ?? {})) {
+    if (values.includes(`dep:${alias}`) || values.includes(alias)) {
+      activations.push(sourceFeature);
+    }
+  }
+  return activations;
+}
+
+function packageMatchesManifest(pkg, manifestPath, root) {
+  return repositoryPath(root, pkg.manifest_path) === manifestPath;
+}
+
+function dependencyTargetsPackage(dependency, targetPackage) {
+  return dependency.path !== null
+    && dependency.path !== undefined
+    && normalizedPath(join(dependency.path, 'Cargo.toml'))
+      === normalizedPath(targetPackage.manifest_path);
+}
+
+function dependencyEdgeMatches(dependency, expected) {
+  return normalizedDependencyKind(dependency) === expected.kind
+    && dependency.optional === expected.optional
+    && normalizedDependencyTarget(dependency) === expected.target
+    && (dependency.rename ?? null) === (expected.rename ?? null)
+    && sameStringSet(dependency.features, expected.features);
+}
+
+function featureTransitivelyReaches(featureGraph, sourceFeature, destinations, seen = new Set()) {
+  if (destinations.has(sourceFeature)) {
+    return true;
+  }
+  if (seen.has(sourceFeature)) {
+    return false;
+  }
+  seen.add(sourceFeature);
+  return (featureGraph[sourceFeature] ?? []).some((reference) =>
+    Object.hasOwn(featureGraph, reference)
+    && featureTransitivelyReaches(featureGraph, reference, destinations, seen));
+}
+
+export function findCapabilityContractConsumerViolations(
+  packages,
+  rules = capabilityContractDependencyRules,
+  { root } = {},
+) {
+  const violations = [];
+  const targetPackages = new Map();
+
+  if (!root) {
+    throw new Error('capability contract consumer check requires the repository root');
+  }
+
+  for (const rule of rules) {
+    const targetPackage = packages.find((pkg) =>
+      pkg.name === rule.packageName && packageMatchesManifest(pkg, rule.manifestPath, root));
+    if (!targetPackage) {
+      violations.push({
+        path: rule.manifestPath,
+        line: 1,
+        message: `${rule.packageName} managed target is missing from Cargo metadata`,
+      });
+      continue;
+    }
+    targetPackages.set(rule.packageName, targetPackage);
+    if (
+      !Object.hasOwn(targetPackage.features ?? {}, 'default')
+      || !sameStringSet(targetPackage.features.default, [])
+    ) {
+      violations.push({
+        path: targetPackage.manifest_path,
+        line: 1,
+        message: `${rule.packageName} capability contract default feature must stay empty`,
+      });
+    }
+    const actualFeatures = Object.keys(targetPackage.features ?? {})
+      .filter((feature) => feature !== 'default');
+    const expectedFeatures = Object.keys(rule.featureProfiles)
+      .filter((feature) => feature !== 'default');
+    if (!sameStringSet(actualFeatures, expectedFeatures)) {
+      violations.push({
+        path: targetPackage.manifest_path,
+        line: 1,
+        message: `${rule.packageName} capability contract feature surface must stay exact`,
+      });
+    }
+    for (const [feature, expectedReferences] of Object.entries(rule.featureProfiles)) {
+      if (
+        Object.hasOwn(targetPackage.features ?? {}, feature)
+        && !sameStringSet(targetPackage.features[feature], expectedReferences)
+      ) {
+        violations.push({
+          path: targetPackage.manifest_path,
+          line: 1,
+          message: `${rule.packageName}:${feature} feature graph must stay exact`,
+        });
+      }
+    }
+  }
+
+  for (const rule of rules) {
+    const targetPackage = targetPackages.get(rule.packageName);
+    if (!targetPackage) {
+      continue;
+    }
+    for (const consumer of packages) {
+      const namedDependencies = (consumer.dependencies ?? []).filter(
+        (dependency) => dependency.name === rule.packageName,
+      );
+      const managedDependencies = namedDependencies.filter((dependency) =>
+        dependencyTargetsPackage(dependency, targetPackage));
+      for (const dependency of namedDependencies) {
+        if (dependencyTargetsPackage(dependency, targetPackage)) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name} ${rule.packageName} dependency must use the managed internal path`,
+        });
+      }
+
+      const consumerProfile = rule.consumers.get(consumer.name);
+      if (!consumerProfile) {
+        if (managedDependencies.length > 0) {
+          violations.push({
+            path: consumer.manifest_path,
+            line: 1,
+            message: `${consumer.name} has an unreviewed consumer edge to ${rule.packageName}`,
+          });
+        }
+        continue;
+      }
+      const unmatchedExpectedEdges = [...consumerProfile.edges];
+      for (const dependency of managedDependencies) {
+        if (dependency.uses_default_features !== false) {
+          violations.push({
+            path: consumer.manifest_path,
+            line: 1,
+            message: `${consumer.name} ${rule.packageName} dependency must set default-features = false`,
+          });
+        }
+        const matchIndex = unmatchedExpectedEdges.findIndex((edge) =>
+          dependencyEdgeMatches(dependency, edge));
+        if (matchIndex === -1) {
+          violations.push({
+            path: consumer.manifest_path,
+            line: 1,
+            message: `${consumer.name} has an unreviewed ${rule.packageName} dependency edge`,
+          });
+        } else {
+          unmatchedExpectedEdges.splice(matchIndex, 1);
+        }
+      }
+      for (const edge of unmatchedExpectedEdges) {
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name} is missing reviewed ${edge.kind} ${rule.packageName} dependency edge`,
+        });
+      }
+
+      const actualForwarders = managedDependencies.flatMap((dependency) =>
+        featureForwardingReferences(consumer.features, dependency));
+      for (const forwarding of actualForwarders) {
+        const allowed = (consumerProfile.forwarders ?? []).some((expected) =>
+          expected.sourceFeature === forwarding.sourceFeature
+          && expected.feature === forwarding.feature
+          && expected.weak === forwarding.weak);
+        if (allowed) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${forwarding.sourceFeature} has unreviewed ${rule.packageName}/${forwarding.feature} forwarding`,
+        });
+      }
+      for (const expected of consumerProfile.forwarders ?? []) {
+        const present = actualForwarders.some((forwarding) =>
+          expected.sourceFeature === forwarding.sourceFeature
+          && expected.feature === forwarding.feature
+          && expected.weak === forwarding.weak);
+        if (present) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${expected.sourceFeature} is missing reviewed ${rule.packageName}/${expected.feature} forwarding`,
+        });
+      }
+      const actualActivators = managedDependencies.flatMap((dependency) =>
+        featureDependencyActivations(consumer.features, dependency));
+      for (const sourceFeature of actualActivators) {
+        if ((consumerProfile.activators ?? []).includes(sourceFeature)) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${sourceFeature} has unreviewed ${rule.packageName} activation`,
+        });
+      }
+      for (const sourceFeature of consumerProfile.activators ?? []) {
+        if (actualActivators.includes(sourceFeature)) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${sourceFeature} is missing reviewed ${rule.packageName} activation`,
+        });
+      }
+
+      const directOwners = new Set([
+        ...(consumerProfile.forwarders ?? []).map(({ sourceFeature }) => sourceFeature),
+        ...(consumerProfile.activators ?? []),
+      ]);
+      const allowedAggregates = new Set(consumerProfile.aggregates ?? []);
+      for (const feature of Object.keys(consumer.features ?? {})) {
+        if (
+          directOwners.has(feature)
+          || allowedAggregates.has(feature)
+          || !featureTransitivelyReaches(consumer.features, feature, directOwners)
+        ) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${feature} is an unreviewed aggregate of ${rule.packageName} capability owners`,
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
 function matchingClosingDelimiter(
   source,
   openingIndex,
@@ -1809,6 +2085,7 @@ export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
       packages,
       { root, crateLayoutRules },
     ),
+    ...findCapabilityContractConsumerViolations(packages, undefined, { root }),
     ...findFeatureGatedTestTargetViolations(packages),
     ...findRuntimeServicesTestSupportFeatureViolations(packages),
     ...findTokioDependencyFeatureViolations(packages),

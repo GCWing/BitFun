@@ -13,9 +13,16 @@ crate-type = ["rlib"]
 serde = { workspace = true }
 serde_json = { workspace = true }
 bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false }
 async-trait = { workspace = true }
 indexmap = { workspace = true }
+
+[features]
+default = []
+acp-bridge = []
+computer-use-contract = []
+element-token = []
+mcp-bridge = []
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

@@ -8,6 +8,7 @@ description = "BitFun Agent Client Protocol surface"
 [features]
 default = ["client", "server"]
 client = [
+    "bitfun-agent-tools/acp-bridge",
     "dep:futures",
     "dep:serde",
     "dep:bitfun-core",
@@ -15,6 +16,7 @@ client = [
     "bitfun-core/ssh-remote",
 ]
 server = [
+    "dep:bitfun-agent-tools",
     "dep:bitfun-agent-runtime",
     "dep:bitfun-core-types",
     "dep:bitfun-core",
@@ -42,7 +44,7 @@ name = "bitfun_acp"
 [dependencies]
 bitfun-core = { path = "../../assembly/core", default-features = false, optional = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
-bitfun-agent-tools = { path = "../../execution/tool-contracts" }
+bitfun-agent-tools = { path = "../../execution/tool-contracts", default-features = false, optional = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 

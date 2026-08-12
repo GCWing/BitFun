@@ -31,11 +31,17 @@ the product tool runtime.
   `services-integrations`; this crate owns only the model/tool bridge contract.
 - ACP protocol/client lifecycle stays in `bitfun-acp`; this crate owns only the
   external-agent tool bridge contract.
+- Keep `default = []`. ACP and MCP bridges, Computer Use contracts, and element
+  tokens are independent capability slices; do not combine them into a
+  `full` or compatibility feature.
 
 ## Verification
 
 ```bash
-cargo test -p bitfun-agent-tools
-cargo test -p bitfun-agent-tools --test tool_contracts
+cargo test --locked -p bitfun-agent-tools --no-default-features
+cargo test --locked -p bitfun-agent-tools --no-default-features --features acp-bridge --test tool_contracts acp_external_agent_bridge_preserves_tool_contract
+cargo test --locked -p bitfun-agent-tools --no-default-features --features mcp-bridge --test tool_contracts mcp_tool_bridge
+cargo test --locked -p bitfun-agent-tools --no-default-features --features computer-use-contract --lib computer_use::
+cargo test --locked -p bitfun-agent-tools --no-default-features --features element-token --lib element_token::
 node scripts/check-core-boundaries.mjs
 ```

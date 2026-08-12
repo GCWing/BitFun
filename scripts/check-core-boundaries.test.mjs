@@ -32,6 +32,7 @@ import {
 } from './core-boundaries/explicit-test-topology.mjs';
 import { crateLayoutRules } from './core-boundaries/rules/crate-layout.mjs';
 import {
+  capabilityContractDependencyRules,
   coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
   optionalDependencyFeatureOwnerRules,
@@ -69,6 +70,104 @@ test('Core and ACP defaults preserve their explicit assembly contracts', async (
   );
 });
 
+test('portable contract crates expose only capability-local feature slices', async () => {
+  const [runtimePortsManifest, agentToolsManifest] = await Promise.all([
+    readFile(new URL('../src/crates/contracts/runtime-ports/Cargo.toml', import.meta.url), 'utf8'),
+    readFile(new URL('../src/crates/execution/tool-contracts/Cargo.toml', import.meta.url), 'utf8'),
+  ]);
+
+  const runtimePortFeatures = parseManifestFeatures(runtimePortsManifest);
+  assert.deepEqual(runtimePortFeatures.default, []);
+  assert.deepEqual(
+    new Set(Object.keys(runtimePortFeatures)),
+    new Set([
+      'default',
+      'agent-api',
+      'git-port',
+      'permission',
+      'plugin-runtime',
+      'remote-exec-port',
+      'remote-workspace-ports',
+      'runtime-event-port',
+      'script-tool-runtime',
+      'terminal-port',
+      'tool-runtime-handles',
+      'ts',
+      'workspace-ports',
+    ]),
+  );
+  assert.deepEqual(runtimePortFeatures['agent-api'], ['dep:bitfun-core-types']);
+  assert.deepEqual(runtimePortFeatures['plugin-runtime'], []);
+  assert.deepEqual(runtimePortFeatures['script-tool-runtime'], []);
+  assert.deepEqual(new Set(runtimePortFeatures['workspace-ports']), new Set(['dep:anyhow', 'dep:tokio-util']));
+  assert.deepEqual(runtimePortFeatures['terminal-port'], ['dep:tokio']);
+  assert.deepEqual(runtimePortFeatures['remote-exec-port'], ['dep:tokio']);
+  assert.deepEqual(
+    new Set(runtimePortFeatures['tool-runtime-handles']),
+    new Set([
+      'workspace-ports',
+      'terminal-port',
+      'remote-exec-port',
+    ]),
+  );
+
+  const agentToolFeatures = parseManifestFeatures(agentToolsManifest);
+  assert.deepEqual(agentToolFeatures.default, []);
+  assert.deepEqual(agentToolFeatures['acp-bridge'], []);
+  assert.deepEqual(agentToolFeatures['computer-use-contract'], []);
+  assert.deepEqual(agentToolFeatures['element-token'], []);
+  assert.deepEqual(agentToolFeatures['mcp-bridge'], []);
+});
+
+test('runtime-port capability source gates protect modules and public exports', async () => {
+  const { requiredContentRules } = await import(
+    './core-boundaries/rules/source/required-rules.mjs'
+  );
+  const sourceRule = requiredContentRules.find(
+    (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/lib.rs'
+      && rule.reason.includes('capability features'),
+  );
+  const patterns = sourceRule?.patterns.map(({ regex }) => regex.source).join('\n') ?? '';
+
+  for (const [feature, moduleName] of [
+    ['workspace-ports', 'workspace_ports'],
+    ['terminal-port', 'terminal_port'],
+    ['remote-exec-port', 'remote_exec_port'],
+    ['remote-workspace-ports', 'remote_workspace_ports'],
+    ['runtime-event-port', 'runtime_event_port'],
+    ['git-port', 'git_port'],
+    ['tool-runtime-handles', 'tool_runtime_handles'],
+  ]) {
+    assert.match(patterns, new RegExp(`${feature}.*mod ${moduleName}`));
+    assert.match(patterns, new RegExp(`${feature}.*pub use ${moduleName}`));
+  }
+});
+
+test('runtime-ports async dependencies stay behind their exact port owners', () => {
+  const ownerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'runtime-ports',
+  );
+  const ownersByDependency = new Map(
+    ownerRule.dependencies.map((dependency) => [
+      dependency.depName,
+      new Set(dependency.ownerFeatures),
+    ]),
+  );
+
+  assert.deepEqual(
+    ownersByDependency.get('anyhow'),
+    new Set(['workspace-ports']),
+  );
+  assert.deepEqual(
+    ownersByDependency.get('tokio-util'),
+    new Set(['workspace-ports']),
+  );
+  assert.deepEqual(
+    ownersByDependency.get('tokio'),
+    new Set(['remote-exec-port', 'terminal-port']),
+  );
+});
+
 test('Core feature-free dependencies stay attached to their exact runtime owners', () => {
   const coreOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'core',
@@ -85,7 +184,7 @@ test('Core feature-free dependencies stay attached to their exact runtime owners
   assert.deepEqual(ownersByDependency.get('regex'), new Set(['agent-runtime']));
   assert.deepEqual(
     ownersByDependency.get('bitfun-agent-tools'),
-    new Set(['agent-runtime', 'local-storage']),
+    new Set(['agent-runtime', 'local-storage', 'mcp-runtime']),
   );
   assert.deepEqual(ownersByDependency.get('fluent-bundle'), new Set(['i18n-runtime']));
   assert.deepEqual(ownersByDependency.get('unic-langid'), new Set(['i18n-runtime']));
@@ -193,6 +292,61 @@ function pathDependency(repoCratePath, options = {}) {
     uses_default_features: options.usesDefaultFeatures ?? true,
     features: options.features ?? [],
   };
+}
+
+const RUNTIME_PORT_FEATURE_PROFILES = {
+  default: [],
+  'agent-api': ['dep:bitfun-core-types'],
+  'git-port': [],
+  permission: ['dep:bitfun-product-domains'],
+  'plugin-runtime': [],
+  'remote-exec-port': ['dep:tokio'],
+  'remote-workspace-ports': [],
+  'runtime-event-port': [],
+  'script-tool-runtime': [],
+  'terminal-port': ['dep:tokio'],
+  'tool-runtime-handles': ['workspace-ports', 'terminal-port', 'remote-exec-port'],
+  ts: [
+    'dep:ts-rs',
+    'agent-api',
+    'permission',
+    'bitfun-core-types/ts',
+    'bitfun-product-domains?/ts',
+  ],
+  'workspace-ports': ['dep:anyhow', 'dep:tokio-util'],
+};
+
+const AGENT_TOOL_FEATURE_PROFILES = {
+  default: [],
+  'acp-bridge': [],
+  'computer-use-contract': [],
+  'element-token': [],
+  'mcp-bridge': [],
+};
+
+function capabilityPackage(name, repoManifestPath, featureProfiles) {
+  return {
+    ...packageAt(name, repoManifestPath),
+    features: structuredClone(featureProfiles),
+  };
+}
+
+function agentToolsCapabilityPackage() {
+  return {
+    ...capabilityPackage(
+      'bitfun-agent-tools',
+      'src/crates/execution/tool-contracts/Cargo.toml',
+      AGENT_TOOL_FEATURE_PROFILES,
+    ),
+    dependencies: [pathDependency('src/crates/contracts/runtime-ports', {
+      name: 'bitfun-runtime-ports',
+      usesDefaultFeatures: false,
+    })],
+  };
+}
+
+function findTestCapabilityViolations(finder, packages, rules) {
+  return finder(packages, rules, { root: TEST_ROOT });
 }
 
 function integrationTarget(name, sourcePath, requiredFeatures = []) {
@@ -372,16 +526,28 @@ test('contract and AI adapter tests keep reviewed feature and failure-domain top
   ]);
   assert.deepEqual(topology.runtimePortsIntegrationTestTargets, [
     {
-      name: 'runtime_port_contracts',
+      name: 'plugin_runtime_contracts',
       path: 'tests/runtime_port_contracts.rs',
       leaves: [
-        'tests/runtime_port_contracts/git_port_contracts.rs',
         'tests/runtime_port_contracts/plugin_runtime_contracts.rs',
         'tests/runtime_port_contracts/plugin_runtime_diagnostics_contracts.rs',
-        'tests/runtime_port_contracts/script_tool_port_contracts.rs',
-        'tests/runtime_port_contracts/session_store_contracts.rs',
       ],
-      forbidRequiredFeatures: true,
+      requiredFeatures: ['plugin-runtime'],
+    },
+    {
+      name: 'git_port_contracts',
+      path: 'tests/git_port_contracts.rs',
+      requiredFeatures: ['git-port'],
+    },
+    {
+      name: 'script_tool_port_contracts',
+      path: 'tests/script_tool_port_contracts.rs',
+      requiredFeatures: ['script-tool-runtime'],
+    },
+    {
+      name: 'session_store_contracts',
+      path: 'tests/session_store_contracts.rs',
+      requiredFeatures: ['workspace-ports'],
     },
   ]);
   assert.deepEqual(topology.productDomainsIntegrationTestTargets, [
@@ -2930,6 +3096,8 @@ test('services-core capability profiles keep heavy owners out of the empty profi
     'dep:anyhow',
     'dep:async-trait',
     'dep:bitfun-runtime-ports',
+    'bitfun-runtime-ports/runtime-event-port',
+    'bitfun-runtime-ports/workspace-ports',
     'dep:dunce',
     'process-runtime',
     'tokio/fs',
@@ -3282,4 +3450,389 @@ test('closed feature profiles reject product-full hidden behind a child feature'
       },
     ],
   );
+});
+
+test('capability contract consumers must select only their reviewed dependency features', async () => {
+  const cargoBoundaries = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  assert.equal(
+    typeof cargoBoundaries.findCapabilityContractConsumerViolations,
+    'function',
+    'Cargo boundary checker must expose the capability contract consumer policy',
+  );
+
+  const runtimePorts = capabilityPackage(
+    'bitfun-runtime-ports',
+    'src/crates/contracts/runtime-ports/Cargo.toml',
+    RUNTIME_PORT_FEATURE_PROFILES,
+  );
+  const agentTools = agentToolsCapabilityPackage();
+  const pluginRuntimeClient = packageAt(
+    'bitfun-plugin-runtime-client',
+    'src/crates/execution/plugin-runtime-client/Cargo.toml',
+    [
+      pathDependency('src/crates/contracts/runtime-ports', {
+        name: 'bitfun-runtime-ports',
+      }),
+    ],
+  );
+
+  const messages = findTestCapabilityViolations(
+    cargoBoundaries.findCapabilityContractConsumerViolations,
+    [
+    runtimePorts,
+    agentTools,
+    pluginRuntimeClient,
+    ],
+  ).map((violation) => violation.message);
+
+  assert.ok(messages.some((message) => /default-features = false/.test(message)));
+  assert.ok(messages.some((message) => /plugin-runtime/.test(message)));
+});
+
+test('unreviewed consumers cannot add capability contract dependency edges', async () => {
+  const { findCapabilityContractConsumerViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const runtimePorts = capabilityPackage(
+    'bitfun-runtime-ports',
+    'src/crates/contracts/runtime-ports/Cargo.toml',
+    RUNTIME_PORT_FEATURE_PROFILES,
+  );
+  const agentTools = agentToolsCapabilityPackage();
+  const unreviewed = packageAt(
+    'unreviewed-host',
+    'src/apps/unreviewed-host/Cargo.toml',
+    [
+      pathDependency('src/crates/contracts/runtime-ports', {
+        name: 'bitfun-runtime-ports',
+        target: 'cfg(windows)',
+        usesDefaultFeatures: false,
+        features: ['agent-api'],
+      }),
+    ],
+  );
+
+  const messages = findTestCapabilityViolations(findCapabilityContractConsumerViolations, [
+    runtimePorts,
+    agentTools,
+    unreviewed,
+  ]).map(
+    (violation) => violation.message,
+  );
+  assert.equal(messages.length, 1, messages.join('\n'));
+  assert.match(messages[0], /unreviewed consumer/);
+});
+
+test('capability contract edge policy rejects alias, weak, optional, and non-normal widening', async () => {
+  const { findCapabilityContractConsumerViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const runtimePorts = capabilityPackage(
+    'bitfun-runtime-ports',
+    'src/crates/contracts/runtime-ports/Cargo.toml',
+    RUNTIME_PORT_FEATURE_PROFILES,
+  );
+  const validDependency = pathDependency('src/crates/contracts/runtime-ports', {
+    name: 'bitfun-runtime-ports',
+    usesDefaultFeatures: false,
+    features: ['plugin-runtime'],
+  });
+  const mutations = [
+    { label: 'renamed alias forwarding', dependency: { ...validDependency, rename: 'ports' }, features: { sneaky: ['ports/agent-api'] }, expected: /sneaky.*unreviewed.*forwarding/ },
+    { label: 'weak alias forwarding', dependency: { ...validDependency, rename: 'ports' }, features: { sneaky: ['ports?/agent-api'] }, expected: /sneaky.*unreviewed.*forwarding/ },
+    { label: 'optional edge', dependency: { ...validDependency, optional: true }, features: {}, expected: /unreviewed.*dependency edge/ },
+    { label: 'dev edge', dependency: { ...validDependency, kind: 'dev' }, features: {}, expected: /unreviewed.*dependency edge/ },
+    { label: 'build edge', dependency: { ...validDependency, kind: 'build' }, features: {}, expected: /unreviewed.*dependency edge/ },
+    { label: 'target edge', dependency: { ...validDependency, target: 'cfg(windows)' }, features: {}, expected: /unreviewed.*dependency edge/ },
+  ];
+
+  for (const mutation of mutations) {
+    const consumer = {
+      ...packageAt(
+        'bitfun-plugin-runtime-client',
+        'src/crates/execution/plugin-runtime-client/Cargo.toml',
+        [mutation.dependency],
+      ),
+      features: mutation.features,
+    };
+    const messages = findTestCapabilityViolations(
+      findCapabilityContractConsumerViolations,
+      [runtimePorts, consumer],
+    ).map(
+      (violation) => violation.message,
+    );
+    assert.ok(
+      messages.some((message) => mutation.expected.test(message)),
+      `${mutation.label} must not widen the reviewed capability contract`,
+    );
+  }
+});
+
+test('capability contract targets require an explicit empty default feature', async () => {
+  const { findCapabilityContractConsumerViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const runtimePorts = capabilityPackage(
+    'bitfun-runtime-ports',
+    'src/crates/contracts/runtime-ports/Cargo.toml',
+    RUNTIME_PORT_FEATURE_PROFILES,
+  );
+  delete runtimePorts.features.default;
+
+  const messages = findTestCapabilityViolations(
+    findCapabilityContractConsumerViolations,
+    [runtimePorts],
+  ).map(
+    (violation) => violation.message,
+  );
+  assert.ok(messages.some((message) => /default feature must stay empty/.test(message)));
+});
+
+test('capability contract optional activators reject unreviewed dep aliases', async () => {
+  const { findCapabilityContractConsumerViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const agentTools = agentToolsCapabilityPackage();
+  const dependency = pathDependency('src/crates/execution/tool-contracts', {
+    name: 'bitfun-agent-tools',
+    rename: 'tools_contract',
+    optional: true,
+    usesDefaultFeatures: false,
+  });
+  const consumer = {
+    ...packageAt(
+      'bitfun-acp',
+      'src/crates/interfaces/acp/Cargo.toml',
+      [dependency],
+    ),
+    features: {
+      client: ['tools_contract/acp-bridge'],
+      server: ['dep:tools_contract'],
+      sneaky: ['tools_contract'],
+    },
+  };
+
+  const messages = findTestCapabilityViolations(
+    findCapabilityContractConsumerViolations,
+    [agentTools, consumer],
+  ).map(
+    (violation) => violation.message,
+  );
+  assert.ok(messages.some((message) => /sneaky.*unreviewed.*activation/.test(message)));
+  assert.doesNotMatch(messages.join('\n'), /server.*unreviewed.*activation/);
+});
+
+test('capability contract consumers cannot remove reviewed forwarding or activation', async () => {
+  const { findCapabilityContractConsumerViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const runtimePorts = capabilityPackage(
+    'bitfun-runtime-ports',
+    'src/crates/contracts/runtime-ports/Cargo.toml',
+    RUNTIME_PORT_FEATURE_PROFILES,
+  );
+  const integrations = {
+    ...packageAt(
+      'bitfun-services-integrations',
+      'src/crates/services/services-integrations/Cargo.toml',
+      [pathDependency('src/crates/contracts/runtime-ports', {
+        name: 'bitfun-runtime-ports',
+        optional: true,
+        usesDefaultFeatures: false,
+      })],
+    ),
+    features: {
+      git: [],
+      'remote-connect': [
+        'bitfun-runtime-ports/agent-api',
+        'bitfun-runtime-ports/remote-workspace-ports',
+      ],
+      'remote-ssh': [
+        'bitfun-runtime-ports/remote-exec-port',
+        'bitfun-runtime-ports/remote-workspace-ports',
+        'bitfun-runtime-ports/workspace-ports',
+      ],
+      'remote-ssh-concrete': ['dep:bitfun-runtime-ports'],
+      'script-tool-runtime': ['bitfun-runtime-ports/script-tool-runtime'],
+    },
+  };
+  const servicesCore = {
+    ...packageAt(
+      'bitfun-services-core',
+      'src/crates/services/services-core/Cargo.toml',
+      [pathDependency('src/crates/contracts/runtime-ports', {
+        name: 'bitfun-runtime-ports',
+        optional: true,
+        usesDefaultFeatures: false,
+      })],
+    ),
+    features: {
+      permission: [],
+      'workspace-runtime': [
+        'dep:bitfun-runtime-ports',
+        'bitfun-runtime-ports/runtime-event-port',
+        'bitfun-runtime-ports/workspace-ports',
+      ],
+    },
+  };
+
+  const messages = findTestCapabilityViolations(findCapabilityContractConsumerViolations, [
+    runtimePorts,
+    integrations,
+    servicesCore,
+  ]).map((violation) => violation.message);
+
+  assert.ok(messages.some((message) => /bitfun-services-integrations:git.*missing reviewed.*git-port forwarding/.test(message)));
+  assert.ok(messages.some((message) => /bitfun-services-core:permission.*missing reviewed.*activation/.test(message)));
+});
+
+test('capability contract targets cannot be removed or replaced by a same-name package', async () => {
+  const { findCapabilityContractConsumerViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const reviewedConsumer = packageAt(
+    'bitfun-plugin-runtime-client',
+    'src/crates/execution/plugin-runtime-client/Cargo.toml',
+    [pathDependency('src/crates/contracts/runtime-ports', {
+      name: 'bitfun-runtime-ports',
+      usesDefaultFeatures: false,
+      features: ['plugin-runtime'],
+    })],
+  );
+
+  const missingTargetMessages = findTestCapabilityViolations(
+    findCapabilityContractConsumerViolations,
+    [reviewedConsumer],
+  ).map((violation) => violation.message);
+  assert.ok(missingTargetMessages.some((message) =>
+    /bitfun-runtime-ports managed target.*missing/.test(message)));
+
+  const runtimePorts = capabilityPackage(
+    'bitfun-runtime-ports',
+    'src/crates/contracts/runtime-ports/Cargo.toml',
+    RUNTIME_PORT_FEATURE_PROFILES,
+  );
+  reviewedConsumer.dependencies[0] = {
+    ...reviewedConsumer.dependencies[0],
+    path: null,
+    source: 'registry+https://github.com/rust-lang/crates.io-index',
+  };
+  const spoofedTargetMessages = findTestCapabilityViolations(
+    findCapabilityContractConsumerViolations,
+    [runtimePorts, reviewedConsumer],
+  ).map((violation) => violation.message);
+  assert.ok(spoofedTargetMessages.some((message) => /managed internal path/.test(message)));
+
+  const vendorRuntimePorts = {
+    ...runtimePorts,
+    manifest_path: join(
+      TEST_ROOT,
+      'vendor',
+      'src',
+      'crates',
+      'contracts',
+      'runtime-ports',
+      'Cargo.toml',
+    ),
+  };
+  reviewedConsumer.dependencies[0] = {
+    ...reviewedConsumer.dependencies[0],
+    path: join(TEST_ROOT, 'vendor', 'src', 'crates', 'contracts', 'runtime-ports'),
+    source: null,
+  };
+  const vendorTargetMessages = findCapabilityContractConsumerViolations(
+    [vendorRuntimePorts, reviewedConsumer],
+    [capabilityContractDependencyRules[0]],
+    { root: TEST_ROOT },
+  ).map((violation) => violation.message);
+  assert.ok(vendorTargetMessages.some((message) => /managed target.*missing/.test(message)));
+});
+
+test('capability contract target feature graphs stay exact', async () => {
+  const { findCapabilityContractConsumerViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const runtimePorts = capabilityPackage(
+    'bitfun-runtime-ports',
+    'src/crates/contracts/runtime-ports/Cargo.toml',
+    RUNTIME_PORT_FEATURE_PROFILES,
+  );
+  runtimePorts.features['git-port'] = ['plugin-runtime'];
+
+  const messages = findTestCapabilityViolations(
+    findCapabilityContractConsumerViolations,
+    [runtimePorts],
+  ).map(
+    (violation) => violation.message,
+  );
+  assert.ok(messages.some((message) => /git-port.*feature graph must stay exact/.test(message)));
+});
+
+test('unreviewed local feature aliases cannot wrap reviewed capability owners', async () => {
+  const { findCapabilityContractConsumerViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const agentTools = agentToolsCapabilityPackage();
+  const acp = {
+    ...packageAt(
+      'bitfun-acp',
+      'src/crates/interfaces/acp/Cargo.toml',
+      [pathDependency('src/crates/execution/tool-contracts', {
+        name: 'bitfun-agent-tools',
+        optional: true,
+        usesDefaultFeatures: false,
+      })],
+    ),
+    features: {
+      default: ['client', 'server'],
+      client: ['bitfun-agent-tools/acp-bridge'],
+      server: ['dep:bitfun-agent-tools'],
+      sneakyClient: ['client'],
+      sneakyServer: ['server'],
+    },
+  };
+
+  const messages = findTestCapabilityViolations(
+    findCapabilityContractConsumerViolations,
+    [agentTools, acp],
+  ).map(
+    (violation) => violation.message,
+  );
+  assert.ok(messages.some((message) => /sneakyClient.*unreviewed.*aggregate/.test(message)));
+  assert.ok(messages.some((message) => /sneakyServer.*unreviewed.*aggregate/.test(message)));
+  assert.doesNotMatch(messages.join('\n'), /default.*unreviewed.*aggregate/);
+});
+
+test('capability contract consumers cannot remove reviewed dependency edges', async () => {
+  const { findCapabilityContractConsumerViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const runtimePorts = capabilityPackage(
+    'bitfun-runtime-ports',
+    'src/crates/contracts/runtime-ports/Cargo.toml',
+    RUNTIME_PORT_FEATURE_PROFILES,
+  );
+  const pluginRuntimeClient = packageAt(
+    'bitfun-plugin-runtime-client',
+    'src/crates/execution/plugin-runtime-client/Cargo.toml',
+  );
+  const opencodeAdapter = packageAt(
+    'bitfun-opencode-adapter',
+    'src/crates/adapters/opencode-adapter/Cargo.toml',
+    [pathDependency('src/crates/contracts/runtime-ports', {
+      name: 'bitfun-runtime-ports',
+      usesDefaultFeatures: false,
+      features: ['plugin-runtime'],
+    })],
+  );
+
+  const messages = findTestCapabilityViolations(findCapabilityContractConsumerViolations, [
+    runtimePorts,
+    pluginRuntimeClient,
+    opencodeAdapter,
+  ]).map((violation) => violation.message);
+  assert.ok(messages.some((message) => /bitfun-plugin-runtime-client.*missing reviewed.*normal.*edge/.test(message)));
+  assert.ok(messages.some((message) => /bitfun-opencode-adapter.*missing reviewed.*dev.*edge/.test(message)));
 });

@@ -24,7 +24,7 @@ tokio-util = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-bitfun-agent-tools = { path = "../tool-contracts" }
+bitfun-agent-tools = { path = "../tool-contracts", default-features = false }
 tokio-stream = { workspace = true }
 
 [lints]
