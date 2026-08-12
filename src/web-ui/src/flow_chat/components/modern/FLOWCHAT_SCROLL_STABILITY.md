@@ -228,12 +228,22 @@ Four boundaries, and none of them is a matter of taste:
   halves what is left every frame, and a write the register refuses moves
   nothing and so books no further frame.
 
-A step of the list's own scroll offset changes no layout, but unlike the
-thinking card's it is not free: the virtualizer re-windows from the scroll
-events it produces, and every scroll event is also an anchor carry and a
-visible-Turn pass. That price is `listCommits` in the `tailFollow` probe, which
-is why both viewports are sampled over one window — see
-`flowChatTailFollowDiagnostics.ts`.
+A step of the list's own scroll offset changes no layout, and the worry that it
+would still be charged for — the virtualizer re-windows from the scroll events
+it produces, and each one is also an anchor carry and a visible-Turn pass — did
+not show up in the measurement. Over 1580 steps and 8435px of following, list
+commits held between 15/s and 28/s while the step rate varied from 29/s to
+119/s, so the cost per step *falls* as the follow gets busier. The two highest
+commit rates in the session, 46/s and 51/s, were windows where the list follow
+took no step at all and a thinking card was growing instead. Commits track
+content changing height, which is also what moves the follow target, and the
++0.80 correlation between the two is that shared cause rather than a price.
+
+What the ease actually did, over the same run: no step over a line that was not
+a deliberate snap, 99% of steps under 12px, 67% under 4px, and every window's
+largest step exactly `TAIL_EASE_ALPHA` of its largest lag — 0.242 to 0.261
+against a nominal 0.25, which is also the evidence that nothing else was
+writing the viewport in between.
 
 "At bottom" is a band, not a point: from the end of real content down to
 whatever the follow rule owns. A pinned Turn and a held collapse gap are both
@@ -346,16 +356,21 @@ content such as history state and `RuntimeStatusSlot`.
 ## Known Gaps
 
 - The eased follow raises the scroll-event rate from one a line to one a frame
-  while output streams, and every one of those is an anchor carry, a
-  visible-Turn pass and a boundary evaluation. The heavy one is bounded — the
-  visible-Turn pass is coalesced to a frame and writes the store only on a
-  change — but the virtualizer re-windows from those events, so the cost is
-  real and lands in `listCommits`. Measure with the `tailFollow` probe before
-  changing `TAIL_EASE_ALPHA`.
+  while output streams — 1247 of them in one 120-second session, each an anchor
+  stand-down and a visible-Turn pass. It does not show in list commits, and
+  nothing here counts the DOM reads themselves, so what is actually known is
+  that the rendering cost did not move. Re-measure with the `tailFollow` probe
+  before changing `TAIL_EASE_ALPHA`.
 - Easing is bounded by the frames the display gives it. The step it converges
   on is the content's growth *per frame*, so the same stream smooths less at
-  60Hz than at 200Hz, and a fast enough stream is a line a frame on any display
-  — at which point the ease is spending its lag and buying nothing.
+  60Hz than on the ~200Hz display these numbers come from, and a fast enough
+  stream is a line a frame anywhere — at which point the ease is spending its
+  lag and buying nothing.
+- `SMOOTH_SCROLL_YIELD_FRAMES` is a frame budget, so on a 200Hz display it
+  covers 0.22s where at 60Hz it covers 0.75s. Measured: a jump to latest from
+  the top of a transcript animated for its budget and was then finished by the
+  frame loop in one 3290px write. The animation is cut short rather than
+  cancelled outright, and the follow lands on the right offset either way.
 - A scrollbar drag is recognised from the gutter the bar occupies, so it is
   invisible where the platform draws overlay scrollbars that take no layout
   width — WebKit-backed builds, where `scrollbar-gutter: stable` reserves
