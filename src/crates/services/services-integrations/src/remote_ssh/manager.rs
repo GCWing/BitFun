@@ -1234,6 +1234,10 @@ fn supervised_container_command(
 /// hit the supervisor itself; both `terminate_child` here and
 /// [`container_signal_command`] therefore fall back to `pkill -P` plus a direct
 /// `kill`, which reaches one generation instead of all of them.
+///
+/// The supervisor must also duplicate stdin before starting the asynchronous
+/// child. POSIX non-interactive shells attach `/dev/null` to an asynchronous
+/// list's fd 0, so `<&0` inside that list cannot preserve streamed input.
 fn supervised_container_command_with_pid_file(
     container: &ContainerWorkspaceConfig,
     command: &str,
@@ -1260,12 +1264,14 @@ fn supervised_container_command_with_pid_file(
          }}; \
          trap remove_pid_file EXIT; \
          trap 'terminate_child; exit 143' HUP TERM; \
+         exec 9<&0 || exit 1; \
          if command -v setsid >/dev/null 2>&1; then \
-           setsid {quoted_shell} -lc {quoted_command} <&0 & \
+           setsid {quoted_shell} -lc {quoted_command} <&9 & \
          else \
-           {quoted_shell} -lc {quoted_command} <&0 & \
+           {quoted_shell} -lc {quoted_command} <&9 & \
          fi; \
          child=$!; \
+         exec 9<&-; \
          if [ \"$tracking\" -eq 1 ]; then \
            printf '%s' \"$child\" > \"$pid_file\" || tracking=0; \
          fi; \
@@ -5955,11 +5961,58 @@ mod tests {
 
         assert!(pid_file.starts_with("/tmp/.bitfun-exec-"));
         assert!(wrapped.contains("setsid '/bin/bash' -lc"));
+        assert!(wrapped.contains("exec 9<&0 || exit 1"));
+        assert!(wrapped.contains("<&9 &"));
+        assert!(wrapped.contains("exec 9<&-"));
         assert!(wrapped.contains("|| tracking=0"));
         assert!(wrapped.contains("printf '%s' \"$child\" > \"$pid_file\""));
         assert!(signal.contains("[ -s \"$pid_file\" ] || exit 75"));
         assert!(signal.contains("kill -KILL -- \"-$pid\""));
         assert!(signal.contains("kill -KILL \"$pid\""));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn supervised_container_command_preserves_streamed_stdin() {
+        use std::io::Write;
+
+        let container = ContainerWorkspaceConfig {
+            name: "dev".to_string(),
+            access: ContainerAccess::DockerExec,
+            local: true,
+            docker_path: "docker".to_string(),
+            shell: "/bin/sh".to_string(),
+            user: None,
+            interactive: true,
+        };
+        let wrapped = supervised_container_command_with_pid_file(
+            &container,
+            "read value; printf 'stdin:%s' \"$value\"",
+            "/tmp/.bitfun-exec-stdin-contract.pid",
+        );
+        let mut child = std::process::Command::new("sh")
+            .args(["-lc", &wrapped])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn supervised command");
+        child
+            .stdin
+            .take()
+            .expect("supervisor stdin")
+            .write_all(b"transport-contract\n")
+            .expect("write supervisor stdin");
+        let output = child
+            .wait_with_output()
+            .expect("wait for supervised command");
+
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"stdin:transport-contract");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).trim().is_empty(),
+            "stdin forwarding must not add command stderr"
+        );
     }
 
     #[test]

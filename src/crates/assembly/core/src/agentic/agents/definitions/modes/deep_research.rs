@@ -25,6 +25,9 @@ impl DeepResearchMode {
                 "AgentWait".to_string(),
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
+                "get_goal".to_string(),
+                "create_goal".to_string(),
+                "update_goal".to_string(),
                 "Read".to_string(),
                 "view_image".to_string(),
                 "analyze_image".to_string(),
@@ -36,6 +39,10 @@ impl DeepResearchMode {
                 "WriteStdin".to_string(),
                 "ExecControl".to_string(),
                 "ControlHub".to_string(),
+                // Standing research ("re-check these sources every morning")
+                // belongs on a schedule, and ControlHub's `wait` points here
+                // rather than at an hour-long turn.
+                "Cron".to_string(),
                 "TodoWrite".to_string(),
                 "AskUserQuestion".to_string(),
             ],

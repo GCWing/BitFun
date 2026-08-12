@@ -14,6 +14,8 @@ const log = createLogger('AgentCompanionPetCommands');
  * `agent-companion://pet-command`.
  */
 export type AgentCompanionPetCommand =
+  /** Right-click menu: open the companion appearance picker in Settings. */
+  | { type: 'open-pet-settings' }
   /** Right-click menu: turn the companion off ("Show Agent companion"). */
   | { type: 'close-desktop-pet' }
   /** Bubble right-click menu: the user acknowledged this bubble. */
@@ -41,6 +43,16 @@ async function closeAgentCompanionDesktopPet(): Promise<void> {
     enable_agent_companion: false,
   });
   log.info('Agent companion disabled from pet context menu');
+}
+
+async function openAgentCompanionPetSettings(): Promise<void> {
+  const [{ quickActions }, { invoke }] = await Promise.all([
+    import('@/shared/services/ide-control'),
+    import('@tauri-apps/api/core'),
+  ]);
+  quickActions.openSettings('session-personalization');
+  await invoke('show_main_window');
+  log.info('Agent companion settings opened from pet context menu');
 }
 
 /**
@@ -84,6 +96,9 @@ export async function handleAgentCompanionPetCommand(
   }
 
   switch (command.type) {
+    case 'open-pet-settings':
+      await openAgentCompanionPetSettings();
+      return;
     case 'close-desktop-pet':
       await closeAgentCompanionDesktopPet();
       return;

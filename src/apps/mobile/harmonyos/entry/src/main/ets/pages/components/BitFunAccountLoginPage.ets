@@ -2,17 +2,17 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { DEFAULT_CLOUD_RELAY_URL } from '../../services/CloudAccountClient';
 import { CARD, INK, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SUBTLE } from './Theme';
 
-@Component
+@ComponentV2
 export struct BitFunAccountLoginPage {
-  cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> =
+  @Event cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> =
     async (_relayUrl: string, _username: string, _password: string): Promise<string> => '';
-  onBack: () => void = () => {};
-  onLoginSuccess: () => void = () => {};
-  @State relayUrl: string = DEFAULT_CLOUD_RELAY_URL;
-  @State username: string = '';
-  @State password: string = '';
-  @State errorText: string = '';
-  @State isBusy: boolean = false;
+  @Event onBack: () => void = () => {};
+  @Event onLoginSuccess: () => void = () => {};
+  @Local relayUrl: string = DEFAULT_CLOUD_RELAY_URL;
+  @Local username: string = '';
+  @Local password: string = '';
+  @Local errorText: string = '';
+  @Local isBusy: boolean = false;
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {

@@ -226,6 +226,16 @@
     text-transform: uppercase;
   }
 
+  /* Marks a tab holding something the user has not seen yet. */
+  &__item-unseen {
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    margin-left: $size-gap-2;
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-accent-500);
+  }
+
   &__item {
     display: flex;
     align-items: center;

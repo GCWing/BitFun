@@ -201,6 +201,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "apply_external_source_control_action_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
+    (
+        "get_external_ecosystem_awareness_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "acknowledge_external_ecosystems_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     ("apply_patch", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "archive_all_sessions",
@@ -208,7 +216,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("archive_session", RemoteWorkspacePolicy::LegacyUnaudited),
     (
-        "browser_control_create_launcher",
+        "browser_control_enable_default_cdp",
         RemoteWorkspacePolicy::LocalOnly,
     ),
     (
@@ -518,6 +526,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "project_ai_model_reasoning_catalog",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "get_models_dev_catalog_status",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "get_all_modified_files",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -709,6 +725,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("get_session_lineage", RemoteWorkspacePolicy::RemoteRouted),
+    (
+        "get_session_permission_mode",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
     ("get_session_files", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "get_session_operations",
@@ -1373,6 +1393,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "refresh_models_dev_catalog_now",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "reveal_models_dev_cache_directory",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "refresh_subscription_account",
         RemoteWorkspacePolicy::LocalOnly,
     ),
@@ -1960,6 +1988,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("update_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
     ("update_session_mode", RemoteWorkspacePolicy::RemoteRouted),
+    (
+        "update_session_permission_mode",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
     (
         "update_session_model",
         RemoteWorkspacePolicy::LegacyUnaudited,

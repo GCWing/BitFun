@@ -206,7 +206,7 @@ flowchart TB
 与运行第三方 JS/TS 的 Node/Bun Plugin Host 不同；三者不能共享名称或业务归属。
 
 当前代码已经交付显式启用的 Shared TUI 最小切片，包含本机 IPC、身份、握手、Session/Turn、当前 Session 的 name/Agent mode/model、Permission/UserInput、
-ownership 和生命周期治理；GUI、Headless CLI、ACP、SDK Host、Server/Remote 仍没有 Shared consumer。该图中的多入口逻辑复用是
+ownership 和生命周期治理；Model、Skill、Subagent 和 MCP 管理暂由 Shared CLI adapter 的本地 compatibility provider 保留，不属于 v17 或公开 SDK 合同。GUI、Headless CLI、ACP、SDK Host、Server/Remote 仍没有 Shared consumer。该图中的多入口逻辑复用是
 当前事实，除 Shared TUI 外的跨进程 Shared deployment 仍是目标架构。
 
 ### 4.3 各形态能做什么

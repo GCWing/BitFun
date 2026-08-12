@@ -1,9 +1,10 @@
 import { AppRootPresentation } from './components/AppRootPresentation';
+import { WatchProvisionCard } from './components/WatchProvisionCard';
 import { ArkUiAppRootHostAdapter } from './host/AppRootHostAdapter';
-import { AppRootRuntime } from './state/AppRootRuntime';
+import { AppRootRuntime } from './runtime/AppRootRuntime';
 
 @Entry
-@Component
+@ComponentV2
 struct AppRoot {
   private readonly hostAdapter: ArkUiAppRootHostAdapter = new ArkUiAppRootHostAdapter();
   private readonly runtime: AppRootRuntime = new AppRootRuntime(this.hostAdapter);
@@ -38,8 +39,23 @@ struct AppRoot {
         remoteCreateState: this.runtime.remoteCreateState,
         generalPageState: this.runtime.generalChatPageState,
         filePreviewState: this.runtime.filePreviewState,
-        deviceId: this.runtime.remoteConnectionViewModel.getDeviceId(),
+        deviceId: this.runtime.remoteConnectionController.getDeviceId(),
         actions: this.runtime.presentationActions
+      })
+
+      // Sits above every route on purpose: a watch waiting for approval must
+      // not be hidden behind whatever screen the phone happens to be on.
+      WatchProvisionCard({
+        state: this.runtime.watchProvisionState,
+        onApprove: () => {
+          void this.runtime.watchProvisionController.approve();
+        },
+        onReject: () => {
+          void this.runtime.watchProvisionController.reject();
+        },
+        onDismiss: () => {
+          this.runtime.watchProvisionController.dismiss();
+        }
       })
     }
     .width('100%')

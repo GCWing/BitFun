@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   finishInputSession: vi.fn(),
   cancelInputSession: vi.fn(async () => undefined),
   notificationInfo: vi.fn(),
+  notificationError: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api', () => ({
@@ -83,7 +84,7 @@ vi.mock('@/shared/notification-system', () => ({
   notificationService: {
     info: mocks.notificationInfo,
     warning: vi.fn(),
-    error: vi.fn(),
+    error: mocks.notificationError,
   },
 }));
 
@@ -137,6 +138,7 @@ describe('useComposerVoiceInput completion modes', () => {
     mocks.finishInputSession.mockClear();
     mocks.cancelInputSession.mockClear();
     mocks.notificationInfo.mockClear();
+    mocks.notificationError.mockClear();
     activateInput = vi.fn();
     focusInputSoon = vi.fn();
     insertText = vi.fn(() => 'Existing draft Transcribed request');
@@ -220,5 +222,33 @@ describe('useComposerVoiceInput completion modes', () => {
     expect(insertText).not.toHaveBeenCalled();
     expect(submitText).not.toHaveBeenCalled();
     expect(mocks.notificationInfo).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the idle control actionable when microphone capture is unavailable', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: undefined,
+    });
+    await act(async () => {
+      root.render(
+        <Probe
+          activateInput={activateInput}
+          focusInputSoon={focusInputSoon}
+          insertText={insertText}
+          submitText={submitText}
+          onController={(next) => { controller = next; }}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(controller?.disabled).toBe(false);
+    await act(async () => {
+      controller?.toggle();
+      await Promise.resolve();
+    });
+
+    expect(controller?.phase).toBe('idle');
+    expect(mocks.notificationError).toHaveBeenCalledWith('input.voiceInput.unsupported');
   });
 });

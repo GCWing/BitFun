@@ -13,7 +13,6 @@ import {
   ConfigPageLoading,
   Modal,
   Select,
-  Tooltip,
   confirmDanger,
   type SelectOption,
 } from '@/component-library';
@@ -71,6 +70,7 @@ type BrowserControlLaunchResponse = {
   status: string;
   message: string | null;
   browserKind: string;
+  setupUrl?: string;
 };
 
 type BrowserControlBrowserOption = {
@@ -142,6 +142,10 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
 
   // ── Browser control state ───────────────────────────────────────────────
   const [browserCdpAvailable, setBrowserCdpAvailable] = useState(false);
+  const [browserReady, setBrowserReady] = useState(false);
+  const [browserAutoConnectOnStartup, setBrowserAutoConnectOnStartup] = useState(false);
+  const [browserDefaultCdpSupported, setBrowserDefaultCdpSupported] = useState(false);
+  const [browserDefaultCdpEnabled, setBrowserDefaultCdpEnabled] = useState(false);
   const [browserKind, setBrowserKind] = useState('');
   const [browserVersion, setBrowserVersion] = useState<string | null>(null);
   const [browserPageCount, setBrowserPageCount] = useState(0);
@@ -186,6 +190,9 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       const [s, browsers] = await Promise.all([
         invoke<{
           cdpAvailable: boolean;
+          defaultCdpSupported: boolean;
+          defaultCdpEnabled: boolean;
+          browserReady: boolean;
           browserKind: string;
           browserVersion: string | null;
           port: number;
@@ -194,6 +201,9 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         invoke<{ options: BrowserControlBrowserOption[] }>('browser_control_list_browsers'),
       ]);
       setBrowserCdpAvailable(s.cdpAvailable);
+      setBrowserDefaultCdpSupported(s.defaultCdpSupported);
+      setBrowserDefaultCdpEnabled(s.defaultCdpEnabled);
+      setBrowserReady(s.browserReady);
       setBrowserKind(s.browserKind);
       setBrowserVersion(s.browserVersion);
       setBrowserPageCount(s.pageCount);
@@ -234,6 +244,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         debugConfigData,
         computerUseCfg,
         browserControlPreferredBrowser,
+        browserControlAutoConnect,
         loadedToolPermissionConfig,
         loadedPermissionModeControlVisibility,
         loadedCompanionPets,
@@ -246,6 +257,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
+        configManager.getConfig<boolean>('ai.browser_control_auto_connect_on_startup'),
         permissionConfigService.getConfig(),
         configManager.getOptionalConfig<boolean>(SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH),
         listAgentCompanionPets(),
@@ -261,6 +273,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
       if (debugConfigData) setDebugConfig(debugConfigData);
       setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
+      setBrowserAutoConnectOnStartup(browserControlAutoConnect === true);
       setToolPermissionConfig(normalizeToolPermissionConfig(loadedToolPermissionConfig));
       setShowPermissionModeControl(loadedPermissionModeControlVisibility !== false);
 
@@ -473,33 +486,14 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     {
       value: 'safe_only',
       label: tTools('config.subagentBatchPolicy.safeOnly'),
+      description: tTools('config.subagentBatchPolicy.safeOnlyDesc'),
     },
     {
       value: 'force_parallel',
       label: tTools('config.subagentBatchPolicy.forceParallel'),
+      description: tTools('config.subagentBatchPolicy.forceParallelDesc'),
     },
   ];
-
-  const subagentBatchPolicyLabel = (
-    <span className="bitfun-func-agent-config__label-with-tooltip">
-      <span>{tTools('config.subagentBatchPolicy.label')}</span>
-      <Tooltip
-        content={
-          <span className="bitfun-func-agent-config__policy-tooltip">
-            <strong>{tTools('config.subagentBatchPolicy.safeOnly')}</strong>
-            <span>{tTools('config.subagentBatchPolicy.safeOnlyDesc')}</span>
-            <strong>{tTools('config.subagentBatchPolicy.forceParallel')}</strong>
-            <span>{tTools('config.subagentBatchPolicy.forceParallelDesc')}</span>
-          </span>
-        }
-        placement="top"
-      >
-        <span className="bitfun-func-agent-config__label-tooltip-icon" aria-label={tTools('config.subagentBatchPolicy.tooltipLabel')}>
-          <Info size={14} />
-        </span>
-      </Tooltip>
-    </span>
-  );
 
   const selectedCompanionPetPackage = settings?.agent_companion_pet
     ? companionPets.find(pet => pet.packagePath === settings.agent_companion_pet?.packagePath) ?? null
@@ -639,24 +633,89 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     }
   };
 
+  const handleBrowserAutoConnectChange = async (checked: boolean) => {
+    const previousValue = browserAutoConnectOnStartup;
+    setBrowserAutoConnectOnStartup(checked);
+    try {
+      await configManager.setConfig('ai.browser_control_auto_connect_on_startup', checked);
+    } catch (error) {
+      log.error('Failed to save browser_control_auto_connect_on_startup', error);
+      setBrowserAutoConnectOnStartup(previousValue);
+      notificationService.error(
+        `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+    }
+  };
+
+  const presentBrowserControlLaunchResult = (result: BrowserControlLaunchResponse) => {
+    if (result.success) {
+      notificationService.success(
+        t('browserControl.connectSuccess', { browser: result.browserKind }),
+        { duration: 3000 }
+      );
+    } else if (result.status === 'requires_user_profile_setup') {
+      notificationService.info(
+        t('browserControl.userProfileSetupRequired', { browser: result.browserKind }),
+        { duration: 12000 }
+      );
+    } else if (result.status === 'requires_manual_user_profile_setup') {
+      // The platform could not open the settings page, so the URL itself is
+      // the actionable part of the message.
+      notificationService.info(
+        t('browserControl.userProfileSetupManual', {
+          browser: result.browserKind,
+          url: result.setupUrl ?? '',
+        }),
+        { duration: 20000 }
+      );
+    } else if (result.status === 'user_profile_connection_failed') {
+      notificationService.info(
+        t('browserControl.userProfileConnectionFailed', { browser: result.browserKind }),
+        { duration: 12000 }
+      );
+    } else if (result.status === 'needs_restart') {
+      setBrowserRestartPrompt(result);
+    } else if (result.message) {
+      notificationService.info(result.message, { duration: 8000 });
+    }
+  };
+
   const handleBrowserControlLaunch = async () => {
     setBrowserControlBusy(true);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const result = await invoke<BrowserControlLaunchResponse>('browser_control_launch', { request: { port: 9222 } });
-      if (result.success) {
-        notificationService.success(
-          t('browserControl.connectSuccess', { browser: result.browserKind }),
-          { duration: 3000 }
-        );
-      } else if (result.status === 'needs_restart') {
-        setBrowserRestartPrompt(result);
-      } else if (result.message) {
-        notificationService.info(result.message, { duration: 8000 });
-      }
+      presentBrowserControlLaunchResult(result);
       await refreshBrowserControlStatus();
     } catch (error) {
       log.error('browser_control_launch failed', error);
+      notificationService.error(t('browserControl.connectFailed'));
+    } finally {
+      setBrowserControlBusy(false);
+    }
+  };
+
+  const handleBrowserControlEnableDefaultCdp = async () => {
+    setBrowserControlBusy(true);
+    try {
+      notificationService.info(
+        t(
+          browserDefaultCdpEnabled
+            ? 'browserControl.defaultCdpConnectPrompt'
+            : 'browserControl.defaultCdpEnablePrompt',
+          { browser: browserKind },
+        ),
+        { duration: 12000 },
+      );
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<BrowserControlLaunchResponse>(
+        'browser_control_enable_default_cdp',
+        { request: { port: 9222 } },
+      );
+      presentBrowserControlLaunchResult(result);
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('browser_control_enable_default_cdp failed', error);
       notificationService.error(t('browserControl.connectFailed'));
     } finally {
       setBrowserControlBusy(false);
@@ -684,23 +743,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     } catch (error) {
       log.error('browser_control_restart_with_cdp failed', error);
       notificationService.error(t('browserControl.restartFailed'));
-    } finally {
-      setBrowserControlBusy(false);
-    }
-  };
-
-  const handleBrowserControlCreateLauncher = async () => {
-    setBrowserControlBusy(true);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const path = await invoke<string>('browser_control_create_launcher');
-      notificationService.success(
-        t('browserControl.createLauncherSuccess', { path }),
-        { duration: 5000 }
-      );
-    } catch (error) {
-      log.error('browser_control_create_launcher failed', error);
-      notificationService.error(t('browserControl.createLauncherFailed'));
     } finally {
       setBrowserControlBusy(false);
     }
@@ -858,9 +900,24 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const computerUseScreenLabel = computerUseStatusLoading
     ? t('loading.text')
     : computerUseScreen ? t('computerUse.granted') : t('computerUse.notGranted');
+  const computerUsePlatformMessage = computerUsePlatformNote
+    ? platform === 'macos'
+      ? t('computerUse.platformNotes.macos')
+      : platform === 'windows'
+        ? t('computerUse.platformNotes.windows')
+        : platform === 'linux'
+          ? t('computerUse.platformNotes.linux')
+          : t('computerUse.platformNotes.generic')
+    : null;
+  // A ready browser is not a failure state: BitFun attaches to it the moment
+  // something needs it, so say that rather than the bare "not connected".
   const browserStatusLabel = browserCdpAvailable
     ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
-    : browserStatusLoading ? t('loading.text') : t('browserControl.notConnected');
+    : browserStatusLoading
+      ? t('loading.text')
+      : browserReady
+        ? t('browserControl.readyNotConnected')
+        : t('browserControl.notConnected');
   const browserSelectOptions: SelectOption[] = browserOptions.map((option) => ({
     value: option.value,
     label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,
@@ -1118,11 +1175,11 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         >
           <ConfigPageRow
             label={t('permissionPolicy.mode')}
-            description={resolveToolPermissionMode(toolPermissionConfig) === 'full_access'
+            description={`${resolveToolPermissionMode(toolPermissionConfig) === 'full_access'
               ? t('permissionPolicy.fullAccessDescription')
               : resolveToolPermissionMode(toolPermissionConfig) === 'auto'
                 ? t('permissionPolicy.autoApproveDescription')
-                : t('permissionPolicy.askDescription')}
+                : t('permissionPolicy.askDescription')} ${t('permissionPolicy.modeDescription')}`}
             align="center"
           >
             <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
@@ -1186,21 +1243,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
           description={t('toolExecution.sectionDescription')}
         >
           <ConfigPageRow
-            label={(
-              <span className="bitfun-func-agent-config__inline-label">
-                <span>{tTools('config.executionTimeout')}</span>
-                <Tooltip content={tTools('config.executionTimeoutHint')} placement="top">
-                  <span
-                    className="bitfun-func-agent-config__inline-info"
-                    role="button"
-                    tabIndex={0}
-                    aria-label={tTools('config.executionTimeoutHint')}
-                  >
-                    <Info size={14} />
-                  </span>
-                </Tooltip>
-              </span>
-            )}
+            label={tTools('config.executionTimeout')}
             description={tTools('config.executionTimeoutDesc')}
             align="center"
           >
@@ -1217,7 +1260,11 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               />
             </div>
           </ConfigPageRow>
-          <ConfigPageRow label={subagentBatchPolicyLabel} description={tTools('config.subagentBatchPolicy.desc')} align="center">
+          <ConfigPageRow
+            label={tTools('config.subagentBatchPolicy.label')}
+            description={tTools('config.subagentBatchPolicy.desc')}
+            align="center"
+          >
             <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
               <Select
                 value={subagentBatchExecutionPolicy}
@@ -1229,11 +1276,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
             </div>
           </ConfigPageRow>
           <ConfigPageRow
-            label={(
-              <span className="bitfun-func-agent-config__inline-label">
-                <span>{tTools('config.subagentMaxConcurrency')}</span>
-              </span>
-            )}
+            label={tTools('config.subagentMaxConcurrency')}
             description={tTools('config.subagentMaxConcurrencyDesc')}
             align="center"
           >
@@ -1386,7 +1429,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                   )}
                 </div>
               </ConfigPageRow>
-              {computerUsePlatformNote && (
+              {computerUsePlatformMessage && (
                 <div
                   className="bitfun-func-agent-config__platform-note"
                   data-bf-component="session-config"
@@ -1401,7 +1444,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                   <Info size={14} style={{ flexShrink: 0, marginTop: 2, opacity: 0.7 }} />
                   <p className="bitfun-config-page-row__description" style={{ margin: 0 }}>
                     <strong>{t('computerUse.platformNote')}: </strong>
-                    {computerUsePlatformNote}
+                    {computerUsePlatformMessage}
                   </p>
                 </div>
               )}
@@ -1438,6 +1481,63 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                   />
                 </div>
               </ConfigPageRow>
+              )}
+              {browserDefaultCdpSupported && (
+                <ConfigPageRow
+                  label={t('browserControl.defaultCdp')}
+                  description={t('browserControl.defaultCdpDesc')}
+                  align="center"
+                  balanced
+                >
+                  <div
+                    className="bitfun-func-agent-config__row-control"
+                    data-bf-component="session-config"
+                    data-bf-part="control"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      flexWrap: 'nowrap',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      gap: 8,
+                    }}
+                  >
+                    <span className={browserDefaultCdpEnabled ? 'bitfun-func-agent-config__perm-status--granted' : undefined}>
+                      {t(browserDefaultCdpEnabled
+                        ? 'browserControl.defaultCdpEnabled'
+                        : 'browserControl.defaultCdpDisabled')}
+                    </span>
+                    {!browserCdpAvailable && (
+                      <Button
+                        className="bitfun-func-agent-config__row-action-btn"
+                        size="small"
+                        variant="secondary"
+                        disabled={browserControlBusy || browserStatusLoading}
+                        onClick={() => void handleBrowserControlEnableDefaultCdp()}
+                      >
+                        {t(browserDefaultCdpEnabled
+                          ? 'browserControl.connect'
+                          : 'browserControl.enableDefaultCdp')}
+                      </Button>
+                    )}
+                  </div>
+                </ConfigPageRow>
+              )}
+              {browserDefaultCdpSupported && (
+                <ConfigPageRow
+                  label={t('browserControl.autoConnectOnStartup')}
+                  description={t('browserControl.autoConnectOnStartupDesc')}
+                  align="center"
+                  balanced
+                >
+                  <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
+                    <Switch
+                      checked={browserAutoConnectOnStartup}
+                      onChange={(e) => void handleBrowserAutoConnectChange(e.target.checked)}
+                      size="small"
+                    />
+                  </div>
+                </ConfigPageRow>
               )}
               <ConfigPageRow
                 label={t('browserControl.status')}
@@ -1487,7 +1587,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                       <RefreshCw size={14} />
                     </IconButton>
                   </span>
-                  {!browserCdpAvailable && (
+                  {!browserCdpAvailable && !browserDefaultCdpSupported && (
                     <Button
                       className="bitfun-func-agent-config__row-action-btn"
                       size="small"
@@ -1500,25 +1600,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                   )}
                 </div>
               </ConfigPageRow>
-              {platform === 'macos' && (
-                <ConfigPageRow
-                  label={t('browserControl.createLauncher')}
-                  description={t('browserControl.createLauncherDesc')}
-                  align="center"
-                >
-                  <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
-                    <Button
-                      className="bitfun-func-agent-config__row-action-btn"
-                      size="small"
-                      variant="secondary"
-                      disabled={browserControlBusy}
-                      onClick={() => void handleBrowserControlCreateLauncher()}
-                    >
-                      {t('browserControl.createLauncher')}
-                    </Button>
-                  </div>
-                </ConfigPageRow>
-              )}
             </>
           ) : null}
         </ConfigPageSection>

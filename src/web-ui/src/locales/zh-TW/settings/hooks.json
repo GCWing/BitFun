@@ -37,7 +37,7 @@
     "loading": "正在載入已匯入的 Hooks...",
     "loadFailed": "無法載入已匯入的 Hooks。",
     "refreshFailed": "無法重新整理已匯入的 Hooks。",
-    "empty": "未發現相容的 Claude Code 或 Codex 命令 Hooks。",
+    "empty": "目前沒有已匯入的 Hook。可在 hooks.json 中新增，或重新整理以檢查 Claude Code 與 Codex。",
     "review": "檢閱",
     "update": "檢閱更新",
     "remove": "移除",

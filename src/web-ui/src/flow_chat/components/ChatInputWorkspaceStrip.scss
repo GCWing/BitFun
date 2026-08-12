@@ -209,11 +209,179 @@
     white-space: nowrap;
   }
 
+  // Scope is chosen per click: the row body writes the session, the trailing
+  // button arms the same mode for one submission only.
+  // The row owns the background so hover and selection cover the trailing
+  // controls as well; the inner button stays transparent.
+  &__permission-option-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-right: 8px;
+    border-radius: $size-radius-sm;
+
+    &:hover,
+    &:focus-within {
+      background: var(--bf-appearance-token-element-bg-medium);
+    }
+
+    &--selected {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, transparent);
+
+      &:hover,
+      &:focus-within {
+        background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+      }
+    }
+  }
+
+  &__permission-option-trailing {
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-width: 16px;
+    justify-content: flex-end;
+  }
+
+  &__permission-option-check {
+    flex: none;
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+
+  // Session state and a temporary override share one slot, so the checkmark
+  // steps aside exactly when the one-off control claims it.
+  &__permission-option-row:hover &__permission-option-check,
+  &__permission-option-row:focus-within &__permission-option-check,
+  &__permission-option-row--armed &__permission-option-check {
+    display: none;
+  }
+
+  &__permission-option-icon {
+    flex: none;
+
+    &--ask {
+      color: var(--bf-appearance-token-color-success);
+    }
+
+    &--auto {
+      color: var(--bf-appearance-token-color-warning);
+    }
+
+    &--full_access {
+      color: var(--bf-appearance-token-color-error);
+    }
+  }
+
+  // Hidden until the row is hovered or focused so the menu stays compact; an
+  // armed one stays visible because a pending override must not be invisible.
+  &__permission-option-next-turn {
+    flex: none;
+    display: none;
+    padding: 1px 5px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    font: inherit;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-medium);
+      outline: none;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    &--armed {
+      display: inline-flex;
+      color: var(--bf-appearance-token-color-accent-500);
+      font-weight: 600;
+    }
+  }
+
+  &__permission-option-row:hover &__permission-option-next-turn,
+  &__permission-option-row:focus-within &__permission-option-next-turn {
+    display: inline-flex;
+  }
+
+  // Marks a pending one-off override. A session-level choice is not dotted:
+  // the trigger label already names it, and it is not waiting to expire.
+  &__permission-next-turn-dot {
+    flex: none;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-accent-500);
+  }
+
+  // The reset row keeps a trailing shortcut into the settings page that owns
+  // the default it follows, revealed on hover so the menu stays quiet.
+  &__permission-action-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding-right: 6px;
+    border-radius: $size-radius-sm;
+
+    &:hover,
+    &:focus-within {
+      background: var(--bf-appearance-token-element-bg-medium);
+    }
+
+    .bitfun-chat-input-workspace-strip__permission-visibility-action {
+      flex: 1 1 auto;
+      padding-right: 0;
+
+      &:hover,
+      &:focus-visible {
+        background: transparent;
+      }
+    }
+  }
+
+  &__permission-action-settings {
+    flex: none;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-strong);
+      outline: none;
+    }
+  }
+
+  &__permission-action-row:hover &__permission-action-settings,
+  &__permission-action-row:focus-within &__permission-action-settings {
+    display: inline-flex;
+  }
+
   &__permission-menu {
     position: fixed;
     z-index: $z-popover;
     box-sizing: border-box;
-    width: min(286px, calc(100vw - 16px));
+    // Sized to the widest row now that mode descriptions are tooltips: the
+    // header's scope label (longest for dispatched sessions) rather than the
+    // option rows, which are single-line.
+    width: min(240px, calc(100vw - 16px));
     max-height: calc(100vh - 16px);
     overflow-y: auto;
     padding: 6px;
@@ -239,7 +407,20 @@
     font-weight: 600;
     letter-spacing: 0;
 
+    // A longer localized scope label truncates instead of wrapping the header
+    // onto a second line and reopening the width the tooltips just reclaimed.
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    span:first-child {
+      flex: none;
+    }
+
     span:last-child {
+      min-width: 0;
       color: var(--bf-appearance-token-color-text-muted);
       font-weight: 400;
     }
@@ -258,13 +439,13 @@
   }
 
   &__permission-option {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 16px;
+    display: flex;
+    flex: 1 1 auto;
     align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 48px;
-    padding: 7px 8px;
+    gap: 7px;
+    min-width: 0;
+    min-height: 30px;
+    padding: 5px 0 5px 8px;
     border: 0;
     border-radius: $size-radius-sm;
     background: transparent;
@@ -274,18 +455,8 @@
     text-align: left;
     cursor: pointer;
 
-    &:hover:not(:disabled),
     &:focus-visible {
-      background: var(--bf-appearance-token-element-bg-medium);
       outline: none;
-    }
-
-    &--selected {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, transparent);
-
-      > svg {
-        color: var(--bf-appearance-token-color-accent-500);
-      }
     }
 
     &:disabled {
@@ -294,26 +465,15 @@
     }
   }
 
-  &__permission-option-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
   &__permission-option-label {
+    min-width: 0;
+    overflow: hidden;
     color: var(--bf-appearance-token-color-text-primary);
     font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     font-weight: 500;
     line-height: 1.25;
-  }
-
-  &__permission-option-description {
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 400;
-    line-height: 1.35;
-    white-space: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__permission-visibility-action {

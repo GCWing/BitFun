@@ -4,10 +4,13 @@ export const chatInputWorkspaceStripAppearanceDescriptor: AppearanceSurfaceDescr
   parts: [
     { id: 'root' }, { id: 'main' }, { id: 'workspace' }, { id: 'branch' },
     { id: 'actions' }, { id: 'permission' }, { id: 'permissionMenu' },
-    { id: 'permissionOptions' }, { id: 'permissionOption' }, { id: 'usageAction' },
+    { id: 'permissionOptions' }, { id: 'permissionOptionRow' },
+    { id: 'permissionOption' }, { id: 'permissionOptionTrailing' },
+    { id: 'permissionOptionNextTurn' }, { id: 'usageAction' },
   ],
   states: [
     { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
     { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
+    { id: 'armed', selector: { kind: 'self', suffix: '[data-bf-state~="armed"]' } },
   ],
 };

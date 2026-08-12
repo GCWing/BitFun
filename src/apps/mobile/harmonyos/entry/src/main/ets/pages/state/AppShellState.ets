@@ -12,10 +12,20 @@ export class AppShellState {
   @Trace showSettings: boolean = false;
   @Trace settingsMode: string = 'general';
   @Trace showConnectSheet: boolean = false;
+  /**
+   * Mirror of the resolved master-detail layout mode. Only the presentation
+   * layer measures the viewport, so runtime logic that must branch on compact
+   * versus wide reads it from here.
+   */
+  @Trace wideLayout: boolean = false;
   private accountReturnMode: string = '';
 
   setSidebarVisible(visible: boolean): void {
     this.showSidebar = visible;
+  }
+
+  setWideLayout(wide: boolean): void {
+    this.wideLayout = wide;
   }
 
   setSettingsVisible(visible: boolean): void {

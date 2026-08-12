@@ -248,22 +248,10 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'opencode',
           'claude code',
           'codex',
-          'compatibility',
-        ],
-      },
-      {
-        id: 'hooks',
-        labelKey: 'configCenter.tabs.hooks',
-        descriptionKey: 'configCenter.tabDescriptions.hooks',
-        keywords: [
-          'hooks',
           'hook',
-          'lifecycle',
-          'pretooluse',
-          'posttooluse',
-          'codex',
-          'automation',
-          'guardrail',
+          'hooks',
+          'agent hooks',
+          'compatibility',
         ],
       },
       {
@@ -320,6 +308,13 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
 
 export const DEFAULT_SETTINGS_TAB: ConfigTab = 'basics';
 
+export type SettingsContentFocus = 'hooks';
+
+export interface NormalizedSettingsTarget {
+  tab: ConfigTab;
+  focus?: SettingsContentFocus;
+}
+
 const KNOWN_TABS: ConfigTab[] = SETTINGS_CATEGORIES.flatMap((c) => c.tabs.map((t) => t.id));
 
 /** Normalize supported settings deep links and IDE actions. */
@@ -330,6 +325,14 @@ export function normalizeSettingsTab(section: string): ConfigTab {
   if (section === 'session-config') return 'session-personalization';
   if (section === 'deep-review' || section === 'code-review' || section === 'review-team') return 'review';
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';
+  // Hooks are part of the external AI applications surface, not a standalone page.
+  if (section === 'hooks') return 'external-sources';
   if ((KNOWN_TABS as readonly string[]).includes(section)) return section as ConfigTab;
   return DEFAULT_SETTINGS_TAB;
+}
+
+/** Preserve an optional in-page target while normalizing the owning Settings tab. */
+export function normalizeSettingsTarget(section: string): NormalizedSettingsTarget {
+  if (section === 'hooks') return { tab: 'external-sources', focus: 'hooks' };
+  return { tab: normalizeSettingsTab(section) };
 }

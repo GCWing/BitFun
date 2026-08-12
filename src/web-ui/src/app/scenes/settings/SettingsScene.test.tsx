@@ -19,7 +19,19 @@ vi.mock('../../../infrastructure/config/components/AcpAgentsConfig', () => ({
 }));
 
 vi.mock('../../../infrastructure/config/components/ExternalSourcesConfig', () => ({
-  default: () => <div data-testid="external-sources-config" />,
+  default: ({
+    initialFocus,
+    focusRequestId,
+  }: {
+    initialFocus?: 'hooks';
+    focusRequestId?: number;
+  }) => (
+    <div
+      data-testid="external-sources-config"
+      data-initial-focus={initialFocus}
+      data-focus-request-id={focusRequestId}
+    />
+  ),
 }));
 
 vi.mock('../../../infrastructure/config/components/EditorConfig', () => ({
@@ -67,7 +79,12 @@ describe('SettingsScene lazy tab routing', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
-    useSettingsStore.setState({ activeTab: 'basics', searchQuery: '' });
+    useSettingsStore.setState({
+      activeTab: 'basics',
+      contentFocus: null,
+      contentFocusRequestId: 0,
+      searchQuery: '',
+    });
   });
 
   afterEach(() => {
@@ -118,6 +135,23 @@ describe('SettingsScene lazy tab routing', () => {
     await renderActiveTab('external-sources');
 
     expect(container.querySelector('[data-testid="external-sources-config"]')).not.toBeNull();
+  });
+
+  it('passes a legacy Hook deep-link focus into External AI applications', async () => {
+    useSettingsStore.getState().openTab('external-sources', 'hooks');
+    await act(async () => {
+      root.render(<SettingsScene />);
+    });
+    await waitForPanelContent('external-sources-config');
+
+    const externalSources = container.querySelector('[data-testid="external-sources-config"]');
+    expect(externalSources?.getAttribute('data-initial-focus')).toBe('hooks');
+    expect(externalSources?.getAttribute('data-focus-request-id')).toBe('1');
+
+    await act(async () => {
+      useSettingsStore.getState().openTab('external-sources', 'hooks');
+    });
+    expect(externalSources?.getAttribute('data-focus-request-id')).toBe('2');
   });
 
   it('renders the lazy voice input config tab', async () => {

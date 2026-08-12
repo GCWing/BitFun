@@ -10,6 +10,13 @@ export function featureReferencesDependency(feature, depName) {
   );
 }
 
+export function featureReferencesOptionalDependencyOwner(feature, depName) {
+  return Boolean(
+    featureReferencesDependency(feature, depName)
+      || feature?.refs.some((reference) => reference.startsWith(`${depName}?/`)),
+  );
+}
+
 export function featureReferencesFeature(feature, featureName) {
   return Boolean(feature && feature.refs.includes(featureName));
 }
@@ -17,7 +24,7 @@ export function featureReferencesFeature(feature, featureName) {
 export function unexpectedDependencyOwnerFeatures(features, dependency) {
   return [...features.entries()].filter(
     ([featureName, feature]) =>
-      featureReferencesDependency(feature, dependency.depName)
+      featureReferencesOptionalDependencyOwner(feature, dependency.depName)
       && !dependency.ownerFeatures.includes(featureName),
   );
 }

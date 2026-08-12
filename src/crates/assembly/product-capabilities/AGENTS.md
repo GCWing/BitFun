@@ -17,6 +17,11 @@ concrete runtime execution.
   feature group facts, service capability facts, runtime service availability
   checks, tool provider group id selection, and harness provider descriptor
   selection.
+- `ProductToolPlan` is the assembly-owned authority for the exact tool feature
+  owners requested by one runtime. Provider groups preserve registration order;
+  they are not feature unions. The Agent Runtime baseline plan selects only
+  `Basic` and `AgentControl`, while delivery profiles select their reviewed
+  product plan explicitly.
 - `ProductAssembler` may validate explicit profile input and return immutable
   runtime parts; it must not create concrete services or product state.
 - `ProductCoreDependencyMode::ExplicitCoreCapabilityClosure` records that an

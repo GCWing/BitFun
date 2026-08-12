@@ -559,6 +559,10 @@ impl ChatState {
         self.worktree_control_available = available;
     }
 
+    pub(crate) fn worktree_control_available(&self) -> bool {
+        self.worktree_control_available
+    }
+
     pub(crate) fn branch_label(&self) -> String {
         let execution_target = self
             .workspace_binding

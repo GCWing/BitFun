@@ -84,7 +84,7 @@ use bitfun_agent_runtime::deep_review::FocusedReviewAssignment;
 use bitfun_agent_runtime::output_surface::{
     supports_inline_markdown_images_for_source, TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY,
 };
-use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+use bitfun_agent_runtime::permission::{AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY};
 use bitfun_agent_runtime::remote_file_delivery::{
     needs_computer_links_for_source, remote_file_delivery_reminder,
     TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
@@ -94,12 +94,13 @@ use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_events::{ToolEventData, ToolEventIdentity};
 use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_runtime_ports::{
-    agent_workspace_references_from_metadata, AgentMessageWorkspaceReferencesRequest,
-    AgentSessionComposerUpdate, AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind,
-    AgentThreadGoalDeliveryRequest, AgentWorkspaceReference, AgentWorkspaceReferenceKind,
-    AgentWorkspaceReferenceSearchEntry, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, DelegationPolicy, PermissionDelegationContext,
-    PermissionRuntimeCeiling, RemoteExecPort, SessionStoragePathRequest,
+    agent_workspace_references_from_metadata, resolve_permission_mode,
+    AgentMessageWorkspaceReferencesRequest, AgentSessionComposerUpdate,
+    AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
+    AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferenceSearchEntry,
+    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DelegationPolicy,
+    PermissionDelegationContext, PermissionMode, PermissionModeLayers, PermissionRuntimeCeiling,
+    RemoteExecPort, ResolvedPermissionMode, SessionStoragePathRequest,
     SessionStoragePathResolution, SessionStorePort, SubagentContextMode, TerminalPort, ThreadGoal,
     ThreadGoalContinuationPlan, ThreadGoalStatus,
 };
@@ -1235,56 +1236,104 @@ impl ConversationCoordinator {
         let path_buf = PathBuf::from(workspace_path);
         let workspace_id = Self::resolve_workspace_id_for_config(config).await;
 
-        let identity =
-            crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
-                workspace_path,
-                config.remote_connection_id.as_deref(),
-                config.remote_ssh_host.as_deref(),
-            )
-            .await?;
+        #[cfg(not(feature = "remote-workspace"))]
+        {
+            let has_remote_metadata = config
+                .remote_connection_id
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+                || config
+                    .remote_ssh_host
+                    .as_deref()
+                    .is_some_and(|value| !value.trim().is_empty());
+            if has_remote_metadata {
+                let identity =
+                    crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
+                        workspace_path,
+                        config.remote_connection_id.as_deref(),
+                        config.remote_ssh_host.as_deref(),
+                    )
+                    .await?;
+                let connection_id = identity.remote_connection_id.clone()?;
+                let connection_name = config
+                    .remote_ssh_host
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(&connection_id)
+                    .to_string();
+                return Some(
+                    WorkspaceBinding::new_remote(
+                        workspace_id,
+                        path_buf,
+                        connection_id,
+                        connection_name,
+                        identity,
+                    )
+                    .with_execution_target(config.execution_target.clone()),
+                );
+            }
 
-        if let Some(rid) = identity.remote_connection_id.as_deref() {
-            // Try to look up the connection by the session's stored ID first.
-            let lookup =
+            let mut binding = WorkspaceBinding::new(workspace_id, path_buf);
+            if let Some(project_workspace_path) = config.project_workspace_path.as_deref() {
+                binding = binding.with_project_root_path(PathBuf::from(project_workspace_path));
+            }
+            binding = binding.with_execution_target(config.execution_target.clone());
+            return Some(binding);
+        }
+
+        #[cfg(feature = "remote-workspace")]
+        {
+            let identity =
+                crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
+                    workspace_path,
+                    config.remote_connection_id.as_deref(),
+                    config.remote_ssh_host.as_deref(),
+                )
+                .await?;
+
+            if let Some(rid) = identity.remote_connection_id.as_deref() {
+                // Try to look up the connection by the session's stored ID first.
+                let lookup =
                 crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
                     workspace_path,
                     Some(rid),
                 )
                 .await;
 
-            // If the stored connection_id does not resolve to a registered
-            // workspace, attempt a path-only lookup.  This covers the case
-            // where the user changed the SSH port: the old connection_id is
-            // no longer registered, but the same remote path is now bound to
-            // a new connection with the updated port.
-            let (effective_rid, entry) = if lookup.is_some() {
-                (rid.to_string(), lookup)
-            } else {
-                let path_entry =
-                    crate::service::remote_ssh::workspace_state::lookup_remote_connection(
-                        workspace_path,
-                    )
-                    .await;
-                if let Some(ref pe) = path_entry {
-                    log::info!(
+                // If the stored connection_id does not resolve to a registered
+                // workspace, attempt a path-only lookup.  This covers the case
+                // where the user changed the SSH port: the old connection_id is
+                // no longer registered, but the same remote path is now bound to
+                // a new connection with the updated port.
+                let (effective_rid, entry) = if lookup.is_some() {
+                    (rid.to_string(), lookup)
+                } else {
+                    let path_entry =
+                        crate::service::remote_ssh::workspace_state::lookup_remote_connection(
+                            workspace_path,
+                        )
+                        .await;
+                    if let Some(ref pe) = path_entry {
+                        log::info!(
                         "Session connection_id {} not registered for workspace {}; remapping to {}",
                         rid,
                         workspace_path,
                         pe.connection_id
                     );
-                    (pe.connection_id.clone(), path_entry)
-                } else {
-                    (rid.to_string(), lookup)
-                }
-            };
+                        (pe.connection_id.clone(), path_entry)
+                    } else {
+                        (rid.to_string(), lookup)
+                    }
+                };
 
-            let connection_name = entry
-                .map(|e| e.connection_name)
-                .unwrap_or_else(|| effective_rid.clone());
+                let connection_name = entry
+                    .map(|e| e.connection_name)
+                    .unwrap_or_else(|| effective_rid.clone());
 
-            // Re-resolve identity with the effective connection_id so the
-            // session storage path is correct.
-            let effective_identity =
+                // Re-resolve identity with the effective connection_id so the
+                // session storage path is correct.
+                let effective_identity =
                 crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
                     workspace_path,
                     Some(&effective_rid),
@@ -1293,47 +1342,55 @@ impl ConversationCoordinator {
                 .await
                 .unwrap_or(identity);
 
-            let binding = WorkspaceBinding::new_remote(
-                workspace_id.clone(),
-                path_buf,
-                effective_rid,
-                connection_name,
-                effective_identity,
-            );
+                let binding = WorkspaceBinding::new_remote(
+                    workspace_id.clone(),
+                    path_buf,
+                    effective_rid,
+                    connection_name,
+                    effective_identity,
+                );
 
-            return Some(binding);
+                return Some(binding);
+            }
+
+            let mut binding = WorkspaceBinding::new(workspace_id, path_buf);
+            if let Some(project_workspace_path) = config.project_workspace_path.as_deref() {
+                binding = binding.with_project_root_path(PathBuf::from(project_workspace_path));
+            }
+            binding = binding.with_execution_target(config.execution_target.clone());
+
+            Some(binding)
         }
-
-        let mut binding = WorkspaceBinding::new(workspace_id, path_buf);
-        if let Some(project_workspace_path) = config.project_workspace_path.as_deref() {
-            binding = binding.with_project_root_path(PathBuf::from(project_workspace_path));
-        }
-        binding = binding.with_execution_target(config.execution_target.clone());
-
-        Some(binding)
     }
 
     async fn build_session_config_for_workspace(
         workspace_path: String,
         model_id: Option<String>,
     ) -> SessionConfig {
-        let remote_entry =
-            crate::service::remote_ssh::workspace_state::lookup_remote_connection(&workspace_path)
-                .await;
-
-        let mut config = SessionConfig {
+        let config = SessionConfig {
             workspace_path: Some(workspace_path),
             model_id,
             ..SessionConfig::default()
         };
 
-        if let Some(entry) = remote_entry {
-            config.remote_connection_id = Some(entry.connection_id);
-            if !entry.ssh_host.trim().is_empty() {
-                config.remote_ssh_host = Some(entry.ssh_host);
+        #[cfg(feature = "remote-workspace")]
+        {
+            let mut config = config;
+            let remote_entry =
+                crate::service::remote_ssh::workspace_state::lookup_remote_connection(
+                    config.workspace_path.as_deref().unwrap_or_default(),
+                )
+                .await;
+            if let Some(entry) = remote_entry {
+                config.remote_connection_id = Some(entry.connection_id);
+                if !entry.ssh_host.trim().is_empty() {
+                    config.remote_ssh_host = Some(entry.ssh_host);
+                }
             }
+            return config;
         }
 
+        #[cfg(not(feature = "remote-workspace"))]
         config
     }
 
@@ -1346,51 +1403,60 @@ impl ConversationCoordinator {
         let binding = binding.as_ref()?;
 
         if binding.is_remote() {
-            let manager =
-                match crate::service::remote_ssh::workspace_state::get_remote_workspace_manager() {
+            #[cfg(not(feature = "remote-workspace"))]
+            return None;
+
+            #[cfg(feature = "remote-workspace")]
+            {
+                let manager =
+                    match crate::service::remote_ssh::workspace_state::get_remote_workspace_manager(
+                    ) {
+                        Some(m) => m,
+                        None => {
+                            log::warn!(
+                            "build_workspace_services: RemoteWorkspaceStateManager not initialized"
+                        );
+                            return None;
+                        }
+                    };
+                let ssh_manager = match manager.get_ssh_manager().await {
                     Some(m) => m,
                     None => {
                         log::warn!(
-                            "build_workspace_services: RemoteWorkspaceStateManager not initialized"
+                            "build_workspace_services: SSH manager not available in state manager"
                         );
                         return None;
                     }
                 };
-            let ssh_manager = match manager.get_ssh_manager().await {
-                Some(m) => m,
-                None => {
-                    log::warn!(
-                        "build_workspace_services: SSH manager not available in state manager"
-                    );
-                    return None;
-                }
-            };
-            let file_service = match manager.get_file_service().await {
-                Some(f) => f,
-                None => {
-                    log::warn!(
-                        "build_workspace_services: File service not available in state manager"
-                    );
-                    return None;
-                }
-            };
-            let connection_id = match binding.connection_id() {
-                Some(id) => id.to_string(),
-                None => {
-                    log::warn!("build_workspace_services: No connection_id in workspace binding");
-                    return None;
-                }
-            };
-            log::info!(
-                "build_workspace_services: Built remote services for connection_id={}",
-                connection_id
-            );
-            Some(crate::agentic::workspace::remote_workspace_services(
-                connection_id,
-                file_service,
-                ssh_manager,
-                binding.root_path_string(),
-            ))
+                let file_service = match manager.get_file_service().await {
+                    Some(f) => f,
+                    None => {
+                        log::warn!(
+                            "build_workspace_services: File service not available in state manager"
+                        );
+                        return None;
+                    }
+                };
+                let connection_id = match binding.connection_id() {
+                    Some(id) => id.to_string(),
+                    None => {
+                        log::warn!(
+                            "build_workspace_services: No connection_id in workspace binding"
+                        );
+                        return None;
+                    }
+                };
+                log::info!(
+                    "build_workspace_services: Built remote services for connection_id={}",
+                    connection_id
+                );
+                Some(crate::agentic::workspace::remote_workspace_services(
+                    connection_id,
+                    file_service,
+                    ssh_manager,
+                    binding.root_path_string(),
+                ))
+            }
         } else {
             Some(crate::agentic::workspace::local_workspace_services(
                 binding.root_path_string(),
@@ -3646,6 +3712,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     child_context.insert(key.to_string(), value.to_string());
                 }
             }
+            // The delegated child runs under the same resolved mode as the
+            // submission that triggered it, so resolve the same three layers
+            // here instead of letting the child fall back to the global
+            // default. The parent runtime ceiling is applied separately and
+            // still bounds the child.
+            let delegated_permission_mode = resolve_submission_permission_mode(
+                permission_mode_from_metadata(Some(&user_message_metadata)),
+                self.session_manager
+                    .get_session(&session_id)
+                    .and_then(|session| session.config.permission_mode),
+                default_permission_mode_from_global_config().await,
+            );
+            child_context.insert(
+                PERMISSION_MODE_CONTEXT_KEY.to_string(),
+                delegated_permission_mode.mode.as_str().to_string(),
+            );
             let request = SubagentExecutionRequest {
                 task_description: prompt.clone(),
                 context_mode: SubagentContextMode::Fresh,
@@ -5723,6 +5805,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 auto_approve_ask.to_string(),
             );
         }
+        // Resolve the permission mode once per submission. Downstream rounds and
+        // delegated subagents read this value instead of re-resolving the layers
+        // with partial context, so a mid-turn configuration or session change
+        // cannot split one turn across two modes.
+        let submission_permission_mode = resolve_submission_permission_mode(
+            permission_mode_from_metadata(user_message_metadata.as_ref()),
+            session.config.permission_mode,
+            default_permission_mode_from_global_config().await,
+        );
+        context_vars.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            submission_permission_mode.mode.as_str().to_string(),
+        );
         if needs_computer_links_for_source(submission_policy.trigger_source) {
             context_vars.insert(
                 TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY.to_string(),
@@ -11744,8 +11839,11 @@ impl ConversationCoordinator {
         };
         let profile_id = crate::agentic::agents::resolve_mode_config_profile_id(agent_type);
         let agent_profile = global_config.ai.agent_profiles.get(profile_id.as_ref());
+        // An explicit user-authored command keeps the stored global preset; the
+        // session mode belongs to agent turns, not to a command the user typed.
         let permission_policy = resolve_effective_permission_policy(
             &global_config,
+            None,
             &project_rules,
             agent_profile,
             None,
@@ -12563,6 +12661,47 @@ fn btw_session_memory_mode(
     }
 }
 
+/// Reads the user-level default permission mode.
+///
+/// Falling back to `Ask` on a config failure keeps an unreadable configuration
+/// from silently widening permissions.
+async fn default_permission_mode_from_global_config() -> PermissionMode {
+    match crate::service::config::get_global_config_service().await {
+        Ok(service) => service
+            .get_config(None)
+            .await
+            .map(|config: crate::service::config::types::GlobalConfig| {
+                PermissionMode::from_config(&config.tool_permissions)
+            })
+            .unwrap_or(PermissionMode::Ask),
+        Err(_) => PermissionMode::Ask,
+    }
+}
+
+/// Resolves the mode one submission runs with: `turn -> session -> global`.
+///
+/// The result is written into the execution context once so every round, tool
+/// call, and delegated subagent of this turn reads the same decision.
+fn resolve_submission_permission_mode(
+    turn_override: Option<PermissionMode>,
+    session_mode: Option<PermissionMode>,
+    global_default: PermissionMode,
+) -> ResolvedPermissionMode {
+    resolve_permission_mode(
+        PermissionModeLayers::new(global_default)
+            .with_session(session_mode)
+            .with_turn(turn_override),
+    )
+}
+
+/// Reads a one-off mode selection carried by a single submission.
+fn permission_mode_from_metadata(metadata: Option<&serde_json::Value>) -> Option<PermissionMode> {
+    metadata
+        .and_then(|value| value.get(PERMISSION_MODE_CONTEXT_KEY))
+        .and_then(serde_json::Value::as_str)
+        .and_then(PermissionMode::parse)
+}
+
 async fn new_session_memory_mode_from_global_config() -> SessionMemoryMode {
     match crate::service::config::get_global_config_service().await {
         Ok(service) => {
@@ -12648,8 +12787,9 @@ mod tests {
         lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
-        resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
-        resolve_subagent_model_selection, runtime_port_error_preserving_message,
+        permission_mode_from_metadata, resolve_agent_session_create_created_by,
+        resolve_agent_submission_turn_id, resolve_subagent_model_selection,
+        resolve_submission_permission_mode, runtime_port_error_preserving_message,
         runtime_session_summary, runtime_tool_restrictions_for_session_lifetime,
         runtime_transcript_messages_from_turns, session_storage_workspace_locator,
         turn_review_manifest_for_agent, validate_required_lineage_turns_settled,
@@ -12692,6 +12832,48 @@ mod tests {
     use bitfun_agent_runtime::permission::PermissionRequestManager;
     use bitfun_runtime_services::test_support::FakeRuntimePort;
     use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
+
+    #[cfg(not(feature = "remote-workspace"))]
+    #[tokio::test]
+    async fn remote_session_metadata_never_falls_back_to_a_local_workspace_binding() {
+        let binding = ConversationCoordinator::build_workspace_binding(&SessionConfig {
+            workspace_path: Some("/srv/remote-project".to_string()),
+            remote_connection_id: Some("ssh-user@example.test:22".to_string()),
+            remote_ssh_host: Some("example.test".to_string()),
+            ..SessionConfig::default()
+        })
+        .await
+        .expect("remote metadata must remain a remote binding");
+
+        assert!(binding.is_remote());
+        assert_eq!(binding.connection_id(), Some("ssh-user@example.test:22"));
+        assert!(
+            ConversationCoordinator::build_workspace_services(&Some(binding))
+                .await
+                .is_none(),
+            "a binary without remote-workspace must not create local services for a remote binding"
+        );
+
+        for incomplete in [
+            SessionConfig {
+                workspace_path: Some("/srv/remote-project".to_string()),
+                remote_connection_id: Some("ssh-user@example.test:22".to_string()),
+                ..SessionConfig::default()
+            },
+            SessionConfig {
+                workspace_path: Some("/srv/remote-project".to_string()),
+                remote_ssh_host: Some("example.test".to_string()),
+                ..SessionConfig::default()
+            },
+        ] {
+            assert!(
+                ConversationCoordinator::build_workspace_binding(&incomplete)
+                    .await
+                    .is_none(),
+                "incomplete remote metadata must fail closed instead of becoming local"
+            );
+        }
+    }
 
     #[test]
     fn external_command_delegation_uses_the_resolved_primary_binding() {
@@ -12970,6 +13152,7 @@ mod tests {
         model_runtime_binding_fingerprint, AIConfig, AIModelConfig,
     };
     use crate::service::config::{AgentModelDefaultsConfig, SubagentModelSelection};
+    #[cfg(feature = "remote-workspace")]
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use crate::service::session::{
         DialogTurnData, DialogTurnKind, SessionMetadata, SessionRelationship, SessionStatus,
@@ -12985,9 +13168,9 @@ mod tests {
         AgentSessionCreateRequest, AgentSessionManagementPort, AgentSessionRenameRequest,
         AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionSource,
         AgentThreadGoalGetRequest, AgentThreadGoalManagementPort, AgentUserShellCommandPort,
-        AgentUserShellCommandRequest, DelegationPolicy, PermissionEffect, PermissionRule,
-        PermissionRuntimeCeiling, PortErrorKind, SessionStoragePathRequest, SubagentContextMode,
-        ThreadGoal, ThreadGoalStatus,
+        AgentUserShellCommandRequest, DelegationPolicy, PermissionEffect, PermissionMode,
+        PermissionRule, PermissionRuntimeCeiling, PortErrorKind, SessionStoragePathRequest,
+        SubagentContextMode, ThreadGoal, ThreadGoalStatus,
     };
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -13019,6 +13202,7 @@ mod tests {
         assert!(!gate.try_cancel());
     }
 
+    #[cfg(feature = "external-sources")]
     #[tokio::test]
     async fn manual_compaction_fails_closed_before_admission_when_external_agent_is_unavailable() {
         let (coordinator, session_manager) = test_persistent_coordinator();
@@ -13062,6 +13246,7 @@ mod tests {
         assert!(session.dialog_turn_ids.is_empty());
     }
 
+    #[cfg(feature = "external-sources")]
     #[tokio::test]
     async fn explicit_agent_change_switches_owner_but_case_variant_does_not() {
         let (_coordinator, session_manager) = test_persistent_coordinator();
@@ -13369,6 +13554,61 @@ mod tests {
             )
             .as_deref(),
             Some("/projects/other")
+        );
+    }
+
+    #[test]
+    fn submission_permission_mode_prefers_turn_then_session_then_global() {
+        use bitfun_runtime_ports::PermissionModeSource;
+
+        let global_only = resolve_submission_permission_mode(None, None, PermissionMode::Ask);
+        assert_eq!(global_only.mode, PermissionMode::Ask);
+        assert_eq!(global_only.source, PermissionModeSource::GlobalDefault);
+
+        // A session override isolates this session from the global default.
+        let session_scoped = resolve_submission_permission_mode(
+            None,
+            Some(PermissionMode::FullAccess),
+            PermissionMode::Ask,
+        );
+        assert_eq!(session_scoped.mode, PermissionMode::FullAccess);
+        assert_eq!(session_scoped.source, PermissionModeSource::Session);
+
+        // A one-off submission selection wins over the session's own mode,
+        // including when it tightens the session back down.
+        let turn_scoped = resolve_submission_permission_mode(
+            Some(PermissionMode::Ask),
+            Some(PermissionMode::FullAccess),
+            PermissionMode::AutoApprove,
+        );
+        assert_eq!(turn_scoped.mode, PermissionMode::Ask);
+        assert_eq!(turn_scoped.source, PermissionModeSource::Turn);
+    }
+
+    #[test]
+    fn submission_metadata_mode_accepts_surface_aliases_and_rejects_unknown_values() {
+        assert_eq!(
+            permission_mode_from_metadata(Some(&serde_json::json!({
+                "permission_mode": "auto",
+            }))),
+            Some(PermissionMode::AutoApprove)
+        );
+        assert_eq!(
+            permission_mode_from_metadata(Some(&serde_json::json!({
+                "permission_mode": "full_access",
+            }))),
+            Some(PermissionMode::FullAccess)
+        );
+        assert_eq!(
+            permission_mode_from_metadata(Some(&serde_json::json!({
+                "permission_mode": "elevated",
+            }))),
+            None
+        );
+        assert_eq!(permission_mode_from_metadata(None), None);
+        assert_eq!(
+            permission_mode_from_metadata(Some(&serde_json::json!({ "other": "ask" }))),
+            None
         );
     }
 
@@ -14644,6 +14884,7 @@ mod tests {
         assert!(!bot_router.contains("initialize_snapshot_manager_for_workspace"));
     }
 
+    #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn workspace_open_owner_resolves_known_remote_before_ownership_gate() {
         let root = tempfile::tempdir().expect("test root");
@@ -15996,6 +16237,7 @@ mod tests {
         assert!(error.message.starts_with("Validation error:"));
     }
 
+    #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn thread_goal_management_keeps_cold_remote_workspaces_isolated() {
         let (coordinator, session_manager) = test_coordinator();
@@ -16177,6 +16419,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn thread_goal_mutations_use_loaded_remote_workspace_facts() {
         let (coordinator, session_manager) = test_persistent_coordinator();
@@ -16496,6 +16739,7 @@ mod tests {
         assert!(error.message.starts_with("Validation error:"));
     }
 
+    #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn subagent_session_config_preserves_registered_remote_workspace_identity() {
         let manager = init_remote_workspace_manager();

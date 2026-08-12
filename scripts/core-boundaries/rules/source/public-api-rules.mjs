@@ -1077,6 +1077,23 @@ export const externalSourceCorePublicApiEntries = [
     true,
   ),
   ...[
+    'unacknowledged_external_ecosystems',
+    'acknowledge_external_ecosystems',
+  ].map((symbol) => ({
+    symbol,
+    owner: 'bitfun-core external source composition facade',
+    consumer: 'Desktop external-source host adapter and Web settings navigation',
+    verification:
+      'core acknowledgement persistence and execution-domain scoping tests, Desktop command contract tests, and Web settings awareness tests',
+    p0: 'first-discovery notification for external-source settings',
+    contractSlice: contractSlices.externalSourceCommandContract,
+    wireImpact: true,
+    rationale:
+      'the Web settings notification must remain stable across refreshes and workspace changes without treating acknowledgement as permission or policy',
+    exit:
+      'remove only if Web settings no longer persists first-discovery awareness or a reviewed owner-scoped replacement preserves the same workspace isolation',
+  })),
+  ...[
     'ExternalToolActivationState',
     'ExternalToolApprovalRequest',
     'ExternalToolCapability',

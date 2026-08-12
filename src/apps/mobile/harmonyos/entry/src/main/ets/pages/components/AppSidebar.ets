@@ -5,43 +5,44 @@ import { ConversationSource } from '../navigation/AppRouteContract';
 import { ConversationSourceSwitcher } from './ConversationSourceSwitcher';
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SessionActionPresentation, SessionActionSurface } from './SessionActionSurface';
-import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../state/SessionActionPolicy';
+import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../policy/SessionActionPolicy';
 import { SessionDetailsView } from './SessionDetailsView';
+import { SidebarGlyph } from './SidebarGlyphs';
 
-@Component
+@ComponentV2
 export struct AppSidebar {
-  @Prop sessions: RemoteSession[] = [];
-  @Prop pinnedSessionId: string = '';
-  @Prop selectedSessionId: string = '';
-  @Prop connectionState: string = 'idle';
-  @Prop activeSection: string = 'chat';
-  @Prop accountUserId: string = '';
-  @Prop showConversationSourceSwitcher: boolean = false;
-  @Prop showCollapseButton: boolean = false;
-  @Prop showViewSettingsButton: boolean = false;
-  @Prop showCustomContent: boolean = false;
-  @Prop conversationSource: ConversationSource = ConversationSource.General;
-  onClose: () => void = () => {};
-  onNewChat: () => void = () => {};
-  onEnterCode: () => void = () => {};
-  onConversationSource: (source: ConversationSource) => void = (_source: ConversationSource) => {};
-  onCollapse: () => void = () => {};
-  onOpenViewSettings: () => void = () => {};
-  onSearchQueryChange: (query: string) => void = (_query: string) => {};
-  onOpenSettings: () => void = () => {};
-  onOpenAccount: () => void = () => {};
-  onOpenSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
-  onArchiveSession: (session: RemoteSession, archived: boolean) => void =
+  @Param sessions: RemoteSession[] = [];
+  @Param pinnedSessionId: string = '';
+  @Param selectedSessionId: string = '';
+  @Param connectionState: string = 'idle';
+  @Param activeSection: string = 'chat';
+  @Param accountUserId: string = '';
+  @Param showConversationSourceSwitcher: boolean = false;
+  @Param showCollapseButton: boolean = false;
+  @Param showViewSettingsButton: boolean = false;
+  @Param showCustomContent: boolean = false;
+  @Param conversationSource: ConversationSource = ConversationSource.General;
+  @Event onClose: () => void = () => {};
+  @Event onNewChat: () => void = () => {};
+  @Event onEnterCode: () => void = () => {};
+  @Event onConversationSource: (source: ConversationSource) => void = (_source: ConversationSource) => {};
+  @Event onCollapse: () => void = () => {};
+  @Event onOpenViewSettings: () => void = () => {};
+  @Event onSearchQueryChange: (query: string) => void = (_query: string) => {};
+  @Event onOpenSettings: () => void = () => {};
+  @Event onOpenAccount: () => void = () => {};
+  @Event onOpenSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
+  @Event onArchiveSession: (session: RemoteSession, archived: boolean) => void =
     (_session: RemoteSession, _archived: boolean) => {};
-  onExportSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
-  onDeleteSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
-  @State activeActionSessionId: string = '';
-  @State showSessionActionSheet: boolean = false;
-  @State detailsSessionId: string = '';
-  @State showSessionDetails: boolean = false;
-  @State showSearch: boolean = false;
-  @State sessionSearchQuery: string = '';
-  @State archivedSessionsExpanded: boolean = false;
+  @Event onExportSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
+  @Event onDeleteSession: (session: RemoteSession) => void = (_session: RemoteSession) => {};
+  @Local activeActionSessionId: string = '';
+  @Local showSessionActionSheet: boolean = false;
+  @Local detailsSessionId: string = '';
+  @Local showSessionDetails: boolean = false;
+  @Local showSearch: boolean = false;
+  @Local sessionSearchQuery: string = '';
+  @Local archivedSessionsExpanded: boolean = false;
   /**
    * Session content for the current conversation source. The shell around it
    * (header, source switcher, content origin, footer) stays identical for every
@@ -180,7 +181,7 @@ export struct AppSidebar {
       Row({ space: 6 }) {
         if (this.showViewSettingsButton) {
           Stack({ alignContent: Alignment.Center }) {
-            this.MoreDotsGlyph()
+            SidebarGlyph({ kind: 'session_more' })
           }
           .width(38)
           .height(38)
@@ -195,7 +196,7 @@ export struct AppSidebar {
         }
 
         Stack({ alignContent: Alignment.Center }) {
-          this.SearchGlyph()
+          SidebarGlyph({ kind: 'search' })
         }
         .width(38)
         .height(38)
@@ -282,7 +283,7 @@ export struct AppSidebar {
   private AuthenticatedFooter() {
     Row() {
       Row({ space: 9 }) {
-        this.EditGlyph()
+        SidebarGlyph({ kind: 'edit' })
         Text(RemoteI18n.t('sidebar.newChat'))
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
@@ -303,7 +304,7 @@ export struct AppSidebar {
       Blank()
 
       Stack({ alignContent: Alignment.Center }) {
-        this.SettingsGlyph()
+        SidebarGlyph({ kind: 'settings' })
       }
         .width(46)
         .height(46)
@@ -338,7 +339,7 @@ export struct AppSidebar {
   @Builder
   NavRow(label: string, isActive: boolean, action: () => void) {
     Row({ space: 14 }) {
-      this.RemoteGlyph()
+      SidebarGlyph({ kind: 'remote', connectionState: this.connectionState })
       Text(label)
         .fontSize(18)
         .fontWeight(FontWeight.Bold)
@@ -477,20 +478,9 @@ export struct AppSidebar {
   }
 
   @Builder
-  private MoreDotsGlyph() {
-    Row({ space: 3 }) {
-      Text('').width(3.5).height(3.5).backgroundColor(MUTED).borderRadius(2)
-      Text('').width(3.5).height(3.5).backgroundColor(MUTED).borderRadius(2)
-      Text('').width(3.5).height(3.5).backgroundColor(MUTED).borderRadius(2)
-    }
-    .height(8)
-    .alignItems(VerticalAlign.Center)
-  }
-
-  @Builder
   private SessionMoreButton(session: RemoteSession) {
     Stack({ alignContent: Alignment.Center }) {
-      this.MoreDotsGlyph()
+      SidebarGlyph({ kind: 'session_more' })
     }
     .width(34)
     .height(40)
@@ -556,205 +546,6 @@ export struct AppSidebar {
     }
     .width('100%')
     .padding({ top: 8, bottom: 8 })
-  }
-
-  @Builder
-  RemoteGlyph() {
-    Stack({ alignContent: Alignment.Center }) {
-      if (this.connectionState === 'connected' || this.connectionState === 'reconnecting') {
-        Image($r('app.media.remote_ref_sidebar_connected'))
-          .width(35)
-          .height(34)
-          .objectFit(ImageFit.Contain)
-          .renderMode(ImageRenderMode.Template)
-          .foregroundColor(INK)
-        Text('')
-          .width(8)
-          .height(8)
-          .backgroundColor(GREEN)
-          .borderRadius(4)
-          .position({ x: 24, y: 22 })
-      } else {
-        Image($r('app.media.remote_logo'))
-          .width(34)
-          .height(34)
-          .objectFit(ImageFit.Contain)
-          .renderMode(ImageRenderMode.Template)
-          .foregroundColor(MUTED)
-      }
-    }
-    .width(35)
-    .height(34)
-  }
-
-  @Builder
-  SearchGlyph() {
-    SymbolGlyph($r('sys.symbol.magnifyingglass'))
-      .fontSize(22)
-      .fontColor([INK])
-      .width(24)
-      .height(24)
-  }
-
-  @Builder
-  NotebookGlyph() {
-    Stack() {
-      Text('')
-        .width(22)
-        .height(24)
-        .borderRadius(5)
-        .border({ width: 1.5, color: INK })
-        .position({ x: 8, y: 5 })
-      Text('')
-        .width(4)
-        .height(4)
-        .borderRadius(2)
-        .backgroundColor(INK)
-        .position({ x: 5, y: 11 })
-      Text('')
-        .width(4)
-        .height(4)
-        .borderRadius(2)
-        .backgroundColor(INK)
-        .position({ x: 5, y: 20 })
-    }
-    .width(34)
-    .height(34)
-  }
-
-  @Builder
-  ClockGlyph() {
-    Stack() {
-      Text('')
-        .width(26)
-        .height(26)
-        .borderRadius(13)
-        .border({ width: 1.5, color: INK })
-        .position({ x: 4, y: 4 })
-      Text('')
-        .width(1.5)
-        .height(9)
-        .backgroundColor(INK)
-        .borderRadius(2)
-        .position({ x: 18, y: 10 })
-      Text('')
-        .width(9)
-        .height(1.5)
-        .backgroundColor(INK)
-        .borderRadius(2)
-        .position({ x: 18, y: 20 })
-    }
-    .width(34)
-    .height(34)
-  }
-
-  @Builder
-  AppsGlyph() {
-    Column({ space: 8 }) {
-      Row({ space: 8 }) {
-        this.AppDot()
-        this.AppDot()
-      }
-      Row({ space: 8 }) {
-        this.AppDot()
-        this.AppDot()
-      }
-    }
-    .width(24)
-    .height(24)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-  }
-
-  @Builder
-  AppDot() {
-    Text('')
-      .width(8)
-      .height(8)
-      .borderRadius(4)
-      .backgroundColor(INK)
-  }
-
-  @Builder
-  CodeFlowerGlyph() {
-    Stack() {
-      Text('')
-        .width(16)
-        .height(16)
-        .borderRadius(8)
-        .border({ width: 1.5, color: INK })
-        .backgroundColor(CARD)
-        .position({ x: 9, y: 1 })
-      Text('')
-        .width(16)
-        .height(16)
-        .borderRadius(8)
-        .border({ width: 1.5, color: INK })
-        .backgroundColor(CARD)
-        .position({ x: 17, y: 9 })
-      Text('')
-        .width(16)
-        .height(16)
-        .borderRadius(8)
-        .border({ width: 1.5, color: INK })
-        .backgroundColor(CARD)
-        .position({ x: 9, y: 17 })
-      Text('')
-        .width(16)
-        .height(16)
-        .borderRadius(8)
-        .border({ width: 1.5, color: INK })
-        .backgroundColor(CARD)
-        .position({ x: 1, y: 9 })
-      Text('')
-        .width(14)
-        .height(14)
-        .borderRadius(7)
-        .backgroundColor(CARD)
-        .position({ x: 10, y: 10 })
-    }
-    .width(34)
-    .height(34)
-  }
-
-  @Builder
-  MoreGlyph() {
-    Row({ space: 5 }) {
-      this.DotGlyph()
-      this.DotGlyph()
-      this.DotGlyph()
-    }
-    .width(30)
-    .height(22)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(VerticalAlign.Center)
-  }
-
-  @Builder
-  DotGlyph() {
-    Text('')
-      .width(5)
-      .height(5)
-      .borderRadius(3)
-      .backgroundColor(INK)
-  }
-
-  @Builder
-  EditGlyph() {
-    SymbolGlyph($r('sys.symbol.square_and_pencil'))
-      .fontSize(22)
-      .fontColor([INK])
-      .width(24)
-      .height(24)
-  }
-
-  @Builder
-  SettingsGlyph() {
-    SymbolGlyph($r('sys.symbol.gearshape'))
-      .fontSize(22)
-      .fontColor([INK])
-      .width(24)
-      .height(24)
   }
 
   private visibleRecentSessions(): RemoteSession[] {

@@ -1,10 +1,12 @@
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { worktreeAPI } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { notificationService } from '@/shared/notification-system';
 import type { Session } from '../types/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
 import { pendingQueueManager } from './flow-chat-manager/PendingQueueModule';
 import type { GoalCommandAction } from './goalCommandParser';
 import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
+import { sessionWorktreeMaterializationPlan } from '../utils/sessionWorktree';
 
 export { isGoalSlashCommand, parseGoalCommand } from './goalCommandParser';
 export type { GoalCommandAction } from './goalCommandParser';
@@ -113,6 +115,39 @@ async function sessionRequestBase(session: Session) {
   };
 }
 
+/**
+ * `/goal` can start backend work without passing through the normal first-message
+ * driver. Materialize the composer's pending worktree choice before any goal
+ * action that can start or steer a turn. For an older session with a stale
+ * pending flag, the plan is intentionally empty and we only clear that flag.
+ */
+async function prepareSessionForGoalTurn(session: Session): Promise<Session> {
+  const sessionId = session.sessionId;
+  const latest = flowChatStore.getState().sessions.get(sessionId) ?? session;
+  if (latest.config.worktreeIsolationRequested === undefined) {
+    return latest;
+  }
+
+  const materialization = sessionWorktreeMaterializationPlan(latest);
+  if (materialization) {
+    const result = await worktreeAPI.bindSession(
+      sessionId,
+      materialization.enabled,
+      globalThis.crypto?.randomUUID?.() ?? `goal-worktree-${Date.now()}`,
+      materialization.projectWorkspacePath,
+    );
+    flowChatStore.updateSessionExecutionTarget(sessionId, {
+      workspacePath: result.workspacePath,
+      projectWorkspacePath: result.projectWorkspacePath,
+      workspaceId: result.workspaceId,
+      executionTarget: result.executionTarget,
+    });
+  }
+
+  flowChatStore.setSessionWorktreeIsolationRequested(sessionId, undefined);
+  return flowChatStore.getState().sessions.get(sessionId) ?? latest;
+}
+
 export async function fetchSessionThreadGoal(
   session: Session
 ): Promise<ThreadGoalSnapshot | null> {
@@ -186,7 +221,12 @@ export async function runGoalCommand(params: GoalCommandParams): Promise<ThreadG
       return snapshot;
     }
     case 'resume': {
-      const goal = await agentAPI.setSessionThreadGoalStatus({ ...base, status: 'active' });
+      const preparedSession = await prepareSessionForGoalTurn(params.session);
+      const preparedBase = await sessionRequestBase(preparedSession);
+      const goal = await agentAPI.setSessionThreadGoalStatus({
+        ...preparedBase,
+        status: 'active',
+      });
       const snapshot = mapGoal(goal);
       syncGoalToStore(params.session.sessionId, snapshot);
       notificationService.success(goal.objective, {
@@ -212,8 +252,10 @@ export async function runGoalCommand(params: GoalCommandParams): Promise<ThreadG
         }
       }
 
+      const preparedSession = await prepareSessionForGoalTurn(params.session);
+      const preparedBase = await sessionRequestBase(preparedSession);
       const activation = await agentAPI.activateSessionGoal({
-        ...base,
+        ...preparedBase,
         userHint: params.action.objective,
       });
 
@@ -289,8 +331,6 @@ export async function saveThreadGoalObjective(
     throw new Error('A workspace is required to use /goal.');
   }
 
-  const base = await sessionRequestBase(session);
-
   if (mode === 'create') {
     return runGoalCommand({
       session,
@@ -309,8 +349,10 @@ export async function saveThreadGoalObjective(
     });
   }
 
+  const preparedSession = await prepareSessionForGoalTurn(session);
+  const preparedBase = await sessionRequestBase(preparedSession);
   const goal = await agentAPI.updateSessionThreadGoalObjective({
-    ...base,
+    ...preparedBase,
     objective: trimmed,
   });
   const snapshot = mapGoal(goal);

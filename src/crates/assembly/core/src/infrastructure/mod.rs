@@ -12,7 +12,7 @@ pub mod events;
 pub mod filesystem;
 #[cfg(feature = "local-storage")]
 pub mod storage;
-#[cfg(feature = "ai-adapter-runtime")]
+#[cfg(all(feature = "ai-adapter-runtime", feature = "subscription-auth"))]
 pub mod subscription_auth;
 
 #[cfg(feature = "ai-adapter-runtime")]

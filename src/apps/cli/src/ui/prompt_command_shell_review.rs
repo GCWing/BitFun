@@ -1,4 +1,4 @@
-use bitfun_core::external_sources::PromptCommandShellReviewPlan;
+use bitfun_product_domains::external_sources::PromptCommandShellReviewPlan;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -161,7 +161,7 @@ impl PromptCommandShellReviewPrompt {
 #[cfg(test)]
 mod tests {
     use super::{PromptCommandShellReviewAction, PromptCommandShellReviewPrompt};
-    use bitfun_core::external_sources::PromptCommandShellReviewPlan;
+    use bitfun_product_domains::external_sources::PromptCommandShellReviewPlan;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn plan(can_remember: bool) -> PromptCommandShellReviewPlan {

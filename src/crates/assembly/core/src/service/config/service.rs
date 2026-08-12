@@ -125,7 +125,7 @@ impl ConfigService {
     /// Atomically replaces one JSON configuration value when its current value
     /// still matches the caller's snapshot. The read, comparison, and persisted
     /// write share the existing manager write lock.
-    #[cfg(any(test, feature = "agent-runtime"))]
+    #[cfg(any(test, feature = "mcp-runtime"))]
     pub(crate) async fn compare_and_set_json_config(
         &self,
         path: &str,

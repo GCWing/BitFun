@@ -1,31 +1,21 @@
 // Boundary rules for source ownership, facades, and required owner content.
 
 export const requiredContentRules = [
-  {
-    path: 'Cargo.toml',
-    reason:
-      'workspace Reqwest defaults must stay transport-only so client owners select one TLS backend explicitly',
-    patterns: [
-      {
-        regex: /^reqwest[ \t]*=[ \t]*\{[ \t]*version[ \t]*=[ \t]*"[^"]+",[ \t]*default-features[ \t]*=[ \t]*false,[ \t]*features[ \t]*=[ \t]*\[[ \t]*"http2",[ \t]*"json",[ \t]*"stream",[ \t]*"multipart",[ \t]*"query",[ \t]*"form"[ \t]*\][ \t]*\}[ \t]*$/m,
-        message:
-          'workspace Reqwest dependency must use the reviewed transport/data feature allowlist',
-      },
-    ],
-  },
   ...[
     'src/apps/cli/Cargo.toml',
     'src/apps/desktop/Cargo.toml',
     'src/crates/adapters/ai-adapters/Cargo.toml',
+    'src/crates/assembly/core/Cargo.toml',
     'src/crates/services/miniapp-market-service/Cargo.toml',
+    'src/crates/services/services-integrations/Cargo.toml',
     'src/crates/services/skin-market-service/Cargo.toml',
   ].map((path) => ({
     path,
-    reason: 'first-party Reqwest client owners must select the repository TLS backend explicitly',
+    reason: 'first-party Reqwest consumers must inherit the workspace-owned compatible version',
     patterns: [
       {
-        regex: /^reqwest\s*=\s*\{\s*workspace\s*=\s*true,\s*features\s*=\s*\[\s*"rustls"\s*\]\s*\}/m,
-        message: 'Reqwest client dependency must explicitly enable rustls',
+        regex: /^reqwest\s*=\s*\{\s*workspace\s*=\s*true(?:\s*,|\s*\})/m,
+        message: 'Reqwest dependency must use workspace = true',
       },
     ],
   })),
@@ -230,7 +220,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/services/services-core/tests/storage_owner_contracts.rs',
+    path: 'src/crates/services/services-core/tests/storage_owner_contracts/storage_owner_contracts.rs',
     reason:
       'services-core local storage owner must keep persistence, cleanup, and token usage behavior contracts',
     patterns: [
@@ -442,7 +432,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/contracts/core-types/tests/lsp_contracts.rs',
+    path: 'src/crates/contracts/core-types/tests/core_type_contracts/lsp_contracts.rs',
     reason:
       'core-types must keep LSP manifest serialization, default-value, and placeholder regressions',
     patterns: [
@@ -1523,7 +1513,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/product-capabilities/tests/product_capabilities.rs',
+    path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_capabilities.rs',
     reason:
       'product-capabilities tests must protect product shape facts, runtime service gap reporting, and legacy harness routing',
     patterns: [
@@ -1554,7 +1544,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
+    path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/plugin_product_shape.rs',
     reason:
       'product-capabilities plugin shape tests must protect P0 plugin-capable profiles, non-P0 rejection, default availability reasons, and runtime handoff',
     patterns: [
@@ -1581,7 +1571,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+    path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_sdk_assembly.rs',
     reason:
       'product-capabilities must prove product runtime parts can feed the SDK runtime without bitfun-core',
     patterns: [
@@ -3926,20 +3916,36 @@ export const requiredContentRules = [
         message: 'core ai-adapter-runtime feature must explicitly enable the optional dependency',
       },
       {
+        regex: /subscription-auth = \["bitfun-ai-adapters\?\/subscription-auth"\]/,
+        message: 'core subscription-auth modifier must not activate the optional AI adapter runtime by itself',
+      },
+      {
+        regex: /document-read = \["tool-runtime\?\/document-read"\]/,
+        message: 'core document-read modifier must not activate the optional tool runtime by itself',
+      },
+      {
         regex: /agent-runtime = \[[^\]]*"ai-adapter-runtime"[^\]]*\]/,
         message: 'core agent-runtime assembly must explicitly opt into AI adapter runtime',
       },
       {
-        regex: /product-domains = \[[^\]]*"ai-adapter-runtime"[^\]]*\]/,
-        message: 'core product-domain facade must explicitly opt into AI adapter runtime while concrete AI adapters remain optional',
+        regex: /agent-runtime = \[[^\]]*"bitfun-product-domains\/external-sources"[^\]]*\]/,
+        message: 'core agent-runtime must select only the external-subagent contract slice it uses',
       },
       {
-        regex: /product-domains = \[[^\]]*"bitfun-services-integrations\/function-agents"[^\]]*\]/,
-        message: 'core product-domain facade must enable the function-agent service owner feature it imports',
+        regex: /function-agents = \[[^\]]*"ai-adapter-runtime"[^\]]*\]/,
+        message: 'core function-agent facade must explicitly opt into AI adapter runtime while concrete AI adapters remain optional',
       },
       {
-        regex: /product-domains = \[[^\]]*"bitfun-services-integrations\/miniapp-runtime"[^\]]*\]/,
-        message: 'core product-domain facade must enable the MiniApp service owner feature it imports',
+        regex: /function-agents = \[[^\]]*"bitfun-services-integrations\/function-agents"[^\]]*\]/,
+        message: 'core function-agent facade must enable the function-agent service owner feature it imports',
+      },
+      {
+        regex: /tools-miniapp = \[[^\]]*"bitfun-services-integrations\/miniapp-runtime"[^\]]*\]/,
+        message: 'core MiniApp tool owner must enable the MiniApp runtime service feature it imports',
+      },
+      {
+        regex: /tools-miniapp = \[[^\]]*"bitfun-product-domains\/miniapp"[^\]]*\]/,
+        message: 'core MiniApp tool owner must select its product-domain slice explicitly',
       },
       {
         regex: /canvas-runtime = \[[^\]]*"bitfun-services-integrations\/canvas-runtime"[^\]]*\]/,
@@ -3948,9 +3954,9 @@ export const requiredContentRules = [
       },
       {
         regex:
-          /canvas-runtime = \[[\s\S]*"product-domains"[\s\S]*"bitfun-services-integrations\/canvas-runtime"[\s\S]*\]/,
+          /canvas-runtime = \[[\s\S]*"dep:bitfun-product-domains"[\s\S]*"bitfun-services-integrations\/canvas-runtime"[\s\S]*\]/,
         message:
-          'core canvas-runtime feature must explicitly aggregate product domains and the canvas service owner feature',
+          'core canvas-runtime feature must explicitly aggregate the domain contract and canvas service owner',
       },
       {
         regex:
@@ -3969,18 +3975,12 @@ export const requiredContentRules = [
         message: 'core tool-packs feature must explicitly enable the optional dependency',
       },
       {
-        regex: /"bitfun-tool-packs\/product-full"/,
-        message: 'core product-full must explicitly enable tool pack product features',
-      },
-      {
-        regex:
-          /agent-runtime = \[[\s\S]*"bitfun-services-integrations\/mcp"[\s\S]*"bitfun-services-integrations\/remote-connect"[\s\S]*"bitfun-services-integrations\/workspace-search"[\s\S]*\]/,
-        message:
-          'core agent-runtime must directly assemble the MCP, Remote Connect, and workspace-search services it exposes',
+        regex: /tools-basic = \[[^\]]*"bitfun-tool-packs\/basic"[^\]]*\]/,
+        message: 'core basic tools owner must explicitly enable the matching tool pack feature',
       },
       {
         regex: /"dep:bitfun-product-domains"/,
-        message: 'core product-domains feature must explicitly enable the optional dependency',
+        message: 'core capability owners must explicitly enable the optional product-domain dependency',
       },
       {
         regex: /"dep:bitfun-product-capabilities"/,
@@ -3988,8 +3988,8 @@ export const requiredContentRules = [
           'core product-capabilities feature must explicitly enable the optional dependency',
       },
       {
-        regex: /"bitfun-product-domains\/product-full"/,
-        message: 'core product-full must explicitly enable product-domain features',
+        regex: /"bitfun-product-domains\/function-agents"/,
+        message: 'core function-agent owner must explicitly select its product-domain slice',
       },
     ],
   },
@@ -4007,12 +4007,12 @@ export const requiredContentRules = [
         message: 'external subagent product assembly must stay behind external-sources',
       },
       {
-        regex: /#\[cfg\(feature = "product-domains"\)\]\s*pub mod function_agents\b/s,
-        message: 'function-agent product domain facade must stay behind product-domains',
+        regex: /#\[cfg\(feature = "function-agents"\)\]\s*pub mod function_agents\b/s,
+        message: 'function-agent product domain facade must stay behind function-agents',
       },
       {
-        regex: /#\[cfg\(feature = "product-domains"\)\]\s*pub mod miniapp\b/s,
-        message: 'MiniApp product domain facade must stay behind product-domains',
+        regex: /#\[cfg\(feature = "tools-miniapp"\)\]\s*pub mod miniapp\b/s,
+        message: 'MiniApp product facade must stay behind its tool capability owner',
       },
       {
         regex: /#\[cfg\(feature = "agent-runtime"\)\]\s*pub\(crate\) mod service_agent_runtime\b/s,
@@ -4059,8 +4059,8 @@ export const requiredContentRules = [
         message: 'AI client runtime must stay behind ai-adapter-runtime',
       },
       {
-        regex: /#\[cfg\(feature = "ai-adapter-runtime"\)\]\s*pub mod subscription_auth\b/s,
-        message: 'AI subscription auth runtime must stay behind ai-adapter-runtime',
+        regex: /#\[cfg\(all\(feature = "ai-adapter-runtime", feature = "subscription-auth"\)\)\]\s*pub mod subscription_auth\b/s,
+        message: 'AI subscription auth runtime must require both the adapter and credential owners',
       },
       {
         regex: /#\[cfg\(feature = "debug-log"\)\]\s*pub mod debug_log\b/s,
@@ -4100,24 +4100,44 @@ export const requiredContentRules = [
         message: 'git service facade must stay behind its exact feature',
       },
       {
-        regex: /#\[cfg\(feature = "agent-runtime"\)\]\s*pub mod mcp\b/s,
-        message: 'Core MCP product bridge must stay behind agent-runtime',
+        regex: /#\[cfg\(all\(feature = "agent-runtime", feature = "git"\)\)\]\s*pub mod worktree\b/s,
+        message: 'managed worktree service must require both Agent lifecycle and Git owners',
       },
       {
-        regex: /#\[cfg\(feature = "agent-runtime"\)\]\s*pub mod remote_connect\b/s,
-        message: 'Core Remote Connect product bridge must stay behind agent-runtime',
+        regex: /#\[cfg\(all\(feature = "agent-runtime", feature = "git"\)\)\]\s*pub use worktree::WorktreeService\b/s,
+        message: 'managed worktree export must require both Agent lifecycle and Git owners',
+      },
+      {
+        regex: /#\[cfg\(all\(feature = "agent-runtime", feature = "scheduled-jobs"\)\)\]\s*pub mod cron\b/s,
+        message: 'scheduled job service must require both the Agent lifecycle and scheduled-jobs modifier',
+      },
+      {
+        regex: /#\[cfg\(all\(feature = "agent-runtime", feature = "scheduled-jobs"\)\)\]\s*pub use cron::/s,
+        message: 'scheduled job exports must require both the Agent lifecycle and scheduled-jobs modifier',
+      },
+      {
+        regex: /#\[cfg\(all\(not\(feature = "remote-workspace"\), feature = "agent-runtime"\)\)\]\s*#\[path = "remote_ssh_compat.rs"\]\s*pub mod remote_ssh\b/s,
+        message: 'local Agent workspace identity compatibility must stay behind agent-runtime without enabling remote transport',
+      },
+      {
+        regex: /#\[cfg\(feature = "mcp-runtime"\)\]\s*pub mod mcp\b/s,
+        message: 'Core MCP product bridge must stay behind mcp-runtime',
+      },
+      {
+        regex: /#\[cfg\(feature = "remote-connect"\)\]\s*pub mod remote_connect\b/s,
+        message: 'Core Remote Connect product bridge must stay behind remote-connect',
       },
       {
         regex: /#\[cfg\(feature = "review-platform"\)\]\s*pub mod review_platform\b/s,
         message: 'review platform facade must stay behind its exact feature',
       },
       {
-        regex: /#\[cfg\(feature = "agent-runtime"\)\]\s*pub mod search\b/s,
-        message: 'workspace search facade must stay behind agent-runtime',
+        regex: /#\[cfg\(feature = "workspace-search"\)\]\s*pub mod search\b/s,
+        message: 'workspace search facade must stay behind workspace-search',
       },
       {
-        regex: /#\[cfg\(feature = "agent-runtime"\)\]\s*pub use search::/s,
-        message: 'workspace search exports must stay behind agent-runtime',
+        regex: /#\[cfg\(feature = "workspace-search"\)\]\s*pub use search::/s,
+        message: 'workspace search exports must stay behind workspace-search',
       },
       {
         regex: /#\[cfg\(feature = "agent-runtime"\)\]\s*pub mod snapshot\b/s,
@@ -4823,7 +4843,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_contracts.rs',
+    path: 'src/crates/contracts/runtime-ports/tests/runtime_port_contracts/plugin_runtime_contracts.rs',
     reason:
       'runtime-ports plugin contract tests must cover typed envelopes, candidate effects, and disabled/projection-only behavior',
     patterns: [
@@ -4880,7 +4900,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_diagnostics_contracts.rs',
+    path: 'src/crates/contracts/runtime-ports/tests/runtime_port_contracts/plugin_runtime_diagnostics_contracts.rs',
     reason:
       'runtime-ports plugin diagnostics contract tests must cover permission prompts, diagnostics, and quarantine facts',
     patterns: [
@@ -7209,6 +7229,10 @@ export const requiredContentRules = [
         message: 'missing product registry creation adapter',
       },
       {
+        regex: /\bunavailable_feature_groups\b/,
+        message: 'product registry materialization must fail closed when a planned group was not compiled',
+      },
+      {
         regex: /\bmaterialize_tool\b/,
         message: 'missing concrete tool materialization boundary',
       },
@@ -7496,6 +7520,10 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn enabled_feature_groups\b/,
         message: 'missing tool-pack compile-time feature metadata helper',
+      },
+      {
+        regex: /\bpub fn unavailable_feature_groups\b/,
+        message: 'missing tool-pack planned-versus-compiled validation helper',
       },
       {
         regex: /\bpub struct ToolProviderGroupPlan\b/,
@@ -8042,9 +8070,71 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/interfaces/app-server/src/management/service.rs',
+    reason:
+      'App Server owns the concrete management adapter while Hosts retain explicit service injection and capability scope',
+    patterns: [
+      {
+        regex: /\bpub struct AppManagementService\b/,
+        message: 'missing concrete App Server management service',
+      },
+      {
+        regex: /\bimpl AppManagementService\b/,
+        message: 'missing concrete App Server management implementation',
+      },
+      {
+        regex: /\bAppManagementCapabilities::available\(\)/,
+        message: 'missing App Server management capability projection',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/cli/src/shared_tui_backend.rs',
+    reason:
+      'Shared TUI must retain local Model, Skill, Subagent, and MCP compatibility management without expanding Runtime IPC or leaking owners into controllers',
+    patterns: [
+      {
+        regex: /management: Arc<AppManagementService>/,
+        message: 'missing injected Shared TUI App Server management service',
+      },
+      {
+        regex: /\bfn management_service\b/,
+        message: 'missing Shared TUI management capability gate',
+      },
+      {
+        regex: /\bfn set_management_scope_from_binding\b/,
+        message: 'missing Shared TUI Remote workspace compatibility guard',
+      },
+      {
+        regex: /\.list_models\(ListModelsRequest \{\}\)/,
+        message: 'missing Shared TUI model compatibility delegation',
+      },
+      {
+        regex: /\.list_skills\(request\)/,
+        message: 'missing Shared TUI skill compatibility delegation',
+      },
+      {
+        regex: /\.list_subagents\(request\)/,
+        message: 'missing Shared TUI subagent compatibility delegation',
+      },
+      {
+        regex: /\.list_mcp_servers\(request\)/,
+        message: 'missing Shared TUI MCP compatibility delegation',
+      },
+      {
+        regex: /\bshared_management_capabilities_follow_the_local_management_service\b/,
+        message: 'missing Shared TUI management capability regression',
+      },
+      {
+        regex: /\bremote_workspace_cannot_use_the_local_management_service\b/,
+        message: 'missing Shared TUI Remote management scope regression',
+      },
+    ],
+  },
+  {
     path: 'src/apps/cli/src/ui/startup.rs',
     reason:
-      'CLI mode-aware subagent management remains an app-layer product surface until agent registry migration has CLI equivalence coverage',
+      'CLI subagent presentation remains app-local while mode-aware reads and mutations cross the typed TUI backend boundary',
     patterns: [
       {
         regex: /\bfn show_available_subagent_list\b/,
@@ -8055,16 +8145,16 @@ export const requiredContentRules = [
         message: 'missing CLI subagent config surface',
       },
       {
-        regex: /\bget_subagents_for_query\b/,
-        message: 'missing CLI mode-scoped subagent query',
+        regex: /\bagent\.list_subagents\b/,
+        message: 'missing typed CLI mode-scoped subagent query',
       },
       {
-        regex: /\bSubagentQueryContext\b/,
-        message: 'missing CLI subagent query context',
+        regex: /\bSubagentSummary\b/,
+        message: 'missing secret-safe CLI subagent read projection',
       },
       {
-        regex: /\bupdate_subagent_override\b/,
-        message: 'missing CLI subagent availability update path',
+        regex: /\bagent\s*\.set_subagent_enabled\b/,
+        message: 'missing typed CLI subagent availability update path',
       },
     ],
   },
@@ -8332,8 +8422,23 @@ export const requiredContentRules = [
         message: 'missing ssh-remote gate for real remote search implementation',
       },
       {
-        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use bitfun_services_integrations::remote_ssh::workspace_search::disabled/s,
-        message: 'missing service-owned disabled remote search export',
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use remote_disabled::/s,
+        message: 'missing dependency-light disabled remote search export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/search/remote_disabled.rs',
+    reason:
+      'Core local-search builds must retain an explicit remote-search unsupported contract without compiling SSH services',
+    patterns: [
+      {
+        regex: /Remote SSH search is disabled; enable the `ssh-remote` feature/,
+        message: 'missing explicit disabled remote search diagnostic',
+      },
+      {
+        regex: /\bremote_workspace_search_service_for_path\b/,
+        message: 'missing disabled remote workspace search resolver',
       },
     ],
   },

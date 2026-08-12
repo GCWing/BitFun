@@ -141,7 +141,10 @@ fn doctor_rejects_incomplete_e2e_storage_roots() {
 
 #[test]
 fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
-    const ACCOUNT_SYNC: &str = include_str!("../../src/account_sync.rs");
+    const ACCOUNT_ADAPTER: &str = include_str!("../../src/account.rs");
+    const ACCOUNT_RUNTIME: &str = include_str!(
+        "../../../../crates/assembly/core/src/service/remote_connect/account_runtime.rs"
+    );
     const STARTUP_PAGE: &str = include_str!("../../src/ui/startup.rs");
     const PEER_BOOTSTRAP: &str = include_str!("../../src/peer_host/bootstrap.rs");
     const PEER_STATE: &str = include_str!("../../src/peer_host/state.rs");
@@ -151,7 +154,7 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
         include_str!("../../../../crates/assembly/core/src/product_runtime/runtime_services.rs");
 
     for (path, source) in [
-        ("account_sync.rs", ACCOUNT_SYNC),
+        ("account.rs", ACCOUNT_ADAPTER),
         ("ui/startup.rs", STARTUP_PAGE),
         ("peer_host/bootstrap.rs", PEER_BOOTSTRAP),
         ("peer_host/state.rs", PEER_STATE),
@@ -165,12 +168,19 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
     }
 
     assert!(
-        ACCOUNT_SYNC.contains("CoreAgentRuntimeCompatibility"),
-        "account sync must receive the narrow Core compatibility facade"
+        ACCOUNT_RUNTIME.contains("pub struct AccountRuntime")
+            && ACCOUNT_ADAPTER.contains("impl AccountRuntimeHost for CliAccountRoutingHost")
+            && ACCOUNT_ADAPTER.contains("impl AccountSessionBackupPort"),
+        "account state must live in the shared owner while CLI keeps narrow Host adapters"
     );
     assert!(
-        STARTUP_PAGE.contains("CoreAgentRuntimeCompatibility"),
-        "startup must pass the initialized Core compatibility facade to account sync"
+        STARTUP_PAGE.contains("self.agent.account_snapshot()")
+            && STARTUP_PAGE.contains("self.agent.account_login(")
+            && STARTUP_PAGE.contains("self.agent.account_finalize_login(")
+            && STARTUP_PAGE.contains("self.agent.settings_sync_start(")
+            && STARTUP_PAGE.contains("self.agent.settings_sync_snapshot()")
+            && STARTUP_PAGE.contains("self.agent.settings_sync_cancel()"),
+        "startup account and settings-sync operations must use the typed TUI client"
     );
     assert!(
         !CORE_RUNTIME_SERVICES.contains("pub fn persistence_manager"),
@@ -197,6 +207,26 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
             && PEER_SESSION_COMMANDS.contains("local_workspace_snapshot")
             && PEER_SNAPSHOT_COMMANDS.contains("local_workspace_snapshot"),
         "Peer Host local snapshot operations must consume the injected owner port"
+    );
+}
+
+#[test]
+fn embedded_account_management_adapts_the_shared_runtime_directly() {
+    const EMBEDDED_APP_SERVER: &str = include_str!("../../src/embedded_app_server.rs");
+    const CLI_MAIN: &str = include_str!("../../src/main.rs");
+    const MANAGEMENT: &str =
+        include_str!("../../../../crates/interfaces/app-server/src/management.rs");
+    const MANAGEMENT_SERVICE: &str =
+        include_str!("../../../../crates/interfaces/app-server/src/management/service.rs");
+
+    assert!(
+        EMBEDDED_APP_SERVER.contains("runtime.account_runtime().clone()")
+            && MANAGEMENT_SERVICE.contains("Option<Arc<AccountRuntime>>")
+            && MANAGEMENT_SERVICE.contains("login_with_credentials")
+            && !MANAGEMENT.contains("AccountManagementHost")
+            && !CLI_MAIN.contains("mod tui_account_management")
+            && !CLI_MAIN.contains("mod account_sync"),
+        "Embedded account management must adapt AccountRuntime without a management Host trait"
     );
 }
 
@@ -277,8 +307,8 @@ fn interactive_tui_session_client_uses_only_the_app_server_boundary() {
         TUI_BACKEND.contains("pub(crate) trait TuiBackend")
             && TUI_BACKEND.contains("AppServerClient")
             && !TUI_BACKEND.contains("bitfun_agent_runtime")
-            && !TUI_BACKEND.contains("bitfun_core::")
-            && TUI_CLIENT.contains("use crate::tui_backend::{TuiBackend, TuiBackendError};"),
+            && !TUI_BACKEND.contains("use bitfun_core::")
+            && TUI_CLIENT.contains("use crate::tui_backend::{TuiBackend, TuiBackendError"),
         "TuiBackend must remain CLI-local and depend only on App Server client contracts"
     );
     for backend_operation in [
@@ -398,18 +428,13 @@ fn interactive_tui_agent_operations_stay_behind_app_server_backend() {
             && SHARED_RUNTIME.contains(".update_session_model(request)"),
         "Shared model updates must reuse the Runtime port through the private IPC adapter"
     );
-    let shared_command_path = CHAT_COMMANDS
-        .split_once("fn handle_command(")
-        .expect("handle_command")
-        .1;
     assert!(
-        shared_command_path
-            .find("if self.agent.is_shared()")
-            .unwrap_or(usize::MAX)
-            < shared_command_path
-                .find("external_source_conflict_choices")
-                .expect("external source call"),
-        "Shared slash commands must branch before initializing Embedded external-source owners"
+        TUI_CLIENT.contains(".external_source_snapshot(ExternalSourceSnapshotRequest")
+            && TUI_CLIENT.contains(".external_source_control(ExternalSourceControlRequest")
+            && TUI_CLIENT.contains(".external_source_review(ExternalSourceReviewRequest")
+            && CHAT_COMMANDS.contains("self.agent.external_source_snapshot(false)")
+            && !CHAT_COMMANDS.contains("bitfun_core::external_sources"),
+        "TUI external-source controllers must route reads and mutations through the typed backend"
     );
     assert!(
         CHAT_COMMANDS.matches("if self.agent.is_shared()").count() >= 3
@@ -422,6 +447,161 @@ fn interactive_tui_agent_operations_stay_behind_app_server_backend() {
         CLI_MAIN.contains("Cli::command()") && CLI_MAIN.contains("McpAction::Import"),
         "interactive composition changes must preserve product-aware CLI identity and MCP import"
     );
+}
+
+#[test]
+fn interactive_tui_hook_management_stays_behind_the_typed_backend() {
+    const CHAT_HOOKS: &str = include_str!("../../src/modes/chat/external_hooks.rs");
+    const CHAT_NATIVE_HOOKS: &str = include_str!("../../src/modes/chat/native_hooks.rs");
+    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
+    const SHARED_TUI_BACKEND: &str = include_str!("../../src/shared_tui_backend.rs");
+
+    for operation in [
+        "external_hook_snapshot",
+        "external_hook_plan",
+        "external_hook_apply",
+        "external_hook_mutate",
+        "native_hook_overview",
+    ] {
+        assert!(
+            TUI_CLIENT.contains(operation) && CHAT_HOOKS.contains(&format!(".{operation}(")),
+            "TUI Hook operation {operation} must route through TuiAgentClient"
+        );
+    }
+    for direct_owner in [
+        "bitfun_core::external_hooks",
+        "bitfun_core::native_hooks",
+        "bitfun_core::external_hook_import",
+        "crate::hook_import::mutate",
+    ] {
+        assert!(
+            !CHAT_HOOKS.contains(direct_owner) && !CHAT_NATIVE_HOOKS.contains(direct_owner),
+            "TUI Hook controllers must not reference {direct_owner}"
+        );
+    }
+    assert!(
+        CHAT_HOOKS.contains("expected_revision")
+            && SHARED_TUI_BACKEND.contains("NATIVE_HOOKS_CAPABILITY")
+            && SHARED_TUI_BACKEND.contains("EXTERNAL_HOOKS_CAPABILITY")
+            && SHARED_TUI_BACKEND.contains("does not fall back"),
+        "Hook mutations must preserve stale-revision fencing and remote fail-closed routing"
+    );
+    assert!(
+        !CHAT_HOOKS.contains("post_call_hooks")
+            && !CHAT_NATIVE_HOOKS.contains("post_call_hooks")
+            && !TUI_CLIENT.contains("post_call_hooks"),
+        "compiled-in post-call Hooks must not enter the TUI management API"
+    );
+}
+
+#[test]
+fn interactive_tui_worktrees_stay_behind_the_typed_backend() {
+    const WORKTREE_CONTROLLER: &str = include_str!("../../src/modes/chat/worktree.rs");
+    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
+    const TUI_BACKEND: &str = include_str!("../../src/tui_backend.rs");
+    const SHARED_BACKEND: &str = include_str!("../../src/shared_tui_backend.rs");
+    const WORKTREE_MANAGEMENT: &str =
+        include_str!("../../../../crates/interfaces/app-server/src/management/worktree.rs");
+    const EMBEDDED_APP_SERVER: &str = include_str!("../../src/embedded_app_server.rs");
+    const CLI_MAIN: &str = include_str!("../../src/main.rs");
+
+    for direct_owner in [
+        "GitService",
+        "WorktreeService",
+        "WorktreeSessionBindingRequest",
+        "bitfun_core::",
+        "self.agent.is_shared()",
+    ] {
+        assert!(
+            !WORKTREE_CONTROLLER.contains(direct_owner),
+            "Worktree controller must not reference {direct_owner}"
+        );
+    }
+    for operation in [
+        "worktree_repository_status",
+        "worktree_bind_session",
+        "worktree_release_session",
+    ] {
+        assert!(
+            WORKTREE_CONTROLLER.contains(operation)
+                && TUI_CLIENT.contains(operation)
+                && TUI_BACKEND.contains(operation)
+                && SHARED_BACKEND.contains(operation),
+            "Worktree operation {operation} must stay behind the typed TUI backend"
+        );
+    }
+    assert!(
+        WORKTREE_MANAGEMENT.contains("WorktreeService::bind_session")
+            && EMBEDDED_APP_SERVER.contains("load_for_local_host")
+            && !EMBEDDED_APP_SERVER.contains("LocalWorktreeManagement")
+            && !EMBEDDED_APP_SERVER.contains("tui_worktree_management"),
+        "the Embedded Host must enable the App Server's built-in local Worktree management"
+    );
+    assert!(
+        SHARED_BACKEND.contains("WORKTREES_CAPABILITY")
+            && SHARED_BACKEND.contains("does not fall back")
+            && CLI_MAIN.contains("AppManagementService::load().await?"),
+        "Shared Worktree management must fail closed"
+    );
+}
+
+#[test]
+fn phase4_tui_management_boundaries_have_zero_legacy_owner_budget() {
+    const CHAT_ACCOUNT: &str = include_str!("../../src/modes/chat/account.rs");
+    const CHAT_HOOKS: &str = include_str!("../../src/modes/chat/external_hooks.rs");
+    const CHAT_HOOK_REVIEW: &str = include_str!("../../src/modes/chat/external_review.rs");
+    const CHAT_PROVIDER_MODELS: &str = include_str!("../../src/modes/chat/provider_models.rs");
+    const CHAT_WORKTREE: &str = include_str!("../../src/modes/chat/worktree.rs");
+    const STARTUP: &str = include_str!("../../src/ui/startup.rs");
+    const BOUNDARY_RULES: &str =
+        include_str!("../../../../../scripts/core-boundaries/rules/tui-boundary-rules.mjs");
+
+    for (path, source, marker) in [
+        ("chat/account.rs", CHAT_ACCOUNT, "crate::account::"),
+        ("chat/account.rs", CHAT_ACCOUNT, "crate::account_sync::"),
+        ("chat/external_hooks.rs", CHAT_HOOKS, "bitfun_core::"),
+        ("chat/external_review.rs", CHAT_HOOK_REVIEW, "bitfun_core::"),
+        (
+            "chat/provider_models.rs",
+            CHAT_PROVIDER_MODELS,
+            "crate::account_sync::",
+        ),
+        ("chat/worktree.rs", CHAT_WORKTREE, "bitfun_core::"),
+        ("ui/startup.rs", STARTUP, "bitfun_core::"),
+        ("ui/startup.rs", STARTUP, "CoreAgentRuntimeCompatibility"),
+        ("ui/startup.rs", STARTUP, "crate::account::"),
+        ("ui/startup.rs", STARTUP, "crate::account_sync::"),
+    ] {
+        assert!(
+            !source.contains(marker),
+            "{path} must not reference {marker}"
+        );
+    }
+
+    for budget in [
+        "'src/apps/cli/src/modes/chat/account.rs': {",
+        "'src/apps/cli/src/modes/chat/external_hooks.rs': { 'bitfun_core::': 0 }",
+        "'src/apps/cli/src/modes/chat/external_review.rs': { 'bitfun_core::': 0 }",
+        "'src/apps/cli/src/modes/chat/provider_models.rs': {",
+        "'src/apps/cli/src/modes/chat/worktree.rs': { 'bitfun_core::': 0 },",
+        "'src/apps/cli/src/ui/startup.rs': {",
+    ] {
+        assert!(
+            BOUNDARY_RULES.contains(budget),
+            "missing zero-budget rule: {budget}"
+        );
+    }
+    for zero_budget in [
+        "'crate::account::': 0",
+        "'crate::account_sync::': 0",
+        "'bitfun_core::': 0",
+        "CoreAgentRuntimeCompatibility: 0",
+    ] {
+        assert!(
+            BOUNDARY_RULES.contains(zero_budget),
+            "Phase 4 migrated owner budget must stay at zero: {zero_budget}"
+        );
+    }
 }
 
 #[test]

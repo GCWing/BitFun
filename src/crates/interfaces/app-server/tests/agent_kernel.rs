@@ -44,10 +44,12 @@ use bitfun_app_server::schema::{
     UpdateSessionModeResponse, UpdateSessionModelMessage, UpdateSessionModelResponse,
 };
 use bitfun_app_server::{transport, AppClient, AppServer, BitfunAppRuntime, BitfunAppServer};
+use bitfun_app_server_protocol::agent as protocol_agent;
 use bitfun_app_server_protocol::app::{ClientInfo, HealthStatus, InitializeRequest};
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::event::{AgentEventNotification, EventStream, SyncEventsRequest};
-use bitfun_app_server_protocol::tui;
+use bitfun_app_server_protocol::session as protocol_session;
+use bitfun_app_server_protocol::workspace as protocol_workspace;
 use bitfun_app_server_protocol::PROTOCOL_VERSION;
 use bitfun_runtime_ports as ports;
 use tokio::task::LocalSet;
@@ -778,7 +780,7 @@ async fn phase2_sync_aggregates_authoritative_session_state() {
                 .await
                 .expect("connect app server client");
             let response = client
-                .sync_session(tui::SyncSessionRequest {
+                .sync_session(protocol_session::SyncSessionRequest {
                     workspace_path: "/requested/workspace".to_string(),
                     session_id: "session-1".to_string(),
                     include_internal: true,
@@ -791,11 +793,11 @@ async fn phase2_sync_aggregates_authoritative_session_state() {
             assert_eq!(response.session.session_name, "Phase 2");
             assert!(matches!(
                 response.state,
-                tui::SessionRuntimeState::Processing {
+                protocol_session::SessionRuntimeState::Processing {
                     ref current_turn_id,
                     ref phase,
                 } if current_turn_id == "turn-active"
-                    && matches!(phase, tui::SessionProcessingPhase::Streaming)
+                    && matches!(phase, protocol_session::SessionProcessingPhase::Streaming)
             ));
             assert_eq!(response.transcript.messages.len(), 1);
             assert_eq!(response.transcript.session_id, "session-1");
@@ -825,18 +827,20 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                 .await
                 .expect("connect app server client");
             let steer = client
-                .steer_turn(tui::SteerTurnRequest(ports::AgentDialogSteerRequest {
-                    session_id: "session-1".to_string(),
-                    turn_id: "turn-active".to_string(),
-                    content: "keep going".to_string(),
-                    display_content: None,
-                }))
+                .steer_turn(protocol_agent::SteerTurnRequest(
+                    ports::AgentDialogSteerRequest {
+                        session_id: "session-1".to_string(),
+                        turn_id: "turn-active".to_string(),
+                        content: "keep going".to_string(),
+                        display_content: None,
+                    },
+                ))
                 .await
                 .expect("steer turn");
             assert_eq!(steer.steering_id, "steering-1");
 
             let shell = client
-                .run_user_shell_command(tui::RunUserShellCommandRequest(
+                .run_user_shell_command(protocol_agent::RunUserShellCommandRequest(
                     ports::AgentUserShellCommandRequest {
                         session_id: "session-1".to_string(),
                         turn_id: "shell-turn".to_string(),
@@ -848,14 +852,14 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
             assert_eq!(shell.0.turn_id, "shell-turn");
 
             client
-                .submit_user_answers(tui::SubmitUserAnswersRequest {
+                .submit_user_answers(protocol_agent::SubmitUserAnswersRequest {
                     tool_id: "ask-1".to_string(),
                     answers: serde_json::json!({"answer": "yes"}),
                 })
                 .await
                 .expect("submit user answers");
             let local_turn = client
-                .record_local_command_turn(tui::RecordLocalCommandTurnRequest(
+                .record_local_command_turn(protocol_session::RecordLocalCommandTurnRequest(
                     ports::AgentLocalCommandTurnRecordRequest {
                         session_id: "session-1".to_string(),
                         content: "usage: 12 tokens".to_string(),
@@ -869,7 +873,7 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
             assert_eq!(local_turn.0.turn_id, "local-turn");
 
             client
-                .compact_session(tui::CompactSessionRequest(
+                .compact_session(protocol_session::CompactSessionRequest(
                     ports::AgentSessionCompactionRequest {
                         session_id: "session-1".to_string(),
                         turn_id: "compact-turn".to_string(),
@@ -878,26 +882,30 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                 .await
                 .expect("compact session");
             let undone = client
-                .undo_session(tui::UndoSessionRequest(ports::AgentSessionRevertRequest {
-                    workspace_path: "/workspace".to_string(),
-                    session_id: "session-1".to_string(),
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
-                }))
+                .undo_session(protocol_session::UndoSessionRequest(
+                    ports::AgentSessionRevertRequest {
+                        workspace_path: "/workspace".to_string(),
+                        session_id: "session-1".to_string(),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                    },
+                ))
                 .await
                 .expect("undo session");
             assert!(undone.0.changed);
             client
-                .redo_session(tui::RedoSessionRequest(ports::AgentSessionRevertRequest {
-                    workspace_path: "/workspace".to_string(),
-                    session_id: "session-1".to_string(),
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
-                }))
+                .redo_session(protocol_session::RedoSessionRequest(
+                    ports::AgentSessionRevertRequest {
+                        workspace_path: "/workspace".to_string(),
+                        session_id: "session-1".to_string(),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                    },
+                ))
                 .await
                 .expect("redo session");
             client
-                .reload_context(tui::ReloadContextRequest(
+                .reload_context(protocol_session::ReloadContextRequest(
                     ports::AgentContextReloadRequest {
                         session_id: "session-1".to_string(),
                         target: ports::AgentContextReloadTarget::All,
@@ -933,19 +941,21 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
                 .await
                 .expect("connect app server client");
             let usage = client
-                .session_usage(tui::SessionUsageRequest(ports::AgentSessionUsageRequest {
-                    session_id: "session-1".to_string(),
-                    workspace_path: Some("/workspace".to_string()),
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
-                    include_hidden_subagents: false,
-                }))
+                .session_usage(protocol_session::SessionUsageRequest(
+                    ports::AgentSessionUsageRequest {
+                        session_id: "session-1".to_string(),
+                        workspace_path: Some("/workspace".to_string()),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                        include_hidden_subagents: false,
+                    },
+                ))
                 .await
                 .expect("session usage");
             assert_eq!(usage.0.session_id, "session-1");
 
             client
-                .wait_for_settlement(tui::WaitForSettlementRequest(
+                .wait_for_settlement(protocol_session::WaitForSettlementRequest(
                     ports::AgentTurnSettlementRequest {
                         session_id: "session-1".to_string(),
                         turn_id: "turn-active".to_string(),
@@ -955,7 +965,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
                 .await
                 .expect("wait for settlement");
             let search = client
-                .search_workspace_references(tui::SearchWorkspaceReferencesRequest(
+                .search_workspace_references(protocol_workspace::SearchWorkspaceReferencesRequest(
                     ports::AgentWorkspaceReferenceSearchRequest {
                         session_id: "session-1".to_string(),
                         query: "lib".to_string(),
@@ -966,7 +976,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
                 .expect("search references");
             assert_eq!(search.0.entries[0].path, "src/lib.rs");
             let references = client
-                .message_references(tui::MessageReferencesRequest(
+                .message_references(protocol_workspace::MessageReferencesRequest(
                     ports::AgentMessageWorkspaceReferencesRequest {
                         session_id: "session-1".to_string(),
                         message_id: "message-1".to_string(),
@@ -976,7 +986,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
                 .expect("message references");
             assert_eq!(references.0[0].path, "src/lib.rs");
             let lineage = client
-                .session_lineage(tui::SessionLineageRequest(
+                .session_lineage(protocol_session::SessionLineageRequest(
                     ports::AgentSessionLineageRequest {
                         workspace_path: "/workspace".to_string(),
                         anchor_session_id: "session-1".to_string(),
@@ -988,7 +998,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
                 .expect("lineage");
             assert_eq!(lineage.0.unwrap().root_session_id, "session-1");
             let inspection = client
-                .inspect_lineage(tui::InspectLineageRequest(
+                .inspect_lineage(protocol_session::InspectLineageRequest(
                     ports::AgentSessionLineageTranscriptRequest {
                         workspace_path: "/workspace".to_string(),
                         root_session_id: "session-1".to_string(),
@@ -1002,7 +1012,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
                 .expect("inspect lineage");
             assert_eq!(inspection.0.active_turn_id.as_deref(), Some("turn-active"));
             let cancelled = client
-                .cancel_lineage(tui::CancelLineageRequest(
+                .cancel_lineage(protocol_session::CancelLineageRequest(
                     ports::AgentSessionLineageCancellationRequest {
                         workspace_path: "/workspace".to_string(),
                         root_session_id: "session-1".to_string(),

@@ -37,10 +37,17 @@ impl TeamMode {
                 "Glob".to_string(),
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
+                "get_goal".to_string(),
+                "create_goal".to_string(),
+                "update_goal".to_string(),
                 "TodoWrite".to_string(),
                 "AskUserQuestion".to_string(),
                 "Git".to_string(),
                 "ControlHub".to_string(),
+                // Every mode that carries ControlHub needs Cron: ControlHub's
+                // `wait` tells the agent to schedule long or repeating work
+                // here instead of holding the turn open.
+                "Cron".to_string(),
                 "GetFileDiff".to_string(),
             ],
         }

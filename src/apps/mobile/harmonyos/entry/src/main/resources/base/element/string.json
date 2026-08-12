@@ -23,6 +23,10 @@
     {
       "name": "permission_microphone_reason",
       "value": "用于在会话详情页将语音转成待发送文字。"
+    },
+    {
+      "name": "permission_distributed_datasync_reason",
+      "value": "用于把 BitFun 账号授权给同账号下的手表，免去在手表上输入密码。"
     }
   ]
 }

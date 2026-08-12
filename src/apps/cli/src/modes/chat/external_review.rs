@@ -1,7 +1,6 @@
 // Pure projections and review text derived from the external-source catalog.
 use bitfun_product_domains::external_source_control::{
     ExternalSourceDesiredState, ExternalSourceEffectiveStatus, ExternalSourceRecoveryActionV1,
-    ExternalSourceSupportState,
 };
 
 fn external_command_projections(
@@ -36,7 +35,7 @@ fn external_command_projections(
                     .iter()
                     .find(|source| source.record.key == entry.definition.id.source)?;
                 let native_candidate_id = format!("bitfun.cli:{}", action.id);
-                let external_candidate_id = entry.definition.id.stable_key();
+                let external_candidate_id = entry.candidate_id.clone();
                 let conflict_key = native_prompt_command_conflict_key(
                     source.record.execution_domain_id.as_str(),
                     &entry.definition.name,
@@ -63,7 +62,7 @@ fn external_command_projections(
                 action_id: format!("external-command:{}", entry.definition.name),
                 command_name: entry.definition.name.clone(),
                 invocation_alias: format!("/{}", entry.definition.name),
-                candidate_id: entry.definition.id.stable_key(),
+                candidate_id: entry.candidate_id.clone(),
                 content_version: entry.definition.content_version.clone(),
                 description: format!("{} · {}", entry.definition.description, ecosystem),
                 restricted,
@@ -166,7 +165,7 @@ fn external_command_counts(snapshot: &ExternalSourceCatalogSnapshot) -> (usize, 
 fn external_integration_policy_lines(snapshot: &ExternalSourceCatalogSnapshot) -> Vec<String> {
     let policy = &snapshot.integration_policy;
     if policy.status
-        == bitfun_core::external_sources::ExternalIntegrationPolicyStatus::IncompatibleSchema
+        == bitfun_product_domains::external_integration_policy::ExternalIntegrationPolicyStatus::IncompatibleSchema
     {
         return vec![
             format!(
@@ -262,7 +261,7 @@ enum ExternalControlUiAction {
     Show,
     Refresh,
     SetSafeMode(bool),
-    SetSourceEnabled { source_key: String, enabled: bool },
+    SetSourceEnabled { source_index: usize, enabled: bool },
 }
 
 fn parse_external_control_action(arguments: &str) -> Result<ExternalControlUiAction, String> {
@@ -271,137 +270,106 @@ fn parse_external_control_action(arguments: &str) -> Result<ExternalControlUiAct
         ["refresh"] => Ok(ExternalControlUiAction::Refresh),
         ["safe-mode", "on"] => Ok(ExternalControlUiAction::SetSafeMode(true)),
         ["safe-mode", "off"] => Ok(ExternalControlUiAction::SetSafeMode(false)),
-        ["source", "enable", source_key] => Ok(ExternalControlUiAction::SetSourceEnabled {
-            source_key: (*source_key).to_string(),
+        ["enable", source_number] => Ok(ExternalControlUiAction::SetSourceEnabled {
+            source_index: parse_positive_index(Some(source_number), "extension number")?,
             enabled: true,
         }),
-        ["source", "disable", source_key] => Ok(ExternalControlUiAction::SetSourceEnabled {
-            source_key: (*source_key).to_string(),
+        ["disable", source_number] => Ok(ExternalControlUiAction::SetSourceEnabled {
+            source_index: parse_positive_index(Some(source_number), "extension number")?,
             enabled: false,
         }),
-        _ => Err("usage: /extensions [status | refresh | safe-mode on | safe-mode off | source enable <source-key> | source disable <source-key>]".to_string()),
+        _ => Err(
+            "usage: /extensions [status | refresh | enable <number> | disable <number>]"
+                .to_string(),
+        ),
     }
 }
 
-fn external_control_review_text(
-    control: &bitfun_core::external_sources::ExternalSourceControlSnapshotV1,
+fn external_control_status_text(
+    control: &bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
 ) -> String {
-    use bitfun_core::external_sources::{ExternalCapabilityKindV1, ExternalSourceRuntimeState};
-
-    let mut lines = vec![
-        "External integrations".to_string(),
-        String::new(),
-        format!(
-            "Safe Mode: {}",
-            if control.safe_mode { "on" } else { "off" }
-        ),
-        format!("Execution domain: {}", control.execution_domain_id),
-        format!("Generation: {}", control.refresh_generation),
-        format!("Sources: {}", control.sources.len()),
-    ];
+    let mut lines = vec!["Extensions".to_string(), String::new()];
     if control.safe_mode {
-        lines.push(
-            "New external Tool, Agent, and MCP calls are blocked; calls already in progress are not cancelled."
-                .to_string(),
-        );
-        lines.push(
-            "Safe Mode applies only to this Host process and execution domain; restarting the Host turns it off."
-                .to_string(),
-        );
+        lines.push("External access is paused. Resume: /extensions safe-mode off".to_string());
+        lines.push(String::new());
     }
-    for source in &control.sources {
-        let desired = match source.desired {
-            ExternalSourceDesiredState::Enabled => "enabled",
-            ExternalSourceDesiredState::Disabled => "disabled",
-        };
+
+    if control.sources.is_empty() {
+        lines.push("No extensions found.".to_string());
+    }
+    for (index, source) in control.sources.iter().enumerate() {
         let effective = match source.effective_status {
-            ExternalSourceEffectiveStatus::Discovering => "discovering",
-            ExternalSourceEffectiveStatus::Disabled => "disabled",
-            ExternalSourceEffectiveStatus::ReviewRequired => "review required",
-            ExternalSourceEffectiveStatus::Conflict => "conflict",
-            ExternalSourceEffectiveStatus::Active => "active",
-            ExternalSourceEffectiveStatus::Degraded => "degraded",
-            ExternalSourceEffectiveStatus::Unsupported => "unsupported",
-            ExternalSourceEffectiveStatus::Available => "available",
-            ExternalSourceEffectiveStatus::Removed => "removed",
+            ExternalSourceEffectiveStatus::Discovering => "Checking",
+            ExternalSourceEffectiveStatus::Disabled => "Off",
+            ExternalSourceEffectiveStatus::ReviewRequired => "Needs permission",
+            ExternalSourceEffectiveStatus::Conflict => "Needs attention",
+            ExternalSourceEffectiveStatus::Active => "On",
+            ExternalSourceEffectiveStatus::Degraded => "Needs attention",
+            ExternalSourceEffectiveStatus::Unsupported => "Unavailable",
+            ExternalSourceEffectiveStatus::Available => "Available",
+            ExternalSourceEffectiveStatus::Removed => "Not found",
         };
-        lines.push(format!(
-            "Source {}: {} ({desired}, {effective})",
-            source.stable_key, source.display_name
-        ));
+        let number = index + 1;
+        lines.push(format!("{number}. {} - {effective}", source.display_name));
+        if control.host_capabilities.can_manage_sources {
+            let (verb, command) = match source.desired {
+                ExternalSourceDesiredState::Enabled => ("Disable", "disable"),
+                ExternalSourceDesiredState::Disabled => ("Enable", "enable"),
+            };
+            lines.push(format!("   {verb}: /extensions {command} {number}"));
+        }
     }
-    for capability in &control.capabilities {
-        let label = match capability.kind {
-            ExternalCapabilityKindV1::Command => "Commands",
-            ExternalCapabilityKindV1::Tool => "Tools",
-            ExternalCapabilityKindV1::Subagent => "Agents",
-            ExternalCapabilityKindV1::Mcp => "MCP servers",
-        };
-        let runtime = match capability.runtime {
-            ExternalSourceRuntimeState::NotApplicable => "not applicable",
-            ExternalSourceRuntimeState::Inactive => "inactive",
-            ExternalSourceRuntimeState::Starting => "starting",
-            ExternalSourceRuntimeState::Active => "active",
-            ExternalSourceRuntimeState::Degraded => "degraded",
-            ExternalSourceRuntimeState::Quarantined => "quarantined",
-            ExternalSourceRuntimeState::Unsupported => "unsupported",
-        };
-        let support = match capability.support {
-            ExternalSourceSupportState::Supported => "",
-            ExternalSourceSupportState::Partial => ", support: partial",
-            ExternalSourceSupportState::Unsupported => ", support: unsupported",
-            ExternalSourceSupportState::Unavailable => ", support: unavailable",
-        };
-        lines.push(format!(
-            "{label}: {} items, {} review, {} conflicts, {runtime}{support}",
-            capability.item_count,
-            capability.pending_review_count,
-            capability.unresolved_conflict_count,
-        ));
+
+    if !control.host_capabilities.can_manage_sources {
+        lines.push("This connection can only show extension status.".to_string());
     }
+    if control.sources.iter().any(|source| {
+        matches!(
+            source.effective_status,
+            ExternalSourceEffectiveStatus::ReviewRequired | ExternalSourceEffectiveStatus::Conflict
+        )
+    }) {
+        lines.push("Manage permissions: /tools, /agent, /mcp, or /hooks".to_string());
+    }
+
     const MAX_STATUS_DETAILS: usize = 4;
     if !control.diagnostics.is_empty() {
         lines.push(String::new());
-        lines.push("Issues".to_string());
+        lines.push("Needs attention".to_string());
         for diagnostic in control.diagnostics.iter().take(MAX_STATUS_DETAILS) {
-            let severity = match diagnostic.severity {
-                ExternalSourceDiagnosticSeverity::Info => "info",
-                ExternalSourceDiagnosticSeverity::Warning => "warning",
-                ExternalSourceDiagnosticSeverity::Error => "error",
-                _ => "notice",
-            };
             lines.push(format!(
-                "  - {severity}: [{}] {}",
-                diagnostic.code,
+                "  - {}",
                 external_source_diagnostic_summary(&diagnostic.code)
             ));
         }
         let hidden = control.diagnostics.len().saturating_sub(MAX_STATUS_DETAILS);
         if hidden > 0 {
-            lines.push(format!(
-                "  - {hidden} more; refresh after fixing the listed issue(s)."
-            ));
+            lines.push(format!("  - {hidden} more issue(s)."));
         }
     }
     if !control.recovery_actions.is_empty() {
-        lines.push(String::new());
-        lines.push("Recovery".to_string());
-        for action in control.recovery_actions.iter().take(MAX_STATUS_DETAILS) {
-            lines.push(format!(
-                "  - {}",
-                external_recovery_action_label(action, "extensions")
-            ));
+        let recovery = control
+            .recovery_actions
+            .iter()
+            .filter(|action| {
+                !matches!(
+                    action,
+                    ExternalSourceRecoveryActionV1::Review
+                        | ExternalSourceRecoveryActionV1::ExitSafeMode
+                )
+            })
+            .take(MAX_STATUS_DETAILS)
+            .map(|action| external_recovery_action_label(action, "extensions"))
+            .collect::<Vec<_>>();
+        if !recovery.is_empty() {
+            lines.push(String::new());
+            lines.push(format!("Next: {}", recovery.join("; ")));
         }
     }
     lines.push(String::new());
-    lines.push("Refresh: /extensions refresh".to_string());
-    lines.push(if control.safe_mode {
-        "Exit Safe Mode: /extensions safe-mode off".to_string()
-    } else {
-        "Enter Safe Mode: /extensions safe-mode on".to_string()
-    });
-    lines.push("Enable source: /extensions source enable <source-key>".to_string());
-    lines.push("Disable source: /extensions source disable <source-key>".to_string());
+    if control.host_capabilities.can_refresh {
+        lines.push("Refresh: /extensions refresh".to_string());
+    }
     lines.join("\n")
 }
 
@@ -409,8 +377,9 @@ struct ExternalControlMutationResult {
     action: ExternalControlUiAction,
     result: std::result::Result<
         (
-            bitfun_core::external_sources::ExternalSourceSurfaceSnapshotV1,
+            bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
             Option<ExternalSourceCatalogSnapshot>,
+            Option<ExternalSourceConflictPreferences>,
         ),
         ExternalSourceOperationError,
     >,
@@ -1035,7 +1004,7 @@ enum ExternalIssueSurface {
 }
 
 fn is_external_agent_diagnostic(
-    diagnostic: &bitfun_core::external_sources::ExternalSourceDiagnostic,
+    diagnostic: &bitfun_product_domains::external_sources::ExternalSourceDiagnostic,
 ) -> bool {
     matches!(diagnostic.asset_kind, ExternalSourceAssetKind::Subagent)
 }

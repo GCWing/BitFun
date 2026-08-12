@@ -22,6 +22,7 @@ pub mod dispatch_api;
 pub(crate) mod dispatch_host;
 pub mod dto;
 pub mod editor_ai_api;
+pub mod event_coalescer;
 pub mod external_hooks_api;
 pub mod external_sources_api;
 pub mod git_agent_api;

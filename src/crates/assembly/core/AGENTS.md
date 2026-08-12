@@ -80,9 +80,30 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Feature work must keep `product-full` as the compatibility product assembly
   boundary unless a separate product matrix review changes default capability
   selection.
-- `agent-runtime` owns the existing Core Agent Runtime compatibility facade,
-  including its MCP, Remote Connect, workspace-search, and native Hook runtime
-  services. `external-sources` adds third-party discovery/import adapters,
+- `agent-runtime` owns the Core Agent lifecycle baseline, native Hook runtime,
+  basic filesystem/process tools, and Agent-control tools, including scheduled
+  job execution. Concrete network and product capabilities stay explicitly
+  selectable: `model-catalog`,
+  `mcp-runtime`, `remote-connect`, `workspace-search`, `browser-control`,
+  `web-tools`, `deep-research`, and `script-tool-runtime`.
+  `model-catalog` composes runtime services for catalog update events;
+  `mcp-runtime` layers the Core MCP tool bridge on the Agent lifecycle; and
+  `remote-connect` layers its phone relay on the Agent lifecycle and model
+  catalog. None of these relationships may be hidden in the `agent-runtime`
+  baseline. `scheduled-jobs`, `document-read`, and `subscription-auth` are
+  additive dependency/source modifiers, not standalone runtime profiles. The
+  latter two use Cargo weak dependency forwarding so they refine an already
+  selected tool or adapter owner without activating that owner by themselves.
+  Product-owned managed worktree lifecycle is available only when the Agent
+  lifecycle and Git service owners are both selected; it is not a tool-pack owner.
+  Function Agent adapters use the independent `function-agents` owner;
+  MiniApp domain/runtime/market dependencies belong only to `tools-miniapp`.
+  Tool implementation groups use the matching `tools-*` owner feature.
+  Product Assembly supplies the exact `ProductToolPlan`; Core materialization
+  validates that requested owners were compiled and must not infer product
+  capability from Cargo's feature union. The Agent Runtime baseline plan is
+  exactly `Basic` plus `AgentControl`, not a hidden delivery profile.
+  `external-sources` adds third-party discovery/import adapters,
   `plugin-runtime` adds executable plugin-client wiring, and `debug-log` keeps
   the debug ingest server separate. None may enable `product-full`.
 - CLI/ACP closure checks keep Cargo resolver-v2 normal and host
@@ -100,8 +121,15 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   narrow features may enable `product-full` directly or transitively.
 - `product-full` must explicitly compose every capability it consumes, including
   product-only `services-core` features such as `permission`, `session-git`, and
-  `runtime-ownership`. Do not put those features on the dependency declaration,
-  because Cargo feature union would force them into every core consumer.
+  `runtime-ownership`, every concrete service owner, and every `tools-*` group.
+  Do not put those features on the dependency declaration, because Cargo
+  feature union would force them into every core consumer.
+- Core's default feature set is empty. `product-full` is an explicit
+  compatibility assembly selected by real product entrypoints, never the
+  library's implicit default. Capability-local utility dependencies remain
+  optional and are activated by their owner features; in particular,
+  `base64`, `futures`, `regex`, and `tokio-util` belong to the Agent Runtime,
+  dispatch-store, or debug-log closures that use them.
 - Keep `cargo check -p bitfun-core --no-default-features` viable. Gate
   product-only modules at their owner feature; if a light facade operation
   cannot safely complete without a product owner, fail closed and preserve any

@@ -48,7 +48,11 @@ function normalizeHooksConfig(
   };
 }
 
-const HooksConfig: React.FC = () => {
+export interface HooksConfigProps {
+  embedded?: boolean;
+}
+
+const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
   const { t } = useTranslation('settings/hooks');
   const { error: notifyError, success: notifySuccess } = useNotification();
   const { workspace, workspacePath } = useCurrentWorkspace();
@@ -293,6 +297,9 @@ const HooksConfig: React.FC = () => {
   ));
 
   if (loading) {
+    if (embedded) {
+      return <ConfigPageLoading text={t('loading')} />;
+    }
     return (
       <ConfigPageLayout>
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
@@ -303,10 +310,8 @@ const HooksConfig: React.FC = () => {
     );
   }
 
-  return (
-    <ConfigPageLayout>
-      <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
-
+  const content = (
+    <>
       <ConfigPageContent>
         <ConfigPageSection title={t('activation.title')} description={t('activation.description')}>
           <ConfigPageRow
@@ -464,7 +469,11 @@ const HooksConfig: React.FC = () => {
               {importSnapshot.imports.length === 0
                 && availableSources.length === 0
                 && corruptDiagnostics.length === 0 ? (
-                  <ConfigPageRow label={t('imports.empty')} align="center">
+                  <ConfigPageRow
+                    className="bitfun-hooks-config__empty"
+                    label={<span data-hooks-empty="true">{t('imports.empty')}</span>}
+                    multiline
+                  >
                     {null}
                   </ConfigPageRow>
                 ) : null}
@@ -567,6 +576,21 @@ const HooksConfig: React.FC = () => {
           : t('imports.removeConfirm')}
         confirmDanger
       />
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="bitfun-hooks-config bitfun-hooks-config--embedded">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <ConfigPageLayout>
+      <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
+      {content}
     </ConfigPageLayout>
   );
 };

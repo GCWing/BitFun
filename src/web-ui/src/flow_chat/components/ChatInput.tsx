@@ -124,6 +124,7 @@ import {
 } from '../utils/chatInputMode';
 import { collectModifiedFilePathsFromTurns } from '../utils/modifiedFilePaths';
 import { useSceneStore } from '@/app/stores/sceneStore';
+import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
@@ -144,6 +145,11 @@ import {
 } from './ChatInputWorkspaceStrip';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
+import {
+  DISPATCH_PERMISSION_MODES,
+  dispatchApprovalPolicyFromPermissionMode,
+  permissionModeFromDispatchApprovalPolicy,
+} from '@/features/dispatch/approvalPolicy';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { useComposerCapabilities } from '../session-drivers/useComposerCapabilities';
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
@@ -174,6 +180,12 @@ import {
   type ContextUsageDisplay,
 } from '../utils/tokenUsageDisplay';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import type { SessionPermissionMode } from '@/infrastructure/api/service-api/AgentAPI';
+import {
+  chatInputPermissionMode,
+  permissionModeFromConfig,
+  sessionPermissionMode as toBackendPermissionMode,
+} from '../utils/permissionMode';
 import {
   ExternalSourceApiError,
   externalSourcesAPI,
@@ -453,6 +465,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const [permissionModeSaving, setPermissionModeSaving] = useState(false);
   const [showPermissionModeControl, setShowPermissionModeControl] = useState(true);
+  // The session's own selection. `null` means it follows the global default,
+  // which is what keeps switching modes in one conversation from moving every
+  // other open session.
+  const [sessionPermissionMode, setSessionPermissionMode] =
+    useState<SessionPermissionMode | null>(null);
+  // Armed for the next submission only, never persisted. Cleared once a
+  // submission has carried it, or when the target session changes.
+  const [turnPermissionMode, setTurnPermissionMode] =
+    useState<SessionPermissionMode | null>(null);
   const { addMessage: addToHistory, getSessionHistory } = useInputHistoryStore();
   
   const contexts = useContextStore(state => state.contexts);
@@ -561,6 +582,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { entries: acpPlanEntries } = useAcpPlan(acpSessionForInput?.sessionId ?? null);
   const threadGoalController = useThreadGoalController(effectiveTargetSession, {
     isBtwSession,
+    disabled: !caps.threadGoal,
   });
   const currentSessionTitle = currentSession?.title?.trim() || t('session.untitled');
   const activeBtwSession = activeBtwSessionId
@@ -976,13 +998,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [effectiveTargetSession]
   );
   const isAcpTargetSession = Boolean(acpTargetAgentType);
+  const globalPermissionMode = permissionModeFromConfig(toolPermissionConfig);
+  // Session selection wins over the user-level default, matching how the
+  // backend resolves the mode for each submission.
+  // The session-scoped mode, which is what the menu checkmark marks. An armed
+  // one-off is reported separately so the two states stay distinguishable.
   const permissionMode: ChatInputPermissionMode = isAcpTargetSession
     ? 'acp'
-    : toolPermissionConfig.policy.preset === 'full_access'
-      ? 'full_access'
-      : toolPermissionConfig.interaction.auto_approve_ask
-        ? 'auto'
-        : 'ask';
+    : chatInputPermissionMode(sessionPermissionMode ?? globalPermissionMode);
+  const permissionModeOverridden =
+    !isAcpTargetSession && (turnPermissionMode !== null || sessionPermissionMode !== null);
   const activeSessionMode = effectiveTargetSessionId
     ? acpTargetAgentType || flowChatState.sessions.get(effectiveTargetSessionId)?.mode
     : undefined;
@@ -1678,6 +1703,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     contexts,
     onClearContexts: clearContexts,
     onSuccess: onSendMessage,
+    turnPermissionMode,
+    onTurnPermissionModeConsumed: () => setTurnPermissionMode(null),
     onSessionConflictRetryStart: ({ sessionId }) => {
       sessionConflictRetryBaselinesRef.current.set(
         sessionId,
@@ -1984,53 +2011,158 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, []);
 
-  const handlePermissionModeChange = useCallback(async (
-    nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
-  ) => {
-    if (permissionModeSaving || isAcpTargetSession) return;
-    if (nextMode === 'full_access') {
-      const confirmed = await confirmDanger(
-        t('chatInput.permissionMode.fullAccessWarningTitle'),
-        t('chatInput.permissionMode.fullAccessWarningMessage'),
-        {
-          confirmText: t('chatInput.permissionMode.fullAccessConfirm'),
-          cancelText: t('chatInput.permissionMode.cancel'),
-        },
-      );
-      if (!confirmed) return;
+  // Reads the session's own selection whenever the target session changes, so
+  // switching conversations shows that conversation's mode rather than the last
+  // one the user touched.
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!effectiveTargetSessionId || isAcpTargetSession) {
+      setSessionPermissionMode(null);
+      setTurnPermissionMode(null);
+      return undefined;
     }
-
-    const previousConfig = toolPermissionConfig;
-    const nextConfig: ToolPermissionConfig = {
-      policy: {
-        ...previousConfig.policy,
-        preset: nextMode === 'full_access' ? 'full_access' : 'ask',
-      },
-      interaction: {
-        ...previousConfig.interaction,
-        auto_approve_ask: nextMode === 'auto',
-      },
+    setTurnPermissionMode(null);
+    void (async () => {
+      try {
+        const response = await agentAPI.getSessionPermissionMode({
+          sessionId: effectiveTargetSessionId,
+          workspacePath: effectiveTargetSession?.workspacePath,
+          remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
+          remoteSshHost: effectiveTargetSession?.remoteSshHost,
+        });
+        if (!cancelled) setSessionPermissionMode(response.mode ?? null);
+      } catch (error) {
+        log.warn('Failed to read session permission mode', error);
+        // Falling back to the global default is the safe read: it never shows a
+        // wider mode than the session actually runs with.
+        if (!cancelled) setSessionPermissionMode(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    setToolPermissionConfig(nextConfig);
+  }, [
+    effectiveTargetSessionId,
+    effectiveTargetSession?.workspacePath,
+    effectiveTargetSession?.remoteConnectionId,
+    effectiveTargetSession?.remoteSshHost,
+    isAcpTargetSession,
+  ]);
+
+  const applySessionPermissionMode = useCallback(async (
+    nextMode: SessionPermissionMode | null,
+  ) => {
+    if (!effectiveTargetSessionId) {
+      notificationService.error(t('chatInput.permissionMode.noSession'));
+      return;
+    }
+    const previousMode = sessionPermissionMode;
+    setSessionPermissionMode(nextMode);
     setPermissionModeSaving(true);
     try {
-      const saved = await permissionConfigService.saveConfig(nextConfig);
-      setToolPermissionConfig(saved);
+      const response = await agentAPI.updateSessionPermissionMode({
+        sessionId: effectiveTargetSessionId,
+        mode: nextMode,
+        workspacePath: effectiveTargetSession?.workspacePath,
+        remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
+        remoteSshHost: effectiveTargetSession?.remoteSshHost,
+      });
+      setSessionPermissionMode(response.mode ?? null);
     } catch (error) {
-      log.error('Failed to change permission mode', error);
-      setToolPermissionConfig(previousConfig);
+      log.error('Failed to change session permission mode', error);
+      setSessionPermissionMode(previousMode);
       notificationService.error(t('chatInput.permissionMode.changeFailed'));
     } finally {
       setPermissionModeSaving(false);
     }
-  }, [isAcpTargetSession, permissionModeSaving, t, toolPermissionConfig]);
+  }, [
+    effectiveTargetSessionId,
+    effectiveTargetSession?.workspacePath,
+    effectiveTargetSession?.remoteConnectionId,
+    effectiveTargetSession?.remoteSshHost,
+    sessionPermissionMode,
+    t,
+  ]);
+
+  // Full access is the one mode worth a confirmation in either scope: a
+  // one-off turn still runs every tool without asking.
+  const confirmFullAccessIfNeeded = useCallback(async (
+    nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
+    scope: 'session' | 'turn',
+  ) => {
+    if (nextMode !== 'full_access') return true;
+    return confirmDanger(
+      t('chatInput.permissionMode.fullAccessWarningTitle'),
+      t(scope === 'turn'
+        ? 'chatInput.permissionMode.fullAccessWarningMessageNextTurn'
+        : 'chatInput.permissionMode.fullAccessWarningMessage'),
+      {
+        confirmText: t('chatInput.permissionMode.fullAccessConfirm'),
+        cancelText: t('chatInput.permissionMode.cancel'),
+      },
+    );
+  }, [t]);
+
+  /** Writes the session's own mode. */
+  const handlePermissionModeChange = useCallback(async (
+    nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
+  ) => {
+    if (permissionModeSaving || isAcpTargetSession) return;
+    if (!(await confirmFullAccessIfNeeded(nextMode, 'session'))) return;
+    const backendMode = toBackendPermissionMode(
+      nextMode as Exclude<ChatInputPermissionMode, 'acp' | 'reject'>,
+    );
+    // An armed one-off would otherwise keep masking the session mode the user
+    // just chose, making the write look like it did nothing.
+    setTurnPermissionMode(null);
+    await applySessionPermissionMode(backendMode);
+  }, [
+    applySessionPermissionMode,
+    confirmFullAccessIfNeeded,
+    isAcpTargetSession,
+    permissionModeSaving,
+  ]);
+
+  /**
+   * Arms a mode for the next submission without touching the session. Picking
+   * the already-armed mode disarms it, so an accidental arm is undoable
+   * without disturbing the session's own selection.
+   */
+  const handlePermissionModeForNextTurn = useCallback(async (
+    nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
+  ) => {
+    if (permissionModeSaving || isAcpTargetSession) return;
+    const backendMode = toBackendPermissionMode(
+      nextMode as Exclude<ChatInputPermissionMode, 'acp' | 'reject'>,
+    );
+    if (turnPermissionMode === backendMode) {
+      setTurnPermissionMode(null);
+      return;
+    }
+    if (!(await confirmFullAccessIfNeeded(nextMode, 'turn'))) return;
+    setTurnPermissionMode(backendMode);
+  }, [confirmFullAccessIfNeeded, isAcpTargetSession, permissionModeSaving, turnPermissionMode]);
+
+  // The reset row follows the user-level default, so give it a way to reach the
+  // page that owns that default instead of making the user hunt for it.
+  const handleOpenPermissionDefaultSettings = useCallback(() => {
+    useSettingsStore.getState().setActiveTab('session-permissions');
+    openScene('settings');
+  }, [openScene]);
+
+  const handleResetPermissionModeToDefault = useCallback(async () => {
+    if (permissionModeSaving || isAcpTargetSession) return;
+    // Drop the armed one-off first; otherwise it would keep masking the
+    // session mode the user just asked to restore.
+    setTurnPermissionMode(null);
+    if (sessionPermissionMode === null) return;
+    await applySessionPermissionMode(null);
+  }, [applySessionPermissionMode, isAcpTargetSession, permissionModeSaving, sessionPermissionMode]);
 
   const dispatchPermissionMode: ChatInputPermissionMode =
-    effectiveTargetSession?.config.dispatchApprovalPolicy === 'auto'
-      ? 'auto'
-      : effectiveTargetSession?.config.dispatchApprovalPolicy === 'reject-and-report'
-        ? 'reject'
-        : 'ask';
+    permissionModeFromDispatchApprovalPolicy(
+      effectiveTargetSession?.config.dispatchApprovalPolicy,
+    );
   const dispatchSubmissionOptionsLocked = caps.submissionOptionsLocked;
   const handleDispatchPermissionModeChange = useCallback((
     nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
@@ -2038,12 +2170,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!effectiveTargetSessionId || dispatchSubmissionOptionsLocked) {
       return;
     }
-    const approvalPolicy =
-      nextMode === 'auto' || nextMode === 'full_access'
-        ? 'auto'
-        : nextMode === 'reject'
-          ? 'reject-and-report'
-          : 'remote';
+    const approvalPolicy = dispatchApprovalPolicyFromPermissionMode(nextMode);
     FlowChatStore.getInstance().updateSessionDispatchApprovalPolicy(
       effectiveTargetSessionId,
       approvalPolicy,
@@ -2125,11 +2252,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ...flowChatSessionConfigForCurrentWorkspace(workspace),
           dispatchTargetRequest: selection.request,
           dispatchTarget: selection.target,
-          dispatchApprovalPolicy: selection.approvalPolicy,
+          // Not asked for while picking a target: a dispatch session starts on
+          // the same permission default a local session here would, and the
+          // composer strip stays the one place to change it.
+          dispatchApprovalPolicy: dispatchApprovalPolicyFromPermissionMode(
+            permissionMode === 'acp' ? 'ask' : permissionMode,
+          ),
           dispatchIncludeUncommitted: selection.includeUncommitted,
           dispatchBaseRef: selection.baseRef,
           // Undefined is intentional: the target's probed default model wins
-          // unless a future preflight selector records an explicit choice.
+          // until the composer's model picker records an explicit choice.
           dispatchModel: selection.model,
           dispatchModelCatalog: selection.modelCatalog,
           dispatchAvailableModels: selection.availableModels,
@@ -2141,7 +2273,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       log.error('Failed to create dispatched session projection', { error });
       notificationService.error(t('chatInput.dispatch.createFailed'));
     }
-  }, [effectiveSendAgentType, t, workspace]);
+  }, [effectiveSendAgentType, permissionMode, t, workspace]);
 
   const effectiveTargetSessionHasTurns = effectiveTargetSession
     ? !isProjectedSessionEmpty(effectiveTargetSession)
@@ -2220,6 +2352,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       defaultModelId: effectiveTargetSession.config.dispatchDefaultModel,
       reasoningCatalog: effectiveTargetSession.config.dispatchModelCatalog,
       selectedReasoningPreset: effectiveTargetSession.config.dispatchReasoningPreset,
+      // The probe snapshot above is a starting point, not the offer. Dispatch
+      // changes where a session runs, not which models this device has, and
+      // submission brings the target up to whatever is chosen here — so the
+      // picker offers the local catalog exactly as a local session would, and
+      // survives a projection restored without that snapshot.
+      includeLocalCatalog: true,
       providerLabel,
       disabled: caps.submissionOptionsLocked,
       onSelect: (modelId: string) => {
@@ -5425,15 +5563,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                     {labelText}
                                   </span>
                                   {item.kind === 'mode' && item.id === modeState.current && <span className="bitfun-chat-input__slash-command-current" data-bf-component="chat-input" data-bf-part="commandCurrent">{t('chatInput.current')}</span>}
+                                  {item.kind === 'externalCommand' && item.status !== 'available' ? (
+                                    <span
+                                      className={`bitfun-chat-input__slash-command-status bitfun-chat-input__slash-command-status--${item.status === 'restricted' ? 'restricted' : 'choose'}`}
+                                      data-bf-component="chat-input"
+                                      data-bf-part="commandStatus"
+                                      data-bf-state={item.status}
+                                    >
+                                      {t(item.status === 'restricted'
+                                        ? 'chatInput.commandStatus.restricted'
+                                        : 'chatInput.commandStatus.chooseSource')}
+                                    </span>
+                                  ) : null}
                                 </div>
                               </React.Fragment>
                             );
                           })
-                        ) : !externalPromptCommandsIssue ? (
+                        ) : (
                           <div className="bitfun-chat-input__slash-command-empty" data-bf-component="chat-input" data-bf-part="commandEmpty">
-                            {t('chatInput.noMatchingCommand')}
+                            {/* A catalog issue must not leave the list blank: say why nothing is listed. */}
+                            {externalPromptCommandsIssue === 'host_unavailable'
+                              ? t('chatInput.externalCommandsHostUnavailable')
+                              : externalPromptCommandsIssue === 'load_failed'
+                                ? t('chatInput.externalCommandsLoadFailed')
+                                : t('chatInput.noMatchingCommand')}
                           </div>
-                        ) : null}
+                        )}
                       </div>
                     </div>
                   );
@@ -5965,7 +6120,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             ? {
                 mode: dispatchPermissionMode,
                 disabled: dispatchSubmissionOptionsLocked,
-                options: ['ask', 'auto', 'reject'],
+                options: DISPATCH_PERMISSION_MODES,
                 scopeLabel: t('chatInput.dispatch.sessionScope'),
                 onChange: handleDispatchPermissionModeChange,
                 onHide: handleHidePermissionModeControl,
@@ -5973,7 +6128,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             : {
                 mode: permissionMode,
                 saving: permissionModeSaving,
+                scopeLabel: turnPermissionMode
+                  ? t('chatInput.permissionMode.turnScope')
+                  : t('chatInput.permissionMode.sessionScope'),
+                overridden: permissionModeOverridden,
+                nextTurnMode: turnPermissionMode
+                  ? chatInputPermissionMode(turnPermissionMode)
+                  : null,
+                onChangeForNextTurn: isAcpTargetSession
+                  ? undefined
+                  : handlePermissionModeForNextTurn,
                 onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
+                onResetToDefault: isAcpTargetSession
+                  ? undefined
+                  : handleResetPermissionModeToDefault,
+                onOpenDefaultSettings: isAcpTargetSession
+                  ? undefined
+                  : handleOpenPermissionDefaultSettings,
                 onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
               }
           : undefined}

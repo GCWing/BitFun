@@ -1,7 +1,7 @@
 impl ChatView {
     pub(crate) fn show_prompt_command_shell_review(
         &mut self,
-        plan: bitfun_core::external_sources::PromptCommandShellReviewPlan,
+        plan: bitfun_product_domains::external_sources::PromptCommandShellReviewPlan,
     ) {
         self.prompt_command_shell_review =
             Some(crate::ui::prompt_command_shell_review::PromptCommandShellReviewPrompt::new(plan));
@@ -808,9 +808,9 @@ impl ChatView {
 
     pub(crate) fn show_account_panel(
         &mut self,
-        info: crate::account::AccountInfo,
-        devices: Vec<crate::account::AccountDevice>,
-        sync_progress: crate::account_sync::SyncProgress,
+        info: bitfun_app_server_protocol::account::AccountInfo,
+        devices: Vec<bitfun_app_server_protocol::account::AccountDevice>,
+        sync_progress: bitfun_app_server_protocol::account::SettingsSyncProgress,
     ) {
         self.login_form.show_account(info, devices, sync_progress);
         self.popup_stack.push(PopupType::LoginForm);
@@ -823,8 +823,8 @@ impl ChatView {
 
     pub(crate) fn update_account_panel_progress(
         &mut self,
-        devices: Option<Vec<crate::account::AccountDevice>>,
-        sync_progress: crate::account_sync::SyncProgress,
+        devices: Option<Vec<bitfun_app_server_protocol::account::AccountDevice>>,
+        sync_progress: bitfun_app_server_protocol::account::SettingsSyncProgress,
     ) {
         self.login_form
             .update_account_progress(devices, sync_progress);

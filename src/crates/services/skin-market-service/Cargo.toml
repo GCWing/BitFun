@@ -17,7 +17,7 @@ chrono = { workspace = true }
 hex = { workspace = true }
 image = { workspace = true }
 hmac = { workspace = true }
-reqwest = { workspace = true, features = ["rustls"] }
+reqwest = { workspace = true, features = ["http2", "json", "rustls"] }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

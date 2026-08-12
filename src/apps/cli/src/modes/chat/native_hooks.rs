@@ -80,7 +80,7 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
                 file.scope,
                 if file.loaded { "loaded" } else { "not loaded" },
                 if file.exists { "present" } else { "missing" },
-                crate::plugin_diagnostics::escape_terminal_text(&file.path.to_string_lossy()),
+                crate::plugin_diagnostics::escape_terminal_text(&file.location),
             ));
         }
     }
@@ -101,9 +101,9 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
         let mut current_event = "";
         for rule in overview.rules.iter().take(MAX_TUI_NATIVE_HOOK_RULES) {
             if rule.event != current_event {
-                current_event = rule.event;
+                current_event = rule.event.as_str();
                 lines.push(String::new());
-                lines.push(crate::plugin_diagnostics::escape_terminal_text(rule.event));
+                lines.push(crate::plugin_diagnostics::escape_terminal_text(&rule.event));
             }
             lines.push(native_hook_rule_line(rule));
             for handler in rule
@@ -114,7 +114,7 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
                 lines.push(format!(
                     "    - {} [timeout {}s{}]",
                     truncate_hook_command(&crate::plugin_diagnostics::escape_terminal_text(
-                        &handler.command,
+                        &handler.command_summary,
                     )),
                     handler.timeout_seconds,
                     match handler.status_message.as_deref() {

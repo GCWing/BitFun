@@ -17,6 +17,8 @@ export const acpAgentsConfigAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'status' },
     { id: 'confirmation' },
     { id: 'remoteList' },
+    { id: 'hiddenRemoteList' },
+    { id: 'hiddenRemoteRow' },
     { id: 'remoteServer' },
     { id: 'remoteHeader' },
     { id: 'remoteAgents' },

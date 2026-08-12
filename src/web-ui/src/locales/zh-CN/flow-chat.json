@@ -413,6 +413,7 @@
       "interrupted": "已中断"
     },
     "menu": {
+      "switchPet": "切换宠物",
       "closePet": "关闭宠物",
       "closeBubble": "关闭该气泡"
     },
@@ -664,6 +665,9 @@
       "cliInstallFailed": "无法准备远程运行环境。请检查 SSH 连接后重试。",
       "cliInstallInProgress": "正在准备远程运行环境…",
       "cliInstallUnknownVersion": "所需版本",
+      "modelSyncStarted": "正在把本机的模型配置复制到远程设备…",
+      "modelSyncSucceeded": "模型配置已复制，远程设备可以运行所选模型。",
+      "modelSyncFailed": "无法把模型配置复制到远程设备。",
       "errors": {
         "attachmentUnavailable": "这张图片无法发送到远程设备。请重新添加后再试。",
         "deviceAttachmentTooLarge": "通过账号设备发送的图片总大小不能超过 192 KB。请压缩图片，或改用 SSH 目标。",
@@ -709,9 +713,19 @@
         "tooltip": "此会话的权限由 ACP 客户端控制。"
       },
       "fullAccessWarningTitle": "启用完全访问？",
-      "fullAccessWarningMessage": "完全访问会默认允许工具执行，不再逐次确认。",
+      "fullAccessWarningMessage": "完全访问会默认放行工具调用，不再逐次确认。该设置仅作用于当前会话，项目规则与强制规则仍然生效。",
       "fullAccessConfirm": "启用完全访问",
-      "cancel": "取消"
+      "cancel": "取消",
+      "sessionScope": "当前会话",
+      "currentSessionOverride": "权限：{{mode}}（仅当前会话）",
+      "resetToDefault": "跟随默认模式",
+      "noSession": "请先打开或新建会话，再修改其权限模式。",
+      "turnScope": "仅下一条消息",
+      "currentTurnOverride": "权限：{{mode}}（仅下一条消息）",
+      "nextTurnOnly": "仅下一条消息使用「{{mode}}」",
+      "nextTurnOnlyShort": "仅一次",
+      "fullAccessWarningMessageNextTurn": "完全访问会默认放行工具调用，不再逐次确认。该设置仅作用于下一条消息，项目规则与强制规则仍然生效。",
+      "openDefaultSettings": "打开权限设置"
     },
     "addModeTooltip": "附加 Plan 或 Debug",
     "boostSectionAgent": "智能体",
@@ -796,6 +810,10 @@
     "nativeCommandReconfirmationRequired": "之前选择的外部命令已不可用。请从斜杠菜单中选择 BitFun 命令后再执行。",
     "selectHint": "↑↓ 选择 · Enter 确认 · Esc 取消",
     "current": "当前",
+    "commandStatus": {
+      "restricted": "受限",
+      "chooseSource": "选择来源"
+    },
     "computerUseDisabled": "已在「设置 → 会话权限」中禁用 Computer Use",
     "professionalMode": "专业模式",
     "designMode": "设计模式",
@@ -885,8 +903,8 @@
     "unknownTool": "未知工具"
   },
   "transcriptExport": {
-    "copyFull": "拷贝完整过程",
-    "copyResult": "拷贝结果",
+    "copyFull": "复制完整过程",
+    "copyResult": "复制结果",
     "copyEmpty": "该对话没有可复制的内容",
     "exportEmpty": "该会话没有可导出的内容",
     "exportSuccess": "会话已导出：{{filePath}}",

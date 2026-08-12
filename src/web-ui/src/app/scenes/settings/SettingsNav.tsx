@@ -143,6 +143,7 @@ function useSettingsNav() {
   const setActiveTab = useSettingsStore((s) => s.setActiveTab);
   const searchQuery = useSettingsStore((s) => s.searchQuery);
   const setSearchQuery = useSettingsStore((s) => s.setSearchQuery);
+  const unseenTabs = useSettingsStore((s) => s.unseenTabs);
 
   const [draftQuery, setDraftQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -276,6 +277,7 @@ function useSettingsNav() {
   return {
     t,
     activeTab,
+    unseenTabs,
     handleTabClick,
     preloadTab,
     draftQuery,
@@ -298,6 +300,7 @@ const SettingsNav: React.FC = () => {
   const {
     t,
     activeTab,
+    unseenTabs,
     handleTabClick,
     preloadTab,
     draftQuery,
@@ -436,6 +439,17 @@ const SettingsNav: React.FC = () => {
                     <span className="bitfun-settings-nav__item-label">
                       {t(tabDef.labelKey, { defaultValue: tabDef.id })}
                     </span>
+                    {unseenTabs.includes(tabDef.id) ? (
+                      <span
+                        data-bf-component="settings-nav"
+                        data-bf-part="itemUnseen"
+                        className="bitfun-settings-nav__item-unseen"
+                        // The label carries the meaning; the dot alone would be
+                        // invisible to assistive technology and colour-only.
+                        aria-label={t('configCenter.unseenItems')}
+                        role="status"
+                      />
+                    ) : null}
                     {tabDef.beta ? (
                       <Badge variant="warning" className="bitfun-settings-nav__item-beta">
                         {t('configCenter.beta')}

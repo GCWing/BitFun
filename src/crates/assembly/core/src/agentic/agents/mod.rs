@@ -23,6 +23,7 @@ pub use bitfun_agent_runtime::custom_agent::{
 };
 use bitfun_runtime_ports::PermissionConstraintLayer;
 pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
+#[cfg(feature = "external-sources")]
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
@@ -41,6 +42,7 @@ pub use prompt_builder::{
     UserContextPolicy, UserContextSection,
 };
 pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
+#[cfg(feature = "external-sources")]
 pub(crate) use registry::external_subagent_runtime_key;
 pub use registry::types::{
     subagent_source_from_custom_kind, AgentCategory, AgentInfo, AgentSource, AgentToolPolicy,
@@ -143,6 +145,10 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "Git".to_string(),
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
+        // Pairs with ControlHub: its `wait` sends anything repeating, or
+        // further out than an hour, to Cron rather than holding the turn open
+        // for the interval.
+        "Cron".to_string(),
         "InitMiniApp".to_string(),
         "FinalizeMiniApp".to_string(),
         "PublishMiniApp".to_string(),

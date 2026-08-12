@@ -8,11 +8,31 @@ use bitfun_runtime_ports::{
 
 use crate::agentic::core::SessionConfig;
 use crate::infrastructure::{get_path_manager_arc, PathManager};
-use crate::service::remote_ssh::workspace_state::{
-    resolve_workspace_session_identity, unresolved_remote_session_storage_dir,
-    LOCAL_WORKSPACE_SSH_HOST,
-};
 use crate::service::WorkspaceRuntimeService;
+#[cfg(not(feature = "remote-workspace"))]
+use bitfun_services_core::workspace_identity::workspace_session_identity;
+use bitfun_services_core::workspace_identity::{
+    unresolved_remote_session_storage_dir, WorkspaceSessionIdentity, LOCAL_WORKSPACE_SSH_HOST,
+};
+
+async fn resolve_workspace_session_identity(
+    workspace_path: &str,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> Option<WorkspaceSessionIdentity> {
+    #[cfg(feature = "remote-workspace")]
+    {
+        return crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
+            workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
+        )
+        .await;
+    }
+
+    #[cfg(not(feature = "remote-workspace"))]
+    workspace_session_identity(workspace_path, remote_connection_id, remote_ssh_host)
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct CoreSessionStorePort {
@@ -194,7 +214,7 @@ impl SessionStorePort for CoreSessionStorePort {
         })?;
 
         let requested_workspace_path = request.workspace_path;
-        let runtime_service = WorkspaceRuntimeService::new(path_manager);
+        let runtime_service = WorkspaceRuntimeService::new(path_manager.clone());
         let (effective_storage_path, storage_kind, remote_ssh_host) =
             if identity.hostname == LOCAL_WORKSPACE_SSH_HOST {
                 (
@@ -207,6 +227,7 @@ impl SessionStorePort for CoreSessionStorePort {
             } else if identity.hostname == "_unresolved" {
                 (
                     unresolved_remote_session_storage_dir(
+                        path_manager.remote_ssh_mirror_root_dir(),
                         identity.remote_connection_id.as_deref().unwrap_or_default(),
                         identity.logical_workspace_path(),
                     ),

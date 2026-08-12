@@ -2,10 +2,10 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConversationSource } from '../navigation/AppRouteContract';
 import { CARD, INK, LINE, MUTED, SOFT } from './Theme';
 
-@Component
+@ComponentV2
 export struct ConversationSourceSwitcher {
-  @Prop activeSource: ConversationSource = ConversationSource.General;
-  onSelectSource: (source: ConversationSource) => void = (_source: ConversationSource) => {};
+  @Param activeSource: ConversationSource = ConversationSource.General;
+  @Event onSelectSource: (source: ConversationSource) => void = (_source: ConversationSource) => {};
 
   build() {
     Row({ space: 2 }) {

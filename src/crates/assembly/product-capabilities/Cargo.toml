@@ -4,10 +4,15 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "BitFun product capability pack contracts"
+autotests = false
 
 [lib]
 name = "bitfun_product_capabilities"
 crate-type = ["rlib"]
+
+[[test]]
+name = "product_capability_contracts"
+path = "tests/product_capability_contracts.rs"
 
 [dependencies]
 bitfun-harness = { path = "../../execution/harness" }

@@ -52,7 +52,9 @@ fn forward_subagent_invocation_context(
     context: &ToolUseContext,
     subagent_context: &mut HashMap<String, String>,
 ) {
-    use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+    use bitfun_agent_runtime::permission::{
+        AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+    };
     use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 
     for key in [
@@ -68,6 +70,23 @@ fn forward_subagent_invocation_context(
             _ => continue,
         };
         subagent_context.insert(key.to_string(), value);
+    }
+
+    // The child runs under the parent turn's already-resolved permission mode.
+    // Without this the child would fall back to the user-level default, so a
+    // session that chose its own mode would silently lose it at delegation.
+    // The parent runtime ceiling is applied separately and still bounds the
+    // child, so inheriting a wider mode cannot widen what the parent restricted.
+    if let Some(mode) = context
+        .custom_data
+        .get(PERMISSION_MODE_CONTEXT_KEY)
+        .and_then(Value::as_str)
+        .and_then(bitfun_runtime_ports::PermissionMode::parse)
+    {
+        subagent_context.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            mode.as_str().to_string(),
+        );
     }
 }
 
@@ -1322,6 +1341,52 @@ mod target_context_tests {
         forward_subagent_invocation_context(&parent, &mut child);
 
         assert!(!child.contains_key(AUTO_APPROVE_ASK_CONTEXT_KEY));
+    }
+
+    #[test]
+    fn child_context_inherits_the_parent_resolved_permission_mode() {
+        use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+
+        let mut parent = parent_tool_context();
+        parent.custom_data.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            Value::String("full_access".to_string()),
+        );
+        let mut child = HashMap::new();
+
+        forward_subagent_invocation_context(&parent, &mut child);
+
+        assert_eq!(child[PERMISSION_MODE_CONTEXT_KEY], "full_access");
+    }
+
+    #[test]
+    fn child_context_rejects_an_unparseable_permission_mode() {
+        use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+
+        let mut parent = parent_tool_context();
+        parent.custom_data.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            Value::String("elevated".to_string()),
+        );
+        let mut child = HashMap::new();
+
+        forward_subagent_invocation_context(&parent, &mut child);
+
+        // Dropping it falls back to the user-level default rather than
+        // forwarding a value the child cannot interpret.
+        assert!(!child.contains_key(PERMISSION_MODE_CONTEXT_KEY));
+    }
+
+    #[test]
+    fn child_context_leaves_unset_permission_mode_for_global_fallback() {
+        use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+
+        let parent = parent_tool_context();
+        let mut child = HashMap::new();
+
+        forward_subagent_invocation_context(&parent, &mut child);
+
+        assert!(!child.contains_key(PERMISSION_MODE_CONTEXT_KEY));
     }
 
     #[test]

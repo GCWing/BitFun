@@ -36,7 +36,7 @@ pub(crate) async fn dispatch(
         "reload_config" => workspace::reload_config().await,
         "get_config" => config::get_config(args).await,
         "get_configs" => config::get_configs(args).await,
-        "set_config" => config::set_config(args).await,
+        "set_config" => config::set_config(state, args).await,
         "get_agent_profile_config" => config::get_agent_profile_config(args).await,
         "get_agent_profile_configs" => config::get_agent_profile_configs().await,
         "get_external_source_snapshot"

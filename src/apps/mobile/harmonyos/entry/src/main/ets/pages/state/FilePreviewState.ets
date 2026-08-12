@@ -1,4 +1,4 @@
-import { FilePreviewTarget } from './FilePreviewTarget';
+import { FilePreviewTarget } from '../../model/FilePreviewTarget';
 
 export enum FilePreviewPhase {
   Idle = 'idle',

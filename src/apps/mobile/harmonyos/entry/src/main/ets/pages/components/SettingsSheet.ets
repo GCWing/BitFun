@@ -4,23 +4,23 @@ import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
 import { ModelServiceSettingsPanel } from './ModelServiceSettingsPanel';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
 
-@Component
+@ComponentV2
 export struct SettingsSheet {
-  @Prop generalChatApiUrl: string = '';
-  @Prop generalChatModelName: string = '';
-  @Prop hasGeneralChatApiKey: boolean = false;
-  @Prop generalChatModelCatalog: RemoteModelCatalog = {
+  @Param generalChatApiUrl: string = '';
+  @Param generalChatModelName: string = '';
+  @Param hasGeneralChatApiKey: boolean = false;
+  @Param generalChatModelCatalog: RemoteModelCatalog = {
     version: 0,
     models: [],
     default_models: {}
   };
-  @Prop selectedGeneralChatModelId: string = '';
-  @Prop accountUsername: string = '';
-  @Prop authenticatedUserId: string = '';
-  @Prop deviceId: string = '';
-  onClose: () => void = () => {};
-  onOpenAccount: () => void = () => {};
-  onSaveGeneralChatConfig: (
+  @Param selectedGeneralChatModelId: string = '';
+  @Param accountUsername: string = '';
+  @Param authenticatedUserId: string = '';
+  @Param deviceId: string = '';
+  @Event onClose: () => void = () => {};
+  @Event onOpenAccount: () => void = () => {};
+  @Event onSaveGeneralChatConfig: (
     apiUrl: string,
     apiKey: string,
     modelName: string,
@@ -31,7 +31,7 @@ export struct SettingsSheet {
     _modelName: string,
     _clearApiKey: boolean
   ) => '';
-  onTestGeneralChatConfig: (
+  @Event onTestGeneralChatConfig: (
     apiUrl: string,
     apiKey: string,
     modelName: string,
@@ -42,10 +42,10 @@ export struct SettingsSheet {
     _modelName: string,
     _clearApiKey: boolean
   ) => '';
-  @State showModelService: boolean = false;
-  @State savedGeneralChatApiUrl: string = '';
-  @State savedGeneralChatModelName: string = '';
-  @State savedGeneralChatHasApiKey: boolean = false;
+  @Local showModelService: boolean = false;
+  @Local savedGeneralChatApiUrl: string = '';
+  @Local savedGeneralChatModelName: string = '';
+  @Local savedGeneralChatHasApiKey: boolean = false;
 
   aboutToAppear(): void {
     this.showModelService = false;

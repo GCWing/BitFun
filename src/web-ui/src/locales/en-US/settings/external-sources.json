@@ -1,9 +1,24 @@
 {
   "title": "External AI applications",
-  "subtitle": "Use commands, tools, agents, and MCP from other AI applications, and inspect their Hooks.",
+  "subtitle": "Use commands, tools, agents, and MCP from other AI applications, and manage compatible Hooks.",
   "legacyHostNotice": "This execution Host uses the legacy external-source protocol. Safe Mode requires a Host upgrade.",
   "loading": "Checking external sources…",
   "checkingNonBlocking": "Checking for updates…",
+  "applications": {
+    "title": "Discovered applications",
+    "empty": "No compatible app settings found.",
+    "toggleLabel": "Enable or disable {{name}}",
+    "enableInAdvanced": "Enable external applications in Advanced settings first.",
+    "attentionRequired": "Needs attention. Open Advanced settings to continue.",
+    "openAdvanced": "Open Advanced settings for {{name}}",
+    "advanced": {
+      "title": "Advanced settings"
+    }
+  },
+  "hooksManagement": {
+    "title": "Hooks",
+    "loading": "Loading Hook management…"
+  },
   "hooks": {
     "title": "Hooks",
     "description": "View Hook configuration from OpenCode, Claude Code, and Codex. BitFun only reads config files without running any code.",
@@ -15,7 +30,6 @@
     "showMoreSourcesForProvider": "Show {{count}} more sources for {{provider}}",
     "showMoreEntriesForProvider": "Show {{count}} more Hooks for {{provider}}",
     "showMoreDiagnosticsForProvider": "Show {{count}} more diagnostics for {{provider}}",
-    "technicalDetails": "Technical details",
     "loading": "Checking Hook configuration…",
     "pending": "Hook discovery is still running. The catalog will update automatically.",
     "empty": "No Hook configuration was found.",
@@ -90,7 +104,6 @@
     "hideDetails": "Hide details",
     "close": "Close",
     "unknown": "Unknown",
-    "technicalDetails": "Technical details",
     "selected": "Currently used",
     "selectedUnavailable": "Selected, currently unavailable",
     "notSelected": "Not used",
@@ -115,13 +128,14 @@
     "resolve_conflict": "Resolve conflict",
     "install_runtime": "Install or repair the required runtime, then refresh.",
     "reconnect_host": "Reconnect or upgrade the execution Host, then retry.",
-    "exit_safe_mode": "Exit Safe Mode"
+    "exit_safe_mode": "Exit Safe Mode",
+    "upgrade_host": "Upgrade Host",
+    "view_reason": "View reason"
   },
   "safeMode": {
     "title": "External Safe Mode",
     "description": "Block new external tool, agent, and MCP calls while keeping discovered commands and diagnostics visible. Calls already in progress are not cancelled.",
-    "activeDescription": "New executable external calls are blocked. Calls already in progress may finish; commands and diagnostics remain available for recovery.",
-    "activeNotice": "Safe Mode applies only to this Host process and execution domain. Restarting or switching the execution Host turns it off.",
+    "activeNotice": "New external calls are blocked for this Host process. Calls already in progress may finish; restarting or switching the Host turns Safe Mode off.",
     "toggleLabel": "Use External Safe Mode",
     "entered": "External Safe Mode is active.",
     "exited": "External Safe Mode is off and eligible integrations were reconciled."
@@ -130,7 +144,7 @@
     "hostTitle": "Unavailable here",
     "hostDescription": "View or manage external settings in Desktop.",
     "remoteDescription": "External settings are unavailable for this remote project. Switch to a local project.",
-    "remoteConnectionDescription": "Remote connection unavailable. Retry or disconnect."
+    "remoteConnectionDescription": "Remote connection unavailable. Retry the connection."
   },
   "policy": {
     "title": "Integration settings",
@@ -207,11 +221,8 @@
     "refreshRequired": "The catalog changed before this action completed. Refresh, review the current state, and try again.",
     "policyIncompatible": "External settings were written by a newer BitFun version. Back up and reset them before making changes.",
     "unavailableRetry": "Temporarily unavailable. Try again later.",
-    "internal": "The action failed. Refresh to retry.",
-    "referenceId": "Reference: {{id}}",
-    "errorCode": "Error code: {{code}}",
-    "stage": "Stage: {{stage}}",
-    "causationId": "Related operation: {{id}}"
+    "internal": "The action failed and no settings were changed. Try again below. If it keeps failing, contact support with the reference number.",
+    "referenceId": "Support reference (include when contacting support): {{id}}"
   },
   "diagnostics": {
     "summary": "{{count}} items need attention. Review the details to see what is affected.",
@@ -227,7 +238,7 @@
       "unreadableSource": "BitFun could not read part of a source. Check file access, then refresh.",
       "notSupported": "This type of external content is not supported yet, so BitFun did not load or run it.",
       "checkFailed": "BitFun could not check one source. Other sources remain available; refresh to retry.",
-      "sourceIssue": "BitFun found an issue in one source. The affected content was not enabled; review the technical details."
+      "sourceIssue": "BitFun found an issue in one source. The affected content was not enabled. Check the source configuration, then refresh."
     }
   },
   "sources": {

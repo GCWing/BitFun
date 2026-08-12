@@ -7,6 +7,7 @@ import type { ConnectionTestMessageCode } from '@/shared/utils/aiConnectionTestM
 import type {
   OpenCodePlan,
   ReasoningCatalogProjection,
+  ReasoningConfig,
   SubscriptionProvider,
 } from '@/infrastructure/config/types';
 export type {
@@ -133,10 +134,42 @@ export interface ProviderCatalog {
   providers: ProviderCatalogProvider[];
 }
 
+export type ModelsDevCatalogSource = 'cache' | 'bundle' | 'empty';
+
+export interface ModelsDevReasoningCatalog {
+  revision: string;
+  source: ModelsDevCatalogSource;
+  providers: Array<{
+    id: string;
+    name: string;
+    models: Array<{
+      id: string;
+      display_name?: string;
+    }>;
+  }>;
+}
+
+export interface ModelsDevCatalogStatus {
+  active_source: ModelsDevCatalogSource;
+  revision: string;
+  cache_path: string;
+  cache_exists: boolean;
+  cache_updated_at_ms?: number;
+  provider_count: number;
+  reasoning_model_count: number;
+  refresh_in_progress: boolean;
+}
+
+export interface ModelsDevRefreshResult {
+  outcome: 'updated' | 'unchanged' | 'throttled';
+  status: ModelsDevCatalogStatus;
+}
+
 export interface AIModelCatalog {
   version: number;
   models: AIModelCatalogEntry[];
   provider_catalog?: ProviderCatalog;
+  models_dev_reasoning_catalog?: ModelsDevReasoningCatalog;
   default_models: {
     primary?: string | null;
     fast?: string | null;
@@ -146,6 +179,15 @@ export interface AIModelCatalog {
     speech_recognition?: string | null;
   };
   session_model_id?: string;
+}
+
+export interface ReasoningCatalogProjectionRequest {
+  provider: string;
+  modelName: string;
+  baseUrl: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning: ReasoningConfig;
 }
 
 export type SubscriptionLoginStatus = 'pending' | 'authorized' | 'failed' | 'cancelled';
@@ -218,6 +260,43 @@ export class AIApi {
       return await api.invoke<AIModelCatalog>('get_ai_model_catalog', {});
     } catch (error) {
       throw createTauriCommandError('get_ai_model_catalog', error);
+    }
+  }
+
+  async projectReasoningCatalog(
+    request: ReasoningCatalogProjectionRequest,
+  ): Promise<ReasoningCatalogProjection> {
+    try {
+      return await api.invoke<ReasoningCatalogProjection>(
+        'project_ai_model_reasoning_catalog',
+        { request },
+      );
+    } catch (error) {
+      throw createTauriCommandError('project_ai_model_reasoning_catalog', error);
+    }
+  }
+
+  async getModelsDevCatalogStatus(): Promise<ModelsDevCatalogStatus> {
+    try {
+      return await api.invoke<ModelsDevCatalogStatus>('get_models_dev_catalog_status', {});
+    } catch (error) {
+      throw createTauriCommandError('get_models_dev_catalog_status', error);
+    }
+  }
+
+  async refreshModelsDevCatalogNow(): Promise<ModelsDevRefreshResult> {
+    try {
+      return await api.invoke<ModelsDevRefreshResult>('refresh_models_dev_catalog_now', {});
+    } catch (error) {
+      throw createTauriCommandError('refresh_models_dev_catalog_now', error);
+    }
+  }
+
+  async revealModelsDevCacheDirectory(): Promise<void> {
+    try {
+      await api.invoke('reveal_models_dev_cache_directory', {});
+    } catch (error) {
+      throw createTauriCommandError('reveal_models_dev_cache_directory', error);
     }
   }
 

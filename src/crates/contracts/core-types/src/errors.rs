@@ -69,6 +69,12 @@ pub struct AiProviderError {
     pub provider_code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub http_status: Option<u16>,
+    /// Provider-requested delay before another attempt, in milliseconds.
+    ///
+    /// This is transport metadata only. Runtime owners decide whether to retry;
+    /// the hint must never be used as retry-admission policy.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_after_ms: Option<u64>,
 }
 
 impl AiProviderError {
@@ -85,6 +91,7 @@ impl AiProviderError {
             provider,
             provider_code,
             http_status,
+            retry_after_ms: None,
         }
     }
 
@@ -95,7 +102,13 @@ impl AiProviderError {
             provider: None,
             provider_code: None,
             http_status: None,
+            retry_after_ms: None,
         }
+    }
+
+    pub fn with_retry_after_ms(mut self, retry_after_ms: Option<u64>) -> Self {
+        self.retry_after_ms = retry_after_ms;
+        self
     }
 
     pub fn detail(&self) -> AiErrorDetail {
@@ -639,6 +652,7 @@ mod tests {
         );
 
         assert_eq!(error.category, ErrorCategory::ContextOverflow);
+        assert_eq!(error.retry_after_ms, None);
         let detail = error.detail();
         assert_eq!(detail.provider.as_deref(), Some("openai"));
         assert_eq!(
@@ -646,5 +660,22 @@ mod tests {
             Some("context_length_exceeded")
         );
         assert_eq!(detail.http_status, Some(400));
+    }
+
+    #[test]
+    fn provider_error_preserves_retry_after_hint() {
+        let error = AiProviderError::from_parts(
+            "Request failed".to_string(),
+            Some("openai".to_string()),
+            Some("permission_denied".to_string()),
+            Some(403),
+        )
+        .with_retry_after_ms(Some(1_500));
+
+        assert_eq!(error.retry_after_ms, Some(1_500));
+        assert_eq!(
+            serde_json::to_value(&error).expect("serialize provider error")["retryAfterMs"],
+            1_500
+        );
     }
 }

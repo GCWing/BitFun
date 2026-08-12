@@ -69,7 +69,6 @@ const DEFAULT_ITEM_ORDER: &[&str] = &[
     "extensions",
     "plugins",
     "hooks",
-    "hooks_external",
     "login",
     "logout",
     "status",

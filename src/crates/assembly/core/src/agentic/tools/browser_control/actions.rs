@@ -7,6 +7,16 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use tokio::sync::broadcast;
 
+/// Upper bound for an explicit `wait` duration. Pacing waits ("check again in
+/// 30 minutes") are a legitimate agent pattern, so the ceiling is generous;
+/// it exists only so a nonsense duration cannot wedge the session forever.
+/// Kept in step with `AgentWaitTool::MAX_TIMEOUT_MS`.
+pub const MAX_WAIT_MS: u64 = 60 * 60 * 1_000;
+
+/// How long a `wait { condition }` runs before giving up when the caller does
+/// not say. Matches the previous hard-coded lifecycle and selector budgets.
+pub const DEFAULT_CONDITION_TIMEOUT_MS: u64 = 15_000;
+
 /// Result of waiting for a CDP `Page.lifecycleEvent`.
 enum LifecycleOutcome {
     /// One of the requested lifecycle names fired in time. Carries the name
@@ -1054,17 +1064,35 @@ impl<'a> BrowserActions<'a> {
     }
 
     /// Wait for a duration or a condition.
+    ///
+    /// Callers that can observe cancellation should sleep themselves rather
+    /// than routing a plain duration through here — see ControlHub's
+    /// `browser.wait`, which owns the cancellable, session-free duration path.
+    ///
+    /// `condition_timeout_ms` bounds the condition wait; it defaults to
+    /// [`DEFAULT_CONDITION_TIMEOUT_MS`] and is ignored for duration waits.
     pub async fn wait(
         &self,
         duration_ms: Option<u64>,
         condition: Option<&str>,
+        condition_timeout_ms: Option<u64>,
     ) -> BitFunResult<Value> {
         if let Some(ms) = duration_ms {
-            let clamped = ms.min(30_000);
+            let clamped = ms.min(MAX_WAIT_MS);
             tokio::time::sleep(std::time::Duration::from_millis(clamped)).await;
-            return Ok(json!({ "success": true, "action": "wait", "ms": clamped }));
+            return Ok(json!({
+                "success": true,
+                "action": "wait",
+                "ms": clamped,
+                "requested_ms": ms,
+                "clamped": clamped != ms,
+            }));
         }
         if let Some(cond) = condition {
+            let timeout_ms = condition_timeout_ms
+                .filter(|ms| *ms > 0)
+                .unwrap_or(DEFAULT_CONDITION_TIMEOUT_MS)
+                .min(MAX_WAIT_MS);
             match cond {
                 "networkidle" | "load" | "domcontentloaded" => {
                     // Phase 1: replace the previous "sleep 2s and hope" with
@@ -1085,7 +1113,7 @@ impl<'a> BrowserActions<'a> {
                         "domcontentloaded" => &["DOMContentLoaded", "load"],
                         _ => &["load"],
                     };
-                    let outcome = wait_for_lifecycle(&mut events, None, wanted, 15_000).await;
+                    let outcome = wait_for_lifecycle(&mut events, None, wanted, timeout_ms).await;
                     let (success, lifecycle_event, timed_out) = match outcome {
                         LifecycleOutcome::Reached(n) => (true, Some(n), false),
                         LifecycleOutcome::Timeout => (false, None, true),
@@ -1097,11 +1125,15 @@ impl<'a> BrowserActions<'a> {
                         "condition": cond,
                         "lifecycle_event": lifecycle_event,
                         "timed_out": timed_out,
+                        "timeout_ms": timeout_ms,
                     }));
                 }
                 selector => {
+                    const POLL_INTERVAL_MS: u64 = 500;
                     let js = Self::element_exists_js(selector);
-                    for _ in 0..30 {
+                    let deadline =
+                        tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+                    loop {
                         let result = self.evaluate(&js).await?;
                         let found = result
                             .get("result")
@@ -1109,11 +1141,23 @@ impl<'a> BrowserActions<'a> {
                             .and_then(|v| v.as_bool())
                             .unwrap_or(false);
                         if found {
-                            return Ok(
-                                json!({ "success": true, "action": "wait", "condition": cond }),
-                            );
+                            return Ok(json!({
+                                "success": true,
+                                "action": "wait",
+                                "condition": cond,
+                                "timeout_ms": timeout_ms,
+                            }));
                         }
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        let remaining = deadline
+                            .saturating_duration_since(tokio::time::Instant::now())
+                            .as_millis() as u64;
+                        if remaining == 0 {
+                            break;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            remaining.min(POLL_INTERVAL_MS),
+                        ))
+                        .await;
                     }
                     return Err(structured_error(
                         ErrorCode::Timeout,
@@ -1123,7 +1167,18 @@ impl<'a> BrowserActions<'a> {
                 }
             }
         }
-        Ok(json!({ "success": true, "action": "wait" }))
+        // No duration and no condition: there is nothing to wait for. Reporting
+        // success here used to make a mis-keyed duration (`ms` instead of
+        // `duration_ms`) look like a completed wait that in fact returned
+        // instantly, so the agent silently skipped its pause.
+        Err(structured_error(
+            ErrorCode::InvalidParams,
+            "wait requires a duration or a condition",
+            &[
+                "Pass `duration_ms` (alias `ms`) to pause, e.g. { \"duration_ms\": 1800000 } for 30 minutes",
+                "Or pass `condition`: 'load' | 'domcontentloaded' | 'networkidle' | a CSS/@ref selector",
+            ],
+        ))
     }
 
     // ── Capture ────────────────────────────────────────────────────────

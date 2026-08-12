@@ -15,6 +15,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use base64::Engine as _;
@@ -42,6 +43,29 @@ const BUNDLE_RECORD_FILE: &str = "bundle.json";
 const SYNC_OPERATION_FILE: &str = "sync-operation.json";
 const INCOMING_BUNDLE_FILE: &str = "incoming.bundle";
 const RESULT_BUNDLE_FILE: &str = "result.bundle";
+/// Backstop for one fetch from the project's Git remote.
+///
+/// The fetch used to be unbounded, so a dead transport parked the whole dispatch
+/// on a single `git fetch` forever. This is deliberately not a performance
+/// budget: a first fetch of a large project legitimately runs for many minutes,
+/// and killing one that is still making progress would fall back to shipping the
+/// same history over SSH instead — strictly slower than the fetch it replaced.
+/// Stalls are caught by [`FETCH_STALL_SECONDS`]; this only has to fire before
+/// the controller's own 30-minute workspace-operation ceiling, so that the
+/// target reports the failure rather than the controller timing out on a target
+/// that is still waiting.
+const REMOTE_FETCH_TIMEOUT: Duration = Duration::from_secs(25 * 60);
+/// Bytes per second below which an HTTP fetch counts as stalled.
+const FETCH_STALL_BYTES_PER_SECOND: u32 = 1024;
+/// How long an HTTP fetch may stay under [`FETCH_STALL_BYTES_PER_SECOND`].
+///
+/// Git aborts the transfer itself once both hold, which is the check that
+/// actually wants to be tight: it separates "slow but arriving" from "hung",
+/// which a total-time budget cannot tell apart. It only covers HTTP(S) remotes;
+/// for SSH remotes the backstop above is the only bound.
+const FETCH_STALL_SECONDS: u32 = 60;
+/// How often a bounded Git child is checked for exit.
+const GIT_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// Short per-job suffix that keeps two dispatches of one project apart, matching
 /// the local managed-worktree convention.
 const WORKTREE_SUFFIX_CHARS: usize = 8;
@@ -297,6 +321,7 @@ fn pending_provision_response(
         base_commit: request.base_commit.clone(),
         branch: request.branch.clone(),
         have_tips: Vec::new(),
+        fetch_error: None,
     }
 }
 
@@ -356,19 +381,28 @@ fn provision_in_store(
             base_commit: request.base_commit,
             branch: request.branch,
             have_tips: Vec::new(),
+            fetch_error: None,
         });
     }
 
     let repo = ensure_repository(store, &request.repo_key, request.remote_url.as_deref())?;
+    let mut fetch_error = None;
     if request.remote_url.is_some() && !commit_exists(&repo, &request.base_commit)? {
         // A fetch failure is not fatal on its own: the controller can still
         // deliver the missing objects by bundle, which is also the only path for
-        // a repository with no remote.
-        if let Err(error) = fetch_remote(&repo) {
+        // a repository with no remote. It is reported rather than swallowed,
+        // because "the target fell back to a full upload" and "the target could
+        // not reach the remote" look identical from the controller otherwise.
+        if let Err(error) = fetch_base_commit(&repo, &request.base_commit) {
             tracing::warn!("Dispatch target could not fetch from the Git remote: {error:#}");
+            fetch_error = Some(truncate_utf8(&format!("{error:#}")));
         }
     }
     if !commit_exists(&repo, &request.base_commit)? {
+        // A fetch that died partway leaves its pack under a temporary name, so
+        // the bytes are neither usable nor visible to the tips below. Clearing
+        // them keeps a repeatedly failing remote from filling the target's disk.
+        remove_pack_temporaries(&repo);
         return Ok(DispatchWorkspaceProvisionResponse {
             pending: false,
             provisioned: false,
@@ -377,6 +411,7 @@ fn provision_in_store(
             base_commit: request.base_commit,
             branch: request.branch,
             have_tips: repository_tips(&repo)?,
+            fetch_error,
         });
     }
 
@@ -393,6 +428,7 @@ fn provision_in_store(
         base_commit: request.base_commit,
         branch: request.branch,
         have_tips: Vec::new(),
+        fetch_error: None,
     })
 }
 
@@ -1320,18 +1356,102 @@ fn set_origin(repo: &Path, url: &str) -> Result<()> {
     Ok(())
 }
 
-fn fetch_remote(repo: &Path) -> Result<()> {
-    git(
+/// Bring one commit into the repository cache from the project's remote.
+///
+/// Asks the server for exactly the commit this job needs. The previous refspec
+/// — `+refs/heads/*:refs/remotes/origin/*` — made the first fetch of a project
+/// download every branch the server has (192 of them for this repository) when
+/// a dispatch only ever checks out `base_commit`. Servers that will not serve a
+/// bare object id fall back to the old refspec, so an older or restricted host
+/// still works, just as slowly as before.
+///
+/// A successful fetch is anchored under `refs/dispatch/bases/`. Asking for a
+/// bare object id writes no ref of its own, and the job branch that would hold
+/// it goes away with the job, which would leave the cache holding a project's
+/// whole history with nothing pointing at it — invisible to `have_tips`, so the
+/// next job bundles everything again, and eligible for `gc` to throw away.
+fn fetch_base_commit(repo: &Path, base_commit: &str) -> Result<()> {
+    remove_pack_temporaries(repo);
+    let targeted = fetch_with_stall_guard(repo, &["--no-tags", "origin", base_commit]);
+    let Err(error) = targeted else {
+        anchor_base_commit(repo, base_commit);
+        return Ok(());
+    };
+    tracing::debug!(
+        "Dispatch target could not fetch {base_commit} directly, retrying with every branch: {error:#}"
+    );
+    // The targeted attempt may have died partway through indexing.
+    remove_pack_temporaries(repo);
+    fetch_with_stall_guard(
         repo,
         &[
-            "fetch",
             "--no-tags",
             "--prune",
             "origin",
             "+refs/heads/*:refs/remotes/origin/*",
         ],
     )
-    .map(|_| ())
+}
+
+/// Keep a fetched base commit reachable after its job is gone.
+///
+/// Best effort on purpose: the fetch already succeeded, and the worktree about
+/// to be created keeps the objects alive for this job either way. Failing here
+/// would trade a warm cache for a failed dispatch.
+fn anchor_base_commit(repo: &Path, base_commit: &str) {
+    if let Err(error) = git(
+        repo,
+        &[
+            "update-ref",
+            &format!("refs/dispatch/bases/{base_commit}"),
+            base_commit,
+        ],
+    ) {
+        tracing::debug!("Could not anchor dispatch base commit {base_commit}: {error:#}");
+    }
+}
+
+/// `git fetch` with the stall guard and the deadline both applied.
+fn fetch_with_stall_guard(repo: &Path, fetch_args: &[&str]) -> Result<()> {
+    let low_speed_limit = format!("http.lowSpeedLimit={FETCH_STALL_BYTES_PER_SECOND}");
+    let low_speed_time = format!("http.lowSpeedTime={FETCH_STALL_SECONDS}");
+    let mut args = vec![
+        "-c",
+        low_speed_limit.as_str(),
+        "-c",
+        low_speed_time.as_str(),
+        "fetch",
+    ];
+    args.extend_from_slice(fetch_args);
+    git_within(repo, REMOTE_FETCH_TIMEOUT, &args)
+}
+
+/// Drop `tmp_pack_*` files left behind by a fetch that died while indexing.
+///
+/// Git writes the incoming pack under a temporary name and only renames it once
+/// the index is complete, so a killed or timed-out fetch strands the whole
+/// download. Nothing else ever collects them — `git gc` does not consider them
+/// its business, and they are invisible to every object count — so one broken
+/// first fetch of a large project parks hundreds of megabytes in the cache
+/// permanently, and every retry adds another copy.
+///
+/// Callers hold the repository lock, which serializes every Git operation on
+/// this clone, so a temporary seen here cannot belong to a live fetch.
+fn remove_pack_temporaries(repo: &Path) {
+    let pack_dir = repo.join("objects").join("pack");
+    let Ok(entries) = fs::read_dir(&pack_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !name.starts_with("tmp_pack_") {
+            continue;
+        }
+        if let Err(error) = fs::remove_file(entry.path()) {
+            tracing::debug!("Could not remove stale dispatch pack temporary {name}: {error}");
+        }
+    }
 }
 
 fn repository_tips(repo: &Path) -> Result<Vec<String>> {
@@ -1481,6 +1601,93 @@ fn git(dir: &Path, args: &[&str]) -> Result<String> {
         );
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Run Git with a deadline, killing it if the deadline passes.
+///
+/// Only the remote-facing operations need this. Everything else here works on
+/// local objects and finishes in bounded time on its own, whereas a fetch is at
+/// the mercy of a network that may never answer — and an unbounded one holds the
+/// whole dispatch, and the caller's progress display, hostage.
+fn git_within(dir: &Path, timeout: Duration, args: &[&str]) -> Result<()> {
+    let mut command = git_command(dir);
+    command
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    // `git fetch` is a supervisor: the transfer really happens in the transport
+    // helper and `index-pack` that it spawns. Killing only the parent leaves
+    // those downloading into the cache with nobody waiting for them, which is
+    // how a cancelled fetch ends up stranding hundreds of megabytes. Giving the
+    // whole thing its own process group makes it killable as a unit on Unix;
+    // Windows keeps the old parent-only kill, and the sweep above is what
+    // reclaims whatever a surviving helper leaves behind.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("run git {}", args.join(" ")))?;
+    // Drain stderr on its own thread: a child that fills the pipe while nobody
+    // reads it blocks forever, which would defeat the deadline below.
+    let mut pipe = child.stderr.take();
+    let drain = std::thread::spawn(move || {
+        let mut captured = String::new();
+        if let Some(pipe) = pipe.as_mut() {
+            let _ = pipe.read_to_string(&mut captured);
+        }
+        captured
+    });
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("wait for git {}", args.join(" ")))
+            }
+        }
+        if Instant::now() >= deadline {
+            kill_process_tree(&mut child);
+            // Deliberately not joining the drain: any helper that outlived the
+            // kill still holds the write end, and waiting on it here would put
+            // the deadline right back where it started.
+            bail!(
+                "git {} did not finish within {} seconds",
+                args.join(" "),
+                timeout.as_secs()
+            );
+        }
+        std::thread::sleep(GIT_WAIT_POLL_INTERVAL);
+    };
+    let stderr = drain.join().unwrap_or_default();
+    if !status.success() {
+        bail!(
+            "git {} failed: {}",
+            args.join(" "),
+            truncate_utf8(stderr.trim())
+        );
+    }
+    Ok(())
+}
+
+/// Stop a timed-out Git child and everything it spawned.
+fn kill_process_tree(child: &mut std::process::Child) {
+    #[cfg(unix)]
+    {
+        // The child leads its own group (see `process_group` above), so its pid
+        // doubles as the group id.
+        let group = child.id() as i32;
+        if group > 1 {
+            // SAFETY: `kill` takes a pid and a signal by value and borrows
+            // nothing; a group that already exited just yields ESRCH.
+            unsafe {
+                libc::kill(-group, libc::SIGKILL);
+            }
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 fn git_succeeds(dir: &Path, args: &[&str]) -> Result<bool> {
@@ -1730,6 +1937,168 @@ mod tests {
         assert!(!response.provisioned);
         assert!(response.needs_bundle);
         assert!(response.workspace_path.is_none());
+        // No remote to try, so nothing to explain.
+        assert_eq!(response.fetch_error, None);
+    }
+
+    /// A local path is a valid Git remote, so the fast path is testable without
+    /// a network: the target should pull the commit itself and never ask for a
+    /// bundle.
+    #[test]
+    fn provision_fetches_the_base_commit_from_the_remote_instead_of_bundling() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        let base_commit = init_source_repository(&source);
+
+        let response = provision_in_store(
+            &store,
+            DispatchWorkspaceProvisionRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: "job-1".to_string(),
+                repo_key: "abcdef0123456789".to_string(),
+                project_label: Some("BitFun".to_string()),
+                remote_url: Some(source.to_string_lossy().to_string()),
+                base_commit: base_commit.clone(),
+                branch: "bitfun/dispatch/job-1".to_string(),
+            },
+        )
+        .expect("provision");
+
+        assert!(response.provisioned, "the remote had the commit");
+        assert!(
+            !response.needs_bundle,
+            "no upload should have been asked for"
+        );
+        assert_eq!(response.fetch_error, None);
+        let workspace = response.workspace_path.expect("workspace path");
+        assert_eq!(
+            fs::read(Path::new(&workspace).join("file.txt")).expect("checked out file"),
+            b"base"
+        );
+
+        // The fetched history must outlive the job that pulled it, or the next
+        // dispatch of this project pays for the whole download again.
+        let repo = store
+            .repo_dir("abcdef0123456789")
+            .expect("repo dir")
+            .join("git");
+        let anchored = git(
+            &repo,
+            &["rev-parse", &format!("refs/dispatch/bases/{base_commit}")],
+        )
+        .expect("the base commit should be anchored");
+        assert_eq!(anchored.trim(), base_commit);
+        assert!(
+            repository_tips(&repo).expect("tips").contains(&base_commit),
+            "an anchored base must count as a tip the controller can bundle against"
+        );
+    }
+
+    /// An unreachable remote must degrade to the bundle path *and say why*: on a
+    /// cold cache that fallback re-sends the project's whole history.
+    #[test]
+    fn an_unreachable_remote_reports_why_it_fell_back_to_a_bundle() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let missing = temp.path().join("no-such-repository");
+
+        let response = provision_in_store(
+            &store,
+            DispatchWorkspaceProvisionRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: "job-1".to_string(),
+                repo_key: "abcdef0123456789".to_string(),
+                project_label: Some("BitFun".to_string()),
+                remote_url: Some(missing.to_string_lossy().to_string()),
+                base_commit: "0".repeat(40),
+                branch: "bitfun/dispatch/job-1".to_string(),
+            },
+        )
+        .expect("provision");
+
+        assert!(response.needs_bundle);
+        // The reason has to name the operation and carry Git's own diagnosis;
+        // "the target fell back to a bundle" on its own is not actionable.
+        let reason = response.fetch_error.expect("the fallback reason");
+        assert!(reason.contains("fetch"), "unhelpful reason: {reason}");
+        assert!(
+            reason.contains("does not appear to be a git repository"),
+            "the reason dropped Git's own diagnosis: {reason}"
+        );
+    }
+
+    /// A fetch killed while indexing strands its pack under a temporary name.
+    /// Nothing else collects those, so one broken fetch of a large project used
+    /// to park its whole download in the cache permanently.
+    #[test]
+    fn a_failed_fetch_does_not_leave_its_partial_pack_behind() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let repo_root = store.repo_dir("abcdef0123456789").expect("repo dir");
+        // Seed a real cache: a directory that is not a valid bare repository is
+        // quarantined and rebuilt, which would retire the packs before the
+        // sweep under test ever sees them.
+        create_private_dir(&repo_root).expect("repo root");
+        git(&repo_root, &["init", "--bare", "--quiet", "git"]).expect("bare repo");
+        let pack_dir = repo_root.join("git").join("objects").join("pack");
+        fs::create_dir_all(&pack_dir).expect("pack dir");
+        fs::write(pack_dir.join("tmp_pack_abandoned"), b"partial download").expect("stranded pack");
+        // A real pack must survive: it is the cache this whole path exists for.
+        fs::write(pack_dir.join("pack-real.pack"), b"kept").expect("real pack");
+
+        provision_in_store(
+            &store,
+            DispatchWorkspaceProvisionRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: "job-1".to_string(),
+                repo_key: "abcdef0123456789".to_string(),
+                project_label: Some("BitFun".to_string()),
+                remote_url: Some(
+                    temp.path()
+                        .join("no-such-repository")
+                        .to_string_lossy()
+                        .to_string(),
+                ),
+                base_commit: "0".repeat(40),
+                branch: "bitfun/dispatch/job-1".to_string(),
+            },
+        )
+        .expect("provision");
+
+        assert!(
+            !pack_dir.join("tmp_pack_abandoned").exists(),
+            "the stranded pack survived"
+        );
+        assert!(
+            pack_dir.join("pack-real.pack").exists(),
+            "a real pack was deleted"
+        );
+    }
+
+    #[test]
+    fn a_git_command_that_never_finishes_is_killed_at_its_deadline() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let repo = temp.path().to_path_buf();
+        git(&repo, &["init", "--quiet", "--bare"]).expect("init");
+
+        let started = Instant::now();
+        // `--stdin` with a null stdin returns immediately; a long sleep does not.
+        let error = git_within(
+            &repo,
+            Duration::from_millis(300),
+            &["-c", "alias.stall=!sleep 30", "stall"],
+        )
+        .expect_err("the deadline should have fired");
+
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "it waited too long"
+        );
+        assert!(
+            format!("{error:#}").contains("did not finish within"),
+            "unexpected error: {error:#}"
+        );
     }
 
     #[test]

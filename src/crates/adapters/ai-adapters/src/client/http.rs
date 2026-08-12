@@ -63,9 +63,9 @@ pub(crate) fn create_http_client(
     }
 }
 
-fn build_proxy(config: &ProxyConfig) -> Result<Proxy> {
-    let mut proxy =
-        Proxy::all(&config.url).map_err(|e| anyhow!("Failed to create proxy: {}", e))?;
+pub(crate) fn build_proxy(config: &ProxyConfig) -> Result<Proxy> {
+    let proxy_url = normalize_proxy_url(&config.url);
+    let mut proxy = Proxy::all(&proxy_url).map_err(|e| anyhow!("Failed to create proxy: {}", e))?;
 
     if let (Some(username), Some(password)) = (&config.username, &config.password) {
         if !username.is_empty() && !password.is_empty() {
@@ -75,4 +75,59 @@ fn build_proxy(config: &ProxyConfig) -> Result<Proxy> {
     }
 
     Ok(proxy)
+}
+
+fn normalize_proxy_url(url: &str) -> String {
+    let trimmed = url.trim();
+    if trimmed.contains("://") {
+        trimmed.to_string()
+    } else {
+        format!("http://{trimmed}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_proxy, normalize_proxy_url};
+    use crate::types::ProxyConfig;
+
+    #[test]
+    fn normalizes_bare_host_and_port_to_http_proxy_url() {
+        assert_eq!(
+            normalize_proxy_url("127.0.0.1:7897"),
+            "http://127.0.0.1:7897"
+        );
+    }
+
+    #[test]
+    fn preserves_explicit_proxy_scheme() {
+        assert_eq!(
+            normalize_proxy_url("socks5://127.0.0.1:1080"),
+            "socks5://127.0.0.1:1080"
+        );
+    }
+
+    #[test]
+    fn accepts_bare_host_and_port_proxy_configuration() {
+        let config = ProxyConfig {
+            enabled: true,
+            url: "127.0.0.1:7897".to_string(),
+            username: None,
+            password: None,
+        };
+
+        assert!(build_proxy(&config).is_ok());
+    }
+
+    #[test]
+    fn accepts_explicit_socks5_proxy_configuration() {
+        let config = ProxyConfig {
+            enabled: true,
+            url: "socks5://127.0.0.1:1080".to_string(),
+            username: None,
+            password: None,
+        };
+
+        assert!(build_proxy(&config).is_ok());
+    }
 }

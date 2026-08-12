@@ -413,6 +413,7 @@
       "interrupted": "已中斷"
     },
     "menu": {
+      "switchPet": "切換寵物",
       "closePet": "關閉寵物",
       "closeBubble": "關閉該氣泡"
     },
@@ -664,6 +665,9 @@
       "cliInstallFailed": "無法準備遠端執行環境。請檢查 SSH 連線後重試。",
       "cliInstallInProgress": "正在準備遠端執行環境…",
       "cliInstallUnknownVersion": "所需版本",
+      "modelSyncStarted": "正在將本機的模型設定複製到遠端裝置…",
+      "modelSyncSucceeded": "模型設定已複製，遠端裝置可以執行所選模型。",
+      "modelSyncFailed": "無法將模型設定複製到遠端裝置。",
       "errors": {
         "attachmentUnavailable": "這張圖片無法傳送到遠端裝置。請重新加入後再試。",
         "deviceAttachmentTooLarge": "透過帳號裝置傳送的圖片總大小不能超過 192 KB。請壓縮圖片，或改用 SSH 目標。",
@@ -709,9 +713,19 @@
         "tooltip": "此工作階段的權限由 ACP 用戶端控制。"
       },
       "fullAccessWarningTitle": "啟用完全存取？",
-      "fullAccessWarningMessage": "完全存取會預設允許工具執行，不再逐次確認。",
+      "fullAccessWarningMessage": "完全存取會預設放行工具呼叫，不再逐次確認。此設定僅作用於目前工作階段，專案規則與強制規則仍然生效。",
       "fullAccessConfirm": "啟用完全存取",
-      "cancel": "取消"
+      "cancel": "取消",
+      "sessionScope": "目前工作階段",
+      "currentSessionOverride": "權限：{{mode}}（僅目前工作階段）",
+      "resetToDefault": "跟隨預設模式",
+      "noSession": "請先開啟或新建工作階段，再變更其權限模式。",
+      "turnScope": "僅下一則訊息",
+      "currentTurnOverride": "權限：{{mode}}（僅下一則訊息）",
+      "nextTurnOnly": "僅下一則訊息使用「{{mode}}」",
+      "nextTurnOnlyShort": "僅一次",
+      "fullAccessWarningMessageNextTurn": "完全存取會預設放行工具呼叫，不再逐次確認。此設定僅作用於下一則訊息，專案規則與強制規則仍然生效。",
+      "openDefaultSettings": "開啟權限設定"
     },
     "addModeTooltip": "附加 Plan 或 Debug",
     "boostSectionAgent": "智能體",
@@ -796,6 +810,10 @@
     "nativeCommandReconfirmationRequired": "先前選擇的外部命令已無法使用。請從斜線選單中選擇 BitFun 命令後再執行。",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",
     "current": "目前",
+    "commandStatus": {
+      "restricted": "受限",
+      "chooseSource": "選擇來源"
+    },
     "computerUseDisabled": "已在「設定 → 工作階段權限」中停用 Computer Use",
     "professionalMode": "專業模式",
     "designMode": "設計模式",
@@ -885,8 +903,8 @@
     "unknownTool": "未知工具"
   },
   "transcriptExport": {
-    "copyFull": "拷貝完整過程",
-    "copyResult": "拷貝結果",
+    "copyFull": "複製完整過程",
+    "copyResult": "複製結果",
     "copyEmpty": "該對話沒有可複製的內容",
     "exportEmpty": "該工作階段沒有可匯出的內容",
     "exportSuccess": "工作階段已匯出：{{filePath}}",

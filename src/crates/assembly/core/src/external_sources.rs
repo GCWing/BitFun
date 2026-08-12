@@ -139,6 +139,10 @@ const MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS: usize = 256 * 1024;
 const PROMPT_COMMAND_SHELL_TIMEOUT_MS: u64 = 30_000;
 const PROMPT_COMMAND_SHELL_KILL_YIELD_MS: u64 = 5_000;
 const MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS: usize = 512;
+/// Awareness records are tiny and bounded by the number of registered
+/// ecosystems, but the cap keeps a corrupted or hostile file from growing
+/// without limit.
+const MAX_ACKNOWLEDGED_ECOSYSTEMS: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ResolvedPromptCommandShell {
@@ -922,6 +926,17 @@ struct ExternalSourcesConfig {
     mcp_server_decisions: BTreeMap<String, ExternalMcpDecision>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     mcp_conflict_choices: BTreeMap<String, String>,
+    /// Ecosystems the user has already been told about, as
+    /// `execution_domain_id` + unit separator + `ecosystem_id`.
+    ///
+    /// This records awareness, not a policy decision: it only suppresses the
+    /// "a new external application was found" hint. It deliberately carries no
+    /// content version, because discovering more commands inside an ecosystem
+    /// the user already knows about is not new information. Awareness is also
+    /// user-wide rather than per workspace, so opening another project does not
+    /// re-announce the same application.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    acknowledged_ecosystems: BTreeSet<String>,
     /// Preserves fields written by a newer preferences schema.
     #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     extensions: BTreeMap<String, serde_json::Value>,
@@ -971,6 +986,7 @@ impl std::fmt::Debug for ExternalSourcesConfig {
             .field("subagent_model_bindings", &self.subagent_model_bindings)
             .field("mcp_server_decisions", &self.mcp_server_decisions)
             .field("mcp_conflict_choices", &self.mcp_conflict_choices)
+            .field("acknowledged_ecosystems", &self.acknowledged_ecosystems)
             .field("extensions", &self.extensions)
             .finish()
     }
@@ -1065,6 +1081,57 @@ struct ExternalSourcePreferenceStore {
     path: PathBuf,
 }
 
+fn retired_automatic_application_policy() -> ExternalIntegrationPolicyDocument {
+    let mut policy = ExternalIntegrationPolicyDocument::default();
+    policy.user_defaults.enabled = true;
+    for (ecosystem, mode) in [
+        (OPENCODE_ECOSYSTEM_ID, ExternalIntegrationMode::Recommended),
+        (
+            CLAUDE_CODE_ECOSYSTEM_ID,
+            ExternalIntegrationMode::DiscoverOnly,
+        ),
+        (CODEX_ECOSYSTEM_ID, ExternalIntegrationMode::DiscoverOnly),
+    ] {
+        policy
+            .user_defaults
+            .ecosystems
+            .entry(EcosystemId::new(ecosystem).expect("built-in ecosystem id is valid"))
+            .or_default()
+            .mode = mode;
+    }
+    policy
+}
+
+fn normalize_retired_application_defaults(config: &mut ExternalSourcesConfig) {
+    // The retired application setup enabled integrations automatically. Undo
+    // only that exact untouched default; every user-authored deviation wins.
+    let from_retired_automatic_setup = config
+        .extensions
+        .get("configOrigin")
+        .and_then(serde_json::Value::as_str)
+        == Some("fresh_v2");
+    if !from_retired_automatic_setup {
+        return;
+    }
+
+    // Consume the retired origin on the first persisted update, including
+    // documents that already contain a user deviation or application choice.
+    // Otherwise a later user-authored policy matching the old default could be
+    // mistaken for untouched setup state and reset again.
+    config.extensions.remove("configOrigin");
+    let has_application_choice = match config.extensions.get("applicationConnections") {
+        None => false,
+        Some(serde_json::Value::Object(decisions)) => !decisions.is_empty(),
+        Some(_) => true,
+    };
+    if has_application_choice {
+        return;
+    }
+    if config.integration_policy.known() == Some(&retired_automatic_application_policy()) {
+        config.integration_policy = StoredExternalIntegrationPolicy::default();
+    }
+}
+
 impl ExternalSourcePreferenceStore {
     fn new(path: PathBuf) -> Self {
         Self { path }
@@ -1084,7 +1151,11 @@ impl ExternalSourcePreferenceStore {
         JsonFileStore
             .read_locked_optional(&self.path)
             .await
-            .map(|config| config.unwrap_or_default())
+            .map(|config| {
+                let mut config = config.unwrap_or_default();
+                normalize_retired_application_defaults(&mut config);
+                config
+            })
             .map_err(|error| error.to_string())
     }
 
@@ -1093,7 +1164,10 @@ impl ExternalSourcePreferenceStore {
         update: impl FnOnce(&mut ExternalSourcesConfig) -> R,
     ) -> Result<(R, ExternalSourcesConfig), String> {
         JsonFileStore
-            .update_locked(&self.path, ExternalSourcesConfig::default(), update)
+            .update_locked(&self.path, ExternalSourcesConfig::default(), |config| {
+                normalize_retired_application_defaults(config);
+                update(config)
+            })
             .await
             .map_err(|error| error.to_string())
     }
@@ -4579,6 +4653,88 @@ async fn read_external_sources_config() -> Result<ExternalSourcesConfig, String>
     ExternalSourcePreferenceStore::global()?.read().await
 }
 
+fn acknowledged_ecosystem_key(execution_domain_id: &str, ecosystem_id: &str) -> String {
+    format!("{execution_domain_id}\u{1f}{ecosystem_id}")
+}
+
+/// Ecosystems that have configuration on this host but have never been
+/// announced to the user.
+///
+/// Both the desktop settings navigation and the TUI read this same result, so
+/// neither surface derives "is there something new" on its own and they cannot
+/// drift apart. An ecosystem only qualifies once discovery actually found a
+/// source for it: a registered adapter with nothing to offer is not news.
+pub async fn unacknowledged_external_ecosystems(
+    workspace_root: Option<&Path>,
+) -> Result<Vec<String>, String> {
+    let service = read_only_service_for(workspace_root).await?;
+    let execution_domain_id = service.execution_domain_id.clone();
+    let discovered = service
+        .snapshot()
+        .sources
+        .iter()
+        .map(|source| source.record.ecosystem_id.to_string())
+        .collect::<BTreeSet<_>>();
+    if discovered.is_empty() {
+        return Ok(Vec::new());
+    }
+    let config = read_external_sources_config().await?;
+    Ok(discovered
+        .into_iter()
+        .filter(|ecosystem_id| {
+            !config
+                .acknowledged_ecosystems
+                .contains(&acknowledged_ecosystem_key(
+                    execution_domain_id.as_str(),
+                    ecosystem_id,
+                ))
+        })
+        .collect())
+}
+
+/// Records that the user has seen the given ecosystems.
+///
+/// Awareness is not part of the preference-revision contract. The set only
+/// grows, insertion is idempotent, and no policy or approval decision reads it,
+/// so concurrent writers cannot lose each other's decisions here. Taking an
+/// expected revision would therefore add fencing failures without protecting
+/// anything, and bumping the revision would invalidate unrelated in-flight
+/// mutations every time a user opens the settings page.
+///
+/// The execution domain is resolved from the workspace's own service so hosts
+/// never pass an identity that disagrees with the one discovery recorded.
+pub async fn acknowledge_external_ecosystems(
+    workspace_root: Option<&Path>,
+    ecosystem_ids: Vec<String>,
+) -> Result<(), String> {
+    if ecosystem_ids.is_empty() {
+        return Ok(());
+    }
+    let execution_domain_id = read_only_service_for(workspace_root)
+        .await?
+        .execution_domain_id
+        .clone();
+    let keys = ecosystem_ids
+        .iter()
+        .map(|ecosystem_id| acknowledged_ecosystem_key(execution_domain_id.as_str(), ecosystem_id))
+        .collect::<Vec<_>>();
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            for key in &keys {
+                if config.acknowledged_ecosystems.contains(key) {
+                    continue;
+                }
+                if config.acknowledged_ecosystems.len() >= MAX_ACKNOWLEDGED_ECOSYSTEMS {
+                    break;
+                }
+                config.acknowledged_ecosystems.insert(key.clone());
+            }
+            true
+        })
+        .await
+        .map(|_| ())
+}
+
 async fn persist_prompt_command_shell_plan_approval(
     fingerprint: &str,
     expected_preference_revision: u64,
@@ -6900,6 +7056,12 @@ pub struct ExternalSourceSubscription {
 }
 
 impl ExternalSourceSubscription {
+    pub async fn recv(
+        &mut self,
+    ) -> Result<ExternalSourceCatalogSnapshot, broadcast::error::RecvError> {
+        self.receiver.recv().await
+    }
+
     pub fn try_recv(
         &mut self,
     ) -> Result<ExternalSourceCatalogSnapshot, broadcast::error::TryRecvError> {
@@ -8280,7 +8442,17 @@ mod tests {
         let snapshot =
             lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
         for deferred in batch.deferred {
-            service.schedule_deferred_command_discovery(deferred);
+            let control_plane = Arc::clone(&service.control_plane);
+            tokio::spawn(async move {
+                let Some((completed, _observer)) = control_plane.complete_command(deferred).await
+                else {
+                    return;
+                };
+                let Some(result) = control_plane.finalize_command(completed).await else {
+                    return;
+                };
+                lock_coordinator(&control_plane).apply_discovery_result(result);
+            });
         }
         snapshot
     }
@@ -8723,6 +8895,67 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn acknowledging_an_ecosystem_survives_a_reload_and_stays_idempotent() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let store = ExternalSourcePreferenceStore::new(path.clone());
+        let key = acknowledged_ecosystem_key(LEGACY_LOCAL_EXECUTION_DOMAIN_ID, "opencode");
+
+        store
+            .update(|config| {
+                config.acknowledged_ecosystems.insert(key.clone());
+            })
+            .await
+            .unwrap();
+        store
+            .update(|config| {
+                config.acknowledged_ecosystems.insert(key.clone());
+            })
+            .await
+            .unwrap();
+
+        // A fresh store proves the record came back from disk, not from memory.
+        let reloaded = ExternalSourcePreferenceStore::new(path)
+            .read()
+            .await
+            .unwrap();
+        assert_eq!(reloaded.acknowledged_ecosystems, BTreeSet::from([key]));
+        // Awareness is not a policy decision, so it must not consume a revision.
+        assert_eq!(reloaded.preference_revision, 0);
+    }
+
+    #[tokio::test]
+    async fn acknowledgement_is_scoped_to_its_execution_domain() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = ExternalSourcePreferenceStore::new(temp.path().join("external-sources.json"));
+        let local = acknowledged_ecosystem_key(LEGACY_LOCAL_EXECUTION_DOMAIN_ID, "opencode");
+        let remote = acknowledged_ecosystem_key("remote-host", "opencode");
+
+        store
+            .update(|config| {
+                config.acknowledged_ecosystems.insert(local.clone());
+            })
+            .await
+            .unwrap();
+
+        let persisted = store.read().await.unwrap();
+        assert!(persisted.acknowledged_ecosystems.contains(&local));
+        assert!(!persisted.acknowledged_ecosystems.contains(&remote));
+    }
+
+    #[test]
+    fn acknowledgement_keys_never_collide_across_domains_or_ecosystems() {
+        assert_ne!(
+            acknowledged_ecosystem_key("local-user", "opencode"),
+            acknowledged_ecosystem_key("local-user", "codex")
+        );
+        assert_ne!(
+            acknowledged_ecosystem_key("local-user", "opencode"),
+            acknowledged_ecosystem_key("remote-host", "opencode")
+        );
+    }
+
     #[test]
     fn opencode_registry_owns_low_friction_defaults_and_safety_ceilings() {
         let mut config = ExternalSourcesConfig::default();
@@ -9024,6 +9257,189 @@ mod tests {
             2
         );
         assert_eq!(encoded["futurePreferenceField"][0], "keep");
+    }
+
+    fn retired_application_default_fixture() -> ExternalSourcesConfig {
+        let mut config = ExternalSourcesConfig::default();
+        let policy = config
+            .integration_policy
+            .known_mut()
+            .expect("the built-in integration policy is known");
+        policy.user_defaults.enabled = true;
+        for (ecosystem, mode) in [
+            (OPENCODE_ECOSYSTEM_ID, ExternalIntegrationMode::Recommended),
+            (
+                CLAUDE_CODE_ECOSYSTEM_ID,
+                ExternalIntegrationMode::DiscoverOnly,
+            ),
+            (CODEX_ECOSYSTEM_ID, ExternalIntegrationMode::DiscoverOnly),
+        ] {
+            policy
+                .user_defaults
+                .ecosystems
+                .entry(EcosystemId::new(ecosystem).unwrap())
+                .or_default()
+                .mode = mode;
+        }
+        config
+    }
+
+    fn retired_application_document(
+        config: ExternalSourcesConfig,
+        decisions: serde_json::Value,
+    ) -> serde_json::Value {
+        let mut raw = serde_json::to_value(config).unwrap();
+        raw["configOrigin"] = serde_json::json!("fresh_v2");
+        raw["connectionSchemaMigrationVersion"] = serde_json::json!(1);
+        raw["applicationConnections"] = decisions;
+        raw
+    }
+
+    #[tokio::test]
+    async fn retired_automatic_application_default_is_not_user_consent() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let raw = retired_application_document(
+            retired_application_default_fixture(),
+            serde_json::json!({}),
+        );
+        std::fs::write(&path, serde_json::to_vec_pretty(&raw).unwrap()).unwrap();
+        let store = ExternalSourcePreferenceStore::new(path);
+
+        let read = store.read().await.unwrap();
+        let read_policy = read.integration_policy.known().unwrap();
+        assert!(!read_policy.user_defaults.enabled);
+        assert!(read_policy.user_defaults.ecosystems.is_empty());
+        assert!(read.extensions.contains_key("applicationConnections"));
+
+        let (was_enabled, updated) = store
+            .update(|config| {
+                config
+                    .integration_policy
+                    .known()
+                    .unwrap()
+                    .user_defaults
+                    .enabled
+            })
+            .await
+            .unwrap();
+        assert!(!was_enabled);
+        assert!(
+            !updated
+                .integration_policy
+                .known()
+                .unwrap()
+                .user_defaults
+                .enabled
+        );
+    }
+
+    #[tokio::test]
+    async fn retired_migration_is_consumed_before_later_user_policy_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let mut config = retired_application_default_fixture();
+        config
+            .integration_policy
+            .known_mut()
+            .unwrap()
+            .user_defaults
+            .ecosystems
+            .get_mut(&EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap())
+            .unwrap()
+            .mode = ExternalIntegrationMode::Disabled;
+        let raw = retired_application_document(config, serde_json::json!({}));
+        std::fs::write(&path, serde_json::to_vec_pretty(&raw).unwrap()).unwrap();
+        let store = ExternalSourcePreferenceStore::new(path);
+
+        let (_, migrated) = store.update(|_| {}).await.unwrap();
+        assert!(!migrated.extensions.contains_key("configOrigin"));
+        assert_eq!(
+            migrated
+                .integration_policy
+                .known()
+                .unwrap()
+                .user_defaults
+                .ecosystems[&EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap()]
+                .mode,
+            ExternalIntegrationMode::Disabled
+        );
+
+        store
+            .update(|config| {
+                config.integration_policy =
+                    StoredExternalIntegrationPolicy::Known(retired_automatic_application_policy());
+            })
+            .await
+            .unwrap();
+
+        let read = store.read().await.unwrap();
+        assert_eq!(
+            read.integration_policy.known(),
+            Some(&retired_automatic_application_policy())
+        );
+    }
+
+    #[tokio::test]
+    async fn retired_application_metadata_preserves_a_policy_user_deviation() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let mut config = retired_application_default_fixture();
+        config
+            .integration_policy
+            .known_mut()
+            .unwrap()
+            .user_defaults
+            .ecosystems
+            .get_mut(&EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap())
+            .unwrap()
+            .mode = ExternalIntegrationMode::Disabled;
+        let raw = retired_application_document(config, serde_json::json!({}));
+        std::fs::write(&path, serde_json::to_vec_pretty(&raw).unwrap()).unwrap();
+
+        let config = ExternalSourcePreferenceStore::new(path)
+            .read()
+            .await
+            .unwrap();
+        let policy = config.integration_policy.known().unwrap();
+
+        assert!(policy.user_defaults.enabled);
+        assert_eq!(
+            policy.user_defaults.ecosystems[&EcosystemId::new(CLAUDE_CODE_ECOSYSTEM_ID).unwrap()]
+                .mode,
+            ExternalIntegrationMode::Disabled
+        );
+    }
+
+    #[tokio::test]
+    async fn retired_application_metadata_preserves_an_explicit_application_choice() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let raw = retired_application_document(
+            retired_application_default_fixture(),
+            serde_json::json!({
+                "local-user\u{1f}opencode\u{1f}user_default": {
+                    "desiredConnection": "connected",
+                    "decisionOrigin": "user"
+                }
+            }),
+        );
+        std::fs::write(&path, serde_json::to_vec_pretty(&raw).unwrap()).unwrap();
+
+        let config = ExternalSourcePreferenceStore::new(path)
+            .read()
+            .await
+            .unwrap();
+
+        assert!(
+            config
+                .integration_policy
+                .known()
+                .unwrap()
+                .user_defaults
+                .enabled
+        );
+        assert!(config.extensions.contains_key("applicationConnections"));
     }
 
     #[test]
@@ -9499,19 +9915,16 @@ mod tests {
             slow_provider,
             delayed_provider(
                 "healthy",
-                std::time::Duration::ZERO,
+                std::time::Duration::from_millis(50),
                 Arc::clone(&healthy_calls),
             ),
         ]);
 
         tokio::time::timeout(std::time::Duration::from_secs(2), async {
             loop {
-                let snapshot = refresh_test_commands(&service).await;
+                let _ = refresh_test_commands(&service).await;
                 if slow_calls.load(Ordering::SeqCst) == 1
-                    && snapshot
-                        .commands
-                        .iter()
-                        .any(|command| command.definition.name == "healthy")
+                    && healthy_calls.load(Ordering::SeqCst) >= 1
                 {
                     break;
                 }
@@ -9520,6 +9933,22 @@ mod tests {
         })
         .await
         .expect("slow and healthy providers must both start");
+
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let snapshot = lock_coordinator(&service.control_plane).snapshot();
+                if snapshot
+                    .commands
+                    .iter()
+                    .any(|command| command.definition.name == "healthy")
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the healthy provider result must be published");
 
         let healthy_calls_before_refresh = healthy_calls.load(Ordering::SeqCst);
         let snapshot = tokio::time::timeout(std::time::Duration::from_secs(2), async {

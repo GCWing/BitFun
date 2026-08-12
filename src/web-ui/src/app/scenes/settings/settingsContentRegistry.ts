@@ -6,7 +6,6 @@ const loadAIModelConfig = () => import('../../../infrastructure/config/component
 const loadMcpToolsConfig = () => import('../../../infrastructure/config/components/McpToolsConfig');
 const loadAcpAgentsConfig = () => import('../../../infrastructure/config/components/AcpAgentsConfig');
 const loadExternalSourcesConfig = () => import('../../../infrastructure/config/components/ExternalSourcesConfig');
-const loadHooksConfig = () => import('../../../infrastructure/config/components/HooksConfig');
 const loadEditorConfig = () => import('../../../infrastructure/config/components/EditorConfig');
 const loadBasicsConfig = () => import('../../../infrastructure/config/components/BasicsConfig');
 const loadAppearanceConfig = () => import('../../../infrastructure/config/components/AppearanceConfig');
@@ -23,7 +22,6 @@ export const AIModelConfig = lazy(loadAIModelConfig);
 export const McpToolsConfig = lazy(loadMcpToolsConfig);
 export const AcpAgentsConfig = lazy(loadAcpAgentsConfig);
 export const ExternalSourcesConfig = lazy(loadExternalSourcesConfig);
-export const HooksConfig = lazy(loadHooksConfig);
 export const EditorConfig = lazy(loadEditorConfig);
 export const BasicsConfig = lazy(loadBasicsConfig);
 export const AppearanceConfig = lazy(loadAppearanceConfig);
@@ -59,7 +57,9 @@ const SETTINGS_CONTENT_LOADERS: Partial<Record<ConfigTab, () => Promise<unknown>
   memories: loadMemoriesConfig,
   'mcp-tools': loadMcpToolsConfig,
   'external-sources': loadExternalSourcesConfig,
-  hooks: loadHooksConfig,
+  // Hooks no longer have a standalone GUI page; a stale deep link resolves to
+  // the external AI applications surface where Hooks live as a capability.
+  hooks: loadExternalSourcesConfig,
   'acp-agents': loadAcpAgentsConfig,
   editor: loadEditorConfig,
   keyboard: loadKeyboardShortcutsTab,

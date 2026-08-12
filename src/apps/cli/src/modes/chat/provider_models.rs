@@ -1,5 +1,5 @@
 impl ChatMode {
-    /// Handle provider selection result (step 1 → step 2)
+    /// Handle provider selection result (step 1 to step 2).
     fn handle_provider_selection(&self, selection: ProviderSelection, chat_view: &mut ChatView) {
         match selection {
             ProviderSelection::Provider(template) => {
@@ -11,13 +11,10 @@ impl ChatMode {
                     &default_model,
                 );
             }
-            ProviderSelection::Custom => {
-                chat_view.show_model_config_form_custom();
-            }
+            ProviderSelection::Custom => chat_view.show_model_config_form_custom(),
         }
     }
 
-    /// Save new model to global config
     fn save_new_model(
         &self,
         result: ModelFormResult,
@@ -32,105 +29,31 @@ impl ChatMode {
                 .unwrap_or_default()
                 .as_millis()
         );
-
-        // Parse custom headers JSON if provided
-        let custom_headers: Option<std::collections::HashMap<String, String>> =
-            if result.custom_headers.is_empty() {
-                None
-            } else {
-                serde_json::from_str(&result.custom_headers).ok()
-            };
-
-        let custom_request_body: Option<String> = if result.custom_request_body.is_empty() {
-            None
-        } else {
-            Some(result.custom_request_body.clone())
+        let request = AddModelRequest {
+            model: result.to_mutation(model_id.clone()),
+            make_primary_if_empty: true,
         };
+        let outcome =
+            tokio::task::block_in_place(|| rt_handle.block_on(self.agent.add_model(request)));
 
-        let model_config = bitfun_core::service::config::AIModelConfig {
-            id: model_id.clone(),
-            name: result.name.clone(),
-            provider: result.provider_format.clone(),
-            model_name: result.model_name.clone(),
-            base_url: result.base_url.clone(),
-            api_key: result.api_key.clone(),
-            context_window: Some(result.context_window),
-            max_tokens: Some(result.max_tokens),
-            enabled: true,
-            reasoning: result.reasoning.clone(),
-            inline_think_in_text: result.inline_think_in_text,
-            skip_ssl_verify: result.skip_ssl_verify,
-            custom_headers,
-            custom_headers_mode: if result.custom_headers_mode.is_empty()
-                || result.custom_headers_mode == "merge"
-            {
-                None
-            } else {
-                Some(result.custom_headers_mode.clone())
-            },
-            custom_request_body,
-            ..Default::default()
-        };
-
-        let success = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!("Failed to get config service: {}", e);
-                        return false;
-                    }
-                };
-
-                if let Err(e) = config_service.add_ai_model(model_config).await {
-                    tracing::error!("Failed to add AI model: {}", e);
-                    return false;
-                }
-
-                // Auto-set as primary model if no primary model exists
-                match config_service
-                    .get_config::<bitfun_core::service::config::GlobalConfig>(None)
-                    .await
-                {
-                    Ok(global_config) => {
-                        let has_primary = global_config
-                            .ai
-                            .default_models
-                            .primary
-                            .as_ref()
-                            .map(|p| !p.is_empty())
-                            .unwrap_or(false);
-                        if !has_primary {
-                            if let Err(e) = config_service
-                                .set_config("ai.default_models.primary", &model_id)
-                                .await
-                            {
-                                tracing::warn!("Failed to auto-set primary model: {}", e);
-                            } else {
-                                tracing::info!("Auto-set primary model: {}", model_id);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to read config for auto-primary: {}", e);
-                    }
-                }
-
-                true
-            })
-        });
-
-        if success {
-            chat_view.set_status(Some(format!("Model added: {}", result.name)));
-            chat_state.current_model_name = format!("{} / {}", result.model_name, result.name);
-            tracing::info!("Added new AI model: {} ({})", model_id, result.model_name);
-            crate::account_sync::notify_local_settings_changed();
-        } else {
-            chat_view.set_status(Some("Failed to add model".to_string()));
+        match outcome {
+            Ok(_) => {
+                chat_view.set_status(Some(format!("Model added: {}", result.name)));
+                chat_state.current_model_name = format!("{} / {}", result.model_name, result.name);
+                tracing::info!("Added new AI model: {} ({})", model_id, result.model_name);
+                let _ = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(self.agent.settings_sync_local_changed())
+                });
+            }
+            Err(error) => {
+                tracing::error!("Failed to add AI model: {error}");
+                chat_view.set_status(Some(format!("Failed to add model: {error}")));
+            }
         }
     }
 
-    /// Fetch full model config and open the edit form
+    /// The read projection contains only editable non-secret fields. Existing
+    /// secrets stay write-only and are preserved when the edit form is blank.
     fn edit_model(
         &self,
         selected: &ModelItem,
@@ -138,56 +61,22 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let model_id = selected.id.clone();
-        let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let config_service = GlobalConfigManager::get_service().await.ok()?;
-                let models: Vec<bitfun_core::service::config::AIModelConfig> =
-                    config_service.get_ai_models().await.ok()?;
-                let model = models.into_iter().find(|m| m.id == model_id)?;
-                let reasoning_preset_options = self
-                    .agent
-                    .model_catalog()
-                    .await
-                    .ok()
-                    .and_then(|catalog| catalog.reasoning_presets_by_model.get(&model.id).cloned())
-                    .unwrap_or_default();
-                Some((model, reasoning_preset_options))
-            })
+        let outcome = tokio::task::block_in_place(|| {
+            rt_handle.block_on(self.agent.get_model(model_id.clone()))
         });
 
-        match result {
-            Some((model, reasoning_preset_options)) => {
-                let form_data = ModelFormResult {
-                    editing_model_id: Some(model.id.clone()),
-                    name: model.name,
-                    model_name: model.model_name,
-                    base_url: model.base_url,
-                    api_key: model.api_key,
-                    provider_format: model.provider.clone(),
-                    context_window: model.context_window.unwrap_or(128000),
-                    max_tokens: model.max_tokens.unwrap_or(8192),
-                    reasoning_preset_options,
-                    reasoning: model.reasoning,
-                    inline_think_in_text: model.inline_think_in_text,
-                    skip_ssl_verify: model.skip_ssl_verify,
-                    custom_headers: model
-                        .custom_headers
-                        .map(|h| serde_json::to_string(&h).unwrap_or_default())
-                        .unwrap_or_default(),
-                    custom_headers_mode: model
-                        .custom_headers_mode
-                        .unwrap_or_else(|| "merge".to_string()),
-                    custom_request_body: model.custom_request_body.unwrap_or_default(),
-                };
-                chat_view.show_model_config_form_for_edit(&model.id, &form_data);
+        match outcome {
+            Ok(response) => {
+                let form_data = ModelFormResult::from_projection(response.model);
+                chat_view.show_model_config_form_for_edit(&model_id, &form_data);
             }
-            None => {
-                chat_view.set_status(Some("Failed to load model configuration".to_string()));
+            Err(error) => {
+                tracing::error!("Failed to load model configuration: {error}");
+                chat_view.set_status(Some(format!("Failed to load model configuration: {error}")));
             }
         }
     }
 
-    /// Update an existing model in global config
     fn update_existing_model(
         &self,
         result: ModelFormResult,
@@ -195,78 +84,29 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let model_id = match &result.editing_model_id {
-            Some(id) => id.clone(),
-            None => return,
+        let Some(model_id) = result.editing_model_id.clone() else {
+            return;
         };
-
-        let custom_headers: Option<std::collections::HashMap<String, String>> =
-            if result.custom_headers.is_empty() {
-                None
-            } else {
-                serde_json::from_str(&result.custom_headers).ok()
-            };
-
-        let custom_request_body: Option<String> = if result.custom_request_body.is_empty() {
-            None
-        } else {
-            Some(result.custom_request_body.clone())
+        let request = UpdateModelRequest {
+            model_id: model_id.clone(),
+            model: result.to_mutation(model_id.clone()),
         };
+        let outcome =
+            tokio::task::block_in_place(|| rt_handle.block_on(self.agent.update_model(request)));
 
-        let model_config = bitfun_core::service::config::AIModelConfig {
-            id: model_id.clone(),
-            name: result.name.clone(),
-            provider: result.provider_format.clone(),
-            model_name: result.model_name.clone(),
-            base_url: result.base_url.clone(),
-            api_key: result.api_key.clone(),
-            context_window: Some(result.context_window),
-            max_tokens: Some(result.max_tokens),
-            enabled: true,
-            reasoning: result.reasoning.clone(),
-            inline_think_in_text: result.inline_think_in_text,
-            skip_ssl_verify: result.skip_ssl_verify,
-            custom_headers,
-            custom_headers_mode: if result.custom_headers_mode.is_empty()
-                || result.custom_headers_mode == "merge"
-            {
-                None
-            } else {
-                Some(result.custom_headers_mode.clone())
-            },
-            custom_request_body,
-            ..Default::default()
-        };
-
-        let success = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let config_service = match GlobalConfigManager::get_service().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::error!("Failed to get config service: {}", e);
-                        return false;
-                    }
-                };
-
-                if let Err(e) = config_service
-                    .update_ai_model(&model_id, model_config)
-                    .await
-                {
-                    tracing::error!("Failed to update AI model: {}", e);
-                    return false;
-                }
-
-                true
-            })
-        });
-
-        if success {
-            chat_view.set_status(Some(format!("Model updated: {}", result.name)));
-            chat_state.current_model_name = format!("{} / {}", result.model_name, result.name);
-            tracing::info!("Updated AI model: {}", model_id);
-            crate::account_sync::notify_local_settings_changed();
-        } else {
-            chat_view.set_status(Some("Failed to update model".to_string()));
+        match outcome {
+            Ok(_) => {
+                chat_view.set_status(Some(format!("Model updated: {}", result.name)));
+                chat_state.current_model_name = format!("{} / {}", result.model_name, result.name);
+                tracing::info!("Updated AI model: {model_id}");
+                let _ = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(self.agent.settings_sync_local_changed())
+                });
+            }
+            Err(error) => {
+                tracing::error!("Failed to update AI model: {error}");
+                chat_view.set_status(Some(format!("Failed to update model: {error}")));
+            }
         }
     }
 }

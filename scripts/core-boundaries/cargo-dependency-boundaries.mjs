@@ -2,7 +2,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { servicesReqwestOwnerFeatures } from './rules/feature-rules.mjs';
+import {
+  acpClientCoreFeatures,
+  acpServerCoreFeatures,
+  servicesReqwestOwnerFeatures,
+} from './rules/feature-rules.mjs';
 
 const SKIPPED_DIRECTORIES = new Set([
   '.git',
@@ -156,9 +160,7 @@ const SERVICES_CORE_TOKIO_FEATURES = new Map([
 ]);
 const SERVICES_CORE_BASE_TOKIO_FEATURES = ['rt', 'time'];
 
-// The installer is an excluded standalone workspace with its own Rust checks
-// and packaging lifecycle; this policy governs the root product workspace.
-const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set(['bitfun-installer']);
+const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set();
 
 function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set()) {
   if (visiting.has(feature)) {
@@ -245,37 +247,37 @@ function reqwestDependencyFeatureReferences(references) {
   );
 }
 
-const REQWEST_TRANSPORT_FEATURES = [
-  'form',
-  'http2',
-  'json',
-  'multipart',
-  'query',
-  'stream',
-];
 const REQWEST_PACKAGE_PROFILES = new Map([
-  ['bitfun-installer', {
-    dependencyFeatures: ['json', 'rustls-tls', 'stream'],
-    optional: false,
-    allowedPackageFeatureRefs: new Set(['reqwest/rustls-tls']),
-  }],
-  ['bitfun-core', { dependencyFeatures: REQWEST_TRANSPORT_FEATURES, optional: true }],
+  ['bitfun-core', { dependencyFeatures: [], optional: true }],
   ['bitfun-services-integrations', {
-    dependencyFeatures: REQWEST_TRANSPORT_FEATURES,
+    dependencyFeatures: ['http2'],
     optional: true,
     servicesOwners: true,
   }],
-  ...[
-    'bitfun-ai-adapters',
-    'bitfun-cli',
-    'bitfun-desktop',
-    'bitfun-miniapp-market-service',
-    'bitfun-skin-market-service',
-  ].map((packageName) => [packageName, {
-    dependencyFeatures: [...REQWEST_TRANSPORT_FEATURES, 'rustls'],
+  ['bitfun-ai-adapters', {
+    dependencyFeatures: ['http2', 'json', 'rustls', 'socks', 'stream'],
     optional: false,
-    allowedPackageFeatureRefs: new Set(['reqwest/rustls']),
-  }]),
+    allowedPackageFeatureRefs: new Set(['reqwest/form']),
+    requiredPackageFeatureRefs: new Map([
+      ['subscription-auth', new Set(['reqwest/form'])],
+    ]),
+  }],
+  ['bitfun-cli', {
+    dependencyFeatures: ['http2', 'rustls', 'stream'],
+    optional: false,
+  }],
+  ['bitfun-desktop', {
+    dependencyFeatures: ['http2', 'json', 'query', 'rustls', 'stream'],
+    optional: false,
+  }],
+  ['bitfun-miniapp-market-service', {
+    dependencyFeatures: ['form', 'http2', 'json', 'rustls'],
+    optional: false,
+  }],
+  ['bitfun-skin-market-service', {
+    dependencyFeatures: ['http2', 'json', 'rustls'],
+    optional: false,
+  }],
 ]);
 
 function findReqwestPackageProfileViolations(pkg, profile) {
@@ -355,6 +357,18 @@ function findReqwestPackageProfileViolations(pkg, profile) {
             line: 1,
             message:
               `${pkg.name}:${featureName} has unreviewed Reqwest feature reference ${reference}`,
+          });
+        }
+      }
+    }
+    for (const [featureName, requiredReferences] of profile.requiredPackageFeatureRefs ?? []) {
+      const actualReferences = new Set(pkg.features?.[featureName] ?? []);
+      for (const reference of requiredReferences) {
+        if (!actualReferences.has(reference)) {
+          violations.push({
+            path: pkg.manifest_path,
+            line: 1,
+            message: `${pkg.name}:${featureName} is missing Reqwest feature reference ${reference}`,
           });
         }
       }
@@ -514,6 +528,20 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
   const violations = [];
   const featureGraph = pkg.features ?? {};
   const ownerFeatures = new Set(servicesReqwestOwnerFeatures);
+  const ownerFeatureReferences = new Map([
+    ['announcement', ['reqwest/json']],
+    ['browser-control', ['reqwest/json']],
+    ['debug-log', ['reqwest/json']],
+    ['mcp', ['reqwest/json', 'reqwest/stream']],
+    ['miniapp-market', ['reqwest/json', 'reqwest/query', 'reqwest/stream']],
+    ['miniapp-runtime', ['reqwest/stream']],
+    ['models-dev', ['reqwest/system-proxy']],
+    ['remote-connect', ['reqwest/json', 'reqwest/multipart', 'reqwest/query']],
+    ['remote-ssh-concrete', ['reqwest/stream']],
+    ['review-platform', ['reqwest/json', 'reqwest/query', 'reqwest/stream']],
+    ['speech', ['reqwest/stream']],
+    ['web-tools', ['reqwest/json']],
+  ]);
 
   for (const featureName of servicesReqwestOwnerFeatures) {
     const references = featureGraph[featureName];
@@ -539,6 +567,15 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
         message: `${pkg.name}:${featureName} is missing reqwest/rustls`,
       });
     }
+    for (const reference of ownerFeatureReferences.get(featureName) ?? []) {
+      if (!references.includes(reference)) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name}:${featureName} is missing Reqwest feature reference ${reference}`,
+        });
+      }
+    }
   }
 
   for (const [featureName, references] of Object.entries(featureGraph)) {
@@ -559,12 +596,15 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
       });
       continue;
     }
+    const allowedReferences = new Set([
+      'reqwest',
+      'dep:reqwest',
+      'reqwest/rustls',
+      ...(ownerFeatureReferences.get(featureName) ?? []),
+    ]);
     for (const reference of reqwestReferences) {
       if (
-        reference !== 'reqwest'
-        && reference !== 'dep:reqwest'
-        && reference !== 'reqwest/rustls'
-        && !(featureName === 'models-dev' && reference === 'reqwest/system-proxy')
+        !allowedReferences.has(reference)
       ) {
         violations.push({
           path: pkg.manifest_path,
@@ -773,52 +813,235 @@ export function findProductEntrypointCoreFeatureViolations(
   packages,
   { root, crateLayoutRules },
 ) {
+  const coreCompatibilityReviewedFeatures = [
+    'agent-runtime',
+    'document-read',
+    'subscription-auth',
+    'deep-research',
+    'lsp',
+    'external-sources',
+    'tools-basic',
+    'tools-git',
+    'tools-mcp',
+    'tools-browser-web',
+    'tools-computer-use',
+    'tools-image-analysis',
+    'tools-miniapp',
+    'tools-canvas',
+    'tools-agent-control',
+  ];
   const reviewedCoreFeatureClosures = new Map([
     ['bitfun-cli', [
-      'agent-runtime',
-      'canvas-runtime',
-      'external-sources',
+      ...coreCompatibilityReviewedFeatures,
+      'remote-connect',
       'plugin-runtime',
       'ssh-remote',
     ]],
-    ['bitfun-acp', [
-      'agent-runtime',
-      'canvas-runtime',
+    ['bitfun-acp', [...new Set([...acpClientCoreFeatures, ...acpServerCoreFeatures])]],
+    ['bitfun-app-server', [
       'external-sources',
-      'ssh-remote',
+      'git',
+      'remote-connect',
     ]],
+    ['bitfun-sdk-host-app', coreCompatibilityReviewedFeatures],
   ]);
-  const acpActiveCoreFeatures = [
+  const coreCompatibilityActiveFeatures = [
     'agent-runtime',
     'ai-adapter-runtime',
+    'browser-control',
     'canvas-runtime',
+    'deep-research',
+    'document-read',
     'external-sources',
     'file-watch',
     'filesystem',
     'git',
     'lsp',
     'local-storage',
+    'mcp-runtime',
+    'model-catalog',
     'plugin-source',
     'process-runtime',
     'product-capabilities',
-    'product-domains',
-    'remote-workspace',
     'review-platform',
     'runtime-services',
-    'ssh-remote',
+    'scheduled-jobs',
+    'script-tool-runtime',
+    'subscription-auth',
     'terminal',
     'tool-packs',
+    'tools-agent-control',
+    'tools-basic',
+    'tools-browser-web',
+    'tools-canvas',
+    'tools-computer-use',
+    'tools-git',
+    'tools-image-analysis',
+    'tools-mcp',
+    'tools-miniapp',
+    'web-tools',
+    'workspace-search',
     'workspace-runtime',
     'workspace-watch',
   ];
+  const acpActiveCoreFeatures = [
+    ...coreCompatibilityActiveFeatures,
+    'remote-workspace',
+    'ssh-remote',
+  ];
   const reviewedActiveCoreFeatureClosures = new Map([
-    ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime']],
+    ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime', 'remote-connect']],
     ['bitfun-acp', acpActiveCoreFeatures],
+    ['bitfun-sdk-host-app', coreCompatibilityActiveFeatures],
+    ['bitfun-app-server', [
+      'agent-runtime',
+      'ai-adapter-runtime',
+      'external-sources',
+      'file-watch',
+      'filesystem',
+      'git',
+      'local-storage',
+      'mcp-runtime',
+      'model-catalog',
+      'plugin-source',
+      'process-runtime',
+      'product-capabilities',
+      'remote-connect',
+      'runtime-services',
+      'scheduled-jobs',
+      'script-tool-runtime',
+      'terminal',
+      'tool-packs',
+      'tools-agent-control',
+      'tools-basic',
+      'ts',
+      'workspace-search',
+      'workspace-runtime',
+      'workspace-watch',
+    ]],
+  ]);
+  const reviewedForbiddenDependencyOwnerFeatures = new Map([
+    ['bitfun-sdk-host-app', new Map([
+      ['bitfun-services-integrations', [
+        'announcement',
+        'debug-log',
+        'function-agents',
+        'product-full',
+        'remote-connect',
+        'remote-ssh',
+        'remote-ssh-concrete',
+      ]],
+      ['bitfun-product-domains', ['function-agents', 'product-full']],
+      ['bitfun-services-core', ['dispatch-workspace']],
+    ])],
   ]);
   const packageByManifest = new Map(
     packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
   );
   const violations = [];
+
+  const reviewedAcpRoleSelections = new Map([
+    ['bitfun-cli', {
+      label: 'CLI',
+      requiredFeatures: ['client', 'server'],
+    }],
+    ['bitfun-desktop', {
+      label: 'Desktop',
+      requiredFeatures: ['client'],
+    }],
+  ]);
+  const acpPackage = packages.find((pkg) => pkg.name === 'bitfun-acp');
+  if (acpPackage) {
+    const reviewedConsumersFound = new Set();
+    for (const sourcePackage of packages) {
+      const declaredDependencies = (sourcePackage.dependencies ?? []).filter((candidate) => {
+        if (!candidate.path) {
+          return false;
+        }
+        return packageByManifest.get(
+          normalizedPath(join(candidate.path, 'Cargo.toml')),
+        )?.name === 'bitfun-acp';
+      });
+      const normalDependencies = declaredDependencies.filter(
+        (dependency) => dependency.kind === null,
+      );
+      const rule = reviewedAcpRoleSelections.get(sourcePackage.name);
+      if (!rule) {
+        if (declaredDependencies.length > 0) {
+          violations.push({
+            path: sourcePackage.manifest_path,
+            line: 1,
+            message: `bitfun-acp consumer ${sourcePackage.name} must register an explicit role selection`,
+          });
+        }
+        continue;
+      }
+      if (declaredDependencies.length === 0) {
+        continue;
+      }
+      reviewedConsumersFound.add(sourcePackage.name);
+      const unconditionalDependencies = normalDependencies.filter(
+        (dependency) => dependency.target === null && dependency.optional !== true,
+      );
+      if (unconditionalDependencies.length === 0) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `${rule.label} ACP role selection must keep an unconditional normal bitfun-acp dependency`,
+        });
+      }
+      if (declaredDependencies.some((dependency) => dependency.optional === true)) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `${rule.label} ACP role selection must not make a bitfun-acp dependency optional`,
+        });
+      }
+      if (declaredDependencies.some((dependency) => dependency.uses_default_features !== false)) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `${rule.label} ACP role selection must set default-features = false on every dependency`,
+        });
+      }
+      const unconditionalFeatures = new Set(
+        unconditionalDependencies.flatMap((dependency) => dependency.features ?? []),
+      );
+      const selectedFeatures = new Set(
+        declaredDependencies.flatMap((dependency) => dependency.features ?? []),
+      );
+      if (unconditionalDependencies.length > 0) {
+        for (const requiredFeature of rule.requiredFeatures) {
+          if (!unconditionalFeatures.has(requiredFeature)) {
+            violations.push({
+              path: sourcePackage.manifest_path,
+              line: 1,
+              message: `${rule.label} ACP role selection must include ${requiredFeature}`,
+            });
+          }
+        }
+      }
+      for (const selectedFeature of selectedFeatures) {
+        if (!rule.requiredFeatures.includes(selectedFeature)) {
+          violations.push({
+            path: sourcePackage.manifest_path,
+            line: 1,
+            message: `${rule.label} ACP role selection must not include ${selectedFeature}`,
+          });
+        }
+      }
+    }
+    for (const [sourceName, rule] of reviewedAcpRoleSelections) {
+      const sourcePackage = packages.find((pkg) => pkg.name === sourceName);
+      if (sourcePackage && !reviewedConsumersFound.has(sourceName)) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `${rule.label} ACP role selection must keep the bitfun-acp dependency`,
+        });
+      }
+    }
+  }
 
   for (const sourcePackage of packages) {
     const sourceLayer = layerForManifest(sourcePackage.manifest_path, {
@@ -846,14 +1069,21 @@ export function findProductEntrypointCoreFeatureViolations(
           message: `product entrypoint ${sourcePackage.name} must set default-features = false for its bitfun-core ${dependencyDescription(dependency)}`,
         });
       }
-      if (!Array.isArray(dependency.features) || dependency.features.length === 0) {
+      const roleOwnedAcpDependency =
+        sourcePackage.name === 'bitfun-acp' && dependency.optional === true;
+      if (
+        !roleOwnedAcpDependency
+        && (!Array.isArray(dependency.features) || dependency.features.length === 0)
+      ) {
         violations.push({
           path: sourcePackage.manifest_path,
           line: 1,
           message: `product entrypoint ${sourcePackage.name} must select at least one explicit feature for its bitfun-core ${dependencyDescription(dependency)}`,
         });
       }
-      const reviewedClosure = reviewedCoreFeatureClosures.get(sourcePackage.name);
+      const reviewedClosure = roleOwnedAcpDependency
+        ? undefined
+        : reviewedCoreFeatureClosures.get(sourcePackage.name);
       if (reviewedClosure) {
         const selectedFeatures = new Set(dependency.features ?? []);
         for (const requiredFeature of reviewedClosure) {
@@ -898,7 +1128,14 @@ export function findProductEntrypointCoreFeatureViolations(
       );
       const rootSelectedFeatures = Object.keys(rootPackage.features ?? {})
         .filter((feature) => feature !== 'default');
-      const rootLabel = rootName === 'bitfun-cli' ? 'CLI' : 'ACP';
+      const rootLabel = new Map([
+        ['bitfun-cli', 'CLI'],
+        ['bitfun-acp', 'ACP'],
+        ['bitfun-app-server', 'App Server'],
+        ['bitfun-sdk-host-app', 'SDK Host'],
+      ]).get(rootName) ?? rootName;
+      const forbiddenOwnerFeatures =
+        reviewedForbiddenDependencyOwnerFeatures.get(rootName);
 
       const packageStates = new Map();
       const pending = [];
@@ -1032,6 +1269,30 @@ export function findProductEntrypointCoreFeatureViolations(
                 message: `${rootLabel} dependency closure must not enable ${unexpected}: ${[
                   ...packagePath,
                   `${targetPackage.name}/${unexpected}`,
+                ].join(' -> ')}`,
+              });
+            }
+            continue;
+          }
+
+          const forbiddenOwnerFeature = (
+            forbiddenOwnerFeatures?.get(targetPackage.name) ?? []
+          ).find((feature) => targetState.featureState.active.has(feature));
+          if (forbiddenOwnerFeature) {
+            const forbiddenOwner = `${targetPackage.name}/${forbiddenOwnerFeature}`;
+            const reportKey = [
+              rootName,
+              targetDependencyKindContext,
+              forbiddenOwner,
+            ].join('|');
+            if (!reportedUnexpectedFeatures.has(reportKey)) {
+              reportedUnexpectedFeatures.add(reportKey);
+              violations.push({
+                path: sourcePackage.manifest_path,
+                line: 1,
+                message: `${rootLabel} dependency closure must not enable ${forbiddenOwner}: ${[
+                  ...packagePath,
+                  forbiddenOwner,
                 ].join(' -> ')}`,
               });
             }

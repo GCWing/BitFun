@@ -144,62 +144,65 @@ pub(crate) fn shared_tui_image_attachment_error() -> String {
     format!("Image attachments are unavailable in Shared TUI. {SHARED_TUI_EMBEDDED_HANDOFF}.")
 }
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` and `/connect` to manage models, `/skills` to manage skills, `/mcp` to manage MCP servers, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Extensions, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
-    pub(crate) const fn available_in_shared_tui(self, context: ActionContext) -> bool {
-        (matches!(self, Self::SelectModel) && matches!(context, ActionContext::Chat))
-            || matches!(
-                self,
-                Self::Help
-                    | Self::SelectTheme
-                    | Self::NewSession
-                    | Self::Sessions
-                    | Self::ViewSubagents
-                    | Self::Timeline
-                    | Self::ForkSession
-                    | Self::UndoSession
-                    | Self::RedoSession
-                    | Self::RenameSession
-                    | Self::AcpHelp
-                    | Self::Init
-                    | Self::Status
-                    | Self::WorkspaceDiff
-                    | Self::CompactSession
-                    | Self::Editor
-                    | Self::PromptStash
-                    | Self::PromptStashPop
-                    | Self::PromptStashList
-                    | Self::ToggleTimestamps
-                    | Self::ToggleThinking
-                    | Self::ToggleToolDetails
-                    | Self::CopyTranscript
-                    | Self::ExportTranscript
-                    | Self::ToggleAutoApprove
-                    | Self::OpenAgentSelector
-                    | Self::SwitchAgent
-                    | Self::SwitchAgentReverse
-                    | Self::Reload
-                    | Self::Exit
-                    | Self::OpenPalette
-                    | Self::SubmitInput
-                    | Self::Interrupt
-                    | Self::ClosePopups
-                    | Self::NavigateBack
-                    | Self::InsertNewline
-                    | Self::Paste
-                    | Self::ToggleFocusedTool
-                    | Self::PreviousTool
-                    | Self::NextTool
-                    | Self::HistoryPrevious
-                    | Self::HistoryNext
-                    | Self::JumpTop
-                    | Self::JumpBottom
-                    | Self::ClearInput
-                    | Self::ToggleBrowse
-                    | Self::ScrollUp
-                    | Self::ScrollDown
-            )
+    pub(crate) const fn available_in_shared_tui(self, _context: ActionContext) -> bool {
+        matches!(
+            self,
+            Self::Help
+                | Self::SelectTheme
+                | Self::NewSession
+                | Self::Sessions
+                | Self::ViewSubagents
+                | Self::SelectModel
+                | Self::AddModel
+                | Self::Skills
+                | Self::McpServers
+                | Self::Timeline
+                | Self::ForkSession
+                | Self::UndoSession
+                | Self::RedoSession
+                | Self::RenameSession
+                | Self::AcpHelp
+                | Self::Init
+                | Self::Status
+                | Self::WorkspaceDiff
+                | Self::CompactSession
+                | Self::Editor
+                | Self::PromptStash
+                | Self::PromptStashPop
+                | Self::PromptStashList
+                | Self::ToggleTimestamps
+                | Self::ToggleThinking
+                | Self::ToggleToolDetails
+                | Self::CopyTranscript
+                | Self::ExportTranscript
+                | Self::ToggleAutoApprove
+                | Self::OpenAgentSelector
+                | Self::SwitchAgent
+                | Self::SwitchAgentReverse
+                | Self::Reload
+                | Self::Exit
+                | Self::OpenPalette
+                | Self::SubmitInput
+                | Self::Interrupt
+                | Self::ClosePopups
+                | Self::NavigateBack
+                | Self::InsertNewline
+                | Self::Paste
+                | Self::ToggleFocusedTool
+                | Self::PreviousTool
+                | Self::NextTool
+                | Self::HistoryPrevious
+                | Self::HistoryNext
+                | Self::JumpTop
+                | Self::JumpBottom
+                | Self::ClearInput
+                | Self::ToggleBrowse
+                | Self::ScrollUp
+                | Self::ScrollDown
+        )
     }
 
     const fn available_in_lineage_inspection(self) -> bool {
@@ -584,9 +587,9 @@ static ACTION_SPECS: &[ActionSpec] = &[
     },
     ActionSpec {
         id: "extensions",
-        name: "External integrations",
+        name: "Extensions",
         aliases: &["/extensions"],
-        description: "View external source status and Safe Mode",
+        description: "View and manage extensions",
         contexts: CHAT,
         availability: ActionAvailability::Always,
         handler: ActionHandler::Extensions,
@@ -616,7 +619,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
         id: "hooks",
         name: "Hooks",
         aliases: &["/hooks"],
-        description: "Review and manage native and imported Hooks",
+        description: "View and manage Hooks",
         contexts: CHAT,
         availability: ActionAvailability::Always,
         handler: ActionHandler::NativeHooks,
@@ -638,7 +641,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
         default_bindings: &[],
         fallback_bindings: &[],
         shortcut_field: None,
-        palette: palette("Tools", false),
+        palette: None,
         shortcut_label: None,
         slash_on_startup: false,
     },
@@ -1340,6 +1343,7 @@ pub(crate) fn slash_actions(state: ActionState) -> Vec<ActionProjection> {
         .filter(|spec| {
             spec.available(state)
                 && !spec.aliases.is_empty()
+                && spec.id != "hooks_external"
                 && (state.context != ActionContext::Startup || spec.slash_on_startup)
         })
         .flat_map(|spec| {
@@ -2124,7 +2128,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shared_tui_supports_current_session_model_selection_without_model_management() {
+    fn shared_tui_exposes_local_compatibility_management() {
         assert!(ActionHandler::Sessions.available_in_shared_tui(ActionContext::Chat));
         assert!(ActionHandler::Interrupt.available_in_shared_tui(ActionContext::Chat));
         for action in [
@@ -2132,6 +2136,9 @@ mod tests {
             ActionHandler::SwitchAgent,
             ActionHandler::SwitchAgentReverse,
             ActionHandler::SelectModel,
+            ActionHandler::AddModel,
+            ActionHandler::Skills,
+            ActionHandler::McpServers,
             ActionHandler::RenameSession,
         ] {
             assert!(
@@ -2140,7 +2147,6 @@ mod tests {
             );
         }
         for action in [
-            ActionHandler::McpServers,
             ActionHandler::Tools,
             ActionHandler::Extensions,
             ActionHandler::Plugins,
@@ -2154,17 +2160,25 @@ mod tests {
                 "{action:?}"
             );
         }
-        assert!(!ActionHandler::SelectModel.available_in_shared_tui(ActionContext::Startup));
+        assert!(ActionHandler::SelectModel.available_in_shared_tui(ActionContext::Startup));
+        assert!(ActionHandler::AddModel.available_in_shared_tui(ActionContext::Startup));
+        assert!(ActionHandler::Skills.available_in_shared_tui(ActionContext::Startup));
+        assert!(ActionHandler::McpServers.available_in_shared_tui(ActionContext::Startup));
         assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
         assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/models`"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`/connect`"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`/skills`"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`/mcp`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`View subagents`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/fork`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/rename <name>`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/reload [skills|instructions]`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("Ctrl+D"));
         assert!(SHARED_TUI_HELP_NOTE.contains("idle, non-current Session"));
-        assert!(SHARED_TUI_HELP_NOTE.contains("Agent/Subagent management"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("local compatibility owner"));
+        assert!(SHARED_TUI_HELP_NOTE
+            .contains("do not reconfigure an already-running Shared Runtime Host"));
         assert!(SHARED_TUI_HELP_NOTE.contains("remain Embedded"));
     }
 
@@ -2323,7 +2337,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_tui_projections_hide_embedded_management_actions() {
+    fn shared_tui_projections_expose_compatibility_management_actions() {
         let state = ActionState::chat(false, false).for_shared_tui();
         let slash_ids = slash_actions(state)
             .into_iter()
@@ -2334,17 +2348,25 @@ mod tests {
             .map(|action| action.id)
             .collect::<Vec<_>>();
 
-        for unavailable in ["skills", "mcp_servers", "extensions", "hooks", "usage"] {
+        for unavailable in ["tools", "extensions", "hooks", "usage"] {
             assert!(!slash_ids.contains(&unavailable), "{unavailable}");
             assert!(!palette_ids.contains(&unavailable), "{unavailable}");
         }
-        for available in ["new_session", "sessions", "theme", "help", "exit"] {
+        for available in [
+            "new_session",
+            "sessions",
+            "select_model",
+            "add_model",
+            "skills",
+            "mcp_servers",
+            "theme",
+            "help",
+            "exit",
+        ] {
             assert!(palette_ids.contains(&available), "{available}");
         }
         assert!(slash_ids.contains(&"switch_agent"));
         assert!(palette_ids.contains(&"switch_agent"));
-        assert!(slash_ids.contains(&"select_model"));
-        assert!(palette_ids.contains(&"select_model"));
         assert!(slash_ids.contains(&"rename_session"));
         assert!(slash_ids.contains(&"reload"));
         assert!(!slash_ids.contains(&"reload_skills"));
@@ -2367,7 +2389,7 @@ mod tests {
         );
 
         let startup_state = ActionState::startup(false).for_shared_tui();
-        assert!(!slash_actions(startup_state)
+        assert!(slash_actions(startup_state)
             .iter()
             .any(|action| action.id == "select_model"));
     }
@@ -2480,7 +2502,22 @@ mod tests {
         assert_eq!(tools.handler, ActionHandler::Tools);
         let extensions = action_for_alias("/extensions", ActionContext::Chat).unwrap();
         assert_eq!(extensions.handler, ActionHandler::Extensions);
-        assert!(extensions.description.contains("Safe Mode"));
+        assert_eq!(extensions.name, "Extensions");
+        assert_eq!(extensions.description, "View and manage extensions");
+        assert_eq!(
+            action_for_alias("/hooks_external", ActionContext::Chat)
+                .expect("legacy Hook alias remains parseable")
+                .handler,
+            ActionHandler::ExternalHooks
+        );
+        assert!(!slash_actions(ActionState::chat(false, false))
+            .iter()
+            .any(|action| action.id == "hooks_external"));
+        assert!(!palette_actions(ActionState::chat(false, false))
+            .iter()
+            .any(|action| action.id == "hooks_external"));
+        let hooks = action_for_alias("/hooks", ActionContext::Chat).unwrap();
+        assert_eq!(hooks.description, "View and manage Hooks");
         let agents = action_for_alias("/agent", ActionContext::Chat).unwrap();
         assert_eq!(agents.handler, ActionHandler::OpenAgentSelector);
         assert_eq!(agents.description, "Switch modes and manage agents");

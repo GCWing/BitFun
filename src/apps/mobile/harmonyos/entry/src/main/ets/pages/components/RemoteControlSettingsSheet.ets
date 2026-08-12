@@ -5,45 +5,45 @@ import { RemotePermissionMode } from '../../model/RemoteModels';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
 import { BitFunAccountLoginPage } from './BitFunAccountLoginPage';
 
-@Component
+@ComponentV2
 export struct RemoteControlSettingsSheet {
-  @Prop desktopName: string = '';
-  @Prop desktopId: string = '';
-  @Prop userId: string = '';
-  @Prop accountUsername: string = '';
-  @Prop @Watch('handleAccountUserChanged') accountUserId: string = '';
-  @Prop deviceId: string = '';
-  @Prop controlTargetType: string = 'none';
-  @Prop controlTargetDeviceId: string = '';
-  @Prop connectionState: string = 'idle';
-  @Prop statusText: string = '';
-  @Prop isBusy: boolean = false;
-  @Prop openAccountOnAppear: boolean = false;
-  onClose: () => void = () => {};
-  onOpenAccount: () => void = () => {};
-  onAddConnection: () => void = () => {};
-  cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> = async (_relayUrl: string, _username: string, _password: string): Promise<string> => '';
-  cloudSync: () => Promise<string> = async (): Promise<string> => '0';
-  cloudLogout: () => Promise<void> = async (): Promise<void> => {};
-  cloudListDevices: () => Promise<CloudAccountDevice[]> = async (): Promise<CloudAccountDevice[]> => [];
-  getPermissionMode: () => Promise<RemotePermissionMode> = async (): Promise<RemotePermissionMode> => 'ask';
-  setPermissionMode: (mode: RemotePermissionMode) => Promise<RemotePermissionMode> =
+  @Param desktopName: string = '';
+  @Param desktopId: string = '';
+  @Param userId: string = '';
+  @Param accountUsername: string = '';
+  @Param accountUserId: string = '';
+  @Param deviceId: string = '';
+  @Param controlTargetType: string = 'none';
+  @Param controlTargetDeviceId: string = '';
+  @Param connectionState: string = 'idle';
+  @Param statusText: string = '';
+  @Param isBusy: boolean = false;
+  @Param openAccountOnAppear: boolean = false;
+  @Event onClose: () => void = () => {};
+  @Event onOpenAccount: () => void = () => {};
+  @Event onAddConnection: () => void = () => {};
+  @Event cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> = async (_relayUrl: string, _username: string, _password: string): Promise<string> => '';
+  @Event cloudSync: () => Promise<string> = async (): Promise<string> => '0';
+  @Event cloudLogout: () => Promise<void> = async (): Promise<void> => {};
+  @Event cloudListDevices: () => Promise<CloudAccountDevice[]> = async (): Promise<CloudAccountDevice[]> => [];
+  @Event getPermissionMode: () => Promise<RemotePermissionMode> = async (): Promise<RemotePermissionMode> => 'ask';
+  @Event setPermissionMode: (mode: RemotePermissionMode) => Promise<RemotePermissionMode> =
     async (mode: RemotePermissionMode): Promise<RemotePermissionMode> => mode;
-  onDisconnect: () => void = () => {};
-  onReconnect: () => void = () => {};
-  @State showProfile: boolean = false;
-  @State showLogin: boolean = false;
-  @State cloudSyncBusy: boolean = false;
-  @State cloudSyncStatus: string = '';
-  @State accountDevices: CloudAccountDevice[] = [];
-  @State accountDevicesBusy: boolean = false;
-  @State accountDevicesError: string = '';
-  @State permissionMode: RemotePermissionMode = 'ask';
-  @State permissionModeBusy: boolean = false;
-  @State permissionModeLoaded: boolean = false;
-  @State permissionModeError: string = '';
-  @State confirmFullAccess: boolean = false;
-  @State logoutBusy: boolean = false;
+  @Event onDisconnect: () => void = () => {};
+  @Event onReconnect: () => void = () => {};
+  @Local showProfile: boolean = false;
+  @Local showLogin: boolean = false;
+  @Local cloudSyncBusy: boolean = false;
+  @Local cloudSyncStatus: string = '';
+  @Local accountDevices: CloudAccountDevice[] = [];
+  @Local accountDevicesBusy: boolean = false;
+  @Local accountDevicesError: string = '';
+  @Local permissionMode: RemotePermissionMode = 'ask';
+  @Local permissionModeBusy: boolean = false;
+  @Local permissionModeLoaded: boolean = false;
+  @Local permissionModeError: string = '';
+  @Local confirmFullAccess: boolean = false;
+  @Local logoutBusy: boolean = false;
 
   aboutToAppear(): void {
     this.showProfile = this.openAccountOnAppear && this.isAccountAuthenticated();
@@ -855,6 +855,7 @@ export struct RemoteControlSettingsSheet {
     return this.accountUserId.trim().length > 0;
   }
 
+  @Monitor('accountUserId')
   private handleAccountUserChanged(): void {
     if (this.isAccountAuthenticated() && this.accountDevices.length === 0) {
       this.refreshAccountDevices();

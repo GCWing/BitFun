@@ -30,7 +30,7 @@ bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
 bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-webdriver = { path = "../../crates/adapters/webdriver" }
-bitfun-acp = { path = "../../crates/interfaces/acp" }
+bitfun-acp = { path = "../../crates/interfaces/acp", default-features = false, features = ["client"] }
 
 # Tauri
 tauri = { workspace = true }
@@ -41,7 +41,6 @@ tauri-plugin-log = { workspace = true }
 tauri-plugin-autostart = { workspace = true }
 tauri-plugin-notification = { workspace = true }
 tauri-plugin-updater = { workspace = true }
-tauri-plugin-global-shortcut = { workspace = true }
 tauri-plugin-single-instance = { workspace = true }
 tauri-plugin-window-state = { workspace = true }
 keepawake = { workspace = true }
@@ -66,7 +65,7 @@ dark-light = { workspace = true }
 similar = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
-reqwest = { workspace = true, features = ["rustls"] }
+reqwest = { workspace = true, features = ["http2", "json", "query", "rustls", "stream"] }
 semver = { workspace = true }
 zip = { workspace = true }
 tar = { workspace = true }
@@ -86,6 +85,9 @@ enigo = { workspace = true }
 image = { workspace = true }
 resvg = { workspace = true }
 tempfile = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 bitflags = { workspace = true }

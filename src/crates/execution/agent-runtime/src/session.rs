@@ -4,6 +4,7 @@ pub use bitfun_core_types::{
     SessionAgentRouteOwner, SessionContinuationPolicy, SessionExecutionTarget,
     SessionModelBindingPolicy,
 };
+pub use bitfun_runtime_ports::PermissionMode;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
@@ -189,6 +190,18 @@ pub struct SessionConfig {
     /// model's default preset (Auto).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_preset: Option<String>,
+    /// Explicit tool permission mode selected for this session. `None` follows
+    /// the user-level default, so an unset session keeps tracking global
+    /// configuration changes instead of freezing the value it was created with.
+    ///
+    /// Read leniently: a mode written by a newer build must not fail the whole
+    /// persisted session state. See `deserialize_optional_permission_mode`.
+    #[serde(
+        default,
+        deserialize_with = "bitfun_runtime_ports::deserialize_optional_permission_mode",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub permission_mode: Option<PermissionMode>,
     /// Whether this child session accepts another delegated turn.
     #[serde(default, skip_serializing_if = "is_reusable_continuation_policy")]
     pub continuation_policy: SessionContinuationPolicy,
@@ -234,6 +247,7 @@ impl Default for SessionConfig {
             remote_ssh_host: None,
             model_id: None,
             reasoning_preset: None,
+            permission_mode: None,
             continuation_policy: SessionContinuationPolicy::default(),
             model_binding_policy: SessionModelBindingPolicy::default(),
             model_binding_fingerprint: None,
@@ -309,11 +323,55 @@ pub fn sanitize_persisted_session_state(state: &SessionState) -> SessionState {
 #[cfg(test)]
 mod tests {
     use super::{
-        sanitize_persisted_session_state, CompressionState, PersistedSessionStateFile, Session,
-        SessionAgentRouteOwner, SessionConfig, SessionContinuationPolicy,
-        SessionModelBindingPolicy,
+        sanitize_persisted_session_state, CompressionState, PermissionMode,
+        PersistedSessionStateFile, Session, SessionAgentRouteOwner, SessionConfig,
+        SessionContinuationPolicy, SessionModelBindingPolicy,
     };
     use crate::session_state::{ProcessingPhase, SessionState};
+
+    fn persisted_state_json(permission_mode: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "schema_version": 1,
+            "config": {
+                "max_context_tokens": 128128,
+                "auto_compact": true,
+                "enable_tools": true,
+                "safe_mode": true,
+                "max_turns": 200,
+                "enable_context_compression": true,
+                "permission_mode": permission_mode,
+            },
+            "snapshot_session_id": null,
+            "compression_state": { "last_compression_at": null, "compression_count": 0 },
+            "runtime_state": "Idle",
+        })
+    }
+
+    #[test]
+    fn persisted_session_state_survives_a_permission_mode_from_a_newer_build() {
+        let known: PersistedSessionStateFile =
+            serde_json::from_value(persisted_state_json(serde_json::json!("full_access")))
+                .expect("known mode should load");
+        assert_eq!(
+            known.config.permission_mode,
+            Some(PermissionMode::FullAccess)
+        );
+
+        // The whole state file must still load; only the unreadable selection is
+        // dropped, leaving the session on the user-level default.
+        let unknown: PersistedSessionStateFile =
+            serde_json::from_value(persisted_state_json(serde_json::json!("read_only")))
+                .expect("an unknown mode must not fail the state file");
+        assert_eq!(unknown.config.permission_mode, None);
+        assert_eq!(unknown.config.max_context_tokens, 128128);
+        assert!(unknown.config.enable_tools);
+    }
+
+    #[test]
+    fn unset_permission_mode_keeps_persisted_config_bytes_unchanged() {
+        let serialized = serde_json::to_value(SessionConfig::default()).expect("serialize");
+        assert!(serialized.get("permission_mode").is_none());
+    }
     use bitfun_core_types::{
         SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
     };

@@ -53,7 +53,6 @@ impl ChatMode {
         chat_view.activate_session_composer(&source_session_id, &new_session_id);
         *session_id = new_session_id.clone();
         *chat_state = new_state;
-        chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.agent_type = restored_agent_type;
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
@@ -123,7 +122,6 @@ impl ChatMode {
         chat_view.activate_session_composer(&previous_session_id, new_session_id);
         *session_id = new_session_id.to_string();
         *chat_state = new_state;
-        chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.agent_type = restored_agent_type;
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
@@ -179,7 +177,6 @@ impl ChatMode {
         chat_view.activate_session_composer(&previous_session_id, &new_session_id);
         *session_id = new_session_id;
         *chat_state = new_state;
-        chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;

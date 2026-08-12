@@ -23,6 +23,7 @@ export const chatInputAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'commandName' },
     { id: 'commandLabel' },
     { id: 'commandCurrent' },
+    { id: 'commandStatus' },
     { id: 'commandSection' },
     { id: 'commandEmpty' },
     { id: 'actions' },

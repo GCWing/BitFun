@@ -52,6 +52,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn manifest_resolver_facade_preserves_product_owner_output() {
         let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];

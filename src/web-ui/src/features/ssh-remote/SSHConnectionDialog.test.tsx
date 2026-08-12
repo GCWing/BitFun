@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -99,17 +101,19 @@ vi.mock('@/component-library', () => ({
     value,
     onChange,
     className,
+    placeholder,
     suffix,
   }: {
     label?: string;
     value?: string;
     onChange?: React.ChangeEventHandler<HTMLInputElement>;
     className?: string;
+    placeholder?: string;
     suffix?: React.ReactNode;
   }) => (
     <label className={className}>
       {label}
-      <input aria-label={label} value={value} onChange={onChange} />
+      <input aria-label={label} value={value} onChange={onChange} placeholder={placeholder} />
       {suffix}
     </label>
   ),
@@ -117,12 +121,18 @@ vi.mock('@/component-library', () => ({
     options,
     value,
     onChange,
+    dropdownClassName,
   }: {
     options: Array<{ label: string; value: string }>;
     value: string;
     onChange: (value: string) => void;
+    dropdownClassName?: string;
   }) => (
-    <select value={value} onChange={(event) => onChange(event.target.value)}>
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      data-dropdown-class-name={dropdownClassName}
+    >
       {options.map((option) => (
         <option key={option.value} value={option.value}>{option.label}</option>
       ))}
@@ -167,6 +177,36 @@ describe('SSHConnectionDialog', () => {
     });
   }
 
+  function setInputValue(label: string, value: string): void {
+    const input = container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+    expect(input).not.toBeNull();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, value);
+      input?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  function setSelectValue(select: HTMLSelectElement | null, value: string): void {
+    expect(select).not.toBeNull();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+      setter?.call(select, value);
+      select?.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  function findTargetSelect(): HTMLSelectElement | null {
+    return Array.from(container.querySelectorAll<HTMLSelectElement>('select')).find((select) => (
+      select.querySelector('option[value="localDocker"]') !== null
+    )) ?? null;
+  }
+
+  function findConnectButton(): HTMLButtonElement | undefined {
+    return Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('ssh.remote.connect'));
+  }
+
   it('keeps optional connection fields collapsed for a new connection', async () => {
     await renderDialog();
 
@@ -183,6 +223,30 @@ describe('SSHConnectionDialog', () => {
     expect(container.querySelector('input[aria-label="ssh.remote.connectionName"]')).not.toBeNull();
     expect(container.querySelector('input[aria-label="ssh.remote.proxyJump"]')).not.toBeNull();
     expect(container.querySelector('input[aria-label="ssh.remote.connectTimeout"]')).not.toBeNull();
+  });
+
+  it('keeps portalled select menus above the raised dialog overlay', async () => {
+    await renderDialog();
+
+    const selects = Array.from(container.querySelectorAll<HTMLSelectElement>('select'));
+    expect(selects.length).toBeGreaterThan(0);
+    expect(selects.every((select) => (
+      select.dataset.dropdownClassName === 'ssh-connection-dialog__select-dropdown'
+    ))).toBe(true);
+
+    const stylesheet = readFileSync(
+      resolve(process.cwd(), 'src/features/ssh-remote/SSHConnectionDialog.scss'),
+      'utf8',
+    );
+    const overlayZIndex = Number(stylesheet.match(
+      /\.ssh-connection-dialog__modal-overlay\s*\{[^}]*z-index:\s*(\d+)/,
+    )?.[1]);
+    const selectZIndex = Number(stylesheet.match(
+      /\.select__dropdown\.ssh-connection-dialog__select-dropdown\s*\{[^}]*z-index:\s*(\d+)/,
+    )?.[1]);
+
+    expect(overlayZIndex).toBeGreaterThan(0);
+    expect(selectZIndex).toBeGreaterThan(overlayZIndex);
   });
 
   it('reveals non-default settings when editing an existing connection', async () => {
@@ -262,27 +326,11 @@ describe('SSHConnectionDialog', () => {
     remoteContextMock.connect.mockResolvedValue(undefined);
     await renderDialog(onClose);
 
-    const setValue = (label: string, value: string) => {
-      const input = container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
-      expect(input).not.toBeNull();
-      act(() => {
-        if (input) {
-          const setter = Object.getOwnPropertyDescriptor(
-            HTMLInputElement.prototype,
-            'value',
-          )?.set;
-          setter?.call(input, value);
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      });
-    };
+    setInputValue('ssh.remote.host', 'example.test');
+    setInputValue('ssh.remote.username', 'dev');
+    setInputValue('ssh.remote.password', 'secret');
 
-    setValue('ssh.remote.host', 'example.test');
-    setValue('ssh.remote.username', 'dev');
-    setValue('ssh.remote.password', 'secret');
-
-    const connectButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent?.includes('ssh.remote.connect'));
+    const connectButton = findConnectButton();
     expect(connectButton).not.toBeUndefined();
     await act(async () => {
       connectButton?.click();
@@ -298,6 +346,69 @@ describe('SSHConnectionDialog', () => {
       }),
       { browseAfterConnect: true },
     );
+    expect(remoteContextMock.connect.mock.calls[0]?.[1].container).toBeUndefined();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    ['remote Docker', 'remoteDocker', false, 'auto'],
+    ['local Docker', 'localDocker', true, 'auto'],
+    ['container sshd', 'containerSshd', false, 'sshd'],
+  ] as const)(
+    'builds the expected connection config for %s',
+    async (_label, targetType, local, access) => {
+      remoteContextMock.connect.mockResolvedValue(undefined);
+      await renderDialog();
+
+      setSelectValue(findTargetSelect(), targetType);
+      const containerNameInput = container.querySelector<HTMLInputElement>(
+        'input[placeholder="ssh.remote.containerNamePlaceholder"]',
+      );
+      expect(containerNameInput).not.toBeNull();
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        setter?.call(containerNameInput, 'devbox');
+        containerNameInput?.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+
+      if (!local) {
+        setInputValue('ssh.remote.host', 'example.test');
+        setInputValue('ssh.remote.username', 'dev');
+        setInputValue('ssh.remote.password', 'secret');
+      }
+
+      const connectButton = findConnectButton();
+      expect(connectButton).not.toBeUndefined();
+      await act(async () => {
+        connectButton?.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const expectedId = local
+        ? 'docker-local-devbox'
+        : 'ssh-dev@example.test-container-devbox';
+      expect(remoteContextMock.connect).toHaveBeenCalledWith(
+        expectedId,
+        expect.objectContaining({
+          id: expectedId,
+          host: local ? 'local-docker' : 'example.test',
+          username: local ? 'docker' : 'dev',
+          auth: local
+            ? { type: 'PrivateKey', keyPath: '' }
+            : { type: 'Password', password: 'secret' },
+          container: {
+            name: 'devbox',
+            access,
+            local,
+            dockerPath: 'docker',
+            shell: '/bin/sh',
+            user: undefined,
+            interactive: true,
+          },
+        }),
+        { browseAfterConnect: true },
+      );
+    },
+  );
 });

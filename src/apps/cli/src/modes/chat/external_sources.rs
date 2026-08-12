@@ -231,6 +231,20 @@ impl
     }
 }
 
+impl From<bitfun_app_server_protocol::external_source::ExternalSourceConflictPreferences>
+    for ExternalSourceConflictPreferences
+{
+    fn from(
+        preferences: bitfun_app_server_protocol::external_source::ExternalSourceConflictPreferences,
+    ) -> Self {
+        Self {
+            choices: preferences.choices,
+            lineage_current_keys: preferences.lineage_current_keys,
+            conflicted_candidate_ids: preferences.conflicted_candidate_ids,
+        }
+    }
+}
+
 fn builtin_command_reconfirmation(
     action_id: &str,
     command_name: &str,
@@ -365,7 +379,7 @@ impl ChatMode {
         &mut self,
         arguments: &str,
         chat_view: &mut ChatView,
-        chat_state: &ChatState,
+        _chat_state: &ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
         let action = match parse_external_control_action(arguments) {
@@ -377,29 +391,54 @@ impl ChatMode {
         };
         if self.external_control_mutation_rx.is_some() {
             chat_view.set_status(Some(
-                "An external integration update is already running; input remains available."
-                    .to_string(),
+                "An extension update is already running; input remains available.".to_string(),
             ));
             return;
         }
 
-        let workspace = self.workspace_path_for_sync(chat_state);
+        let source_selection = match &action {
+            ExternalControlUiAction::SetSourceEnabled {
+                source_index,
+                enabled,
+            } => {
+                let Some(control) = self.external_control_snapshot.as_ref() else {
+                    chat_view.set_status(Some(
+                        "Open /extensions before changing an extension.".to_string(),
+                    ));
+                    return;
+                };
+                if !control.host_capabilities.can_manage_sources {
+                    chat_view.set_status(Some(
+                        "This connection can only show extension status.".to_string(),
+                    ));
+                    return;
+                }
+                let Some(source) = control.sources.get(*source_index) else {
+                    chat_view.set_status(Some(
+                        "That extension is no longer listed. Run /extensions refresh.".to_string(),
+                    ));
+                    return;
+                };
+                Some((source.stable_key.clone(), *enabled))
+            }
+            _ => None,
+        };
         let expected_preference_revision = self
-            .external_source_snapshot
+            .external_control_snapshot
             .as_ref()
             .map(|snapshot| snapshot.preference_revision);
         let task_action = action.clone();
+        let agent = self.agent.clone();
         let (sender, receiver) = mpsc::channel();
         rt_handle.spawn(async move {
             let result = async {
                 if matches!(&task_action, ExternalControlUiAction::Show) {
-                    let surface = get_external_source_control_snapshot(
-                        Some(&workspace),
-                        false,
-                        ExternalSourceHostCapabilities::read_write(),
-                    )
-                    .await?;
-                    return Ok((surface, None));
+                    let response = agent.external_source_snapshot(false).await?;
+                    return Ok((
+                        response.control,
+                        Some(response.snapshot),
+                        Some(response.preferences.into()),
+                    ));
                 }
 
                 let action = match &task_action {
@@ -407,29 +446,30 @@ impl ChatMode {
                     ExternalControlUiAction::SetSafeMode(enabled) => {
                         ExternalSourceControlActionV1::SetSafeMode { enabled: *enabled }
                     }
-                    ExternalControlUiAction::SetSourceEnabled {
-                        source_key,
-                        enabled,
-                    } => ExternalSourceControlActionV1::SetSourceEnabled {
-                        source_key: source_key.clone(),
-                        enabled: *enabled,
-                    },
+                    ExternalControlUiAction::SetSourceEnabled { .. } => {
+                        let (source_key, enabled) = source_selection
+                            .clone()
+                            .expect("source selection was resolved before spawning");
+                        ExternalSourceControlActionV1::SetSourceEnabled {
+                            source_key,
+                            enabled,
+                        }
+                    }
                     ExternalControlUiAction::Show => unreachable!(),
                 };
-                let surface = apply_external_source_control_action(
-                    Some(&workspace),
-                    ExternalSourceControlRequestV1 {
+                let response = agent
+                    .external_source_control(ExternalSourceControlRequestV1 {
                         schema_version: EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
                         operation_id: format!("tui-{}", uuid::Uuid::new_v4()),
                         expected_preference_revision,
                         action,
-                    },
-                )
-                .await?;
-                let catalog = external_source_snapshot(Some(&workspace), false)
-                    .await
-                    .map_err(sanitize_external_source_operation_error)?;
-                Ok((surface, Some(catalog)))
+                    })
+                    .await?;
+                Ok((
+                    response.surface.control,
+                    Some(response.snapshot.snapshot),
+                    Some(response.snapshot.preferences.into()),
+                ))
             }
             .await;
             let _ = sender.send(ExternalControlMutationResult {
@@ -439,15 +479,13 @@ impl ChatMode {
         });
         self.external_control_mutation_rx = Some(receiver);
         let status = match action {
-            ExternalControlUiAction::Show => "Reading external integration status",
-            ExternalControlUiAction::Refresh => "Refreshing external integrations",
-            ExternalControlUiAction::SetSafeMode(true) => "Entering External Safe Mode",
-            ExternalControlUiAction::SetSafeMode(false) => "Exiting External Safe Mode",
-            ExternalControlUiAction::SetSourceEnabled { enabled: true, .. } => {
-                "Enabling external source"
-            }
+            ExternalControlUiAction::Show => "Reading extension status",
+            ExternalControlUiAction::Refresh => "Refreshing extensions",
+            ExternalControlUiAction::SetSafeMode(true) => "Pausing external access",
+            ExternalControlUiAction::SetSafeMode(false) => "Resuming external access",
+            ExternalControlUiAction::SetSourceEnabled { enabled: true, .. } => "Enabling extension",
             ExternalControlUiAction::SetSourceEnabled { enabled: false, .. } => {
-                "Disabling external source"
+                "Disabling extension"
             }
         };
         chat_view.set_status(Some(format!(
@@ -474,24 +512,26 @@ impl ChatMode {
         };
         self.external_control_mutation_rx = None;
         match outcome.result {
-            Ok((surface, catalog)) => {
+            Ok((control, catalog, preferences)) => {
+                if let Some(preferences) = preferences {
+                    self.replace_external_conflict_preferences(preferences);
+                }
                 if let Some(catalog) = catalog {
                     self.update_external_source_view(chat_view, &catalog);
                     self.external_source_snapshot = Some(catalog);
                 }
-                chat_view.show_info_popup(external_control_review_text(&surface.control));
+                chat_view.show_info_popup(external_control_status_text(&control));
+                self.external_control_snapshot = Some(control);
                 let status = match outcome.action {
-                    ExternalControlUiAction::Show => "External integration status updated",
-                    ExternalControlUiAction::Refresh => "External integrations refreshed",
-                    ExternalControlUiAction::SetSafeMode(true) => "External Safe Mode is active",
-                    ExternalControlUiAction::SetSafeMode(false) => {
-                        "External Safe Mode is off; eligible integrations were reconciled"
-                    }
+                    ExternalControlUiAction::Show => "Extension status updated",
+                    ExternalControlUiAction::Refresh => "Extensions refreshed",
+                    ExternalControlUiAction::SetSafeMode(true) => "External access is paused",
+                    ExternalControlUiAction::SetSafeMode(false) => "External access resumed",
                     ExternalControlUiAction::SetSourceEnabled { enabled: true, .. } => {
-                        "External source enabled"
+                        "Extension enabled"
                     }
                     ExternalControlUiAction::SetSourceEnabled { enabled: false, .. } => {
-                        "External source disabled"
+                        "Extension disabled"
                     }
                 };
                 chat_view.set_status(Some(status.to_string()));
@@ -543,7 +583,7 @@ impl ChatMode {
             return;
         }
 
-        let workspace = self.workspace_path_for_sync(chat_state);
+        let _ = chat_state;
         let expected_preference_revision = self
             .external_source_snapshot
             .as_ref()
@@ -559,41 +599,44 @@ impl ChatMode {
             ExternalToolReviewAction::Show => unreachable!(),
         };
         let task_action = action.clone();
+        let agent = self.agent.clone();
         let (sender, receiver) = mpsc::channel();
         rt_handle.spawn(async move {
             let result = match &task_action {
                 ExternalToolReviewAction::Refresh => {
-                    external_source_snapshot(Some(&workspace), true).await
+                    agent
+                        .external_source_review(ExternalSourceReviewAction::Refresh)
+                        .await
                 }
                 ExternalToolReviewAction::Decide {
                     approval_key,
                     decision_key,
                     approved,
                 } => {
-                    set_external_tool_target_decision(
-                        Some(&workspace),
-                        approval_key,
-                        decision_key,
-                        *approved,
-                        expected_preference_revision,
-                    )
-                    .await
+                    agent
+                        .external_source_review(ExternalSourceReviewAction::SetToolTargetDecision {
+                            approval_key: approval_key.clone(),
+                            decision_key: decision_key.clone(),
+                            approved: *approved,
+                            expected_preference_revision,
+                        })
+                        .await
                 }
                 ExternalToolReviewAction::Choose {
                     conflict_key,
                     candidate_id,
                 } => {
-                    set_external_tool_conflict_choice(
-                        Some(&workspace),
-                        conflict_key,
-                        candidate_id,
-                        expected_preference_revision,
-                    )
-                    .await
+                    agent
+                        .external_source_review(ExternalSourceReviewAction::SetToolConflictChoice {
+                            conflict_key: conflict_key.clone(),
+                            candidate_id: candidate_id.clone(),
+                            expected_preference_revision,
+                        })
+                        .await
                 }
                 ExternalToolReviewAction::Show => unreachable!(),
             }
-            .map_err(sanitize_external_source_operation_error);
+            .map(|response| response.snapshot);
             let _ = sender.send(ExternalToolMutationResult {
                 action: task_action,
                 result,
@@ -741,7 +784,7 @@ impl ChatMode {
             return;
         }
 
-        let workspace = self.workspace_path_for_sync(chat_state);
+        let _ = chat_state;
         let pending_status = match &action {
             ExternalAgentReviewAction::Refresh => "Refreshing external agents",
             ExternalAgentReviewAction::Decide { approved: true, .. } => "Enabling external agent",
@@ -753,11 +796,14 @@ impl ChatMode {
             ExternalAgentReviewAction::Show => unreachable!(),
         };
         let task_action = action.clone();
+        let agent = self.agent.clone();
         let (sender, receiver) = mpsc::channel();
         rt_handle.spawn(async move {
             let result = match &task_action {
                 ExternalAgentReviewAction::Refresh => {
-                    external_source_snapshot(Some(&workspace), true).await
+                    agent
+                        .external_source_review(ExternalSourceReviewAction::Refresh)
+                        .await
                 }
                 ExternalAgentReviewAction::Decide {
                     candidate_id,
@@ -766,15 +812,15 @@ impl ChatMode {
                     expected_subagent_generation,
                     expected_preference_revision,
                 } => {
-                    set_external_subagent_activation(
-                        Some(&workspace),
-                        candidate_id,
-                        *approved,
-                        *expected_subagent_generation,
-                        *expected_preference_revision,
-                        decision_key,
-                    )
-                    .await
+                    agent
+                        .external_source_review(ExternalSourceReviewAction::SetSubagentActivation {
+                            candidate_id: candidate_id.clone(),
+                            approved: *approved,
+                            expected_subagent_generation: *expected_subagent_generation,
+                            expected_preference_revision: *expected_preference_revision,
+                            decision_key: decision_key.clone(),
+                        })
+                        .await
                 }
                 ExternalAgentReviewAction::Choose {
                     conflict_key,
@@ -783,15 +829,17 @@ impl ChatMode {
                     expected_subagent_generation,
                     expected_preference_revision,
                 } => {
-                    choose_external_subagent_conflict(
-                        Some(&workspace),
-                        conflict_key,
-                        candidate_id,
-                        *approve_external,
-                        *expected_subagent_generation,
-                        *expected_preference_revision,
-                    )
-                    .await
+                    agent
+                        .external_source_review(
+                            ExternalSourceReviewAction::ChooseSubagentConflict {
+                                conflict_key: conflict_key.clone(),
+                                candidate_id: candidate_id.clone(),
+                                approve_external: *approve_external,
+                                expected_subagent_generation: *expected_subagent_generation,
+                                expected_preference_revision: *expected_preference_revision,
+                            },
+                        )
+                        .await
                 }
                 ExternalAgentReviewAction::Bind {
                     binding_key,
@@ -799,18 +847,20 @@ impl ChatMode {
                     expected_subagent_generation,
                     expected_preference_revision,
                 } => {
-                    set_external_subagent_model_binding(
-                        Some(&workspace),
-                        binding_key,
-                        target.clone(),
-                        *expected_subagent_generation,
-                        *expected_preference_revision,
-                    )
-                    .await
+                    agent
+                        .external_source_review(
+                            ExternalSourceReviewAction::SetSubagentModelBinding {
+                                binding_key: binding_key.clone(),
+                                target: target.clone(),
+                                expected_subagent_generation: *expected_subagent_generation,
+                                expected_preference_revision: *expected_preference_revision,
+                            },
+                        )
+                        .await
                 }
                 ExternalAgentReviewAction::Show => unreachable!(),
             }
-            .map_err(sanitize_external_source_operation_error);
+            .map(|response| response.snapshot);
             let _ = sender.send(ExternalAgentMutationResult {
                 action: task_action,
                 result,

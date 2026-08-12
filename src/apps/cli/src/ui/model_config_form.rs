@@ -1,3 +1,4 @@
+use bitfun_app_server_protocol::model::{ModelEditProjection, ModelMutation, SecretUpdate};
 /// Model configuration form dialog
 ///
 /// A multi-field input form for adding a new AI model configuration.
@@ -58,6 +59,69 @@ fn reasoning_after_preset_selection(
     let mut reasoning = existing.cloned().unwrap_or_default();
     reasoning.default_preset = selected_preset.map(ToOwned::to_owned);
     Some(reasoning)
+}
+
+impl ModelFormResult {
+    pub(crate) fn from_projection(projection: ModelEditProjection) -> Self {
+        let model = projection.summary;
+        Self {
+            editing_model_id: Some(model.id),
+            name: model.name,
+            model_name: model.model_name,
+            base_url: model.base_url,
+            api_key: String::new(),
+            provider_format: model.provider,
+            context_window: model.context_window.unwrap_or(128_000),
+            max_tokens: model.max_tokens.unwrap_or(8_192),
+            reasoning_preset_options: projection.reasoning_preset_options,
+            reasoning: projection.reasoning,
+            inline_think_in_text: projection.inline_think_in_text,
+            skip_ssl_verify: projection.skip_ssl_verify,
+            custom_headers: String::new(),
+            custom_headers_mode: projection.custom_headers_mode,
+            custom_request_body: String::new(),
+        }
+    }
+
+    pub(crate) fn to_mutation(&self, model_id: String) -> ModelMutation {
+        let editing = self.editing_model_id.is_some();
+        let required_secret = |value: &str| {
+            if editing && value.is_empty() {
+                SecretUpdate::Preserve
+            } else {
+                SecretUpdate::Replace(value.to_string())
+            }
+        };
+        let optional_secret = |value: &str| {
+            if value.is_empty() {
+                if editing {
+                    SecretUpdate::Preserve
+                } else {
+                    SecretUpdate::Clear
+                }
+            } else {
+                SecretUpdate::Replace(value.to_string())
+            }
+        };
+        ModelMutation {
+            id: model_id,
+            name: self.name.clone(),
+            provider: self.provider_format.clone(),
+            model_name: self.model_name.clone(),
+            base_url: self.base_url.clone(),
+            api_key: Some(required_secret(&self.api_key)),
+            custom_headers: Some(optional_secret(&self.custom_headers)),
+            custom_request_body: Some(optional_secret(&self.custom_request_body)),
+            context_window: Some(self.context_window),
+            max_tokens: Some(self.max_tokens),
+            enabled: true,
+            reasoning: self.reasoning.clone(),
+            inline_think_in_text: self.inline_think_in_text,
+            skip_ssl_verify: self.skip_ssl_verify,
+            custom_headers_mode: (!self.custom_headers_mode.is_empty())
+                .then(|| self.custom_headers_mode.clone()),
+        }
+    }
 }
 
 /// Action returned by the form
@@ -453,7 +517,7 @@ impl ModelConfigFormState {
         if self.base_url.trim().is_empty() {
             return Some("Base URL is required".into());
         }
-        if self.api_key.trim().is_empty() {
+        if self.editing_model_id.is_none() && self.api_key.trim().is_empty() {
             return Some("API Key is required".into());
         }
         if self.context_window.trim().parse::<u32>().is_err() {
@@ -871,6 +935,9 @@ impl ModelConfigFormState {
             FormField::Name => "Config Name *",
             FormField::ModelName => "Model Name *",
             FormField::BaseUrl => "Base URL *",
+            FormField::ApiKey if self.editing_model_id.is_some() => {
+                "API Key (leave blank to preserve)"
+            }
             FormField::ApiKey => "API Key *",
             FormField::ProviderFormat => "Provider Format",
             FormField::ContextWindow => "Context Window",
@@ -1165,6 +1232,9 @@ impl ModelConfigFormState {
             FormField::Name => "e.g. My Model Config",
             FormField::ModelName => "e.g. gpt-4, claude-sonnet-4-5-20250929",
             FormField::BaseUrl => "https://api.example.com/v1/chat/completions",
+            FormField::ApiKey if self.editing_model_id.is_some() => {
+                "Leave blank to keep the configured key"
+            }
             FormField::ApiKey => "Enter your API key",
             FormField::ProviderFormat => "",
             FormField::ContextWindow => "128000",

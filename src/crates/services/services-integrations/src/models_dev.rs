@@ -10,6 +10,7 @@
 
 use log::{debug, warn};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::fs;
@@ -44,6 +45,13 @@ pub struct ModelsDevSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelsDevCacheMetadata {
+    pub path: PathBuf,
+    pub exists: bool,
+    pub updated_at_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelsDevRefreshOutcome {
     NotNeeded,
     Throttled,
@@ -65,6 +73,15 @@ pub struct ModelsDevCatalogService {
     bundled_snapshot: Arc<str>,
     cache_ttl: Duration,
     refresh_state: Arc<Mutex<RefreshState>>,
+    refresh_in_progress: Arc<AtomicBool>,
+}
+
+struct RefreshGuard(Arc<AtomicBool>);
+
+impl Drop for RefreshGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
 }
 
 impl ModelsDevCatalogService {
@@ -75,6 +92,7 @@ impl ModelsDevCatalogService {
             bundled_snapshot: Arc::from(BUNDLED_MODELS_DEV_SNAPSHOT),
             cache_ttl: DEFAULT_CACHE_TTL,
             refresh_state: Arc::new(Mutex::new(RefreshState::default())),
+            refresh_in_progress: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -124,8 +142,45 @@ impl ModelsDevCatalogService {
         snapshot("{}".to_string(), ModelsDevSnapshotSource::Empty)
     }
 
+    pub async fn cache_metadata(&self) -> ModelsDevCacheMetadata {
+        let metadata = fs::metadata(&self.cache_file).await.ok();
+        let updated_at_ms = metadata
+            .as_ref()
+            .and_then(|value| value.modified().ok())
+            .and_then(|value| value.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|value| value.as_millis().min(i64::MAX as u128) as i64);
+        ModelsDevCacheMetadata {
+            path: self.cache_file.clone(),
+            exists: metadata.is_some(),
+            updated_at_ms,
+        }
+    }
+
+    pub fn refresh_in_progress(&self) -> bool {
+        self.refresh_in_progress.load(Ordering::Acquire)
+    }
+
     /// Refresh the cache when stale. Failures leave the last valid cache intact.
     pub async fn refresh_if_stale(&self) -> ModelsDevRefreshOutcome {
+        self.refresh(false).await
+    }
+
+    /// Refresh the cache immediately, bypassing the freshness check. The
+    /// existing refresh-attempt throttle still prevents concurrent/repeated
+    /// requests from becoming an update storm.
+    pub async fn refresh_now(&self) -> ModelsDevRefreshOutcome {
+        self.refresh(true).await
+    }
+
+    async fn refresh(&self, force: bool) -> ModelsDevRefreshOutcome {
+        if self
+            .refresh_in_progress
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return ModelsDevRefreshOutcome::Throttled;
+        }
+        let _refresh_guard = RefreshGuard(self.refresh_in_progress.clone());
         let body = match &self.runtime_source {
             ModelsDevRuntimeSource::LocalFile(path) => {
                 let body = match fs::read_to_string(path).await {
@@ -155,7 +210,7 @@ impl ModelsDevCatalogService {
                 if endpoint_url.trim().is_empty() {
                     return ModelsDevRefreshOutcome::NotNeeded;
                 }
-                if self.is_cache_fresh().await {
+                if !force && self.is_cache_fresh().await {
                     return ModelsDevRefreshOutcome::NotNeeded;
                 }
                 let Ok(mut refresh_state) = self.refresh_state.try_lock() else {
@@ -620,6 +675,48 @@ mod tests {
                 .expect("updated cache read"),
             VALID
         );
+    }
+
+    #[tokio::test]
+    async fn refresh_now_bypasses_fresh_cache_for_http_source() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let cache_file = directory.path().join("models.json");
+        tokio::fs::write(&cache_file, VALID)
+            .await
+            .expect("existing cache write");
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("request");
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request).await;
+            stream
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        VALID.len(),
+                        VALID
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .expect("response");
+        });
+        let service = ModelsDevCatalogService::new(&cache_file)
+            .with_endpoint(format!("http://{address}"))
+            .with_cache_ttl(Duration::from_secs(3600));
+
+        assert_eq!(
+            service.refresh_if_stale().await,
+            ModelsDevRefreshOutcome::NotNeeded
+        );
+        assert_eq!(
+            service.refresh_now().await,
+            ModelsDevRefreshOutcome::Unchanged {
+                version: super::snapshot(VALID.to_string(), ModelsDevSnapshotSource::Cache).version
+            }
+        );
+        server.await.expect("server");
     }
 
     #[tokio::test]

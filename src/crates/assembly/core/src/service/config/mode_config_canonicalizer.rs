@@ -13,6 +13,7 @@ use crate::service::config::types::{
 };
 use crate::util::errors::*;
 use bitfun_agent_runtime::skills::normalize_user_mode_skill_overrides;
+use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
 use bitfun_runtime_ports::PermissionRule;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -88,13 +89,13 @@ pub fn resolve_effective_tools(
     mode_config: Option<&AgentProfileConfig>,
     valid_tools: &HashSet<String>,
 ) -> Vec<String> {
-    let Some(config) = mode_config else {
-        return normalize_tools(default_tools.to_vec(), valid_tools);
-    };
-
     let default_tools = normalize_tools(default_tools.to_vec(), valid_tools);
-    let removed: HashSet<String> = config.removed_tools.iter().cloned().collect();
-    let added = normalize_tools(config.added_tools.clone(), valid_tools);
+    let removed: HashSet<String> = mode_config
+        .map(|config| config.removed_tools.iter().cloned().collect())
+        .unwrap_or_default();
+    let added = mode_config
+        .map(|config| normalize_tools(config.added_tools.clone(), valid_tools))
+        .unwrap_or_default();
 
     let mut effective = Vec::new();
     let mut seen = HashSet::new();
@@ -111,6 +112,16 @@ pub fn resolve_effective_tools(
     for tool in added {
         if seen.insert(tool.clone()) {
             effective.push(tool);
+        }
+    }
+
+    // Thread goals are a main-session lifecycle capability, not an optional
+    // mode specialization. The UI and backend can activate a goal without a
+    // model tool call, so allowing a profile override to remove update_goal
+    // would strand the active goal in the automatic continuation loop.
+    for tool_name in THREAD_GOAL_TOOL_NAMES {
+        if valid_tools.contains(tool_name) && seen.insert(tool_name.to_string()) {
+            effective.push(tool_name.to_string());
         }
     }
 
@@ -195,6 +206,7 @@ fn stored_agent_profile_from_overrides(
 
     added_tools.retain(|tool| !default_set.contains(tool));
     removed_tools.retain(|tool| default_set.contains(tool));
+    removed_tools.retain(|tool| !THREAD_GOAL_TOOL_NAMES.contains(&tool.as_str()));
 
     let removed_set: HashSet<String> = removed_tools.iter().cloned().collect();
     added_tools.retain(|tool| !removed_set.contains(tool));
@@ -578,13 +590,54 @@ pub fn agent_profile_member_mode_ids_for(agent_id: &str) -> Vec<String> {
 mod tests {
     use super::{
         agent_profile_member_mode_ids_for, canonicalize_agent_profile,
-        normalize_skill_override_lists, stored_agent_profile_from_overrides,
-        StoredAgentProfileOverrides,
+        normalize_skill_override_lists, resolve_effective_tools,
+        stored_agent_profile_from_overrides, StoredAgentProfileOverrides,
     };
-    use crate::service::config::types::AgentSubagentOverrideState;
+    use crate::service::config::types::{AgentProfileConfig, AgentSubagentOverrideState};
+    use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
     use bitfun_runtime_ports::{PermissionEffect, PermissionRule};
     use serde_json::Value;
     use std::collections::HashSet;
+
+    #[test]
+    fn mode_profiles_cannot_remove_required_thread_goal_tools() {
+        let default_tools = vec![
+            "Read".to_string(),
+            "get_goal".to_string(),
+            "create_goal".to_string(),
+            "update_goal".to_string(),
+        ];
+        let valid_tools = default_tools.iter().cloned().collect();
+        let stored = stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
+            agent_id: "Claw",
+            added_tools: Vec::new(),
+            removed_tools: default_tools.clone(),
+            disabled_user_skills: Vec::new(),
+            enabled_user_skills: Vec::new(),
+            subagent_overrides: Default::default(),
+            tool_permission_rules: Vec::new(),
+            default_tools: &default_tools,
+            valid_tools: &valid_tools,
+        })
+        .expect("the ordinary Read removal should keep the profile");
+
+        assert_eq!(stored.removed_tools, vec!["Read".to_string()]);
+        for tool_name in THREAD_GOAL_TOOL_NAMES {
+            assert!(!stored.removed_tools.iter().any(|tool| tool == tool_name));
+        }
+
+        let legacy_config = AgentProfileConfig {
+            profile_id: "Claw".to_string(),
+            removed_tools: default_tools.clone(),
+            ..AgentProfileConfig::default()
+        };
+        let effective_tools =
+            resolve_effective_tools(&default_tools, Some(&legacy_config), &valid_tools);
+        assert!(!effective_tools.contains(&"Read".to_string()));
+        for tool_name in THREAD_GOAL_TOOL_NAMES {
+            assert!(effective_tools.iter().any(|tool| tool == tool_name));
+        }
+    }
 
     #[test]
     fn normalize_skill_override_lists_removes_duplicates_and_conflicts() {

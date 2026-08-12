@@ -1,9 +1,24 @@
 {
   "title": "外部 AI 应用",
-  "subtitle": "使用其他 AI 应用的命令、工具、Agent 和 MCP，并检查其 Hook。",
+  "subtitle": "使用其他 AI 应用的命令、工具、Agent 和 MCP，并管理兼容的 Hook。",
   "legacyHostNotice": "当前执行 Host 使用旧版外部来源协议；升级 Host 后才能使用安全模式。",
   "loading": "正在检查外部来源…",
   "checkingNonBlocking": "正在检查更新…",
+  "applications": {
+    "title": "已发现的应用",
+    "empty": "未发现兼容的应用设置。",
+    "toggleLabel": "启用或停用 {{name}}",
+    "enableInAdvanced": "请先在高级设置中启用外部应用。",
+    "attentionRequired": "需要处理。请打开高级设置继续。",
+    "openAdvanced": "打开 {{name}} 的高级设置",
+    "advanced": {
+      "title": "高级设置"
+    }
+  },
+  "hooksManagement": {
+    "title": "Hooks",
+    "loading": "正在加载 Hook 管理…"
+  },
   "hooks": {
     "title": "Hooks",
     "description": "查看 OpenCode、Claude Code 和 Codex 的 Hook 配置。BitFun 只读取配置文件，不运行任何代码。",
@@ -15,7 +30,6 @@
     "showMoreSourcesForProvider": "再显示 {{provider}} 的 {{count}} 个来源",
     "showMoreEntriesForProvider": "再显示 {{provider}} 的 {{count}} 个 Hook",
     "showMoreDiagnosticsForProvider": "再显示 {{provider}} 的 {{count}} 条诊断",
-    "technicalDetails": "技术详情",
     "loading": "正在检查 Hook 配置…",
     "pending": "Hook 发现仍在进行，目录会自动更新。",
     "empty": "未发现 Hook 配置。",
@@ -90,7 +104,6 @@
     "hideDetails": "收起详情",
     "close": "关闭",
     "unknown": "未知",
-    "technicalDetails": "技术详情",
     "selected": "当前使用",
     "selectedUnavailable": "已选择，当前不可用",
     "notSelected": "未使用",
@@ -115,13 +128,14 @@
     "resolve_conflict": "解决冲突",
     "install_runtime": "安装或修复所需运行时，然后刷新。",
     "reconnect_host": "重新连接或升级执行 Host，然后重试。",
-    "exit_safe_mode": "退出安全模式"
+    "exit_safe_mode": "退出安全模式",
+    "upgrade_host": "升级 Host",
+    "view_reason": "查看原因"
   },
   "safeMode": {
     "title": "外部来源安全模式",
     "description": "阻止新的外部工具、Agent 和 MCP 调用，同时保留已发现的命令与诊断信息；已在执行的调用不会被取消。",
-    "activeDescription": "新的外部可执行调用已被阻止；已在执行的调用仍可能完成，命令和诊断信息继续可用于恢复。",
-    "activeNotice": "安全模式仅对当前 Host 进程和执行域有效；重启或切换执行 Host 后会自动关闭。",
+    "activeNotice": "当前 Host 进程已阻止新的外部调用；已在执行的调用仍可能完成，重启或切换 Host 后安全模式会自动关闭。",
     "toggleLabel": "使用外部来源安全模式",
     "entered": "外部来源安全模式已启用。",
     "exited": "外部来源安全模式已关闭，符合条件的集成已重新协调。"
@@ -130,7 +144,7 @@
     "hostTitle": "此处暂不可用",
     "hostDescription": "请在桌面端查看或管理外部配置。",
     "remoteDescription": "该远程项目暂不支持外部配置，请切回本地项目。",
-    "remoteConnectionDescription": "远程连接不可用，请重试或断开连接。"
+    "remoteConnectionDescription": "远程连接不可用，请重试连接。"
   },
   "policy": {
     "title": "接入设置",
@@ -207,11 +221,8 @@
     "refreshRequired": "操作完成前目录已变化。请刷新并确认当前状态后重试。",
     "policyIncompatible": "外部设置由较新的 BitFun 版本写入。请先备份并重置，再进行更改。",
     "unavailableRetry": "暂时不可用，请稍后重试。",
-    "internal": "操作失败，请刷新重试。",
-    "referenceId": "参考编号：{{id}}",
-    "errorCode": "错误编号：{{code}}",
-    "stage": "处理阶段：{{stage}}",
-    "causationId": "关联操作：{{id}}"
+    "internal": "操作失败，当前设置未更改。请使用下方操作重试；若仍失败，请联系支持并提供参考编号。",
+    "referenceId": "支持参考编号（联系支持时请提供）：{{id}}"
   },
   "diagnostics": {
     "summary": "有 {{count}} 项内容需要注意，请查看详情了解影响范围。",
@@ -227,7 +238,7 @@
       "unreadableSource": "BitFun 无法读取来源中的部分内容。请检查文件访问权限后刷新。",
       "notSupported": "BitFun 暂不支持此类外部内容，因此没有加载或运行它。",
       "checkFailed": "BitFun 未能检查一个来源，其他来源仍可使用。请刷新重试。",
-      "sourceIssue": "BitFun 在一个来源中发现问题，受影响的内容未启用。请查看技术详情。"
+      "sourceIssue": "BitFun 在一个来源中发现问题，受影响的内容未启用。请检查来源配置后刷新。"
     }
   },
   "sources": {
