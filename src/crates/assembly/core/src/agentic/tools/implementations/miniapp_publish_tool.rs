@@ -458,7 +458,7 @@ fn find_apps_by_name<'a>(apps: &'a [MiniAppMeta], needle: &str) -> Vec<&'a MiniA
     }
     let exact: Vec<&MiniAppMeta> = apps
         .iter()
-        .filter(|meta| display_names(meta).iter().any(|name| *name == needle))
+        .filter(|meta| display_names(meta).contains(&needle))
         .collect();
     if !exact.is_empty() {
         return exact;

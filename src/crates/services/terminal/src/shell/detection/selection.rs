@@ -9,7 +9,7 @@ impl ShellDetector {
     pub fn get_default_shell() -> DetectedShell {
         #[cfg(windows)]
         {
-            return Self::find_shell(&ShellType::PowerShellCore)
+            Self::find_shell(&ShellType::PowerShellCore)
                 .or_else(|| Self::find_shell(&ShellType::PowerShell))
                 .or_else(|| Self::find_shell(&ShellType::Cmd))
                 .unwrap_or_else(|| {
@@ -18,7 +18,7 @@ impl ShellDetector {
                         PathBuf::from("cmd.exe"),
                         "Command Prompt",
                     )
-                });
+                })
         }
         #[cfg(not(windows))]
         {
@@ -41,7 +41,7 @@ impl ShellDetector {
             if matches!(shell_type, ShellType::Bash) {
                 return platform::detect_git_bash();
             }
-            return Self::validate_first_candidate(Self::candidates_for_shell(shell_type));
+            Self::validate_first_candidate(Self::candidates_for_shell(shell_type))
         }
         #[cfg(not(windows))]
         {

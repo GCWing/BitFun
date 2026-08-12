@@ -352,6 +352,9 @@
     "unsaved": "Unsaved",
     "fileDeleted": "Deleted",
     "missionControl": "Mission Control",
+    "mergeCell": "Merge into this window",
+    "exitGrid": "Exit grid",
+    "removeCell": "Remove this cell",
     "hiddenTabsCount": "{{count}} hidden tabs",
     "confirmCloseWithDirty": "File \"{{title}}\" has unsaved changes.\n\nDiscard changes and close?",
     "confirmCloseAllWithDirty": "{{count}} files have unsaved changes:\n\n{{fileList}}\n\nDiscard all changes and close?"
@@ -577,7 +580,14 @@
     "dropRight": "Right",
     "dropTop": "Top",
     "dropBottom": "Bottom",
-    "dropCenter": "Drop"
+    "dropCenter": "Drop",
+    "dropHere": "Drop here",
+    "dropExpand": "Expand to 3x3 grid",
+    "dropAddCol": "Add column",
+    "dropAddRow": "Add row",
+    "dropToSlot": "Place in this cell",
+    "groupSlot": "Group {{slot}}",
+    "grid9EmptyHint": "Open or drag in a panel first, then use the 3x3 grid layout"
   },
   "flexiblePanel": {
     "empty": {

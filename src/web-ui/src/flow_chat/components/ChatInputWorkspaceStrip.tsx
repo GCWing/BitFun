@@ -19,7 +19,7 @@ import {
   SquareCheck,
 } from 'lucide-react';
 import { ThreadGoalStripButton } from './thread-goal/ThreadGoalStripButton';
-import type { ThreadGoalSnapshot } from '../services/goalService';
+import type { GoalChainEntry, ThreadGoalSnapshot } from '../services/goalService';
 import { Tooltip, IconButton } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
@@ -45,6 +45,7 @@ export interface ChatInputWorkspaceStripProps {
   threadGoal?: {
     visible: boolean;
     goal: ThreadGoalSnapshot | null;
+    goalChain?: GoalChainEntry[];
     onOpen: () => void;
   };
   /** Native-tool permission mode for this session, exposed as a compact strip control. */

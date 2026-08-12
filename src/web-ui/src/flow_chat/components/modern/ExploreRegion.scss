@@ -3,10 +3,12 @@
 .explore-region {
   position: relative;
   overflow: hidden;
-  /* Same column box as .model-round-item so the collapse header (`>`) and the
-   * round's body text share one leading edge. */
+  /* 2026-08-08 修复：折叠框宽度跟随容器（右栏拉伸自适应），不再被
+   * min(100%, 900px) 锁死——折叠摘要头与展开正文共用容器宽度，右栏多宽
+   * 折叠框就多宽（RECON-折叠框宽度硬编码-20260808）。正文阅读列宽仍由
+   * 外层 .virtual-item-wrapper 的 flowchat-content-max-width token 约束。 */
   box-sizing: border-box;
-  width: min(100%, 900px);
+  width: 100%;
   margin: 0 auto;
   padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad);
 

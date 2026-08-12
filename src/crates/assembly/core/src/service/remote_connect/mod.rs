@@ -8,6 +8,7 @@
 //! tears down the relay side; bots keep running.  Use `stop_bot()` or
 //! `stop_all()` to shut everything down.
 
+pub mod account_runtime;
 pub mod bot;
 pub mod embedded_relay_host;
 pub mod lan;
@@ -240,7 +241,7 @@ impl DelegatedIdentityAuthorization {
         }
     }
 
-    fn into_response(self, local_device_id: &str) -> DelegatedIdentityResolution {
+    fn into_response(self, local_device_id: &str) -> AuthorizedCredentialResolution {
         use base64::{engine::general_purpose::STANDARD as B64, Engine};
 
         let Self {
@@ -249,7 +250,7 @@ impl DelegatedIdentityAuthorization {
             master_key,
             host_lease,
         } = self;
-        DelegatedIdentityResolution {
+        AuthorizedCredentialResolution {
             response: remote_server::RemoteResponse::DelegateIdentity {
                 token,
                 user_id,
@@ -261,12 +262,85 @@ impl DelegatedIdentityAuthorization {
     }
 }
 
-struct DelegatedIdentityResolution {
+/// A full account device credential minted for a peer device that cannot
+/// authenticate on its own, together with the host account lease that
+/// authorized it. Deliberately a distinct type from
+/// [`DelegatedIdentityAuthorization`]: that one carries a 24-hour delegated
+/// token limited to device discovery and RPC, this one carries a 30-day full
+/// device credential. They must never be routed into each other's response.
+pub struct ProvisionedDeviceAuthorization {
+    token: String,
+    user_id: String,
+    master_key: [u8; 32],
+    /// The device the credential was minted *for*, echoed back so the caller
+    /// can verify the relay registered the id it asked for.
+    device_id: String,
+    host_lease: Option<Box<dyn Send>>,
+}
+
+impl ProvisionedDeviceAuthorization {
+    pub fn new(token: String, user_id: String, master_key: [u8; 32], device_id: String) -> Self {
+        Self {
+            token,
+            user_id,
+            master_key,
+            device_id,
+            host_lease: None,
+        }
+    }
+
+    pub fn with_host_lease<L>(
+        token: String,
+        user_id: String,
+        master_key: [u8; 32],
+        device_id: String,
+        lease: L,
+    ) -> Self
+    where
+        L: Send + 'static,
+    {
+        Self {
+            token,
+            user_id,
+            master_key,
+            device_id,
+            host_lease: Some(Box::new(lease)),
+        }
+    }
+
+    fn into_response(self) -> AuthorizedCredentialResolution {
+        use base64::{engine::general_purpose::STANDARD as B64, Engine};
+
+        let Self {
+            token,
+            user_id,
+            master_key,
+            device_id,
+            host_lease,
+        } = self;
+        AuthorizedCredentialResolution {
+            response: remote_server::RemoteResponse::PeerDeviceProvisioned {
+                token,
+                user_id,
+                master_key: B64.encode(master_key),
+                device_id,
+            },
+            _host_lease: host_lease,
+        }
+    }
+}
+
+/// An authorized credential response together with the host account lease that
+/// authorized it. The lease is retained after the provider returns and released
+/// only after the encrypted room response has been sent, so an account
+/// transition cannot clear state and then be overwritten by a retiring
+/// verifier. Carries either credential kind.
+struct AuthorizedCredentialResolution {
     response: remote_server::RemoteResponse,
     _host_lease: Option<Box<dyn Send>>,
 }
 
-impl DelegatedIdentityResolution {
+impl AuthorizedCredentialResolution {
     fn error(message: impl Into<String>) -> Self {
         Self {
             response: remote_server::RemoteResponse::Error {
@@ -321,6 +395,11 @@ pub struct RemoteConnectService {
     /// login. Resolved on demand when a paired client sends
     /// `get_delegated_identity` over the room channel.
     delegated_identity_fn: Arc<RwLock<Option<DelegatedIdentityFn>>>,
+    /// Callback that mints a full account device credential for a peer device
+    /// on behalf of a paired client. Set by the desktop layer after account
+    /// login. Resolved on demand when a paired client sends
+    /// `provision_peer_device` over the room channel.
+    peer_device_provision_fn: Arc<RwLock<Option<PeerDeviceProvisionFn>>>,
     /// Non-secret username embedded in the QR when the desktop is logged in.
     account_pairing_username: Arc<RwLock<Option<String>>>,
     /// When set, pairing requires BitFun account username+password and the
@@ -333,6 +412,24 @@ type DelegatedIdentityFn = Arc<
     dyn Fn() -> std::pin::Pin<
             Box<
                 dyn std::future::Future<Output = Option<DelegatedIdentityAuthorization>>
+                    + Send
+                    + Sync,
+            >,
+        > + Send
+        + Sync,
+>;
+
+/// Provider minting a full account device credential for a peer device.
+/// Takes `(device_id, device_name, request_id)`; `request_id` comes from the
+/// device being provisioned so retries stay idempotent at the relay.
+type PeerDeviceProvisionFn = Arc<
+    dyn Fn(
+            String,
+            String,
+            String,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<ProvisionedDeviceAuthorization, String>>
                     + Send
                     + Sync,
             >,
@@ -395,6 +492,7 @@ impl RemoteConnectService {
             active_device_connection_id: Arc::new(RwLock::new(None)),
             online_devices: Arc::new(RwLock::new(Vec::new())),
             delegated_identity_fn: Arc::new(RwLock::new(None)),
+            peer_device_provision_fn: Arc::new(RwLock::new(None)),
             account_pairing_username: Arc::new(RwLock::new(None)),
             account_pairing_verifier: Arc::new(RwLock::new(None)),
         })
@@ -411,6 +509,24 @@ impl RemoteConnectService {
             + 'static,
     {
         *self.delegated_identity_fn.write().await = Some(Arc::new(move || Box::pin(f())));
+    }
+
+    /// Set the peer-device provisioning provider (called by desktop after
+    /// login). Mints a full account device credential with a host account lease
+    /// for a device the paired client vouches for.
+    pub async fn set_peer_device_provisioner<F, Fut>(&self, f: F)
+    where
+        F: Fn(String, String, String) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<ProvisionedDeviceAuthorization, String>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        *self.peer_device_provision_fn.write().await = Some(Arc::new(
+            move |device_id, device_name, request_id| {
+                Box::pin(f(device_id, device_name, request_id))
+            },
+        ));
     }
 
     /// Enable account-password pairing in the QR.
@@ -577,31 +693,101 @@ impl RemoteConnectService {
         delegated_identity_fn: &Arc<RwLock<Option<DelegatedIdentityFn>>>,
         trusted_mobile_identity: &Arc<RwLock<Option<TrustedMobileIdentity>>>,
         local_device_id: &str,
-    ) -> DelegatedIdentityResolution {
+    ) -> AuthorizedCredentialResolution {
         let trusted_identity = trusted_mobile_identity.read().await.clone();
         let Some(trusted_identity) = trusted_identity else {
-            return DelegatedIdentityResolution::error(
+            return AuthorizedCredentialResolution::error(
                 "Pairing authorization expired; scan a new QR code",
             );
         };
         let provider = delegated_identity_fn.read().await.clone();
         let Some(get_identity) = provider else {
-            return DelegatedIdentityResolution::error(
+            return AuthorizedCredentialResolution::error(
                 "Desktop is not logged into a BitFun account",
             );
         };
         let Some(authorization) = get_identity().await else {
-            return DelegatedIdentityResolution::error(
+            return AuthorizedCredentialResolution::error(
                 "Desktop is not logged into a BitFun account",
             );
         };
         if authorization.user_id != trusted_identity.user_id {
-            return DelegatedIdentityResolution::error(
+            return AuthorizedCredentialResolution::error(
                 "Paired mobile identity no longer matches the desktop account",
             );
         }
         info!("Delegated identity resolved for paired client");
         authorization.into_response(local_device_id)
+    }
+
+    /// Answer a paired client's `provision_peer_device` request using the
+    /// provider registered by the desktop layer after account login.
+    ///
+    /// Gated exactly like `resolve_delegated_identity_response`: only a client
+    /// that completed pairing (which requires the account password whenever the
+    /// desktop is logged in) may ask the desktop to add a device to its account.
+    async fn resolve_provisioned_device_response(
+        peer_device_provision_fn: &Arc<RwLock<Option<PeerDeviceProvisionFn>>>,
+        trusted_mobile_identity: &Arc<RwLock<Option<TrustedMobileIdentity>>>,
+        device_id: &str,
+        device_name: &str,
+        request_id: &str,
+    ) -> AuthorizedCredentialResolution {
+        let trusted_identity = trusted_mobile_identity.read().await.clone();
+        let Some(trusted_identity) = trusted_identity else {
+            return AuthorizedCredentialResolution::error(
+                "Pairing authorization expired; scan a new QR code",
+            );
+        };
+
+        // Checked here as well as at the relay so a malformed id fails with a
+        // usable message instead of an opaque HTTP 400 one hop away.
+        if device_id.len() != 32 || !device_id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return AuthorizedCredentialResolution::error(
+                "Device id must be 32 hexadecimal characters",
+            );
+        }
+        if device_id.bytes().any(|b| b.is_ascii_uppercase()) {
+            return AuthorizedCredentialResolution::error("Device id must be lowercase");
+        }
+        if device_name.trim().is_empty() {
+            return AuthorizedCredentialResolution::error("Device name is required");
+        }
+        if request_id.trim().is_empty() {
+            return AuthorizedCredentialResolution::error("Request id is required");
+        }
+
+        let provider = peer_device_provision_fn.read().await.clone();
+        let Some(provision) = provider else {
+            return AuthorizedCredentialResolution::error(
+                "Desktop is not logged into a BitFun account",
+            );
+        };
+        let authorization = match provision(
+            device_id.to_string(),
+            device_name.to_string(),
+            request_id.to_string(),
+        )
+        .await
+        {
+            Ok(authorization) => authorization,
+            Err(message) => return AuthorizedCredentialResolution::error(message),
+        };
+        if authorization.user_id != trusted_identity.user_id {
+            return AuthorizedCredentialResolution::error(
+                "Paired mobile identity no longer matches the desktop account",
+            );
+        }
+        // The credential is only useful for the device that asked for it; a
+        // mismatch means the account switched mid-flight or the relay answered
+        // for someone else.
+        if authorization.device_id != device_id {
+            return AuthorizedCredentialResolution::error(
+                "Provisioned credential does not match the requested device",
+            );
+        }
+        info!("Provisioned account device credential for paired client");
+        authorization.into_response()
     }
 
     async fn send_pairing_error_response(
@@ -862,6 +1048,7 @@ impl RemoteConnectService {
         let active_room_owner = self.active_room_owner.clone();
         let trusted_mobile_identity_arc = self.trusted_mobile_identity.clone();
         let delegated_identity_fn_arc = self.delegated_identity_fn.clone();
+        let peer_device_provision_fn_arc = self.peer_device_provision_fn.clone();
         let account_pairing_verifier_arc = self.account_pairing_verifier.clone();
         let local_device_id = self.device_identity.device_id.clone();
         tokio::spawn(async move {
@@ -917,21 +1104,37 @@ impl RemoteConnectService {
                                     Ok((cmd, request_id)) => {
                                         handled_as_active_command = true;
                                         debug!("Remote command decrypted");
-                                        let response_resolution = if matches!(
-                                            cmd,
-                                            remote_server::RemoteCommand::GetDelegatedIdentity
-                                        ) {
-                                            RemoteConnectService::resolve_delegated_identity_response(
-                                                &delegated_identity_fn_arc,
-                                                &trusted_mobile_identity_arc,
-                                                &local_device_id,
-                                            )
-                                            .await
-                                        } else {
-                                            DelegatedIdentityResolution {
+                                        // Account-credential commands are answered
+                                        // here, before dispatch: this loop owns the
+                                        // trusted pairing identity that authorizes
+                                        // them. Everything else routes normally.
+                                        let response_resolution = match &cmd {
+                                            remote_server::RemoteCommand::GetDelegatedIdentity => {
+                                                RemoteConnectService::resolve_delegated_identity_response(
+                                                    &delegated_identity_fn_arc,
+                                                    &trusted_mobile_identity_arc,
+                                                    &local_device_id,
+                                                )
+                                                .await
+                                            }
+                                            remote_server::RemoteCommand::ProvisionPeerDevice {
+                                                device_id,
+                                                device_name,
+                                                request_id,
+                                            } => {
+                                                RemoteConnectService::resolve_provisioned_device_response(
+                                                    &peer_device_provision_fn_arc,
+                                                    &trusted_mobile_identity_arc,
+                                                    device_id,
+                                                    device_name,
+                                                    request_id,
+                                                )
+                                                .await
+                                            }
+                                            _ => AuthorizedCredentialResolution {
                                                 response: server.dispatch(&cmd).await,
                                                 _host_lease: None,
-                                            }
+                                            },
                                         };
                                         match server
                                             .encrypt_response(
@@ -2269,6 +2472,269 @@ mod tests {
         assert!(matches!(
             &response.response,
             remote_server::RemoteResponse::DelegateIdentity { .. }
+        ));
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(20),
+                account_lifecycle.clone().lock_owned(),
+            )
+            .await
+            .is_err(),
+            "account replacement must remain blocked while the response is in flight"
+        );
+
+        drop(response);
+        tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            account_lifecycle.lock_owned(),
+        )
+        .await
+        .expect("account replacement should proceed after the response is released");
+    }
+
+    const WATCH_DEVICE_ID: &str = "0123456789abcdef0123456789abcdef";
+
+    fn peer_provisioner(user_id: &'static str, device_id: &'static str) -> PeerDeviceProvisionFn {
+        Arc::new(move |_device_id, _device_name, _request_id| {
+            Box::pin(async move {
+                Ok(ProvisionedDeviceAuthorization::new(
+                    "watch-device-token".to_string(),
+                    user_id.to_string(),
+                    [9_u8; 32],
+                    device_id.to_string(),
+                ))
+            })
+        })
+    }
+
+    fn trusted_as(user_id: &str) -> Arc<RwLock<Option<TrustedMobileIdentity>>> {
+        Arc::new(RwLock::new(Some(TrustedMobileIdentity {
+            mobile_install_id: "install-1".to_string(),
+            user_id: user_id.to_string(),
+        })))
+    }
+
+    #[tokio::test]
+    async fn provisioning_requires_a_trusted_pairing_before_minting_credentials() {
+        let provider_called = Arc::new(AtomicBool::new(false));
+        let called = provider_called.clone();
+        let provider: PeerDeviceProvisionFn =
+            Arc::new(move |_device_id, _device_name, _request_id| {
+                let called = called.clone();
+                Box::pin(async move {
+                    called.store(true, Ordering::SeqCst);
+                    Ok(ProvisionedDeviceAuthorization::new(
+                        "watch-device-token".to_string(),
+                        "account-user".to_string(),
+                        [9_u8; 32],
+                        WATCH_DEVICE_ID.to_string(),
+                    ))
+                })
+            });
+        let provider = Arc::new(RwLock::new(Some(provider)));
+        let trusted = Arc::new(RwLock::new(None));
+
+        let response = RemoteConnectService::resolve_provisioned_device_response(
+            &provider,
+            &trusted,
+            WATCH_DEVICE_ID,
+            "HarmonyOS Watch",
+            "5f0d1c1a-0000-4000-8000-000000000001",
+        )
+        .await;
+
+        assert!(matches!(
+            response.response,
+            remote_server::RemoteResponse::Error { .. }
+        ));
+        assert!(
+            !provider_called.load(Ordering::SeqCst),
+            "an unpaired caller must never reach the relay"
+        );
+    }
+
+    #[tokio::test]
+    async fn provisioning_uses_the_account_bound_during_pairing() {
+        let provider = Arc::new(RwLock::new(Some(peer_provisioner(
+            "paired-user",
+            WATCH_DEVICE_ID,
+        ))));
+
+        let response = RemoteConnectService::resolve_provisioned_device_response(
+            &provider,
+            &trusted_as("paired-user"),
+            WATCH_DEVICE_ID,
+            "HarmonyOS Watch",
+            "5f0d1c1a-0000-4000-8000-000000000001",
+        )
+        .await;
+
+        match response.response {
+            remote_server::RemoteResponse::PeerDeviceProvisioned {
+                token,
+                user_id,
+                device_id,
+                ..
+            } => {
+                assert_eq!(token, "watch-device-token");
+                assert_eq!(user_id, "paired-user");
+                // The provisioned device, not the delegating desktop.
+                assert_eq!(device_id, WATCH_DEVICE_ID);
+            }
+            other => panic!("expected a provisioned credential, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn provisioning_rejects_a_provider_for_another_account() {
+        let provider = Arc::new(RwLock::new(Some(peer_provisioner(
+            "other-user",
+            WATCH_DEVICE_ID,
+        ))));
+
+        let response = RemoteConnectService::resolve_provisioned_device_response(
+            &provider,
+            &trusted_as("paired-user"),
+            WATCH_DEVICE_ID,
+            "HarmonyOS Watch",
+            "5f0d1c1a-0000-4000-8000-000000000001",
+        )
+        .await;
+
+        assert!(matches!(
+            response.response,
+            remote_server::RemoteResponse::Error { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn provisioning_rejects_a_credential_minted_for_a_different_device() {
+        let provider = Arc::new(RwLock::new(Some(peer_provisioner(
+            "paired-user",
+            "ffffffffffffffffffffffffffffffff",
+        ))));
+
+        let response = RemoteConnectService::resolve_provisioned_device_response(
+            &provider,
+            &trusted_as("paired-user"),
+            WATCH_DEVICE_ID,
+            "HarmonyOS Watch",
+            "5f0d1c1a-0000-4000-8000-000000000001",
+        )
+        .await;
+
+        assert!(matches!(
+            response.response,
+            remote_server::RemoteResponse::Error { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn provisioning_rejects_device_ids_the_relay_would_refuse() {
+        let provider_called = Arc::new(AtomicBool::new(false));
+        let called = provider_called.clone();
+        let provider: PeerDeviceProvisionFn =
+            Arc::new(move |_device_id, _device_name, _request_id| {
+                let called = called.clone();
+                Box::pin(async move {
+                    called.store(true, Ordering::SeqCst);
+                    Ok(ProvisionedDeviceAuthorization::new(
+                        "watch-device-token".to_string(),
+                        "paired-user".to_string(),
+                        [9_u8; 32],
+                        WATCH_DEVICE_ID.to_string(),
+                    ))
+                })
+            });
+        let provider = Arc::new(RwLock::new(Some(provider)));
+
+        // Too short, non-hex, and uppercase: the three shapes the relay's
+        // `provision_device` validator rejects.
+        for bad_id in [
+            "watch-0123456789abcdef",
+            "0123456789abcdef0123456789abcdeg",
+            "0123456789ABCDEF0123456789ABCDEF",
+        ] {
+            let response = RemoteConnectService::resolve_provisioned_device_response(
+                &provider,
+                &trusted_as("paired-user"),
+                bad_id,
+                "HarmonyOS Watch",
+                "5f0d1c1a-0000-4000-8000-000000000001",
+            )
+            .await;
+            assert!(
+                matches!(
+                    response.response,
+                    remote_server::RemoteResponse::Error { .. }
+                ),
+                "{bad_id} should be rejected before the relay sees it"
+            );
+        }
+        assert!(
+            !provider_called.load(Ordering::SeqCst),
+            "a malformed id must fail locally rather than at the relay"
+        );
+    }
+
+    #[tokio::test]
+    async fn provisioning_surfaces_the_relay_failure_reason() {
+        let provider: PeerDeviceProvisionFn =
+            Arc::new(move |_device_id, _device_name, _request_id| {
+                Box::pin(async move { Err("relay rejected the request".to_string()) })
+            });
+        let provider = Arc::new(RwLock::new(Some(provider)));
+
+        let response = RemoteConnectService::resolve_provisioned_device_response(
+            &provider,
+            &trusted_as("paired-user"),
+            WATCH_DEVICE_ID,
+            "HarmonyOS Watch",
+            "5f0d1c1a-0000-4000-8000-000000000001",
+        )
+        .await;
+
+        match response.response {
+            // The person is standing there watching a watch spin; a generic
+            // failure would send them to the wrong fix.
+            remote_server::RemoteResponse::Error { message } => {
+                assert!(message.contains("relay rejected the request"), "{message}");
+            }
+            other => panic!("expected the relay reason to survive, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn provisioning_keeps_account_lease_until_response_is_released() {
+        let account_lifecycle = Arc::new(Mutex::new(()));
+        let provider_lifecycle = account_lifecycle.clone();
+        let provider: PeerDeviceProvisionFn =
+            Arc::new(move |_device_id, _device_name, _request_id| {
+                let provider_lifecycle = provider_lifecycle.clone();
+                Box::pin(async move {
+                    let lease = provider_lifecycle.lock_owned().await;
+                    Ok(ProvisionedDeviceAuthorization::with_host_lease(
+                        "watch-device-token".to_string(),
+                        "paired-user".to_string(),
+                        [9_u8; 32],
+                        WATCH_DEVICE_ID.to_string(),
+                        lease,
+                    ))
+                })
+            });
+        let provider = Arc::new(RwLock::new(Some(provider)));
+
+        let response = RemoteConnectService::resolve_provisioned_device_response(
+            &provider,
+            &trusted_as("paired-user"),
+            WATCH_DEVICE_ID,
+            "HarmonyOS Watch",
+            "5f0d1c1a-0000-4000-8000-000000000001",
+        )
+        .await;
+        assert!(matches!(
+            &response.response,
+            remote_server::RemoteResponse::PeerDeviceProvisioned { .. }
         ));
         assert!(
             tokio::time::timeout(

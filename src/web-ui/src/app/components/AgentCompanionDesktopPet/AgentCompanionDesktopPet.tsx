@@ -613,6 +613,14 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       });
   }, [sendPetCommand]);
 
+  const openPetSettings = useCallback(() => {
+    setOverlay(null);
+    void sendPetCommand({ type: 'open-pet-settings' })
+      .catch(error => {
+        log.warn('Failed to request Agent companion pet settings', error);
+      });
+  }, [sendPetCommand]);
+
   const closeBubble = useCallback((task: AgentCompanionTaskStatus) => {
     setOverlay(null);
     setDismissedBubbles(previous => ({
@@ -844,11 +852,18 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const overlayTask = overlay && overlay.kind !== 'pet-menu'
     ? visibleTasks.find(task => task.sessionId === overlay.sessionId) ?? null
     : null;
-  const menuItem = overlay?.kind === 'pet-menu'
-    ? { label: t('agentCompanion.menu.closePet'), onClick: closeDesktopPet }
+  const menuItems = overlay?.kind === 'pet-menu'
+    ? [
+      { key: 'switch-pet', label: t('agentCompanion.menu.switchPet'), onClick: openPetSettings },
+      { key: 'close-pet', label: t('agentCompanion.menu.closePet'), onClick: closeDesktopPet },
+    ]
     : overlay?.kind === 'bubble-menu' && overlayTask
-      ? { label: t('agentCompanion.menu.closeBubble'), onClick: () => closeBubble(overlayTask) }
-      : null;
+      ? [{
+        key: 'close-bubble',
+        label: t('agentCompanion.menu.closeBubble'),
+        onClick: () => closeBubble(overlayTask),
+      }]
+      : [];
 
   return (
     <main
@@ -863,7 +878,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
           onPointerDown={closeOverlay}
         />
       )}
-      {menuItem && (
+      {menuItems.length > 0 && (
         <div
           ref={menuRef}
           className="bitfun-agent-companion-window__overlay bitfun-agent-companion-window__overlay--anchored"
@@ -874,14 +889,17 @@ export const AgentCompanionDesktopPet: React.FC = () => {
           }}
         >
           <div className="bitfun-agent-companion-window__menu" role="menu">
-            <button
-              type="button"
-              role="menuitem"
-              className="bitfun-agent-companion-window__menu-item"
-              onClick={menuItem.onClick}
-            >
-              {menuItem.label}
-            </button>
+            {menuItems.map(menuItem => (
+              <button
+                key={menuItem.key}
+                type="button"
+                role="menuitem"
+                className="bitfun-agent-companion-window__menu-item"
+                onClick={menuItem.onClick}
+              >
+                {menuItem.label}
+              </button>
+            ))}
           </div>
         </div>
       )}

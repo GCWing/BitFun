@@ -40,7 +40,7 @@ Use this tool to:
 - Download readable content from web pages
 - Access online resources
 
-Best for static pages that need no login. For pages requiring the user's login session or JavaScript rendering, use ControlHub domain="browser" instead: connect -> navigate -> snapshot / read_article. That drives BitFun's managed browser profile, which is separate from the user's everyday browser, so a first-time sign-in by the user may be required. (browser.fetch only works when a session is already connected and the current page is same-origin with the target URL — it runs inside that page and is subject to its CORS policy.)
+Best for static pages that need no login. For pages requiring the user's login session or JavaScript rendering, use ControlHub domain="browser" instead: connect -> navigate -> snapshot / read_article. Chrome 144+ and Edge can connect to the user's current profile after explicit approval, preserving tabs and login state; other supported Chromium browsers reuse a real-profile endpoint when available and otherwise use BitFun's persistent managed profile. (browser.fetch only works when a session is already connected and the current page is same-origin with the target URL — it runs inside that page and is subject to its CORS policy.)
 
 Supports different output formats:
 - raw: Raw response content (original HTML or text)
@@ -159,7 +159,10 @@ Example usage:
         let requested_format =
             normalize_requested_format(input.get("format").and_then(|v| v.as_str()))?;
 
-        let response = WebToolNetworkProvider::fetch_text(url)
+        // 阈值参数配置化：ai.thresholds.tool_timeout.web_fetch_secs
+        let fetch_timeout_secs = crate::agentic::tools::implementations::web::timeouts::configured_web_fetch_timeout_secs()
+            .await;
+        let response = WebToolNetworkProvider::fetch_text_with_timeout(url, fetch_timeout_secs)
             .await
             .map_err(|error| BitFunError::tool(error.to_string()))?;
         let content_type = response.content_type;

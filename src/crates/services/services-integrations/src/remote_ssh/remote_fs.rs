@@ -594,8 +594,10 @@ mod tests {
 
     #[test]
     fn sftp_special_files_are_not_reported_as_regular_files() {
-        let mut attrs = russh_sftp::protocol::FileAttributes::default();
-        attrs.permissions = Some(0o010644);
+        let attrs = russh_sftp::protocol::FileAttributes {
+            permissions: Some(0o010644),
+            ..Default::default()
+        };
 
         let entry = remote_file_entry_from_metadata("/workspace/pipe", attrs);
 

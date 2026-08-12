@@ -194,10 +194,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("add_skill", RemoteWorkspacePolicy::LegacyUnaudited),
     ("analyze_work_state", RemoteWorkspacePolicy::LegacyUnaudited),
     (
-        "apply_external_application_action_v2",
-        RemoteWorkspacePolicy::RemoteUnsupported,
-    ),
-    (
         "apply_external_mcp_import_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
@@ -220,7 +216,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("archive_session", RemoteWorkspacePolicy::LegacyUnaudited),
     (
-        "browser_control_create_launcher",
+        "browser_control_enable_default_cdp",
         RemoteWorkspacePolicy::LocalOnly,
     ),
     (
@@ -353,6 +349,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("create_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
     ("create_session", RemoteWorkspacePolicy::LegacyUnaudited),
     ("create_subagent", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "create_legion_preset",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("debug_close_devtools", RemoteWorkspacePolicy::LocalOnly),
     ("debug_devtools_available", RemoteWorkspacePolicy::LocalOnly),
     ("debug_element_picked", RemoteWorkspacePolicy::LocalOnly),
@@ -384,6 +384,9 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("delete_session", RemoteWorkspacePolicy::LegacyUnaudited),
+    // Cascade deletion resolves the remote session storage path through the
+    // same desktop session scope as the single delete command.
+    ("delete_session_tree", RemoteWorkspacePolicy::RemoteRouted),
     ("delete_skill", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_subagent", RemoteWorkspacePolicy::LegacyUnaudited),
     // Detached dispatch is routed by its own immutable target and observer
@@ -530,6 +533,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "project_ai_model_reasoning_catalog",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "get_models_dev_catalog_status",
         RemoteWorkspacePolicy::LocalOnly,
     ),
@@ -581,14 +588,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "get_directory_children_paginated",
         RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
-    (
-        "get_external_application_review_page_v2",
-        RemoteWorkspacePolicy::RemoteUnsupported,
-    ),
-    (
-        "get_external_application_snapshot_v2",
-        RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
         "get_external_hook_catalog",
@@ -905,6 +904,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "list_legion_presets",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "list_agent_tool_names",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -955,6 +958,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "list_persisted_sessions",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "list_deleted_session_ids",
+        RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
         "list_persisted_sessions_page",
@@ -2195,25 +2202,6 @@ mod tests {
             registered_commands().contains(COMMAND),
             "Desktop must register the external-source control command invoked by Web UI"
         );
-    }
-
-    #[test]
-    fn external_application_v2_commands_never_fall_back_to_controller_local_state() {
-        for command in [
-            "get_external_application_snapshot_v2",
-            "get_external_application_review_page_v2",
-            "apply_external_application_action_v2",
-        ] {
-            assert_eq!(
-                remote_workspace_policy(command),
-                Some(RemoteWorkspacePolicy::RemoteUnsupported),
-                "{command} must execute on the workspace Host"
-            );
-            assert!(
-                registered_commands().contains(command),
-                "{command} must be registered by Desktop"
-            );
-        }
     }
 
     /// `LegacyUnaudited` is a frozen backlog: commands may graduate out of it

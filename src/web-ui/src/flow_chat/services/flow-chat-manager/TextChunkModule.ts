@@ -78,6 +78,33 @@ function findRound(
 }
 
 /**
+ * B1 lazy round creation helper: event sources such as ACP direct delivery may
+ * skip model-round-started; create the round (id=roundId) before appending
+ * content so data is not silently dropped. Shared by the text-chunk and
+ * tool-event paths. addModelRound dedupes by roundId, repeated calls are safe.
+ */
+export function ensureModelRoundExists(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId: string,
+  roundId: string
+): void {
+  if (findRound(context, sessionId, turnId, roundId)) {
+    return;
+  }
+  const lazyModelRound: import('../../types/flow-chat').ModelRound = {
+    id: roundId,
+    index: 0,
+    items: [],
+    isStreaming: true,
+    isComplete: false,
+    status: 'streaming',
+    startTime: Date.now(),
+  };
+  context.flowChatStore.addModelRound(sessionId, turnId, lazyModelRound);
+}
+
+/**
  * Process a normal text chunk without notifying the store.
  */
 export function processNormalTextChunkInternal(
@@ -152,7 +179,14 @@ export function processNormalTextChunkInternal(
       attemptId,
       attemptIndex,
     };
-    
+
+    // B1 defense: ACP direct delivery and similar event sources may skip
+    // model-round-started; lazily create the round (id=roundId) before appending
+    // text so content is not silently dropped.
+    if (!round) {
+      ensureModelRoundExists(context, sessionId, turnId, roundId);
+    }
+
     context.flowChatStore.addModelRoundItemSilent(sessionId, turnId, textItem, roundId);
     sessionActiveTextItems.set(streamKey, textItemId);
   } else {

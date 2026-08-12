@@ -11,9 +11,11 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use tokio::time::Duration;
 
-const DEFAULT_TIMEOUT_MS: u64 = 10 * 60 * 1_000;
+const DEFAULT_TIMEOUT_MS: u64 = 600_000;
 const MAX_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
 
+/// DEPRECATED. Use SessionMessage for sub-agent communication (async, no waiting needed).
+/// Max 10min, only for short waits confirming session creation, not for long-running tasks.
 pub struct AgentWaitTool;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -99,11 +101,40 @@ impl AgentWaitTool {
     }
 
     fn parse_timeout_ms(timeout_ms: Option<&Value>) -> u64 {
+        Self::parse_timeout_ms_with_bounds(timeout_ms, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
+    }
+
+    fn parse_timeout_ms_with_bounds(
+        timeout_ms: Option<&Value>,
+        default_timeout_ms: u64,
+        max_timeout_ms: u64,
+    ) -> u64 {
         timeout_ms
             .and_then(Value::as_u64)
             .filter(|timeout_ms| *timeout_ms > 0)
-            .unwrap_or(DEFAULT_TIMEOUT_MS)
-            .min(MAX_TIMEOUT_MS)
+            .unwrap_or(default_timeout_ms)
+            .min(max_timeout_ms)
+    }
+
+    /// Resolve the configured AgentWait default/max timeouts
+    /// (`ai.thresholds.tool_timeout.agent_wait_default_ms` / `agent_wait_max_ms`),
+    /// falling back to the legacy 600s/3600s constants when unset or invalid.
+    async fn configured_agent_wait_timeout_bounds() -> (u64, u64) {
+        use crate::service::config::get_global_config_service;
+        let Ok(config_service) = get_global_config_service().await else {
+            return (DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return (DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+        };
+        let timeouts = &thresholds.tool_timeout;
+        (
+            timeouts.agent_wait_default_ms.max(1),
+            timeouts.agent_wait_max_ms.max(timeouts.agent_wait_default_ms.max(1)),
+        )
     }
 
     fn outcome_json(outcome: &BackgroundSubagentOutcome) -> Value {
@@ -116,6 +147,10 @@ impl AgentWaitTool {
         })
     }
 
+    /// 方向 C（并列返回面）：result_for_assistant 只内嵌极简状态（wait 状态 +
+    /// 每个 outcome 的 bg_task_id/agent_id/status），不嵌入 outcome.content 全文。
+    /// 全文留在 data JSON（outcome_json 含 content/error），父会话按需取 data；
+    /// 避免显式等待返回面携带「通知 + 全文」双路。
     fn assistant_result(result: &BackgroundSubagentWaitResult) -> String {
         if result.outcomes.is_empty() {
             return format!(
@@ -133,9 +168,6 @@ impl AgentWaitTool {
                 outcome.model_agent_id(),
                 outcome.status.as_str(),
             ));
-            if let Some(content) = &outcome.content {
-                message.push_str(content);
-            }
             if let Some(error) = &outcome.error {
                 message.push_str("\nError: ");
                 message.push_str(error);
@@ -190,7 +222,7 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
                 },
                 "timeout_ms": {
                     "type": "integer",
-                    "description": "Maximum time to wait in milliseconds. Defaults to ten minutes."
+                    "description": "Maximum time to wait in milliseconds. Defaults to 10 minutes."
                 }
             },
             "additionalProperties": false
@@ -243,7 +275,14 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let request = Self::parse_request(input)?;
+        let mut request = Self::parse_request(input)?;
+        // 阈值参数配置化：ai.thresholds.tool_timeout.agent_wait_default_ms / agent_wait_max_ms
+        let (default_ms, max_ms) = Self::configured_agent_wait_timeout_bounds().await;
+        request.timeout_ms = Self::parse_timeout_ms_with_bounds(
+            input.get("timeout_ms"),
+            default_ms,
+            max_ms,
+        );
         let session_id = context
             .session_id
             .as_deref()

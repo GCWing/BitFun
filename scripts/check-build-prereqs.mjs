@@ -23,7 +23,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -34,7 +34,7 @@ const FIX = process.argv.includes('--fix');
 
 // --- Check logic (extracted for re-use and testing) ---
 
-function runChecks(rootDir) {
+export function runChecks(rootDir) {
   const errors = [];
   const warnings = [];
 
@@ -126,45 +126,50 @@ function runFixes(pendingFixes, rootDir) {
   return allSucceeded;
 }
 
-// --- Main ---
+// --- Main (only when run directly, not when imported as a module) ---
 
-const firstResult = runChecks(ROOT_DIR);
+const isDirectRun =
+  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-if (firstResult.errors.length === 0 && firstResult.warnings.length === 0) {
-  console.log('Build prerequisite check passed.');
-  process.exit(0);
-}
+if (isDirectRun) {
+  const firstResult = runChecks(ROOT_DIR);
 
-reportResults(firstResult);
+  if (firstResult.errors.length === 0 && firstResult.warnings.length === 0) {
+    console.log('Build prerequisite check passed.');
+    process.exit(0);
+  }
 
-if (firstResult.errors.length > 0) {
-  const pendingFixes = collectPendingFixes(firstResult.errors);
+  reportResults(firstResult);
 
-  if (FIX && pendingFixes.length > 0) {
-    console.log('Attempting fixes...\n');
-    const allSucceeded = runFixes(pendingFixes, ROOT_DIR);
+  if (firstResult.errors.length > 0) {
+    const pendingFixes = collectPendingFixes(firstResult.errors);
 
-    if (allSucceeded) {
-      console.log('Re-checking prerequisites...\n');
-      const secondResult = runChecks(ROOT_DIR);
-      reportResults(secondResult);
+    if (FIX && pendingFixes.length > 0) {
+      console.log('Attempting fixes...\n');
+      const allSucceeded = runFixes(pendingFixes, ROOT_DIR);
 
-      if (secondResult.errors.length === 0) {
-        console.log('All errors resolved after fix.');
-        process.exit(0);
+      if (allSucceeded) {
+        console.log('Re-checking prerequisites...\n');
+        const secondResult = runChecks(ROOT_DIR);
+        reportResults(secondResult);
+
+        if (secondResult.errors.length === 0) {
+          console.log('All errors resolved after fix.');
+          process.exit(0);
+        }
+        console.error('Some errors remain after fix.');
+        process.exit(1);
       }
-      console.error('Some errors remain after fix.');
+      console.error('Some fix attempts failed. See errors above.');
       process.exit(1);
     }
-    console.error('Some fix attempts failed. See errors above.');
+
+    console.error(
+      'Run with --fix to attempt automatic fixes for missing prerequisites.',
+    );
     process.exit(1);
   }
 
-  console.error(
-    'Run with --fix to attempt automatic fixes for missing prerequisites.',
-  );
-  process.exit(1);
+  // Only warnings, no errors
+  process.exit(0);
 }
-
-// Only warnings, no errors
-process.exit(0);

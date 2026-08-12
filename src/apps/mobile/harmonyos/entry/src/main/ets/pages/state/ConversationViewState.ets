@@ -18,6 +18,7 @@ import {
   toConversationUiSession
 } from '../components/ConversationUiModels';
 import { AppRoute } from '../navigation/AppRouteContract';
+import { ConversationCoreState } from './ConversationCoreState';
 import { GeneralChatPageState } from './GeneralChatPageState';
 import { RemotePageState } from './RemotePageState';
 
@@ -32,6 +33,7 @@ export class ConversationViewState {
   connectionState: string = 'idle';
   composerCapabilities: ChatComposerCapabilities = GENERAL_CHAT_COMPOSER_CAPABILITIES;
   isBusy: boolean = false;
+  isLoadingConversation: boolean = false;
   canStop: boolean = false;
   hasMoreMessages: boolean = false;
   timelineItems: ChatTimelineItem[] = [];
@@ -63,49 +65,43 @@ export class ConversationViewState {
   }
 
   private static remote(remote: RemotePageState): ConversationViewState {
-    const state = new ConversationViewState();
-    state.activeSession = toConversationUiSession(remote.activeSession);
+    const state = ConversationViewState.fromCore(remote.conversation);
     state.surface = ChatSurface.Remote;
     state.desktopName = remote.desktopName;
     state.workspaceBranch = remote.workspaceBranch;
-    state.statusText = remote.statusText;
     state.connectionState = remote.connectionState;
+    state.isLoadingConversation = remote.isLoadingConversation;
     state.composerCapabilities = REMOTE_CHAT_COMPOSER_CAPABILITIES;
-    state.isBusy = remote.isBusy;
-    state.canStop = remote.hasRunningActiveTurn();
-    state.hasMoreMessages = remote.hasMoreMessages;
-    state.timelineItems = remote.timelineItems;
-    state.timelineRevision = remote.timelineRevision;
     state.showSuggestionsWhenEmpty = false;
-    state.modelCatalog = toConversationUiModelCatalog(remote.modelCatalog);
-    state.selectedModelId = remote.selectedModelId;
     state.downloadingFilePath = remote.downloadingFilePath;
     state.downloadedFilePath = remote.downloadedFilePath;
     state.fileDownloadStatus = remote.fileDownloadStatus;
-    state.selectedImages = remote.selectedImages.map((image) => toConversationUiSelectedImage(image));
-    state.isVoiceListening = remote.isVoiceListening;
-    state.chatInput = remote.chatInput;
     return state;
   }
 
   private static general(general: GeneralChatPageState, inlineStatus: string): ConversationViewState {
-    const state = new ConversationViewState();
-    state.activeSession = toConversationUiSession(general.activeSession);
-    state.statusText = general.statusText;
+    const state = ConversationViewState.fromCore(general.conversation);
     state.inlineStatusText = inlineStatus;
     state.connectionState = GeneralChatServiceStatus.connectionState(general.serviceState);
-    state.isBusy = general.isBusy;
-    state.canStop = general.hasRunningActiveTurn();
-    state.hasMoreMessages = general.hasMoreMessages;
-    state.timelineItems = general.timelineItems;
-    state.timelineRevision = general.timelineRevision;
-    state.modelCatalog = toConversationUiModelCatalog(general.modelCatalog);
-    state.selectedModelId = general.selectedModelId;
-    state.isSessionPinned = general.activeSession.sessionId.length > 0 &&
-      general.pinnedSessionId() === general.activeSession.sessionId;
-    state.selectedImages = general.selectedImages.map((image) => toConversationUiSelectedImage(image));
-    state.isVoiceListening = general.isVoiceListening;
-    state.chatInput = general.chatInput;
+    state.isSessionPinned = general.conversation.activeSession.sessionId.length > 0 &&
+      general.pinnedSessionId() === general.conversation.activeSession.sessionId;
+    return state;
+  }
+
+  private static fromCore(core: ConversationCoreState): ConversationViewState {
+    const state = new ConversationViewState();
+    state.activeSession = toConversationUiSession(core.activeSession);
+    state.statusText = core.statusText;
+    state.isBusy = core.isBusy;
+    state.canStop = core.hasRunningActiveTurn();
+    state.hasMoreMessages = core.hasMoreMessages;
+    state.timelineItems = core.timelineItems;
+    state.timelineRevision = core.timelineRevision;
+    state.modelCatalog = toConversationUiModelCatalog(core.modelCatalog);
+    state.selectedModelId = core.selectedModelId;
+    state.selectedImages = core.selectedImages.map((image) => toConversationUiSelectedImage(image));
+    state.isVoiceListening = core.isVoiceListening;
+    state.chatInput = core.chatInput;
     return state;
   }
 

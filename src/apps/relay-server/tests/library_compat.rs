@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 #[test]
+#[allow(clippy::type_complexity)] // pinned legacy fn-pointer signature on purpose
 fn legacy_library_path_exposes_supported_relay_api() {
     let _: fn(
         Arc<RoomManager>,

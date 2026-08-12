@@ -1,14 +1,19 @@
+import { resolveTodoLineage } from '../utils/todoLineage';
+
 type TodoStatus = 'completed' | 'in_progress' | 'pending' | 'cancelled';
 
 export interface TodoLike {
   id?: string | number;
   content?: string;
   status?: TodoStatus | string;
+  dependencies?: string[];
 }
 
 export interface TodoRenderItem {
   key: string;
   todo: TodoLike;
+  /** Tree depth from dependency resolution (0 = root/flat; unused when no dependencies). */
+  depth: number;
 }
 
 export function createTodoRenderItems(todos: TodoLike[]): TodoRenderItem[] {
@@ -20,7 +25,7 @@ export function createTodoRenderItems(todos: TodoLike[]): TodoRenderItem[] {
     idCounts.set(id, (idCounts.get(id) ?? 0) + 1);
   }
 
-  return todos.map((todo, index) => {
+  const renderItems = todos.map((todo, index) => {
     if (todo.id === undefined || todo.id === null) {
       return { key: `todo-${index}`, todo };
     }
@@ -31,5 +36,22 @@ export function createTodoRenderItems(todos: TodoLike[]): TodoRenderItem[] {
     }
 
     return { key: `${id}-${index}`, todo };
+  });
+
+  // Attach tree depth from dependency lineage; flat (depth 0) when there are
+  // no dependencies, keeping the previous behavior unchanged.
+  const lineage = resolveTodoLineage(todos);
+  const depthById = new Map<string, number>();
+  lineage.items.forEach(({ todo, depth }) => {
+    if (todo.id === undefined || todo.id === null) return;
+    depthById.set(String(todo.id), depth);
+  });
+
+  return renderItems.map((item) => {
+    const depth =
+      item.todo.id === undefined || item.todo.id === null
+        ? 0
+        : depthById.get(String(item.todo.id)) ?? 0;
+    return { ...item, depth };
   });
 }

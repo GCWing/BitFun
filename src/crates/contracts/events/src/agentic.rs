@@ -24,6 +24,16 @@ pub struct SubagentParentInfo {
     pub session_id: String,
     #[serde(rename = "dialogTurnId")]
     pub dialog_turn_id: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "depth"
+    )]
+    pub depth: Option<u32>,
+    /// Delegated RBAC role key (R-14 B4); absent when the parent session has
+    /// no registered role.
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "role")]
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,6 +80,16 @@ pub struct DeepReviewQueueState {
     pub session_concurrency_high: bool,
 }
 
+/// Sub-agent completion status. One-to-one with SubagentResultStatus.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentCompletionStatus {
+    Completed,
+    Failed,
+    Cancelled,
+    PartialTimeout,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AgenticEvent {
@@ -95,6 +115,12 @@ pub enum AgenticEvent {
         /// Remote SSH host for sessions bound to remote workspaces.
         #[serde(skip_serializing_if = "Option::is_none")]
         remote_ssh_host: Option<String>,
+        /// Parent session that launched this session (delegated subagent case).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parent_session_id: Option<String>,
+        /// Subagent type when this session is a delegated subagent session.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        subagent_type: Option<String>,
     },
 
     SessionStateChanged {
@@ -160,6 +186,19 @@ pub enum AgenticEvent {
         /// Runtime-admitted public label for a focused Review child.
         #[serde(skip_serializing_if = "Option::is_none")]
         focused_review_display_label: Option<String>,
+    },
+
+    /// Emitted when a sub-agent turn completes
+    SubagentTurnCompleted {
+        session_id: String,
+        subagent_dialog_turn_id: String,
+        parent_session_id: String,
+        parent_dialog_turn_id: String,
+        parent_tool_call_id: String,
+        agent_type: Option<String>,
+        status: SubagentCompletionStatus,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output_text: Option<String>,
     },
 
     DialogTurnCompleted {
@@ -378,6 +417,9 @@ pub enum AgenticEvent {
         reason: String,
     },
 
+    ReviewPropagationNeeded {
+        parent_session_id: String,
+    },
     /// A persisted reasoning preset became unavailable for the session's
     /// concrete model and was canonically cleared to Auto.
     SessionReasoningPresetAutoCleared {
@@ -640,6 +682,8 @@ impl AgenticEvent {
             | Self::DeepReviewQueueStateChanged { session_id, .. }
             | Self::SessionModelAutoMigrated { session_id, .. }
             | Self::SessionReasoningPresetAutoCleared { session_id, .. } => Some(session_id),
+            Self::SubagentTurnCompleted { session_id, .. } => Some(session_id),
+            Self::ReviewPropagationNeeded { parent_session_id, .. } => Some(parent_session_id),
             Self::SystemError { session_id, .. } => session_id.as_deref(),
         }
     }
@@ -696,6 +740,7 @@ impl AgenticEvent {
             | Self::ThreadGoalUpdated { .. }
             | Self::UserSteeringInjected { .. }
             | Self::ContextCompressionCompleted { .. } => AgenticEventPriority::Normal,
+            Self::SubagentTurnCompleted { .. } => AgenticEventPriority::Normal,
 
             Self::ToolEvent { tool_event, .. } => tool_event.default_priority(),
 
@@ -1036,6 +1081,12 @@ mod tests {
     }
 
     #[test]
+    fn subagent_completion_status_serializes_snake_case() {
+        let status = SubagentCompletionStatus::PartialTimeout;
+        let json = serde_json::to_string(&status).unwrap();
+        assert_eq!(json, "\"partial_timeout\"");
+    }
+
     fn reasoning_preset_auto_clear_is_a_high_priority_session_event() {
         let event = AgenticEvent::SessionReasoningPresetAutoCleared {
             session_id: "session-1".to_string(),

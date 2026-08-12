@@ -11,6 +11,8 @@ import {
   profileFromTauriBuildArgs,
   runCargoTargetGc,
   selectStaleByMtime,
+  planBuildOrphanPrune,
+  planDepsOrphanPrune,
   splitFingerprintDir,
   splitIncrementalCrateDir,
   targetFromTauriBuildArgs,
@@ -156,7 +158,10 @@ test('collectGcPlan keeps distinct Cargo units while pruning stale generations',
 
     const plan = collectGcPlan(profileDir, { now, fingerprintMinAgeMs: dayMs });
 
-    assert.ok(plan.incremental.some((path) => path.endsWith('bitfun_core-oldhash1')));
+    // Keep-2 per crate (d8-P2-6): with two roots for the same crate the older
+    // one is retained as a concurrency buffer; the stale session inside the
+    // newest root is still pruned.
+    assert.ok(!plan.incremental.some((path) => path.endsWith('bitfun_core-oldhash1')));
     assert.ok(
       plan.incremental.some((path) =>
         path.includes(`${join('bitfun_core-newhash2', 's-old-session')}`)
@@ -217,9 +222,12 @@ test('runCargoTargetGc prunes old generations and honors dry-run', () => {
       logger: { info() {}, warn() {} },
     });
     assert.equal(dry.dryRun, true);
-    assert.ok(dry.counts.total >= 2);
+    assert.ok(dry.counts.total >= 1);
     assert.ok(existsSync(join(profileDir, 'incremental', 'bitfun_demo-old')));
 
+    // Keep-2 per crate (d8-P2-6): with only two roots for the same crate,
+    // neither is pruned — the older one is retained as a concurrency buffer
+    // for other worktrees sharing this target dir.
     const live = runCargoTargetGc({
       rootDir: root,
       targetDir,
@@ -230,7 +238,7 @@ test('runCargoTargetGc prunes old generations and honors dry-run', () => {
       logger: { info() {}, warn() {} },
     });
     assert.equal(live.skipped, false);
-    assert.equal(existsSync(join(profileDir, 'incremental', 'bitfun_demo-old')), false);
+    assert.equal(existsSync(join(profileDir, 'incremental', 'bitfun_demo-old')), true);
     assert.equal(existsSync(join(profileDir, 'incremental', 'bitfun_demo-new')), true);
     assert.equal(
       existsSync(join(profileDir, '.fingerprint', 'bitfun-demo-aaaaaaaaaaaaaaaa')),
@@ -245,6 +253,24 @@ test('runCargoTargetGc prunes old generations and honors dry-run', () => {
       true
     );
     assert.equal(existsSync(join(profileDir, 'deps', 'libghost-cccccccccccccccc.rlib')), false);
+  } finally {
+    cleanup();
+  }
+});
+
+test('planDepsOrphanPrune skips everything when keptHashes is empty (d8-P2-5)', () => {
+  const { root, cleanup } = fixtureRoot();
+  try {
+    const profileDir = join(root, 'target', 'debug');
+    touchFile(join(profileDir, 'deps', 'libbitfun_demo-aaaaaaaaaaaaaaaa.rlib'), Date.now());
+    touchDir(join(profileDir, 'deps', 'bitfun_demo-aaaaaaaaaaaaaaaa'), Date.now());
+
+    // Empty keptHashes (fingerprint plan produced nothing) must not nuke deps.
+    const deps = planDepsOrphanPrune(join(profileDir, 'deps'), new Set());
+    assert.equal(deps.length, 0);
+    const build = planBuildOrphanPrune(join(profileDir, 'build'), new Set());
+    assert.equal(build.length, 0);
+    assert.equal(existsSync(join(profileDir, 'deps', 'libbitfun_demo-aaaaaaaaaaaaaaaa.rlib')), true);
   } finally {
     cleanup();
   }
@@ -323,4 +349,12 @@ test('tauri build argv helpers resolve profile and target', () => {
   assert.equal(profileFromTauriBuildArgs([]), 'release');
   assert.equal(targetFromTauriBuildArgs(['--target', 'aarch64-apple-darwin']), 'aarch64-apple-darwin');
   assert.equal(targetFromTauriBuildArgs([]), null);
+});
+
+test('parseGcArgs supports --min-age-hours (d8-P2-7)', () => {
+  assert.equal(parseGcArgs([]).fingerprintMinAgeHours, undefined);
+  assert.equal(parseGcArgs(['--min-age-hours', '48']).fingerprintMinAgeHours, 48);
+  assert.equal(parseGcArgs(['--min-age-hours=12']).fingerprintMinAgeHours, 12);
+  // Non-numeric values are ignored, leaving the env/default in effect.
+  assert.equal(parseGcArgs(['--min-age-hours', 'abc']).fingerprintMinAgeHours, undefined);
 });

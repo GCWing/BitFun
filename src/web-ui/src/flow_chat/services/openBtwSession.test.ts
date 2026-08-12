@@ -88,6 +88,7 @@ vi.mock('../store/FlowChatStore', () => ({
       sessions,
       activeSessionId,
     }),
+    subscribe: () => () => {},
     addExternalSession: (...args: unknown[]) =>
       mocks.addExternalSession(...args),
     updateSessionRelationship: (...args: unknown[]) =>
@@ -95,6 +96,7 @@ vi.mock('../store/FlowChatStore', () => ({
     clearSessionUnreadCompletion: (...args: unknown[]) =>
       mocks.clearSessionUnreadCompletion(...args),
   },
+  isSessionConfirmedDeleted: () => false,
 }));
 
 vi.mock('./FlowChatManager', () => ({

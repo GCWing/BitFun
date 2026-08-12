@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, memo, useEffect, useRef } from 'react';
+import { useChatFullWidth } from '../../hooks/useApp';
 import { ModernFlowChatContainer as FlowChatContainer } from '../../../flow_chat/components/modern/ModernFlowChatContainer';
 import { ChatInput } from '../../../flow_chat/components/ChatInput';
 import type { ChatInputRegistration } from '../../../flow_chat/components/chatInputRegistration';
@@ -49,6 +50,7 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
   emptyState,
   chatInputRegistration,
 }) => {
+  const chatFullWidth = useChatFullWidth();
   const addTab = useCanvasStore(state => state.addTab);
   const deferredTaskDetailTimersRef = useRef<number[]>([]);
   const deferredTaskDetailIdleCallbacksRef = useRef<number[]>([]);
@@ -151,7 +153,7 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
 
   return (
     <div data-bf-component="chat-pane" data-bf-part="root"
-      className="bitfun-chat-pane__content"
+      className={`bitfun-chat-pane__content${chatFullWidth ? ' bitfun-chat-pane__content--chat-full-width' : ''}`}
       data-shortcut-scope="chat"
       data-fullscreen={isFullscreen}
       data-testid="chat-pane"
@@ -178,6 +180,7 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
           isSceneActive={isSceneActive}
           onSendMessage={(_message: string) => {}}
           registration={chatInputRegistration}
+          className={chatFullWidth ? 'bitfun-chat-input--chat-full-width' : ''}
         />
       )}
     </div>

@@ -41,6 +41,22 @@ vi.mock('@/component-library', () => ({
       {children}
     </button>
   ),
+  IconButton: ({
+    children,
+    disabled,
+    isLoading,
+    onClick,
+    tooltip: _tooltip,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    children: React.ReactNode;
+    isLoading?: boolean;
+    tooltip?: React.ReactNode;
+  }) => (
+    <button type="button" disabled={disabled || isLoading} onClick={onClick} {...props}>
+      {children}
+    </button>
+  ),
   Input: ({
     value,
     onChange,
@@ -84,13 +100,18 @@ vi.mock('./common', () => ({
     children,
     title,
     description,
+    extra,
   }: {
     children: React.ReactNode;
     title: string;
     description?: string;
+    extra?: React.ReactNode;
   }) => (
     <section>
-      <h2>{title}</h2>
+      <div>
+        <h2>{title}</h2>
+        {extra}
+      </div>
       {description ? <p>{description}</p> : null}
       {children}
     </section>
@@ -141,6 +162,7 @@ describe('AcpAgentsConfig', () => {
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    localStorage.clear();
     loadJsonConfigMock.mockResolvedValue(JSON.stringify({
       acpClients: {
         opencode: {
@@ -228,6 +250,116 @@ describe('AcpAgentsConfig', () => {
     expect(container.textContent).toContain('remote.refreshDetection');
     expect(container.textContent).not.toContain('remote.env');
     expect(probeClientRequirementsMock).toHaveBeenCalledWith({
+      remoteConnectionId: 'huawei-server',
+      force: undefined,
+    });
+  });
+
+  it('hides a saved remote server without deleting its SSH connection', async () => {
+    listSavedConnectionsMock.mockResolvedValue([{
+      id: 'huawei-server',
+      name: 'Huawei Server',
+      host: '119.8.182.138',
+      port: 22,
+      username: 'ssh-root',
+      authType: { type: 'Password' },
+    }]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const hideButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="remote.hideConnection"]'
+    );
+    expect(hideButton).not.toBeNull();
+
+    await act(async () => {
+      hideButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(listSavedConnectionsMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain('Huawei Server');
+    expect(JSON.parse(localStorage.getItem('bitfun:settings:acp-agents:hidden-remote-connections:v1') || '[]'))
+      .toEqual(['huawei-server']);
+    expect(container.textContent).toContain('remote.showHiddenConnections');
+  });
+
+  it('restores a hidden remote server from the hidden list', async () => {
+    localStorage.setItem(
+      'bitfun:settings:acp-agents:hidden-remote-connections:v1',
+      JSON.stringify(['huawei-server'])
+    );
+    listSavedConnectionsMock.mockResolvedValue([{
+      id: 'huawei-server',
+      name: 'Huawei Server',
+      host: '119.8.182.138',
+      port: 22,
+      username: 'ssh-root',
+      authType: { type: 'Password' },
+    }]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const showHiddenButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('remote.showHiddenConnections'));
+    expect(showHiddenButton).not.toBeUndefined();
+
+    await act(async () => {
+      showHiddenButton?.click();
+      await Promise.resolve();
+    });
+
+    const restoreButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="remote.restoreConnection"]'
+    );
+    expect(restoreButton).not.toBeNull();
+
+    await act(async () => {
+      restoreButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(localStorage.getItem('bitfun:settings:acp-agents:hidden-remote-connections:v1'))
+      .toBe('[]');
+    expect(container.textContent).toContain('Huawei Server');
+  });
+
+  it('does not probe hidden remote servers until they are restored', async () => {
+    localStorage.setItem(
+      'bitfun:settings:acp-agents:hidden-remote-connections:v1',
+      JSON.stringify(['huawei-server'])
+    );
+    listSavedConnectionsMock.mockResolvedValue([{
+      id: 'huawei-server',
+      name: 'Huawei Server',
+      host: '119.8.182.138',
+      port: 22,
+      username: 'ssh-root',
+      authType: { type: 'Password' },
+    }]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(probeClientRequirementsMock).not.toHaveBeenCalledWith({
       remoteConnectionId: 'huawei-server',
       force: undefined,
     });

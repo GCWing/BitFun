@@ -529,3 +529,44 @@
     }
   }
 }
+
+// Grid template dropdown (four/six/nine-cell) in the chat header actions.
+.flowchat-header__grid-template-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.flowchat-header__grid-template-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  min-width: 132px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bf-appearance-token-color-bg-elevated);
+  border: 1px solid var(--bf-appearance-token-border-base);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px var(--bf-appearance-token-color-overlay-black-12);
+}
+
+.flowchat-header__grid-template-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bf-appearance-token-element-bg-hover);
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+}

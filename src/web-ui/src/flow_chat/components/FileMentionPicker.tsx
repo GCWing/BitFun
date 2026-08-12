@@ -536,8 +536,24 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
                   onMouseEnter={() => setSelectedIndex(index)}
                 >
                   {isSession ? <MessageCircle size={13} className="file-mention-picker__icon file-mention-picker__icon--session" /> : file?.isDirectory ? <Folder size={13} className="file-mention-picker__icon file-mention-picker__icon--folder" /> : <File size={13} className="file-mention-picker__icon file-mention-picker__icon--file" />}
-                  <span data-bf-component="file-mention-picker" data-bf-part="itemName" className="file-mention-picker__item-name">{session?.sessionName ?? file?.name}</span>
+                  <span
+                    data-bf-component="file-mention-picker"
+                    data-bf-part="itemName"
+                    className={`file-mention-picker__item-name${file && !file.referenceStableKey ? ' file-mention-picker__item-name--with-path' : ''}`}
+                  >
+                    {session?.sessionName ?? file?.name}
+                  </span>
                   {session && <span data-bf-component="file-mention-picker" data-bf-part="itemDetail" className="file-mention-picker__item-detail">{session.workspaceLabel}</span>}
+                  {file && !file.referenceStableKey && (
+                    <span
+                      data-bf-component="file-mention-picker"
+                      data-bf-part="itemDetail"
+                      className="file-mention-picker__item-detail file-mention-picker__item-path"
+                      title={file.relativePath}
+                    >
+                      {file.relativePath}
+                    </span>
+                  )}
                   {file?.referenceStableKey && (
                     <span data-bf-component="file-mention-picker" data-bf-part="itemDetail" className="file-mention-picker__item-detail">
                       {file.referenceDescription || file.path}

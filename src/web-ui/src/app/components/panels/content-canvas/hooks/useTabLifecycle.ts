@@ -15,12 +15,29 @@ import {
   useProjectCanvasStore,
   useGitCanvasStore,
   useBottomTerminalCanvasStore,
+  GROUP_STATE_KEY,
 } from '../stores';
-import type { EditorGroupId, PanelContent, CreateTabEventDetail } from '../types';
+import type { EditorGroupId, EditorGroupState, PanelContent, CreateTabEventDetail } from '../types';
+import { EDITOR_GROUP_IDS, GRID_MAX_DIM } from '../types/layout';
 import { TAB_EVENTS } from '../types';
 import { useI18n } from '@/infrastructure/i18n';
 import { drainPendingTabs } from '@/shared/services/pendingTabQueue';
 import { confirmDialog } from '@/component-library/components/ConfirmDialog/confirmService';
+
+/** Count visible (non-hidden) tabs in a canvas store editor group. */
+const getVisibleTabCount = (
+  state: ReturnType<typeof useAgentCanvasStore.getState>,
+  groupId: EditorGroupId,
+): number => {
+  // Resolve through GROUP_STATE_KEY (single source of truth, shared with
+  // canvasStore): covers primary/secondary/tertiary AND slot4..slot16.
+  const group = state[GROUP_STATE_KEY[groupId]];
+  if (!group || typeof group === 'boolean' || typeof group === 'string' || typeof group === 'number') return 0;
+  const tabs = (group as { tabs?: Array<{ isHidden?: boolean }> }).tabs;
+  if (!Array.isArray(tabs)) return 0;
+  return tabs.filter(t => !t.isHidden).length;
+};
+
 interface UseTabLifecycleOptions {
   /** App mode / target canvas */
   mode?: 'agent' | 'project' | 'git' | 'bottom-terminal';
@@ -144,16 +161,12 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Dirty check before closing a tab.
    */
   const handleCloseWithDirtyCheck = useCallback(async (tabId: string, groupId: EditorGroupId): Promise<boolean> => {
-    const {
-      primaryGroup: latestPrimaryGroup,
-      secondaryGroup: latestSecondaryGroup,
-      tertiaryGroup: latestTertiaryGroup,
-    } = canvasStoreApi.getState();
-    const group = groupId === 'primary'
-      ? latestPrimaryGroup
-      : groupId === 'secondary'
-        ? latestSecondaryGroup
-        : latestTertiaryGroup;
+    // Generic mapping through GROUP_STATE_KEY (single source of truth shared
+    // with canvasStore): resolves primary/secondary/tertiary AND slot4..slot16,
+    // so tabs in any of the 16 grid9 cells can be closed. The old ternary only
+    // decoded the legacy 3 groups, silently no-op'ing slot closes.
+    const state = canvasStoreApi.getState();
+    const group = state[GROUP_STATE_KEY[groupId]] as EditorGroupState;
     const tab = group.tabs.find(t => t.id === tabId);
 
     if (!tab) {
@@ -181,16 +194,10 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Dirty check before closing all tabs.
    */
   const handleCloseAllWithDirtyCheck = useCallback(async (groupId: EditorGroupId): Promise<boolean> => {
-    const {
-      primaryGroup: latestPrimaryGroup,
-      secondaryGroup: latestSecondaryGroup,
-      tertiaryGroup: latestTertiaryGroup,
-    } = canvasStoreApi.getState();
-    const group = groupId === 'primary'
-      ? latestPrimaryGroup
-      : groupId === 'secondary'
-        ? latestSecondaryGroup
-        : latestTertiaryGroup;
+    // Same generic mapping as handleCloseWithDirtyCheck: covers slot4..slot16
+    // so "close all" works in every expanded grid9 cell.
+    const state = canvasStoreApi.getState();
+    const group = state[GROUP_STATE_KEY[groupId]] as EditorGroupState;
     const closableTabs = group.tabs.filter(t => t.state !== 'pinned');
     const dirtyTabs = closableTabs.filter(t => t.isDirty);
 
@@ -316,7 +323,24 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
       }
       
       // Determine target group: use specified group when split enabled, otherwise active group
-      const groupId = (enableSplitView && targetGroup) ? targetGroup : (targetGroup || activeGroupId);
+      // btw-session tabs (subagent side-threads / review windows) prefer an empty
+      // grid9 cell over stacking into an existing window: in grid9 mode emptied
+      // slots persist as drop targets, so a newly opened subagent fills a blank
+      // window first (r < grid9RowsCount && c < grid9ColsCount keeps the search
+      // inside the active frame). Non-grid9 modes auto-merge empty groups, so the
+      // fallback stays the plain target/active group.
+      let groupId = (enableSplitView && targetGroup) ? targetGroup : (targetGroup || activeGroupId);
+      if (type === 'btw-session' && layout.splitMode === 'grid9') {
+        const canvasState = canvasStoreApi.getState();
+        const { grid9ColsCount, grid9RowsCount } = canvasState.layout;
+        const firstEmpty = EDITOR_GROUP_IDS.find((gid, idx) => {
+          const row = Math.floor(idx / GRID_MAX_DIM);
+          const col = idx % GRID_MAX_DIM;
+          if (row >= grid9RowsCount || col >= grid9ColsCount) return false;
+          return getVisibleTabCount(canvasState, gid) === 0;
+        });
+        if (firstEmpty) groupId = firstEmpty;
+      }
 
       // Open all tabs in active state by default (no preview replacement)
       addTab(content, 'active', groupId);
@@ -337,7 +361,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
     return () => {
       window.removeEventListener(eventName, handleCreateTab as EventListener);
     };
-  }, [mode, createTabEventName, expandPanelEventName, findTabByMetadata, updateTabContent, switchToTab, addTab, activeGroupId, layout.splitMode, setSplitMode]);
+  }, [mode, createTabEventName, expandPanelEventName, findTabByMetadata, updateTabContent, switchToTab, addTab, activeGroupId, layout.splitMode, setSplitMode, canvasStoreApi]);
 
   return {
     openPreview,

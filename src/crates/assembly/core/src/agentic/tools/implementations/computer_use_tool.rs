@@ -850,7 +850,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
         if files.len() <= COMPUTER_USE_DEBUG_MAX_FILES {
             return;
         }
-        files.sort_by(|a, b| b.0.cmp(&a.0));
+        files.sort_by_key(|file| std::cmp::Reverse(file.0));
         for (_, path) in files.into_iter().skip(COMPUTER_USE_DEBUG_MAX_FILES) {
             if let Err(e) = tokio::fs::remove_file(&path).await {
                 warn!(

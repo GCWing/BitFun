@@ -12,7 +12,6 @@
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::keyed_lock::KeyedAsyncLock;
 use crate::agentic::session::{SessionExecutionBindingError, SessionExecutionBindingUpdate};
-use crate::service::remote_ssh::lookup_remote_connection;
 use crate::service::workspace::get_global_workspace_service;
 use crate::service::worktree::{
     WorktreeCreateRequest, WorktreeListRequest, WorktreeRemoveRequest, WorktreeService,
@@ -63,6 +62,16 @@ pub struct WorktreeSessionBindingResult {
 struct SessionBindingContext {
     project_workspace_path: String,
     execution_target: SessionExecutionTarget,
+    /// Why an actual transition is forbidden. An already-satisfied binding
+    /// request remains a safe, read-only no-op even when this is set.
+    transition_blocker: Option<WorktreeError>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionBindingAction {
+    AlreadyBound,
+    Enable,
+    Disable,
 }
 
 fn error(code: WorktreeErrorCode, message: impl Into<String>) -> WorktreeError {
@@ -85,46 +94,51 @@ async fn load_binding_context(
     let session_manager = coordinator.get_session_manager();
     let session = session_manager.get_session(&request.session_id);
 
-    let (workspace_path, project_workspace_path, execution_target) = if let Some(session) = session
-    {
-        if !session.dialog_turn_ids.is_empty() {
-            return Err(error(
-                WorktreeErrorCode::WorktreeBusy,
-                "Worktree isolation can only be changed before the session's first message",
-            ));
-        }
-        if !matches!(session.state, crate::agentic::core::SessionState::Idle) {
-            return Err(error(
-                WorktreeErrorCode::WorktreeBusy,
-                "Worktree isolation cannot be changed while the session is processing",
-            ));
-        }
-        if session.config.remote_connection_id.is_some() {
-            return Err(error(
-                WorktreeErrorCode::RemoteUnsupported,
-                "Managed worktrees are not supported for remote SSH workspaces yet",
-            ));
-        }
+    let (workspace_path, project_workspace_path, execution_target, mut transition_blocker) =
+        if let Some(session) = session {
+            let transition_blocker = if !session.dialog_turn_ids.is_empty() {
+                Some(error(
+                    WorktreeErrorCode::WorktreeBusy,
+                    "Worktree isolation can only be changed before the session's first message",
+                ))
+            } else if !matches!(session.state, crate::agentic::core::SessionState::Idle) {
+                Some(error(
+                    WorktreeErrorCode::WorktreeBusy,
+                    "Worktree isolation cannot be changed while the session is processing",
+                ))
+            } else if session.config.remote_connection_id.is_some() {
+                Some(error(
+                    WorktreeErrorCode::RemoteUnsupported,
+                    "Managed worktrees are not supported for remote SSH workspaces yet",
+                ))
+            } else {
+                None
+            };
 
-        let workspace_path = session.config.workspace_path.clone().ok_or_else(|| {
-            error(
-                WorktreeErrorCode::InvalidPath,
-                "Session is not bound to a workspace",
+            let workspace_path = session.config.workspace_path.clone().ok_or_else(|| {
+                error(
+                    WorktreeErrorCode::InvalidPath,
+                    "Session is not bound to a workspace",
+                )
+            })?;
+            let project_workspace_path = session
+                .config
+                .project_workspace_path
+                .clone()
+                .unwrap_or_else(|| workspace_path.clone());
+            let execution_target = session
+                .config
+                .execution_target
+                .clone()
+                .unwrap_or_else(|| SessionExecutionTarget::local(workspace_path.clone()));
+            (
+                workspace_path,
+                project_workspace_path,
+                execution_target,
+                transition_blocker,
             )
-        })?;
-        let project_workspace_path = session
-            .config
-            .project_workspace_path
-            .clone()
-            .unwrap_or_else(|| workspace_path.clone());
-        let execution_target = session
-            .config
-            .execution_target
-            .clone()
-            .unwrap_or_else(|| SessionExecutionTarget::local(workspace_path.clone()));
-        (workspace_path, project_workspace_path, execution_target)
-    } else {
-        let project_workspace_path = request
+        } else {
+            let project_workspace_path = request
                 .project_workspace_path
                 .as_deref()
                 .map(str::trim)
@@ -139,48 +153,53 @@ async fn load_binding_context(
                     )
                 })?
                 .to_string();
-        let metadata = session_manager
-            .load_session_metadata(Path::new(&project_workspace_path), &request.session_id)
+            let metadata = session_manager
+                .load_session_metadata(Path::new(&project_workspace_path), &request.session_id)
+                .await
+                .map_err(|metadata_error| {
+                    error(
+                        WorktreeErrorCode::IoFailed,
+                        format!("Failed to load session metadata: {metadata_error}"),
+                    )
+                })?
+                .ok_or_else(|| {
+                    error(
+                        WorktreeErrorCode::WorktreeNotFound,
+                        format!("Session not found: {}", request.session_id),
+                    )
+                })?;
+            let transition_blocker = (metadata.turn_count > 0).then(|| {
+                error(
+                    WorktreeErrorCode::WorktreeBusy,
+                    "Worktree isolation can only be changed before the session's first message",
+                )
+            });
+
+            let workspace_path = metadata
+                .workspace_path
+                .clone()
+                .unwrap_or_else(|| project_workspace_path.clone());
+            let persisted_project_path = metadata
+                .project_workspace_path
+                .clone()
+                .unwrap_or(project_workspace_path);
+            let execution_target = metadata
+                .execution_target
+                .clone()
+                .unwrap_or_else(|| SessionExecutionTarget::local(workspace_path.clone()));
+            (
+                workspace_path,
+                persisted_project_path,
+                execution_target,
+                transition_blocker,
+            )
+        };
+
+    if transition_blocker.is_none()
+        && crate::service::remote_ssh::workspace_state::is_remote_path(&project_workspace_path)
             .await
-            .map_err(|metadata_error| {
-                error(
-                    WorktreeErrorCode::IoFailed,
-                    format!("Failed to load session metadata: {metadata_error}"),
-                )
-            })?
-            .ok_or_else(|| {
-                error(
-                    WorktreeErrorCode::WorktreeNotFound,
-                    format!("Session not found: {}", request.session_id),
-                )
-            })?;
-        if metadata.turn_count > 0 {
-            return Err(error(
-                WorktreeErrorCode::WorktreeBusy,
-                "Worktree isolation can only be changed before the session's first message",
-            ));
-        }
-
-        let workspace_path = metadata
-            .workspace_path
-            .clone()
-            .unwrap_or_else(|| project_workspace_path.clone());
-        let persisted_project_path = metadata
-            .project_workspace_path
-            .clone()
-            .unwrap_or(project_workspace_path);
-        let execution_target = metadata
-            .execution_target
-            .clone()
-            .unwrap_or_else(|| SessionExecutionTarget::local(workspace_path.clone()));
-        (workspace_path, persisted_project_path, execution_target)
-    };
-
-    if lookup_remote_connection(&project_workspace_path)
-        .await
-        .is_some()
     {
-        return Err(error(
+        transition_blocker = Some(error(
             WorktreeErrorCode::RemoteUnsupported,
             "Managed worktrees are not supported for remote SSH workspaces yet",
         ));
@@ -196,6 +215,27 @@ async fn load_binding_context(
     Ok(SessionBindingContext {
         project_workspace_path,
         execution_target,
+        transition_blocker,
+    })
+}
+
+fn binding_action(
+    context: &SessionBindingContext,
+    enabled: bool,
+) -> Result<SessionBindingAction, WorktreeError> {
+    let is_worktree = context.execution_target.worktree_id.is_some();
+    if enabled == is_worktree {
+        return Ok(SessionBindingAction::AlreadyBound);
+    }
+
+    if let Some(blocker) = context.transition_blocker.as_ref() {
+        return Err(blocker.clone());
+    }
+
+    Ok(if enabled {
+        SessionBindingAction::Enable
+    } else {
+        SessionBindingAction::Disable
     })
 }
 
@@ -266,24 +306,22 @@ impl WorktreeService {
             .map_err(|message| error(WorktreeErrorCode::InvalidPath, message))?;
         let _binding_guard = SESSION_BINDING_LOCKS.lock(&request.session_id).await;
         let context = load_binding_context(&request).await?;
-        let is_worktree = context.execution_target.worktree_id.is_some();
-
-        if request.enabled == is_worktree {
-            // Already in the requested state; report it rather than churn Git.
-            return Ok(WorktreeSessionBindingResult {
-                session_id: request.session_id,
-                workspace_path: context.execution_target.root_path.clone(),
-                project_workspace_path: context.project_workspace_path,
-                workspace_id: current_workspace_id(&context.execution_target.root_path).await,
-                execution_target: context.execution_target,
-                retained_worktree_path: None,
-            });
-        }
-
-        if request.enabled {
-            Self::enable_session_worktree(&request, &context).await
-        } else {
-            Self::disable_session_worktree(&request, &context).await
+        match binding_action(&context, request.enabled)? {
+            SessionBindingAction::AlreadyBound => {
+                // Already in the requested state; report it rather than churn Git.
+                Ok(WorktreeSessionBindingResult {
+                    session_id: request.session_id,
+                    workspace_path: context.execution_target.root_path.clone(),
+                    project_workspace_path: context.project_workspace_path,
+                    workspace_id: current_workspace_id(&context.execution_target.root_path).await,
+                    execution_target: context.execution_target,
+                    retained_worktree_path: None,
+                })
+            }
+            SessionBindingAction::Enable => Self::enable_session_worktree(&request, &context).await,
+            SessionBindingAction::Disable => {
+                Self::disable_session_worktree(&request, &context).await
+            }
         }
     }
 
@@ -399,7 +437,11 @@ impl WorktreeService {
 
 #[cfg(test)]
 mod tests {
-    use super::{WorktreeSessionBindingRequest, SESSION_BINDING_LOCKS};
+    use super::{
+        binding_action, error, SessionBindingAction, SessionBindingContext,
+        WorktreeSessionBindingRequest, SESSION_BINDING_LOCKS,
+    };
+    use bitfun_core_types::{SessionExecutionTarget, WorktreeErrorCode};
     use std::time::Duration;
 
     #[test]
@@ -427,6 +469,29 @@ mod tests {
         assert_eq!(
             request.project_workspace_path.as_deref(),
             Some(r"D:\workspace\BitFun")
+        );
+    }
+
+    #[test]
+    fn already_satisfied_binding_is_a_no_op_after_the_first_message() {
+        let context = SessionBindingContext {
+            project_workspace_path: "/repo".to_string(),
+            execution_target: SessionExecutionTarget::local("/repo"),
+            transition_blocker: Some(error(
+                WorktreeErrorCode::WorktreeBusy,
+                "Worktree isolation can only be changed before the session's first message",
+            )),
+        };
+
+        assert_eq!(
+            binding_action(&context, false),
+            Ok(SessionBindingAction::AlreadyBound)
+        );
+        assert_eq!(
+            binding_action(&context, true)
+                .expect_err("an actual transition must stay blocked")
+                .code,
+            WorktreeErrorCode::WorktreeBusy
         );
     }
 

@@ -189,6 +189,18 @@ export default function lifecycleUnitTest() {
       expect(state.showSettings).assertFalse();
       expect(state.showConnectSheet).assertFalse();
     });
+
+    it('mirrors the resolved layout mode for runtime branching', 0, () => {
+      const state = new AppShellState();
+
+      expect(state.wideLayout).assertFalse();
+      state.setWideLayout(true);
+      expect(state.wideLayout).assertTrue();
+
+      state.setSidebarVisible(true);
+      state.closeGlobalSurfaces();
+      expect(state.wideLayout).assertTrue();
+    });
   });
 
   describe('AsyncLifecycleGate', () => {

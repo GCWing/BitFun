@@ -3,7 +3,7 @@ use crate::client::StreamResponse;
 use crate::stream::UnifiedResponse;
 use crate::trace::{ModelExchangeRequestAttempt, ModelExchangeTraceConfig};
 use anyhow::{anyhow, Result};
-use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
+use bitfun_core_types::errors::AiProviderError;
 use chrono::{DateTime, Utc};
 use futures::Stream;
 use log::{debug, error, warn};
@@ -99,10 +99,6 @@ fn format_transport_error(label: &str, error: &reqwest::Error) -> String {
     }
 
     message
-}
-
-fn is_retryable_http_status(status: StatusCode) -> bool {
-    status.is_server_error() || matches!(status.as_u16(), 408 | 409 | 425 | 429)
 }
 
 fn provider_error_code(body: &str) -> Option<String> {
@@ -226,6 +222,7 @@ impl Drop for ManagedResponseStream {
     }
 }
 
+#[allow(clippy::too_many_arguments)] // request pipeline entry; grouping would churn all callers
 pub(crate) async fn execute_sse_request<BuildRequest, BuildHandler, HandlerFuture>(
     label: &str,
     url: &str,
@@ -271,26 +268,6 @@ where
                 let http_version = resp.version();
                 let headers = resp.headers().clone();
 
-                if status.is_client_error() && !is_retryable_http_status(status) {
-                    let error_text = resp
-                        .text()
-                        .await
-                        .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
-                    let provider_error =
-                        http_provider_error(label, status, &error_text, "client error");
-                    if let Some(trace) = trace.as_ref() {
-                        trace
-                            .sink
-                            .request_attempt_failed(
-                                trace_handle.as_ref(),
-                                &provider_error.to_string(),
-                            )
-                            .await;
-                    }
-                    error!("{}", provider_error);
-                    return Err(anyhow!(provider_error));
-                }
-
                 if status.is_success() {
                     debug!(
                         "{} request connected: {}ms, status: {}, protocol: {:?}, transport_attempt: {}/{}",
@@ -307,20 +284,13 @@ where
                         .text()
                         .await
                         .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
-                    let provider_error = http_provider_error(label, status, &error_text, "error");
-                    if provider_error.category == ErrorCategory::ContextOverflow {
-                        if let Some(trace) = trace.as_ref() {
-                            trace
-                                .sink
-                                .request_attempt_failed(
-                                    trace_handle.as_ref(),
-                                    &provider_error.to_string(),
-                                )
-                                .await;
-                        }
-                        error!("{}", provider_error);
-                        return Err(anyhow!(provider_error));
-                    }
+                    let error_kind = if status.is_client_error() {
+                        "client error"
+                    } else {
+                        "error"
+                    };
+                    let provider_error =
+                        http_provider_error(label, status, &error_text, error_kind);
                     let error = anyhow!(provider_error);
                     warn!(
                         "{} request failed: {}ms, transport_attempt {}/{}, error: {}",
@@ -457,11 +427,53 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::extract::State;
+    use axum::response::IntoResponse;
+    use axum::routing::post;
+    use axum::{Json, Router};
+    use bitfun_core_types::errors::ErrorCategory;
     use reqwest::header::HeaderValue;
     use std::sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     };
+
+    #[derive(Clone)]
+    struct RetryFixtureState {
+        attempts: Arc<AtomicUsize>,
+    }
+
+    async fn bad_requests_then_success(
+        State(state): State<RetryFixtureState>,
+        Json(body): Json<serde_json::Value>,
+    ) -> impl IntoResponse {
+        assert_eq!(body["model"], "configured-model");
+        match state.attempts.fetch_add(1, Ordering::SeqCst) {
+            0 => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": {
+                        "message": "Invalid temperature value",
+                        "type": "invalid_request_error",
+                        "code": "invalid_parameter"
+                    }
+                })),
+            )
+                .into_response(),
+            1 => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": {
+                        "message": "Maximum context length exceeded",
+                        "type": "invalid_request_error",
+                        "code": "context_length_exceeded"
+                    }
+                })),
+            )
+                .into_response(),
+            _ => StatusCode::OK.into_response(),
+        }
+    }
 
     #[test]
     fn http_error_uses_structured_code_before_generic_message() {
@@ -536,16 +548,47 @@ mod tests {
         assert!(observed_cancel.load(Ordering::SeqCst));
     }
 
-    #[test]
-    fn retryable_http_statuses_include_rate_limit_and_server_errors() {
-        assert!(is_retryable_http_status(StatusCode::TOO_MANY_REQUESTS));
-        assert!(is_retryable_http_status(StatusCode::REQUEST_TIMEOUT));
-        assert!(is_retryable_http_status(StatusCode::INTERNAL_SERVER_ERROR));
-        assert!(is_retryable_http_status(StatusCode::BAD_GATEWAY));
+    #[tokio::test]
+    async fn every_bad_request_uses_existing_retry_loop() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let app = Router::new()
+            .route("/chat/completions", post(bad_requests_then_success))
+            .with_state(RetryFixtureState {
+                attempts: Arc::clone(&attempts),
+            });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind retry fixture");
+        let address = listener.local_addr().expect("retry fixture address");
+        let server_task = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("retry fixture should run");
+        });
+        let url = format!("http://{address}/chat/completions");
+        let client = reqwest::Client::new();
+        let request_body = serde_json::json!({"model": "configured-model"});
 
-        assert!(!is_retryable_http_status(StatusCode::UNAUTHORIZED));
-        assert!(!is_retryable_http_status(StatusCode::BAD_REQUEST));
-        assert!(!is_retryable_http_status(StatusCode::NOT_FOUND));
+        let result = execute_sse_request(
+            "OpenAI Streaming API",
+            &url,
+            &request_body,
+            3,
+            None,
+            None,
+            || client.post(&url),
+            |_response, tx, _tx_raw, _remaining_ttft_timeout| async move {
+                drop(tx);
+            },
+        )
+        .await;
+
+        server_task.abort();
+        assert!(
+            result.is_ok(),
+            "ordinary and context-overflow 400 responses should both retry"
+        );
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 
     #[test]

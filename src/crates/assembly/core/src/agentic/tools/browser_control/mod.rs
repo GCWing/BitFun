@@ -1,9 +1,10 @@
 //! Browser control via Chrome DevTools Protocol (CDP).
 //!
-//! Connects to the user's default browser (Chrome, Edge, etc.) over a
-//! CDP WebSocket, enabling page navigation, DOM interaction, screenshots,
-//! JS evaluation and more — all while preserving the user's existing
-//! cookies, extensions, and login sessions.
+//! Connects to a Chromium-family browser over CDP, enabling page navigation,
+//! DOM interaction, screenshots, JS evaluation and more. Chrome 144+ and Edge
+//! use user-approved live-profile endpoints so existing tabs, cookies,
+//! extensions and login sessions are preserved. Other Chromium browsers reuse
+//! a real-profile endpoint when available and retain a managed fallback.
 
 pub mod actions;
 pub mod browser_launcher;

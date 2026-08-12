@@ -380,7 +380,7 @@ fn stream_json_provider_http_403_emits_one_error_terminal() {
         "stream-json",
     ]);
     let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
-    server.assert_chat_completion_requests(1);
+    server.assert_chat_completion_requests(10);
 
     let stdout = stdout(&output);
     assert!(!output.status.success(), "{stdout}");
@@ -443,7 +443,7 @@ fn stream_json_provider_and_patch_failures_publish_one_final_classification() {
         &output_target,
     ]);
     let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
-    server.assert_chat_completion_requests(1);
+    server.assert_chat_completion_requests(10);
 
     let stdout = stdout(&output);
     let stderr = stderr(&output);
@@ -481,7 +481,7 @@ fn stream_json_provider_and_patch_failures_publish_one_final_classification() {
 }
 
 #[test]
-fn stream_json_disconnect_then_permanent_retry_failure_emits_one_error_terminal() {
+fn stream_json_disconnect_then_exhausted_retry_failure_emits_one_error_terminal() {
     let server = MockOpenAiServer::disconnect_then_http_403();
     let environment = CliTestEnvironment::new();
     environment.configure_mock_model(server.base_url());
@@ -493,7 +493,7 @@ fn stream_json_disconnect_then_permanent_retry_failure_emits_one_error_terminal(
         "stream-json",
     ]);
     let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
-    server.assert_chat_completion_requests(2);
+    server.assert_chat_completion_requests(11);
 
     let stdout = stdout(&output);
     assert!(!output.status.success(), "{stdout}");

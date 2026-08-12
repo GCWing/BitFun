@@ -22,7 +22,9 @@ pub(crate) async fn build_memory_read_path_reminder(memory_root: &Path) -> Optio
                 );
                 None
             } else {
-                let memory_summary = truncate_memory_summary(summary);
+                // 阈值参数配置化：ai.thresholds.memories.summary_token_limit
+                let summary_token_limit = configured_memory_summary_token_limit().await;
+                let memory_summary = truncate_memory_summary(summary, summary_token_limit);
                 let reminder = render_memory_read_path_reminder(memory_root, &memory_summary);
                 info!(
                     "Memory read-path reminder built: memory_root={}, summary_bytes={}, injected_summary_bytes={}, reminder_bytes={}",
@@ -52,8 +54,28 @@ pub(crate) async fn build_memory_read_path_reminder(memory_root: &Path) -> Optio
     }
 }
 
-fn truncate_memory_summary(summary: &str) -> String {
-    truncate_head_tokens(summary.trim(), MEMORY_SUMMARY_TOKEN_LIMIT)
+fn truncate_memory_summary(summary: &str, token_limit: usize) -> String {
+    truncate_head_tokens(summary.trim(), token_limit)
+}
+
+/// Resolve the configured memory-summary token limit
+/// (`ai.thresholds.memories.summary_token_limit`), falling back to
+/// `MEMORY_SUMMARY_TOKEN_LIMIT = 2_500` when unset or invalid.
+async fn configured_memory_summary_token_limit() -> usize {
+    let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+        return MEMORY_SUMMARY_TOKEN_LIMIT;
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return MEMORY_SUMMARY_TOKEN_LIMIT;
+    };
+    let limit = thresholds.memories.summary_token_limit;
+    if limit == 0 {
+        return MEMORY_SUMMARY_TOKEN_LIMIT;
+    }
+    limit
 }
 
 fn truncate_head_tokens(text: &str, token_limit: usize) -> String {

@@ -352,6 +352,7 @@ impl JsWorkerPool {
             .map_err(MiniAppWorkerPoolError::validation)
     }
 
+    #[allow(clippy::too_many_arguments)] // spawn + invoke descriptor for a worker
     pub async fn call_with_app_dir(
         &self,
         worker_key: &str,

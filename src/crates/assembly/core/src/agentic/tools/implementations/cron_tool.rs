@@ -170,6 +170,7 @@ impl CronTool {
                     .unwrap_or_else(|| workspace_ref.workspace_path.clone()),
                 remote_connection_id: workspace_ref.remote_connection_id.clone(),
                 remote_ssh_host: workspace_ref.remote_ssh_host.clone(),
+                include_hidden: false,
             })
             .await
             .map_err(|error| {
@@ -441,6 +442,7 @@ impl CronToolJobPatchInput {
 struct CronToolInput {
     action: CronAction,
     session_id: Option<String>,
+    target_kind: Option<CronJobTargetKind>,
     job: Option<CronToolJobInput>,
     patch: Option<CronToolJobPatchInput>,
     job_id: Option<String>,
@@ -635,10 +637,11 @@ impl Tool for CronTool {
 
 Defaults:
 - "session_id": defaults to the current session for "list" and "add".
+- "target_kind": optional, one of "session" | "workspace". Defaults to "session" for "list"; pass "workspace" to list workspace-scoped jobs.
 
 Actions:
 - "get_time": Return the current local time including timezone information.
-- "list": List all jobs for the effective session scope.
+- "list": List all jobs for the effective session scope (or workspace scope when "target_kind" is "workspace").
 - "add": Create a job. Requires "job". When "job.name" is omitted, uses "Cron job".
 - "update": Update a job. Requires "job_id" and "patch".
 - "remove": Delete a job. Requires "job_id".
@@ -683,6 +686,11 @@ Patch schema for "update":
                 "session_id": {
                     "type": "string",
                     "description": "Optional target session ID. Defaults to the current session for list/add."
+                },
+                "target_kind": {
+                    "type": "string",
+                    "enum": ["session", "workspace"],
+                    "description": "Optional target kind filter for list. Defaults to session; use workspace to list workspace-scoped jobs."
                 },
                 "action": {
                     "type": "string",
@@ -1047,7 +1055,7 @@ Patch schema for "update":
                         workspace_ref.workspace_id.as_deref(),
                         workspace_ref.remote_connection_id.as_deref(),
                         Some(&session_id),
-                        Some(CronJobTargetKind::Session),
+                        Some(params.target_kind.unwrap_or(CronJobTargetKind::Session)),
                     )
                     .await;
                 jobs.sort_by(|left, right| {

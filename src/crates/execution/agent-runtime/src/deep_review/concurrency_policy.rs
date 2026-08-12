@@ -189,6 +189,10 @@ impl Default for DeepReviewConcurrencyPolicy {
 
 impl DeepReviewExecutionPolicy {
     /// Extract the concurrency policy from a run manifest, if present.
+    ///
+    /// When the manifest carries no `concurrencyPolicy`, the defaults come from
+    /// the configured `ai.thresholds.deep_review.*` values injected into this
+    /// policy (阈值参数配置化), falling back to the legacy constants.
     pub fn concurrency_policy_from_manifest(
         &self,
         raw_manifest: &Value,
@@ -196,11 +200,29 @@ impl DeepReviewExecutionPolicy {
         let mut policy = raw_manifest
             .get("concurrencyPolicy")
             .map(DeepReviewConcurrencyPolicy::from_manifest)
-            .unwrap_or_default();
+            .unwrap_or_else(|| self.configured_concurrency_policy_default());
         if is_adaptive_review_manifest(raw_manifest) {
             policy.max_parallel_instances = policy
                 .max_parallel_instances
                 .min(MAX_ADAPTIVE_PARALLEL_INSTANCES);
+        }
+        policy
+    }
+
+    /// Default concurrency policy honoring the configured
+    /// `ai.thresholds.deep_review.max_parallel_instances` /
+    /// `max_queue_wait_secs` / `auto_retry_elapsed_guard_secs` values.
+    pub fn configured_concurrency_policy_default(&self) -> DeepReviewConcurrencyPolicy {
+        let mut policy = DeepReviewConcurrencyPolicy::default();
+        if let Some(parallel_instances) = self.configured_max_parallel_instances {
+            policy.max_parallel_instances = parallel_instances.max(1).min(16);
+        }
+        if let Some(queue_wait) = self.configured_queue_wait_seconds {
+            policy.max_queue_wait_seconds = queue_wait.min(MAX_QUEUE_WAIT_SECONDS).max(1);
+        }
+        if let Some(guard) = self.configured_auto_retry_elapsed_guard_seconds {
+            policy.auto_retry_elapsed_guard_seconds =
+                guard.min(MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS).max(1);
         }
         policy
     }

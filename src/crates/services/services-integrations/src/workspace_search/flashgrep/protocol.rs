@@ -270,6 +270,7 @@ pub(crate) struct NotificationEnvelope {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)] // response/notification payloads differ structurally
 pub(crate) enum ServerMessage {
     Response(ResponseEnvelope),
     Notification(NotificationEnvelope),

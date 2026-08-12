@@ -901,6 +901,9 @@ pub(crate) struct PeerHostState {
     pub(crate) agent_runtime: AgentRuntime,
     pub(crate) local_workspace_snapshot: Arc<dyn bitfun_runtime_ports::LocalWorkspaceSnapshotPort>,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
+    pub(crate) account_runtime:
+        Arc<bitfun_core::service::remote_connect::account_runtime::AccountRuntime>,
+    pub(crate) account_routing: Arc<crate::account::CliAccountRoutingHost>,
     pub(crate) turns: PeerTurnTracker,
     pub(crate) workspace_service: Arc<WorkspaceService>,
     pub(crate) filesystem_service: Arc<FileSystemService>,
@@ -1072,6 +1075,7 @@ fn spawn_turn_cancellation(
 
 static PEER_HOST_STATE: OnceLock<PeerHostState> = OnceLock::new();
 
+#[allow(clippy::result_large_err)] // returns the rejected state itself; boxing would require callers to reconstruct it
 pub(crate) fn set_peer_host_state(state: PeerHostState) -> Result<(), PeerHostState> {
     PEER_HOST_STATE.set(state)
 }

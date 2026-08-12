@@ -33,12 +33,6 @@ import {
   type ExternalIntegrationAccess,
   type ExternalIntegrationMode,
   type ExternalIntegrationPolicyMutation,
-  type ExternalApplicationControlActionV2,
-  type ExternalApplicationControlResultV2,
-  type ExternalApplicationOwnerGenerationV2,
-  type ExternalApplicationReviewItemResultV2,
-  type ExternalApplicationReviewItemV2,
-  type ExternalApplicationSnapshotV2,
   type ExternalMcpDefinition,
   type ExternalSourceCatalogSnapshot,
   type ExternalSourceRecoveryAction,
@@ -69,7 +63,6 @@ import {
   ExternalCommandConflicts,
   ExternalSourceSection,
   buildExternalApplicationsView,
-  buildExternalApplicationsViewV2,
   type ExternalApplicationView,
 } from './external-sources';
 import './ExternalSourcesConfig.scss';
@@ -134,32 +127,20 @@ type SnapshotLoadResult =
   | { status: 'ignored' }
   | { status: 'error' };
 
-type ApplicationReviewState = {
-  reviewId: string;
-  preferenceRevision: number;
-  loading: boolean;
-  items: ExternalApplicationReviewItemV2[];
-  expectedGenerations: ExternalApplicationOwnerGenerationV2[];
-  nextCursor?: string;
-  totalCount: number;
-  recommendedCount: number;
-  maxSelectionCount: number;
-  overrides: Record<string, boolean>;
-  itemResults: ExternalApplicationReviewItemResultV2[];
-  submitted: boolean;
-};
-
-let applicationOperationSequence = 0;
-
-function nextApplicationOperationId(): string {
-  const randomId = globalThis.crypto?.randomUUID?.();
-  return randomId
-    ? `external-app-${randomId}`
-    : `external-app-${Date.now()}-${++applicationOperationSequence}`;
+function sourceEcosystemId(
+  snapshot: ExternalSourceCatalogSnapshot | null,
+  source: { providerId: string; sourceId: string } | undefined,
+): string | undefined {
+  if (!snapshot || !source) return undefined;
+  return snapshot.sources.find((candidate) => (
+    candidate.record.key.providerId === source.providerId
+    && candidate.record.key.sourceId === source.sourceId
+  ))?.record.ecosystemId;
 }
 
-function applicationReviewItemKey(item: ExternalApplicationReviewItemV2): string {
-  return `${item.itemRef.kind}:${item.itemRef.stableId}`;
+function onlyEcosystemId(values: Array<string | undefined>): string | undefined {
+  const ecosystems = new Set(values.filter((value): value is string => Boolean(value)));
+  return ecosystems.size === 1 ? ecosystems.values().next().value : undefined;
 }
 
 function abbreviatedLocation(location: string): string {
@@ -425,11 +406,9 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
   const [agentChangeNotice, setAgentChangeNotice] = useState<AgentChangeNotice | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [hooksOpen, setHooksOpen] = useState(initialFocus === 'hooks');
-  const [applicationReviewState, setApplicationReviewState] = useState<ApplicationReviewState | null>(null);
   const hooksSummaryRef = useRef<HTMLElement>(null);
   const handledHookFocusRequestRef = useRef<number | null>(null);
   const snapshotRef = useRef<ExternalSourceCatalogSnapshot | null>(null);
-  const applicationSnapshotRef = useRef<ExternalApplicationSnapshotV2 | null>(null);
   const agentChangeNoticeRef = useRef<AgentChangeNotice | null>(null);
   const requestSequence = useRef(0);
   const acceptedSequence = useRef(0);
@@ -451,13 +430,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     snapshot: ExternalSourceCatalogSnapshot;
   } | null>(null);
   const snapshot = snapshotState?.scope === requestScope ? snapshotState.snapshot : null;
-  const [applicationSnapshotState, setApplicationSnapshotState] = useState<{
-    scope: string;
-    snapshot: ExternalApplicationSnapshotV2;
-  } | null>(null);
-  const applicationSnapshot = applicationSnapshotState?.scope === requestScope
-    ? applicationSnapshotState.snapshot
-    : null;
   const requestScopeRef = useRef(requestScope);
   useLayoutEffect(() => {
     if (requestScopeRef.current !== requestScope) {
@@ -465,7 +437,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       requestSequence.current += 1;
       acceptedSequence.current = requestSequence.current;
       snapshotRef.current = null;
-      applicationSnapshotRef.current = null;
       agentChangeNoticeRef.current = null;
     }
   }, [requestScope]);
@@ -567,23 +538,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     return true;
   }, [applySnapshot]);
 
-  const acceptApplicationSnapshot = useCallback((
-    next: ExternalApplicationSnapshotV2,
-    scope: string,
-    sequence: number,
-  ): boolean => {
-    if (requestScopeRef.current !== scope || sequence < acceptedSequence.current) return false;
-    if (Array.from(pendingMutations.current.values()).includes(scope)) return false;
-    const current = applicationSnapshotRef.current;
-    if (current?.executionDomainId === next.executionDomainId
-      && (next.refreshGeneration < current.refreshGeneration
-        || next.preferenceRevision < current.preferenceRevision)) return false;
-    acceptedSequence.current = sequence;
-    applicationSnapshotRef.current = next;
-    setApplicationSnapshotState({ scope, snapshot: next });
-    return true;
-  }, []);
-
   const acceptMutationSnapshot = useCallback((
     next: ExternalSourceCatalogSnapshot,
     scope: string,
@@ -608,26 +562,10 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       setRefreshing(true);
     }
     try {
-      const surface = await externalSourcesAPI.getApplicationSurface(workspacePath, forceRefresh);
-      if (surface.protocol === 'v1') {
-        if (!acceptReadSnapshot(surface.snapshot, scope, sequence)) return { status: 'ignored' };
-        applicationSnapshotRef.current = null;
-        setApplicationSnapshotState(null);
-        setError(null);
-        return { status: 'accepted', snapshot: surface.snapshot };
-      }
-      if (!acceptApplicationSnapshot(surface.snapshot, scope, sequence)) {
-        return { status: 'ignored' };
-      }
+      const next = await externalSourcesAPI.getSnapshot(workspacePath, forceRefresh);
+      if (!acceptReadSnapshot(next, scope, sequence)) return { status: 'ignored' };
       setError(null);
-      void externalSourcesAPI.getSnapshot(workspacePath, false)
-        .then((legacySnapshot) => {
-          acceptReadSnapshot(legacySnapshot, scope, sequence);
-        })
-        .catch(() => {
-          // The V1 catalog is secondary on a V2 Host; the application home remains usable.
-        });
-      return { status: 'accepted' };
+      return { status: 'accepted', snapshot: next };
     } catch (loadError) {
       if (requestScopeRef.current !== scope
         || sequence < acceptedSequence.current
@@ -646,13 +584,10 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         }
       }
     }
-  }, [acceptApplicationSnapshot, acceptReadSnapshot, requestScope, workspacePath]);
+  }, [acceptReadSnapshot, requestScope, workspacePath]);
 
   useEffect(() => {
     setSnapshotState(null);
-    setApplicationSnapshotState(null);
-    applicationSnapshotRef.current = null;
-    setApplicationReviewState(null);
     snapshotRef.current = null;
     agentChangeNoticeRef.current = null;
     setAgentChangeNotice(null);
@@ -727,259 +662,10 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     () => snapshot ? catalogDiagnosticsWithoutSourceDuplicates(snapshot, sourceGroups) : [],
     [snapshot, sourceGroups],
   );
-  const applicationsView = useMemo(
-    () => applicationSnapshot
-      ? buildExternalApplicationsViewV2(applicationSnapshot)
-      : buildExternalApplicationsView(snapshot, sourceGroups, policyScope),
-    [applicationSnapshot, policyScope, snapshot, sourceGroups],
+  const applications = useMemo(
+    () => buildExternalApplicationsView(snapshot, policyScope),
+    [policyScope, snapshot],
   );
-  const applicationTargetScope = applicationSnapshot?.workspaceScopeId
-    ? 'workspace_override'
-    : 'user_default';
-  const canMutateApplicationScope = applicationSnapshot
-    ? applicationSnapshot.hostCapabilities.canMutate
-      && (applicationTargetScope === 'workspace_override'
-        ? applicationSnapshot.hostCapabilities.canManageWorkspaceOverride
-        : applicationSnapshot.hostCapabilities.canManageUserDefault)
-    : false;
-
-  const loadApplicationReviewPage = useCallback(async (cursor?: string) => {
-    const current = applicationSnapshot;
-    const summary = current?.reviewSummary;
-    if (!current || !summary || !current.hostCapabilities.canReadReview) return;
-    const scope = requestScope;
-    const append = cursor !== undefined;
-    const reviewId = append ? applicationReviewState?.reviewId : summary.reviewId;
-    if (!reviewId) return;
-    const preferenceRevision = append
-      ? applicationReviewState?.preferenceRevision ?? current.preferenceRevision
-      : current.preferenceRevision;
-    const expectedGenerations = append
-      ? applicationReviewState?.expectedGenerations ?? []
-      : [];
-    setApplicationReviewState((previous) => ({
-      reviewId,
-      preferenceRevision,
-      loading: true,
-      items: append && previous?.reviewId === reviewId ? previous.items : [],
-      expectedGenerations,
-      nextCursor: append ? previous?.nextCursor : undefined,
-      totalCount: summary.totalCount,
-      recommendedCount: summary.recommendationSummary.recommendedCount,
-      maxSelectionCount: summary.maxSelectionCount,
-      overrides: append && previous?.reviewId === reviewId ? previous.overrides : {},
-      itemResults: append && previous?.reviewId === reviewId ? previous.itemResults : [],
-      submitted: append && previous?.reviewId === reviewId ? previous.submitted : false,
-    }));
-    try {
-      const page = await externalSourcesAPI.getApplicationReviewPage(workspacePath, {
-        schemaVersion: 2,
-        executionDomainId: current.executionDomainId,
-        ...(current.workspaceScopeId ? { workspaceScopeId: current.workspaceScopeId } : {}),
-        targetScope: current.workspaceScopeId ? 'workspace_override' : 'user_default',
-        reviewId,
-        preferenceRevision,
-        expectedGenerations,
-        ...(cursor ? { cursor } : {}),
-        pageSize: 64,
-      });
-      let authoritativeSummary = summary;
-      let reboundSnapshot: ExternalApplicationSnapshotV2 | null = null;
-      if (!append && page.reviewId !== summary.reviewId) {
-        const surface = await externalSourcesAPI.getApplicationSurface(workspacePath, false);
-        if (surface.protocol !== 'v2') {
-          throw new Error('The current Host no longer supports application review.');
-        }
-        const reboundSummary = surface.snapshot.reviewSummary;
-        if (!reboundSummary
-          || surface.snapshot.executionDomainId !== page.executionDomainId
-          || surface.snapshot.workspaceScopeId !== page.workspaceScopeId
-          || surface.snapshot.preferenceRevision !== page.preferenceRevision
-          || reboundSummary.reviewId !== page.reviewId) {
-          throw new Error('The application review changed while it was opening.');
-        }
-        authoritativeSummary = reboundSummary;
-        reboundSnapshot = surface.snapshot;
-      }
-      if (requestScopeRef.current !== scope) return;
-      const latest = applicationSnapshotRef.current;
-      if (!latest
-        || latest.preferenceRevision !== preferenceRevision
-        || latest.reviewSummary?.reviewId !== summary.reviewId
-        || Array.from(pendingMutations.current.values()).includes(scope)) return;
-      if (reboundSnapshot
-        && !acceptApplicationSnapshot(reboundSnapshot, scope, acceptedSequence.current)) return;
-      setApplicationReviewState((previous) => {
-        if (!previous || (append && previous.reviewId !== page.reviewId)) return previous;
-        const items = new Map(
-          (append ? previous.items : []).map((item) => [applicationReviewItemKey(item), item]),
-        );
-        page.items.forEach((item) => items.set(applicationReviewItemKey(item), item));
-        return {
-          ...previous,
-          reviewId: page.reviewId,
-          preferenceRevision: page.preferenceRevision,
-          loading: false,
-          items: Array.from(items.values()),
-          expectedGenerations: page.expectedGenerations,
-          nextCursor: page.nextCursor,
-          totalCount: page.totalCount,
-          recommendedCount: append
-            ? previous.recommendedCount
-            : authoritativeSummary.recommendationSummary.recommendedCount,
-          maxSelectionCount: append
-            ? previous.maxSelectionCount
-            : authoritativeSummary.maxSelectionCount,
-        };
-      });
-    } catch (reviewError) {
-      if (requestScopeRef.current !== scope) return;
-      setApplicationReviewState((previous) => (
-        append && previous ? { ...previous, loading: false } : null
-      ));
-      setError({ kind: 'load', ...externalOperationErrorFacts(reviewError) });
-    }
-  }, [acceptApplicationSnapshot, applicationReviewState?.expectedGenerations,
-    applicationReviewState?.preferenceRevision, applicationReviewState?.reviewId,
-    applicationSnapshot, requestScope, workspacePath]);
-
-  useEffect(() => {
-    setApplicationReviewState((previous) => {
-      if (!previous || previous.submitted) return previous;
-      return applicationSnapshot?.reviewSummary?.reviewId === previous.reviewId
-        && applicationSnapshot.preferenceRevision === previous.preferenceRevision
-        ? previous
-        : null;
-    });
-  }, [applicationSnapshot?.preferenceRevision, applicationSnapshot?.reviewSummary?.reviewId]);
-
-  const selectedApplicationReviewCount = useMemo(() => {
-    if (!applicationReviewState) return 0;
-    let selectedCount = applicationReviewState.recommendedCount;
-    Object.entries(applicationReviewState.overrides).forEach(([key, selected]) => {
-      const item = applicationReviewState.items.find(
-        (candidate) => applicationReviewItemKey(candidate) === key,
-      );
-      if (item && selected !== item.recommended) selectedCount += selected ? 1 : -1;
-    });
-    return selectedCount;
-  }, [applicationReviewState]);
-
-  const setApplicationReviewItemSelected = useCallback((
-    item: ExternalApplicationReviewItemV2,
-    selected: boolean,
-  ) => {
-    const maximum = applicationReviewState?.maxSelectionCount ?? 0;
-    if (selected && selectedApplicationReviewCount >= maximum) {
-      setOperationStatus(t('applications.review.selectionLimit'));
-      return;
-    }
-    const key = applicationReviewItemKey(item);
-    setApplicationReviewState((previous) => {
-      if (!previous) return previous;
-      const overrides = { ...previous.overrides };
-      if (selected === item.recommended) delete overrides[key];
-      else overrides[key] = selected;
-      return { ...previous, overrides };
-    });
-  }, [applicationReviewState?.maxSelectionCount, selectedApplicationReviewCount, t]);
-
-  const runApplicationAction = useCallback(async (
-    action: ExternalApplicationControlActionV2,
-    mutationKey: string,
-  ): Promise<ExternalApplicationControlResultV2 | null> => {
-    const current = applicationSnapshot;
-    if (!current || !canMutateApplicationScope) return null;
-    const scope = requestScope;
-    const sequence = ++requestSequence.current;
-    pendingMutations.current.set(sequence, scope);
-    latestMutationByScope.current.set(scope, sequence);
-    activeMutation.current = { scope, sequence };
-    setBusyKey(mutationKey);
-    setOperationStatus(null);
-    setError(null);
-    let result: ExternalApplicationControlResultV2 | null = null;
-    try {
-      result = await externalSourcesAPI.applyApplicationAction(workspacePath, {
-        schemaVersion: 2,
-        executionDomainId: current.executionDomainId,
-        ...(current.workspaceScopeId ? { workspaceScopeId: current.workspaceScopeId } : {}),
-        targetScope: current.workspaceScopeId ? 'workspace_override' : 'user_default',
-        operationId: nextApplicationOperationId(),
-        expectedPreferenceRevision: current.preferenceRevision,
-        action,
-      });
-      if (requestScopeRef.current === scope
-        && (latestMutationByScope.current.get(scope) ?? sequence) <= sequence) {
-        acceptedSequence.current = Math.max(acceptedSequence.current, sequence);
-        const partial = result.itemResults.some((item) => item.outcome !== 'applied');
-        setOperationStatus(t(`applications.review.outcome.${partial ? 'partial' : result.outcome}`));
-      }
-    } catch (mutationError) {
-      if (requestScopeRef.current === scope) {
-        setError({ kind: 'mutation', ...externalOperationErrorFacts(mutationError) });
-      }
-    } finally {
-      pendingMutations.current.delete(sequence);
-      if (activeMutation.current?.scope === scope
-        && activeMutation.current.sequence === sequence) {
-        activeMutation.current = null;
-        setBusyKey(null);
-      }
-    }
-    if (result && requestScopeRef.current === scope) await loadSnapshot(true, false);
-    return result;
-  }, [applicationSnapshot, canMutateApplicationScope, loadSnapshot, requestScope, t, workspacePath]);
-
-  const submitApplicationReview = useCallback(async (
-    selectionBaseline: 'recommended' | 'none',
-    immediateSelection?: { item: ExternalApplicationReviewItemV2; selected: boolean },
-  ) => {
-    const current = applicationReviewState;
-    if (!current) return;
-    const itemByKey = new Map(
-      current.items.map((item) => [applicationReviewItemKey(item), item]),
-    );
-    const effectiveOverrides = new Map(Object.entries(current.overrides));
-    if (immediateSelection) {
-      effectiveOverrides.set(
-        applicationReviewItemKey(immediateSelection.item),
-        immediateSelection.selected,
-      );
-    }
-    const selectionOverrides = selectionBaseline === 'recommended'
-      ? Array.from(effectiveOverrides.entries()).flatMap(([key, selected]) => {
-          const item = itemByKey.get(key);
-          return item ? [{ itemRef: item.itemRef, selected }] : [];
-        })
-      : [];
-    setApplicationReviewState((previous) => previous
-      ? { ...previous, submitted: true }
-      : previous);
-    const result = await runApplicationAction({
-      type: 'submit_application_review',
-      reviewId: current.reviewId,
-      expectedGenerations: current.expectedGenerations,
-      selectionBaseline,
-      selectionOverrides,
-    }, 'application-review');
-    if (result) {
-      setApplicationReviewState((previous) => result.outcome === 'stale'
-        ? null
-        : previous
-          ? {
-              ...previous,
-              itemResults: result.itemResults,
-              nextCursor: undefined,
-              submitted: true,
-            }
-          : previous);
-    } else {
-      setApplicationReviewState((previous) => previous
-        ? { ...previous, submitted: false }
-        : previous);
-    }
-  }, [applicationReviewState, runApplicationAction]);
 
   const commandConflicts = useMemo(
     () => unresolvedFirst(snapshot?.commandConflicts ?? []),
@@ -1011,12 +697,9 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     canRevealSourceLocation: false,
   };
   const control = snapshot?.control;
-  const canRefresh = applicationSnapshot?.hostCapabilities.canRefresh
-    ?? hostCapabilities.canRefresh;
-  const safeModeEnabled = applicationSnapshot?.safeMode ?? control?.safeMode;
-  const canSetSafeMode = applicationSnapshot
-    ? canMutateApplicationScope && applicationSnapshot.hostCapabilities.canSetSafeMode
-    : hostCapabilities.canSetSafeMode;
+  const canRefresh = hostCapabilities.canRefresh;
+  const safeModeEnabled = control?.safeMode;
+  const canSetSafeMode = hostCapabilities.canSetSafeMode;
   const policyStatus = snapshot?.integrationPolicy?.status;
   const policyCompatible = policyStatus === 'compatible';
   const policyIncompatible = policyStatus === 'incompatible_schema';
@@ -1025,9 +708,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     && !hostCapabilities.canManageSources
     && !hostCapabilities.canApproveRuntime
     && !hostCapabilities.canSetSafeMode;
-  const applicationHostReadOnly = Boolean(applicationSnapshot)
-    && !canMutateApplicationScope
-    && !applicationSnapshot?.hostCapabilities.canSetSafeMode;
   const remoteWorkspace = workspace?.workspaceKind === WorkspaceKind.Remote;
   const readOnlyHintKey = remoteWorkspace
     ? 'policy.remoteReadOnlyHint'
@@ -1133,11 +813,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
   }, [runMutation, workspacePath]);
 
   const setSafeMode = useCallback(async (enabled: boolean) => {
-    if (applicationSnapshot) {
-      if (!canSetSafeMode) return;
-      await runApplicationAction({ type: 'set_safe_mode', enabled }, 'external-safe-mode');
-      return;
-    }
     const currentSnapshot = snapshotRef.current;
     if (!currentSnapshot?.control) return;
     await runMutation(
@@ -1153,7 +828,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       'canSetSafeMode',
       'none',
     );
-  }, [applicationSnapshot, canSetSafeMode, runApplicationAction, runMutation, t, workspacePath]);
+  }, [runMutation, t, workspacePath]);
 
   const chooseConflict = useCallback(async (conflictKey: string, candidateId: string) => {
     if (!snapshot) return;
@@ -1452,13 +1127,6 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     application: ExternalApplicationView,
     enabled: boolean,
   ) => {
-    if (applicationSnapshot && application.applicationId) {
-      await runApplicationAction({
-        type: enabled ? 'connect_application' : 'disconnect_application',
-        applicationId: application.applicationId,
-      }, `application:${application.applicationId}`);
-      return;
-    }
     if (!snapshot) return;
     const storedPolicy = ecosystemPolicies.find(
       (ecosystem) => ecosystem.ecosystemId === application.ecosystemId,
@@ -1475,9 +1143,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
       mode,
     });
   }, [
-    applicationSnapshot,
     ecosystemPolicies,
-    runApplicationAction,
     snapshot,
     updatePolicy,
   ]);
@@ -1514,10 +1180,16 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     );
   }, [requestScope, runMutation, t]);
 
-  const scrollToFirstAttentionItem = useCallback(() => {
-    const target = document.querySelector<HTMLElement>(
-      '[data-external-attention="true"]',
-    );
+  const scrollToFirstAttentionItem = useCallback((ecosystemId?: string) => {
+    const matchingEcosystemElements = ecosystemId
+      ? Array.from(document.querySelectorAll<HTMLElement>('[data-external-ecosystem]'))
+          .filter((element) => element.dataset.externalEcosystem === ecosystemId)
+      : [];
+    const target = ecosystemId
+      ? matchingEcosystemElements.find(
+          (element) => element.dataset.externalAttention === 'true',
+        ) ?? matchingEcosystemElements[0]
+      : document.querySelector<HTMLElement>('[data-external-attention="true"]');
     if (!target) return;
     target.scrollIntoView({ block: 'center', behavior: 'smooth' });
     if (target instanceof HTMLDetailsElement) {
@@ -1534,10 +1206,21 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     target.focus();
   }, []);
 
-  const openAdvanced = useCallback(() => {
+  const openAdvancedAttention = useCallback((ecosystemId: string) => {
     setAdvancedOpen(true);
-    window.requestAnimationFrame(scrollToFirstAttentionItem);
+    setExpandedEcosystems((current) => new Set(current).add(ecosystemId));
+    window.requestAnimationFrame(() => scrollToFirstAttentionItem(ecosystemId));
   }, [scrollToFirstAttentionItem]);
+
+  const openAdvancedPolicy = useCallback(() => {
+    setAdvancedOpen(true);
+    window.requestAnimationFrame(() => {
+      const policyCard = document.querySelector<HTMLElement>('[data-bf-part="policyCard"]');
+      if (!policyCard) return;
+      policyCard.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      policyCard.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus();
+    });
+  }, []);
 
   const revealSourceLocation = useCallback(async (sourceKey: string): Promise<boolean> => {
     const scope = requestScope;
@@ -1852,7 +1535,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             key={action.type}
                             size="small"
                             variant="secondary"
-                            onClick={scrollToFirstAttentionItem}
+                            onClick={() => scrollToFirstAttentionItem()}
                           >
                             {t(`recoveryActions.${action.type}`)}
                           </Button>
@@ -1879,7 +1562,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 ) : null}
               </div>
             ) : null}
-            {(snapshot && hostReadOnly) || applicationHostReadOnly ? (
+            {snapshot && hostReadOnly ? (
               <div className="bitfun-external-sources-config__host-mode" data-bf-component="external-sources-config" data-bf-part="hostMode" role="status">
                 <ShieldCheck size={16} aria-hidden="true" />
                 <span>{t(readOnlyHintKey)}</span>
@@ -1903,53 +1586,20 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
               </div>
             ) : null}
             {safeModeEnabled ? safeModeSection : null}
-            {snapshot || applicationSnapshot ? (
+            {snapshot ? (
               <ExternalAppsOverview
-                applications={applicationsView.applications}
+                applications={applications}
                 t={t}
-                totalAttentionCount={applicationsView.totalAttentionCount}
                 busy={busyKey !== null}
-                canMutate={applicationSnapshot
-                  ? canMutateApplicationScope
-                  : policyCompatible && hostCapabilities.canMutatePolicy}
-                policiesEnabled={applicationSnapshot ? true : selectedPolicyEnabled}
+                canMutate={policyCompatible && hostCapabilities.canMutatePolicy}
+                policiesEnabled={selectedPolicyEnabled}
                 onToggle={(application, enabled) => void toggleApplication(application, enabled)}
-                onOpenAdvanced={openAdvanced}
-                onOpenReview={applicationSnapshot?.reviewSummary
-                  ? () => void loadApplicationReviewPage()
-                  : undefined}
-                review={applicationSnapshot && applicationReviewState ? {
-                  open: true,
-                  loading: applicationReviewState.loading,
-                  items: applicationReviewState.items,
-                  selected: applicationReviewState.overrides,
-                  selectedCount: selectedApplicationReviewCount,
-                  recommendedCount: applicationReviewState.recommendedCount,
-                  totalCount: applicationReviewState.totalCount,
-                  maxSelectionCount: applicationReviewState.maxSelectionCount,
-                  applicationNames: applicationSnapshot.applications
-                    .filter((application) => application.pendingReviewCount > 0)
-                    .map((application) => application.displayName),
-                  nextCursor: applicationReviewState.nextCursor,
-                  itemResults: applicationReviewState.itemResults,
-                  completed: applicationReviewState.submitted,
-                  canSubmit: canMutateApplicationScope,
-                  onClose: () => setApplicationReviewState(null),
-                  onToggleItem: setApplicationReviewItemSelected,
-                  onLoadMore: () => {
-                    if (applicationReviewState.nextCursor) {
-                      void loadApplicationReviewPage(applicationReviewState.nextCursor);
-                    }
-                  },
-                  onSubmit: (baseline, immediateSelection) => void submitApplicationReview(
-                    baseline,
-                    immediateSelection,
-                  ),
-                } : undefined}
+                onOpenAttention={openAdvancedAttention}
+                onOpenPolicy={openAdvancedPolicy}
               />
             ) : null}
             {hookManagement}
-            {snapshot || applicationSnapshot ? (
+            {snapshot ? (
               <details
                 className="bitfun-external-sources-config__advanced"
                 open={advancedOpen}
@@ -1978,7 +1628,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     <button
                       type="button"
                       aria-controls="external-integration-attention-region"
-                      onClick={scrollToFirstAttentionItem}
+                      onClick={() => scrollToFirstAttentionItem()}
                     >
                       {t('policy.attentionSummary', {
                         count: externalAttentionCount,
@@ -2101,7 +1751,10 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                   if (isOpencode) {
                     return (
                       <React.Fragment key={ecosystem.ecosystemId}>
-                        <div className="bitfun-external-sources-config__opencode-card">
+                        <div
+                          className="bitfun-external-sources-config__opencode-card"
+                          data-external-ecosystem={ecosystem.ecosystemId}
+                        >
                           <div className="bitfun-external-sources-config__opencode-summary">
                             <div>
                               <strong>{t('opencode.title')}</strong>
@@ -2181,6 +1834,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                       data-bf-component="external-sources-config"
                                       data-bf-part="notice"
                                       data-external-attention="true"
+                                      data-external-ecosystem={group.ecosystemId}
                                     >
                                       <summary>
                                         {t('diagnostics.sourceSummary', {
@@ -2310,7 +1964,12 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                   }
                   return (
                   <React.Fragment key={ecosystem.ecosystemId}>
-                <div className="bitfun-external-sources-config__ecosystem-card" data-bf-component="external-sources-config" data-bf-part="ecosystemCard">
+                <div
+                  className="bitfun-external-sources-config__ecosystem-card"
+                  data-bf-component="external-sources-config"
+                  data-bf-part="ecosystemCard"
+                  data-external-ecosystem={ecosystem.ecosystemId}
+                >
                   <div className="bitfun-external-sources-config__ecosystem-heading" data-bf-component="external-sources-config" data-bf-part="ecosystemHeading">
                     <div>
                       <div className="bitfun-external-sources-config__ecosystem-name" data-bf-component="external-sources-config" data-bf-part="ecosystemName">
@@ -2501,6 +2160,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       className="bitfun-external-sources-config__tool-card"
                       data-bf-component="external-sources-config"
                       data-bf-part="toolCard"
+                      data-external-attention="true"
+                      data-external-ecosystem={source?.record.ecosystemId}
                       key={request.decisionKey}
                     >
                     <div className="bitfun-external-sources-config__conflict-title" data-bf-component="external-sources-config" data-bf-part="toolTitle">
@@ -2609,6 +2270,9 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             data-bf-component="external-sources-config"
                             data-bf-part="state"
                             data-external-attention={state === 'approval_required' ? 'true' : undefined}
+                            data-external-ecosystem={state === 'approval_required'
+                              ? source?.record.ecosystemId
+                              : undefined}
                           >
                             {t(`mcpState.${state}`)}
                           </span>
@@ -2717,6 +2381,11 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     data-bf-part="conflict"
                     key={conflict.conflictKey}
                     data-external-attention={!conflict.selectedCandidateId ? 'true' : undefined}
+                    data-external-ecosystem={onlyEcosystemId(
+                      conflict.candidates.map((candidate) => (
+                        sourceEcosystemId(snapshot, candidate.source)
+                      )),
+                    )}
                   >
                     <div className="bitfun-external-sources-config__conflict-title" data-bf-component="external-sources-config" data-bf-part="conflictTitle">
                       {t('mcpConflicts.serverName', { name: conflict.serverName })}
@@ -3030,6 +2699,14 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             data-bf-component="external-sources-config"
                             data-bf-part="state"
                             data-external-attention={state === 'approval_required' ? 'true' : undefined}
+                            data-external-ecosystem={state === 'approval_required'
+                              ? agent.sourceKeys
+                                  .map((key) => snapshot.sources.find((source) => (
+                                    key.providerId === source.record.key.providerId
+                                    && key.sourceId === source.record.key.sourceId
+                                  ))?.record.ecosystemId)
+                                  .find(Boolean)
+                              : undefined}
                           >
                             {t(`agentState.${state}`)}
                           </span>
@@ -3305,6 +2982,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       className="bitfun-external-sources-config__tool-card"
                       data-bf-component="external-sources-config"
                       data-bf-part="toolCard"
+                      data-external-attention="true"
+                      data-external-ecosystem={source?.record.ecosystemId}
                       key={request.decisionKey}
                     >
                       <div className="bitfun-external-sources-config__conflict-title" data-bf-component="external-sources-config" data-bf-part="toolTitle">
@@ -3597,6 +3276,11 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       data-bf-part="conflict"
                       key={conflict.conflictKey}
                       data-external-attention={!conflict.selectedCandidateId ? 'true' : undefined}
+                      data-external-ecosystem={onlyEcosystemId(
+                        conflict.candidates.map((candidate) => (
+                          sourceEcosystemId(snapshot, candidate.source)
+                        )),
+                      )}
                     >
                     <div className="bitfun-external-sources-config__conflict-title" data-bf-component="external-sources-config" data-bf-part="conflictTitle">
                       {t('toolConflicts.toolName', { name: conflict.toolName })}

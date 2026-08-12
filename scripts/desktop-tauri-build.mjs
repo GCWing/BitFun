@@ -41,6 +41,27 @@ async function main() {
   Object.assign(process.env, productBuildEnvironment(resolution));
   console.log(`[product] ${resolution.assembly.member} ${resolution.assembly.assemblyDigest}`);
 
+  // L2-P2-2：构建前校验。tauri.conf.json 将 `../../mobile-web/dist` 映射为
+  // bundle 资源，dist 缺失会让 cargo check/tauri build 以令人困惑的
+  // "resource path doesn't exist" 失败（exit 101）。这里复用
+  // check-build-prereqs.mjs 的检查逻辑在真正启动构建前拦截缺失前置条件，
+  // 输出明确错误与修复命令（pnpm run prepare:mobile-web）。
+  const prereqs = await import('./check-build-prereqs.mjs');
+  const { errors: prereqErrors, warnings: prereqWarnings } = prereqs.runChecks(ROOT);
+  for (const warning of prereqWarnings) {
+    console.warn(`[build-prereq][WARN] ${warning.name}: ${warning.message}`);
+  }
+  if (prereqErrors.length > 0) {
+    console.error('Build prerequisite check failed before tauri build:\n');
+    for (const error of prereqErrors) {
+      console.error(`  [FAIL] ${error.name}: ${error.message}`);
+      if (error.fix) {
+        console.error(`         Fix: ${error.fix.join(' ')}`);
+      }
+    }
+    process.exit(1);
+  }
+
   const flashgrepBinary = ensureFlashgrepBinary();
   process.env.FLASHGREP_DAEMON_BIN = flashgrepBinary;
 

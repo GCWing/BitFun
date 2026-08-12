@@ -9,7 +9,7 @@ import {
 } from './EventHandlerModule';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
-import { FlowChatStore } from '../../store/FlowChatStore';
+import { FlowChatStore, isSessionConfirmedDeleted, markSessionsConfirmedDeleted } from '../../store/FlowChatStore';
 import { notificationService } from '../../../shared/notification-system/services/NotificationService';
 import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
 import type { FlowChatContext } from './types';
@@ -23,6 +23,14 @@ vi.mock('../../../shared/notification-system/services/NotificationService', () =
     warning: vi.fn(),
     success: vi.fn(),
   },
+}));
+
+// EventHandlerModule dynamically imports btwSessionPane when a session is
+// deleted so the deleted-thread canvas placeholder is closed. Mock it so the
+// dynamic import resolves synchronously in tests instead of loading the whole
+// canvas store after the test environment has been torn down.
+vi.mock('../../services/btwSessionPane', () => ({
+  closeBtwSessionInAuxPane: vi.fn(),
 }));
 
 describe('isAppWindowFocused', () => {
@@ -345,6 +353,66 @@ describe('subagent parent helpers', () => {
     expect(
       FlowChatStore.getInstance().getState().sessions.get('review-child')?.focusedReviewDisplayLabel,
     ).toBe('Authentication boundary');
+  });
+
+  it('does not resurrect a confirmed-deleted child session on SubagentSessionLinked', () => {
+    const task = makeTaskTool('task-deleted');
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        'parent-session',
+        {
+          sessionId: 'parent-session',
+          title: 'Parent Session',
+          dialogTurns: [{
+            id: 'parent-turn',
+            sessionId: 'parent-session',
+            userMessage: { id: 'user-1', content: 'Run', timestamp: 900 },
+            modelRounds: [makeRound('round-1', [task])],
+            status: 'processing',
+            startTime: 900,
+          }],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 800,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+          workspacePath: 'D:\\workspace\\repo',
+        } as Session,
+      ]]),
+      activeSessionId: 'parent-session',
+    }));
+    markSessionsConfirmedDeleted(['deleted-child-ghost']);
+
+    __test_only__.handleSubagentSessionLinked(
+      { currentWorkspacePath: 'D:\\workspace\\repo' } as FlowChatContext,
+      {
+        sessionId: 'deleted-child-ghost',
+        parentSessionId: 'parent-session',
+        parentDialogTurnId: 'parent-turn',
+        parentToolCallId: 'task-deleted',
+        agentType: 'Executor',
+      },
+    );
+
+    expect(
+      FlowChatStore.getInstance().getState().sessions.has('deleted-child-ghost'),
+    ).toBe(false);
+  });
+
+  it('does not create a placeholder shell for a confirmed-deleted session on DialogTurnStarted', () => {
+    markSessionsConfirmedDeleted(['deleted-turn-ghost']);
+
+    __test_only__.handleDialogTurnStarted(createFlowChatContext(), {
+      sessionId: 'deleted-turn-ghost',
+      turnId: 'ghost-turn-1',
+      turnIndex: 0,
+      userInput: 'Ghost input',
+      userMessageMetadata: { kind: 'user_dialog' },
+    });
+
+    expect(FlowChatStore.getInstance().getState().sessions.has('deleted-turn-ghost'))
+      .toBe(false);
   });
 
   it('stores an absolute parent Turn index when linking from a partial restored tail', () => {
@@ -858,6 +926,7 @@ function createFlowChatContext(): FlowChatContext {
       getBufferSize: vi.fn(() => 0),
       flushNow: vi.fn(),
       clear: vi.fn(),
+      add: vi.fn(),
     } as any,
     pendingTurnCompletions: new Map(),
     pendingHistoryLoads: new Map(),
@@ -1128,6 +1197,110 @@ describe('handleDialogTurnComplete', () => {
       ?.dialogTurns[0];
     expect(finalizedTurn?.status).toBe('completed');
     expect(finalizedTurn?.endTime).toBe(eventOwnedEndTime);
+  });
+});
+
+describe('handleTextChunk', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('creates an ACP flow session placeholder when a text chunk arrives for an unknown acp_ flow session', () => {
+    const sessionId = 'acp_codebuddy_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b';
+    const turnId = 'turn-1';
+    const context = createFlowChatContext();
+
+    __test_only__.handleTextChunk(context, {
+      sessionId,
+      turnId,
+      roundId: 'round-1',
+      text: 'hello from ACP',
+    } as any);
+
+    const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
+    expect(session).toBeDefined();
+    expect(session?.config?.agentType).toBe('acp:codebuddy');
+  });
+
+  it('keeps dropping text chunks for a non-ACP session missing from the store', () => {
+    const sessionId = 'regular-session';
+    const turnId = 'turn-1';
+    const context = createFlowChatContext();
+
+    __test_only__.handleTextChunk(context, {
+      sessionId,
+      turnId,
+      roundId: 'round-1',
+      text: 'hello',
+    } as any);
+
+    expect(FlowChatStore.getInstance().getState().sessions.has(sessionId)).toBe(false);
+  });
+});
+
+describe('handleSessionDeleted', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+  });
+
+  it('marks the session confirmed-deleted even when the store cascade is empty', () => {
+    // The store never loaded the session (e.g. it was deleted while the tab
+    // was closed), so the cascade is empty. The id must still be recorded so
+    // a later refresh cannot resurrect it from residual disk metadata.
+    const sessionId = 'ghost-deleted-1';
+    expect(isSessionConfirmedDeleted(sessionId)).toBe(false);
+
+    __test_only__.handleSessionDeleted(createFlowChatContext(), { sessionId });
+
+    expect(isSessionConfirmedDeleted(sessionId)).toBe(true);
+  });
+
+  it('marks every cascade member and removes the sessions from the store', () => {
+    const parentId = 'parent-deleted-1';
+    const childId = 'child-deleted-1';
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([
+        [parentId, {
+          sessionId: parentId,
+          title: 'Parent',
+          dialogTurns: [],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 800,
+          lastActiveAt: 1000,
+          error: null,
+        } as Session],
+        [childId, {
+          sessionId: childId,
+          title: 'Child',
+          parentSessionId: parentId,
+          dialogTurns: [],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 900,
+          lastActiveAt: 1000,
+          error: null,
+        } as Session],
+      ]),
+      activeSessionId: null,
+    }));
+
+    __test_only__.handleSessionDeleted(createFlowChatContext(), { sessionId: parentId });
+
+    expect(isSessionConfirmedDeleted(parentId)).toBe(true);
+    expect(isSessionConfirmedDeleted(childId)).toBe(true);
+    expect(FlowChatStore.getInstance().getState().sessions.has(parentId)).toBe(false);
+    expect(FlowChatStore.getInstance().getState().sessions.has(childId)).toBe(false);
   });
 });
 

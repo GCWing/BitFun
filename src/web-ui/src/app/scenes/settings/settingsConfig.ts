@@ -17,6 +17,7 @@ export type ConfigTab =
   | 'voice-input'
   | 'review'
   | 'memories'
+  | 'ai-thresholds'
   | 'mcp-tools'
   | 'external-sources'
   | 'hooks'
@@ -233,6 +234,25 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'rollout',
           'learning',
           'knowledge',
+        ],
+      },
+      {
+        id: 'ai-thresholds',
+        labelKey: 'configCenter.tabs.aiThresholds',
+        descriptionKey: 'configCenter.tabDescriptions.aiThresholds',
+        keywords: [
+          'threshold',
+          'thresholds',
+          'limit',
+          'limits',
+          'timeout',
+          'retry',
+          'compression',
+          'concurrency',
+          'token',
+          'budget',
+          'cap',
+          'backoff',
         ],
       },
       {

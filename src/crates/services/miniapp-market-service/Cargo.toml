@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-miniapp-market-service"
 version.workspace = true
 authors.workspace = true
@@ -17,7 +18,7 @@ chrono = { workspace = true }
 hex = { workspace = true }
 image = { workspace = true }
 rand = { workspace = true }
-reqwest = { workspace = true, features = ["rustls"] }
+reqwest = { workspace = true, features = ["form", "http2", "json", "rustls"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 semver = { workspace = true }

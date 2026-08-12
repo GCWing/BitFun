@@ -60,6 +60,7 @@ where
     store.status_for_manifest(manifest).await
 }
 
+#[allow(clippy::too_many_arguments)] // resume + progress context for one artifact
 async fn ensure_artifact_downloaded<F>(
     store: &SpeechModelStore,
     manifest: &SpeechModelManifest,
@@ -148,6 +149,7 @@ where
     )))
 }
 
+#[allow(clippy::too_many_arguments)] // download + resume context for one source
 async fn download_source<F>(
     client: &reqwest::Client,
     source_url: &str,

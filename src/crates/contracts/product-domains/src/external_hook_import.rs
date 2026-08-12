@@ -560,7 +560,7 @@ fn hash_part(hasher: &mut Sha256, value: &[u8]) {
     hasher.update(value);
 }
 
-fn validate_asset_path(path: &PathBuf) -> Result<(), ExternalSourceContractError> {
+fn validate_asset_path(path: &Path) -> Result<(), ExternalSourceContractError> {
     if path.as_os_str().is_empty()
         || path.is_absolute()
         || path.components().count() > MAX_EXTERNAL_HOOK_IMPORT_ASSET_DEPTH

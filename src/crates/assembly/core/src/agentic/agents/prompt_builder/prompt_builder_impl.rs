@@ -2,7 +2,9 @@
 use crate::agentic::memories::build_memory_read_path_reminder;
 use crate::agentic::memories::workspace::memory_root_dir;
 use crate::agentic::tools::implementations::ExecCommandTool;
+#[cfg(feature = "remote-workspace")]
 use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
+#[cfg(feature = "remote-workspace")]
 use crate::agentic::workspace::WorkspaceBackend;
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::try_get_path_manager_arc;
@@ -12,19 +14,22 @@ use crate::service::config::{get_app_language_code, get_global_config_service};
 use crate::service::filesystem::get_formatted_directory_listing;
 use crate::service::i18n::LocaleId;
 use crate::service::instruction_context::build_workspace_instruction_files_context;
+#[cfg(feature = "remote-workspace")]
 use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::prompt::{
-    render_project_layout, render_runtime_context_reminder, render_user_context_reminder,
-    render_workspace_context, PrependedPromptReminders, ProjectLayoutFacts, PromptRelatedPath,
-    RemoteExecutionHints, RuntimeContextFacts, RuntimeContextNeeds, RuntimeShellFacts,
+    render_project_layout, render_runtime_context_reminder, render_runtime_facts_reminder,
+    render_user_context_reminder, render_workspace_context, PrependedPromptReminders,
+    ProjectLayoutFacts, PromptRelatedPath, RemoteExecutionHints, RuntimeContextFacts,
+    RuntimeContextNeeds, RuntimeFactsInput, RuntimeFactsUsage, RuntimeShellFacts,
     ToolListingSections, UserContextPolicy, UserContextSection, WorkspaceContextFacts,
     WorktreeContextFacts,
 };
 use bitfun_agent_runtime::remote_file_delivery::user_workspace_relative_file_link;
 use bitfun_core_types::SessionExecutionTargetKind;
+use chrono::Datelike;
 use log::{debug, info, warn};
 use std::path::Path;
 
@@ -193,60 +198,70 @@ pub async fn build_prompt_context_for_workspace(
         return Some(base);
     }
 
-    let Some(connection_id) = workspace.connection_id() else {
-        return Some(base);
-    };
-    let connection_display_name = match &workspace.backend {
-        WorkspaceBackend::Remote {
-            connection_name, ..
-        } => connection_name.clone(),
-        _ => connection_id.to_string(),
-    };
-    let Some(manager) = get_remote_workspace_manager() else {
-        warn!(
+    #[cfg(not(feature = "remote-workspace"))]
+    {
+        Some(base)
+    }
+
+    #[cfg(feature = "remote-workspace")]
+    {
+        let Some(connection_id) = workspace.connection_id() else {
+            return Some(base);
+        };
+        let connection_display_name = match &workspace.backend {
+            WorkspaceBackend::Remote {
+                connection_name, ..
+            } => connection_name.clone(),
+            _ => connection_id.to_string(),
+        };
+        let Some(manager) = get_remote_workspace_manager() else {
+            warn!(
             "Remote workspace active but RemoteWorkspaceStateManager is missing; using minimal remote hints"
         );
-        return Some(base.with_remote_prompt_overlay(
-            RemoteExecutionHints {
-                connection_display_name,
-                kernel_name: "unknown".to_string(),
-                hostname: "unknown".to_string(),
-            },
-            None,
-        ));
-    };
+            return Some(base.with_remote_prompt_overlay(
+                RemoteExecutionHints {
+                    connection_display_name,
+                    kernel_name: "unknown".to_string(),
+                    hostname: "unknown".to_string(),
+                },
+                None,
+            ));
+        };
 
-    let ssh_manager = manager.get_ssh_manager().await;
-    let file_service = manager.get_file_service().await;
-    let (kernel_name, hostname) = if let Some(ref ssh) = ssh_manager {
-        if let Some(info) = ssh.get_server_info(connection_id).await {
-            (info.os_type, info.hostname)
+        let ssh_manager = manager.get_ssh_manager().await;
+        let file_service = manager.get_file_service().await;
+        let (kernel_name, hostname) = if let Some(ref ssh) = ssh_manager {
+            if let Some(info) = ssh.get_server_info(connection_id).await {
+                (info.os_type, info.hostname)
+            } else {
+                ("Linux".to_string(), "remote".to_string())
+            }
         } else {
             ("Linux".to_string(), "remote".to_string())
-        }
-    } else {
-        ("Linux".to_string(), "remote".to_string())
-    };
-    let remote_layout = if let Some(ref fs) = file_service {
-        match build_remote_workspace_layout_preview(fs, connection_id, &workspace_path, 200).await {
-            Ok((_, preview)) => Some(preview),
-            Err(e) => {
-                warn!("Remote workspace layout for prompt failed: {}", e);
-                None
+        };
+        let remote_layout = if let Some(ref fs) = file_service {
+            match build_remote_workspace_layout_preview(fs, connection_id, &workspace_path, 200)
+                .await
+            {
+                Ok((_, preview)) => Some(preview),
+                Err(e) => {
+                    warn!("Remote workspace layout for prompt failed: {}", e);
+                    None
+                }
             }
-        }
-    } else {
-        None
-    };
+        } else {
+            None
+        };
 
-    Some(base.with_remote_prompt_overlay(
-        RemoteExecutionHints {
-            connection_display_name,
-            kernel_name,
-            hostname,
-        },
-        remote_layout,
-    ))
+        Some(base.with_remote_prompt_overlay(
+            RemoteExecutionHints {
+                connection_display_name,
+                kernel_name,
+                hostname,
+            },
+            remote_layout,
+        ))
+    }
 }
 
 pub struct PromptBuilder {
@@ -285,6 +300,24 @@ impl PromptBuilder {
             local_shell,
             supports_image_understanding: self.context.supports_image_understanding,
             inline_markdown_image_display: self.context.inline_markdown_image_display,
+        })
+    }
+
+    /// Build the per-turn runtime facts reminder: current local/UTC time,
+    /// weekday, timezone offset (chrono::Local, same shape as the GetTime
+    /// tool) plus the live context usage ratio and tiered guidance.
+    pub fn build_runtime_facts_reminder(&self, usage: RuntimeFactsUsage) -> String {
+        let now = chrono::Local::now();
+        let utc = now.with_timezone(&chrono::Utc);
+        render_runtime_facts_reminder(&RuntimeFactsInput {
+            local_time_rfc3339: now.to_rfc3339_opts(chrono::SecondsFormat::Secs, false),
+            utc_time_rfc3339: utc.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            weekday_name: now.format("%A").to_string(),
+            weekday_number: now.weekday().number_from_monday(),
+            local_hhmm: now.format("%H:%M").to_string(),
+            timezone_offset: now.format("%:z").to_string(),
+            context_usage_ratio: usage.context_usage_ratio,
+            compression_preview_ratio: usage.compression_preview_ratio,
         })
     }
 
@@ -360,8 +393,13 @@ impl PromptBuilder {
 
         if policy.includes(UserContextSection::WorkspaceInstructions) {
             if let Some(prompt) = &self.context.workspace_instruction_files_context {
+                // Port-resolved / pre-resolved context: the workspace
+                // instruction files master switch gate ran upstream at the
+                // instruction read point (service::instruction_context), so an
+                // already-resolved context renders as-is.
                 additional_sections.push(prompt.clone());
-            } else if !self.context.workspace_instruction_files_context_resolved
+            } else if crate::service::config::workspace_instruction_files_enabled()
+                && !self.context.workspace_instruction_files_context_resolved
                 && self.context.remote_execution.is_none()
             {
                 let workspace = Path::new(&self.context.workspace_path);
@@ -426,12 +464,14 @@ impl PromptBuilder {
     pub async fn build_prepended_reminders(
         &self,
         user_context_policy: &UserContextPolicy,
+        runtime_facts_usage: RuntimeFactsUsage,
     ) -> PrependedPromptReminders {
         PrependedPromptReminders {
             deferred_tool_listing: self.build_deferred_tool_listing_reminder(),
             skill_listing: self.build_skill_listing_reminder(),
             agent_listing: self.build_agent_listing_reminder(),
             runtime_context: self.build_runtime_context_reminder().await,
+            runtime_facts: Some(self.build_runtime_facts_reminder(runtime_facts_usage)),
             user_context: self.build_user_context_reminder(user_context_policy).await,
         }
     }
@@ -646,6 +686,7 @@ mod tests {
     use super::PromptBuilderContext;
     use super::RemoteExecutionHints;
     use super::RuntimeContextNeeds;
+    use super::RuntimeFactsUsage;
     use super::ToolListingSections;
     use crate::agentic::agents::UserContextPolicy;
     use crate::agentic::WorkspaceBinding;
@@ -672,6 +713,10 @@ mod tests {
                 &UserContextPolicy::empty()
                     .with_workspace_context()
                     .with_workspace_instructions(),
+                RuntimeFactsUsage {
+                    context_usage_ratio: Some(0.35),
+                    compression_preview_ratio: Some(0.9),
+                },
             )
             .await;
         let reminders_for_order = reminders.clone();
@@ -690,6 +735,7 @@ mod tests {
         let runtime_context = reminders
             .runtime_context
             .expect("runtime context should build");
+        let runtime_facts = reminders.runtime_facts.expect("runtime facts should build");
 
         assert!(skill_listing.contains("# Skill Listing"));
         assert!(skill_listing
@@ -712,6 +758,8 @@ mod tests {
         assert!(!runtime_context.contains("## ExecCommand Shell"));
         assert!(!runtime_context.contains("## Local Client"));
         assert!(!runtime_context.contains("ExecCommand shell:"));
+        assert!(runtime_facts.contains("[Runtime Facts]"));
+        assert!(runtime_facts.contains("当前上下文占比: 35%"));
         assert_eq!(
             ordered_reminders,
             vec![
@@ -719,6 +767,7 @@ mod tests {
                 skill_listing.as_str(),
                 agent_listing.as_str(),
                 runtime_context.as_str(),
+                runtime_facts.as_str(),
                 user_context.as_str(),
             ]
         );
@@ -728,7 +777,7 @@ mod tests {
     async fn prepended_reminders_omit_runtime_context_without_runtime_tool_needs() {
         let context = PromptBuilderContext::new(r"workspace\root", None, None);
         let reminders = PromptBuilder::new(context)
-            .build_prepended_reminders(&UserContextPolicy::empty())
+            .build_prepended_reminders(&UserContextPolicy::empty(), RuntimeFactsUsage::default())
             .await;
 
         assert_eq!(reminders.skill_listing, None);
@@ -736,6 +785,28 @@ mod tests {
         assert_eq!(reminders.deferred_tool_listing, None);
         assert_eq!(reminders.user_context, None);
         assert_eq!(reminders.runtime_context, None);
+        assert!(reminders
+            .runtime_facts
+            .expect("runtime facts should always build")
+            .contains("[Runtime Facts]"));
+    }
+
+    #[test]
+    fn build_runtime_facts_reminder_includes_time_weekday_and_offset_shape() {
+        let context = PromptBuilderContext::new(r"workspace\root", None, None);
+        let reminder = PromptBuilder::new(context).build_runtime_facts_reminder(RuntimeFactsUsage {
+            context_usage_ratio: Some(0.5),
+            compression_preview_ratio: Some(0.9),
+        });
+
+        // Time facts come from chrono::Local at build time; assert the key
+        // shape (date/time/weekday/offset) without locking specific seconds.
+        assert!(reminder.contains("[Runtime Facts]"));
+        assert!(reminder.contains("当前本地时间: "));
+        assert!(reminder.contains("UTC 时间: "));
+        assert!(reminder.contains("时区偏移: "));
+        assert!(reminder.contains("周"));
+        assert!(reminder.contains("当前上下文占比: 50%"));
     }
 
     #[tokio::test]

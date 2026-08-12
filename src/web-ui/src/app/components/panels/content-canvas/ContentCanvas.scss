@@ -29,6 +29,15 @@
     min-height: 0;
   }
 
+  // Empty state doubles as an L0 drop target: fills the panel and highlights
+  // on drag-over so the user sees the conversation can be opened here.
+  &__empty-drop {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+  }
+
   // Editor area
   &__editor {
     flex: 1;

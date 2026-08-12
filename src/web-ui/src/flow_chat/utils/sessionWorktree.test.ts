@@ -83,6 +83,19 @@ describe('session worktree control', () => {
     }))).toBeUndefined();
   });
 
+  it('discards a stale pending change once the session has persisted work', () => {
+    expect(sessionWorktreeMaterializationPlan(session({
+      totalTurnCount: 1,
+      config: {
+        executionTarget: {
+          kind: 'local',
+          rootPath: '/repo',
+        },
+        worktreeIsolationRequested: true,
+      },
+    }))).toBeUndefined();
+  });
+
   it('invalidates the composer subscription after hydrate and rebind', () => {
     const initial = sessionWorktreeBindingSubscriptionKey(session());
     const armed = sessionWorktreeBindingSubscriptionKey(session({

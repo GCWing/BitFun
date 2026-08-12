@@ -61,18 +61,19 @@ crate.
 
 ## Verification
 
+Start from the capability that owns the change. Integration targets group test
+source files with the same owner and feature closure; keep a focused run small
+with `--test <target> <module>::<filter>` instead of adding another Cargo
+target. Representative stable entry points are:
+
 ```bash
 cargo check -p bitfun-services-core --no-default-features
 cargo check -p bitfun-services-core --no-default-features --features filesystem
-cargo test -p bitfun-services-core --no-default-features --features json-io --lib json_store
-cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_metadata_contracts
+cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_contracts session_metadata_contracts::
+cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_write_lock_contracts
 cargo test -p bitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
-cargo test -p bitfun-services-core --no-default-features --features workspace-instructions --test declarative_workspace_instruction_contracts
-cargo test -p bitfun-services-core --no-default-features --features lsp --test lsp_plugin_registry_contracts
-cargo test -p bitfun-services-core --no-default-features --features session-git memory_workspace
-cargo check -p bitfun-services-core --no-default-features --features workspace-identity
-cargo test -p bitfun-services-core --no-default-features --features workspace-runtime workspace
-cargo test -p bitfun-services-core --no-default-features --features runtime-ownership --test runtime_ownership_contracts
-node scripts/check-core-boundaries.mjs
-cargo check -p bitfun-core --features product-full
+pnpm run check:core-boundaries
 ```
+
+Other capability-specific target names remain in `Cargo.toml`; document a new
+command here only when it becomes a recurring owner workflow.

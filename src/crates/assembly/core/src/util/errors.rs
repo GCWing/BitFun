@@ -230,7 +230,7 @@ impl From<bitfun_agent_tools::computer_use::ComputerUseContractError> for BitFun
     }
 }
 
-#[cfg(feature = "agent-runtime")]
+#[cfg(feature = "mcp-runtime")]
 impl From<bitfun_services_integrations::mcp::MCPRuntimeError> for BitFunError {
     fn from(error: bitfun_services_integrations::mcp::MCPRuntimeError) -> Self {
         use bitfun_services_integrations::mcp::MCPRuntimeErrorKind;

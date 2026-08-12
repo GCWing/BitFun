@@ -7,6 +7,11 @@
 
 
 .bitfun-session-scene {
+  // Single source of truth for the minimum chat width. Must stay in sync with
+  // PANEL_COMMON_CONFIG.MIN_CENTER_WIDTH (panelConfig.ts). The chat pane keeps
+  // at least one page when the right panel is stretched to its maximum.
+  --private-session-min-chat-width: 400px;
+
   --private-session-pane-resizer-accent-rgb: 88, 166, 255;
   --private-session-pane-resizer-muted-rgb: 128, 128, 128;
 
@@ -65,7 +70,7 @@
 
 .bitfun-session-scene__chat-pane {
   flex: 1 1 auto;
-  min-width: 400px;
+  min-width: var(--private-session-min-chat-width);
   height: 100%;
   overflow: hidden;
   position: relative;
@@ -77,6 +82,9 @@
   }
 }
 
+// ─── Explicit UI entries (grid9 toggle) ────────────────────────────────────
+// The 3x3 grid toggle now lives in the auxiliary panel's tab-bar actions
+// (right panel top-right, original icon style). No floating entries remain.
 
 .bitfun-session-scene__aux-pane {
   display: flex;
@@ -85,7 +93,9 @@
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
-  max-width: 1200px;
+  // No max-width cap: the JS-calculated inline width (dynamic upper bound =
+  // container − resizer − min chat width) is authoritative, so the right panel
+  // stretches until the chat pane reaches its one-page minimum.
 
   transition: width $motion-base $easing-standard,
               opacity $motion-base $easing-standard;

@@ -352,7 +352,8 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
       const simpleTodos = latestPlanData.todos.map(t => ({ 
         id: t.id, 
         content: t.content,
-        status: t.status
+        status: t.status,
+        dependencies: t.dependencies,
       }));
 
       const message = `Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself. To-do's from the plan have already been created. Do not create them again. Mark them as in_progress as you work, starting with the first one. Don't stop until you have completed all the to-dos.
@@ -476,10 +477,11 @@ ${JSON.stringify(simpleTodos, null, 2)}
       {planData.todos && planData.todos.length > 0 && isTodosExpanded && (
         <div className="create-plan-todos create-plan-todos--expanded" data-bf-component="create-plan-display" data-bf-part="todos" data-bf-state="expanded">
           <div className="todos-list">
-            {todoRenderItems.map(({ todo, key }) => (
+            {todoRenderItems.map(({ todo, key, depth }) => (
               <div
                 key={key}
                 className={`todo-item status-${todo.status || 'pending'}`}
+                style={depth > 0 ? { paddingLeft: 12 + depth * 16 } : undefined}
                 data-bf-component="create-plan-display"
                 data-bf-part="todo"
               >

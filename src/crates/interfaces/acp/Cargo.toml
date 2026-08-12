@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-acp"
 version.workspace = true
 authors.workspace = true
@@ -11,9 +12,21 @@ name = "bitfun_acp"
 [dependencies]
 bitfun-core = { path = "../../assembly/core", default-features = false, features = [
     "agent-runtime",
-    "canvas-runtime",
+    "document-read",
+    "subscription-auth",
+    "deep-research",
+    "lsp",
     "external-sources",
     "ssh-remote",
+    "tools-basic",
+    "tools-git",
+    "tools-mcp",
+    "tools-browser-web",
+    "tools-computer-use",
+    "tools-image-analysis",
+    "tools-miniapp",
+    "tools-canvas",
+    "tools-agent-control",
 ] }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }
@@ -32,6 +45,7 @@ dashmap = { workspace = true }
 log = { workspace = true }
 uuid = { workspace = true }
 sha2 = { workspace = true }
+which = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

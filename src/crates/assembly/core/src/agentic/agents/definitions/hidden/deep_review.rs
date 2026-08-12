@@ -18,6 +18,8 @@ impl DeepReviewAgent {
         let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
         tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Direct);
 
+        // 审查工具全家桶配齐：TodoWrite 跟踪检查项，AskUserQuestion
+        // 向上级提判断问题（deny 列表明确保留）。保持只读。
         Self {
             default_tools: vec![
                 "LaunchReviewAgent".to_string(),
@@ -27,6 +29,9 @@ impl DeepReviewAgent {
                 "LS".to_string(),
                 "GetFileDiff".to_string(),
                 "submit_code_review".to_string(),
+                "ReviewPlatform".to_string(),
+                "TodoWrite".to_string(),
+                "AskUserQuestion".to_string(),
             ],
             tool_exposure_overrides,
         }
@@ -92,7 +97,10 @@ mod tests {
             Some(&ToolExposure::Direct),
         );
         assert!(tools.contains(&"submit_code_review".to_string()));
-        assert!(!tools.contains(&"AskUserQuestion".to_string()));
+        // 审查工具全家桶配齐（TodoWrite 跟踪 + AskUserQuestion 提问）。
+        assert!(tools.contains(&"ReviewPlatform".to_string()));
+        assert!(tools.contains(&"TodoWrite".to_string()));
+        assert!(tools.contains(&"AskUserQuestion".to_string()));
         assert!(!tools.contains(&"Edit".to_string()));
         assert!(!tools.contains(&"Write".to_string()));
         assert!(!tools.contains(&"ExecCommand".to_string()));

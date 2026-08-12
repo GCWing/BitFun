@@ -15,6 +15,7 @@ fn goal(status: ThreadGoalStatus) -> ThreadGoal {
         created_at: 1,
         updated_at: 2,
         auto_continuation_count: 0,
+        reference_files: Vec::new(),
     }
 }
 
@@ -28,12 +29,16 @@ fn update_goal_status_parser_preserves_legacy_values_and_errors() {
         parse_update_goal_status("BLOCKED").expect("blocked should parse"),
         ThreadGoalStatus::Blocked
     );
+    assert_eq!(
+        parse_update_goal_status("resume").expect("resume should parse"),
+        ThreadGoalStatus::Active
+    );
 
     assert_eq!(
         parse_update_goal_status("paused")
             .expect_err("unsupported status should fail")
             .to_string(),
-        "update_goal status must be complete or blocked, got paused"
+        "update_goal status must be complete, blocked, or resume, got paused"
     );
 }
 

@@ -189,7 +189,9 @@ pub(crate) async fn set_default_model(model_id: &str) -> Result<()> {
 
     // Short-lived management process: the sync loop never runs here, so push
     // the change directly (no-op when logged out).
-    crate::account_sync::push_settings_after_local_change().await;
+    crate::account::build_management_account_runtime()
+        .push_settings_after_local_change()
+        .await;
     Ok(())
 }
 
@@ -548,6 +550,7 @@ pub(crate) async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
                 workspace_path: workspace_path.to_string_lossy().to_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                include_hidden: false,
             })
             .await?
             .first()

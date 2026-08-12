@@ -120,6 +120,11 @@ export const CANVAS_SHORTCUTS: ShortcutDef[] = [
     descriptionKey: 'keyboard.shortcuts.canvas.splitVertical',
   },
   {
+    id: 'canvas.splitGrid9',
+    config: mod('9', { shift: true, scope: 'canvas' }),
+    descriptionKey: 'keyboard.shortcuts.canvas.splitGrid9',
+  },
+  {
     id: 'canvas.anchorZone',
     config: mod('`', { scope: 'canvas' }),
     descriptionKey: 'keyboard.shortcuts.canvas.anchorZone',
@@ -227,6 +232,11 @@ export const CHAT_SHORTCUTS: ShortcutDef[] = [
     id: 'chat.insertNewline',
     config: { key: 'Enter', ctrl: true, scope: 'chat', allowInInput: true },
     descriptionKey: 'keyboard.shortcuts.chat.insertNewline',
+  },
+  {
+    id: 'canvas.splitGrid9.chat',
+    config: mod('9', { shift: true, scope: 'chat' }),
+    descriptionKey: 'keyboard.shortcuts.canvas.splitGrid9',
   },
 ];
 

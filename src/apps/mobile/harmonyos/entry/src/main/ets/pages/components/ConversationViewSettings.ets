@@ -1,7 +1,7 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteLogger } from '../../services/RemoteLogger';
-import { ConversationSessionFilterPolicy } from '../state/ConversationSessionFilterPolicy';
+import { ConversationSessionFilterPolicy } from '../policy/ConversationSessionFilterPolicy';
 import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
 
 @ComponentV2

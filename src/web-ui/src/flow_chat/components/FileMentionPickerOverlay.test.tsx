@@ -3,6 +3,7 @@
 import React, { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { workspaceAPI } from '@/infrastructure/api';
 import { FileMentionPicker } from './FileMentionPicker';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -53,6 +54,7 @@ describe('FileMentionPicker overlay', () => {
   let root: Root;
 
   beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -74,5 +76,28 @@ describe('FileMentionPicker overlay', () => {
     const picker = document.querySelector<HTMLElement>('.file-mention-picker--overlay');
     expect(picker?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
     expect(picker?.style.visibility).toBe('visible');
+  });
+
+  it('shows the workspace-relative path after the file name', async () => {
+    vi.mocked(workspaceAPI.getDirectoryChildren).mockResolvedValueOnce([
+      {
+        path: '/workspace/src/App.tsx',
+        name: 'App.tsx',
+        isDirectory: false,
+      },
+    ]);
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+
+    const item = document.querySelector('[data-bf-part="item"]');
+    const itemName = item?.querySelector('[data-bf-part="itemName"]');
+    const itemPath = item?.querySelector('[data-bf-part="itemDetail"]');
+    expect(itemName?.textContent).toBe('App.tsx');
+    expect(itemName?.classList.contains('file-mention-picker__item-name--with-path')).toBe(true);
+    expect(itemPath?.textContent).toBe('src/App.tsx');
+    expect(itemPath?.classList.contains('file-mention-picker__item-path')).toBe(true);
   });
 });

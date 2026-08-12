@@ -43,6 +43,13 @@ pub enum AgentSource {
 #[derive(Debug, Clone)]
 pub struct AgentToolPolicy {
     pub allowed_tools: Vec<String>,
+    /// User-enabled tool set after mode default + profile (added/removed)
+    /// resolution, BEFORE dynamic MCP tools are merged in. This is the
+    /// authoritative "front-end checked" set used by the runtime RBAC gate to
+    /// match what the user actually enabled: a tool checked in the agent
+    /// profile is executable, an unchecked one is not — even when it appears
+    /// in `allowed_tools` (dynamic MCP tools are merged in unconditionally).
+    pub user_enabled_tools: Vec<String>,
     pub exposure_overrides: AgentToolPolicyOverrides,
     pub permission_constraints: PermissionConstraintLayer,
 }

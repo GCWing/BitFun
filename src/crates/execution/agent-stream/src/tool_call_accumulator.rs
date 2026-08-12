@@ -307,6 +307,13 @@ impl PendingToolCall {
         tool_name: &str,
         raw_arguments: &str,
     ) -> Result<Value, ToolArgumentParseError> {
+        // No-parameter tools (e.g. GetTime) may legitimately arrive with an
+        // empty/whitespace-only argument payload instead of `{}`. Treat that
+        // as an empty object rather than feeding serde_json::from_str(""),
+        // which fails with "EOF while parsing a value at line 1 column 0".
+        if raw_arguments.trim().is_empty() {
+            return Ok(json!({}));
+        }
         match serde_json::from_str::<Value>(raw_arguments) {
             Ok(arguments) => {
                 if tool_name == "Git" {
@@ -1084,6 +1091,57 @@ mod tests {
         assert!(empty_delta.finalized_previous.is_none());
         assert!(empty_delta.early_detected.is_none());
         assert!(empty_delta.params_partial.is_none());
+    }
+
+    #[test]
+    fn no_parameter_tool_with_empty_arguments_finalizes_as_valid_empty_object() {
+        // Providers (e.g. CodeBuddy cloud) emit `arguments: ""` for
+        // no-parameter tools (e.g. GetTime). The raw payload never reaches
+        // serde_json::from_str("") — the finalize path must treat it as an
+        // empty object and keep the tool call valid.
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("GetTime".to_string()));
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.tool_id, "call_1");
+        assert_eq!(finalized.tool_name, "GetTime");
+        assert_eq!(finalized.arguments, json!({}));
+        assert_eq!(finalized.raw_arguments, "");
+        assert!(!finalized.is_error, "empty arguments must not mark the call invalid");
+        assert!(finalized.parse_error.is_none());
+    }
+
+    #[test]
+    fn whitespace_only_arguments_finalize_as_valid_empty_object() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("GetTime".to_string()));
+        pending.append_arguments("   ");
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.arguments, json!({}));
+        assert!(!finalized.is_error, "whitespace-only arguments must stay valid");
+        assert!(finalized.parse_error.is_none());
+    }
+
+    #[test]
+    fn explicit_empty_object_arguments_are_preserved() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("GetTime".to_string()));
+        pending.append_arguments("{}");
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.arguments, json!({}));
+        assert_eq!(finalized.raw_arguments, "{}");
+        assert!(!finalized.is_error);
     }
 
     // ------------------------------------------------------------------

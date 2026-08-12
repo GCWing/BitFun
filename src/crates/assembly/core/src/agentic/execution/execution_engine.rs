@@ -27,7 +27,7 @@ use crate::agentic::image_analysis::{
     build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
     ImageLimits,
 };
-use crate::agentic::round_preempt::RoundInjectionKind;
+use crate::agentic::round_preempt::{RoundInjection, RoundInjectionKind};
 use crate::agentic::session::{
     ContextCompressor, SessionManager, TokenAnchor, TokenAnchorInput, UserContextCacheIdentity,
 };
@@ -43,8 +43,10 @@ use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::service::config::get_global_config_service;
+#[cfg(test)]
+use crate::service::config::types::{automatic_max_output_tokens, MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT};
 use crate::service::config::types::{
-    automatic_max_output_tokens, model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
+    model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
 };
 use crate::service::instruction_context::{
     build_local_workspace_instruction_files_context_with_fs_detailed,
@@ -57,7 +59,9 @@ use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
+use bitfun_agent_runtime::prompt::RuntimeFactsUsage;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
+use bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use bitfun_core_types::SessionModelBindingPolicy;
 use log::{debug, error, info, trace, warn};
@@ -68,6 +72,12 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tool_runtime::context::PrimaryModelFacts;
+
+fn ensure_primary_session_goal_tools(allowed_tools: &mut Vec<String>, is_subagent: bool) {
+    if !is_subagent {
+        ensure_thread_goal_tools(allowed_tools);
+    }
+}
 
 /// Execution engine configuration
 #[derive(Debug, Clone)]
@@ -102,6 +112,33 @@ pub struct ContextCompactionOutcome {
 const MANUAL_COMPACTION_PLANNING: u8 = 0;
 const MANUAL_COMPACTION_CANCELLED: u8 = 1;
 const MANUAL_COMPACTION_COMMITTING: u8 = 2;
+
+/// Session metadata key for the pre-compaction progress snapshot. Written by
+/// the custom compaction checkpoint, which is intentionally not gated by
+/// `app.hooks.enabled` so long-running tasks keep a recoverable record of
+/// goal/role/todos state across context compaction.
+const COMPACTION_PROGRESS_SNAPSHOT_KEY: &str = "compactionProgressSnapshot";
+
+/// Current wall-clock time in milliseconds since the Unix epoch, used for
+/// compaction snapshot timestamps.
+fn compaction_snapshot_timestamp_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Maximum number of thinking-only rescue continuations before the turn
+/// finalizes locally. The round loop re-requests the model after a
+/// thinking-only round (no text / no tool call) via a rescue reminder; without
+/// this bound a thinking-only storm (2000 empty prompts observed in 1.5 h)
+/// can consume the whole round budget. A round that made progress (tool call
+/// or user-visible text) resets the counter, so healthy tasks are unaffected.
+const DEFAULT_EMPTY_ROUND_RESPAWN_LIMIT: usize = 1;
+/// Maximum number of finalize (rescue) model requests per turn. The finalize
+/// path already retries once when the first request returns no usable text;
+/// that retry is the second request, so the default budget is 2.
+const DEFAULT_FINALIZE_ROUND_LIMIT: usize = 2;
 
 /// Arbitrates the only race that matters for manual compaction: cancellation
 /// may win while the model is planning, but context commit must be atomic once
@@ -421,6 +458,7 @@ struct TurnPromptScaffoldInput<'a> {
     supports_image_understanding: bool,
     model_name: &'a str,
     current_agent: &'a dyn crate::agentic::agents::Agent,
+    runtime_facts_usage: RuntimeFactsUsage,
     context: &'a ExecutionContext,
 }
 
@@ -430,12 +468,14 @@ struct FinalizeRoundInput<'a> {
     tool_definitions: Option<Vec<ToolDefinition>>,
     reminder_text: &'a str,
     messages: &'a [Message],
-    prepended_reminders: &'a [&'a str],
+    static_prepended_reminders: &'a [&'a str],
+    dynamic_prepended_reminders: &'a [&'a str],
     primary_model_facts: &'a PrimaryModelFacts,
     execution_context_vars: &'a HashMap<String, String>,
     round_group_id: Option<String>,
     round_number: usize,
     agent_type: String,
+    user_enabled_tools: Vec<String>,
     context: &'a ExecutionContext,
     ai_client: Arc<crate::infrastructure::ai::AIClient>,
 }
@@ -498,6 +538,147 @@ impl ExecutionEngine {
         )
     }
 
+    /// Resolve the configured compression safety reserve
+    /// (`ai.thresholds.compression.safety_reserve_tokens`), falling back to
+    /// `AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS = 10_000` when unset or invalid.
+    async fn configured_compression_safety_reserve_tokens() -> usize {
+        let Ok(config_service) = get_global_config_service().await else {
+            return Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS;
+        };
+        let reserve = thresholds.compression.safety_reserve_tokens;
+        if reserve == 0 {
+            return Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS;
+        }
+        reserve
+    }
+
+    /// Resolve the configured compression overflow / recovery / pass budgets
+    /// (`ai.thresholds.compression.*`), falling back to the legacy constants.
+    async fn configured_compression_counts() -> (
+        usize, // overflow attempts
+        usize, // main-context overflow recoveries
+        usize, // consecutive compression failures
+        usize, // failed-tool recovery attempts
+        usize, // stop-hook continuations
+        usize, // same-round passes
+    ) {
+        let legacy = (
+            Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS,
+            Self::MAX_MAIN_CONTEXT_OVERFLOW_RECOVERIES,
+            3usize, // legacy MAX_CONSECUTIVE_COMPRESSION_FAILURES
+            3usize, // legacy MAX_FAILED_TOOL_RECOVERY_ATTEMPTS
+            3usize, // legacy MAX_STOP_HOOK_CONTINUATIONS
+            2usize, // legacy MAX_SAME_ROUND_COMPRESSION_PASSES
+        );
+        let Ok(config_service) = get_global_config_service().await else {
+            return legacy;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return legacy;
+        };
+        let c = &thresholds.compression;
+        (
+            c.overflow_attempts.max(1),
+            c.main_context_overflow_recoveries,
+            c.consecutive_failures.max(1),
+            c.failed_tool_recovery_attempts,
+            c.stop_hook_continuations,
+            c.same_round_passes.max(1),
+        )
+    }
+
+    /// Resolve the configured compression overflow-attempt budget
+    /// (`ai.thresholds.compression.overflow_attempts`).
+    async fn configured_compression_overflow_attempts() -> usize {
+        Self::configured_compression_counts().await.0
+    }
+
+    /// Resolve the configured recent-context retention
+    /// (`ai.thresholds.compression.recent_context_tokens`).
+    async fn configured_compression_recent_context_tokens() -> usize {
+        let Ok(config_service) = get_global_config_service().await else {
+            return ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS;
+        };
+        let tokens = thresholds.compression.recent_context_tokens;
+        if tokens == 0 {
+            return ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS;
+        }
+        tokens
+    }
+
+    /// Resolve the configured compression retry-step
+    /// (`ai.thresholds.compression.retry_step_tokens`).
+    async fn configured_compression_retry_step_tokens() -> usize {
+        let Ok(config_service) = get_global_config_service().await else {
+            return ContextCompressor::RECENT_CONTEXT_RETRY_STEP_TOKENS;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return ContextCompressor::RECENT_CONTEXT_RETRY_STEP_TOKENS;
+        };
+        let tokens = thresholds.compression.retry_step_tokens;
+        if tokens == 0 {
+            return ContextCompressor::RECENT_CONTEXT_RETRY_STEP_TOKENS;
+        }
+        tokens
+    }
+
+    /// Resolve the configured max retained user tokens
+    /// (`ai.thresholds.compression.max_retained_user_tokens`).
+    async fn configured_compression_max_retained_user_tokens() -> usize {
+        let Ok(config_service) = get_global_config_service().await else {
+            return 20_000;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return 20_000;
+        };
+        let tokens = thresholds.compression.max_retained_user_tokens;
+        if tokens == 0 {
+            return 20_000;
+        }
+        tokens
+    }
+
+    /// Resolve the configured max image-bearing message rounds
+    /// (`ai.thresholds.compression.image_bearing_messages`), falling back to
+    /// the legacy `MAX_IMAGE_BEARING_MESSAGE_ROUNDS = 2` when unset.
+    async fn configured_max_image_bearing_messages() -> usize {
+        let Ok(config_service) = get_global_config_service().await else {
+            return 2;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return 2;
+        };
+        let count = thresholds.compression.image_bearing_messages;
+        if count == 0 {
+            return 2;
+        }
+        count
+    }
+
     /// Estimate request pressure for compression decisions.
     ///
     /// `total_tokens` tracks the whole provider request input. The snapshot also
@@ -521,6 +702,19 @@ impl ExecutionEngine {
             trigger_budget,
             prepended_reminder_tokens,
         )
+    }
+
+    /// Map a token pressure snapshot to the prompt-level runtime facts used by
+    /// the Runtime Facts reminder: live usage ratio plus the dynamic
+    /// compression preview trigger point (input_limit / context_window).
+    fn runtime_facts_usage_from_pressure(pressure: &TokenPressureSnapshot) -> RuntimeFactsUsage {
+        let compression_preview_ratio = (pressure.context_window > 0).then(|| {
+            pressure.input_limit as f32 / pressure.context_window as f32
+        });
+        RuntimeFactsUsage {
+            context_usage_ratio: Some(pressure.usage_ratio),
+            compression_preview_ratio,
+        }
     }
 
     fn estimate_auto_compression_pressure_with_anchor(
@@ -630,16 +824,73 @@ impl ExecutionEngine {
         }
     }
 
+    /// Resolve the configured output-reserve for a compression trigger budget,
+    /// honoring `ai.thresholds.output_tokens.automatic_tiers` (阈值参数配置化).
+    async fn compression_trigger_budget_configured(
+        context_window: usize,
+        configured_max_tokens: Option<u32>,
+    ) -> CompressionTriggerBudget {
+        let automatic_output_reserve =
+            crate::service::config::types::automatic_max_output_tokens_configured(
+                context_window as u32,
+            )
+            .await as usize;
+        let output_reserve_tokens = configured_max_tokens
+            .map(|value| value as usize)
+            .unwrap_or(automatic_output_reserve);
+        let ratio_percent =
+            crate::service::config::types::configured_output_tokens_ratio_percent().await;
+        Self::compression_trigger_budget_with_output_reserve_and_ratio(
+            context_window,
+            configured_max_tokens,
+            Self::configured_compression_safety_reserve_tokens().await,
+            output_reserve_tokens,
+            ratio_percent,
+        )
+    }
+
+    /// Legacy synchronous compression-trigger budget with hard-coded reserve
+    /// defaults; used by unit tests (生产路径走 `compression_trigger_budget_configured`).
+    #[cfg(test)]
     fn compression_trigger_budget(
         context_window: usize,
         configured_max_tokens: Option<u32>,
     ) -> CompressionTriggerBudget {
+        Self::compression_trigger_budget_with_output_reserve_and_ratio(
+            context_window,
+            configured_max_tokens,
+            Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS,
+            automatic_max_output_tokens(context_window as u32) as usize,
+            MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT,
+        )
+    }
+
+    /// Same as [`Self::compression_trigger_budget_configured`] but with
+    /// an explicit output-reserve ratio cap in percent
+    /// (阈值参数配置化：`ai.thresholds.output_tokens.ratio_percent` replaces the
+    /// legacy hard-coded `MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT = 40`).
+    fn compression_trigger_budget_with_output_reserve_and_ratio(
+        context_window: usize,
+        configured_max_tokens: Option<u32>,
+        safety_reserve_tokens: usize,
+        output_reserve_tokens: usize,
+        ratio_percent: u32,
+    ) -> CompressionTriggerBudget {
         let output_reserve_tokens = configured_max_tokens
             .map(|value| value as usize)
-            .unwrap_or_else(|| automatic_max_output_tokens(context_window as u32) as usize);
-        let safety_reserve_tokens = Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS;
-        let input_limit =
-            context_window.saturating_sub(output_reserve_tokens + safety_reserve_tokens);
+            .unwrap_or(output_reserve_tokens);
+        // ENGINE-03：把输出预留钳制到窗口的 ratio_percent（默认 40%）以内（与
+        // `is_valid_configured_max_output_tokens` 强制执行的同一比例）。否则配置了
+        // 超过窗口的 max_tokens 会把 input_limit 压到 0，导致每一轮都无条件触发自动压缩。
+        let ratio_percent = ratio_percent.max(1).min(100);
+        let max_output_reserve =
+            (context_window as f64 * ratio_percent as f64 / 100.0) as usize;
+        let output_reserve_tokens = output_reserve_tokens.min(max_output_reserve);
+        let safety_reserve_tokens = safety_reserve_tokens.max(1);
+        // ENGINE-05: saturating_add guards a 32-bit usize overflow when both
+        // reserves are summed.
+        let input_limit = context_window
+            .saturating_sub(output_reserve_tokens.saturating_add(safety_reserve_tokens));
 
         CompressionTriggerBudget {
             input_limit,
@@ -807,6 +1058,17 @@ impl ExecutionEngine {
         restrictions
     }
 
+    /// Whether a finalize (rescue) round may still request the model.
+    ///
+    /// The rescue path (`run_finalize_round`) issues a fresh model request when
+    /// the main loop stopped on repeated tool failures / max rounds. That
+    /// request is only useful while the model still has a chance to produce a
+    /// final answer; otherwise the turn should synthesize a local final
+    /// response without spending tokens on a request that cannot help.
+    fn should_allow_finalize_round(finalize_rounds_completed: usize, max_finalize_rounds: usize) -> bool {
+        finalize_rounds_completed < max_finalize_rounds
+    }
+
     fn build_local_final_response_message(reason: &str) -> String {
         match reason {
             "repeated_tool_failures" => {
@@ -814,6 +1076,9 @@ impl ExecutionEngine {
             }
             "max_rounds" => {
                 "I'm stopping here because this turn reached its round limit before I could complete a final response.".to_string()
+            }
+            "thinking_only_budget" => {
+                "I'm stopping here because repeated reasoning-only rounds produced no action and the automatic continuation budget was exhausted.".to_string()
             }
             _ => "I'm stopping here because this turn could not be completed successfully.".to_string(),
         }
@@ -826,6 +1091,37 @@ impl ExecutionEngine {
         has_assistant_message && !used_local_final_response_synthesis
     }
 
+    /// 队列批量化合并（主人定标：N 条通知 → 1 次模型请求）。
+    ///
+    /// Same-kind `BackgroundResult` notifications that render to the identical
+    /// wrapped text (the fixed template) collapse to the first entry — one
+    /// model request handles the whole storm. The merged entry is byte-identical
+    /// to what a single notification would have produced, so the provider-side
+    /// prompt prefix is stable across runs with the same scenario. Different
+    /// notification texts (distinct child sessions each carry their own id) and
+    /// all `UserSteering` / `ThreadGoalObjectiveUpdated` entries are preserved
+    /// verbatim.
+    fn coalesce_round_injections(pending: Vec<RoundInjection>) -> Vec<RoundInjection> {
+        let mut merged: Vec<RoundInjection> = Vec::with_capacity(pending.len());
+        for injection in pending {
+            if injection.kind == RoundInjectionKind::BackgroundResult {
+                let duplicate = merged.iter().any(|existing| {
+                    existing.kind == RoundInjectionKind::BackgroundResult
+                        && existing.content == injection.content
+                });
+                if duplicate {
+                    log::debug!(
+                        "Background notification coalesced into a single request: content_len={}",
+                        injection.content.len()
+                    );
+                    continue;
+                }
+            }
+            merged.push(injection);
+        }
+        merged
+    }
+
     fn build_finalize_cache_anchor_messages(turn_id: &str, reminder_text: &str) -> Vec<Message> {
         vec![
             Message::internal_reminder(
@@ -833,7 +1129,7 @@ impl ExecutionEngine {
                 reminder_text.to_string(),
             )
             .with_turn_id(turn_id.to_string()),
-            Message::user(Self::FINALIZE_USER_FOLLOWUP.to_string())
+            Message::user(render_system_reminder(Self::FINALIZE_USER_FOLLOWUP))
                 .with_semantic_kind(MessageSemanticKind::InternalReminder)
                 .with_internal_reminder_kind(InternalReminderKind::FinalizeCacheAnchor)
                 .with_turn_id(turn_id.to_string()),
@@ -1188,11 +1484,59 @@ impl ExecutionEngine {
         (user_context, cacheable)
     }
 
+    /// Resolve the user context cache identity for the current execution,
+    /// layering the runtime-affecting dimensions onto the agent policy scope
+    /// key:
+    ///
+    /// - `remote:<connection>` — a failed overlay cached without remote hints
+    ///   must not persist across reconnects (existing behavior).
+    /// - `extsrc:<on|off>` — the `external_instruction_sources` master switch
+    ///   changes the rendered User Context content (external user files are
+    ///   skipped when off). Without it in the scope key, a session that toggles
+    ///   on↔off mid-session would keep hitting the stale cached content,
+    ///   because cache hits only check identity + TTL, never content.
+    /// - `winstr:<on|off>` — the `workspace_instruction_files` master switch
+    ///   changes the rendered User Context content (project AGENTS.md / CLAUDE.md
+    ///   skipped when off). Same staleness concern as `extsrc`.
+    /// - `|instr:<digest>` (TOKEN-03): the digest of the workspace instruction
+    ///   files (workspace-level `AGENTS.md`/`CLAUDE.md` and user-level external
+    ///   sources when enabled). Appended AFTER the stable prefix so unchanged
+    ///   content keeps hitting the cache while an edited instruction file
+    ///   invalidates it.
+    async fn user_context_cache_identity_for(
+        base_identity: UserContextCacheIdentity,
+        remote_connection: Option<&str>,
+        workspace_root: Option<std::path::PathBuf>,
+    ) -> UserContextCacheIdentity {
+        let mut scope_key = base_identity.scope_key;
+        if let Some(connection) = remote_connection {
+            scope_key = format!("{scope_key}|remote:{connection}");
+        }
+        let external_sources =
+            crate::service::config::external_instruction_sources_enabled();
+        scope_key = format!(
+            "{scope_key}|extsrc:{}",
+            if external_sources { "on" } else { "off" }
+        );
+        let workspace_instruction_files =
+            crate::service::config::workspace_instruction_files_enabled();
+        scope_key = format!(
+            "{scope_key}|winstr:{}",
+            if workspace_instruction_files { "on" } else { "off" }
+        );
+        if let Some(workspace_root) = workspace_root {
+            let digest = workspace_instruction_digest(&workspace_root, external_sources).await;
+            scope_key = format!("{scope_key}|instr:{digest}");
+        }
+        UserContextCacheIdentity::new(scope_key)
+    }
+
     async fn build_cached_prepended_prompt_reminders(
         &self,
         execution_context: &ExecutionContext,
         current_agent: &dyn crate::agentic::agents::Agent,
         prompt_context: Option<&PromptBuilderContext>,
+        runtime_facts_usage: RuntimeFactsUsage,
     ) -> PrependedPromptReminders {
         let Some(prompt_context) = prompt_context.cloned() else {
             return PrependedPromptReminders::default();
@@ -1225,19 +1569,19 @@ impl ExecutionEngine {
                 session_id
             );
         }
-        let user_context_identity = {
-            let base_identity = current_agent.user_context_cache_identity();
-            // Append the remote connection to the cache scope so a failed overlay
-            // (cached without remote hints) does not persist across reconnects.
-            if let Some(connection) = &remote_connection_for_cache {
-                UserContextCacheIdentity::new(format!(
-                    "{}|remote:{}",
-                    base_identity.scope_key, connection
-                ))
-            } else {
-                base_identity
-            }
-        };
+        let user_context_identity = Self::user_context_cache_identity_for(
+            current_agent.user_context_cache_identity(),
+            remote_connection_for_cache.as_deref(),
+            // TOKEN-03: include the workspace instruction content digest so a
+            // changed instruction file invalidates the session-level cache.
+            // The digest is appended AFTER the existing scope-key prefix so
+            // stable prefixes keep matching for unchanged content.
+            execution_context
+                .workspace
+                .as_ref()
+                .map(|workspace| workspace.root_path().to_path_buf()),
+        )
+        .await;
         let user_context = if let Some(cached_user_context) = self
             .session_manager
             .cached_user_context(session_id, &user_context_identity)
@@ -1292,6 +1636,7 @@ impl ExecutionEngine {
             built_user_context
         };
         let runtime_context = prompt_builder.build_runtime_context_reminder().await;
+        let runtime_facts = Some(prompt_builder.build_runtime_facts_reminder(runtime_facts_usage));
 
         PrependedPromptReminders {
             deferred_tool_listing: prompt_builder.build_deferred_tool_listing_reminder(),
@@ -1302,6 +1647,7 @@ impl ExecutionEngine {
                 .as_ref()
                 .and_then(|sections| sections.render_agent_listing_reminder()),
             runtime_context,
+            runtime_facts,
             user_context,
         }
     }
@@ -1340,7 +1686,81 @@ impl ExecutionEngine {
             .await;
         Ok(system_prompt)
     }
+}
 
+/// TOKEN-03: digest of the workspace instruction files that feed the User
+/// Context reminder, so the session-level User Context cache invalidates when
+/// an instruction file's content changes (the cache identity previously only
+/// covered the policy scope labels, so edited instructions stayed invisible
+/// until the session rebuilt).
+///
+/// Best-effort: any read/scan failure falls back to `"unreadable"` so the
+/// digest never blocks prompt assembly; the cache just misses once and the
+/// fresh content is re-read on the miss path.
+async fn workspace_instruction_digest(workspace_root: &std::path::Path, external_sources: bool) -> String {
+    use std::collections::BTreeMap;
+
+    let mut digest_input = String::new();
+
+    // Workspace-level instruction files (startup-context, no path patterns) —
+    // only when the workspace instruction files master switch is on, mirroring
+    // the render path in service::instruction_context.
+    if crate::service::config::workspace_instruction_files_enabled() {
+        match bitfun_services_core::workspace_instructions::read_workspace_instruction_files(
+            workspace_root,
+        )
+        .await
+        {
+            Ok(files) => {
+                for file in files {
+                    digest_input.push_str(&file.name);
+                    digest_input.push('\0');
+                    digest_input.push_str(&file.content);
+                    digest_input.push('\0');
+                }
+            }
+            Err(error) => {
+                log::warn!(
+                    "workspace_instruction_digest: failed to read workspace instruction files: {}",
+                    error
+                );
+                return "unreadable".to_string();
+            }
+        }
+    }
+
+    // User-level external instruction sources (~/.claude/CLAUDE.md, OpenCode
+    // AGENTS.md, Codex AGENTS.md, rules/) — only when the master switch is on,
+    // mirroring the render path in service::instruction_context.
+    if external_sources {
+        match crate::instruction_sources::load_local_user_instruction_files(workspace_root).await
+        {
+            loaded => {
+                let mut names: BTreeMap<String, String> = BTreeMap::new();
+                for file in loaded.files {
+                    names.insert(file.name.clone(), file.content.clone());
+                }
+                for (name, content) in names {
+                    digest_input.push_str(&name);
+                    digest_input.push('\0');
+                    digest_input.push_str(&content);
+                    digest_input.push('\0');
+                }
+            }
+        }
+    }
+
+    if digest_input.is_empty() {
+        return "none".to_string();
+    }
+
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(digest_input.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+impl ExecutionEngine {
     async fn resolve_turn_prompt_scaffold(
         &self,
         input: TurnPromptScaffoldInput<'_>,
@@ -1367,6 +1787,7 @@ impl ExecutionEngine {
                 input.context,
                 input.current_agent,
                 prompt_context.as_ref(),
+                input.runtime_facts_usage,
             )
             .await;
         let system_prompt = self
@@ -1399,7 +1820,7 @@ impl ExecutionEngine {
         prepended_prompt_reminders: &PrependedPromptReminders,
     ) {
         debug!(
-            "Turn prompt scaffold resolved: session_id={}, turn_id={}, stage={}, system_prompt_len={} bytes, skill_listing_len={}, agent_listing_len={}, deferred_tool_listing_len={}, user_context_len={}, runtime_context_len={}",
+            "Turn prompt scaffold resolved: session_id={}, turn_id={}, stage={}, system_prompt_len={} bytes, skill_listing_len={}, agent_listing_len={}, deferred_tool_listing_len={}, user_context_len={}, runtime_context_len={}, runtime_facts_len={}",
             session_id,
             turn_id,
             stage,
@@ -1428,6 +1849,11 @@ impl ExecutionEngine {
                 .runtime_context
                 .as_ref()
                 .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .runtime_facts
+                .as_ref()
+                .map(|text| text.len())
                 .unwrap_or(0)
         );
     }
@@ -1442,6 +1868,88 @@ impl ExecutionEngine {
             }
             _ => messages.insert(0, scaffold.system_prompt_message.clone()),
         }
+    }
+
+    /// Refresh only the per-round runtime facts reminder on a turn scaffold so
+    /// every model request carries live time and the current token pressure
+    /// snapshot instead of the turn-start values. Long-lived turns (background
+    /// Task agents, subagents, deep-review passes) can span many rounds and
+    /// minutes; keeping the turn-start snapshot would freeze the model's view
+    /// of time and context usage for the whole turn.
+    ///
+    /// ENGINE-01/07: sessions without a workspace never produce a prompt
+    /// context (`build_prompt_context` returns `None`), so the round-level
+    /// reminder previously stayed frozen at the turn-start value forever.
+    /// `build_runtime_facts_reminder` only needs the live clock and the usage
+    /// snapshot, so a minimal context refreshes it for every session shape.
+    /// The reminder always builds (returns `String`, never `None`), so the
+    /// round-level refresh can no longer silently skip.
+    /// P-17：按回合标记刷新或置空 Runtime Facts。
+    /// - inject_runtime_facts == true（用户消息回合首轮或上下文恢复后首轮）→ 刷新注入。
+    /// - false（同回合工具轮）→ 置空，动态后置不再携带 Runtime Facts。
+    fn refresh_runtime_facts_for_round(
+        scaffold: &mut TurnPromptScaffold,
+        prompt_context: Option<PromptBuilderContext>,
+        usage: RuntimeFactsUsage,
+        inject_runtime_facts: bool,
+    ) {
+        if !inject_runtime_facts {
+            scaffold.prepended_prompt_reminders.runtime_facts = None;
+            return;
+        }
+        let builder = match prompt_context {
+            Some(prompt_context) => PromptBuilder::new(prompt_context),
+            None => {
+                let mut context = PromptBuilderContext::new("", None, None);
+                // Preserve remote_execution from original context if available
+                if let Some(original_context) = &prompt_context {
+                    context.remote_execution = original_context.remote_execution.clone();
+                }
+                PromptBuilder::new(context)
+            },
+        };
+        let refreshed = builder.build_runtime_facts_reminder(usage);
+        scaffold.prepended_prompt_reminders.runtime_facts = Some(refreshed);
+    }
+
+    /// P-18：按会话级 User Context 注入规则构建本轮动态后置提醒。
+    /// - Runtime Facts：沿用 scaffold（refresh_runtime_facts_for_round 已按回合标记
+    ///   置空或刷新：用户首轮/恢复后首轮 = Some，工具轮 = None）。
+    /// - User Context：整个会话生命周期只注入一次（新建会话首次用户输入注入）。
+    ///   注入世代 == 当前世代 → 已注入过，后续所有回合（含后续用户回合与工具轮）
+    ///   均不重复注入；上下文压缩/恢复使缓存世代递增 → 恢复后首轮重新注入一次。
+    ///   原实现（每回合首轮注入）在 execute_dialog_turn_impl 每次 turn 开始清除
+    ///   注入标记，导致同一会话每个用户回合都重复注入工作区指令全文。
+    async fn round_dynamic_reminders<'a>(
+        &self,
+        session_id: &str,
+        reminders: &'a PrependedPromptReminders,
+    ) -> Vec<&'a str> {
+        let mut dynamic = Vec::new();
+        if let Some(runtime_facts) = reminders.runtime_facts.as_deref() {
+            dynamic.push(runtime_facts);
+        }
+        let generation = self
+            .session_manager
+            .user_context_cache_generation(session_id)
+            .await;
+        let injected_generation = self
+            .session_manager
+            .user_context_injected_generation(session_id)
+            .await;
+        // P-18（d5-P1-1）：只在真正注入了 User Context 时才记录注入世代。
+        // `user_context` 为 None（无 workspace / 指令文件构建失败 / 无内容可注入）时
+        // 不记录——否则同一世代内后续轮被抑制注入，而模型实际从未看到 User Context，
+        // 当缓存恢复可用时（如远端重连）也必须能重新注入。
+        if injected_generation != Some(generation) {
+            if let Some(user_context) = reminders.user_context.as_deref() {
+                dynamic.push(user_context);
+                self.session_manager
+                    .remember_user_context_injected_generation(session_id, generation)
+                    .await;
+            }
+        }
+        dynamic
     }
 
     pub(crate) async fn resolve_model_id_for_turn(
@@ -1618,11 +2126,13 @@ impl ExecutionEngine {
                 .map(|workspace| workspace.root_path()),
             &input.context.dialog_turn_id,
             input.primary_model_facts.supports_image_inputs,
-            input.prepended_reminders,
+            input.static_prepended_reminders,
+            input.dynamic_prepended_reminders,
+            Self::configured_max_image_bearing_messages().await,
         )
         .await?;
         final_ai_messages.push(AIMessage::user(render_system_reminder(input.reminder_text)));
-        final_ai_messages.push(AIMessage::user(Self::FINALIZE_USER_FOLLOWUP.to_string()));
+        final_ai_messages.push(AIMessage::user(render_system_reminder(Self::FINALIZE_USER_FOLLOWUP)));
 
         let model_exchange_trace_dir = self
             .session_manager
@@ -1639,6 +2149,7 @@ impl ExecutionEngine {
             workspace: input.context.workspace.clone(),
             model_exchange_trace_dir,
             available_tools: finalize_tool_names,
+            user_enabled_tools: input.user_enabled_tools.clone(),
             deferred_tools: Vec::new(),
             loaded_deferred_tool_specs: Vec::new(),
             model_config_id: input.primary_model_facts.model_id.clone(),
@@ -1675,19 +2186,27 @@ impl ExecutionEngine {
         workspace_path: Option<&Path>,
         current_turn_id: &str,
         attach_images: bool,
-        prepended_reminders: &[&str],
+        static_prepended_reminders: &[&str],
+        dynamic_prepended_reminders: &[&str],
+        max_image_bearing_messages: usize,
     ) -> BitFunResult<Vec<AIMessage>> {
-        /// Only the last this many **messages** that contain images keep their images for the API.
-        const MAX_IMAGE_BEARING_MESSAGE_ROUNDS: usize = 2;
-
+        // Only the last `max_image_bearing_messages` messages that contain
+        // images keep their images for the API.
         let limits = ImageLimits::for_provider(provider);
 
-        let trimmed_reminders = prepended_reminders
+        let trimmed_static_reminders = static_prepended_reminders
             .iter()
             .map(|text| text.trim())
             .filter(|text| !text.is_empty())
             .collect::<Vec<_>>();
-        let mut result = Vec::with_capacity(messages.len() + trimmed_reminders.len());
+        let trimmed_dynamic_reminders = dynamic_prepended_reminders
+            .iter()
+            .map(|text| text.trim())
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>();
+        let mut result = Vec::with_capacity(
+            messages.len() + trimmed_static_reminders.len() + trimmed_dynamic_reminders.len(),
+        );
         let mut attached_image_count = 0usize;
         let first_non_system_index = messages
             .iter()
@@ -1696,14 +2215,17 @@ impl ExecutionEngine {
         let mut prepended_reminders_injected = false;
 
         let keep_image_messages = if attach_images {
-            Self::image_bearing_indices_to_keep(messages, MAX_IMAGE_BEARING_MESSAGE_ROUNDS)
+            Self::image_bearing_indices_to_keep(messages, max_image_bearing_messages)
         } else {
             HashSet::new()
         };
 
         for (msg_idx, msg) in messages.iter().enumerate() {
             if !prepended_reminders_injected && msg_idx == first_non_system_index {
-                for reminder in &trimmed_reminders {
+                // Static reminders (deferred tool listing / skill / agent /
+                // runtime context) stay right after the system message so the
+                // provider-side prompt/prefix cache prefix stays stable.
+                for reminder in &trimmed_static_reminders {
                     result.push(AIMessage::user(render_system_reminder(reminder)));
                 }
                 prepended_reminders_injected = true;
@@ -1741,7 +2263,7 @@ impl ExecutionEngine {
                             "{}\n\n[{} image(s) from this message omitted: only the latest {} message(s) in the conversation that contain images are sent to the model.]",
                             prompt.trim_end(),
                             dropped_count,
-                            MAX_IMAGE_BEARING_MESSAGE_ROUNDS
+                            max_image_bearing_messages
                         )
                     } else {
                         prompt
@@ -1817,7 +2339,7 @@ impl ExecutionEngine {
                                     "{}\n\n[{} image(s) from this tool result omitted: only the latest {} message(s) in the conversation that contain images are sent to the model.]",
                                     content_str.trim_end(),
                                     dropped,
-                                    MAX_IMAGE_BEARING_MESSAGE_ROUNDS
+                                    max_image_bearing_messages
                                 ));
                                 ai.tool_image_attachments = None;
                             }
@@ -1830,9 +2352,18 @@ impl ExecutionEngine {
         }
 
         if !prepended_reminders_injected {
-            for reminder in trimmed_reminders {
+            for reminder in trimmed_static_reminders {
                 result.push(AIMessage::user(render_system_reminder(reminder)));
             }
+        }
+
+        // Dynamic reminders (runtime facts refreshed every round + user
+        // context) are always appended at the very end of the message
+        // sequence, after the newest user message, so their per-round
+        // changes never break the stable cache prefix built from the system
+        // message, the static reminders and the full conversation history.
+        for reminder in trimmed_dynamic_reminders {
+            result.push(AIMessage::user(render_system_reminder(reminder)));
         }
 
         Ok(result)
@@ -1886,14 +2417,17 @@ impl ExecutionEngine {
         attach_images: bool,
         prepended_prompt_reminders: &PrependedPromptReminders,
     ) -> BitFunResult<Vec<AIMessage>> {
-        let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
+        let static_reminders = prepended_prompt_reminders.static_ordered_reminders();
+        let dynamic_reminders = prepended_prompt_reminders.dynamic_ordered_reminders();
         let mut compression_messages = Self::build_ai_messages_for_send(
             runtime_messages,
             provider,
             workspace.map(|workspace| workspace.root_path()),
             dialog_turn_id,
             attach_images,
-            &prepended_reminders,
+            &static_reminders,
+            &dynamic_reminders,
+            Self::configured_max_image_bearing_messages().await,
         )
         .await?;
         compression_messages.push(AIMessage::user(
@@ -2039,17 +2573,20 @@ impl ExecutionEngine {
         trace_config: Option<ModelExchangeTraceConfig>,
     ) -> BitFunResult<Option<crate::agentic::session::CompressionResult>> {
         let max_initial_recent = context_window.saturating_div(2).max(1);
-        let mut recent_target =
-            ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS.min(max_initial_recent);
+        let recent_context_tokens = Self::configured_compression_recent_context_tokens().await;
+        let retry_step_tokens = Self::configured_compression_retry_step_tokens().await;
+        let mut recent_target = recent_context_tokens.min(max_initial_recent);
+        let max_overflow_attempts = Self::configured_compression_overflow_attempts().await;
         let mut selected_plan = None;
         let mut model_summary = None;
 
-        for attempt in 0..Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS {
+        for attempt in 0..max_overflow_attempts {
             let Some(plan) = self.context_compressor.plan_compression(
                 session_id,
                 runtime_messages,
                 context_window,
                 recent_target,
+                Some(Self::configured_compression_max_retained_user_tokens().await),
             )?
             else {
                 break;
@@ -2059,7 +2596,7 @@ impl ExecutionEngine {
                 session_id,
                 dialog_turn_id,
                 attempt + 1,
-                Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS,
+                max_overflow_attempts,
                 plan.retained_user_token_budget,
                 plan.retained_user_tokens,
                 plan.retained_user_messages.len(),
@@ -2095,19 +2632,19 @@ impl ExecutionEngine {
                         session_id,
                         dialog_turn_id,
                         attempt + 1,
-                        Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS,
+                        max_overflow_attempts,
                         plan.recent_target_tokens,
                         plan.cutoff_message_index,
                         plan.next_recent_target_tokens,
                         err
                     );
-                    let can_retry = attempt + 1 < Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS
+                    let can_retry = attempt + 1 < max_overflow_attempts
                         && plan.next_recent_target_tokens.is_some();
                     let next_recent_target = plan.next_recent_target_tokens;
                     selected_plan = Some(plan);
                     if can_retry {
                         recent_target = recent_target
-                            .saturating_add(ContextCompressor::RECENT_CONTEXT_RETRY_STEP_TOKENS)
+                            .saturating_add(retry_step_tokens)
                             .max(next_recent_target.expect("retry target checked above"));
                         continue;
                     }
@@ -2257,7 +2794,11 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
             )
             .await;
-        let allowed_tools = tool_policy.allowed_tools.clone();
+        let mut allowed_tools = tool_policy.allowed_tools.clone();
+        ensure_primary_session_goal_tools(
+            &mut allowed_tools,
+            context.subagent_parent_info.is_some(),
+        );
         let enable_tools = context
             .context
             .get("enable_tools")
@@ -2311,6 +2852,9 @@ impl ExecutionEngine {
                 supports_image_understanding: primary_supports_image_understanding,
                 tool_listing_sections,
                 runtime_context_needs,
+                // Compression model requests do not need per-turn runtime
+                // facts; the default keeps their prompt prefix stable.
+                runtime_facts_usage: RuntimeFactsUsage::default(),
                 stage: "compression_scaffold",
             })
             .await?;
@@ -2353,6 +2897,187 @@ impl ExecutionEngine {
         }
     }
 
+    /// Custom compaction checkpoint, intentionally outside the `app.hooks.enabled`
+    /// gate: persist a lightweight pre-compaction progress snapshot into session
+    /// metadata so long-running tasks can verify goal/role/todos state survived
+    /// context compaction.
+    async fn preserve_compaction_progress_snapshot(
+        &self,
+        session_id: &str,
+        trigger: &str,
+        session: &Session,
+    ) {
+        let Some(storage_path) = self
+            .session_manager
+            .effective_session_storage_path(session_id)
+            .await
+        else {
+            // Session persistence is disabled; there is nowhere to store the
+            // snapshot and post-compaction verification is skipped accordingly.
+            debug!(
+                "Compaction snapshot skipped (session storage unavailable): session_id={}",
+                session_id
+            );
+            return;
+        };
+
+        let mut has_thread_goal = false;
+        let mut todos_present = false;
+        let mut custom_metadata_present = false;
+        match self
+            .session_manager
+            .load_session_metadata(&storage_path, session_id)
+            .await
+        {
+            Ok(Some(metadata)) => {
+                has_thread_goal = metadata
+                    .custom_metadata
+                    .as_ref()
+                    .and_then(|value| value.get(bitfun_runtime_ports::THREAD_GOAL_METADATA_KEY))
+                    .is_some();
+                todos_present = metadata.todos.is_some();
+                custom_metadata_present = metadata.custom_metadata.is_some();
+            }
+            Ok(None) => {}
+            Err(error) => {
+                debug!(
+                    "Compaction snapshot baseline unavailable: session_id={}, error={}",
+                    session_id, error
+                );
+            }
+        }
+
+        let snapshot = serde_json::json!({
+            "trigger": trigger,
+            "compressionCountBefore": session.compression_state.compression_count,
+            "agentType": session.agent_type,
+            "hasThreadGoal": has_thread_goal,
+            "todosPresent": todos_present,
+            "customMetadataPresent": custom_metadata_present,
+            "recordedAtMs": compaction_snapshot_timestamp_ms(),
+        });
+        if let Err(error) = self
+            .session_manager
+            .merge_session_custom_metadata(
+                session_id,
+                serde_json::json!({ COMPACTION_PROGRESS_SNAPSHOT_KEY: snapshot }),
+            )
+            .await
+        {
+            warn!(
+                "Failed to persist compaction progress snapshot: session_id={}, trigger={}, error={}",
+                session_id, trigger, error
+            );
+        } else {
+            // Registered: active subagent tracking is runtime-only (coordinator
+            // in-memory state) and is not persisted in session metadata;
+            // compaction does not clear it.
+            debug!(
+                "Compaction snapshot recorded: session_id={}, trigger={}, active_subagents=runtime_only_not_persisted",
+                session_id, trigger
+            );
+        }
+    }
+
+    /// Custom compaction checkpoint, intentionally outside the `app.hooks.enabled`
+    /// gate: read-only verification that goal/role/todos survived context
+    /// compaction. Only warns on missing state; never blocks or rewrites anything.
+    async fn verify_compaction_progress_state(
+        &self,
+        session_id: &str,
+        trigger: &str,
+        session: &Session,
+    ) {
+        let Some(storage_path) = self
+            .session_manager
+            .effective_session_storage_path(session_id)
+            .await
+        else {
+            return;
+        };
+        let metadata = match self
+            .session_manager
+            .load_session_metadata(&storage_path, session_id)
+            .await
+        {
+            Ok(Some(metadata)) => metadata,
+            Ok(None) => {
+                warn!(
+                    "Compaction verification: session metadata missing after compaction: session_id={}, trigger={}",
+                    session_id, trigger
+                );
+                return;
+            }
+            Err(error) => {
+                warn!(
+                    "Compaction verification: failed to load session metadata after compaction: session_id={}, trigger={}, error={}",
+                    session_id, trigger, error
+                );
+                return;
+            }
+        };
+
+        let Some(snapshot) = metadata
+            .custom_metadata
+            .as_ref()
+            .and_then(|value| value.get(COMPACTION_PROGRESS_SNAPSHOT_KEY))
+        else {
+            // No baseline was recorded (e.g. persistence disabled at snapshot
+            // time); verification is skipped without noise.
+            return;
+        };
+
+        let mut missing = Vec::new();
+        if session.agent_type
+            != snapshot
+                .get("agentType")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("")
+        {
+            missing.push("role(agent_type)");
+        }
+        if snapshot
+            .get("hasThreadGoal")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+            && metadata
+                .custom_metadata
+                .as_ref()
+                .and_then(|value| value.get(bitfun_runtime_ports::THREAD_GOAL_METADATA_KEY))
+                .is_none()
+        {
+            missing.push("thread_goal");
+        }
+        if snapshot
+            .get("todosPresent")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+            && metadata.todos.is_none()
+        {
+            missing.push("todos");
+        }
+        if snapshot
+            .get("customMetadataPresent")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+            && metadata.custom_metadata.is_none()
+        {
+            missing.push("custom_metadata");
+        }
+
+        if missing.is_empty() {
+            debug!(
+                "Compaction verification passed: session_id={}, trigger={}",
+                session_id, trigger
+            );
+        } else {
+            warn!(
+                "Compaction verification: state lost across compaction: session_id={}, trigger={}, missing={}",
+                session_id, trigger, missing.join(",")
+            );
+        }
+    }
+
     /// Compress context, will emit compression events (Started, Completed, and Failed)
     #[allow(clippy::too_many_arguments)]
     async fn compress_messages(
@@ -2390,6 +3115,11 @@ impl ExecutionEngine {
         let compression_id = format!("compression_{}", uuid::Uuid::new_v4());
         // Captured before `ai_client` is consumed by summary generation.
         let ai_client_model = ai_client.config.model.clone();
+
+        // Capture pre-compaction progress state before native hook dispatch so
+        // long-running task state can be verified after compaction.
+        self.preserve_compaction_progress_snapshot(session_id, trigger, &session)
+            .await;
 
         native_hooks::dispatch_pre_compact(
             Self::native_hook_facts(session_id, dialog_turn_id, workspace, &ai_client_model),
@@ -2593,6 +3323,11 @@ impl ExecutionEngine {
                 )
                 .await;
 
+                // Verify goal/role/todos survived compaction after native hook
+                // dispatch; only warns on missing state.
+                self.verify_compaction_progress_state(session_id, trigger, &session)
+                    .await;
+
                 Ok(Some((compressed_tokens, new_messages)))
             }
             Ok(None) => Ok(None),
@@ -2636,6 +3371,10 @@ impl ExecutionEngine {
         let scaffold = self
             .resolve_compression_runtime_scaffold(&session, &context)
             .await?;
+        // Capture pre-compaction progress state before native hook dispatch so
+        // long-running task state can be verified after compaction.
+        self.preserve_compaction_progress_snapshot(&session_id, trigger, &session)
+            .await;
         native_hooks::dispatch_pre_compact(
             Self::native_hook_facts(
                 &session_id,
@@ -2651,8 +3390,11 @@ impl ExecutionEngine {
         let prepended_reminders = scaffold.prepended_prompt_reminders.ordered_reminders();
         let prepended_reminder_tokens =
             Self::prepended_reminder_tokens_for_pressure(&prepended_reminders);
-        let compression_trigger_budget =
-            Self::compression_trigger_budget(context_window, scaffold.ai_client.config.max_tokens);
+        let compression_trigger_budget = Self::compression_trigger_budget_configured(
+            context_window,
+            scaffold.ai_client.config.max_tokens,
+        )
+        .await;
         let mut runtime_messages = vec![scaffold.system_prompt_message.clone()];
         runtime_messages.extend(messages.clone());
         let before_pressure = Self::estimate_auto_compression_pressure(
@@ -2858,6 +3600,11 @@ impl ExecutionEngine {
                 )
                 .await;
 
+                // Verify goal/role/todos survived compaction after native hook
+                // dispatch; only warns on missing state.
+                self.verify_compaction_progress_state(&session_id, trigger, &session)
+                    .await;
+
                 Ok(ContextCompactionOutcome {
                     compression_id,
                     compression_count,
@@ -2985,6 +3732,14 @@ impl ExecutionEngine {
             "Executing dialog turn implementation: dialog_turn_id={}",
             dialog_turn_id
         );
+
+        // P-18（每会话一次语义）：User Context 注入标记在整个会话生命周期内
+        // 只清除一次——首次执行时注入一次，之后所有用户回合都不再重新注入。
+        // round_dynamic_reminders 通过 user_context_injected_generation 与
+        // user_context_cache_generation 比较：已注入过（标记 == 当前世代）→
+        // 不再注入；上下文压缩/恢复使缓存世代递增 → 恢复后首轮重新注入一次。
+        // 原实现（每回合首轮注入）在 turn 开始时清除标记，导致同一会话每个
+        // 用户回合都重复注入工作区指令全文；现改为会话级一次注入。
 
         // Things that remain constant in a dialog turn: 1.agent, 2.system prompt, 3.tools, 4.ai client
         // 1. Get current agent
@@ -3182,7 +3937,11 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
             )
             .await;
-        let allowed_tools = tool_policy.allowed_tools.clone();
+        let mut allowed_tools = tool_policy.allowed_tools.clone();
+        ensure_primary_session_goal_tools(
+            &mut allowed_tools,
+            context.subagent_parent_info.is_some(),
+        );
         let enable_tools = context
             .context
             .get("enable_tools")
@@ -3278,6 +4037,9 @@ impl ExecutionEngine {
         // 4. Resolve the prompt scaffold used by model requests in this turn.
         // It is refreshed after successful context compression so the first
         // post-compaction request builds the new provider-side prefix cache.
+        // Runtime facts carry a turn-start usage estimate: system prompt and
+        // prepended reminder tokens are not yet measurable at this point, so
+        // it is a lower bound that gets refreshed after context compression.
         let mut turn_prompt_scaffold = self
             .resolve_turn_prompt_scaffold(TurnPromptScaffoldInput {
                 context: &context,
@@ -3286,6 +4048,19 @@ impl ExecutionEngine {
                 supports_image_understanding: primary_supports_image_understanding,
                 tool_listing_sections: tool_listing_sections.clone(),
                 runtime_context_needs,
+                runtime_facts_usage: Self::runtime_facts_usage_from_pressure(
+                    &Self::estimate_auto_compression_pressure(
+                        &initial_messages,
+                        tool_definitions.as_deref(),
+                        context_window,
+                        Self::compression_trigger_budget_configured(
+                            context_window,
+                            ai_client.config.max_tokens,
+                        )
+                        .await,
+                        0,
+                    ),
+                ),
                 stage: "turn_start",
             })
             .await?;
@@ -3295,12 +4070,18 @@ impl ExecutionEngine {
         messages.extend(initial_messages);
 
         let mut round_index = 0;
+        // P-17：本轮是否发生上下文恢复（压缩/溢出恢复），恢复后首轮需注入 Runtime Facts。
+        let mut context_recovered_this_round = false;
         let mut completed_rounds = 0usize;
         let mut total_tools = 0;
         let mut last_partial_recovery_reason: Option<String> = None;
         let mut finalization_reason: Option<&'static str> = None;
         let mut consecutive_compression_failures: u32 = 0;
-        const MAX_CONSECUTIVE_COMPRESSION_FAILURES: u32 = 3;
+        // 阈值参数配置化：ai.thresholds.compression.*
+        let compression_counts = Self::configured_compression_counts().await;
+        let max_consecutive_compression_failures = compression_counts.2 as u32;
+        let max_failed_tool_recovery_attempts = compression_counts.3;
+        let max_stop_hook_continuations = compression_counts.4;
         let mut main_context_overflow_recoveries = 0usize;
         let mut active_round_lifecycle: Option<ModelRoundLifecycle> = None;
 
@@ -3309,21 +4090,21 @@ impl ExecutionEngine {
         let mut recent_tool_signatures: Vec<String> = Vec::new();
         let mut recent_failed_tool_signatures: Vec<String> = Vec::new();
         let mut failed_tool_recovery_attempts: usize = 0;
-        const MAX_FAILED_TOOL_RECOVERY_ATTEMPTS: usize = 3;
-        const MAX_PARTIAL_CONTINUATION_ATTEMPTS: usize = 3;
+        let max_partial_continuation_attempts: usize = 3;
         let mut full_compression_count = 0usize;
         let mut compression_failure_count = 0u32;
 
         // Save the last token usage statistics
         let mut last_usage: Option<crate::util::types::ai::GeminiUsage> = None;
 
-        // Track thinking-only rescue reminders for observability. This counter
-        // is not a stop condition.
+        // Track thinking-only rescue reminders. This counter is also a stop
+        // condition: repeated thinking-only rounds with no progress exhaust
+        // DEFAULT_EMPTY_ROUND_RESPAWN_LIMIT and end the turn with a local
+        // final response (resets on rounds that made progress).
         let mut thinking_only_rescue_attempts: usize = 0;
         let mut partial_continuation_attempts: usize = 0;
         // Bounds how often Stop hooks may reopen a finished turn.
         let mut stop_hook_continuations: usize = 0;
-        const MAX_STOP_HOOK_CONTINUATIONS: usize = 3;
 
         // Add detailed logging showing the execution context messages.
         debug!(
@@ -3345,8 +4126,11 @@ impl ExecutionEngine {
         );
 
         let enable_context_compression = session.config.enable_context_compression;
-        let compression_trigger_budget =
-            Self::compression_trigger_budget(context_window, ai_client.config.max_tokens);
+        let compression_trigger_budget = Self::compression_trigger_budget_configured(
+            context_window,
+            ai_client.config.max_tokens,
+        )
+        .await;
 
         // If the primary model is text-only, do not send image payloads to the provider.
         // Instead, keep a text-only placeholder (including `image_id`).
@@ -3401,7 +4185,7 @@ impl ExecutionEngine {
                 .session_manager
                 .select_latest_matching_token_anchor(&context.session_id, &messages)
                 .await;
-            let (token_pressure, anchor_details) =
+            let (mut token_pressure, anchor_details) =
                 Self::estimate_auto_compression_pressure_with_anchor(
                     &messages,
                     tool_definitions.as_deref(),
@@ -3483,14 +4267,17 @@ impl ExecutionEngine {
                 token_pressure.safety_reserve_tokens
             );
 
+            // ENGINE-03：input_limit == 0 表示窗口过小，仅预留（output reserve +
+            // safety reserve）就已超出窗口；此时禁用自动压缩，而不是每轮都无条件压缩。
             let should_compress = enable_context_compression
+                && token_pressure.input_limit > 0
                 && token_pressure.total_tokens >= token_pressure.input_limit;
             let mut send_pressure_reusable = true;
 
             // Circuit breaker: skip full compression if it has failed too many
             // consecutive times.  Microcompact and emergency truncation still run.
             let circuit_breaker_open =
-                consecutive_compression_failures >= MAX_CONSECUTIVE_COMPRESSION_FAILURES;
+                consecutive_compression_failures >= max_consecutive_compression_failures;
 
             if !should_compress {
                 debug!(
@@ -3520,77 +4307,154 @@ impl ExecutionEngine {
                     token_pressure.usage_ratio * 100.0
                 );
 
-                match self
-                    .compress_messages(
-                        &context.session_id,
-                        &context.dialog_turn_id,
-                        "auto",
-                        messages.clone(),
-                        token_pressure,
-                        context_window,
-                        ai_client.clone(),
-                        &tool_definitions,
-                        turn_prompt_scaffold.system_prompt_message.clone(),
-                        &turn_prompt_scaffold.prepended_prompt_reminders,
-                        primary_supports_image_understanding,
-                        context_profile_policy.compression_contract_limit,
-                        context.workspace.as_ref(),
-                    )
-                    .await
+                // ENGINE-04: a single full-compression pass can still leave the
+                // context over input_limit (the compression contract preserves a
+                // recent-context tail). Re-check input_limit after each pass and
+                // compress again in the same round (bounded) instead of trusting
+                // the pre-compression snapshot.
+                let max_same_round_compression_passes = compression_counts.5 as u32;
+                let mut compression_passes = 0u32;
+                let mut compressed_this_round = false;
+                while !circuit_breaker_open
+                    && compression_passes < max_same_round_compression_passes
+                    && token_pressure.total_tokens >= token_pressure.input_limit
                 {
-                    Ok(Some((compressed_tokens, compressed_messages))) => {
-                        info!(
-                            "Round {} compression completed: messages {} -> {}, tokens {} -> {}",
-                            round_index,
-                            messages.len(),
-                            compressed_messages.len(),
-                            token_pressure.total_tokens,
-                            compressed_tokens,
-                        );
+                    compression_passes += 1;
+                    match self
+                        .compress_messages(
+                            &context.session_id,
+                            &context.dialog_turn_id,
+                            "auto",
+                            messages.clone(),
+                            token_pressure,
+                            context_window,
+                            ai_client.clone(),
+                            &tool_definitions,
+                            turn_prompt_scaffold.system_prompt_message.clone(),
+                            &turn_prompt_scaffold.prepended_prompt_reminders,
+                            primary_supports_image_understanding,
+                            context_profile_policy.compression_contract_limit,
+                            context.workspace.as_ref(),
+                        )
+                        .await
+                    {
+                        Ok(Some((compressed_tokens, compressed_messages))) => {
+                            info!(
+                                "Round {} compression pass {} completed: messages {} -> {}, tokens {} -> {}",
+                                round_index,
+                                compression_passes,
+                                messages.len(),
+                                compressed_messages.len(),
+                                token_pressure.total_tokens,
+                                compressed_tokens,
+                            );
 
-                        messages = compressed_messages;
-                        turn_prompt_scaffold = self
-                            .resolve_turn_prompt_scaffold(TurnPromptScaffoldInput {
-                                context: &context,
-                                current_agent: current_agent.as_ref(),
-                                model_name: &ai_client.config.model,
-                                supports_image_understanding: primary_supports_image_understanding,
-                                tool_listing_sections: tool_listing_sections.clone(),
-                                runtime_context_needs,
-                                stage: "after_context_compression",
-                            })
-                            .await?;
-                        Self::apply_turn_prompt_scaffold_to_messages(
-                            &mut messages,
-                            &turn_prompt_scaffold,
-                        );
-                        full_compression_count += 1;
-                        consecutive_compression_failures = 0;
-                        send_pressure_reusable = false;
+                            messages = compressed_messages;
+                            // ENGINE-02: recompute the pressure against the
+                            // compressed messages so the next-pass decision, the
+                            // scaffold refresh, and the runtime-facts reminder all
+                            // see the post-compression state instead of the stale
+                            // pre-compression snapshot. The prepended reminders are
+                            // still the pre-refresh values here — they are small and
+                            // the final send-pressure estimate below reuses the
+                            // freshly resolved scaffold.
+                            token_pressure = Self::estimate_auto_compression_pressure(
+                                &messages,
+                                tool_definitions.as_deref(),
+                                context_window,
+                                compression_trigger_budget,
+                                Self::prepended_reminder_tokens_for_pressure(
+                                    &turn_prompt_scaffold
+                                        .prepended_prompt_reminders
+                                        .ordered_reminders(),
+                                ),
+                            );
+                            compressed_this_round = true;
+                            context_recovered_this_round = true;
+                            full_compression_count += 1;
+                            consecutive_compression_failures = 0;
+                            send_pressure_reusable = false;
+                        }
+                        Ok(None) => {
+                            debug!("No eligible multi-turn context available for compression");
+                            consecutive_compression_failures = 0;
+                            break;
+                        }
+                        Err(e) => {
+                            consecutive_compression_failures += 1;
+                            compression_failure_count += 1;
+                            error!(
+                                "Round {} compression failed ({}/{}): {}, continuing with uncompressed context",
+                                round_index,
+                                consecutive_compression_failures,
+                                max_consecutive_compression_failures,
+                                e
+                            );
+                            break;
+                        }
                     }
-                    Ok(None) => {
-                        debug!("No eligible multi-turn context available for compression");
-                        consecutive_compression_failures = 0;
-                    }
-                    Err(e) => {
-                        consecutive_compression_failures += 1;
-                        compression_failure_count += 1;
-                        error!(
-                            "Round {} compression failed ({}/{}): {}, continuing with uncompressed context",
-                            round_index,
-                            consecutive_compression_failures,
-                            MAX_CONSECUTIVE_COMPRESSION_FAILURES,
-                            e
-                        );
-                    }
+                }
+
+                // Re-resolve the scaffold once after compression so the first
+                // post-compaction request builds the new provider-side prefix
+                // cache with the post-compression token pressure (ENGINE-02).
+                if compressed_this_round {
+                    turn_prompt_scaffold = self
+                        .resolve_turn_prompt_scaffold(TurnPromptScaffoldInput {
+                            context: &context,
+                            current_agent: current_agent.as_ref(),
+                            model_name: &ai_client.config.model,
+                            supports_image_understanding: primary_supports_image_understanding,
+                            tool_listing_sections: tool_listing_sections.clone(),
+                            runtime_context_needs,
+                            runtime_facts_usage: Self::runtime_facts_usage_from_pressure(
+                                &token_pressure,
+                            ),
+                            stage: "after_context_compression",
+                        })
+                        .await?;
+                    Self::apply_turn_prompt_scaffold_to_messages(
+                        &mut messages,
+                        &turn_prompt_scaffold,
+                    );
                 }
             }
 
             // L2: Emergency truncation — if tokens still exceed context_window
             // after all compression layers, drop oldest API rounds until we fit.
+            // Refresh runtime facts per round so every model request carries
+            // live time and the current token pressure snapshot; long-lived
+            // turns must not freeze the model's view at turn start.
+            let prompt_context = Self::build_prompt_context(
+                &context,
+                &ai_client.config.model,
+                primary_supports_image_understanding,
+                tool_listing_sections.clone(),
+                runtime_context_needs,
+            )
+            .await;
+            // P-17/P-18 回合标记：用户消息回合首轮（round_index == 0）或上下文恢复后首轮
+            // 注入 Runtime Facts；同回合工具轮（round_index > 0 且未恢复）不注入。
+            let inject_runtime_facts = round_index == 0 || context_recovered_this_round;
+            context_recovered_this_round = false;
+            Self::refresh_runtime_facts_for_round(
+                &mut turn_prompt_scaffold,
+                prompt_context,
+                Self::runtime_facts_usage_from_pressure(&token_pressure),
+                inject_runtime_facts,
+            );
             let send_prepended_reminders = turn_prompt_scaffold
                 .prepended_prompt_reminders
                 .ordered_reminders();
+            let send_static_prepended_reminders = turn_prompt_scaffold
+                .prepended_prompt_reminders
+                .static_ordered_reminders();
+            let send_dynamic_prepended_reminders = self
+                .round_dynamic_reminders(
+                    &context.session_id,
+                    &turn_prompt_scaffold.prepended_prompt_reminders,
+                )
+                .await;
             let send_prepended_reminder_tokens =
                 Self::prepended_reminder_tokens_for_pressure(&send_prepended_reminders);
             let mut send_pressure = if send_pressure_reusable
@@ -3668,6 +4532,7 @@ impl ExecutionEngine {
                 workspace: context.workspace.clone(),
                 model_exchange_trace_dir,
                 available_tools: available_tools.clone(),
+                user_enabled_tools: tool_policy.user_enabled_tools.clone(),
                 deferred_tools: deferred_tools.clone(),
                 loaded_deferred_tool_specs,
                 model_config_id: model_id.clone(),
@@ -3709,7 +4574,9 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
                 &context.dialog_turn_id,
                 primary_supports_image_understanding,
-                &send_prepended_reminders,
+                &send_static_prepended_reminders,
+                &send_dynamic_prepended_reminders,
+                Self::configured_max_image_bearing_messages().await,
             )
             .await?;
 
@@ -3784,6 +4651,9 @@ impl ExecutionEngine {
                                         primary_supports_image_understanding,
                                     tool_listing_sections: tool_listing_sections.clone(),
                                     runtime_context_needs,
+                                    runtime_facts_usage: Self::runtime_facts_usage_from_pressure(
+                                        &send_pressure,
+                                    ),
                                     stage: "after_context_overflow_recovery",
                                 })
                                 .await?;
@@ -3801,6 +4671,7 @@ impl ExecutionEngine {
                                 .await;
                             full_compression_count += 1;
                             consecutive_compression_failures = 0;
+                            context_recovered_this_round = true;
                             continue;
                         }
                         Ok(None) => {
@@ -3931,6 +4802,17 @@ impl ExecutionEngine {
                 failed_tool_recovery_attempts = 0;
             }
 
+            // A round that made real progress (tool call issued, more rounds
+            // scheduled, or user-visible text produced) resets the thinking-only
+            // rescue counter so an occasional thinking round inside an otherwise
+            // healthy task does not accumulate toward the storm budget.
+            if round_result.has_more_rounds
+                || !round_result.tool_calls.is_empty()
+                || round_result.had_assistant_text
+            {
+                thinking_only_rescue_attempts = 0;
+            }
+
             let after_round_pressure = Self::estimate_auto_compression_pressure(
                 &messages,
                 tool_definitions.as_deref(),
@@ -3964,7 +4846,7 @@ impl ExecutionEngine {
                 let tail = &recent_failed_tool_signatures
                     [recent_failed_tool_signatures.len() - max_consec..];
                 if tail.windows(2).all(|w| w[0] == w[1]) {
-                    if failed_tool_recovery_attempts < MAX_FAILED_TOOL_RECOVERY_ATTEMPTS {
+                    if failed_tool_recovery_attempts < max_failed_tool_recovery_attempts {
                         failed_tool_recovery_attempts += 1;
                         warn!(
                             "Repeated tool failure detected: {} consecutive rounds with identical tool signatures, injecting recovery prompt #{}",
@@ -3996,7 +4878,7 @@ impl ExecutionEngine {
                     } else {
                         warn!(
                             "Repeated tool failure detected: {} consecutive rounds with identical tool signatures, max recovery attempts ({}) exhausted, finalizing without tools",
-                            max_consec, MAX_FAILED_TOOL_RECOVERY_ATTEMPTS
+                            max_consec, max_failed_tool_recovery_attempts
                         );
                         finalization_reason = Some("repeated_tool_failures");
                         break;
@@ -4020,7 +4902,7 @@ impl ExecutionEngine {
             // no genuine new exploration and we treat it as a loop.
             if Self::is_periodic_tool_signature_loop(&recent_failed_tool_signatures, max_consec) {
                 let window_size = max_consec.max(1).saturating_mul(2);
-                if failed_tool_recovery_attempts < MAX_FAILED_TOOL_RECOVERY_ATTEMPTS {
+                if failed_tool_recovery_attempts < max_failed_tool_recovery_attempts {
                     failed_tool_recovery_attempts += 1;
                     warn!(
                         "Repeated tool failure detected: last {} failed rounds form a periodic tool-call pattern (<= {} distinct signatures, each repeated), injecting recovery prompt #{}",
@@ -4052,7 +4934,7 @@ impl ExecutionEngine {
                 } else {
                     warn!(
                             "Repeated tool failure detected: last {} failed rounds form a periodic tool-call pattern, max recovery attempts ({}) exhausted, finalizing without tools",
-                            window_size, MAX_FAILED_TOOL_RECOVERY_ATTEMPTS
+                            window_size, max_failed_tool_recovery_attempts
                     );
                     finalization_reason = Some("repeated_tool_failures");
                     break;
@@ -4068,6 +4950,13 @@ impl ExecutionEngine {
             if let Some(source) = context.round_injection.as_ref() {
                 let pending = source.take_pending(&context.session_id, &context.dialog_turn_id);
                 if !pending.is_empty() {
+                    // 队列批量化合并（主人定标）：同一轮边界排队的 N 条后台完成
+                    // 通知合并为 1 条注入 → 一次模型请求处理全部，而非每条触发
+                    // 一次请求。合并按 (kind + 通知文本) 精确匹配：相同文本的
+                    // BackgroundResult 通知只保留首条（文本即固定模板，合并结果
+                    // 逐字节稳定，缓存前缀不漂移）；UserSteering / ThreadGoal
+                    // 保持原样逐条注入。后台通知功能本身保留（主人裁决：必要）。
+                    let pending = Self::coalesce_round_injections(pending);
                     info!(
                         "Injecting {} round message(s) at round boundary: session_id={}, dialog_turn_id={}, round_index={}",
                         pending.len(),
@@ -4079,14 +4968,29 @@ impl ExecutionEngine {
                         let injection_id = injection.id.clone();
                         let injection_kind = injection.kind;
                         let wrapped = match injection.kind {
-                            RoundInjectionKind::UserSteering => format!(
-                                "<system_reminder>\nThe user sent a new message while this turn was running. You have just finished the previous atomic action; handle this new user message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew user message:\n{}\n</system_reminder>",
-                                injection.content
-                            ),
-                            RoundInjectionKind::BackgroundResult => format!(
-                                "<system_reminder>\nA background task has finished and returned new information while this turn was running. Incorporate it into your current work immediately when relevant. Do not wait for a separate future turn.\n\nBackground result:\n{}\n</system_reminder>",
-                                injection.content
-                            ),
+                            RoundInjectionKind::UserSteering => {
+                                let prepended_text = injection
+                                    .prepended_reminders
+                                    .iter()
+                                    .map(|reminder| reminder.text.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
+                                if prepended_text.is_empty() {
+                                    format!(
+                                        "<system_reminder>\nThe user sent a new message while this turn was running. You have just finished the previous atomic action; handle this new user message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew user message:\n{}\n</system_reminder>",
+                                        injection.content
+                                    )
+                                } else {
+                                    format!(
+                                        "<system_reminder>\n{}\n\nAn agent sent a new message while this turn was running. You have just finished the previous atomic action; handle this new message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew message:\n{}\n</system_reminder>",
+                                        prepended_text, injection.content
+                                    )
+                                }
+                            }
+                            RoundInjectionKind::BackgroundResult => {
+                                "<system_reminder>\nA background task has finished. The background subagent has replied. Use SessionHistory / SessionMessage to view the message content.\n</system_reminder>"
+                                    .to_string()
+                            }
                             RoundInjectionKind::ThreadGoalObjectiveUpdated => {
                                 injection.content.clone()
                             }
@@ -4101,7 +5005,8 @@ impl ExecutionEngine {
                             }
                         };
                         let user_msg = Message::internal_reminder(reminder_kind, wrapped)
-                            .with_turn_id(context.dialog_turn_id.clone());
+                            .with_turn_id(context.dialog_turn_id.clone())
+                            .with_steering_id(injection.id.clone());
                         messages.push(user_msg.clone());
                         if let Err(e) = self
                             .session_manager
@@ -4157,7 +5062,7 @@ impl ExecutionEngine {
                     if let Some(ref reason) = round_result.partial_recovery_reason {
                         if Self::should_continue_after_partial_response(reason) {
                             partial_continuation_attempts += 1;
-                            if partial_continuation_attempts <= MAX_PARTIAL_CONTINUATION_ATTEMPTS {
+                            if partial_continuation_attempts <= max_partial_continuation_attempts {
                                 let reminder = format!(
                                     "<system_reminder>Your previous assistant response was interrupted mid-stream ({reason}). Continue writing from exactly where you stopped. Do not repeat content that was already delivered; pick up seamlessly and complete the answer.</system_reminder>"
                                 );
@@ -4177,7 +5082,7 @@ impl ExecutionEngine {
                                 warn!(
                                     "Partial stream recovery with assistant text; injecting continuation reminder #{}/{}: turn={}, round={}, reason={}",
                                     partial_continuation_attempts,
-                                    MAX_PARTIAL_CONTINUATION_ATTEMPTS,
+                                    max_partial_continuation_attempts,
                                     context.dialog_turn_id,
                                     round_index,
                                     reason
@@ -4212,7 +5117,7 @@ impl ExecutionEngine {
                         // completion is reported by SubagentStop instead, so
                         // Stop stays a top-level-turn event as in Codex.
                         let stop_block_reason = if context.subagent_parent_info.is_none()
-                            && stop_hook_continuations < MAX_STOP_HOOK_CONTINUATIONS
+                            && stop_hook_continuations < max_stop_hook_continuations
                         {
                             native_hooks::dispatch_stop(
                                 Self::native_hook_facts(
@@ -4249,7 +5154,7 @@ impl ExecutionEngine {
                             info!(
                                 "Stop hook blocked turn completion; continuing turn #{}/{}: turn={}, round={}",
                                 stop_hook_continuations,
-                                MAX_STOP_HOOK_CONTINUATIONS,
+                                max_stop_hook_continuations,
                                 context.dialog_turn_id,
                                 round_index
                             );
@@ -4261,6 +5166,31 @@ impl ExecutionEngine {
                     }
                 } else if round_result.had_thinking_content {
                     thinking_only_rescue_attempts += 1;
+                    // Bound repeated thinking-only rounds: each rescue re-requests
+                    // the model with no new information. Once the budget is
+                    // exhausted, synthesize a local final response instead of
+                    // keeping the storm alive (the observable driver of the
+                    // 2000 empty prompts observed in the 2026-08-10 audit).
+                    if thinking_only_rescue_attempts > DEFAULT_EMPTY_ROUND_RESPAWN_LIMIT {
+                        warn!(
+                            "Thinking-only round rescue budget exhausted ({} attempts); ending turn with local final response: turn={}, round={}",
+                            thinking_only_rescue_attempts, context.dialog_turn_id, round_index
+                        );
+                        finalization_reason = Some("thinking_only_budget");
+                        let local_msg = Message::assistant(
+                            Self::build_local_final_response_message("thinking_only_budget"),
+                        )
+                        .with_turn_id(context.dialog_turn_id.clone());
+                        messages.push(local_msg.clone());
+                        if let Err(e) = self
+                            .session_manager
+                            .add_message(&context.session_id, local_msg)
+                            .await
+                        {
+                            warn!("Failed to persist thinking-only budget final response: {}", e);
+                        }
+                        break;
+                    }
                     let reminder = "<system_reminder>The previous round produced internal reasoning only — no tool call and no user-visible response. You MUST now either: (1) call the single tool that best advances the user's task, or (2) write your final answer to the user. Do not produce another round of reasoning without taking action.</system_reminder>".to_string();
                     let user_msg = Message::internal_reminder(
                         InternalReminderKind::ThinkingOnlyRescue,
@@ -4346,20 +5276,37 @@ impl ExecutionEngine {
             };
 
             if let Some(finalize_reminder) = finalize_reminder {
+                // The finalize path issues fresh model requests. Bound them so
+                // an empty-reply / non-progress storm cannot turn the finalize
+                // step itself into an unbounded token sink; when the budget is
+                // exhausted, synthesize a local final response instead.
+                // finalize 路径是直线结构：首请求 + 至多一次重试，天然受
+                // DEFAULT_FINALIZE_ROUND_LIMIT=2 约束（gate 边界 0/1 用字面量
+                // 显式表达），无需运行时计数（消除「写后未读」死代码）。
+                let finalize_allowed = Self::should_allow_finalize_round(
+                    0,
+                    DEFAULT_FINALIZE_ROUND_LIMIT,
+                );
                 let finalize_round_group_id = Some(format!(
                     "{}:finalize:{}",
                     context.dialog_turn_id, completed_rounds
                 ));
                 info!(
-                    "Finalizing dialog turn: session_id={}, turn_id={}, reason={}",
-                    context.session_id, context.dialog_turn_id, reason
+                    "Finalizing dialog turn: session_id={}, turn_id={}, reason={}, finalize_rounds_completed={}, finalize_allowed={}",
+                    context.session_id, context.dialog_turn_id, reason, 0usize, finalize_allowed
                 );
 
-                let finalize_prepended_reminders = turn_prompt_scaffold
+                let finalize_static_prepended_reminders = turn_prompt_scaffold
                     .prepended_prompt_reminders
-                    .ordered_reminders();
-                let final_round_result = self
-                    .run_finalize_round(FinalizeRoundInput {
+                    .static_ordered_reminders();
+                let finalize_dynamic_prepended_reminders = self
+                    .round_dynamic_reminders(
+                        &context.session_id,
+                        &turn_prompt_scaffold.prepended_prompt_reminders,
+                    )
+                    .await;
+                let final_round_result = if finalize_allowed {
+                    self.run_finalize_round(FinalizeRoundInput {
                         permission_constraints: tool_policy.permission_constraints.clone(),
                         ai_client: ai_client.clone(),
                         context: &context,
@@ -4368,13 +5315,28 @@ impl ExecutionEngine {
                         round_group_id: finalize_round_group_id.clone(),
                         execution_context_vars: &execution_context_vars,
                         primary_model_facts: &primary_model_facts,
-                        prepended_reminders: &finalize_prepended_reminders,
+                        static_prepended_reminders: &finalize_static_prepended_reminders,
+                        dynamic_prepended_reminders: &finalize_dynamic_prepended_reminders,
                         messages: &messages,
                         reminder_text: finalize_reminder,
                         tool_definitions: tool_definitions.clone(),
+                        user_enabled_tools: tool_policy.user_enabled_tools.clone(),
                         context_window,
                     })
-                    .await?;
+                    .await?
+                } else {
+                    warn!(
+                        "Finalize round budget exhausted ({} >= {}); synthesizing local final response: session_id={}, turn_id={}, reason={}",
+                        0usize,
+                        DEFAULT_FINALIZE_ROUND_LIMIT,
+                        context.session_id,
+                        context.dialog_turn_id,
+                        reason
+                    );
+                    crate::agentic::execution::types::RoundResult::local_fallback()
+                };
+                // 首请求完成；重试门控（1 < 2）为后续唯一读取点，
+                // 修复前此处的 += 1 是「写后未读」死代码，已移除。
 
                 let mut accepted = final_round_result.had_assistant_text
                     && !Self::assistant_has_tool_calls(&final_round_result.assistant_message);
@@ -4389,8 +5351,12 @@ impl ExecutionEngine {
                         "Finalize round did not return usable assistant text; retrying once: session_id={}, turn_id={}",
                         context.session_id, context.dialog_turn_id
                     );
-                    let retry_result = self
-                        .run_finalize_round(FinalizeRoundInput {
+                    let retry_allowed = Self::should_allow_finalize_round(
+                        1,
+                        DEFAULT_FINALIZE_ROUND_LIMIT,
+                    );
+                    let retry_result = if retry_allowed {
+                        self.run_finalize_round(FinalizeRoundInput {
                             permission_constraints: tool_policy.permission_constraints.clone(),
                             ai_client: ai_client.clone(),
                             context: &context,
@@ -4399,13 +5365,25 @@ impl ExecutionEngine {
                             round_group_id: finalize_round_group_id.clone(),
                             execution_context_vars: &execution_context_vars,
                             primary_model_facts: &primary_model_facts,
-                            prepended_reminders: &finalize_prepended_reminders,
+                            static_prepended_reminders: &finalize_static_prepended_reminders,
+                            dynamic_prepended_reminders: &finalize_dynamic_prepended_reminders,
                             messages: &messages,
                             reminder_text: finalize_reminder,
                             tool_definitions: tool_definitions.clone(),
+                            user_enabled_tools: tool_policy.user_enabled_tools.clone(),
                             context_window,
                         })
-                        .await?;
+                        .await?
+                    } else {
+                        warn!(
+                            "Finalize retry budget exhausted ({} >= {}); synthesizing local final response: session_id={}, turn_id={}",
+                            1usize,
+                            DEFAULT_FINALIZE_ROUND_LIMIT,
+                            context.session_id,
+                            context.dialog_turn_id
+                        );
+                        crate::agentic::execution::types::RoundResult::local_fallback()
+                    };
                     if !retry_result.had_assistant_text
                         || Self::assistant_has_tool_calls(&retry_result.assistant_message)
                     {
@@ -4461,7 +5439,10 @@ impl ExecutionEngine {
                         warn!("Failed to update final assistant message in memory: {}", e);
                     }
                 }
-            } else if reason == "partial_truncated" {
+            } else if reason == "partial_truncated" || reason == "thinking_only_budget" {
+                // Both paths deliver a user-visible final response: the partial
+                // answer streamed earlier, and the thinking-only budget path
+                // synthesized a local assistant message.
                 has_final_response = true;
             }
         }
@@ -4487,7 +5468,7 @@ impl ExecutionEngine {
         // successfully, renumber `cit_XXX` references in the final report
         // into consecutive `[N]` display IDs. Two gates apply (agent type +
         // dialog success) so other agents and failed turns are unaffected.
-        #[cfg(feature = "agent-runtime")]
+        #[cfg(feature = "deep-research")]
         {
             if bitfun_agent_runtime::deep_research::should_post_process_research_report(
                 &agent_type,
@@ -4528,7 +5509,7 @@ impl ExecutionEngine {
         }
 
         // Print dialog turn token statistics (from model's last returned usage)
-        if let Some(usage) = last_usage {
+        if let Some(ref usage) = last_usage {
             info!(
                 "Dialog turn completed - Token stats: turn_id={}, rounds={}, tools={}, duration={}ms, prompt_tokens={}, completion_tokens={}, total_tokens={}",
                 context.dialog_turn_id,
@@ -4564,6 +5545,12 @@ impl ExecutionEngine {
                 .cloned()
                 .unwrap_or_else(|| Message::assistant(String::new())),
             total_rounds: completed_rounds,
+            total_tools,
+            total_tokens: last_usage
+                .as_ref()
+                .map(|usage| usage.total_token_count as usize)
+                .unwrap_or(0),
+            duration_ms,
             success,
             new_messages,
             finish_reason,
@@ -4621,13 +5608,17 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::{
-        activate_conditional_instructions_after_round, manual_compaction_terminal_error,
-        ContextHealthSnapshot, ExecutionEngine, RoundResult, TurnPromptScaffold,
+        activate_conditional_instructions_after_round, ensure_primary_session_goal_tools,
+        manual_compaction_terminal_error, ContextHealthSnapshot, ExecutionEngine, RoundResult,
+        TurnPromptScaffold,
     };
+    use crate::agentic::round_preempt::{RoundInjection, RoundInjectionKind, RoundInjectionTarget};
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, UserContextPolicy,
     };
-    use crate::agentic::core::{InternalReminderKind, Message, MessageRole, ToolCall, ToolResult};
+    use crate::agentic::core::{
+        InternalReminderKind, Message, MessageRole, MessageSemanticKind, ToolCall, ToolResult,
+    };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
         ContextCompressor, PromptCachePolicy, SessionContextStore, SessionManager,
@@ -4636,12 +5627,16 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::workspace::{local_workspace_services, WorkspaceBinding};
     use crate::infrastructure::PathManager;
+    use crate::instruction_sources::test_support::InstructionSwitches;
     #[cfg(feature = "external-sources")]
     use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
+    use crate::util::TokenCounter;
     use crate::util::types::ToolDefinition;
+    use bitfun_agent_runtime::prompt::RuntimeFactsUsage;
+    use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
     use bitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind};
     use serde_json::json;
     use sha2::{Digest, Sha256};
@@ -4650,6 +5645,26 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
+    use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use crate::agentic::execution::{ExecutionEngineConfig, RoundExecutor, StreamProcessor};
+    use crate::agentic::session::compression::CompressionConfig;
+    use crate::agentic::session::PromptCacheScope;
+    use crate::agentic::tools::registry::ToolRegistry;
+    use crate::agentic::tools::{ToolPipeline, ToolStateManager};
+    use tokio::sync::RwLock as TokioRwLock;
+
+    #[test]
+    fn primary_session_tool_policy_restores_goal_tools_but_subagents_stay_scoped() {
+        let mut primary_tools = vec!["Read".to_string()];
+        ensure_primary_session_goal_tools(&mut primary_tools, false);
+        for tool_name in THREAD_GOAL_TOOL_NAMES {
+            assert!(primary_tools.iter().any(|tool| tool == tool_name));
+        }
+
+        let mut subagent_tools = vec!["Read".to_string()];
+        ensure_primary_session_goal_tools(&mut subagent_tools, true);
+        assert_eq!(subagent_tools, vec!["Read".to_string()]);
+    }
 
     #[test]
     fn manual_compaction_preserves_cancellation_as_a_terminal_cancellation() {
@@ -4814,6 +5829,8 @@ mod tests {
 
     #[tokio::test]
     async fn workspace_instruction_read_failure_is_not_cacheable_and_can_recover() {
+        // Guard restores the previous switch values on drop.
+        let _switches = InstructionSwitches::set(Some(true), None);
         let fs = InstructionWorkspaceFs::recovering();
         let (workspace, workspace_services) = workspace_with_fs(Arc::new(fs));
         let prompt_context = PromptBuilderContext::new(
@@ -4856,8 +5873,150 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    async fn user_context_cache_identity_includes_external_sources_switch_state() {
+        // P2-1 (KV cache design audit 20260810): the external_instruction_sources
+        // master switch changes the rendered User Context content (external user
+        // files are skipped when off), but cache hits only check identity + TTL,
+        // never content. The switch state must therefore be part of the cache
+        // scope key so an on↔off toggle mid-session cannot hit the stale cached
+        // content from the other switch state.
+        let _environment = lock_environment();
+        let base = crate::agentic::session::UserContextCacheIdentity::new(
+            "workspace_context|workspace_instructions",
+        );
+        // Start ON; the explicit mid-test flip to OFF is asserted below, and
+        // the guard restores the previous value on drop.
+        let _switches = InstructionSwitches::set(None, Some(true));
+        let on = ExecutionEngine::user_context_cache_identity_for(base.clone(), None, None).await;
+        crate::service::config::set_external_instruction_sources_enabled(false);
+        let off = ExecutionEngine::user_context_cache_identity_for(base.clone(), None, None).await;
+
+        assert_eq!(
+            on.scope_key,
+            "workspace_context|workspace_instructions|extsrc:on|winstr:off"
+        );
+        assert_eq!(
+            off.scope_key,
+            "workspace_context|workspace_instructions|extsrc:off|winstr:off"
+        );
+        assert_ne!(
+            on.scope_key, off.scope_key,
+            "switch toggle must change the user context cache identity"
+        );
+    }
+
+    #[cfg(feature = "external-sources")]
+    #[tokio::test]
+    async fn user_context_cache_identity_layers_remote_and_switch_state() {
+        // remote:<connection> and extsrc:<on|off> are orthogonal scope suffixes:
+        // a remote overlay reconnect and a switch toggle must both invalidate
+        // the user context cache independently while composing in one key.
+        let _environment = lock_environment();
+        let base = crate::agentic::session::UserContextCacheIdentity::new(
+            "workspace_instructions",
+        );
+        // Guard restores the previous switch values on drop.
+        let _switches = InstructionSwitches::set(None, Some(true));
+        let identity = ExecutionEngine::user_context_cache_identity_for(base, Some("ssh-host/22"), None).await;
+        assert_eq!(
+            identity.scope_key,
+            "workspace_instructions|remote:ssh-host/22|extsrc:on|winstr:off"
+        );
+    }
+
+    #[cfg(feature = "external-sources")]
+    #[tokio::test]
+    async fn session_user_context_cache_misses_after_external_sources_switch_toggle() {
+        // P2-1 end-to-end guard: the scope key drives the session-level user
+        // context cache. With the switch ON we remember content under the
+        // `|extsrc:on` identity; after the switch flips OFF the engine must
+        // miss that entry (it queries `|extsrc:off`) and rebuild, instead of
+        // serving the stale ON content.
+        let _environment = lock_environment();
+        // Start ON; the explicit mid-test flip to OFF is asserted below, and
+        // the guard restores the previous value on drop.
+        let _switches = InstructionSwitches::set(None, Some(true));
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_path = temp.path().join("workspace");
+        std::fs::create_dir_all(&workspace_path).expect("workspace directory");
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(
+                PersistenceManager::new(Arc::new(PathManager::with_user_root_for_tests(
+                    temp.path().join("user-root"),
+                )))
+                .expect("persistence manager"),
+            ),
+            SessionManagerConfig {
+                max_active_sessions: 4,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let session = session_manager
+            .create_session(
+                "P2-1 switch toggle".to_string(),
+                "agentic".to_string(),
+                crate::agentic::core::SessionConfig {
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should be created");
+
+        let base_identity =
+            crate::agentic::session::UserContextCacheIdentity::new("workspace_instructions");
+
+        crate::service::config::set_external_instruction_sources_enabled(true);
+        let on_identity = ExecutionEngine::user_context_cache_identity_for(
+            base_identity.clone(),
+            None,
+            None,
+        )
+        .await;
+        session_manager
+            .remember_user_context(
+                &session.session_id,
+                on_identity.clone(),
+                "ON content".to_string(),
+            )
+            .await;
+        assert_eq!(
+            session_manager
+                .cached_user_context(&session.session_id, &on_identity)
+                .await
+                .as_deref(),
+            Some("ON content"),
+            "same switch state must still hit the cache"
+        );
+
+        crate::service::config::set_external_instruction_sources_enabled(false);
+        let off_identity = ExecutionEngine::user_context_cache_identity_for(
+            base_identity,
+            None,
+            None,
+        )
+        .await;
+        assert_ne!(on_identity, off_identity);
+        assert_eq!(
+            session_manager
+                .cached_user_context(&session.session_id, &off_identity)
+                .await,
+            None,
+            "switch toggle must not hit the stale ON content"
+        );
+    }
+
+    #[cfg(feature = "external-sources")]
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn local_workspace_services_still_include_local_user_instruction_sources() {
         let _environment = lock_environment();
+        // Enable both instruction master switches; guard restores on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_root = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -4901,8 +6060,11 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn local_workspace_services_remain_the_project_instruction_io_owner() {
         let _environment = lock_environment();
+        // Enable both instruction master switches; guard restores on drop.
+        let _switches = InstructionSwitches::enable_all();
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace_root = temp.path().join("workspace");
         let xdg = temp.path().join("xdg");
@@ -5053,7 +6215,7 @@ mod tests {
 
         let compressor = ContextCompressor::new(Default::default());
         let plan = compressor
-            .plan_compression(&context.session_id, &persisted, 128_000, 100)
+            .plan_compression(&context.session_id, &persisted, 128_000, 100, None)
             .expect("compression plan")
             .expect("compressible context");
         let compressed = compressor
@@ -5261,6 +6423,30 @@ mod tests {
     }
 
     #[test]
+    fn compression_trigger_budget_clamps_output_reserve_to_window_ratio() {
+        // ENGINE-03：配置的 max_tokens 超过窗口时，不允许把 input_limit 饿死到 0；
+        // 输出预留被钳制到窗口的 40%（与 is_valid_configured_max_output_tokens 允许的同一比例）。
+        let budget = ExecutionEngine::compression_trigger_budget(32_000, Some(100_000));
+
+        assert_eq!(budget.output_reserve_tokens, 12_800);
+        assert_eq!(budget.safety_reserve_tokens, 10_000);
+        assert!(
+            budget.input_limit > 0,
+            "input_limit must stay positive after the clamp, got {}",
+            budget.input_limit
+        );
+        assert_eq!(budget.input_limit, 32_000 - 12_800 - 10_000);
+    }
+
+    #[test]
+    fn compression_trigger_budget_disables_auto_compression_on_zero_input_limit() {
+        // ENGINE-03：当窗口小到仅预留就超出窗口时，input_limit 饱和为 0；
+        // 调用方在此时禁用自动压缩，而不是每轮都无条件压缩。
+        let budget = ExecutionEngine::compression_trigger_budget(1_000, None);
+        assert_eq!(budget.input_limit, 0);
+    }
+
+    #[test]
     fn compression_trigger_budget_uses_the_automatic_output_tier_when_max_tokens_is_unset() {
         let budget = ExecutionEngine::compression_trigger_budget(128_000, None);
 
@@ -5452,6 +6638,322 @@ mod tests {
     }
 
     #[test]
+    fn per_round_runtime_facts_refresh_replaces_turn_start_value() {
+        let mut scaffold = TurnPromptScaffold {
+            system_prompt_message: Message::system("system prompt".to_string()),
+            prepended_prompt_reminders: PrependedPromptReminders::default(),
+        };
+        let context = PromptBuilderContext::new(
+            "E:/workspace".to_string(),
+            Some("session-1".to_string()),
+            Some("model-1".to_string()),
+        );
+
+        ExecutionEngine::refresh_runtime_facts_for_round(
+            &mut scaffold,
+            Some(context),
+            RuntimeFactsUsage {
+                context_usage_ratio: Some(0.35),
+                compression_preview_ratio: Some(0.9),
+            },
+            true,
+        );
+        let first = scaffold
+            .prepended_prompt_reminders
+            .runtime_facts
+            .clone()
+            .expect("runtime facts should be refreshed for the round");
+        assert!(first.contains("[Runtime Facts]"));
+        assert!(first.contains("当前上下文占比: 35%"));
+
+        // A later round with a different pressure snapshot replaces the text:
+        // the runtime facts must not stay frozen at the first round's values.
+        ExecutionEngine::refresh_runtime_facts_for_round(
+            &mut scaffold,
+            Some(PromptBuilderContext::new(
+                "E:/workspace".to_string(),
+                Some("session-1".to_string()),
+                Some("model-1".to_string()),
+            )),
+            RuntimeFactsUsage {
+                context_usage_ratio: Some(0.72),
+                compression_preview_ratio: Some(0.9),
+            },
+            true,
+        );
+        let second = scaffold
+            .prepended_prompt_reminders
+            .runtime_facts
+            .clone()
+            .expect("runtime facts should stay refreshed");
+        assert_ne!(first, second);
+        assert!(second.contains("当前上下文占比: 72%"));
+
+        // ENGINE-01/07: a missing prompt context (workspace-less session) must
+        // still refresh the reminder from a minimal context instead of leaving
+        // the previous round's value frozen; the usage ratio is replaced.
+        ExecutionEngine::refresh_runtime_facts_for_round(
+            &mut scaffold,
+            None,
+            RuntimeFactsUsage {
+                context_usage_ratio: Some(0.41),
+                compression_preview_ratio: Some(0.9),
+            },
+            true,
+        );
+        let third = scaffold
+            .prepended_prompt_reminders
+            .runtime_facts
+            .clone()
+            .expect("runtime facts should refresh even without a prompt context");
+        assert_ne!(second, third);
+        assert!(third.contains("[Runtime Facts]"));
+        assert!(third.contains("当前上下文占比: 41%"));
+    }
+
+    #[test]
+    fn tool_round_clears_runtime_facts_after_user_round_injection() {
+        // P-17: user round first turn injects runtime facts; the same round's
+        // tool turn clears them so the dynamic postfix no longer carries them.
+        let mut scaffold = TurnPromptScaffold {
+            system_prompt_message: Message::system("system prompt".to_string()),
+            prepended_prompt_reminders: PrependedPromptReminders::default(),
+        };
+        let context = PromptBuilderContext::new(
+            "E:/workspace".to_string(),
+            Some("session-1".to_string()),
+            Some("model-1".to_string()),
+        );
+        let usage = RuntimeFactsUsage {
+            context_usage_ratio: Some(0.35),
+            compression_preview_ratio: Some(0.9),
+        };
+
+        // User round first turn: inject.
+        ExecutionEngine::refresh_runtime_facts_for_round(
+            &mut scaffold,
+            Some(context.clone()),
+            usage,
+            true,
+        );
+        assert!(
+            scaffold.prepended_prompt_reminders.runtime_facts.is_some(),
+            "user round first turn should inject runtime facts"
+        );
+
+        // Same-round tool turn: clear.
+        ExecutionEngine::refresh_runtime_facts_for_round(
+            &mut scaffold,
+            Some(context),
+            usage,
+            false,
+        );
+        assert!(
+            scaffold.prepended_prompt_reminders.runtime_facts.is_none(),
+            "same-round tool turn must not carry runtime facts"
+        );
+    }
+
+    #[tokio::test]
+    async fn round_dynamic_reminders_injects_user_context_once_per_session() {
+        // P-18（每会话一次语义）：User Context 在新会话首轮注入一次，同一会话
+        // 的后续用户回合与工具轮均不再重复注入；上下文压缩使缓存世代递增 →
+        // 恢复后首轮重新注入一次。
+        let temp = tempfile::tempdir().expect("tempdir");
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(
+                PersistenceManager::new(Arc::new(PathManager::with_user_root_for_tests(
+                    temp.path().join("user-root"),
+                )))
+                .expect("persistence manager"),
+            ),
+            SessionManagerConfig {
+                max_active_sessions: 4,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let tool_pipeline = Arc::new(ToolPipeline::new(
+            Arc::new(TokioRwLock::new(ToolRegistry::new())),
+            Arc::new(ToolStateManager::new(event_queue.clone())),
+            None,
+        ));
+        let engine = ExecutionEngine::new(
+            Arc::new(RoundExecutor::new(
+                Arc::new(StreamProcessor::new(event_queue.clone())),
+                event_queue.clone(),
+                tool_pipeline.clone(),
+            )),
+            event_queue.clone(),
+            session_manager.clone(),
+            Arc::new(ContextCompressor::new(CompressionConfig::default())),
+            ExecutionEngineConfig::default(),
+        );
+
+        let session_id = "p18-session-scoped-session";
+        let reminders = PrependedPromptReminders {
+            runtime_facts: Some("[Runtime Facts] 当前上下文占比: 35%".to_string()),
+            user_context: Some("[User Context] workspace instructions".to_string()),
+            ..Default::default()
+        };
+
+        // Turn 1, first round: runtime facts + user context both inject.
+        let turn1_first = engine
+            .round_dynamic_reminders(session_id, &reminders)
+            .await;
+        assert!(turn1_first.iter().any(|r| r.contains("[Runtime Facts]")));
+        assert!(turn1_first.iter().any(|r| r.contains("[User Context]")));
+
+        // Turn 1, same-turn tool round (round >= 1): user context skipped by
+        // the injected-generation marker. The scaffold in a real tool round no
+        // longer carries runtime facts either — `refresh_runtime_facts_for_round`
+        // with `inject_runtime_facts=false` clears them (P-17, execution_engine
+        // tool-turn path) — so the dynamic postfix must carry neither
+        // (d5-P2-3：此前断言"runtime facts 仍被携带"是测试构造假阳性，因为
+        // 测试直接复用首轮 scaffold；真实工具轮链路必须验证置空后的状态)。
+        let mut tool_round_scaffold = TurnPromptScaffold {
+            system_prompt_message: Message::system("system prompt".to_string()),
+            prepended_prompt_reminders: PrependedPromptReminders {
+                runtime_facts: Some("[Runtime Facts] 当前上下文占比: 35%".to_string()),
+                user_context: Some("[User Context] workspace instructions".to_string()),
+                ..Default::default()
+            },
+        };
+        ExecutionEngine::refresh_runtime_facts_for_round(
+            &mut tool_round_scaffold,
+            None,
+            RuntimeFactsUsage {
+                context_usage_ratio: Some(0.35),
+                compression_preview_ratio: Some(0.9),
+            },
+            false,
+        );
+        let turn1_tool_round = engine
+            .round_dynamic_reminders(
+                session_id,
+                &tool_round_scaffold.prepended_prompt_reminders,
+            )
+            .await;
+        assert!(
+            !turn1_tool_round.iter().any(|r| r.contains("[Runtime Facts]")),
+            "same-round tool turn must not carry runtime facts (cleared at scaffold level)"
+        );
+        assert!(!turn1_tool_round.iter().any(|r| r.contains("[User Context]")));
+
+        // Turn 2: session-scoped semantics — no turn-start marker reset, so the
+        // first round of the next user turn must NOT re-inject user context.
+        let turn2_first = engine
+            .round_dynamic_reminders(session_id, &reminders)
+            .await;
+        assert!(turn2_first.iter().any(|r| r.contains("[Runtime Facts]")));
+        assert!(
+            !turn2_first.iter().any(|r| r.contains("[User Context]")),
+            "session-scoped injection: second user turn must not re-inject user context"
+        );
+
+        // Context compaction bumps the generation: first round re-injects even
+        // without an explicit marker reset.
+        session_manager
+            .invalidate_prompt_cache(session_id, PromptCacheScope::UserContext, "test")
+            .await;
+        let recovery_first = engine
+            .round_dynamic_reminders(session_id, &reminders)
+            .await;
+        assert!(recovery_first.iter().any(|r| r.contains("[Runtime Facts]")));
+        assert!(recovery_first.iter().any(|r| r.contains("[User Context]")));
+    }
+
+    #[tokio::test]
+    async fn round_dynamic_reminders_does_not_record_generation_when_user_context_none() {
+        // d5-P1-1: when the scaffold carries no User Context (no workspace,
+        // instruction build failure, nothing injectable), the injected
+        // generation must NOT be recorded. Otherwise the same cache generation
+        // suppresses later rounds and the model never sees User Context even
+        // after the cache becomes available again (e.g. remote reconnect).
+        let temp = tempfile::tempdir().expect("tempdir");
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(
+                PersistenceManager::new(Arc::new(PathManager::with_user_root_for_tests(
+                    temp.path().join("user-root"),
+                )))
+                .expect("persistence manager"),
+            ),
+            SessionManagerConfig {
+                max_active_sessions: 4,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let tool_pipeline = Arc::new(ToolPipeline::new(
+            Arc::new(TokioRwLock::new(ToolRegistry::new())),
+            Arc::new(ToolStateManager::new(event_queue.clone())),
+            None,
+        ));
+        let engine = ExecutionEngine::new(
+            Arc::new(RoundExecutor::new(
+                Arc::new(StreamProcessor::new(event_queue.clone())),
+                event_queue.clone(),
+                tool_pipeline.clone(),
+            )),
+            event_queue.clone(),
+            session_manager.clone(),
+            Arc::new(ContextCompressor::new(CompressionConfig::default())),
+            ExecutionEngineConfig::default(),
+        );
+
+        let session_id = "p18-none-context-session";
+        // No User Context in the scaffold: the first round must not record a
+        // generation and must not inject anything from the user-context slot.
+        let reminders = PrependedPromptReminders {
+            runtime_facts: Some("[Runtime Facts] 当前上下文占比: 35%".to_string()),
+            user_context: None,
+            ..Default::default()
+        };
+
+        let first = engine
+            .round_dynamic_reminders(session_id, &reminders)
+            .await;
+        assert!(first.iter().any(|r| r.contains("[Runtime Facts]")));
+        assert!(
+            session_manager
+                .user_context_injected_generation(session_id)
+                .await
+                .is_none(),
+            "user_context=None must not record an injected generation"
+        );
+
+        // A later round in the same generation with a user context available
+        // must still inject (the None round did not lock the generation).
+        let reminders_with_context = PrependedPromptReminders {
+            runtime_facts: Some("[Runtime Facts] 当前上下文占比: 35%".to_string()),
+            user_context: Some("[User Context] workspace instructions".to_string()),
+            ..Default::default()
+        };
+        let later = engine
+            .round_dynamic_reminders(session_id, &reminders_with_context)
+            .await;
+        assert!(
+            later.iter().any(|r| r.contains("[User Context]")),
+            "user_context becoming available in the same generation must still inject"
+        );
+        assert!(
+            session_manager
+                .user_context_injected_generation(session_id)
+                .await
+                .is_some(),
+            "a real injection must record the generation"
+        );
+    }
+
+    #[test]
     fn tool_signature_args_summary_truncates_on_utf8_boundary() {
         let args = format!("{}{}", "a".repeat(62), "案".repeat(30));
         let args_hash = hex::encode(Sha256::digest(args.as_bytes()));
@@ -5565,6 +7067,69 @@ mod tests {
         );
     }
 
+    fn test_injection(kind: RoundInjectionKind, content: &str) -> RoundInjection {
+        RoundInjection {
+            id: format!("inj-{}", std::process::id()),
+            kind,
+            execution_policy: kind.default_execution_policy(),
+            target: RoundInjectionTarget::CurrentRunningTurn,
+            content: content.to_string(),
+            display_content: content.to_string(),
+            created_at: std::time::SystemTime::now(),
+            prepended_reminders: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn coalesce_round_injections_merges_identical_background_notifications() {
+        // 主人定标：N 条通知排队 → 合并为 1 条注入 → 1 次模型请求。
+        let notice = "Background agent session child-1 (GeneralPurpose) has replied; use SessionHistory to view the full reply.";
+        let pending = vec![
+            test_injection(RoundInjectionKind::BackgroundResult, notice),
+            test_injection(RoundInjectionKind::BackgroundResult, notice),
+            test_injection(RoundInjectionKind::BackgroundResult, notice),
+            test_injection(RoundInjectionKind::UserSteering, "check tests"),
+        ];
+        let merged = ExecutionEngine::coalesce_round_injections(pending);
+        assert_eq!(merged.len(), 2, "N identical notifications collapse to one");
+        assert_eq!(merged[0].kind, RoundInjectionKind::BackgroundResult);
+        assert_eq!(merged[0].content, notice);
+        assert_eq!(merged[1].kind, RoundInjectionKind::UserSteering);
+    }
+
+    #[test]
+    fn coalesce_round_injections_preserves_distinct_notifications_and_steering() {
+        // 通知功能保留：不同子代理（不同文本）各自保留；UserSteering 原样。
+        let notice_a =
+            "Background agent session child-a (GeneralPurpose) has replied; use SessionHistory to view the full reply.";
+        let notice_b =
+            "Background agent session child-b (GeneralPurpose) has replied; use SessionHistory to view the full reply.";
+        let pending = vec![
+            test_injection(RoundInjectionKind::BackgroundResult, notice_a),
+            test_injection(RoundInjectionKind::BackgroundResult, notice_b),
+            test_injection(RoundInjectionKind::UserSteering, "steer one"),
+            test_injection(RoundInjectionKind::UserSteering, "steer two"),
+        ];
+        let merged = ExecutionEngine::coalesce_round_injections(pending);
+        assert_eq!(merged.len(), 4, "distinct notifications and steering survive");
+    }
+
+    #[test]
+    fn coalesce_round_injections_output_is_deterministic() {
+        // 缓存前缀稳定性：两次相同场景合并结果逐字节一致（不因时序产生变体）。
+        let notice = "Background agent session child-1 (GeneralPurpose) has replied; use SessionHistory to view the full reply.";
+        let make = || {
+            ExecutionEngine::coalesce_round_injections(vec![
+                test_injection(RoundInjectionKind::BackgroundResult, notice),
+                test_injection(RoundInjectionKind::BackgroundResult, notice),
+            ])
+        };
+        let first = make();
+        let second = make();
+        assert_eq!(first.len(), second.len());
+        assert_eq!(first[0].content, second[0].content);
+    }
+
     #[test]
     fn local_fallback_response_does_not_count_as_agent_final_response() {
         assert!(ExecutionEngine::should_mark_has_final_response(true, false));
@@ -5592,6 +7157,24 @@ mod tests {
         );
         assert!(!messages[0].is_actual_user_message());
         assert!(!messages[1].is_actual_user_message());
+
+        // Both finalize anchor messages must carry the system-reminder markup so
+        // downstream CLI statistics can tell them apart from real user prompts.
+        assert!(message_text(&messages[0])
+            .is_some_and(crate::agentic::core::is_system_reminder_only));
+        assert!(message_text(&messages[1])
+            .is_some_and(crate::agentic::core::is_system_reminder_only));
+    }
+
+    #[test]
+    fn finalize_followup_reminder_keeps_system_reminder_markup_in_request_body() {
+        // The FINALIZE_USER_FOLLOWUP text is an internal injection sent as a
+        // role=user message. It must stay wrapped in <system_reminder> so CLI
+        // usage statistics do not count it as a user prompt.
+        assert!(crate::agentic::core::is_system_reminder_only(&format!(
+            "<system_reminder>{}</system_reminder>",
+            ExecutionEngine::FINALIZE_USER_FOLLOWUP
+        )));
     }
 
     #[test]
@@ -5812,5 +7395,259 @@ mod tests {
             duration_ms: Some(1),
             image_attachments: None,
         })
+    }
+
+    #[tokio::test]
+    async fn resident_subagent_session_compaction_keeps_context_reusable() {
+        // A resident subagent work post (Task spawn then repeated send_input
+        // reuse) accumulates context across dialog turns. Automatic compaction
+        // must replace the in-memory context — the exact source the next
+        // send_input loads — without changing the session identity, and the
+        // compacted context must stay compressible so the resident session
+        // never dies from an ever-growing context window.
+        let temp = tempfile::tempdir().expect("tempdir");
+        let session_manager = SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(
+                PersistenceManager::new(Arc::new(PathManager::with_user_root_for_tests(
+                    temp.path().join("user-root"),
+                )))
+                .expect("persistence manager"),
+            ),
+            SessionManagerConfig {
+                max_active_sessions: 4,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        );
+        let compressor = ContextCompressor::new(Default::default());
+        let session_id = "resident-subagent-session";
+        // A small window keeps the test fast while exercising the real trigger
+        // math (input_limit = window - output reserve - safety reserve). It
+        // must stay above the 10k safety reserve so input_limit is meaningful.
+        let context_window = 32_000usize;
+        let trigger_budget = ExecutionEngine::compression_trigger_budget(context_window, None);
+        assert!(trigger_budget.input_limit > 0);
+
+        // Repeated send_input turns: each turn appends a user message plus
+        // assistant/tool round messages (the engine loop's add_message path).
+        let mut turn = 0usize;
+        let compressed_turn = loop {
+            turn += 1;
+            assert!(turn < 50, "compression never triggered");
+            let user_message = Message::user(format!("send_input turn {}: continue the standing task", turn))
+                .with_turn_id(format!("turn-{turn}"));
+            let assistant_message =
+                Message::assistant(format!("round evidence {}", "x".repeat(2_000)))
+                    .with_turn_id(format!("turn-{turn}"));
+            let tool_message =
+                command_result("Bash", true, Some(0)).with_turn_id(format!("turn-{turn}"));
+            for message in [&user_message, &assistant_message, &tool_message] {
+                session_manager
+                    .add_message(session_id, message.clone())
+                    .await
+                    .expect("append turn messages");
+            }
+
+            let context = session_manager
+                .get_context_messages(session_id)
+                .await
+                .expect("reusable context");
+            let pressure = ExecutionEngine::estimate_auto_compression_pressure(
+                &context,
+                None,
+                context_window,
+                trigger_budget,
+                0,
+            );
+            if pressure.total_tokens >= pressure.input_limit {
+                let Some(plan) = compressor
+                    .plan_compression(
+                        session_id,
+                        &context,
+                        context_window,
+                        ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS,
+                        None,
+                    )
+                    .expect("compression planning succeeds")
+                else {
+                    // Not enough compressible history yet; keep accumulating.
+                    continue;
+                };
+                let result = compressor
+                    .compress_plan_with_contract(
+                        session_id,
+                        context_window,
+                        plan,
+                        None,
+                        Some(format!("turn {} handoff summary", turn)),
+                    )
+                    .expect("compression succeeds");
+                let before_message_count = context.len();
+                session_manager
+                    .replace_context_messages(session_id, result.messages.clone())
+                    .await;
+                let after = session_manager
+                    .get_context_messages(session_id)
+                    .await
+                    .expect("compacted context");
+                // ENGINE-06：压缩回归断言必须与真实 send_input 使用同一度量——
+                // 完整会话消息走 estimate_auto_compression_pressure，而不是按单条
+                // 消息求和（后者测的是另一个 token 口径）。
+                let after_pressure = ExecutionEngine::estimate_auto_compression_pressure(
+                    &after,
+                    None,
+                    context_window,
+                    trigger_budget,
+                    0,
+                );
+                assert!(
+                    after_pressure.total_tokens < after_pressure.input_limit,
+                    "compaction must bring the resident context back under the input limit: after={}, input_limit={}",
+                    after_pressure.total_tokens,
+                    after_pressure.input_limit
+                );
+                // ENGINE-06：压缩后的会话消息并不是完整请求。下一次 send_input 会
+                // 在其上重新拼回系统提示、前置提醒与工具定义；这些固定脚手架的开销
+                // 必须由压缩后的裕量（input_limit - total_tokens）覆盖，否则常驻
+                // 会话在下一轮又会立刻触发压缩，依然会在窗口处耗尽。
+                let scaffold_system_tokens = ExecutionEngine::system_tokens_for_pressure(
+                    std::slice::from_ref(&Message::system(
+                        "You are BitFun, an autonomous coding agent. Execute the user's task within the workshop workflow."
+                            .to_string(),
+                    )),
+                );
+                let scaffold_reminder_tokens =
+                    ExecutionEngine::prepended_reminder_tokens_for_pressure(&[
+                        "Continue executing the standing task. The prior context was summarized by compression.",
+                        "Current time is 2026-08-05T12:00:00Z. Context usage is low after compaction.",
+                    ]);
+                let scaffold_tools = vec![
+                    ToolDefinition {
+                        name: "Bash".to_string(),
+                        description: "Run a shell command and capture its output.".to_string(),
+                        parameters: json!({"type": "object", "properties": {"command": {"type": "string"}}}),
+                    },
+                    ToolDefinition {
+                        name: "Read".to_string(),
+                        description: "Read a file from the workspace and return its content.".to_string(),
+                        parameters: json!({"type": "object", "properties": {"path": {"type": "string"}}}),
+                    },
+                ];
+                let scaffold_tool_tokens =
+                    TokenCounter::estimate_tool_definitions_tokens(&scaffold_tools);
+                let scaffold_overhead = scaffold_system_tokens
+                    .saturating_add(scaffold_reminder_tokens)
+                    .saturating_add(scaffold_tool_tokens);
+                let after_headroom = after_pressure
+                    .input_limit
+                    .saturating_sub(after_pressure.total_tokens);
+                assert!(
+                    after_headroom >= scaffold_overhead,
+                    "compaction must leave margin for the system/reminder/tool scaffold the next send_input adds back: headroom={}, scaffold={} (system={}, reminders={}, tools={}), after={}, input_limit={}",
+                    after_headroom,
+                    scaffold_overhead,
+                    scaffold_system_tokens,
+                    scaffold_reminder_tokens,
+                    scaffold_tool_tokens,
+                    after_pressure.total_tokens,
+                    after_pressure.input_limit
+                );
+                assert!(
+                    after.len() < before_message_count,
+                    "compaction must fold the accumulated turn messages: before={}, after={}",
+                    before_message_count,
+                    after.len()
+                );
+                assert!(
+                    after.iter().any(|message| message.metadata.semantic_kind
+                        == Some(MessageSemanticKind::CompressionSummary)),
+                    "compacted context must carry the compression summary"
+                );
+                assert!(
+                    after.iter().any(|message| message.internal_reminder_kind()
+                        == Some(InternalReminderKind::CompressionContinuation)),
+                    "compacted context must carry the continuation reminder"
+                );
+                break turn;
+            }
+        };
+
+        // The next send_input loads the compacted context (same session_id),
+        // appends a new user message, and must remain compressible so the
+        // resident session can keep running instead of dying at the window.
+        let continued = session_manager
+            .get_context_messages(session_id)
+            .await
+            .expect("reusable context after compaction");
+        assert!(
+            !continued.is_empty(),
+            "compacted context is loadable by the next send_input"
+        );
+        session_manager
+            .add_message(
+                session_id,
+                Message::user("send_input after compaction: keep going".to_string())
+                    .with_turn_id(format!("turn-{}", compressed_turn + 1)),
+            )
+            .await
+            .expect("append after compaction");
+        let continued = session_manager
+            .get_context_messages(session_id)
+            .await
+            .expect("reloaded context");
+        let plan = compressor
+            .plan_compression(
+                session_id,
+                &continued,
+                context_window,
+                ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS,
+                None,
+            )
+            .expect("recompression planning succeeds");
+        assert!(
+            plan.is_some(),
+            "compacted resident context remains compressible"
+        );
+    }
+
+    #[test]
+    fn finalize_round_budget_gates_model_requests() {
+        assert!(ExecutionEngine::should_allow_finalize_round(0, 2));
+        assert!(ExecutionEngine::should_allow_finalize_round(1, 2));
+        assert!(!ExecutionEngine::should_allow_finalize_round(2, 2));
+        assert!(!ExecutionEngine::should_allow_finalize_round(5, 2));
+    }
+
+    #[test]
+    fn local_fallback_round_has_no_model_visible_content() {
+        let fallback = crate::agentic::execution::types::RoundResult::local_fallback();
+        assert!(!fallback.had_assistant_text);
+        assert!(!fallback.had_thinking_content);
+        assert!(fallback.tool_calls.is_empty());
+        assert!(!fallback.has_more_rounds);
+        assert!(fallback.usage.is_none());
+    }
+
+    #[test]
+    fn local_final_response_message_covers_thinking_only_budget() {
+        assert!(
+            ExecutionEngine::build_local_final_response_message("thinking_only_budget")
+                .contains("reasoning-only")
+        );
+    }
+
+    #[test]
+    fn finalize_budget_allows_legacy_first_request_and_single_retry() {
+        // 缓存保护（主人定标 2026-08-10）：finalize 门控必须允许「首请求 +
+        // 一次重试」——这是修复前 legacy 行为的逐字节等价。预算 2 恰好等于
+        // 该行为；超过 2 的请求（修复前不存在）才被截断为本地合成。
+        // 因此正常 finalize 轮请求的 prompt 组装路径零变化（run_finalize_round
+        // 内部未被触碰），共享前缀不漂移。
+        assert!(ExecutionEngine::should_allow_finalize_round(0, 2)); // 首请求
+        assert!(ExecutionEngine::should_allow_finalize_round(1, 2)); // 一次重试
+        assert!(!ExecutionEngine::should_allow_finalize_round(2, 2)); // 修复前无第 3 次
     }
 }

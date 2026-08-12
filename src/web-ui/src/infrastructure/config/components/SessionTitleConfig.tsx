@@ -1,18 +1,22 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Switch } from '@/component-library';
+import { Select, Switch } from '@/component-library';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import { configManager } from '../services/ConfigManager';
 import type { AIModelConfig } from '../types';
 import { ConfigPageRow, ConfigPageSection } from './common';
-import { ModelSelectionRadio } from './ModelSelectionRadio';
+import { type ModelSelectOption, useModelSelectPresentation } from './ModelSelectPresentation';
 import './AIFeaturesConfig.scss';
 
 const log = createLogger('SessionTitleConfig');
 
 const AGENT_SESSION_TITLE = 'session-title-func-agent';
+
+function normalizeSelectValue(value: string | number | (string | number)[]): string {
+  return String(Array.isArray(value) ? (value[0] ?? '') : value);
+}
 
 export const SessionTitleConfig: React.FC = () => {
   const { t } = useTranslation('settings/ai-model');
@@ -21,6 +25,7 @@ export const SessionTitleConfig: React.FC = () => {
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
+  const { buildModelOption, renderModelOption, renderModelValue } = useModelSelectPresentation();
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -57,6 +62,15 @@ export const SessionTitleConfig: React.FC = () => {
 
   const enabledModels = models.filter((model) => model.enabled);
   const sessionTitleModelId = funcAgentModels[AGENT_SESSION_TITLE] || 'fast';
+  const modelOptions = useMemo<ModelSelectOption[]>(() => [
+    { label: t('sessionTitle.model.fast'), value: 'fast' },
+    { label: t('sessionTitle.model.primary'), value: 'primary' },
+    ...enabledModels
+      .filter((model): model is AIModelConfig & { id: string } => (
+        typeof model.id === 'string' && model.id.trim().length > 0
+      ))
+      .map(buildModelOption),
+  ], [buildModelOption, enabledModels, t]);
 
   const updateEnabled = async (checked: boolean) => {
     if (!settings) return;
@@ -114,31 +128,44 @@ export const SessionTitleConfig: React.FC = () => {
       data-bf-part="root"
       title={t('sessionTitle.title')}
       description={t('sessionTitle.subtitle')}
-    >
-      <ConfigPageRow label={t('sessionTitle.enable')} align="center">
-        <div className="bitfun-func-agent-config__row-control" data-bf-component="session-title-config" data-bf-part="enableControl">
+      extra={(
+        <div
+          className="bitfun-func-agent-config__appearance-host"
+          data-bf-component="session-title-config"
+          data-bf-part="enableControl"
+        >
           <Switch
             checked={settings?.enable_session_title_generation ?? false}
             onChange={(e) => void updateEnabled(e.target.checked)}
             size="small"
             disabled={isLoading || !settings}
+            aria-label={t('sessionTitle.title')}
           />
         </div>
-      </ConfigPageRow>
+      )}
+    >
       <ConfigPageRow
-        className="bitfun-func-agent-config__model-row"
         label={t('sessionTitle.model.label')}
         description={enabledModels.length === 0 ? t('sessionTitle.models.empty') : undefined}
         align="center"
       >
-        <div className="bitfun-func-agent-config__row-control bitfun-func-agent-config__row-control--model" data-bf-component="session-title-config" data-bf-part="modelControl">
-          <ModelSelectionRadio
-            value={sessionTitleModelId}
-            models={enabledModels}
-            onChange={(modelId) => void handleModelChange(modelId)}
-            layout="horizontal"
+        <div
+          className="bitfun-func-agent-config__appearance-host"
+          data-bf-component="session-title-config"
+          data-bf-part="modelControl"
+        >
+          <Select
             size="small"
+            searchable
+            className="model-select-presentation__select"
+            dropdownClassName="model-select-presentation__dropdown"
+            options={modelOptions}
+            value={sessionTitleModelId}
+            onChange={(value) => void handleModelChange(normalizeSelectValue(value))}
+            renderOption={renderModelOption}
+            renderValue={renderModelValue}
             disabled={isLoading}
+            triggerTestId="settings-session-title-model-select"
           />
         </div>
       </ConfigPageRow>

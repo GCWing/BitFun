@@ -297,6 +297,13 @@ async function initializeAfterRender(): Promise<void> {
       const { registerNotificationContextMenu } = await import('./shared/notification-system');
       registerNotificationContextMenu();
     })(),
+    (async () => {
+      // E2E test helper: expose scene store in dev mode for Playwright
+      if (import.meta.env.DEV) {
+        const { useSceneStore } = await import('./app/stores/sceneStore');
+        (window as any).__E2E_SCENE_STORE__ = useSceneStore;
+      }
+    })(),
   ]);
 
   initResults.forEach((result, index) => {

@@ -1,17 +1,17 @@
 import { CARD, FILE_LINK, INK, LINE, MUTED, SOFT } from './Theme';
 
-@Component
+@ComponentV2
 export struct FileReferenceCard {
-  @Prop path: string = '';
-  @Prop label: string = '';
-  @Prop status: string = '';
-  @Prop previewLabel: string = '';
-  @Prop buttonLabel: string = '';
-  @Prop disabled: boolean = false;
-  @Prop selected: boolean = false;
-  @Prop previewLoading: boolean = false;
-  onPreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
-  onDownload: (path: string) => void = (_path: string) => {};
+  @Param path: string = '';
+  @Param label: string = '';
+  @Param status: string = '';
+  @Param previewLabel: string = '';
+  @Param buttonLabel: string = '';
+  @Param disabled: boolean = false;
+  @Param selected: boolean = false;
+  @Param previewLoading: boolean = false;
+  @Event onPreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
+  @Event onDownload: (path: string) => void = (_path: string) => {};
 
   build() {
     Row({ space: 10 }) {

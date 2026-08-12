@@ -155,6 +155,21 @@ pub fn record_review_diff_page(
     )
 }
 
+/// Override the global per-turn diff budgets
+/// (`ai.thresholds.deep_review.diff_max_chars_per_turn` /
+/// `diff_max_acquisitions_per_turn`). `None` keeps the legacy constants.
+/// Called once at DeepReview policy load; values apply to every subsequent
+/// turn budget created.
+pub fn set_deep_review_configured_diff_budgets(
+    diff_max_chars_per_turn: Option<usize>,
+    diff_max_acquisitions_per_turn: Option<usize>,
+) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.set_configured_diff_budgets(
+        diff_max_chars_per_turn,
+        diff_max_acquisitions_per_turn,
+    );
+}
+
 pub fn review_diff_budget_exhausted(parent_dialog_turn_id: &str) -> bool {
     GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_diff_budget_exhausted(parent_dialog_turn_id)
 }

@@ -55,6 +55,63 @@
     }
   }
 
+  // 3x3 grid (grid9) — cells keep a floor size and scroll internally so the
+  // canvas degrades gracefully when the AuxPane is narrow (full-width mode).
+  &.is-grid9 {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+
+    .canvas-editor-area__grid9-canvas {
+      display: grid;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+
+      .canvas-editor-area__grid9-cell {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+
+        .canvas-editor-group {
+          min-width: 0;
+          min-height: 0;
+        }
+
+        // Empty slot: dashed placeholder frame so users can see it is a
+        // valid drop target before starting a drag.
+        &:has(.canvas-editor-group__empty) {
+          background: var(--bf-appearance-token-color-bg-secondary);
+          border: 1px dashed var(--bf-appearance-token-border-base);
+
+          .canvas-editor-group__empty-content span {
+            font-size: 12px;
+            color: var(--bf-appearance-token-color-text-muted);
+          }
+        }
+      }
+
+      .canvas-split-handle {
+        min-width: 0;
+        min-height: 0;
+
+        // grid9 uses fixed 2px tracks for the resizers; make the handle fill
+        // its track (the default 4px width/height would overflow the track).
+        &--horizontal {
+          width: 100%;
+          height: 100%;
+        }
+
+        &--vertical {
+          width: 100%;
+          height: 100%;
+        }
+      }
+    }
+  }
+
   &__primary,
   &__secondary,
   &__tertiary {

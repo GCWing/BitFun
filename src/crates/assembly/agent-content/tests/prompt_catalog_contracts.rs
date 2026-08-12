@@ -10,6 +10,10 @@ use bitfun_agent_content::{
 
 const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
     (
+        "acp_agent",
+        include_bytes!("../prompts/agents/acp_agent.md"),
+    ),
+    (
         "agentic_mode",
         include_bytes!("../prompts/agents/agentic_mode.md"),
     ),
@@ -68,6 +72,10 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
     (
         "init_agents_md",
         include_bytes!("../prompts/shared/init_agents_md.md"),
+    ),
+    (
+        "legion_mode",
+        include_bytes!("../prompts/agents/legion_mode.md"),
     ),
     (
         "multitask_mode_first_entry_reminder",

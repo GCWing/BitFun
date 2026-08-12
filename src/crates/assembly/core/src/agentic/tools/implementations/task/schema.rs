@@ -7,7 +7,7 @@ impl TaskTool {
             "description".to_string(),
             json!({
                 "type": "string",
-                "description": "A short (3-5 word) description of the task"
+                "description": "A short (3-5 word) description of the task. Use SessionControl (list) to discover sessions and SessionMessage to communicate with them."
             }),
         );
         properties.insert(
@@ -40,7 +40,7 @@ impl TaskTool {
             "action".to_string(),
             json!({
                 "type": "string",
-                "enum": ["spawn", "send_input", "cancel"],
+                "enum": ["spawn", "send_input", "cancel", "list", "history"],
                 "description": "The action to perform."
             }),
         );
@@ -60,7 +60,7 @@ impl TaskTool {
             "agent_id".to_string(),
             json!({
                 "type": "string",
-                "description": "Required for action='send_input' and action='cancel'."
+                "description": "Required for action='send_input' and action='cancel'. Also accepted for action='history'."
             }),
         );
         properties.insert(
@@ -68,6 +68,22 @@ impl TaskTool {
             json!({
                 "type": "boolean",
                 "description": "Optional for action='spawn' and action='send_input'. Defaults to false."
+            }),
+        );
+        properties.insert(
+            "persistent".to_string(),
+            json!({
+                "type": "boolean",
+                "default": true,
+                "description": "Optional for action='spawn'. Defaults to true. When false the subagent is temporary: it is automatically recycled when the task finishes (success, failure, or cancellation), and the returned agent_id cannot be reused. When true the subagent session is retained and can be continued with 'send_input'."
+            }),
+        );
+        properties.insert(
+            "max_turns".to_string(),
+            json!({
+                "type": "integer",
+                "minimum": 1,
+                "description": "Optional for action='history'. Limits the number of most recent turns returned."
             }),
         );
         json!({
@@ -91,6 +107,8 @@ Supported actions:
 - `spawn`: create and run a new subagent. The result contains an `agent_id` for future `send_input` or `cancel`.
 - `send_input`: continue an existing subagent. Provide `agent_id`, `description`, and `prompt`. Optionally provide `model_id` to switch the subagent model for this and later turns.
 - `cancel`: cancel a background subagent. Provide `agent_id`.
+- `list`: list all background subagents for the current conversation. Returns agent_id, session_id, and status for each.
+- `history`: read the conversation history of a specified subagent. Provide `agent_id` or `session_id`. Optionally provide `max_turns` to limit the number of turns returned.
 
 Two modes for action='spawn':
 The two modes are mutually exclusive: do not provide `subagent_type` when `fork_context=true`.
@@ -112,11 +130,20 @@ The two modes are mutually exclusive: do not provide `subagent_type` when `fork_
 - false: Wait for the agent to finish and return its result to you.
 - true: Run the agent in the background without blocking you. The response includes a `bg_task_id`; use AgentWait when you need the results.
 
+`persistent` usage (action='spawn'):
+- true (default): the subagent session is durable; use `send_input` with the returned `agent_id` to continue it later.
+- false: one-shot temporary subagent. The session is automatically recycled when the task finishes (success, failure, or cancellation). The returned `agent_id` cannot be reused — treat the result as final.
+
 `model_id` usage:
 - Set it only when the user requests a particular model.
 - Omit it to use the subagent's configured model, which may differ from your model.
 - Special values: `inherit` explicitly uses the same model as yours; `primary` and `fast` use the user's configured model slots.
 - For a configured model, call ListModels first and use its returned `model_id`.
+
+`role` usage (action='spawn', R-14 B3 security parameter):
+- Optional explicit RBAC role for the child session: "commander", "executor", "reviewer", "warden", or "punishment_executor". Defaults to "executor" when omitted.
+- A caller may only delegate to its own role (or, as commander, to any role); delegation to a different role is rejected with an error at the spawn entry point. Unknown role keys are ignored and fall back to the default.
+- Only set this when the target subagent genuinely needs a different role baseline; prefer omitting it for ordinary delegation.
 
 Usage notes:
 - Include a short description of what the agent will do for this round (for `spawn` and `send_input`).
@@ -126,6 +153,9 @@ Usage notes:
 - When launching multiple non-read-only subagents in parallel, assign non-overlapping scopes and outputs so their file edits, commands, or external side effects do not conflict.
 - Treat subagent outputs as useful evidence, but verify details yourself before making edits or final claims that depend on exact code.
 - If an agent description mentions proactive use, consider it when relevant and use your judgment.
+- Use SessionControl (list) to discover subagent sessions.
+- Use SessionMessage to communicate with subagent sessions.
+- Use SessionHistory to export and inspect subagent transcripts.
 
 Examples (assume "example-reviewer" is present in the agent listing):
 <examples>

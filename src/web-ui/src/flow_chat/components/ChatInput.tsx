@@ -29,6 +29,8 @@ import { FlowChatStore } from '../store/FlowChatStore';
 import { useAcpPlan } from '../hooks/useAcpPlan';
 import { filterSlashCommands, useAcpSlashCommands } from '../hooks/useAcpSlashCommands';
 import { acpSessionRef, acpSlashCommandText } from '../utils/acpSession';
+import { conversationLevelLabel } from '../utils/conversationLevelLabel';
+import { buildConversationHierarchy } from '../utils/conversationHierarchy';
 import { AcpPlanPanel } from './AcpPlanPanel';
 import type { FlowChatState } from '../types/flow-chat';
 import type {
@@ -145,6 +147,11 @@ import {
 } from './ChatInputWorkspaceStrip';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
+import {
+  DISPATCH_PERMISSION_MODES,
+  dispatchApprovalPolicyFromPermissionMode,
+  permissionModeFromDispatchApprovalPolicy,
+} from '@/features/dispatch/approvalPolicy';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { useComposerCapabilities } from '../session-drivers/useComposerCapabilities';
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
@@ -282,8 +289,13 @@ type SlashPickerItem =
   | SlashAcpCommandItem
   | SlashSkillItem
   | SlashExternalPromptCommandItem;
-type ChatInputTarget = 'main' | 'btw';
+type ChatInputTarget = 'main' | 'btw' | { sessionId: string };
 
+/**
+ * Build the conversation hierarchy levels (L0..LN) around the current session:
+ * the ancestor chain from the root conversation down to the current session,
+ * then all descendant child sessions (BFS, ordered by createdAt then depth).
+ */
 function nativePromptCommandCandidateId(
   kind: Exclude<SlashPickerItem['kind'], 'externalCommand'>,
   id: string,
@@ -498,7 +510,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     ? activeBtwSessionData.childSessionId
     : undefined;
   const effectiveTargetSessionId =
-    inputTarget === 'btw' && activeBtwSessionId ? activeBtwSessionId : currentSessionId;
+    inputTarget === 'btw' && activeBtwSessionId
+      ? activeBtwSessionId
+      : typeof inputTarget === 'object'
+        ? inputTarget.sessionId
+        : currentSessionId;
   const effectiveTargetSessionIdRef = useRef<string | null>(effectiveTargetSessionId);
   effectiveTargetSessionIdRef.current = effectiveTargetSessionId;
 
@@ -577,13 +593,49 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { entries: acpPlanEntries } = useAcpPlan(acpSessionForInput?.sessionId ?? null);
   const threadGoalController = useThreadGoalController(effectiveTargetSession, {
     isBtwSession,
+    disabled: !caps.threadGoal,
   });
   const currentSessionTitle = currentSession?.title?.trim() || t('session.untitled');
   const activeBtwSession = activeBtwSessionId
     ? flowChatState.sessions.get(activeBtwSessionId)
     : undefined;
   const activeBtwRelationship = resolveSessionRelationship(activeBtwSession);
-  const showTargetSwitcher = !!activeBtwSessionId;
+  const conversationLevels = useMemo(
+    () => buildConversationHierarchy(flowChatState.sessions, currentSessionId),
+    [flowChatState.sessions, currentSessionId],
+  );
+  const showTargetSwitcher = !!activeBtwSessionId || conversationLevels.length > 1;
+  const handleSelectConversationLevel = useCallback(
+    (sessionId: string) => {
+      setInputTarget({ sessionId });
+      const session = flowChatState.sessions.get(sessionId);
+      if (!session) {
+        return;
+      }
+      const relationship = resolveSessionRelationship(session);
+      if (!relationship.canOpenInAuxPane || !relationship.parentSessionId) {
+        return;
+      }
+      const kind = session.sessionKind;
+      openBtwSessionInAuxPane({
+        childSessionId: sessionId,
+        parentSessionId: relationship.parentSessionId,
+        workspacePath: session.workspacePath,
+        sessionKind:
+          kind === 'subagent' ||
+          kind === 'review' ||
+          kind === 'deep_review' ||
+          kind === 'miniapp' ||
+          kind === 'btw'
+            ? kind
+            : 'btw',
+        parentToolCallId: session.parentToolCallId,
+        subagentType: session.subagentType,
+        sessionTitle: session.title,
+      });
+    },
+    [flowChatState.sessions],
+  );
   const activeBtwKind =
     activeBtwRelationship.kind === 'review' ||
     activeBtwRelationship.kind === 'deep_review' ||
@@ -1102,12 +1154,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       (state: FlowChatState): string => {
         const parts: string[] = [state.activeSessionId ?? ''];
         // Track sessions that ChatInput reads in render body (lines 278, 288, 304, 619)
-        const sessionIds = [
-          state.activeSessionId,
-          currentSessionId,
-          effectiveTargetSessionId,
-          activeBtwSessionId,
-        ].filter((id): id is string => !!id);
+        const sessionIds = new Set<string>(
+          [
+            state.activeSessionId,
+            currentSessionId,
+            effectiveTargetSessionId,
+            activeBtwSessionId,
+          ].filter((id): id is string => !!id),
+        );
+        // Track every session in the conversation hierarchy so level tabs stay in sync.
+        for (const level of buildConversationHierarchy(state.sessions, currentSessionId)) {
+          sessionIds.add(level.sessionId);
+        }
         for (const id of sessionIds) {
           const s = state.sessions.get(id);
           if (s) {
@@ -1119,7 +1177,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               `${s.needsUserAttention ? '1':'0'}|${s.dialogTurns.length}|` +
               `${JSON.stringify(s.config.dispatchTarget ?? null)}|` +
               `${s.config.dispatchApprovalPolicy ?? ''}|${s.config.dispatchJobState ?? ''}|` +
-              `${sessionWorktreeBindingSubscriptionKey(s)}`
+              `${sessionWorktreeBindingSubscriptionKey(s)}|` +
+              `${s.parentSessionId ?? ''}|${s.sessionKind ?? ''}|${s.depth ?? ''}|` +
+              `${s.createdAt ?? ''}|${JSON.stringify(s.btwOrigin ?? null)}`
             );
           }
         }
@@ -1150,10 +1210,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [currentSessionId, effectiveTargetSessionId, activeBtwSessionId]);
 
   useEffect(() => {
-    if (!showTargetSwitcher || !activeBtwSessionId) {
-      setInputTarget('main');
-    }
-  }, [activeBtwSessionId, showTargetSwitcher]);
+    setInputTarget(prev => {
+      if (typeof prev === 'object') {
+        const stillInHierarchy = conversationLevels.some(
+          level => level.sessionId === prev.sessionId,
+        );
+        return showTargetSwitcher && stillInHierarchy ? prev : 'main';
+      }
+      if (prev === 'btw' && !activeBtwSessionId) {
+        return 'main';
+      }
+      return prev;
+    });
+  }, [activeBtwSessionId, conversationLevels, showTargetSwitcher]);
 
   useEffect(() => {
     setChatInputActive(inputState.isActive);
@@ -1960,7 +2029,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
     const loadVisibility = async () => {
       try {
-        applyVisibility(await configManager.getOptionalConfig<boolean>(configPath));
+        applyVisibility(await configManager.getConfig<boolean | undefined>(configPath));
       } catch (error) {
         log.warn('Failed to load permission mode control visibility preference', error);
         applyVisibility(true);
@@ -2154,11 +2223,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [applySessionPermissionMode, isAcpTargetSession, permissionModeSaving, sessionPermissionMode]);
 
   const dispatchPermissionMode: ChatInputPermissionMode =
-    effectiveTargetSession?.config.dispatchApprovalPolicy === 'auto'
-      ? 'auto'
-      : effectiveTargetSession?.config.dispatchApprovalPolicy === 'reject-and-report'
-        ? 'reject'
-        : 'ask';
+    permissionModeFromDispatchApprovalPolicy(
+      effectiveTargetSession?.config.dispatchApprovalPolicy,
+    );
   const dispatchSubmissionOptionsLocked = caps.submissionOptionsLocked;
   const handleDispatchPermissionModeChange = useCallback((
     nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
@@ -2166,12 +2233,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!effectiveTargetSessionId || dispatchSubmissionOptionsLocked) {
       return;
     }
-    const approvalPolicy =
-      nextMode === 'auto' || nextMode === 'full_access'
-        ? 'auto'
-        : nextMode === 'reject'
-          ? 'reject-and-report'
-          : 'remote';
+    const approvalPolicy = dispatchApprovalPolicyFromPermissionMode(nextMode);
     FlowChatStore.getInstance().updateSessionDispatchApprovalPolicy(
       effectiveTargetSessionId,
       approvalPolicy,
@@ -2253,11 +2315,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ...flowChatSessionConfigForCurrentWorkspace(workspace),
           dispatchTargetRequest: selection.request,
           dispatchTarget: selection.target,
-          dispatchApprovalPolicy: selection.approvalPolicy,
+          // Not asked for while picking a target: a dispatch session starts on
+          // the same permission default a local session here would, and the
+          // composer strip stays the one place to change it.
+          dispatchApprovalPolicy: dispatchApprovalPolicyFromPermissionMode(
+            permissionMode === 'acp' ? 'ask' : permissionMode,
+          ),
           dispatchIncludeUncommitted: selection.includeUncommitted,
           dispatchBaseRef: selection.baseRef,
           // Undefined is intentional: the target's probed default model wins
-          // unless a future preflight selector records an explicit choice.
+          // until the composer's model picker records an explicit choice.
           dispatchModel: selection.model,
           dispatchModelCatalog: selection.modelCatalog,
           dispatchAvailableModels: selection.availableModels,
@@ -2269,7 +2336,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       log.error('Failed to create dispatched session projection', { error });
       notificationService.error(t('chatInput.dispatch.createFailed'));
     }
-  }, [effectiveSendAgentType, t, workspace]);
+  }, [effectiveSendAgentType, permissionMode, t, workspace]);
 
   const effectiveTargetSessionHasTurns = effectiveTargetSession
     ? !isProjectedSessionEmpty(effectiveTargetSession)
@@ -2348,6 +2415,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       defaultModelId: effectiveTargetSession.config.dispatchDefaultModel,
       reasoningCatalog: effectiveTargetSession.config.dispatchModelCatalog,
       selectedReasoningPreset: effectiveTargetSession.config.dispatchReasoningPreset,
+      // The probe snapshot above is a starting point, not the offer. Dispatch
+      // changes where a session runs, not which models this device has, and
+      // submission brings the target up to whatever is chosen here — so the
+      // picker offers the local catalog exactly as a local session would, and
+      // survives a projection restored without that snapshot.
+      includeLocalCatalog: true,
       providerLabel,
       disabled: caps.submissionOptionsLocked,
       onSelect: (modelId: string) => {
@@ -4975,14 +5048,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       
       e.preventDefault();
 
-      const isBtwCommand = isSlashCommand(inputState.value.trim(), '/btw');
+      const promptSlashCommandsEnabled = !isAcpInputSession;
+      const isBtwCommand =
+        promptSlashCommandsEnabled &&
+        caps.ops.has('btw') &&
+        isSlashCommand(inputState.value.trim(), '/btw');
       if (isBtwCommand) {
         // Allow /btw submission even while the main session is generating.
         void submitBtwFromInput();
         return;
       }
 
-      if (isGoalSlashCommand(inputState.value.trim())) {
+      const isGoalCommand =
+        promptSlashCommandsEnabled &&
+        caps.ops.has('goal') &&
+        isGoalSlashCommand(inputState.value.trim());
+      if (isGoalCommand) {
         void submitGoalFromInput();
         return;
       }
@@ -5000,7 +5081,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredSelectableModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
+  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredSelectableModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, isAcpInputSession, caps.ops, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -5309,6 +5390,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     <span className="bitfun-chat-input__target-tab-name" data-bf-component="chat-input" data-bf-part="targetName">{activeBtwSessionTitle}</span>
                   )}
                 </button>
+                {conversationLevels.map(entry => {
+                  const isLevelActive =
+                    typeof inputTarget === 'object' && inputTarget.sessionId === entry.sessionId;
+                  const levelTitle = isLevelActive
+                    ? entry.session?.title?.trim() || t('session.untitled')
+                    : '';
+                  return (
+                    <button
+                      key={entry.sessionId}
+                      type="button"
+                      tabIndex={-1}
+                      className={`bitfun-chat-input__target-tab ${isLevelActive ? 'bitfun-chat-input__target-tab--active' : ''}`}
+                      onClick={() => handleSelectConversationLevel(entry.sessionId)}
+                      title={entry.session?.title}
+                    >
+                      {conversationLevelLabel(entry, t)}
+                      {levelTitle && (
+                        <span className="bitfun-chat-input__target-tab-name">{levelTitle}</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
             <div ref={mentionAnchorRef} className="bitfun-chat-input__input-area" data-bf-component="chat-input" data-bf-part="area">
@@ -5385,9 +5488,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 isOpen={mentionState.isActive}
                 searchQuery={mentionState.query}
                 workspacePath={sessionBoundWorkspacePath}
-                workspaceId={hasRegisteredWorkspace
-                  ? undefined
-                  : effectiveTargetSession?.workspaceId || workspace?.id}
                 excludeSessionId={effectiveTargetSessionId || undefined}
                 anchorRef={mentionAnchorRef}
                 onSelect={(context: FileContext | DirectoryContext | SessionReferenceContext) => {
@@ -6110,7 +6210,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             ? {
                 mode: dispatchPermissionMode,
                 disabled: dispatchSubmissionOptionsLocked,
-                options: ['ask', 'auto', 'reject'],
+                options: DISPATCH_PERMISSION_MODES,
                 scopeLabel: t('chatInput.dispatch.sessionScope'),
                 onChange: handleDispatchPermissionModeChange,
                 onHide: handleHidePermissionModeControl,
@@ -6150,6 +6250,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             ? {
                 visible: true,
                 goal: threadGoalController.goal,
+                goalChain: threadGoalController.goalChain,
                 onOpen: () => {
                   void threadGoalController.openGoalEntry();
                 },

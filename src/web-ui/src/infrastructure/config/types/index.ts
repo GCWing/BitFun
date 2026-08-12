@@ -229,6 +229,7 @@ export interface ReasoningCatalogProjection {
   status: 'unsupported' | 'known' | 'unknown';
   default_preset?: string;
   presets?: ReasoningPresetDescriptor[];
+  unavailable_presets?: ReasoningPresetDescriptor[];
 }
 
 export interface ModelMetadata {
@@ -351,6 +352,31 @@ export interface AIConfig {
   subagent_batch_execution_policy?: 'safe_only' | 'force_parallel' | 'serial';
   computer_use_enabled?: boolean;
   browser_control_preferred_browser?: string;
+  /**
+   * User-controllable master switch for the RBAC/Warden mechanism (R-26).
+   * When false, RBAC tool-restriction checks and the Warden runtime are
+   * fully bypassed. Defaults to true.
+   */
+  rbac_enabled?: boolean;
+  /**
+   * Master switch for loading external user instruction sources
+   * (~/.claude/CLAUDE.md + rules/, OpenCode AGENTS.md, Codex AGENTS.md) into
+   * the User Context. When false, external instruction files are not read at
+   * all; workspace instruction files (project AGENTS.md / .claude/rules) are
+   * unaffected. Defaults to false (taiji customized build: not injected
+   * unless explicitly enabled).
+   */
+  external_instruction_sources?: boolean;
+  /**
+   * Master switch for loading workspace instruction files (project-level
+   * AGENTS.md / AGENTS.override.md / CLAUDE.md / .claude/CLAUDE.md /
+   * CLAUDE.local.md / opencode config references) into the User Context.
+   * Independent of external_instruction_sources. Defaults to false (taiji
+   * customized build: full workspace instruction text is the main context
+   * bloat source, so it is not injected unless explicitly enabled).
+   */
+  workspace_instruction_files?: boolean;
+  browser_control_auto_connect_on_startup?: boolean;
 }
 
 export interface StoredAgentProfileConfigItem {

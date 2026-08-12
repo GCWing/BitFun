@@ -1,0 +1,102 @@
+# =============================================================================
+# cargo-deny configuration (schema: cargo-deny 0.20.x)
+# License compliance + dependency review + vulnerability gate
+# =============================================================================
+# Reference: https://embarkstudios.github.io/cargo-deny/
+# Note: 0.20 moved [advisories] lint levels to Scope values and renamed
+# [bans] wildcard-predicates -> wildcards. See
+# https://github.com/EmbarkStudios/cargo-deny/blob/0.20.2/src/advisories/cfg.rs
+# and src/bans/cfg.rs for the exact accepted keys.
+
+[advisories]
+# 0.20: vulnerability/notice are deprecated (removed in the 0.14 line) and
+# severity-threshold is deprecated (PR#611); keeping them aborts parsing.
+# unmaintained/unsound are Scope values: "all" | "workspace" | "transitive" | "none".
+# The pre-0.20 "warn" policy is preserved as "none" (warn, never block CI).
+unmaintained = "none"
+unsound = "all"
+# Whether to error on crates yanked from crates.io (LintLevel). The previous
+# `ignore-yanked = false` ("never ignore yanked crates") maps to warn-level.
+yanked = "warn"
+# Known advisories in the upstream dependency tree, each registered with an
+# explicit reason. New advisories NOT listed here fail the gate. The pinned
+# upstream versions cannot be upgraded without breaking API semantics:
+#   - russh 0.45 (^0.45) -> fixed 0.60.3 is a breaking API jump
+#   - glib 0.18 / quick-xml 0.28-0.30 / memmap2 0.7-0.8 are pinned by the
+#     Linux desktop stack (tauri 2.11 / screenshots / enigo)
+#   - rsa 0.9.10 (RUSTSEC-2023-0071) has no fixed release
+ignore = [
+    { id = "RUSTSEC-2026-0154", reason = "russh 0.45 pinned by ^0.45 in Cargo.toml; fixed version 0.60.3 is a breaking API upgrade" },
+    { id = "RUSTSEC-2026-0153", reason = "russh-cryptovec ships with pinned russh 0.45; same upgrade constraint" },
+    { id = "RUSTSEC-2023-0071", reason = "rsa 0.9.10 via russh-keys; no fixed release exists for this advisory" },
+    { id = "RUSTSEC-2024-0429", reason = "glib 0.18 pinned by tauri 2.11 Linux GTK stack; fix requires glib 0.20 (gtk-rs major bump)" },
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.28/0.30 are build-time deps of the Linux desktop stack (xcb/wayland); fix 0.41 is a breaking jump" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml NsReader OOM advisory; same quick-xml version constraint as RUSTSEC-2026-0194" },
+    { id = "RUSTSEC-2026-0186", reason = "memmap2 0.7/0.8 pinned by screenshots/enigo on Linux desktop; fix 0.9.11 is a breaking jump" },
+    { id = "RUSTSEC-2026-0187", reason = "lopdf 0.41 pinned by anydoc 0.1.6 (document conversion); fix 0.42 is a breaking jump" },
+    { id = "RUSTSEC-2026-0002", reason = "lru 0.12 pinned by ratatui 0.29 (CLI TUI); fix 0.16.3 is a breaking jump" },
+]
+
+[bans]
+# Ban specific crates
+# multiple-versions is warn (not deny): the current upstream dependency tree
+# legitimately contains 110+ duplicate crate versions (tauri/webview2/mozilla
+# stacks). Deny would make the gate permanently red and CI unusable; warn keeps
+# the duplicates visible without blocking.
+multiple-versions = "warn"
+# wildcards is warn (not deny): dozens of internal path dependencies use "*"
+# version requirements upstream. Deny would block the whole workspace; warn
+# keeps them visible.
+wildcards = "warn"
+deny = []
+# skip list - allow multiple versions for some crates (usually unavoidable via transitive deps)
+skip = []
+# skip-tree - allow multiple versions for an entire subtree rooted at a crate
+# (none currently: the previous tokio-util/aws-sdk-s3 entries no longer match
+#  the dependency graph and only produced unmatched-skip-root warnings)
+skip-tree = []
+
+[licenses]
+# 0.20 removed copyleft/allow-osi-fsf-free/default/deny (PR#611); the allow
+# list below is now the single source of truth for what is permitted.
+# Ignore license checks for private workspace crates that are never published
+# (bitfun-*/terminal-* don't declare a license field upstream); third-party
+# dependencies are still fully checked.
+private = { ignore = true }
+# Allowed licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unlicense",
+    "CC0-1.0",
+    "Zlib",
+    "MPL-2.0",
+    # Permissive OSI/FSF licenses in the current dependency tree (cargo deny
+    # rejects anything not explicitly listed):
+    "BSL-1.0",              # clipboard-win, error-code (OSI + FSF free)
+    "UPL-1.0",              # readability-js (OSI + FSF free)
+    "CDLA-Permissive-2.0",  # webpki-root-certs, webpki-roots (permissive data license)
+]
+confidence-threshold = 0.8
+# Exceptions - crates with explicit license approval. Keep only per-crate
+# licenses that are NOT in the global allow list (none currently).
+exceptions = []
+
+[sources]
+# Allowed crate sources (0.20: allow-registry is an array of registry URLs;
+# allow-git-registry was removed, use allow-git for git sources)
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = [
+    "https://github.com/rust-lang/crates.io-index",
+]
+# Git dependency allowlist
+allow-git = [
+    # tauri git dependency pinned in Cargo.lock (pre-0.20 `allow-git-registry`)
+    "https://github.com/tauri-apps/tauri.git",
+]

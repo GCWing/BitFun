@@ -25,6 +25,10 @@ pub struct AcpClientConfig {
     pub readonly: bool,
     #[serde(default)]
     pub permission_mode: AcpClientPermissionMode,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -33,6 +37,7 @@ pub enum AcpClientPermissionMode {
     #[default]
     Ask,
     AllowOnce,
+    AllowAlways,
     RejectOnce,
 }
 
@@ -49,6 +54,8 @@ pub struct AcpClientInfo {
     pub status: AcpClientStatus,
     pub tool_name: String,
     pub session_count: usize,
+    pub category: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,5 +116,16 @@ mod tests {
 
         assert_eq!(mode, AcpClientPermissionMode::Ask);
         assert_eq!(serde_json::to_string(&mode).unwrap(), "\"ask\"");
+    }
+
+    #[test]
+    fn allow_always_round_trips_as_snake_case() {
+        let mode = AcpClientPermissionMode::AllowAlways;
+
+        assert_eq!(serde_json::to_string(&mode).unwrap(), "\"allow_always\"");
+        assert_eq!(
+            serde_json::from_str::<AcpClientPermissionMode>("\"allow_always\"").unwrap(),
+            AcpClientPermissionMode::AllowAlways
+        );
     }
 }

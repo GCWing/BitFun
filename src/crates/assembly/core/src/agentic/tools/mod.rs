@@ -1,6 +1,7 @@
 //! Tool system - includes Tool interface, tool registry and tool executor
 
 pub mod account_login_capability;
+#[cfg(feature = "browser-control")]
 pub mod browser_control;
 pub mod computer_use_capability;
 pub mod computer_use_host;
@@ -12,7 +13,9 @@ pub mod framework;
 pub mod image_context;
 pub mod implementations;
 pub mod manifest_resolver;
+#[cfg(feature = "tools-miniapp")]
 pub mod page_deploy_host;
+#[cfg(feature = "tools-miniapp")]
 pub mod page_publish_host;
 pub mod pipeline;
 pub(crate) mod post_call_hooks;
@@ -42,8 +45,11 @@ pub use registry::{
     get_readonly_registered_tool_names, get_readonly_tools,
 };
 pub use restrictions::{
-    is_miniapp_headless_agent_run, is_miniapp_market_strict_agent_run,
-    miniapp_agent_run_tool_restrictions, miniapp_headless_agent_tool_restrictions,
-    miniapp_market_strict_agent_tool_restrictions, tool_restrictions_for_delegation_policy,
-    ToolPathOperation, ToolPathPolicy, ToolRuntimeRestrictions,
+    clear_session_role, clear_session_restrictions, get_default_permissions,
+    get_session_restrictions, get_session_role, is_miniapp_headless_agent_run,
+    is_miniapp_market_strict_agent_run, miniapp_agent_run_tool_restrictions,
+    miniapp_headless_agent_tool_restrictions, miniapp_market_strict_agent_tool_restrictions,
+    set_session_role, subagent_tool_restrictions, tool_restrictions_for_delegation_policy,
+    update_restrictions, AgentRole, OperationClass, RolePermissionMap, ToolPathOperation,
+    ToolPathPolicy, ToolRuntimeRestrictions, ToolRuntimeRestrictionsPatch,
 };

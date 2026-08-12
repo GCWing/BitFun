@@ -7,7 +7,7 @@
 use super::store::{self, StoredCredential};
 use super::{
     OpenCodePlan, ResolvedCredential, StartedLogin, SubscriptionApiOffering,
-    SubscriptionOfferingModel,
+    SubscriptionHttpOptions, SubscriptionOfferingModel,
 };
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
@@ -117,19 +117,16 @@ struct OpenCodeRoute {
     format: &'static str,
 }
 
-fn http_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .context("build opencode http client")
+fn http_client(options: &SubscriptionHttpOptions) -> Result<reqwest::Client> {
+    super::build_http_client(options, "OpenCode")
 }
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
-async fn request_device_code() -> Result<DeviceCodeResponse> {
-    let client = http_client()?;
+async fn request_device_code(options: &SubscriptionHttpOptions) -> Result<DeviceCodeResponse> {
+    let client = http_client(options)?;
     let resp = client
         .post(format!("{SERVER}/auth/device/code"))
         .json(&serde_json::json!({ "client_id": CLIENT_ID }))
@@ -154,8 +151,8 @@ enum DevicePoll {
 }
 
 /// One poll attempt against the device-token endpoint.
-async fn poll_once(device_code: &str) -> Result<DevicePoll> {
-    let client = http_client()?;
+async fn poll_once(device_code: &str, options: &SubscriptionHttpOptions) -> Result<DevicePoll> {
+    let client = http_client(options)?;
     let resp = client
         .post(format!("{SERVER}/auth/device/token"))
         .json(&serde_json::json!({
@@ -437,7 +434,11 @@ async fn fetch_remote_offerings(
     }
 }
 
-async fn fetch_metadata(access: &str, existing: Option<&serde_json::Value>) -> serde_json::Value {
+async fn fetch_metadata(
+    access: &str,
+    existing: Option<&serde_json::Value>,
+    options: &SubscriptionHttpOptions,
+) -> serde_json::Value {
     let mut metadata = existing
         .and_then(serde_json::Value::as_object)
         .cloned()
@@ -446,7 +447,7 @@ async fn fetch_metadata(access: &str, existing: Option<&serde_json::Value>) -> s
         "server".to_string(),
         serde_json::Value::String(SERVER.to_string()),
     );
-    let client = match http_client() {
+    let client = match http_client(options) {
         Ok(client) => client,
         Err(_) => return serde_json::Value::Object(metadata),
     };
@@ -529,8 +530,8 @@ async fn persist_tokens(
     Ok(())
 }
 
-async fn refresh(refresh_token: &str) -> Result<TokenResponse> {
-    let client = http_client()?;
+async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Result<TokenResponse> {
+    let client = http_client(options)?;
     let resp = client
         .post(format!("{SERVER}/auth/device/token"))
         .json(&serde_json::json!({
@@ -571,8 +572,9 @@ fn absolute_verification_url(uri: &str) -> String {
 pub(crate) async fn begin_login(
     cancel: CancellationToken,
     expected_revision: u64,
+    options: SubscriptionHttpOptions,
 ) -> Result<StartedLogin> {
-    let device = request_device_code().await?;
+    let device = request_device_code(&options).await?;
     let interval = device.interval.unwrap_or(5).max(1);
     let device_code = device.device_code.clone();
     let user_code = device.user_code.clone();
@@ -586,14 +588,15 @@ pub(crate) async fn begin_login(
                 let mut wait = interval;
                 loop {
                     tokio::time::sleep(Duration::from_secs(wait)).await;
-                    match poll_once(&device_code).await? {
+                    match poll_once(&device_code, &options).await? {
                         DevicePoll::Authorized(tokens) => {
                             // Optional profile/org network calls belong to the
                             // cancellable authorization phase. The provider
                             // commit lock should cover only the credential
                             // store transaction, never up to 60 seconds of
                             // metadata fetching.
-                            let metadata = fetch_metadata(&tokens.access_token, None).await;
+                            let metadata =
+                                fetch_metadata(&tokens.access_token, None, &options).await;
                             return Ok((tokens, metadata));
                         }
                         DevicePoll::Pending => {
@@ -621,7 +624,7 @@ pub(crate) async fn begin_login(
     })
 }
 
-async fn ensure_fresh() -> Result<String> {
+async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<String> {
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
@@ -638,7 +641,7 @@ async fn ensure_fresh() -> Result<String> {
             if expires > now_ms() + REFRESH_LEEWAY_MS {
                 return Ok(access);
             }
-            let refreshed = refresh(&refresh_token).await?;
+            let refreshed = refresh(&refresh_token, options).await?;
             let new_expires = now_ms() + refreshed.expires_in * 1000;
             let outcome = store::upsert_if_revision(
                 STORE_KEY,
@@ -652,16 +655,46 @@ async fn ensure_fresh() -> Result<String> {
                 },
             )
             .await?;
-            super::require_current_store_revision(super::SubscriptionProvider::Opencode, outcome)?;
-            log::info!("opencode subscription tokens refreshed");
-            Ok(refreshed.access_token)
+            match outcome {
+                store::ConditionalCommitOutcome::Committed { .. } => {
+                    log::info!("opencode subscription tokens refreshed");
+                    Ok(refreshed.access_token)
+                }
+                store::ConditionalCommitOutcome::Conflict { current_revision } => {
+                    let current = super::load_current_store_after_conflict(
+                        super::SubscriptionProvider::Opencode,
+                        current_revision,
+                    )
+                    .await?;
+                    match current.credential {
+                        Some(StoredCredential::Api { key, .. }) => {
+                            log::info!(
+                                "opencode refresh reused the current API credential after a concurrent update"
+                            );
+                            Ok(key)
+                        }
+                        Some(StoredCredential::Oauth {
+                            access, expires, ..
+                        }) if expires > now_ms() => {
+                            log::info!(
+                                "opencode refresh reused tokens committed by a concurrent refresh"
+                            );
+                            Ok(access)
+                        }
+                        _ => Err(super::store_revision_conflict(
+                            super::SubscriptionProvider::Opencode,
+                            current_revision,
+                        )),
+                    }
+                }
+            }
         }
     }
 }
 
 /// Refreshes account/org/catalog metadata using a fresh credential.
-pub(crate) async fn refresh_profile() -> Result<()> {
-    let access = ensure_fresh().await?;
+pub(crate) async fn refresh_profile(options: &SubscriptionHttpOptions) -> Result<()> {
+    let access = ensure_fresh(options).await?;
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
@@ -671,7 +704,7 @@ pub(crate) async fn refresh_profile() -> Result<()> {
             metadata.as_ref()
         }
     };
-    let metadata = fetch_metadata(&access, existing_metadata).await;
+    let metadata = fetch_metadata(&access, existing_metadata, options).await;
     if existing_metadata == Some(&metadata) {
         return Ok(());
     }
@@ -701,8 +734,11 @@ pub(crate) async fn refresh_profile() -> Result<()> {
     Ok(())
 }
 
-async fn resolve_route(route: OpenCodeRoute) -> Result<ResolvedCredential> {
-    let api_key = ensure_fresh().await?;
+async fn resolve_route(
+    route: OpenCodeRoute,
+    options: &SubscriptionHttpOptions,
+) -> Result<ResolvedCredential> {
+    let api_key = ensure_fresh(options).await?;
     Ok(ResolvedCredential {
         api_key,
         base_url: Some(route.base_url.to_string()),
@@ -715,13 +751,17 @@ async fn resolve_route(route: OpenCodeRoute) -> Result<ResolvedCredential> {
 
 /// Resolves the legacy OpenCode target. Models saved before plan-aware auth
 /// are kept on their historical Zen Chat Completions route.
-pub(crate) async fn resolve() -> Result<ResolvedCredential> {
-    resolve_route(route_for(OpenCodePlan::Zen, "openai")?).await
+pub(crate) async fn resolve(options: &SubscriptionHttpOptions) -> Result<ResolvedCredential> {
+    resolve_route(route_for(OpenCodePlan::Zen, "openai")?, options).await
 }
 
 /// Resolves a concrete OpenCode plan and wire format to a trusted endpoint.
-pub(crate) async fn resolve_for(plan: OpenCodePlan, format: &str) -> Result<ResolvedCredential> {
-    resolve_route(route_for(plan, format)?).await
+pub(crate) async fn resolve_for(
+    plan: OpenCodePlan,
+    format: &str,
+    options: &SubscriptionHttpOptions,
+) -> Result<ResolvedCredential> {
+    resolve_route(route_for(plan, format)?, options).await
 }
 
 /// Provider metadata used to seed a new model entry.

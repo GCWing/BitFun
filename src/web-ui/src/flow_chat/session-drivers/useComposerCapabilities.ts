@@ -12,6 +12,7 @@
 
 import { useRuntimeStatusStore } from '../store/runtimeStatusStore';
 import type { Session } from '../types/flow-chat';
+import { isAcpFlowSession } from '../utils/acpSession';
 import { resolveSessionDriverId, type SessionDriverId } from './resolve';
 
 export const DISPATCH_TRANSFER_ROUND_PREFIX = 'dispatch-transfer:';
@@ -21,6 +22,9 @@ export type ComposerSlashOp = 'btw' | 'compact' | 'goal' | 'usage' | 'init' | 'r
 
 const LOCAL_SLASH_OPS: ReadonlySet<ComposerSlashOp> = new Set([
   'btw', 'compact', 'goal', 'usage', 'init', 'review',
+]);
+const LOCAL_SLASH_OPS_WITHOUT_THREAD_GOAL: ReadonlySet<ComposerSlashOp> = new Set([
+  'btw', 'compact', 'usage', 'init', 'review',
 ]);
 /** Ops a detached target serves via its durable turn mailbox / query verb. */
 const DISPATCH_SLASH_OPS: ReadonlySet<ComposerSlashOp> = new Set(['compact', 'usage']);
@@ -59,10 +63,20 @@ export interface ComposerCapabilityInput {
   displayAsChild: boolean;
 }
 
+export function sessionSupportsThreadGoal(
+  session: Pick<Session, 'config' | 'mode'> | undefined,
+): boolean {
+  // ACP agents own their execution loop and tool surface. Until the protocol
+  // exposes the BitFun thread-goal lifecycle, advertising the local goal UI
+  // would create state the external agent cannot inspect or complete.
+  return !isAcpFlowSession(session);
+}
+
 export function useComposerCapabilities(input: ComposerCapabilityInput): ComposerCapabilities {
   const { sessionId, session, hostMasksDispatch, displayAsChild } = input;
   const driverId = resolveSessionDriverId(sessionId ?? '', session);
   const dispatchTransport = !hostMasksDispatch && driverId === 'dispatch';
+  const threadGoalSupported = sessionSupportsThreadGoal(session);
 
   const transferInFlight = useRuntimeStatusStore(state => {
     const status = sessionId ? state.bySessionId.get(sessionId) : undefined;
@@ -85,9 +99,13 @@ export function useComposerCapabilities(input: ComposerCapabilityInput): Compose
     driverId,
     dispatchTransport,
     localSlashCommands: !dispatchTransport,
-    ops: dispatchTransport ? DISPATCH_SLASH_OPS : LOCAL_SLASH_OPS,
+    ops: dispatchTransport
+      ? DISPATCH_SLASH_OPS
+      : threadGoalSupported
+        ? LOCAL_SLASH_OPS
+        : LOCAL_SLASH_OPS_WITHOUT_THREAD_GOAL,
     usageReport: true,
-    threadGoal: !displayAsChild && !dispatchTransport,
+    threadGoal: threadGoalSupported && !displayAsChild && !dispatchTransport,
     transferInFlight,
     submissionOptionsLocked,
     sessionScopedApproval: dispatchTransport,

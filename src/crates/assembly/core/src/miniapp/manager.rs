@@ -119,20 +119,6 @@ impl MiniAppManager {
         compile_with_request(source, permissions, &request)
     }
 
-    fn compile_market_source_with_app_data_dir(
-        &self,
-        app_id: &str,
-        app_data_dir: &Path,
-        source: &MiniAppSource,
-        permissions: &MiniAppPermissions,
-        theme: &str,
-        workspace_root: Option<&Path>,
-    ) -> BitFunResult<String> {
-        let request =
-            MiniAppCompileRequest::from_paths(app_id, app_data_dir, workspace_root, theme);
-        compile_market_with_request(source, permissions, &request)
-    }
-
     pub async fn uses_market_strict_runtime(&self, app_id: &str) -> bool {
         self.storage
             .load_meta(app_id)

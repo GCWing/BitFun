@@ -519,6 +519,59 @@ describe('DispatchJobObserver', () => {
     cleanup();
   });
 
+  it('renders an automatic model configuration push inside the transcript', async () => {
+    // Submission copies this device's API keys to a target that cannot serve
+    // the chosen model. That has to stay as visible as the manual button it
+    // replaced, including after a replay from byte zero.
+    registerRunningJob();
+    const started: DispatchEvent = {
+      type: 'audit',
+      timestamp: '2026-08-09T00:00:00Z',
+      action: 'model-sync',
+      details: { stage: 'model-sync-started', sync: { requestedModel: 'model-a' } },
+    };
+    const succeeded: DispatchEvent = {
+      type: 'audit',
+      timestamp: '2026-08-09T00:00:02Z',
+      action: 'model-sync',
+      details: { stage: 'model-sync-succeeded', sync: { modelCount: 4 } },
+    };
+    mocks.status.mockResolvedValue(status({
+      cursor: 2,
+      events: [started, succeeded],
+    }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    const turn = flowChatStore
+      .getState()
+      .sessions
+      .get('session-1')
+      ?.dialogTurns[0];
+    const items = turn?.modelRounds[0].items ?? [];
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: `dispatch-audit:${dispatchEventId(started)}`,
+        type: 'text',
+        content: expect.any(String),
+      }),
+      expect.objectContaining({
+        id: `dispatch-audit:${dispatchEventId(succeeded)}`,
+        type: 'text',
+        content: expect.any(String),
+      }),
+    ]);
+    // Each stage says something of its own; a shared placeholder would hide
+    // whether the push actually landed.
+    const labels = items.map(item => 'content' in item ? item.content : '');
+    expect(labels[0]).not.toBe('');
+    expect(labels[0]).not.toBe(labels[1]);
+    // The synced payload carries API keys and must never reach the transcript.
+    expect(labels.join(' ')).not.toContain('model-a');
+    cleanup();
+  });
+
   it('marks a missing baseline worktree during observer reconciliation', async () => {
     registerRunningJob();
     dispatchJobStore.getState().registerJob({

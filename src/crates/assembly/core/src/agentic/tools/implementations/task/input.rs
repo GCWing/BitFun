@@ -1,10 +1,13 @@
 use super::*;
+use crate::agentic::tools::restrictions::AgentRole;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TaskAction {
     Spawn,
     SendInput,
     Cancel,
+    List,
+    History,
 }
 
 impl TaskAction {
@@ -26,8 +29,10 @@ impl TaskAction {
             "spawn" => Ok(Self::Spawn),
             "send_input" => Ok(Self::SendInput),
             "cancel" => Ok(Self::Cancel),
+            "list" => Ok(Self::List),
+            "history" => Ok(Self::History),
             other => Err(BitFunError::tool(format!(
-                "action must be one of: spawn, send_input, cancel; got '{}'",
+                "action must be one of: spawn, send_input, cancel, list, history; got '{}'",
                 other
             ))),
         }
@@ -68,6 +73,8 @@ impl TaskAction {
             Self::Spawn => "spawn",
             Self::SendInput => "send_input",
             Self::Cancel => "cancel",
+            Self::List => "list",
+            Self::History => "history",
         }
     }
 }
@@ -84,8 +91,21 @@ pub(super) struct TaskInvocation {
     pub(super) inherit_parent_model: bool,
     pub(super) timeout_seconds: Option<u64>,
     pub(super) run_in_background: bool,
+    /// Two lifecycle modes for a spawned background subagent:
+    /// - `true` (default): the subagent session is durable and can be continued
+    ///   later with `send_input` (existing behavior).
+    /// - `false`: one-shot temporary subagent — the session is automatically
+    ///   recycled when the task finishes (success, failure, or cancellation);
+    ///   the returned `agent_id` cannot be reused.
+    pub(super) persistent: bool,
     pub(super) is_retry: bool,
     pub(super) requested_auto_retry: bool,
+    pub(super) max_turns: Option<u64>,
+    /// Optional explicit target role for the spawned subagent (R-14 B3).
+    /// When `None`, the target defaults to `Executor` (the subagent role
+    /// assigned by session creation); a specified role is validated against
+    /// the creator's role and fails fast on violation.
+    pub(super) role: Option<AgentRole>,
 }
 
 impl TaskTool {
@@ -106,7 +126,12 @@ impl TaskTool {
                     "action is not supported for DeepReview Task calls".to_string(),
                 ));
             }
-            for field in ["fork_context", "agent_id", "run_in_background"] {
+            for field in [
+                "fork_context",
+                "agent_id",
+                "run_in_background",
+                "persistent",
+            ] {
                 if input.get(field).is_some() {
                     return Err(BitFunError::tool(format!(
                         "{field} is not allowed for DeepReview Task calls"
@@ -127,11 +152,14 @@ impl TaskTool {
                 inherit_parent_model,
                 timeout_seconds: Self::optional_timeout_seconds(input)?,
                 run_in_background: false,
+                persistent: true,
                 is_retry: input.get("retry").and_then(Value::as_bool).unwrap_or(false),
                 requested_auto_retry: input
                     .get("auto_retry")
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
+                max_turns: None,
+                role: None,
             });
         }
 
@@ -184,6 +212,16 @@ impl TaskTool {
                 }
 
                 let (model_id, inherit_parent_model) = Self::optional_model_id(input)?;
+                let persistent = Self::optional_bool(input, "persistent")?.unwrap_or(true);
+
+                // R-14 B3: optional explicit target role. Unknown keys degrade
+                // to None (default executor target) so stale model output never
+                // errors at parse time; the delegation validation runs at the
+                // spawn entry point and fails fast on a role violation.
+                let role = input
+                    .get("role")
+                    .and_then(Value::as_str)
+                    .and_then(AgentRole::from_str_key);
 
                 Ok(TaskInvocation {
                     action,
@@ -196,8 +234,11 @@ impl TaskTool {
                     inherit_parent_model,
                     timeout_seconds: None,
                     run_in_background,
+                    persistent,
                     is_retry: false,
                     requested_auto_retry: false,
+                    max_turns: None,
+                    role,
                 })
             }
             TaskAction::SendInput => {
@@ -209,9 +250,11 @@ impl TaskTool {
                     &[
                         "fork_context",
                         "subagent_type",
+                        "persistent",
                         "retry",
                         "auto_retry",
                         "retry_coverage",
+                        "max_turns",
                     ],
                     action,
                 )?;
@@ -229,8 +272,11 @@ impl TaskTool {
                     inherit_parent_model,
                     timeout_seconds: None,
                     run_in_background,
+                    persistent: true,
                     is_retry: false,
                     requested_auto_retry: false,
+                    max_turns: None,
+                    role: None,
                 })
             }
             TaskAction::Cancel => {
@@ -243,6 +289,7 @@ impl TaskTool {
                         "subagent_type",
                         "model_id",
                         "run_in_background",
+                        "persistent",
                         "retry",
                         "auto_retry",
                         "retry_coverage",
@@ -261,8 +308,94 @@ impl TaskTool {
                     inherit_parent_model: false,
                     timeout_seconds: None,
                     run_in_background: false,
+                    persistent: true,
                     is_retry: false,
                     requested_auto_retry: false,
+                    max_turns: None,
+                    role: None,
+                })
+            }
+            TaskAction::List => {
+                Self::ensure_fields_absent(
+                    input,
+                    &[
+                        "agent_id",
+                        "prompt",
+                        "description",
+                        "fork_context",
+                        "subagent_type",
+                        "model_id",
+                        "run_in_background",
+                        "persistent",
+                        "retry",
+                        "auto_retry",
+                        "retry_coverage",
+                    ],
+                    action,
+                )?;
+
+                Ok(TaskInvocation {
+                    action,
+                    description: None,
+                    prompt: None,
+                    context_mode: SubagentContextMode::Fresh,
+                    target_agent_id: None,
+                    subagent_type: None,
+                    model_id: None,
+                    inherit_parent_model: false,
+                    timeout_seconds: None,
+                    run_in_background: false,
+                    persistent: true,
+                    is_retry: false,
+                    requested_auto_retry: false,
+                    max_turns: None,
+                    role: None,
+                })
+            }
+            TaskAction::History => {
+                let target_agent_id =
+                    Self::optional_trimmed_string(input, "agent_id")?.or_else(|| {
+                        input
+                            .get("session_id")
+                            .and_then(Value::as_str)
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(String::from)
+                    });
+                Self::ensure_fields_absent(
+                    input,
+                    &[
+                        "prompt",
+                        "description",
+                        "fork_context",
+                        "subagent_type",
+                        "model_id",
+                        "run_in_background",
+                        "persistent",
+                        "retry",
+                        "auto_retry",
+                        "retry_coverage",
+                    ],
+                    action,
+                )?;
+                let max_turns = Self::optional_max_turns(input)?;
+
+                Ok(TaskInvocation {
+                    action,
+                    description: None,
+                    prompt: None,
+                    context_mode: SubagentContextMode::Fresh,
+                    target_agent_id,
+                    subagent_type: None,
+                    model_id: None,
+                    inherit_parent_model: false,
+                    timeout_seconds: None,
+                    run_in_background: false,
+                    persistent: true,
+                    is_retry: false,
+                    requested_auto_retry: false,
+                    max_turns,
+                    role: None,
                 })
             }
         }
@@ -371,6 +504,18 @@ impl TaskTool {
         }
     }
 
+    fn optional_max_turns(input: &Value) -> BitFunResult<Option<u64>> {
+        match input.get("max_turns") {
+            None | Some(Value::Null) => Ok(None),
+            Some(value) => {
+                let parsed = value.as_u64().ok_or_else(|| {
+                    BitFunError::tool("max_turns must be a non-negative integer".to_string())
+                })?;
+                Ok((parsed > 0).then_some(parsed))
+            }
+        }
+    }
+
     fn ensure_fields_absent(
         input: &Value,
         fields: &[&str],
@@ -389,11 +534,15 @@ impl TaskTool {
 
     fn has_effective_value(input: &Value, field: &str) -> bool {
         // Some models serialize unused fields from this action-union schema as
-        // null, an empty string, or false. Those values carry no action intent.
+        // null or an empty string; those carry no action intent. Semantic
+        // booleans (for example `persistent: false`, `fork_context: false`)
+        // carry intent even when false: a field that is disallowed for an
+        // action must be rejected regardless of its boolean value, so a bare
+        // `false` is never silently accepted.
         match input.get(field) {
             None | Some(Value::Null) => false,
             Some(Value::String(value)) => !value.trim().is_empty(),
-            Some(Value::Bool(value)) => *value,
+            Some(Value::Bool(_)) => true,
             Some(_) => true,
         }
     }

@@ -10,6 +10,7 @@ export {
   useGitCanvasStore,
   usePanelViewCanvasStore,
   useBottomTerminalCanvasStore,
+  GROUP_STATE_KEY,
   useGroupTabs,
   useActiveTabId,
   useLayout,

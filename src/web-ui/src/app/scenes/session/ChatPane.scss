@@ -25,3 +25,11 @@
   width: 100%;
   height: 100%;
 }
+
+// Full-width tiled chat: the conversation reading column expands with the
+// chat pane (still centered) instead of capping at the 900px A4-like width.
+.bitfun-chat-pane__content--chat-full-width {
+  .virtual-item-wrapper {
+    max-width: none;
+  }
+}

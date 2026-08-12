@@ -1074,6 +1074,7 @@ impl ReviewPlatformService {
             .await
     }
 
+    #[allow(clippy::too_many_arguments)] // evidence fetch mirroring issue identity + paging
     pub async fn issue(
         &self,
         platform: ReviewPlatformKind,
@@ -1158,6 +1159,7 @@ impl ReviewPlatformService {
             .await
     }
 
+    #[allow(clippy::too_many_arguments)] // diff fetch mirroring PR revisions + paging
     pub async fn pull_request_file_diff(
         &self,
         repository_path: &str,
@@ -5038,6 +5040,9 @@ fn replace_token_store_file_atomically(
         .encode_wide()
         .chain(std::iter::once(0))
         .collect::<Vec<_>>();
+    // SAFETY: `target`, `temp` and `backup` are NUL-terminated wide strings
+    // allocated above; the Win32 calls only read them for the duration of the
+    // call and require no Rust-side aliasing.
     let result = unsafe {
         if target_path.exists() {
             ReplaceFileW(

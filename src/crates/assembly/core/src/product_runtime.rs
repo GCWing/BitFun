@@ -736,6 +736,7 @@ impl CoreAgentRuntimeCompatibility {
         include_internal: bool,
     ) -> BitFunResult<Session> {
         validate_persisted_session_id(session_id)?;
+        self.reject_tombstoned_session(storage_path, session_id).await?;
         if include_internal {
             self.coordinator
                 .restore_internal_session_from_storage_path(storage_path, session_id)
@@ -761,6 +762,7 @@ impl CoreAgentRuntimeCompatibility {
         SessionViewRestoreTiming,
     )> {
         validate_persisted_session_id(session_id)?;
+        self.reject_tombstoned_session(storage_path, session_id).await?;
         let (session, turns, total_turn_count, mut timing) = if let Some(tail_turn_count) =
             tail_turn_count
         {
@@ -824,7 +826,7 @@ impl CoreAgentRuntimeCompatibility {
             })
         {
             return Err(BitFunError::NotFound(format!(
-                "Session not found: {}",
+                "Session exists but is hidden: {}",
                 request.session_id
             )));
         }
@@ -843,6 +845,7 @@ impl CoreAgentRuntimeCompatibility {
         include_internal: bool,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         validate_persisted_session_id(session_id)?;
+        self.reject_tombstoned_session(storage_path, session_id).await?;
         if include_internal {
             self.coordinator
                 .restore_internal_session_with_turns_from_storage_path(storage_path, session_id)
@@ -885,6 +888,10 @@ impl CoreAgentRuntimeCompatibility {
         include_internal: bool,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         validate_persisted_session_id(session_id)?;
+        let storage_path = self
+            .resolve_persisted_session_storage_path(request.clone())
+            .await?;
+        self.reject_tombstoned_session(&storage_path, session_id).await?;
         if include_internal {
             self.coordinator
                 .restore_internal_session_with_turns_for_workspace(request, session_id)
@@ -900,7 +907,30 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         workspace_path: &Path,
     ) -> BitFunResult<Vec<SessionMetadata>> {
-        self.persistence.list_session_metadata(workspace_path).await
+        self.list_persisted_sessions_with_options(workspace_path, false)
+            .await
+    }
+
+    /// Lists persisted session metadata. With `include_internal`, hidden
+    /// Subagent/Ephemeral sessions are included for full conversation
+    /// management. Session ids recorded in the workspace deletion tombstone
+    /// registry are filtered out: a deleted session must never be listed
+    /// again, even when residual disk metadata survives (ghost-resurrection
+    /// loop closure on the backend, mirroring the frontend pre-warm path).
+    pub async fn list_persisted_sessions_with_options(
+        &self,
+        workspace_path: &Path,
+        include_internal: bool,
+    ) -> BitFunResult<Vec<SessionMetadata>> {
+        let mut sessions = self
+            .persistence
+            .list_session_metadata_with_options(workspace_path, include_internal)
+            .await?;
+        let tombstoned = self.tombstoned_session_ids(workspace_path).await?;
+        if !tombstoned.is_empty() {
+            sessions.retain(|metadata| !tombstoned.contains(&metadata.session_id));
+        }
+        Ok(sessions)
     }
 
     pub async fn list_persisted_sessions_page(
@@ -909,9 +939,83 @@ impl CoreAgentRuntimeCompatibility {
         cursor: Option<&str>,
         limit: usize,
     ) -> BitFunResult<SessionMetadataPage> {
-        self.persistence
-            .list_session_metadata_page(workspace_path, cursor, limit)
+        self.list_persisted_sessions_page_with_options(workspace_path, cursor, limit, false)
             .await
+    }
+
+    /// Paginated variant of [`list_persisted_sessions_with_options`].
+    /// Tombstoned session ids are filtered from the returned page; cursor and
+    /// `has_more` semantics come from the backing store and stay valid, so
+    /// paging continues past filtered entries instead of stopping early.
+    pub async fn list_persisted_sessions_page_with_options(
+        &self,
+        workspace_path: &Path,
+        cursor: Option<&str>,
+        limit: usize,
+        include_internal: bool,
+    ) -> BitFunResult<SessionMetadataPage> {
+        let mut page = self
+            .persistence
+            .list_session_metadata_page_with_options(workspace_path, cursor, limit, include_internal)
+            .await?;
+        let tombstoned = self.tombstoned_session_ids(workspace_path).await?;
+        if !tombstoned.is_empty() {
+            let visible_before = page.sessions.len();
+            page.sessions
+                .retain(|metadata| !tombstoned.contains(&metadata.session_id));
+            if page.sessions.len() < visible_before {
+                page.loaded_top_level_count = page
+                    .loaded_top_level_count
+                    .min(page.sessions.len());
+            }
+        }
+        Ok(page)
+    }
+
+    /// Session ids recorded in the workspace deletion tombstone registry.
+    /// The registry lives next to the sessions directory and is read through
+    /// the session manager, the same source the frontend pre-warm path
+    /// consumes, so every backend consumer agrees on "confirmed deleted".
+    ///
+    /// Fail-closed by contract (L4-P2-A): a corrupt/unreadable registry
+    /// propagates Err instead of degrading to an empty filter — silently
+    /// returning nothing to filter would let tombstoned sessions reappear in
+    /// listings (torn write masking). The corrupt-registry case is pinned by
+    /// `corrupt_tombstone_surfaces_error_and_keeps_file_untouched`.
+    async fn tombstoned_session_ids(
+        &self,
+        workspace_path: &Path,
+    ) -> BitFunResult<Vec<String>> {
+        let session_manager = self.coordinator.get_session_manager();
+        let storage_path = session_manager
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        session_manager.list_deleted_session_ids(&storage_path).await
+    }
+
+    /// Rejects restoring a session id recorded in the deletion tombstone
+    /// registry. Deletion is permanent: the id only becomes restorable again
+    /// after a successful re-create/restore, which durably clears the
+    /// tombstone. Returns the same NotFound shape the storage layer uses for
+    /// a missing session.
+    async fn reject_tombstoned_session(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        if self
+            .coordinator
+            .get_session_manager()
+            .list_deleted_session_ids(storage_path)
+            .await?
+            .iter()
+            .any(|id| id == session_id)
+        {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {session_id}"
+            )));
+        }
+        Ok(())
     }
 
     pub async fn load_persisted_session_metadata(
@@ -1003,6 +1107,7 @@ impl CoreAgentRuntimeCompatibility {
         if self.is_session_loaded_from_storage_path(storage_path, session_id)? {
             return Ok(());
         }
+        self.reject_tombstoned_session(storage_path, session_id).await?;
         if include_internal {
             self.coordinator
                 .restore_internal_session_from_storage_path(storage_path, session_id)
@@ -2487,6 +2592,157 @@ mod tests {
             .await
             .expect_err("missing session must be rejected before refreshing skills");
         assert!(error.to_string().contains(missing_id), "{error}");
+    }
+
+    fn build_compatibility(
+        workspace: &TestWorkspace,
+    ) -> (CoreAgentRuntimeCompatibility, Arc<SessionManager>, Arc<PersistenceManager>) {
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence_manager.clone(),
+            SessionManagerConfig {
+                max_active_sessions: 4,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: true,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let tool_pipeline = Arc::new(ToolPipeline::new(
+            Arc::new(TokioRwLock::new(ToolRegistry::new())),
+            Arc::new(ToolStateManager::new(event_queue.clone())),
+            None,
+        ));
+        let execution_engine = Arc::new(ExecutionEngine::new(
+            Arc::new(RoundExecutor::new(
+                Arc::new(StreamProcessor::new(event_queue.clone())),
+                event_queue.clone(),
+                tool_pipeline.clone(),
+            )),
+            event_queue.clone(),
+            session_manager.clone(),
+            Arc::new(ContextCompressor::new(CompressionConfig::default())),
+            ExecutionEngineConfig::default(),
+        ));
+        let coordinator = Arc::new(ConversationCoordinator::new(
+            session_manager.clone(),
+            execution_engine,
+            tool_pipeline,
+            event_queue,
+            Arc::new(EventRouter::new()),
+            Arc::new(
+                crate::runtime_ownership::CoreRuntimeOwnership::embedded_with_facts(
+                    workspace.path().join("runtime-ownership"),
+                    "bitfun".to_string(),
+                    "test",
+                ),
+            ),
+        ));
+        let scheduler = DialogScheduler::new(coordinator.clone(), session_manager.clone());
+        (
+            CoreAgentRuntimeCompatibility::build(coordinator, scheduler),
+            session_manager,
+            persistence_manager,
+        )
+    }
+
+    #[tokio::test]
+    async fn list_persisted_sessions_filters_tombstoned_session_ids() {
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(workspace.path_manager()),
+        ));
+        let (compatibility, session_manager, persistence_manager) =
+            build_compatibility(&workspace);
+        let keep_id = format!("tombstone-keep-{}", Uuid::new_v4());
+        let deleted_id = format!("tombstone-deleted-{}", Uuid::new_v4());
+
+        // Both sessions exist on disk (metadata written through the same
+        // persistence path the list reads).
+        for (id, title) in [(&keep_id, "Keep"), (&deleted_id, "Delete")] {
+            let metadata = SessionMetadata::new(
+                id.clone(),
+                title.to_string(),
+                "agentic".to_string(),
+                "model".to_string(),
+            );
+            persistence_manager
+                .save_session_metadata(workspace.path(), &metadata)
+                .await
+                .expect("metadata should save");
+        }
+
+        // Record the deletion tombstone for one session while its disk
+        // metadata remains: the exact residual-directory scenario the list
+        // must filter (ghost resurrection guard on the backend).
+        let storage_path = session_manager
+            .resolve_storage_path_for_workspace_path(workspace.path())
+            .await;
+        session_manager
+            .record_deleted_session_id(&storage_path, &deleted_id)
+            .await
+            .expect("tombstone should record");
+
+        let sessions = compatibility
+            .list_persisted_sessions(workspace.path())
+            .await
+            .expect("persisted sessions should list");
+        let listed_ids: Vec<&str> = sessions
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect();
+        assert!(
+            listed_ids.contains(&keep_id.as_str()),
+            "kept session must be listed: {listed_ids:?}"
+        );
+        assert!(
+            !listed_ids.contains(&deleted_id.as_str()),
+            "tombstoned session id must be filtered from the list: {listed_ids:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn restore_rejects_tombstoned_session_ids() {
+        let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(workspace.path_manager()),
+        ));
+        let (compatibility, session_manager, _persistence_manager) =
+            build_compatibility(&workspace);
+        let session_id = format!("tombstone-restore-{}", Uuid::new_v4());
+        session_manager
+            .create_session_with_id(
+                Some(session_id.clone()),
+                "To delete".to_string(),
+                "agentic".to_string(),
+                crate::agentic::core::SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        session_manager
+            .delete_session(workspace.path(), &session_id)
+            .await
+            .expect("session should delete");
+
+        let storage_path = session_manager
+            .resolve_storage_path_for_workspace_path(workspace.path())
+            .await;
+        let error = compatibility
+            .restore_session_from_storage_path(&storage_path, &session_id, false)
+            .await
+            .expect_err("tombstoned session must not be restorable");
+        assert!(
+            error.to_string().contains(&session_id),
+            "restore rejection should identify the session: {error}"
+        );
     }
 
     #[test]

@@ -292,7 +292,11 @@ export interface DispatchSelection {
   includeUncommitted: boolean;
   /** Git revision resolved when creating the controller baseline worktree. */
   baseRef: string;
-  approvalPolicy: DispatchApprovalPolicy;
+  /**
+   * No approval policy and no model: both are ordinary composer controls that
+   * protocol v4 carries per turn, so picking a target decides only what the
+   * target cannot change later — where it runs and which code it gets.
+   */
   model?: string;
   modelCatalog?: import('@/infrastructure/api/service-api/AIApi').AIModelCatalog;
   availableModels?: string[];

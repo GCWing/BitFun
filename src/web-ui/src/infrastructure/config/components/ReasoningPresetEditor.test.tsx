@@ -10,7 +10,13 @@ import type { ReasoningCatalogProjection, ReasoningConfig } from '../types';
 import ReasoningPresetEditor from './ReasoningPresetEditor';
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, options?: Record<string, unknown>) => (
+      typeof options?.presets === 'string'
+        ? `${key}: ${String(options.format)}: ${options.presets}`
+        : key
+    ),
+  }),
 }));
 
 interface SelectSpyProps {
@@ -91,6 +97,7 @@ function renderEditor(
   value?: ReasoningConfig,
   onChange?: ReturnType<typeof vi.fn>,
   generatedProjection?: ReasoningCatalogProjection,
+  requestFormatLabel?: string,
 ) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -101,6 +108,7 @@ function renderEditor(
         value={value ?? { catalog: { source: 'models_dev', provider: '', model: '' }, presets: [] }}
         onChange={onChange ?? vi.fn()}
         generatedProjection={generatedProjection}
+        requestFormatLabel={requestFormatLabel}
         modelsDevReasoningCatalog={modelsDevReasoningCatalog}
       />,
     );
@@ -127,8 +135,14 @@ describe('ReasoningPresetEditor models-dev binding', () => {
     value?: ReasoningConfig,
     onChange?: ReturnType<typeof vi.fn>,
     generatedProjection?: ReasoningCatalogProjection,
+    requestFormatLabel?: string,
   ) {
-    const { container, root } = renderEditor(value, onChange, generatedProjection);
+    const { container, root } = renderEditor(
+      value,
+      onChange,
+      generatedProjection,
+      requestFormatLabel,
+    );
     activeRoot = root;
     activeContainer = container;
   }
@@ -163,6 +177,34 @@ describe('ReasoningPresetEditor models-dev binding', () => {
     render({ catalog: { source: 'models_dev', provider: 'github-copilot', model: '' }, presets: [] });
     const model = selectProps['reasoningPresets.catalogModel'];
     expect(model?.options?.map(o => o.value)).toEqual(['gpt-5.1-codex']);
+  });
+
+  it('warns about explicitly bound models.dev presets unsupported by the API format', () => {
+    render(
+      {
+        catalog: { source: 'models_dev', provider: 'anthropic', model: 'claude-fable-5' },
+        presets: [],
+      },
+      vi.fn(),
+      {
+        status: 'unknown',
+        presets: [],
+        unavailable_presets: [
+          { id: 'low', label: 'Low', order: 10, source: 'models_dev',
+            actions: [{ type: 'effort', value: 'low' }] },
+          { id: 'high', label: 'High', order: 20, source: 'models_dev',
+            actions: [{ type: 'effort', value: 'high' }] },
+        ],
+      },
+      'OpenAI (chat/completions)',
+    );
+
+    const warning = activeContainer?.querySelector('[data-bf-part="unavailableWarning"]');
+    expect(warning?.textContent).toContain('reasoningPresets.unavailableTitle');
+    expect(warning?.textContent).toContain('OpenAI (chat/completions)');
+    expect(warning?.textContent).toContain('Low, High');
+    expect(selectProps['reasoningPresets.defaultPreset']?.options?.map(option => option.value))
+      .toEqual(['']);
   });
 
   it('reflects the currently bound provider and model values', () => {

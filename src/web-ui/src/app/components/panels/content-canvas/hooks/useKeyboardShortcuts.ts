@@ -6,13 +6,15 @@
  * the editor canvas area (data-shortcut-scope="canvas").
  */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
+import { notificationService } from '@/shared/notification-system';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
-import { useCanvasStore } from '../stores';
-import type { EditorGroupId } from '../types';
+import { useCanvasStore, useAgentCanvasStore, GROUP_STATE_KEY } from '../stores';
+import type { EditorGroupId, EditorGroupState } from '../types';
 
 interface UseKeyboardShortcutsOptions {
   enabled?: boolean;
@@ -22,10 +24,25 @@ interface UseKeyboardShortcutsOptions {
 export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) => {
   const { enabled = true, handleCloseWithDirtyCheck } = options;
   const hasCanvasDismissibleLayer = useHasDismissibleLayer('canvas');
+  const { t } = useTranslation('components');
 
   const {
     primaryGroup,
     secondaryGroup,
+    tertiaryGroup,
+    slot4Group,
+    slot5Group,
+    slot6Group,
+    slot7Group,
+    slot8Group,
+    slot9Group,
+    slot10Group,
+    slot11Group,
+    slot12Group,
+    slot13Group,
+    slot14Group,
+    slot15Group,
+    slot16Group,
     activeGroupId,
     layout,
     closeTab,
@@ -37,9 +54,53 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
     toggleMissionControl,
   } = useCanvasStore();
 
+  // Keyed by GROUP_STATE_KEY so getActiveGroup can resolve any of the 16
+  // editor groups through the same mapping canvasStore uses.
+  const groups: Record<string, EditorGroupState> = useMemo(() => ({
+    primaryGroup,
+    secondaryGroup,
+    tertiaryGroup,
+    slot4Group,
+    slot5Group,
+    slot6Group,
+    slot7Group,
+    slot8Group,
+    slot9Group,
+    slot10Group,
+    slot11Group,
+    slot12Group,
+    slot13Group,
+    slot14Group,
+    slot15Group,
+    slot16Group,
+  }), [
+    primaryGroup,
+    secondaryGroup,
+    tertiaryGroup,
+    slot4Group,
+    slot5Group,
+    slot6Group,
+    slot7Group,
+    slot8Group,
+    slot9Group,
+    slot10Group,
+    slot11Group,
+    slot12Group,
+    slot13Group,
+    slot14Group,
+    slot15Group,
+    slot16Group,
+  ]);
+
+  // Resolve the active group through the shared GROUP_STATE_KEY mapping so
+  // Ctrl+W (tab.close) works in any of the 16 grid9 cells (slot4..slot16),
+  // not just primary/secondary. All 16 group fields are subscribed and
+  // forwarded through the mapping, so the callback stays mode-aware (reads
+  // the same useCanvasStore values this hook is subscribed to) and re-binds
+  // whenever any group's tabs change.
   const getActiveGroup = useCallback(() => {
-    return activeGroupId === 'primary' ? primaryGroup : secondaryGroup;
-  }, [activeGroupId, primaryGroup, secondaryGroup]);
+    return groups[GROUP_STATE_KEY[activeGroupId]];
+  }, [activeGroupId, groups]);
 
   const getVisibleTabs = useCallback(() => {
     return getActiveGroup().tabs.filter((t) => !t.isHidden);
@@ -77,6 +138,34 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
     { key: '\\', ctrl: true, shift: true, scope: 'canvas' },
     () => setSplitMode(layout.splitMode === 'vertical' ? 'none' : 'vertical'),
     { enabled, description: 'keyboard.shortcuts.canvas.splitVertical' }
+  );
+
+  // 3x3 grid (grid9): mod+Shift+9 — cycle grid9 on/off.
+  // Key deliberately avoids mod+Shift+G (scene.openGit, app scope) and is
+  // registered in BOTH canvas and chat scopes so it fires whether focus is in
+  // the auxiliary canvas or the center chat pane (chat does not inherit canvas
+  // scope in ShortcutManager.findCandidates).
+  const toggleGrid9 = useCallback(() => {
+    // The auxiliary canvas runs in 'agent' mode; read its live state for the
+    // empty-canvas check (no tabs → show a hint instead of a silent no-op).
+    const hasTabs = useAgentCanvasStore.getState().getAllTabs().length > 0;
+    if (!hasTabs) {
+      notificationService.info(t('canvas.grid9EmptyHint'), { duration: 3000 });
+      return;
+    }
+    setSplitMode(layout.splitMode === 'grid9' ? 'none' : 'grid9');
+  }, [layout.splitMode, setSplitMode, t]);
+  useShortcut(
+    'canvas.splitGrid9',
+    { key: '9', ctrl: true, shift: true, scope: 'canvas' },
+    toggleGrid9,
+    { enabled, description: 'keyboard.shortcuts.canvas.splitGrid9' }
+  );
+  useShortcut(
+    'canvas.splitGrid9.chat',
+    { key: '9', ctrl: true, shift: true, scope: 'chat' },
+    toggleGrid9,
+    { enabled, description: 'keyboard.shortcuts.canvas.splitGrid9' }
   );
 
   // Anchor zone: mod+`

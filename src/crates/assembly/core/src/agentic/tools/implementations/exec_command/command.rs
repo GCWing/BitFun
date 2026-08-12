@@ -68,6 +68,27 @@ impl ExecCommandTool {
         Self
     }
 
+    /// Resolve the configured ExecCommand default yield time
+    /// (`ai.thresholds.tool_timeout.exec_command_yield_ms`), falling back to
+    /// `EXEC_COMMAND_DEFAULT_YIELD_TIME_MS = 30_000` when unset or invalid.
+    async fn configured_exec_command_yield_ms() -> u64 {
+        use crate::service::config::get_global_config_service;
+        let Ok(config_service) = get_global_config_service().await else {
+            return tool_runtime::exec_command::EXEC_COMMAND_DEFAULT_YIELD_TIME_MS;
+        };
+        let Ok(thresholds) = config_service
+            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+            .await
+        else {
+            return tool_runtime::exec_command::EXEC_COMMAND_DEFAULT_YIELD_TIME_MS;
+        };
+        let ms = thresholds.tool_timeout.exec_command_yield_ms;
+        if ms == 0 {
+            return tool_runtime::exec_command::EXEC_COMMAND_DEFAULT_YIELD_TIME_MS;
+        }
+        ms
+    }
+
     pub(crate) async fn local_shell_prompt_info() -> ExecCommandShellPromptInfo {
         let shell = resolve_local_exec_shell().await;
         ExecCommandShellPromptInfo {
@@ -677,7 +698,13 @@ Output:
         let workdir = Self::resolve_workdir(input, context)?;
         let tty = parsed_input.tty;
         let shell = resolve_local_exec_shell().await;
-        let yield_time_ms = parsed_input.yield_time_ms;
+        // 阈值参数配置化：ai.thresholds.tool_timeout.exec_command_yield_ms。
+        // tool-runtime 的默认 30s 在此被配置值覆盖（仅在用户未显式传 yield_time_ms 时）。
+        let yield_time_ms = if input.get("yield_time_ms").is_some() {
+            parsed_input.yield_time_ms
+        } else {
+            Self::configured_exec_command_yield_ms().await
+        };
         let terminal_port = context.terminal_port().ok_or_else(|| {
             BitFunError::tool("terminal runtime service is required for ExecCommand".to_string())
         })?;

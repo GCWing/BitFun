@@ -15,13 +15,21 @@ use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
-use bitfun_services_core::lsp::project_detector::{ProjectDetector, ProjectInfo};
+#[cfg(feature = "lsp")]
+use bitfun_services_core::lsp::project_detector::ProjectDetector;
 use log::debug;
+#[cfg(feature = "lsp")]
 use std::path::Path;
 
 pub struct DebugMode {
     default_tools: Vec<String>,
     tool_exposure_overrides: AgentToolPolicyOverrides,
+}
+
+#[derive(Debug, Default)]
+struct DebugProjectInfo {
+    languages: Vec<String>,
+    project_types: Vec<String>,
 }
 
 const DEBUG_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str = "debug_mode_first_entry_reminder";
@@ -52,9 +60,23 @@ impl DebugMode {
         }
     }
 
-    async fn detect_project_info(&self, workspace_path: &str) -> ProjectInfo {
-        let path = Path::new(workspace_path);
-        ProjectDetector::detect(path).await.unwrap_or_default()
+    async fn detect_project_info(&self, workspace_path: &str) -> DebugProjectInfo {
+        #[cfg(feature = "lsp")]
+        {
+            let detected = ProjectDetector::detect(Path::new(workspace_path))
+                .await
+                .unwrap_or_default();
+            return DebugProjectInfo {
+                languages: detected.languages,
+                project_types: detected.project_types,
+            };
+        }
+
+        #[cfg(not(feature = "lsp"))]
+        {
+            let _ = workspace_path;
+            DebugProjectInfo::default()
+        }
     }
 
     fn load_reminder_template(&self, template_name: &str) -> BitFunResult<String> {
@@ -244,7 +266,7 @@ Use these exact values when inserting instrumentation code. The server automatic
     fn build_first_entry_reminder(
         &self,
         debug_config: &DebugModeConfig,
-        project_info: &ProjectInfo,
+        project_info: &DebugProjectInfo,
         workspace_path: &str,
     ) -> BitFunResult<String> {
         let reminder_template =

@@ -18,7 +18,7 @@ import {
 import { globalEventBus } from '../../infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
-import { loadPanelWidth, savePanelWidth, STORAGE_KEYS } from '../layout/panelConfig';
+import { loadPanelWidth, savePanelWidth, STORAGE_KEYS, RIGHT_PANEL_CONFIG } from '../layout/panelConfig';
 
 const log = createLogger('AppManager');
 
@@ -39,7 +39,7 @@ export class AppManager implements IAppManager {
         leftPanelWidth: typeof window !== 'undefined' && window.innerWidth > 0 
           ? Math.min(300, Math.floor(window.innerWidth * 0.15)) // Left 15%, max 300px
           : 280,
-        rightPanelWidth: loadPanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, DEFAULT_LAYOUT_STATE.rightPanelWidth),
+        rightPanelWidth: this.resolveInitialRightPanelWidth(),
         bottomTerminalPanelHeight: loadPanelWidth(
           STORAGE_KEYS.BOTTOM_TERMINAL_PANEL_LAST_HEIGHT,
           DEFAULT_LAYOUT_STATE.bottomTerminalPanelHeight
@@ -377,6 +377,27 @@ export class AppManager implements IAppManager {
       this.pendingStateNotifyRaf = null;
       globalEventBus.emit('app:state:changed', this.state);
     });
+  }
+
+  /**
+   * Resolve the initial right-panel width.
+   * One-time migration: a persisted right-panel last width above MAX_WIDTH is
+   * treated as stale residue (e.g. saved during an earlier unlimited-drag
+   * build) and falls back to the comfortable default instead of squashing the
+   * chat pane to its minimum on first open. Only the right panel key is
+   * touched; the left panel and bottom terminal are unaffected.
+   */
+  private resolveInitialRightPanelWidth(): number {
+    const saved = loadPanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, DEFAULT_LAYOUT_STATE.rightPanelWidth);
+    if (saved > RIGHT_PANEL_CONFIG.MAX_WIDTH) {
+      try {
+        localStorage.removeItem(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH);
+      } catch (error) {
+        log.warn('Failed to clear stale right panel width', error);
+      }
+      return DEFAULT_LAYOUT_STATE.rightPanelWidth;
+    }
+    return saved;
   }
 
   // Clear legacy panel state data

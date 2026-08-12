@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/component-library';
 import type { ReasoningCatalogProjection, ReasoningConfig } from '../types';
 import type { ModelsDevReasoningCatalog } from '@/infrastructure/api/service-api/AIApi';
+import { aiApi } from '@/infrastructure/api';
+import type { ReasoningCatalogProjectionRequest } from '@/infrastructure/api/service-api/AIApi';
 import {
   cloneReasoningConfig,
   validateReasoningConfig,
@@ -15,6 +17,8 @@ interface ReasoningConfigPanelProps {
   value: ReasoningConfig;
   generatedProjection?: ReasoningCatalogProjection | null;
   modelsDevReasoningCatalog?: ModelsDevReasoningCatalog | null;
+  projectionRequest?: Omit<ReasoningCatalogProjectionRequest, 'reasoning'>;
+  requestFormatLabel?: string;
   onCancel: () => void;
   onApply: (value: ReasoningConfig) => void;
 }
@@ -23,22 +27,66 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
   value,
   generatedProjection,
   modelsDevReasoningCatalog,
+  projectionRequest,
+  requestFormatLabel,
   onCancel,
   onApply,
 }) => {
   const { t } = useTranslation('settings/ai-model');
   const [draft, setDraft] = useState(() => cloneReasoningConfig(value));
   const [editorInvalid, setEditorInvalid] = useState(false);
+  const projectionRequestId = useRef(0);
+  const projectionBindingKey = JSON.stringify({
+    projectionRequest,
+    catalog: draft.catalog,
+  });
+  const [resolvedProjection, setResolvedProjection] = useState<{
+    bindingKey: string;
+    projection?: ReasoningCatalogProjection | null;
+  }>(() => ({
+    bindingKey: projectionBindingKey,
+    projection: generatedProjection,
+  }));
+  const activeGeneratedProjection = resolvedProjection.bindingKey === projectionBindingKey
+    ? resolvedProjection.projection
+    : undefined;
+
+  useEffect(() => {
+    if (!projectionRequest) {
+      setResolvedProjection({
+        bindingKey: projectionBindingKey,
+        projection: generatedProjection,
+      });
+      return;
+    }
+
+    const requestId = ++projectionRequestId.current;
+    void aiApi.projectReasoningCatalog({
+      ...projectionRequest,
+      reasoning: draft,
+    }).then((projection) => {
+      if (projectionRequestId.current !== requestId) return;
+      setResolvedProjection({ bindingKey: projectionBindingKey, projection });
+    }).catch(() => {
+      if (projectionRequestId.current !== requestId) return;
+      setResolvedProjection({ bindingKey: projectionBindingKey, projection: undefined });
+    });
+
+    return () => {
+      if (projectionRequestId.current === requestId) {
+        projectionRequestId.current += 1;
+      }
+    };
+  }, [draft, generatedProjection, projectionBindingKey, projectionRequest]);
+
   const generatedPresetIds = useMemo(() => (
-    generatedProjection?.presets
+    activeGeneratedProjection?.presets
       ?.filter(preset => preset.source !== 'model_config')
       .map(preset => preset.id) ?? []
-  ), [generatedProjection?.presets]);
-  const catalogBindingUnchanged = JSON.stringify(draft.catalog) === JSON.stringify(value.catalog);
-  const activeGeneratedProjection = catalogBindingUnchanged ? generatedProjection : undefined;
+  ), [activeGeneratedProjection?.presets]);
   const validationError = validateReasoningConfig(
     draft,
-    catalogBindingUnchanged ? generatedPresetIds : [],
+    generatedPresetIds,
   );
   const invalid = editorInvalid || validationError !== null;
 
@@ -57,6 +105,7 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
           value={draft}
           generatedProjection={activeGeneratedProjection}
           modelsDevReasoningCatalog={modelsDevReasoningCatalog}
+          requestFormatLabel={requestFormatLabel}
           onChange={setDraft}
           onValidationChange={setEditorInvalid}
         />

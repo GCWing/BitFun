@@ -232,6 +232,10 @@ impl PromptCacheScope {
 pub struct SessionPromptCacheStore {
     session_caches: Arc<DashMap<String, SessionPromptCache>>,
     user_context_generations: Arc<DashMap<String, u64>>,
+    /// P-18：记录每个 session 最近一次实际注入 User Context 时的缓存世代，
+    /// 用于会话级一次注入（新对话/压缩后注入 1 次，同世代所有后续回合不注入）。
+    /// 与 user_context_generations 同生命周期（仅内存态，session 删除即清除）。
+    user_context_injected_generations: Arc<DashMap<String, u64>>,
 }
 
 pub enum PromptCacheLookup {
@@ -251,6 +255,7 @@ impl SessionPromptCacheStore {
         Self {
             session_caches: Arc::new(DashMap::new()),
             user_context_generations: Arc::new(DashMap::new()),
+            user_context_injected_generations: Arc::new(DashMap::new()),
         }
     }
 
@@ -386,6 +391,27 @@ impl SessionPromptCacheStore {
         true
     }
 
+    /// P-18（每会话一次）：读取该 session 最近一次实际注入 User Context 时的缓存世代。
+    /// None = 该会话尚未注入（新对话首轮应注入）。
+    pub fn user_context_injected_generation(&self, session_id: &str) -> Option<u64> {
+        self.user_context_injected_generations
+            .get(session_id)
+            .map(|generation| *generation)
+    }
+
+    /// P-18（每会话一次）：记录该 session 已在指定缓存世代实际注入过 User Context。
+    pub fn remember_user_context_injected_generation(&self, session_id: &str, generation: u64) {
+        self.user_context_injected_generations
+            .insert(session_id.to_string(), generation);
+    }
+
+    /// P-18（每会话一次）：清除该 session 的 User Context 注入标记（回到"从未
+    /// 注入"态）。会话级语义下仅在会话创建/恢复时调用；原回合级语义在每个用户
+    /// 消息回合（turn）开始时调用，已移除——保留此方法供测试与显式重置使用。
+    pub fn clear_user_context_injected_generation(&self, session_id: &str) {
+        self.user_context_injected_generations.remove(session_id);
+    }
+
     pub fn invalidate(&self, session_id: &str, scope: PromptCacheScope) -> bool {
         let _user_context_generation = if scope.clears_user_context() {
             let mut generation = self
@@ -413,6 +439,7 @@ impl SessionPromptCacheStore {
 
     pub fn delete_session(&self, session_id: &str) {
         self.user_context_generations.remove(session_id);
+        self.user_context_injected_generations.remove(session_id);
         self.session_caches.remove(session_id);
     }
 }
@@ -547,5 +574,82 @@ mod tests {
             .expect("session cache")
             .user_context
             .is_none());
+    }
+
+    #[test]
+    fn user_context_injected_generation_starts_none_for_new_session() {
+        // P-18：新会话从未注入 User Context → None（首轮应注入）。
+        let store = SessionPromptCacheStore::new();
+        store.create_session("session-1");
+
+        assert_eq!(store.user_context_injected_generation("session-1"), None);
+    }
+
+    #[test]
+    fn clear_user_context_injected_generation_resets_to_none() {
+        // P-18：每 turn 开始清除注入标记 → 回到"从未注入"态，该 turn 首轮重新注入。
+        let store = SessionPromptCacheStore::new();
+        store.create_session("session-1");
+        let generation = store.user_context_generation("session-1");
+        store.remember_user_context_injected_generation("session-1", generation);
+        assert_eq!(
+            store.user_context_injected_generation("session-1"),
+            Some(generation)
+        );
+
+        store.clear_user_context_injected_generation("session-1");
+
+        assert_eq!(store.user_context_injected_generation("session-1"), None);
+    }
+
+    #[test]
+    fn remember_user_context_injected_generation_records_generation() {
+        let store = SessionPromptCacheStore::new();
+        store.create_session("session-1");
+        let generation = store.user_context_generation("session-1");
+
+        store.remember_user_context_injected_generation("session-1", generation);
+
+        assert_eq!(
+            store.user_context_injected_generation("session-1"),
+            Some(generation)
+        );
+    }
+
+    #[test]
+    fn user_context_invalidation_bumps_generation_so_reinjection_is_needed() {
+        // P-18：压缩/新对话使 User Context 缓存失效 → 世代递增 →
+        // 注入世代落后于当前世代 → 恢复后首轮需重新注入。
+        let store = SessionPromptCacheStore::new();
+        store.create_session("session-1");
+        let generation = store.user_context_generation("session-1");
+        store.remember_user_context_injected_generation("session-1", generation);
+        store.set_user_context(
+            "session-1",
+            CachedUserContext::new(
+                UserContextCacheIdentity::new("workspace_context"),
+                "cached user context",
+            ),
+        );
+
+        assert!(store.invalidate("session-1", PromptCacheScope::UserContext));
+
+        let next_generation = store.user_context_generation("session-1");
+        assert!(next_generation > generation);
+        assert_ne!(
+            store.user_context_injected_generation("session-1"),
+            Some(next_generation)
+        );
+    }
+
+    #[test]
+    fn delete_session_clears_user_context_injected_generation() {
+        let store = SessionPromptCacheStore::new();
+        store.create_session("session-1");
+        store.remember_user_context_injected_generation("session-1", 3);
+
+        store.delete_session("session-1");
+
+        assert_eq!(store.user_context_injected_generation("session-1"), None);
     }
 }

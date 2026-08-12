@@ -16,6 +16,7 @@ const CLIENT_EVENT_BUFFER: usize = 256;
 const CLIENT_COMMAND_BUFFER: usize = 64;
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)] // IPC event payload is inherently larger; boxing adds indirection on the hot event path
 pub enum RuntimeIpcClientEvent {
     Runtime(crate::RuntimeIpcEvent),
     Disconnected,
@@ -70,6 +71,7 @@ enum ClientWriteOutcome {
     },
 }
 
+#[allow(clippy::large_enum_variant)] // operation result is inherently larger than control outcomes
 enum PendingResponse {
     Result(RuntimeIpcOperationResult),
     Remote(RuntimeIpcError),

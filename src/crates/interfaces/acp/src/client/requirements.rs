@@ -51,7 +51,18 @@ pub(crate) fn acp_requirement_spec<'a>(
     }
 }
 
+/// Default-timeout wrapper retained for compatibility (legacy callers/tests).
+#[allow(dead_code)]
 pub(crate) async fn probe_executable(command: &str) -> AcpRequirementProbeItem {
+    probe_executable_with_timeout(command, REQUIREMENT_PROBE_TIMEOUT).await
+}
+
+/// Same as [`probe_executable`] but with an explicit probe timeout
+/// (阈值参数配置化：`ai.thresholds.acp_timeout.requirement_probe_secs`).
+pub(crate) async fn probe_executable_with_timeout(
+    command: &str,
+    timeout: Duration,
+) -> AcpRequirementProbeItem {
     let path = find_executable(command);
     let mut item = AcpRequirementProbeItem {
         name: command.to_string(),
@@ -62,9 +73,7 @@ pub(crate) async fn probe_executable(command: &str) -> AcpRequirementProbeItem {
     };
 
     if let Some(path) = path {
-        match run_command_with_timeout(path.as_os_str(), ["--version"], REQUIREMENT_PROBE_TIMEOUT)
-            .await
-        {
+        match run_command_with_timeout(path.as_os_str(), ["--version"], timeout).await {
             Ok(output) if output.status.success() => {
                 item.version = parse_version_text(&output.stdout)
                     .or_else(|| parse_version_text(&output.stderr));
@@ -81,14 +90,27 @@ pub(crate) async fn probe_executable(command: &str) -> AcpRequirementProbeItem {
     item
 }
 
+/// Default-timeout wrapper retained for compatibility (legacy callers/tests).
+#[allow(dead_code)]
 pub(crate) async fn probe_npm_adapter(package: &str, bin: &str) -> AcpRequirementProbeItem {
-    probe_npm_adapter_with_path(package, bin, None).await
+    probe_npm_adapter_with_timeout(package, bin, REQUIREMENT_PROBE_TIMEOUT).await
+}
+
+/// Same as [`probe_npm_adapter`] but with an explicit probe timeout
+/// (阈值参数配置化：`ai.thresholds.acp_timeout.requirement_probe_secs`).
+pub(crate) async fn probe_npm_adapter_with_timeout(
+    package: &str,
+    bin: &str,
+    timeout: Duration,
+) -> AcpRequirementProbeItem {
+    probe_npm_adapter_with_path(package, bin, None, timeout).await
 }
 
 async fn probe_npm_adapter_with_path(
     package: &str,
     bin: &str,
     configured_path: Option<&OsStr>,
+    timeout: Duration,
 ) -> AcpRequirementProbeItem {
     let mut item = AcpRequirementProbeItem {
         name: package.to_string(),
@@ -108,9 +130,7 @@ async fn probe_npm_adapter_with_path(
     };
 
     let global_args = ["ls", "-g", "--json", "--depth=0", package];
-    match run_command_with_timeout(npm_path.as_os_str(), global_args, REQUIREMENT_PROBE_TIMEOUT)
-        .await
-    {
+    match run_command_with_timeout(npm_path.as_os_str(), global_args, timeout).await {
         Ok(output) if output.status.success() => {
             if let Some(version) = npm_ls_package_version(&output.stdout, package) {
                 item.installed = true;
@@ -128,12 +148,8 @@ async fn probe_npm_adapter_with_path(
     }
 
     let offline_args = npm_offline_probe_args(package, bin);
-    match run_command_with_timeout(
-        npm_path.as_os_str(),
-        offline_args.iter().map(String::as_str),
-        REQUIREMENT_PROBE_TIMEOUT,
-    )
-    .await
+    match run_command_with_timeout(npm_path.as_os_str(), offline_args.iter().map(String::as_str), timeout)
+        .await
     {
         Ok(output) if output.status.success() => {
             item.installed = true;
@@ -282,17 +298,25 @@ pub(crate) async fn probe_remote_npx_adapter(
     item
 }
 
+/// Default-timeout wrapper retained for compatibility (legacy callers/tests).
+#[allow(dead_code)]
 pub(crate) async fn predownload_npm_adapter(package: &str, bin: &str) -> BitFunResult<()> {
+    predownload_npm_adapter_with_timeout(package, bin, ADAPTER_DOWNLOAD_TIMEOUT).await
+}
+
+/// Same as [`predownload_npm_adapter`] but with an explicit download timeout
+/// (阈值参数配置化：`ai.thresholds.acp_timeout.adapter_download_secs`).
+pub(crate) async fn predownload_npm_adapter_with_timeout(
+    package: &str,
+    bin: &str,
+    timeout: Duration,
+) -> BitFunResult<()> {
     let npm_path = find_executable("npm")
         .ok_or_else(|| BitFunError::service("npm is not available on PATH".to_string()))?;
     let args = npm_predownload_args(package, bin);
 
-    match run_command_with_timeout(
-        npm_path.as_os_str(),
-        args.iter().map(String::as_str),
-        ADAPTER_DOWNLOAD_TIMEOUT,
-    )
-    .await
+    match run_command_with_timeout(npm_path.as_os_str(), args.iter().map(String::as_str), timeout)
+        .await
     {
         Ok(output) if output.status.success() => Ok(()),
         Ok(output) => Err(BitFunError::service(format!(
@@ -318,12 +342,23 @@ fn npm_predownload_args(package: &str, bin: &str) -> [String; 6] {
     ]
 }
 
+/// Default-timeout wrapper retained for compatibility (legacy callers/tests).
+#[allow(dead_code)]
 pub(crate) async fn install_npm_cli_package(package: &str) -> BitFunResult<()> {
+    install_npm_cli_package_with_timeout(package, CLI_INSTALL_TIMEOUT).await
+}
+
+/// Same as [`install_npm_cli_package`] but with an explicit install timeout
+/// (阈值参数配置化：`ai.thresholds.acp_timeout.cli_install_secs`).
+pub(crate) async fn install_npm_cli_package_with_timeout(
+    package: &str,
+    timeout: Duration,
+) -> BitFunResult<()> {
     let npm_path = find_executable("npm")
         .ok_or_else(|| BitFunError::service("npm is not available on PATH".to_string()))?;
     let args = ["install", "-g", package];
 
-    match run_command_with_timeout(npm_path.as_os_str(), args, CLI_INSTALL_TIMEOUT).await {
+    match run_command_with_timeout(npm_path.as_os_str(), args, timeout).await {
         Ok(output) if output.status.success() => Ok(()),
         Ok(output) => Err(BitFunError::service(format!(
             "Failed to install ACP agent CLI '{}': {}",
@@ -337,13 +372,32 @@ pub(crate) async fn install_npm_cli_package(package: &str) -> BitFunResult<()> {
     }
 }
 
+/// Default-timeout wrapper retained for compatibility (legacy callers/tests).
+#[allow(dead_code)]
 pub(crate) async fn install_remote_npm_cli_package(
     ssh_manager: &SSHConnectionManager,
     connection_id: &str,
     package: &str,
 ) -> BitFunResult<()> {
+    install_remote_npm_cli_package_with_timeout(
+        ssh_manager,
+        connection_id,
+        package,
+        CLI_INSTALL_TIMEOUT,
+    )
+    .await
+}
+
+/// Same as [`install_remote_npm_cli_package`] but with an explicit install
+/// timeout (阈值参数配置化：`ai.thresholds.acp_timeout.cli_install_secs`).
+pub(crate) async fn install_remote_npm_cli_package_with_timeout(
+    ssh_manager: &SSHConnectionManager,
+    connection_id: &str,
+    package: &str,
+    timeout: Duration,
+) -> BitFunResult<()> {
     let command = remote_user_shell_command(&format!("npm install -g {}", shell_escape(package)));
-    let timeout_ms = u64::try_from(CLI_INSTALL_TIMEOUT.as_millis()).unwrap_or(u64::MAX);
+    let timeout_ms = u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX);
     match ssh_manager
         .execute_command_with_options(
             connection_id,
@@ -376,12 +430,51 @@ pub(crate) async fn install_remote_npm_cli_package(
     }
 }
 
+/// Expand Windows-style `%VAR%` environment references in a configured
+/// command string (e.g. `%APPDATA%\npm\claude-agent-acp.cmd`). `%%` is an
+/// escaped literal `%`. Variables that are not set are kept verbatim so the
+/// original placeholder stays visible in error output.
+pub(crate) fn expand_env_vars(value: &str) -> String {
+    if !value.contains('%') {
+        return value.to_string();
+    }
+
+    let mut expanded = String::with_capacity(value.len());
+    let mut remaining = value;
+    while let Some(start) = remaining.find('%') {
+        expanded.push_str(&remaining[..start]);
+        remaining = &remaining[start + 1..];
+        let Some(end) = remaining.find('%') else {
+            // Unclosed '%': keep the remainder verbatim.
+            expanded.push('%');
+            expanded.push_str(remaining);
+            return expanded;
+        };
+        let name = &remaining[..end];
+        remaining = &remaining[end + 1..];
+        if name.is_empty() {
+            // "%%" is an escaped literal '%'.
+            expanded.push('%');
+        } else if let Ok(value) = env::var(name) {
+            expanded.push_str(&value);
+        } else {
+            // Unset variable: keep the placeholder verbatim.
+            expanded.push('%');
+            expanded.push_str(name);
+            expanded.push('%');
+        }
+    }
+    expanded.push_str(remaining);
+    expanded
+}
+
 pub(crate) fn resolve_configured_command(
     command: &str,
     extra_env: &HashMap<String, String>,
 ) -> PathBuf {
+    let command = expand_env_vars(command);
     let configured_path = configured_path_value(extra_env);
-    find_executable_with_path(command, configured_path.as_deref())
+    find_executable_with_path(&command, configured_path.as_deref())
         .unwrap_or_else(|| PathBuf::from(command))
 }
 
@@ -489,13 +582,14 @@ fn find_executable(command: &str) -> Option<PathBuf> {
 }
 
 fn find_executable_with_path(command: &str, configured_path: Option<&OsStr>) -> Option<PathBuf> {
-    let command_path = PathBuf::from(command);
+    let command = expand_env_vars(command);
+    let command_path = PathBuf::from(&command);
     if command_path.components().count() > 1 {
         return executable_file(&command_path).then_some(command_path);
     }
 
     for directory in command_search_paths(configured_path) {
-        for candidate in executable_candidates(&directory, command) {
+        for candidate in executable_candidates(&directory, &command) {
             if executable_file(&candidate) {
                 return Some(candidate);
             }
@@ -679,6 +773,81 @@ mod tests {
     }
 
     #[test]
+    fn expand_env_vars_replaces_set_windows_variables() {
+        const TEST_VAR: &str = "BITFUN_ACP_TEST_EXPAND_VAR";
+        std::env::set_var(TEST_VAR, r"C:\Users\test\AppData\Roaming");
+
+        let expanded = expand_env_vars(r"%BITFUN_ACP_TEST_EXPAND_VAR%\npm\claude-agent-acp.cmd");
+
+        std::env::remove_var(TEST_VAR);
+        assert_eq!(
+            expanded,
+            r"C:\Users\test\AppData\Roaming\npm\claude-agent-acp.cmd"
+        );
+    }
+
+    /// Real-environment counterpart: on Windows, `%APPDATA%` must expand to
+    /// the live APPDATA value, matching the absolute paths used in the L0 ACP
+    /// registries (e.g. `%APPDATA%\npm\claude.exe` and the ACP dispatcher at
+    /// `%APPDATA%\BitFun\skills\acp-agent-dispatcher\acp_call.cjs`).
+    #[cfg(windows)]
+    #[test]
+    fn expand_env_vars_resolves_real_appdata_like_l0_configs() {
+        let appdata = std::env::var("APPDATA").expect("APPDATA should be set on Windows");
+
+        assert_eq!(
+            expand_env_vars(r"%APPDATA%\npm\claude.exe"),
+            format!(r"{}\npm\claude.exe", appdata)
+        );
+        assert_eq!(
+            expand_env_vars(r"%APPDATA%\BitFun\skills\acp-agent-dispatcher\acp_call.cjs"),
+            format!(r"{}\BitFun\skills\acp-agent-dispatcher\acp_call.cjs", appdata)
+        );
+    }
+
+    #[test]
+    fn expand_env_vars_keeps_unset_variables_literal() {
+        assert_eq!(
+            expand_env_vars(r"%BITFUN_ACP_TEST_UNSET_VAR%\npm\codex-acp.cmd"),
+            r"%BITFUN_ACP_TEST_UNSET_VAR%\npm\codex-acp.cmd"
+        );
+    }
+
+    #[test]
+    fn expand_env_vars_escapes_double_percent_and_keeps_plain_input() {
+        assert_eq!(expand_env_vars("100%%done"), "100%done");
+        assert_eq!(expand_env_vars("plain-command"), "plain-command");
+        assert_eq!(expand_env_vars("unclosed-%placeholder"), "unclosed-%placeholder");
+    }
+
+    #[test]
+    fn resolve_configured_command_expands_env_vars_in_command() {
+        const TEST_VAR: &str = "BITFUN_ACP_TEST_CMD_DIR";
+        let test_dir = env::temp_dir().join(format!("bitfun-acp-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&test_dir).expect("test dir should be created");
+
+        #[cfg(windows)]
+        let file_name = "bitfun-env-tool.cmd";
+        #[cfg(not(windows))]
+        let file_name = "bitfun-env-tool";
+
+        let executable = test_dir.join(file_name);
+        std::fs::write(&executable, b"").expect("test executable should be written");
+
+        let command = format!(
+            "%{TEST_VAR}%{}{}",
+            std::path::MAIN_SEPARATOR,
+            file_name
+        );
+        std::env::set_var(TEST_VAR, &test_dir);
+        let resolved = resolve_configured_command(&command, &HashMap::new());
+        std::env::remove_var(TEST_VAR);
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+        assert_eq!(resolved, executable);
+    }
+
+    #[test]
     fn command_search_paths_keep_configured_path_first() {
         let configured_paths = env::join_paths([
             PathBuf::from("/tmp/bitfun-acp-first"),
@@ -735,6 +904,7 @@ mod tests {
             "@agentclientprotocol/codex-acp",
             "codex-acp",
             Some(test_dir.as_os_str()),
+            REQUIREMENT_PROBE_TIMEOUT,
         ));
 
         assert!(item.installed);

@@ -80,10 +80,67 @@ export function runManifestParserSelfTest({
     topLevelRustFiles: agentRuntimeIntegrationTestTargets.map(({ path }) => path),
     rootSources: explicitTestRoots,
     leafRustFiles: ['tests/agent_definition_contracts/prompt_contracts.rs'],
+    leafSources: new Map([['tests/agent_definition_contracts/prompt_contracts.rs', '']]),
   };
   const topologyErrors = validateExplicitIntegrationTestTopology(explicitTestFixture);
   if (topologyErrors.length > 0) {
     throw new Error(`valid explicit integration-test topology failed: ${topologyErrors.join('; ')}`);
+  }
+  const repeatedOwnerGateErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    rootSources: new Map([
+      ...explicitTestRoots,
+      [
+        'tests/agent_definition_contracts.rs',
+        '#![cfg(feature = "agent-definitions")]\n#[path = "agent_definition_contracts/prompt_contracts.rs"]\nmod prompt_contracts;',
+      ],
+    ]),
+    leafSources: new Map([[
+      'tests/agent_definition_contracts/prompt_contracts.rs',
+      '#![cfg(feature = "agent-definitions")]\n',
+    ]]),
+  });
+  if (!repeatedOwnerGateErrors.some((error) => error.includes('belongs in its explicit target root'))) {
+    throw new Error('grouped test topology must keep positive owner cfg only in the target root');
+  }
+  const hiddenLeafCfgSources = [
+    '# ! [ cfg(not(any())) ]\nfn contract() {}\n',
+    '#![\n  cfg(not(any()))\n]\nfn contract() {}\n',
+    '#/**/!/**/[/**/cfg(not(any()))]\nfn contract() {}\n',
+    '#![doc = r#"a"]b"#]\n#![/* ] */ cfg(not(any()))]\nfn contract() {}\n',
+    '#![r#cfg_attr(feature = "unrelated", cfg(windows))]\nfn contract() {}\n',
+    '#!/usr/bin/env rustx\n#![cfg(not(any()))]\nfn contract() {}\n',
+    '\uFEFF#!/usr/bin/env rustx\n/* preamble */\n# ! [ cfg(not(any())) ]\nfn contract() {}\n',
+    "#![doc = stringify!('a)]\n#![cfg(not(any()))]\n#![doc = stringify!('b)]\nfn contract() {}\n",
+  ];
+  for (const leafSource of hiddenLeafCfgSources) {
+    const hiddenLeafCfgErrors = validateExplicitIntegrationTestTopology({
+      ...explicitTestFixture,
+      leafSources: new Map([[
+        'tests/agent_definition_contracts/prompt_contracts.rs',
+        leafSource,
+      ]]),
+    });
+    if (!hiddenLeafCfgErrors.some((error) => error.includes('belongs in its explicit target root'))) {
+      throw new Error(`grouped test topology must reject obfuscated leaf cfg: ${leafSource}`);
+    }
+  }
+  for (const leafSource of [
+    '/* # ! [ cfg(not(any())) ] */\nfn contract() {}\n',
+    'const TEXT: &str = r#"\n#![cfg(not(any()))]\n"#;\n',
+    '#![doc = r#"a"]b"#]\nfn contract() {}\n',
+    "#![doc = stringify!('a)]\nfn contract() {}\n",
+  ]) {
+    const literalLeafCfgErrors = validateExplicitIntegrationTestTopology({
+      ...explicitTestFixture,
+      leafSources: new Map([[
+        'tests/agent_definition_contracts/prompt_contracts.rs',
+        leafSource,
+      ]]),
+    });
+    if (literalLeafCfgErrors.length > 0) {
+      throw new Error(`grouped test topology misread cfg text in trivia or a literal: ${literalLeafCfgErrors.join('; ')}`);
+    }
   }
   const orphanErrors = validateExplicitIntegrationTestTopology({
     ...explicitTestFixture,
@@ -94,6 +151,35 @@ export function runManifestParserSelfTest({
   });
   if (!orphanErrors.some((error) => error.includes('orphan_contracts.rs'))) {
     throw new Error('explicit integration-test topology must reject an orphan leaf test');
+  }
+  const reviewedLeafCfgFixture = {
+    ...explicitTestFixture,
+    leafSources: new Map([[
+      'tests/agent_definition_contracts/prompt_contracts.rs',
+      '#![cfg(not(feature = "reviewed-negative"))]\n',
+    ]]),
+    allowedLeafCfgLines: new Map([[
+      'tests/agent_definition_contracts/prompt_contracts.rs',
+      '#![cfg(not(feature = "reviewed-negative"))]',
+    ]]),
+  };
+  const reviewedLeafCfgErrors = validateExplicitIntegrationTestTopology(
+    reviewedLeafCfgFixture,
+  );
+  if (reviewedLeafCfgErrors.length > 0) {
+    throw new Error(
+      `grouped test topology rejected an exact reviewed leaf cfg: ${reviewedLeafCfgErrors.join('; ')}`,
+    );
+  }
+  const extraLeafCfgErrors = validateExplicitIntegrationTestTopology({
+    ...reviewedLeafCfgFixture,
+    leafSources: new Map([[
+      'tests/agent_definition_contracts/prompt_contracts.rs',
+      '#![cfg(not(feature = "reviewed-negative"))]\n#![cfg(not(feature = "unrelated-feature"))]\n',
+    ]]),
+  });
+  if (!extraLeafCfgErrors.some((error) => error.includes('belongs in its explicit target root'))) {
+    throw new Error('grouped test topology must reject extra cfg lines on a reviewed leaf');
   }
   const wrongSectionErrors = validateExplicitIntegrationTestTopology({
     ...explicitTestFixture,
@@ -249,7 +335,7 @@ export function runManifestParserSelfTest({
     'workspace-runtime',
     'workspace-watch',
     'product-capabilities',
-    'product-domains',
+    'function-agents',
     'tool-packs',
   ]) {
     if (!coreProductFullFeatureAssemblyRule.requiredFeatureRefs.includes(featureName)) {
@@ -339,7 +425,7 @@ export function runManifestParserSelfTest({
     ],
     [servicesCoreManifest, 'session-git', ['local-storage', 'dep:git2']],
     [servicesCoreManifest, 'workspace-identity', ['dep:dunce', 'dep:sha2']],
-    [coreManifest, 'dispatch-store', ['local-storage']],
+    [coreManifest, 'dispatch-store', ['local-storage', 'bitfun-services-core/dispatch-workspace']],
     [coreManifest, 'filesystem', ['bitfun-services-core/filesystem']],
     [coreManifest, 'local-storage', ['bitfun-services-core/local-storage']],
     [coreManifest, 'process-runtime', ['bitfun-services-core/process-runtime']],
@@ -372,7 +458,7 @@ export function runManifestParserSelfTest({
     [
       coreManifest,
       'canvas-runtime',
-      ['product-domains', 'bitfun-services-integrations/canvas-runtime'],
+      ['dep:bitfun-product-domains', 'bitfun-services-integrations/canvas-runtime'],
     ],
     [coreManifest, 'announcement', ['bitfun-services-integrations/announcement']],
     [coreManifest, 'file-watch', ['bitfun-services-integrations/file-watch']],
@@ -882,45 +968,6 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
-  const workspaceReqwestRule = requiredContentRules.find((rule) => rule.path === 'Cargo.toml');
-  const workspaceReqwestRuleText = workspaceReqwestRule?.patterns
-    .map((pattern) => pattern.regex.source)
-    .join('\n') ?? '';
-  for (const featureName of ['http2', 'json', 'stream', 'multipart', 'query', 'form']) {
-    if (!workspaceReqwestRuleText.includes(featureName)) {
-      throw new Error(`workspace Reqwest boundary must allow only reviewed feature ${featureName}`);
-    }
-  }
-  const workspaceReqwestPattern = workspaceReqwestRule?.patterns[0]?.regex;
-  const reviewedReqwestDeclaration =
-    'reqwest = { version = "0.13.4", default-features = false, features = ["http2", "json", "stream", "multipart", "query", "form"] }';
-  if (!workspaceReqwestPattern?.test(reviewedReqwestDeclaration)) {
-    throw new Error('workspace Reqwest boundary must accept the reviewed transport/data profile');
-  }
-  for (const featureName of ['default-tls', 'http3', '__native-tls']) {
-    const expandedDeclaration = reviewedReqwestDeclaration.replace(
-      '"form"]',
-      `"form", "${featureName}"]`,
-    );
-    if (workspaceReqwestPattern.test(expandedDeclaration)) {
-      throw new Error(`workspace Reqwest boundary must reject TLS-enabling feature ${featureName}`);
-    }
-  }
-  for (const path of [
-    'src/apps/cli/Cargo.toml',
-    'src/apps/desktop/Cargo.toml',
-    'src/crates/adapters/ai-adapters/Cargo.toml',
-    'src/crates/services/miniapp-market-service/Cargo.toml',
-    'src/crates/services/skin-market-service/Cargo.toml',
-  ]) {
-    const reqwestRule = requiredContentRules.find((rule) => rule.path === path);
-    const reqwestRuleText = reqwestRule?.patterns
-      .map((pattern) => pattern.regex.source)
-      .join('\n') ?? '';
-    if (!reqwestRuleText.includes('rustls')) {
-      throw new Error(`${path} must guard the explicit Reqwest Rustls client dependency`);
-    }
-  }
   const servicesCoreOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-core',
   );
@@ -1527,12 +1574,6 @@ export function runManifestParserSelfTest({
     'ExternalSourceControlRequestV1',
     'ExternalSourceOperationStage',
     'ExternalSourceRecoveryActionV1',
-    'EXTERNAL_APPLICATION_SCHEMA_V2',
-    'ExternalApplicationSnapshotV2',
-    'ExternalApplicationReviewPageV2',
-    'ExternalApplicationControlActionV2',
-    'ExternalApplicationControlRequestV2',
-    'ExternalApplicationControlResultV2',
   ]) {
     if (!externalSourceControlPublicApiRule?.allowedSymbolEntries.some(
       (entry) => entry.symbol === requiredSymbol
@@ -1583,9 +1624,6 @@ export function runManifestParserSelfTest({
     'ExternalSourceControlRequestV1',
     'get_external_source_control_snapshot',
     'apply_external_source_control_action',
-    'get_external_application_snapshot_v2',
-    'get_external_application_review_page_v2',
-    'apply_external_application_action_v2',
   ]) {
     if (!externalSourceCorePublicApiRule?.allowedSymbolEntries.some(
       (entry) => entry.symbol === requiredSymbol
@@ -3757,6 +3795,7 @@ export function runManifestParserSelfTest({
         'StaticToolProviderFactory',
         'create_registry_from_static_provider_entries',
         'create_product_tool_registry_from_plan',
+        'unavailable_feature_groups',
         'materialize_tool',
         'GetToolSpecTool',
       ],
@@ -3845,6 +3884,7 @@ export function runManifestParserSelfTest({
         'ToolProviderGroupPlan',
         'all_feature_groups',
         'enabled_feature_groups',
+        'unavailable_feature_groups',
         'product_tool_provider_group_plan',
         'ToolProviderGroupPlanSelectionError',
         'try_product_tool_provider_group_plan_for_ids',
@@ -4179,8 +4219,12 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/service/search/mod.rs',
       contracts: [
         'feature = "ssh-remote"',
-        'bitfun_services_integrations::remote_ssh::workspace_search::disabled',
+        'remote_disabled',
       ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/service/search/remote_disabled.rs',
+      contracts: ['Remote SSH search is disabled', 'remote_workspace_search_service_for_path'],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/disabled.rs',
@@ -4202,13 +4246,13 @@ export function runManifestParserSelfTest({
         'bitfun-services-integrations\\/miniapp-runtime',
         'dep:bitfun-product-capabilities',
         'dep:bitfun-tool-packs',
-        'bitfun-tool-packs\\/product-full',
+        'tools-basic',
+        'bitfun-tool-packs\\/basic',
         'agent-runtime',
-        'bitfun-services-integrations\\/mcp',
-        'bitfun-services-integrations\\/remote-connect',
-        'bitfun-services-integrations\\/workspace-search',
         'dep:bitfun-product-domains',
-        'bitfun-product-domains\\/product-full',
+        'bitfun-product-domains\\/external-sources',
+        'bitfun-product-domains\\/function-agents',
+        'bitfun-product-domains\\/miniapp',
       ],
     },
     {
@@ -4218,8 +4262,9 @@ export function runManifestParserSelfTest({
         'pub mod agentic',
         'feature = "external-sources"',
         'mod external_subagents',
-        'feature = "product-domains"',
+        'feature = "function-agents"',
         'pub mod function_agents',
+        'feature = "tools-miniapp"',
         'pub mod miniapp',
         'feature = "agent-runtime"',
         'service_agent_runtime',

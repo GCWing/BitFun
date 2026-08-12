@@ -386,8 +386,10 @@ impl HookImportStore {
         if !matches!(load_index(&index_path).await?, LoadedIndex::Corrupt(_)) {
             return Err(HookImportStoreError::InvalidInput("store is not corrupt"));
         }
-        let mut index = StoreIndexV1::default();
-        index.generation = reset_generation();
+        let index = StoreIndexV1 {
+            generation: reset_generation(),
+            ..StoreIndexV1::default()
+        };
         json_store
             .write_atomic_strict(&index_path, &index)
             .await
