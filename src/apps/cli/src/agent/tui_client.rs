@@ -22,11 +22,7 @@ use bitfun_app_server_protocol::workspace::*;
 use bitfun_app_server_protocol::worktree::*;
 use bitfun_core_types::SessionUsageReport;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
-use bitfun_product_domains::external_source_control::{
-    ExternalApplicationControlRequestV2, ExternalApplicationControlResultV2,
-    ExternalApplicationReviewPageRequestV2, ExternalApplicationReviewPageV2,
-    ExternalApplicationSnapshotV2, ExternalSourceControlRequestV1,
-};
+use bitfun_product_domains::external_source_control::ExternalSourceControlRequestV1;
 use bitfun_product_domains::external_sources::{
     ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourcePublicSnapshot,
     NativePromptCommandDescriptor, PromptCommandShellReviewDecision,
@@ -309,13 +305,6 @@ impl TuiAgentClient {
             .map_err(|error| anyhow::anyhow!(error))
     }
 
-    pub(crate) async fn delete_model(&self, model_id: String) -> Result<DeleteModelResponse> {
-        self.backend
-            .delete_model(DeleteModelRequest { model_id })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
-    }
-
     pub(crate) async fn set_model_default(
         &self,
         request: SetModelDefaultRequest,
@@ -465,49 +454,6 @@ impl TuiAgentClient {
             })
             .await
             .map_err(external_source_backend_error)
-    }
-
-    pub(crate) async fn external_application_snapshot_v2(
-        &self,
-        force_refresh: bool,
-    ) -> std::result::Result<ExternalApplicationSnapshotV2, ExternalSourceOperationError> {
-        self.backend
-            .external_application_snapshot_v2(ExternalApplicationSnapshotRequestV2 {
-                workspace_path: Some(self.workspace_path_string()),
-                force_refresh,
-            })
-            .await
-            .map(|response| response.0)
-            .map_err(external_source_backend_error)
-    }
-
-    pub(crate) async fn external_application_review_page_v2(
-        &self,
-        request: ExternalApplicationReviewPageRequestV2,
-    ) -> std::result::Result<ExternalApplicationReviewPageV2, ExternalSourceOperationError> {
-        self.backend
-            .external_application_review_page_v2(ExternalApplicationReviewPageRequest {
-                workspace_path: Some(self.workspace_path_string()),
-                request,
-            })
-            .await
-            .map(|response| response.0)
-            .map_err(external_source_backend_error)
-    }
-
-    pub(crate) async fn apply_external_application_action_v2(
-        &self,
-        request: ExternalApplicationControlRequestV2,
-    ) -> std::result::Result<ExternalApplicationControlResultV2, ExternalSourceOperationError> {
-        let operation_id = request.operation_id.clone();
-        self.backend
-            .apply_external_application_action_v2(ExternalApplicationActionRequest {
-                workspace_path: Some(self.workspace_path_string()),
-                request,
-            })
-            .await
-            .map(|response| response.0)
-            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
     }
 
     pub(crate) fn subscribe_external_source_updates(
@@ -939,6 +885,7 @@ impl TuiAgentClient {
                 workspace_path: self.project_workspace_path_string(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                include_hidden: false,
             }))
             .await?
             .sessions)
@@ -1243,6 +1190,9 @@ impl TuiAgentClient {
         Ok(())
     }
 
+    /// Local TUI turn-settlement waiter, retained for the shared-runtime path
+    /// after the upstream app-server CLI refactor dropped its call sites.
+    #[allow(dead_code)]
     pub(crate) async fn wait_for_turn_settlement(
         &self,
         session_id: &str,
@@ -1476,6 +1426,7 @@ impl TuiAgentClient {
                 turn_id,
                 content,
                 display_content,
+                prepended_reminders: Vec::new(),
             }))
             .await?
             .steering_id)

@@ -155,7 +155,13 @@ impl BackgroundSubagentOutcomeStore {
                 self.live_results.insert(task_pk, live_result);
                 self.changes.notify_waiters();
             }
-            Ok(false) => {}
+            Ok(false) => {
+                // 完成竞态窗口（L3-P2-02 反向）：cancel 已先行将任务置
+                // terminal（Cancelled），complete 的 `UPDATE ... WHERE
+                // status='running'` 不命中。此时不得再写 live_results，
+                // 否则「取消后仍可取回完成结果」。保持 cancel 写入的
+                // Cancelled 状态。
+            }
             Err(error) => {
                 warn!(
                     "Failed to persist background subagent completion: task_pk={}, error={}",
@@ -187,7 +193,22 @@ impl BackgroundSubagentOutcomeStore {
                         },
                     );
                 }
-                Ok(false) => {}
+                Ok(false) => {
+                    // 完成竞态窗口（L3-P2-02）：任务已 terminal（完成块已越过
+                    // suppress_delivery 检查写入 live_results），cancel 的
+                    // `UPDATE ... WHERE status='running'` 不命中。此时必须把
+                    // live_results 中已存在的完成结果覆盖为 Cancelled，否则
+                    // 「取消后仍可被 AgentWait 取回结果」与用户预期相悖。
+                    // 覆盖不写库（terminal 已持久化），只清内存取回面。
+                    self.live_results.insert(
+                        *task_pk,
+                        LiveBackgroundResult {
+                            status: BackgroundTaskStatus::Cancelled,
+                            content: None,
+                            error: Some("Background subagent task was cancelled".to_string()),
+                        },
+                    );
+                }
                 Err(error) => {
                     warn!(
                         "Failed to persist background subagent cancellation: task_pk={}, error={}",
@@ -219,10 +240,18 @@ impl BackgroundSubagentOutcomeStore {
     ) -> BitFunResult<BackgroundSubagentWaitResult> {
         self.reconcile_stale_running_tasks(parent_session_id)
             .await?;
-        let selected = self
+        let candidates = self
             .coordination_store
             .wait_candidates(parent_session_id, requested_bg_task_ids)
             .await?;
+        // `wait_candidates` now returns delivered records too (explicitly
+        // distinguishable via delivered_at_ms) instead of dropping them
+        // silently (COORD-09). A delivered task carries nothing new to wait
+        // on, so it is excluded from the wait set here.
+        let selected = candidates
+            .into_iter()
+            .filter(|record| record.delivered_at_ms.is_none())
+            .collect::<Vec<_>>();
         if selected.is_empty() {
             return Ok(wait_result(
                 BackgroundSubagentWaitStatus::NoMatchingTasks,
@@ -479,6 +508,10 @@ impl BackgroundSubagentOutcomeStore {
             .await
     }
 
+    /// Single-parent resolution kept for compatibility and tests; production
+    /// callers use [`Self::resolve_agent_id_in_scope`] for subtree/global
+    /// management.
+    #[allow(dead_code)]
     pub(crate) async fn resolve_agent_id(
         &self,
         parent_session_id: &str,
@@ -486,6 +519,55 @@ impl BackgroundSubagentOutcomeStore {
     ) -> BitFunResult<String> {
         self.coordination_store
             .resolve_agent_id(parent_session_id, agent_id)
+            .await
+    }
+
+    /// Global-management variant: prefer the caller's subtree, then fall back
+    /// to a whole-database match (see `CoordinationStore::resolve_agent_id_in_scope`).
+    /// `allow_global_fallback=false` turns a scope miss into "not found", which
+    /// mutating Task operations rely on to stay within their session subtree.
+    pub(crate) async fn resolve_agent_id_in_scope(
+        &self,
+        scope_session_ids: &[String],
+        agent_id: &str,
+        allow_global_fallback: bool,
+    ) -> BitFunResult<String> {
+        self.coordination_store
+            .resolve_agent_id_in_scope(scope_session_ids, agent_id, allow_global_fallback)
+            .await
+    }
+
+    /// Single-parent list kept for compatibility; production callers use
+    /// [`Self::list_records_for_parents`] for subtree/global management.
+    #[allow(dead_code)]
+    pub(crate) async fn list_records(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        self.coordination_store.list_tasks(parent_session_id).await
+    }
+
+    /// Lists background records spawned by any session in `parent_session_ids`
+    /// (the caller's subtree), enabling cross-conversation Task management.
+    pub(crate) async fn list_records_for_parents(
+        &self,
+        parent_session_ids: &[String],
+    ) -> BitFunResult<Vec<BackgroundTaskRecord>> {
+        self.coordination_store
+            .list_tasks_for_parents(parent_session_ids)
+            .await
+    }
+
+    /// Collects descendant session ids under `root_session_id` from the
+    /// persisted coordination database. Used to rebuild `agent_id` subtree
+    /// scopes after a restart, when the in-memory session tree may be
+    /// incomplete (COORD-06).
+    pub(crate) async fn descendant_session_ids(
+        &self,
+        root_session_id: &str,
+    ) -> BitFunResult<Vec<String>> {
+        self.coordination_store
+            .descendant_session_ids(root_session_id)
             .await
     }
 
@@ -646,5 +728,157 @@ mod tests {
             recovered.outcomes[0].content.as_deref(),
             Some("persisted child result")
         );
+    }
+
+    /// L3-P2-02：cancel 先于 complete 到达（complete 时任务已 terminal）。
+    /// complete 的 `UPDATE ... WHERE status='running'` 不命中（Ok(false)），
+    /// 不得再写入 live_results——否则「取消后仍可取回完成结果」。
+    #[tokio::test]
+    async fn cancel_then_complete_does_not_overwrite_cancelled_outcome() {
+        let root = tempfile::tempdir().expect("background outcome temp directory");
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("create workspace");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.path().join("config"),
+        ));
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager")),
+            SessionManagerConfig {
+                max_active_sessions: 10,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: true,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let coordination_store = Arc::new(CoordinationStore::new(
+            path_manager.agent_coordination_database_file(),
+        ));
+        let store = BackgroundSubagentOutcomeStore::new(session_manager, coordination_store.clone());
+        let registered = store
+            .register(BackgroundTaskRegistration {
+                parent_session_id: "parent-session".to_string(),
+                requested_agent_id: None,
+                child_session_id: "child-session".to_string(),
+                parent_dialog_turn_id: "parent-turn".to_string(),
+                parent_tool_call_id: "task-tool".to_string(),
+                child_dialog_turn_id: "child-turn".to_string(),
+            })
+            .await
+            .expect("register task");
+
+        // cancel 先到：任务 running -> Cancelled，写入 Cancelled live_result。
+        store.cancel(&[registered.task_pk]).await;
+
+        // complete 后到：WHERE status='running' 不命中（Ok(false)），
+        // live_results 必须保持 Cancelled，不得被完成结果覆盖。
+        store
+            .complete(
+                registered.task_pk,
+                Ok(&SubagentResult {
+                    text: "completed text".to_string(),
+                    status: SubagentResultStatus::Completed,
+                    reason: None,
+                    ledger_event_id: None,
+                    session_id: None,
+                }),
+            )
+            .await;
+
+        let result = store
+            .wait_for(
+                "parent-session",
+                &[registered.bg_task_id.clone()],
+                BackgroundSubagentWaitMode::All,
+                Duration::from_millis(50),
+                "wait-turn",
+                None,
+            )
+            .await
+            .expect("wait after cancel-then-complete");
+        // wait_for 的顶层状态无 Cancelled 变体，取回 outcome 的 status 断言。
+        assert_eq!(result.outcomes.len(), 1);
+        assert_eq!(
+            result.outcomes[0].status,
+            BackgroundSubagentOutcomeStatus::Cancelled
+        );
+        assert_eq!(result.outcomes[0].content, None);
+    }
+
+    /// L3-P2-02：complete 先到（任务已 terminal Completed）后 cancel 到达。
+    /// cancel 的 `UPDATE ... WHERE status='running'` 不命中（Ok(false)），
+    /// 但必须把 live_results 中已存在的完成结果覆盖为 Cancelled——否则
+    /// 「取消后仍可被 AgentWait 取回完成结果」。
+    #[tokio::test]
+    async fn complete_then_cancel_overwrites_live_result_to_cancelled() {
+        let root = tempfile::tempdir().expect("background outcome temp directory");
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("create workspace");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.path().join("config"),
+        ));
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager")),
+            SessionManagerConfig {
+                max_active_sessions: 10,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: true,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let coordination_store = Arc::new(CoordinationStore::new(
+            path_manager.agent_coordination_database_file(),
+        ));
+        let store = BackgroundSubagentOutcomeStore::new(session_manager, coordination_store.clone());
+        let registered = store
+            .register(BackgroundTaskRegistration {
+                parent_session_id: "parent-session".to_string(),
+                requested_agent_id: None,
+                child_session_id: "child-session".to_string(),
+                parent_dialog_turn_id: "parent-turn".to_string(),
+                parent_tool_call_id: "task-tool".to_string(),
+                child_dialog_turn_id: "child-turn".to_string(),
+            })
+            .await
+            .expect("register task");
+
+        // complete 先到：running -> Completed，写入 Completed live_result。
+        store
+            .complete(
+                registered.task_pk,
+                Ok(&SubagentResult {
+                    text: "completed text".to_string(),
+                    status: SubagentResultStatus::Completed,
+                    reason: None,
+                    ledger_event_id: None,
+                    session_id: None,
+                }),
+            )
+            .await;
+
+        // cancel 后到：WHERE status='running' 不命中（Ok(false)），但必须
+        // 覆盖 live_results 为 Cancelled。
+        store.cancel(&[registered.task_pk]).await;
+
+        let result = store
+            .wait_for(
+                "parent-session",
+                &[registered.bg_task_id.clone()],
+                BackgroundSubagentWaitMode::All,
+                Duration::from_millis(50),
+                "wait-turn",
+                None,
+            )
+            .await
+            .expect("wait after complete-then-cancel");
+        assert_eq!(result.outcomes.len(), 1);
+        assert_eq!(
+            result.outcomes[0].status,
+            BackgroundSubagentOutcomeStatus::Cancelled
+        );
+        assert_eq!(result.outcomes[0].content, None);
     }
 }

@@ -73,7 +73,23 @@
       "collapsed": "Collapsed",
       "compact": "Compact",
       "comfortable": "Comfortable",
-      "expanded": "Expanded"
+      "expanded": "Expanded",
+      "fullWidth": "Full-width tiled"
+    },
+    "fullWidth": {
+      "enter": "Tile chat full width",
+      "exit": "Exit full-width tiled chat"
+    },
+    "gridTemplate": {
+      "label": "Grid template",
+      "four": "Four cells (2×2)",
+      "six": "Six cells (2×3)",
+      "nine": "Nine cells (3×3)",
+      "sixteen": "Sixteen cells (4×4)",
+      "exit": "Exit grid"
+    },
+    "grid9": {
+      "toggle": "Toggle 3×3 grid view"
     },
     "resizer": {
       "leftAriaLabel": "Resize left panel",
@@ -81,6 +97,15 @@
       "rightAriaLabel": "Resize right panel",
       "terminalBottomAriaLabel": "Resize bottom terminal panel",
       "title": "Drag to resize | Double-click to switch mode | Current: {{mode}}"
+    },
+    "beeColony": {
+      "title": "Bee colony architecture monitor",
+      "loading": "Loading...",
+      "notReady": "Bee colony MiniApp not ready",
+      "retryHint": "Make sure the MiniApp is compiled and deployed, then reopen the panel.",
+      "restore": "Restore",
+      "maximize": "Maximize",
+      "close": "Close"
     }
   },
   "runtimeStatus": {
@@ -347,7 +372,7 @@
         "complete": "When proven, the agent calls update_goal to mark Complete"
       },
       "note": {
-        "active": "While active, each finished turn auto-continues toward the goal (up to 100 times) until the agent calls update_goal(complete) or the limit is reached.",
+        "active": "While active, each finished turn auto-continues toward the goal (up to 10 times) until the agent calls update_goal(complete) or the limit is reached.",
         "complete": "Marked complete. Edit or clear the goal to start different work.",
         "paused": "Paused — continuation and completion checks are stopped.",
         "blocked": "Blocked — resume with /goal resume after you unblock or the environment changes.",
@@ -413,6 +438,7 @@
       "interrupted": "Interrupted"
     },
     "menu": {
+      "switchPet": "Switch pet",
       "closePet": "Close pet",
       "closeBubble": "Close this bubble"
     },
@@ -664,6 +690,9 @@
       "cliInstallFailed": "Could not prepare the remote environment. Check the SSH connection and try again.",
       "cliInstallInProgress": "Preparing the remote environment…",
       "cliInstallUnknownVersion": "required version",
+      "modelSyncStarted": "Copying this device’s model configuration to the remote device…",
+      "modelSyncSucceeded": "Model configuration copied; the remote device can run the selected model.",
+      "modelSyncFailed": "Could not copy the model configuration to the remote device.",
       "errors": {
         "attachmentUnavailable": "This image cannot be sent to the remote device. Add it again and retry.",
         "deviceAttachmentTooLarge": "Images sent to an account device can total at most 192 KB. Compress them or use an SSH target.",
@@ -826,6 +855,12 @@
     "targetBtw": "Side",
     "sendingToMain": "Main session: {{title}}",
     "sendingToBtw": "Side session: {{title}}",
+    "conversationLevel": {
+      "main": "Main",
+      "child": "Child",
+      "senior": "Senior",
+      "childWithSeq": "Child {{seq}}"
+    },
     "modeDescriptions": {
       "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
       "Multitask": "Multitask mode: decompose work into orthogonal branches and proactively use subagents in parallel when it helps",
@@ -936,6 +971,7 @@
     "cancel": "Stop",
     "openThread": "Open thread",
     "threadLabel": "Side thread",
+    "deletedThreadLabel": "Deleted session",
     "emptyThreadLabel": "No {{label}} open",
     "origin": "Asked from",
     "parent": "parent session",
@@ -1283,7 +1319,8 @@
     "backgroundCommandStopping": "Stopping command",
     "backgroundCommandStopAll": "Stop all",
     "backgroundCommandStopFailed": "Failed to stop background command.",
-    "pullRequests": "Pull requests"
+    "pullRequests": "Pull requests",
+    "dragToAuxiliary": "Drag conversation to the auxiliary panel"
   },
   "backgroundCommandInput": {
     "title": "Send command input",
@@ -1855,7 +1892,8 @@
       "reviewCheckUnavailable": "This additional check could not be completed. The main review can continue.",
       "reviewPartialTimeout": "Timed out after returning partial details",
       "reviewTimedOut": "Timed out",
-      "reviewStopped": "Stopped"
+      "reviewStopped": "Stopped",
+      "deletedSessionLabel": "Session deleted"
     },
     "taskDetailPanel": {
       "untitled": "Untitled Task",
@@ -2509,7 +2547,16 @@
   },
   "subagent": {
     "showingLines": "Showing {{shown}} of {{total}} lines",
-    "showAll": "Show all"
+    "showAll": "Show all",
+    "completedNotification": "Subagent completed",
+    "errorNotification": "Subagent failed",
+    "interruptedNotification": "Subagent interrupted",
+    "status": {
+      "completed": "Completed",
+      "error": "Error",
+      "cancelled": "Stopped"
+    },
+    "deletedSession": "Session deleted"
   },
   "pendingQueue": {
     "title": "Queued ({{count}})",

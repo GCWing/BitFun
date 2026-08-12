@@ -1234,6 +1234,10 @@ fn supervised_container_command(
 /// hit the supervisor itself; both `terminate_child` here and
 /// [`container_signal_command`] therefore fall back to `pkill -P` plus a direct
 /// `kill`, which reaches one generation instead of all of them.
+///
+/// The supervisor must also duplicate stdin before starting the asynchronous
+/// child. POSIX non-interactive shells attach `/dev/null` to an asynchronous
+/// list's fd 0, so `<&0` inside that list cannot preserve streamed input.
 fn supervised_container_command_with_pid_file(
     container: &ContainerWorkspaceConfig,
     command: &str,
@@ -1260,12 +1264,14 @@ fn supervised_container_command_with_pid_file(
          }}; \
          trap remove_pid_file EXIT; \
          trap 'terminate_child; exit 143' HUP TERM; \
+         exec 9<&0 || exit 1; \
          if command -v setsid >/dev/null 2>&1; then \
-           setsid {quoted_shell} -lc {quoted_command} <&0 & \
+           setsid {quoted_shell} -lc {quoted_command} <&9 & \
          else \
-           {quoted_shell} -lc {quoted_command} <&0 & \
+           {quoted_shell} -lc {quoted_command} <&9 & \
          fi; \
          child=$!; \
+         exec 9<&-; \
          if [ \"$tracking\" -eq 1 ]; then \
            printf '%s' \"$child\" > \"$pid_file\" || tracking=0; \
          fi; \
@@ -1459,26 +1465,43 @@ async fn collect_workspace_command_result(
     )
     .await?;
     Ok(SSHCommandResult {
-        stdout: String::from_utf8_lossy(&stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        stdout: String::from_utf8_lossy(&stdout.data).into_owned(),
+        stderr: String::from_utf8_lossy(&stderr.data).into_owned(),
         exit_code: exit
             .and_then(|exit| exit.exit_code)
             .unwrap_or(fallback_exit_code),
         interrupted,
-        timed_out,
+        timed_out: timed_out || stdout.timed_out || stderr.timed_out,
     })
+}
+
+/// Collected stream output with an explicit timeout marker (P2-S7).
+///
+/// `timed_out` distinguishes "the command produced no output" from "the
+/// stream was still open after the drain grace and got truncated" so callers
+/// (e.g. remote listing/read tool paths) can decide whether a partial result
+/// is trustworthy.
+struct CollectedWorkspaceOutput {
+    data: Vec<u8>,
+    timed_out: bool,
 }
 
 async fn collect_workspace_reader(
     mut task: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
     task_error: &'static str,
     allow_incomplete: bool,
-) -> anyhow::Result<Vec<u8>> {
+) -> anyhow::Result<CollectedWorkspaceOutput> {
     match tokio::time::timeout(Duration::from_secs(3), &mut task).await {
-        Ok(result) => Ok(result.context(task_error)??),
+        Ok(result) => Ok(CollectedWorkspaceOutput {
+            data: result.context(task_error)??,
+            timed_out: false,
+        }),
         Err(_) if allow_incomplete => {
             task.abort();
-            Ok(Vec::new())
+            Ok(CollectedWorkspaceOutput {
+                data: Vec::new(),
+                timed_out: true,
+            })
         }
         Err(_) => {
             task.abort();
@@ -3028,9 +3051,9 @@ impl SSHConnectionManager {
                 .or_else(|| entry.as_ref().and_then(|entry| entry.port))
                 .unwrap_or(22);
             let identity_file = entry.as_ref().and_then(|entry| entry.identity_file.clone());
-            let auth = if identity_file.is_some() {
+            let auth = if let Some(identity_file) = identity_file {
                 SSHAuthMethod::PrivateKey {
-                    key_path: identity_file.expect("identity_file.is_some was checked"),
+                    key_path: identity_file,
                     passphrase: None,
                     certificate_path: entry
                         .as_ref()
@@ -5955,11 +5978,58 @@ mod tests {
 
         assert!(pid_file.starts_with("/tmp/.bitfun-exec-"));
         assert!(wrapped.contains("setsid '/bin/bash' -lc"));
+        assert!(wrapped.contains("exec 9<&0 || exit 1"));
+        assert!(wrapped.contains("<&9 &"));
+        assert!(wrapped.contains("exec 9<&-"));
         assert!(wrapped.contains("|| tracking=0"));
         assert!(wrapped.contains("printf '%s' \"$child\" > \"$pid_file\""));
         assert!(signal.contains("[ -s \"$pid_file\" ] || exit 75"));
         assert!(signal.contains("kill -KILL -- \"-$pid\""));
         assert!(signal.contains("kill -KILL \"$pid\""));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn supervised_container_command_preserves_streamed_stdin() {
+        use std::io::Write;
+
+        let container = ContainerWorkspaceConfig {
+            name: "dev".to_string(),
+            access: ContainerAccess::DockerExec,
+            local: true,
+            docker_path: "docker".to_string(),
+            shell: "/bin/sh".to_string(),
+            user: None,
+            interactive: true,
+        };
+        let wrapped = supervised_container_command_with_pid_file(
+            &container,
+            "read value; printf 'stdin:%s' \"$value\"",
+            "/tmp/.bitfun-exec-stdin-contract.pid",
+        );
+        let mut child = std::process::Command::new("sh")
+            .args(["-lc", &wrapped])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn supervised command");
+        child
+            .stdin
+            .take()
+            .expect("supervisor stdin")
+            .write_all(b"transport-contract\n")
+            .expect("write supervisor stdin");
+        let output = child
+            .wait_with_output()
+            .expect("wait for supervised command");
+
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"stdin:transport-contract");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).trim().is_empty(),
+            "stdin forwarding must not add command stderr"
+        );
     }
 
     #[test]

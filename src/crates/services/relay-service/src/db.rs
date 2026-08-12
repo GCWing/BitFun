@@ -373,6 +373,7 @@ impl UserRow {
     /// out-of-band (e.g. an admin import tool) so the relay never sees a
     /// password. Kept as a DB primitive for that future tooling.
     #[allow(dead_code)]
+    #[allow(clippy::too_many_arguments)] // row insert primitive; mirrors users table columns
     pub async fn create(
         pool: &DbPool,
         user_id: &str,
@@ -1050,6 +1051,7 @@ impl SyncSessionRow {
     /// Enforces optional per-user active session count and total encrypted-byte
     /// quotas. Product defaults are effectively unlimited (`i32::MAX`); pass
     /// lower ceilings when an operator needs to bound account storage.
+    #[allow(clippy::too_many_arguments)] // upsert primitive; mirrors sync_sessions columns
     pub async fn upsert_with_quota(
         pool: &DbPool,
         user_id: &str,
@@ -1933,6 +1935,7 @@ impl PageWithUsername {
 }
 
 impl PageVersionRow {
+    #[allow(clippy::too_many_arguments)] // row insert primitive; mirrors page_versions columns
     pub async fn insert(
         pool: &DbPool,
         user_id: &str,

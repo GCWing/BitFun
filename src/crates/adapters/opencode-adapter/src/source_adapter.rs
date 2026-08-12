@@ -311,6 +311,7 @@ impl OpenCodePluginRuntimeAdapter {
         Ok(adapter)
     }
 
+    #[allow(clippy::type_complexity)] // dispatch target tuple shared with plugin runtime
     fn custom_tool_dispatch_targets(
         &self,
     ) -> Vec<(
@@ -510,6 +511,7 @@ impl PluginRuntimeAdapter for OpenCodePluginRuntimeAdapter {
     }
 }
 
+#[allow(clippy::type_complexity)] // adapter + dispatch target tuple return
 pub fn load_opencode_package_adapter(
     input: PluginPackageInput,
     activation: Option<PluginActivationAuthority>,
@@ -571,6 +573,7 @@ impl OpenCodeProjection {
         }
     }
 
+    #[allow(clippy::type_complexity)] // dispatch target tuple shared with plugin runtime
     fn custom_tool_dispatch_target(
         &self,
     ) -> Option<(
@@ -860,6 +863,7 @@ impl OpenCodeInvalidProjection {
         self
     }
 
+    #[allow(clippy::too_many_arguments)] // package diagnostic entry fields
     fn package(
         package_uri: &str,
         package_id: &str,

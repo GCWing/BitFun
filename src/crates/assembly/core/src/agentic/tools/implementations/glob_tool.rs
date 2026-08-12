@@ -549,6 +549,16 @@ mod tests {
         dir
     }
 
+    fn rg_available() -> bool {
+        std::process::Command::new("rg")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
     fn remote_context(root: &str) -> ToolUseContext {
         let session_identity =
             crate::service::remote_ssh::workspace_state::workspace_session_identity(
@@ -653,6 +663,9 @@ mod tests {
 
     #[test]
     fn absolute_pattern_searches_its_external_parent_with_local_rg() {
+        if !rg_available() {
+            return;
+        }
         let workspace_root = make_temp_dir("absolute-pattern-workspace");
         let transcript_dir = make_temp_dir("absolute-pattern-transcripts");
         fs::write(transcript_dir.join("session.log"), "transcript").unwrap();
@@ -734,6 +747,9 @@ mod tests {
 
     #[test]
     fn keeps_shallowest_matches_from_rg_results() {
+        if !rg_available() {
+            return;
+        }
         let root = make_temp_dir("limit");
         fs::create_dir_all(root.join("src/deep")).unwrap();
         fs::create_dir_all(root.join("tests")).unwrap();
@@ -763,6 +779,9 @@ mod tests {
 
     #[test]
     fn static_glob_prefix_results_are_relative_to_walk_root() {
+        if !rg_available() {
+            return;
+        }
         let root = make_temp_dir("relative-walk-root");
         fs::create_dir_all(root.join("src/deep")).unwrap();
         fs::write(root.join("src/lib.rs"), "").unwrap();
@@ -794,6 +813,9 @@ mod tests {
 
     #[test]
     fn wildcard_search_now_returns_files_only() {
+        if !rg_available() {
+            return;
+        }
         let root = make_temp_dir("files-only");
         fs::create_dir_all(root.join("src/nested")).unwrap();
         fs::write(root.join("src/nested/lib.rs"), "").unwrap();

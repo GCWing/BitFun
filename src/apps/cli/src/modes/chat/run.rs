@@ -792,28 +792,38 @@ impl ChatMode {
                     let tool_notice = self.take_external_tool_notice(&snapshot);
                     let agent_notice = self.take_external_agent_notice(&snapshot);
                     self.update_external_source_view(&mut chat_view, &snapshot);
-                    if snapshot.discovery_pending {
-                        chat_view.set_status(Some(
-                            "Checking compatible content from external AI applications".to_string(),
-                        ));
-                    } else if tool_notice.is_some() || agent_notice.is_some() {
-                        chat_view.set_status(Some(
-                            [tool_notice, agent_notice]
-                                .into_iter()
-                                .flatten()
-                                .collect::<Vec<_>>()
-                                .join("; "),
-                        ));
-                    } else if discovery_just_finished {
-                        let (available, restricted) = external_command_counts(&snapshot);
-                        let pending_conflicts = snapshot
-                            .command_conflicts
-                            .iter()
-                            .filter(|conflict| conflict.selected_candidate_id.is_none())
-                            .count();
-                        chat_view.set_status(Some(format!(
-                            "External sources ready: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
-                        )));
+                    // Only take over the status bar while a turn is being
+                    // processed. When the chat is idle the status bar renders
+                    // the session summary (Messages/Tool calls), and external
+                    // source notifications arriving after a turn completes
+                    // must not overwrite it — otherwise the idle summary never
+                    // becomes visible and terminal contract tests that wait
+                    // for "Messages: N" time out on platforms where external
+                    // source discovery reports diagnostics.
+                    if chat_state.is_processing {
+                        if snapshot.discovery_pending {
+                            chat_view.set_status(Some(
+                                "Checking compatible content from external AI applications".to_string(),
+                            ));
+                        } else if tool_notice.is_some() || agent_notice.is_some() {
+                            chat_view.set_status(Some(
+                                [tool_notice, agent_notice]
+                                    .into_iter()
+                                    .flatten()
+                                    .collect::<Vec<_>>()
+                                    .join("; "),
+                            ));
+                        } else if discovery_just_finished {
+                            let (available, restricted) = external_command_counts(&snapshot);
+                            let pending_conflicts = snapshot
+                                .command_conflicts
+                                .iter()
+                                .filter(|conflict| conflict.selected_candidate_id.is_none())
+                                .count();
+                            chat_view.set_status(Some(format!(
+                                "External sources ready: {available} commands available, {restricted} restricted, {pending_conflicts} need a choice"
+                            )));
+                        }
                     }
                     self.external_source_snapshot = Some(snapshot);
                     if chat_view.mcp_selector_visible() {
@@ -970,18 +980,16 @@ impl ChatMode {
                         new_model_id,
                         reason,
                         ..
-                    } => {
-                        if apply_session_model_migration(
-                            &mut chat_state,
-                            session_id,
-                            previous_model_id,
-                            new_model_id,
-                            reason,
-                        ) {
-                            self.load_current_model_name(&mut chat_state, &rt_handle);
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        }
+                    } if apply_session_model_migration(
+                        &mut chat_state,
+                        session_id,
+                        previous_model_id,
+                        new_model_id,
+                        reason,
+                    ) => {
+                        self.load_current_model_name(&mut chat_state, &rt_handle);
+                        chat_view.invalidate_lines_cache();
+                        needs_redraw = true;
                     }
                     AgenticEvent::SessionReasoningPresetAutoCleared {
                         session_id,

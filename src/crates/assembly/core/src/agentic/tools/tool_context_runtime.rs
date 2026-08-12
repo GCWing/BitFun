@@ -17,6 +17,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolTask};
 use crate::agentic::tools::post_call_hooks;
+use crate::agentic::tools::restrictions::{classify_tool_call, get_session_restrictions};
 use crate::agentic::tools::restrictions::{
     is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
 };
@@ -27,13 +28,15 @@ use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::get_path_manager_arc;
+#[cfg(feature = "git")]
 use crate::service::git::{GitDiffParams, GitService};
 use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
 use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::{BitFunError, BitFunResult};
+#[cfg(feature = "git")]
+use bitfun_agent_runtime::checkpoint::GitStatusCheckpointFacts;
 use bitfun_agent_runtime::checkpoint::{
-    build_light_checkpoint as build_runtime_light_checkpoint, GitStatusCheckpointFacts,
-    LightCheckpointWorkspaceFacts,
+    build_light_checkpoint as build_runtime_light_checkpoint, LightCheckpointWorkspaceFacts,
 };
 use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
@@ -46,8 +49,10 @@ use bitfun_product_domains::canvas::CanvasStoragePort;
 use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort, ToolRuntimeHandles};
 #[cfg(feature = "canvas-runtime")]
 use bitfun_services_integrations::canvas::CanvasService;
+#[cfg(feature = "git")]
 use log::warn;
 use serde_json::Value;
+#[cfg(feature = "git")]
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::future::Future;
@@ -402,6 +407,7 @@ impl ToolUseContext {
             .into();
         };
 
+        #[cfg(feature = "git")]
         let git_status = GitService::get_status(workspace_root)
             .await
             .map(|status| GitStatusCheckpointFacts {
@@ -411,6 +417,8 @@ impl ToolUseContext {
                 untracked_count: status.untracked.len(),
             })
             .map_err(|error| error.to_string());
+        #[cfg(not(feature = "git"))]
+        let git_status = Err("Git capability is not compiled into this runtime".to_string());
         let diff_hash = self
             .checkpoint_diff_hash(workspace_root, &touched_files)
             .await;
@@ -429,45 +437,82 @@ impl ToolUseContext {
         workspace_root: &Path,
         touched_files: &[String],
     ) -> Option<String> {
-        let files = touched_files
-            .iter()
-            .filter_map(|file| git_relative_path(workspace_root, file))
-            .collect::<Vec<_>>();
-
-        if files.is_empty() {
+        #[cfg(not(feature = "git"))]
+        {
+            let _ = (workspace_root, touched_files);
             return None;
         }
 
-        let mut diff = String::new();
-        for staged in [false, true] {
-            let params = GitDiffParams {
-                files: Some(files.clone()),
-                staged: Some(staged),
-                ..Default::default()
-            };
-            match GitService::get_diff(workspace_root, &params).await {
-                Ok(part) => diff.push_str(&part),
-                Err(error) => {
-                    warn!(
-                        "Failed to collect checkpoint diff hash: staged={}, error={}",
-                        staged, error
-                    );
-                    return None;
+        #[cfg(feature = "git")]
+        {
+            let files = touched_files
+                .iter()
+                .filter_map(|file| git_relative_path(workspace_root, file))
+                .collect::<Vec<_>>();
+
+            if files.is_empty() {
+                return None;
+            }
+
+            let mut diff = String::new();
+            for staged in [false, true] {
+                let params = GitDiffParams {
+                    files: Some(files.clone()),
+                    staged: Some(staged),
+                    ..Default::default()
+                };
+                match GitService::get_diff(workspace_root, &params).await {
+                    Ok(part) => diff.push_str(&part),
+                    Err(error) => {
+                        warn!(
+                            "Failed to collect checkpoint diff hash: staged={}, error={}",
+                            staged, error
+                        );
+                        return None;
+                    }
                 }
             }
-        }
 
-        if diff.is_empty() {
-            return None;
-        }
+            if diff.is_empty() {
+                return None;
+            }
 
-        Some(hex::encode(Sha256::digest(diff.as_bytes())))
+            Some(hex::encode(Sha256::digest(diff.as_bytes())))
+        }
     }
 
-    pub fn enforce_tool_runtime_restrictions(&self, tool_name: &str) -> BitFunResult<()> {
-        self.runtime_tool_restrictions
+    pub fn enforce_tool_runtime_restrictions(
+        &self,
+        tool_name: &str,
+        input: &Value,
+    ) -> BitFunResult<()> {
+        // R-26: the user-controllable RBAC master switch fully bypasses the
+        // runtime restriction gate when disabled (tools are unrestricted).
+        if !crate::service::config::rbac_enabled() {
+            return Ok(());
+        }
+
+        // Resolve which restrictions to apply: session-specific or context-level.
+        let session_override = self
+            .session_id
+            .as_deref()
+            .and_then(get_session_restrictions);
+        let restrictions: &ToolRuntimeRestrictions = session_override
+            .as_ref()
+            .unwrap_or(&self.runtime_tool_restrictions);
+
+        // 1. Check tool name allow/deny lists.
+        restrictions
             .ensure_tool_allowed(tool_name)
-            .map_err(Into::into)
+            .map_err(BitFunError::from)?;
+
+        // 2. Classify the tool call into an operation class and check operation-level restrictions.
+        let op_class = classify_tool_call(tool_name, input);
+        restrictions
+            .ensure_operation_allowed(op_class, tool_name)
+            .map_err(BitFunError::from)?;
+
+        Ok(())
     }
 
     pub fn enforce_path_operation(
@@ -475,10 +520,16 @@ impl ToolUseContext {
         operation: ToolPathOperation,
         resolution: &ToolPathResolution,
     ) -> BitFunResult<()> {
-        let allowed_roots = self
-            .runtime_tool_restrictions
-            .path_policy
-            .roots_for(operation);
+        // 与 enforce_tool_runtime_restrictions 一致：先取会话级 override 的 path_policy 再检查。
+        let session_override = self
+            .session_id
+            .as_deref()
+            .and_then(get_session_restrictions);
+        let restrictions: &ToolRuntimeRestrictions = session_override
+            .as_ref()
+            .unwrap_or(&self.runtime_tool_restrictions);
+
+        let allowed_roots = restrictions.path_policy.roots_for(operation);
         if allowed_roots.is_empty() {
             return Ok(());
         }
@@ -719,6 +770,7 @@ impl ToolUseContext {
     }
 }
 
+#[cfg(feature = "git")]
 fn git_relative_path(workspace_root: &Path, path: &str) -> Option<String> {
     if is_bitfun_tool_uri(path) {
         return None;
@@ -787,6 +839,8 @@ mod context_facts_tests {
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
+                allowed_operation_classes: BTreeSet::new(),
+                denied_operation_classes: BTreeSet::new(),
             },
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
@@ -832,6 +886,8 @@ mod context_facts_tests {
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
+                allowed_operation_classes: BTreeSet::new(),
+                denied_operation_classes: BTreeSet::new(),
             },
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::new(
                 None,
@@ -1504,17 +1560,22 @@ mod task_context_tests {
                     tool_call_id: "parent_tool".to_string(),
                     session_id: "parent_session".to_string(),
                     dialog_turn_id: "parent_turn".to_string(),
+                    depth: None,
+                    role: None,
                 }),
                 permission_delegation: None,
                 delegation_policy: DelegationPolicy::top_level().spawn_child(),
                 deferred_tools: vec!["WebFetch".to_string()],
                 loaded_deferred_tool_specs: vec![loaded_spec("WebFetch")],
                 allowed_tools: vec!["WebFetch".to_string()],
+                user_enabled_tools: vec!["WebFetch".to_string()],
                 runtime_tool_restrictions: ToolRuntimeRestrictions {
                     allowed_tool_names: BTreeSet::from(["WebFetch".to_string()]),
                     denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                     denied_tool_messages: Default::default(),
                     path_policy: Default::default(),
+                    allowed_operation_classes: BTreeSet::new(),
+                    denied_operation_classes: BTreeSet::new(),
                 },
                 steering_interrupt: None,
                 workspace_services: None,

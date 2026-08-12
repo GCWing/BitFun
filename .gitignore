@@ -23,10 +23,43 @@ dist-ssr
 # Build outputs - Rust/Tauri
 target/
 **/target/
+.target/
 /.targets/
+# Local evidence working dir (fully ignored; intermediate artifacts go to
+# outside the repo)
+target2/
 # The deployable Rust services use the workspace lockfile for reproducible
 # container builds.
 !Cargo.lock
+
+# Work artifacts that must never enter the repo (S-37/S-56 hygiene):
+# recon/fix/verify/report/sediment intermediates, sync records, ws-check data.
+/docs/plans/RECON-*
+/docs/plans/FIX-*
+/docs/plans/VERIFY-*
+/docs/plans/REPORT-*
+/docs/plans/SEDIMENT-*
+/docs/plans/sync-record-*
+/docs/plans/recon-*
+/docs/plans/fix-*
+/docs/plans/doc-governance-report-*
+/docs/plans/pr-final-*
+/docs/plans/ws-check-*
+/docs/plans/del-*.json
+/docs/plans/侦查-*
+/docs/plans/核对-*
+/docs/plans/核查-*
+/docs/plans/*.log
+/docs/plans/*.json
+/docs/plans/*.cjs
+
+# Local customization docs stay out of the repo (S-56 sanitize)
+
+/docs/功能文档/
+/交接文档-现状与决议.md
+/fix-dualfeed-停止回报.md
+/docs/plans/review-upstream-sync-*
+/docs/features/agent-hot-reload.md
 
 # Monaco Editor - copied from node_modules
 public/monaco-editor/
@@ -91,5 +124,9 @@ external/
 /.bitfun/search/flashgrep-index/
 .agents/
 /.flashgrep-index-engine/
+/src/apps/desktop/.bitfun/search/flashgrep-index/
+/target/debug/.bitfun/search/flashgrep-index/
 
 .design/
+__pycache__/
+*.pyc

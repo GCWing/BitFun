@@ -43,6 +43,10 @@ pub struct ListPersistedSessionsRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+    /// When true, hidden Subagent/Ephemeral sessions are included in the
+    /// result (full conversation management).
+    #[serde(default)]
+    pub include_hidden: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +59,10 @@ pub struct ListPersistedSessionsPageRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+    /// When true, hidden Subagent/Ephemeral sessions are included in the page
+    /// (full conversation management).
+    #[serde(default)]
+    pub include_hidden: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -270,7 +278,43 @@ pub async fn list_persisted_sessions(
 ) -> Result<Vec<SessionMetadata>, String> {
     runtime
         .session_application()
-        .list_persisted_sessions(desktop_session_scope(
+        .list_persisted_sessions_with_options(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            request.include_hidden,
+        )
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to list persisted sessions: {}",
+                desktop_session_error(error)
+            )
+        })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListDeletedSessionIdsRequest {
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+/// List session ids recorded in the workspace deletion tombstone registry.
+/// The frontend initialization path pulls this registry to guard against
+/// ghost resurrection of deleted subagent sessions after a restart.
+#[tauri::command]
+pub async fn list_deleted_session_ids(
+    request: ListDeletedSessionIdsRequest,
+    runtime: State<'_, DesktopRuntimeContext>,
+) -> Result<Vec<String>, String> {
+    runtime
+        .session_application()
+        .list_deleted_session_ids(desktop_session_scope(
             request.workspace_path,
             request.remote_connection_id,
             request.remote_ssh_host,
@@ -278,7 +322,7 @@ pub async fn list_persisted_sessions(
         .await
         .map_err(|error| {
             format!(
-                "Failed to list persisted sessions: {}",
+                "Failed to list deleted session ids: {}",
                 desktop_session_error(error)
             )
         })
@@ -355,7 +399,7 @@ pub async fn search_referenceable_sessions(
         }
     }
 
-    candidates.sort_by(|left, right| right.last_activity_at.cmp(&left.last_activity_at));
+    candidates.sort_by_key(|right| std::cmp::Reverse(right.last_activity_at));
     candidates.truncate(limit);
     Ok(candidates)
 }
@@ -369,7 +413,7 @@ pub async fn list_persisted_sessions_page(
     let trace_started = Instant::now();
     let result = runtime
         .session_application()
-        .list_persisted_sessions_page(
+        .list_persisted_sessions_page_with_options(
             desktop_session_scope(
                 request.workspace_path,
                 request.remote_connection_id,
@@ -377,6 +421,7 @@ pub async fn list_persisted_sessions_page(
             ),
             request.cursor.as_deref(),
             request.limit,
+            request.include_hidden,
         )
         .await
         .map_err(|error| {
@@ -593,6 +638,10 @@ pub async fn delete_persisted_session(
     request: DeletePersistedSessionRequest,
     runtime: State<'_, DesktopRuntimeContext>,
 ) -> Result<(), String> {
+    // 单会话删除（L4-P2-E 确认合理）：归档会话按定义是顶层（archived
+    // 会话不可运行、无活跃子树），单会话 delete_session 足够，无需
+    // delete_session_tree 级联。前端 ArchivedSessionsConfig 删除单条归档
+    // 走此命令；后端 tombstone 落盘 + 列表过滤兜底防重启复活。
     runtime
         .session_application()
         .delete_session(
@@ -818,6 +867,8 @@ pub async fn delete_all_archived_sessions(
     let mut deleted_count: u32 = 0;
 
     for metadata in sessions {
+        // 归档会话按定义无活跃子树（L4-P2-E），逐个单会话删除而非
+        // delete_session_tree 级联；任一删除失败即中止（全有或全无语义）。
         runtime
             .session_application()
             .delete_session(scope.clone(), metadata.session_id)

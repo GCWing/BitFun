@@ -217,11 +217,16 @@ pub fn collect_hidden_subagent_cascade(
             &child_session_ids_by_parent,
             &mut visited,
             &mut ordered_session_ids,
+            0,
         );
     }
 
     ordered_session_ids
 }
+
+/// Maximum recursion depth for subagent post-order traversal.
+/// Guards against runaway chains in malformed metadata (defense-in-depth).
+const MAX_SUBAGENT_RECURSION_DEPTH: u32 = 256;
 
 /// Builds the complete subagent Session tree containing `anchor_session_id`.
 ///
@@ -345,7 +350,17 @@ fn collect_subagent_post_order(
     child_session_ids_by_parent: &HashMap<String, Vec<String>>,
     visited: &mut HashSet<String>,
     ordered_session_ids: &mut Vec<String>,
+    recursion_depth: u32,
 ) {
+    if recursion_depth > MAX_SUBAGENT_RECURSION_DEPTH {
+        log::warn!(
+            "collect_subagent_post_order: max recursion depth {} exceeded at session_id={}",
+            MAX_SUBAGENT_RECURSION_DEPTH,
+            session_id
+        );
+        return;
+    }
+
     if !visited.insert(session_id.to_string()) {
         return;
     }
@@ -357,6 +372,7 @@ fn collect_subagent_post_order(
                 child_session_ids_by_parent,
                 visited,
                 ordered_session_ids,
+                recursion_depth + 1,
             );
         }
     }
@@ -628,6 +644,7 @@ mod tests {
                 parent_tool_call_id: None,
                 subagent_type: None,
                 continuation_policy: None,
+                ..Default::default()
             },
         );
 
@@ -659,6 +676,7 @@ mod tests {
             parent_tool_call_id: None,
             subagent_type: None,
             continuation_policy: None,
+            ..Default::default()
         });
 
         let mut grandchild = metadata("grandchild");
@@ -798,6 +816,7 @@ mod tests {
             parent_tool_call_id: None,
             subagent_type: None,
             continuation_policy: None,
+            ..Default::default()
         });
         source.todos = Some(json!([{ "id": "todo" }]));
         source.deep_review_run_manifest = Some(json!({ "run": "manifest" }));

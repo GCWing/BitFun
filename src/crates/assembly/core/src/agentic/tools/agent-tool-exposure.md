@@ -29,7 +29,7 @@ Notes:
 | `CodeReview` | Direct | None | - |
 | `GetToolSpec` | Direct | None | - |
 | `CallDeferredTool` | Direct | None | - |
-| `CreatePlan` | Deferred | None | - |
+| `CreatePlan` | Direct | shared coding modes (agentic/debug/multitask/plan) | Direct |
 | `GetFileDiff` | Deferred | `ReviewFixer`, `ReviewWorker`, `ReviewJudge` | Direct |
 | `SessionControl` | Deferred | None | - |
 | `SessionMessage` | Deferred | None | - |

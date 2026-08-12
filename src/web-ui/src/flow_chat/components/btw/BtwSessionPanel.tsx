@@ -25,6 +25,7 @@ import {
   type ReviewDetailContentState,
   type ReviewDetailExecutionState,
 } from '../../utils/reviewDetailState';
+import { useChatFullWidth } from '@/app/hooks/useApp';
 import {findReviewTaskOutcome} from '../../utils/reviewTaskOutcome';
 import {
   loadBtwSessionHistory,
@@ -141,6 +142,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   displayTitle,
 }) => {
   const { t } = useTranslation('flow-chat');
+  const isChatFullWidth = useChatFullWidth();
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
   const [stoppingReview, setStoppingReview] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -248,9 +250,23 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   }, [childSessionId, childSession, parentSession, workspacePath]);
 
   useEffect(() => {
-    if (!childSession?.isHistorical || childSession.historyState !== 'metadata-only') return;
-    void loadChildHistory().catch(() => undefined);
-  }, [childSession?.historyState, childSession?.isHistorical, loadChildHistory]);
+    if (!childSessionId || !childSession) return;
+    // Auto-load history for any session shell that has no dialog turns and has
+    // not reached a renderable ('ready'), in-flight ('hydrating'), or failed
+    // state. Event-created placeholder shells (e.g. subagents) are
+    // 'new'/'metadata-only' with empty turns and previously never loaded,
+    // leaving an empty conversation; 'failed' stays manual so the retry entry
+    // is visible instead of looping automatically.
+    if (childSession.dialogTurns.length > 0) return;
+    if (
+      childSession.historyState === 'ready' ||
+      childSession.historyState === 'hydrating' ||
+      childSession.historyState === 'failed'
+    ) return;
+    void loadChildHistory().catch(error => {
+      log.error('Failed to auto-load child session history', { childSessionId, error });
+    });
+  }, [childSessionId, childSession, loadChildHistory]);
 
   const updateScrollAffordance = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -957,7 +973,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     <FlowChatContext.Provider value={contextValue}>
       <FlowChatVolatileContext.Provider value={volatileContextValue}>
       <div
-        className={`btw-session-panel${showReviewActionBar ? ' btw-session-panel--has-action-bar' : ''}`}
+        className={`btw-session-panel${showReviewActionBar ? ' btw-session-panel--has-action-bar' : ''}${isChatFullWidth ? ' btw-session-panel--chat-full-width' : ''}`}
         data-bf-component="btw-session-panel"
         data-bf-part="root"
         data-bf-view="session"
@@ -1058,7 +1074,24 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           )}
           {virtualItems.length === 0 ? (
             !isReviewDetail || reviewDetailNotices.length === 0 ? (
-              <div className="btw-session-panel__empty-state" data-bf-component="btw-session-panel" data-bf-part="empty">{t('session.empty')}</div>
+              childSession.historyState === 'failed' ? (
+                <div
+                  className="btw-session-panel__empty-state"
+                  role="alert"
+                  aria-live="polite"
+                >
+                  <span>{t('childSession.reviewDetail.loadFailed', { label: childBadgeLabel })}</span>
+                  <button
+                    type="button"
+                    className="btw-session-panel__empty-retry"
+                    onClick={() => void loadChildHistory()}
+                  >
+                    {t('childSession.reviewDetail.retryLoad')}
+                  </button>
+                </div>
+              ) : (
+                <div className="btw-session-panel__empty-state" data-bf-component="btw-session-panel" data-bf-part="empty">{t('session.empty')}</div>
+              )
             ) : null
           ) : (
             virtualItems.map((item, index) => (

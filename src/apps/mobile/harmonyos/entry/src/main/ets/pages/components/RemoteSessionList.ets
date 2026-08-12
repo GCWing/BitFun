@@ -3,9 +3,9 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { TimeFormat } from '../../services/TimeFormat';
 import { CARD, INK, MUTED, SOFT } from './Theme';
 import { SessionActionPresentation, SessionActionSurface } from './SessionActionSurface';
-import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../state/SessionActionPolicy';
+import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../policy/SessionActionPolicy';
 import { SessionDetailsView } from './SessionDetailsView';
-import { ConversationSessionFilterPolicy } from '../state/ConversationSessionFilterPolicy';
+import { ConversationSessionFilterPolicy } from '../policy/ConversationSessionFilterPolicy';
 
 @ComponentV2
 export struct RemoteSessionList {
@@ -46,10 +46,16 @@ export struct RemoteSessionList {
   @Local showSessionActionSheet: boolean = false;
   @Local detailsSessionId: string = '';
   @Local showSessionDetails: boolean = false;
+  @Local optimisticSelectedSessionId: string = '';
 
   @Monitor('isBusy', 'workspacePath')
   onWorkspaceContextChanged(): void {
     this.createMenuPath = '';
+  }
+
+  @Monitor('selectedSessionId')
+  onSelectedSessionChanged(): void {
+    this.optimisticSelectedSessionId = '';
   }
 
   build() {
@@ -566,7 +572,7 @@ export struct RemoteSessionList {
         Text(item.title || RemoteI18n.t('sidebar.untitled'))
           .width('100%')
           .fontSize(15)
-          .fontWeight(this.selectedSessionId === item.id ? FontWeight.Medium : FontWeight.Regular)
+          .fontWeight(this.isSessionSelected(item.id) ? FontWeight.Medium : FontWeight.Regular)
           .fontColor(INK)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -587,9 +593,23 @@ export struct RemoteSessionList {
     .height(this.metadataText(item).length > 0 ? 56 : 46)
     .padding({ left: nested ? 0 : 10, right: 4 })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor(this.selectedSessionId === item.id ? SOFT : '#00000000')
+    .backgroundColor(this.isSessionSelected(item.id) ? SOFT : '#00000000')
     .borderRadius(10)
+    .onTouch((event: TouchEvent) => {
+      if (this.isBusy) {
+        return;
+      }
+      if (event.type === TouchType.Down) {
+        this.optimisticSelectedSessionId = item.id;
+      } else if (event.type === TouchType.Cancel) {
+        this.optimisticSelectedSessionId = '';
+      }
+    })
     .onClick(() => {
+      if (this.isBusy) {
+        return;
+      }
+      this.optimisticSelectedSessionId = item.id;
       this.onOpenSession(item);
     })
     .gesture(LongPressGesture({ repeat: false }).onAction(() => this.openSessionActions(item)))
@@ -608,6 +628,12 @@ export struct RemoteSessionList {
         }
       }
     })
+  }
+
+  private isSessionSelected(sessionId: string): boolean {
+    const selectedSessionId = this.optimisticSelectedSessionId.length > 0 ?
+      this.optimisticSelectedSessionId : this.selectedSessionId;
+    return selectedSessionId === sessionId;
   }
 
   @Builder

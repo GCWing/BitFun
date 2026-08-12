@@ -190,6 +190,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
             "Claw",
             "DeepResearch",
             "Team",
+            "Legion",
             "ComputerUse",
             "Explore",
             "GeneralPurpose",
@@ -206,12 +207,12 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     );
 
     assert_eq!(specs[0].category, BuiltinAgentCategory::Mode);
-    assert_eq!(specs[8].category, BuiltinAgentCategory::SubAgent);
-    assert_eq!(specs[16].category, BuiltinAgentCategory::SubAgent);
-    assert!(specs[16]
+    assert_eq!(specs[9].category, BuiltinAgentCategory::SubAgent);
+    assert_eq!(specs[17].category, BuiltinAgentCategory::SubAgent);
+    assert!(specs[17]
         .visibility_policy
         .can_access_from_parent(Some("agentic")));
-    assert!(!specs[16].visibility_policy.show_in_global_registry);
+    assert!(!specs[17].visibility_policy.show_in_global_registry);
     assert_eq!(default_model_id_for_builtin_agent("agentic"), "auto");
     assert_eq!(default_model_id_for_builtin_agent("Explore"), "primary");
     assert_eq!(

@@ -47,30 +47,26 @@ pub(super) fn normalize_tool_params(
                 }
             }
         }
-        "LS" => {
-            if !normalized.contains_key("path") {
-                if let Some(value) = normalized
-                    .get("directory")
-                    .or_else(|| normalized.get("dir"))
-                    .or_else(|| normalized.get("target_directory"))
-                    .or_else(|| normalized.get("targetDirectory"))
-                    .cloned()
-                {
-                    normalized.insert("path".to_string(), value);
-                }
+        "LS" if !normalized.contains_key("path") => {
+            if let Some(value) = normalized
+                .get("directory")
+                .or_else(|| normalized.get("dir"))
+                .or_else(|| normalized.get("target_directory"))
+                .or_else(|| normalized.get("targetDirectory"))
+                .cloned()
+            {
+                normalized.insert("path".to_string(), value);
             }
         }
-        "Grep" => {
-            if !normalized.contains_key("pattern") {
-                if let Some(value) = normalized
-                    .get("query")
-                    .or_else(|| normalized.get("text"))
-                    .or_else(|| normalized.get("search_pattern"))
-                    .or_else(|| normalized.get("searchPattern"))
-                    .cloned()
-                {
-                    normalized.insert("pattern".to_string(), value);
-                }
+        "Grep" if !normalized.contains_key("pattern") => {
+            if let Some(value) = normalized
+                .get("query")
+                .or_else(|| normalized.get("text"))
+                .or_else(|| normalized.get("search_pattern"))
+                .or_else(|| normalized.get("searchPattern"))
+                .cloned()
+            {
+                normalized.insert("pattern".to_string(), value);
             }
         }
         "Glob" => {

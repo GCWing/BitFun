@@ -42,6 +42,7 @@ describe('SessionAPI paged metadata reads', () => {
       request: {
         workspace_path: '/repo',
         limit: 5,
+        include_hidden: false,
         cursor: '0',
         remote_connection_id: 'remote-1',
         remote_ssh_host: 'host',
@@ -68,6 +69,7 @@ describe('SessionAPI paged metadata reads', () => {
       request: {
         workspace_path: 'D:/repo',
         limit: 5,
+        include_hidden: false,
       },
     });
   });
@@ -94,6 +96,7 @@ describe('SessionAPI paged metadata reads', () => {
         limit: 5,
         remote_connection_id: 'connection-1',
         remote_ssh_host: 'localhost',
+        include_hidden: false,
       },
     });
   });
@@ -118,6 +121,7 @@ describe('SessionAPI paged metadata reads', () => {
         workspace_path: '/srv/repo',
         limit: 5,
         remote_ssh_host: 'legacy.example',
+        include_hidden: false,
       },
     });
   });

@@ -2,8 +2,7 @@
 
 use bitfun_runtime_ports::{
     validate_thread_goal_objective, SetThreadGoalResult, ThreadGoal, ThreadGoalContinuationPlan,
-    ThreadGoalStatus, ThreadGoalToolResponse, GOAL_MODE_METADATA_KEY,
-    MAX_THREAD_GOAL_AUTO_CONTINUATIONS, THREAD_GOAL_METADATA_KEY,
+    ThreadGoalStatus, ThreadGoalToolResponse, GOAL_MODE_METADATA_KEY, THREAD_GOAL_METADATA_KEY,
 };
 use std::fmt;
 use std::sync::{Mutex, MutexGuard};
@@ -314,6 +313,7 @@ fn migrate_legacy_goal_mode(
         created_at,
         updated_at: created_at,
         auto_continuation_count: 0,
+        reference_files: Vec::new(),
     })
 }
 
@@ -325,7 +325,11 @@ pub fn thread_goal_status_is_resumable(status: ThreadGoalStatus) -> bool {
     )
 }
 
-pub fn build_thread_goal_continuation_plan(goal: &ThreadGoal) -> ThreadGoalContinuationPlan {
+pub fn build_thread_goal_continuation_plan(
+    goal: &ThreadGoal,
+    max_auto_continuations: u32,
+) -> ThreadGoalContinuationPlan {
+    let max_auto_continuations = max_auto_continuations.max(1);
     let prompt = match goal.status {
         ThreadGoalStatus::BudgetLimited => budget_limit_prompt(goal),
         ThreadGoalStatus::Active => continuation_prompt(goal),
@@ -336,7 +340,7 @@ pub fn build_thread_goal_continuation_plan(goal: &ThreadGoal) -> ThreadGoalConti
         display_message: format!(
             "Thread goal completion check (auto {}/{}): {}",
             goal.auto_continuation_count,
-            MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+            max_auto_continuations,
             goal.objective.trim()
         ),
         user_message_metadata: serde_json::json!({
@@ -345,7 +349,7 @@ pub fn build_thread_goal_continuation_plan(goal: &ThreadGoal) -> ThreadGoalConti
             "goalId": goal.goal_id,
             "objective": goal.objective,
             "autoContinuationAttempt": goal.auto_continuation_count,
-            "autoContinuationMax": MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+            "autoContinuationMax": max_auto_continuations,
         }),
     }
 }
@@ -373,9 +377,37 @@ pub struct SetThreadGoalRequest {
     pub objective: Option<String>,
     pub status: Option<ThreadGoalStatus>,
     pub token_budget: Option<Option<i64>>,
+    /// Workspace-relative reference files the goal tracks. `Some` replaces
+    /// the goal's list when the objective is also updated; `None` leaves the
+    /// existing list untouched.
+    pub reference_files: Option<Vec<String>>,
     pub replace_existing: bool,
     pub now_epoch_seconds: i64,
     pub new_goal_id: String,
+}
+
+/// Explicit status transitions must respect the resume contract: only
+/// resumable statuses (`Paused`/`Blocked`/`UsageLimited`) may move back to
+/// `Active`, and a `Blocked -> Active` resume resets the auto-continuation
+/// counter so the resumed goal gets a fresh continuation budget instead of
+/// immediately re-blocking on the stale count.
+fn apply_goal_status_transition(
+    existing: &mut ThreadGoal,
+    status: ThreadGoalStatus,
+) -> Result<(), ThreadGoalRuntimeError> {
+    if status == ThreadGoalStatus::Active && existing.status != ThreadGoalStatus::Active {
+        if !thread_goal_status_is_resumable(existing.status) {
+            return Err(ThreadGoalRuntimeError::Validation(format!(
+                "cannot resume goal from status {}",
+                existing.status.as_str()
+            )));
+        }
+        if existing.status == ThreadGoalStatus::Blocked {
+            existing.auto_continuation_count = 0;
+        }
+    }
+    existing.status = status;
+    Ok(())
 }
 
 pub fn build_set_thread_goal_result(
@@ -415,6 +447,9 @@ pub fn build_set_thread_goal_result(
             if let Some(token_budget) = request.token_budget {
                 existing.token_budget = token_budget;
             }
+            if let Some(reference_files) = request.reference_files {
+                existing.reference_files = reference_files;
+            }
             existing.updated_at = request.now_epoch_seconds;
             existing
         } else {
@@ -429,6 +464,7 @@ pub fn build_set_thread_goal_result(
                 created_at: request.now_epoch_seconds,
                 updated_at: request.now_epoch_seconds,
                 auto_continuation_count: 0,
+                reference_files: request.reference_files.unwrap_or_default(),
             }
         }
     } else {
@@ -439,7 +475,7 @@ pub fn build_set_thread_goal_result(
             )));
         };
         if let Some(status) = request.status {
-            existing.status = status;
+            apply_goal_status_transition(&mut existing, status)?;
         }
         if let Some(token_budget) = request.token_budget {
             existing.token_budget = token_budget;
@@ -581,8 +617,10 @@ impl ThreadGoalRuntime {
         &self,
         mut goal: ThreadGoal,
         facts: ThreadGoalContinuationFacts<'_>,
+        max_auto_continuations: u32,
     ) -> ThreadGoalContinuationOutcome {
-        if goal.auto_continuation_count >= MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
+        let max_auto_continuations = max_auto_continuations.max(1);
+        if goal.auto_continuation_count >= max_auto_continuations {
             if goal.status == ThreadGoalStatus::Active {
                 goal.status = ThreadGoalStatus::Blocked;
                 goal.updated_at = facts.now_epoch_seconds;
@@ -608,7 +646,7 @@ impl ThreadGoalRuntime {
         );
         if became_budget_limited {
             if self.mark_budget_limit_reported(goal.goal_id.as_str()) {
-                let plan = build_thread_goal_continuation_plan(&goal);
+                let plan = build_thread_goal_continuation_plan(&goal, max_auto_continuations);
                 return ThreadGoalContinuationOutcome {
                     goal_to_persist: Some(goal),
                     plan: Some(plan),
@@ -635,7 +673,7 @@ impl ThreadGoalRuntime {
 
         goal.auto_continuation_count = goal.auto_continuation_count.saturating_add(1);
         goal.updated_at = facts.now_epoch_seconds;
-        let plan = build_thread_goal_continuation_plan(&goal);
+        let plan = build_thread_goal_continuation_plan(&goal, max_auto_continuations);
         ThreadGoalContinuationOutcome {
             goal_to_persist: Some(goal),
             plan: Some(plan),

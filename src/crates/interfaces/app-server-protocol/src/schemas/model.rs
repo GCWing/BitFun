@@ -5,7 +5,9 @@
 //! are never returned by the server.
 
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
-use bitfun_core_types::{ProviderCatalog, ReasoningConfig};
+use bitfun_core_types::{
+    ProviderCatalog, ReasoningCatalogProjection, ReasoningCatalogProjectionRequest, ReasoningConfig,
+};
 use serde::{Deserialize, Serialize};
 
 macro_rules! unit_response {
@@ -52,6 +54,16 @@ pub struct TuiModelCatalogRequest {}
 pub struct TuiModelCatalogResponse {
     pub provider_catalog: ProviderCatalog,
     pub reasoning_presets_by_model: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "model/projectReasoningCatalog", response = ProjectReasoningCatalogResponse)]
+#[serde(transparent)]
+pub struct ProjectReasoningCatalogRequest(pub ReasoningCatalogProjectionRequest);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+pub struct ProjectReasoningCatalogResponse {
+    pub projection: ReasoningCatalogProjection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

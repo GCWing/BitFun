@@ -7,6 +7,7 @@ import type { ConnectionTestMessageCode } from '@/shared/utils/aiConnectionTestM
 import type {
   OpenCodePlan,
   ReasoningCatalogProjection,
+  ReasoningConfig,
   SubscriptionProvider,
 } from '@/infrastructure/config/types';
 export type {
@@ -180,6 +181,15 @@ export interface AIModelCatalog {
   session_model_id?: string;
 }
 
+export interface ReasoningCatalogProjectionRequest {
+  provider: string;
+  modelName: string;
+  baseUrl: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning: ReasoningConfig;
+}
+
 export type SubscriptionLoginStatus = 'pending' | 'authorized' | 'failed' | 'cancelled';
 
 export interface SubscriptionOfferingModel {
@@ -250,6 +260,19 @@ export class AIApi {
       return await api.invoke<AIModelCatalog>('get_ai_model_catalog', {});
     } catch (error) {
       throw createTauriCommandError('get_ai_model_catalog', error);
+    }
+  }
+
+  async projectReasoningCatalog(
+    request: ReasoningCatalogProjectionRequest,
+  ): Promise<ReasoningCatalogProjection> {
+    try {
+      return await api.invoke<ReasoningCatalogProjection>(
+        'project_ai_model_reasoning_catalog',
+        { request },
+      );
+    } catch (error) {
+      throw createTauriCommandError('project_ai_model_reasoning_catalog', error);
     }
   }
 

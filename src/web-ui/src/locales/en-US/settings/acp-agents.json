@@ -69,8 +69,13 @@
     "title": "Remote Servers",
     "description": "Saved SSH servers reuse the same ACP agent list and probe each remote host automatically.",
     "empty": "No saved SSH servers.",
+    "emptyVisible": "No visible SSH servers.",
     "noAgents": "Add an ACP agent before checking remote servers.",
     "refreshDetection": "Refresh detection",
+    "hideConnection": "Hide {{name}} from ACP Agents",
+    "restoreConnection": "Show {{name}} in ACP Agents",
+    "showHiddenConnections": "Hidden servers ({{count}})",
+    "hideHiddenConnections": "Hide hidden servers",
     "summary": "{{available}} / {{total}} available",
     "issueSummary": "{{count}} issue(s)"
   },
@@ -112,6 +117,8 @@
     "downloadSuccess": "ACP agent CLI downloaded",
     "downloadFailed": "Failed to download ACP agent CLI",
     "predownloadSuccess": "ACP adapter downloaded",
-    "predownloadFailed": "Failed to download ACP adapter"
+    "predownloadFailed": "Failed to download ACP adapter",
+    "connectionHidden": "{{name}} is hidden from ACP Agents",
+    "connectionRestored": "{{name}} is shown in ACP Agents"
   }
 }

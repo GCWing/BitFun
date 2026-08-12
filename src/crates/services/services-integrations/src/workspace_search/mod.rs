@@ -6,6 +6,7 @@
 
 pub(crate) mod flashgrep;
 pub(crate) mod result_mapping;
+pub(crate) mod rg_fallback;
 mod service;
 mod types;
 

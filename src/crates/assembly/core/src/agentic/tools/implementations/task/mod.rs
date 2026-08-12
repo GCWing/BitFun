@@ -1,5 +1,5 @@
 use crate::agentic::agents::{
-    get_agent_registry, AgentInfo, SubagentListScope, SubagentQueryContext,
+    get_agent_registry, AcpAgent, AgentInfo, SubagentListScope, SubagentQueryContext,
 };
 use crate::agentic::coordination::{get_global_coordinator, SubagentExecutionRequest};
 use crate::agentic::deep_review::task_adapter::{
@@ -94,7 +94,7 @@ impl TaskTool {
         let registry = get_agent_registry();
         let workspace_root = context.and_then(|ctx| ctx.workspace_root());
         registry.load_custom_agents(workspace_root).await;
-        registry
+        let mut agents = registry
             .get_subagents_for_query(&SubagentQueryContext {
                 parent_agent_type: context.and_then(|ctx| ctx.agent_type.as_deref()),
                 workspace_root,
@@ -102,7 +102,19 @@ impl TaskTool {
                 include_disabled: false,
                 external_sources_supported: context.is_none_or(|ctx| !ctx.is_remote()),
             })
-            .await
+            .await;
+        // ACP bridge agents (`acp__<client>`) are registered as Mode entries,
+        // so the SubAgent-scoped TaskVisible query does not list them. Allow
+        // them as spawn targets so Task can delegate to external ACP agents —
+        // the same 口径 SessionControl / SessionMessage use for `acp__<client>`.
+        agents.extend(
+            registry
+                .get_modes_info()
+                .await
+                .into_iter()
+                .filter(|agent| agent.id.starts_with(AcpAgent::agent_id_prefix())),
+        );
+        agents
     }
 
     async fn get_agents_types(&self, context: Option<&ToolUseContext>) -> Vec<String> {
@@ -220,9 +232,22 @@ impl Tool for TaskTool {
                 .get("agent_id")
                 .and_then(Value::as_str)
                 .map(str::trim)
-                .filter(|agent_id| !agent_id.is_empty())
-                .map(|agent_id| format!("cancel:{agent_id}"))
-                .ok_or_else(|| BitFunError::validation("agent_id is required".to_string()))?,
+                .filter(|session_id| !session_id.is_empty())
+                .map(|session_id| format!("cancel:{session_id}"))
+                .ok_or_else(|| BitFunError::validation("session_id is required".to_string()))?,
+            TaskAction::List => "list".to_string(),
+            TaskAction::History => input
+                .get("agent_id")
+                .or_else(|| input.get("session_id"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(|id| format!("history:{id}"))
+                .ok_or_else(|| {
+                    BitFunError::validation(
+                        "agent_id or session_id is required".to_string(),
+                    )
+                })?,
         };
         Ok(vec![PermissionIntent::new("task", vec![resource])])
     }
@@ -258,6 +283,13 @@ impl Tool for TaskTool {
                     }
                 })
                 .unwrap_or_else(|| "Sending input to task".to_string()),
+            Some(TaskAction::List) => "Listing background tasks".to_string(),
+            Some(TaskAction::History) => input
+                .get("agent_id")
+                .or_else(|| input.get("session_id"))
+                .and_then(Value::as_str)
+                .map(|id| format!("Getting history for task: {}", id))
+                .unwrap_or_else(|| "Getting task history".to_string()),
             Some(TaskAction::Spawn) | None => {
                 if let Some(description) = input.get("description").and_then(|v| v.as_str()) {
                     if options.verbose {

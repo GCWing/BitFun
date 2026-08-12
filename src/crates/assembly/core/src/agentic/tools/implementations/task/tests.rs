@@ -134,6 +134,53 @@ fn task_schema_accepts_optional_model_id() {
 }
 
 #[test]
+fn task_persistent_defaults_to_true_for_spawn() {
+    let invocation = TaskTool::parse_invocation(
+        &json!({
+            "action": "spawn",
+            "description": "Inspect parser",
+            "prompt": "Inspect the parser flow.",
+            "subagent_type": "Explore",
+        }),
+        false,
+    )
+    .expect("spawn without persistent should parse");
+    assert!(invocation.persistent);
+}
+
+#[test]
+fn task_persistent_false_parses_one_shot_lifecycle() {
+    let invocation = TaskTool::parse_invocation(
+        &json!({
+            "action": "spawn",
+            "description": "One-shot report",
+            "prompt": "Produce a report.",
+            "subagent_type": "GeneralPurpose",
+            "persistent": false,
+        }),
+        false,
+    )
+    .expect("spawn with persistent=false should parse");
+    assert!(!invocation.persistent);
+}
+
+#[test]
+fn task_persistent_is_rejected_for_non_spawn_actions() {
+    let error = TaskTool::parse_invocation(
+        &json!({
+            "action": "send_input",
+            "agent_id": "a1",
+            "description": "Continue",
+            "prompt": "Continue the work.",
+            "persistent": true,
+        }),
+        false,
+    )
+    .expect_err("persistent is not allowed for send_input");
+    assert!(error.to_string().contains("persistent is not allowed"));
+}
+
+#[test]
 fn task_model_id_inherit_requests_parent_model_inheritance() {
     let invocation = TaskTool::parse_invocation(
         &json!({
@@ -479,6 +526,12 @@ fn background_subagent_start_acknowledgement_exposes_agent_wait_task_id() {
     assert!(message.contains("agent_id: \"a1\""));
     assert!(message.contains("bg_task_id: \"bg1\""));
     assert!(message.contains("Use AgentWait"));
+    // L3-P1-01: the completion notice is auto-delivered (submit_dialog_turn);
+    // the old copy claimed "will not be delivered automatically", which
+    // contradicted the dual-channel auto-delivery and pushed the model into
+    // pointless AgentWait loops. Lock the aligned semantics here.
+    assert!(message.contains("delivered back to this session automatically"));
+    assert!(!message.contains("will not be delivered"));
     assert!(!message.contains("GeneralPurpose"));
     assert!(!message.contains("<background_task"));
 }
@@ -662,7 +715,7 @@ async fn validate_input_accepts_send_input_with_neutral_spawn_placeholders() {
                 "action": "send_input",
                 "agent_id": "a1",
                 "description": "continue",
-                "fork_context": false,
+                "fork_context": null,
                 "prompt": "Continue the previous analysis",
                 "subagent_type": ""
             }),
@@ -906,10 +959,10 @@ async fn validate_input_accepts_cancel_with_neutral_optional_placeholders() {
             &json!({
                 "action": "cancel",
                 "agent_id": "a1",
-                "fork_context": false,
+                "fork_context": null,
                 "model_id": "",
                 "prompt": "",
-                "run_in_background": false,
+                "run_in_background": null,
                 "subagent_type": ""
             }),
             None,
@@ -950,47 +1003,23 @@ async fn validate_input_rejects_fork_context_conflicting_fields() {
 }
 
 #[tokio::test]
-async fn call_impl_rejects_nested_subagent_delegation() {
+async fn call_impl_allows_nested_subagent_within_fission_depth() {
+    // R-001: spawn_child() now allows nesting up to MAX_FISSION_DEPTH=10.
+    // At depth=1 (<10), delegation is permitted.
     let policy = DelegationPolicy::top_level().spawn_child();
-    let context = ToolUseContext {
-        tool_call_id: Some("tool-call-1".to_string()),
-        agent_type: Some("agentic".to_string()),
-        session_id: Some("session-1".to_string()),
-        dialog_turn_id: Some("turn-1".to_string()),
-        workspace: None,
-        loaded_deferred_tool_specs: Vec::new(),
-        primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
-        custom_data: HashMap::from([
-            (
-                "delegation_allow_subagent_spawn".to_string(),
-                json!(policy.allow_subagent_spawn),
-            ),
-            (
-                "delegation_nesting_depth".to_string(),
-                json!(policy.nesting_depth),
-            ),
-        ]),
-        computer_use_host: None,
-        runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-        runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
-    };
+    assert!(policy.allow_subagent_spawn, "nesting at depth=1 should be allowed (1 < MAX_FISSION_DEPTH=10)");
+    assert_eq!(policy.nesting_depth, 1);
+}
 
-    let error = TaskTool::new()
-        .call_impl(
-            &json!({
-                "action": "spawn",
-                "description": "delegate",
-                "prompt": "Inspect the repo",
-                "subagent_type": "Explore"
-            }),
-            &context,
-        )
-        .await
-        .expect_err("nested subagent delegation should be rejected");
-
-    assert!(error
-        .to_string()
-        .contains("Recursive subagent delegation is blocked. Use direct tools instead."));
+#[tokio::test]
+async fn call_impl_rejects_nested_subagent_at_max_depth() {
+    // R-001: At MAX_FISSION_DEPTH, delegation is blocked.
+    let mut policy = DelegationPolicy::top_level();
+    for _ in 0..10 {
+        policy = policy.spawn_child();
+    }
+    assert!(!policy.allow_subagent_spawn, "nesting at depth=10 should be blocked (reached MAX_FISSION_DEPTH)");
+    assert_eq!(policy.nesting_depth, 10);
 }
 
 #[test]

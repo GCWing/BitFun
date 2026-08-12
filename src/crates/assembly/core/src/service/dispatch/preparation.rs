@@ -606,7 +606,16 @@ fn validate_setup_audit_event(event: &Value) -> Result<()> {
     let object = event
         .as_object()
         .ok_or_else(|| anyhow!("dispatch setup audit event must be an object"))?;
-    if object.get("action").and_then(Value::as_str) != Some("cli-install")
+    // The journal records every setup action this controller can perform. What
+    // an individual target accepts is narrower and is decided at submit time,
+    // so recovery of a journal written by a newer build cannot fail here.
+    if object
+        .get("action")
+        .and_then(Value::as_str)
+        .is_none_or(|action| {
+            !bitfun_services_core::dispatch_contract::dispatch_supported_setup_audit_actions()
+                .any(|supported| supported == action)
+        })
         || object
             .get("timestamp")
             .and_then(Value::as_str)

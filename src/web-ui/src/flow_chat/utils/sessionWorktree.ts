@@ -47,7 +47,8 @@ export interface SessionWorktreeMaterializationPlan {
 /**
  * Resolve the one transition that must run after a prompt is submitted and
  * before its backend turn starts. `undefined` means the checkbox has not
- * requested a change, or the session is already materialized as requested.
+ * requested a change, the session is already materialized as requested, or
+ * persisted work means it is too late to change the execution root.
  */
 export function sessionWorktreeMaterializationPlan(
   session: SessionWorktreeFacts,
@@ -55,6 +56,7 @@ export function sessionWorktreeMaterializationPlan(
   const requested = session.config.worktreeIsolationRequested;
   if (
     requested === undefined
+    || isSessionWorktreeBindingLocked(session, false)
     || requested === isSessionWorktreeMaterialized(session)
   ) {
     return undefined;

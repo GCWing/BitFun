@@ -7,12 +7,12 @@ import {
 } from '../../services/MarkdownParser';
 import { CARD, FILE_LINK, INK, LINE, MUTED, SOFT } from './Theme';
 
-@Component
+@ComponentV2
 export struct MarkdownContent {
   private readonly parseCache: MarkdownParseCache = new MarkdownParseCache();
-  @Prop text: string = '';
-  onCopyText: (text: string) => void = (_text: string) => {};
-  onOpenLink: (reference: string, label: string) => void = (_reference: string, _label: string) => {};
+  @Param text: string = '';
+  @Event onCopyText: (text: string) => void = (_text: string) => {};
+  @Event onOpenLink: (reference: string, label: string) => void = (_reference: string, _label: string) => {};
 
   build() {
     Column({ space: 5 }) {

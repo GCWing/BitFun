@@ -6,7 +6,6 @@
   "scripts": {
     "test": "wdio run ./config/wdio.conf.ts",
     "test:l0": "wdio run ./config/wdio.conf.ts --spec \"./specs/l0-smoke.spec.ts\"",
-    "test:l0:protocol": "wdio run ./config/wdio.conf.ts --spec \"./specs/l0-webdriver-protocol.spec.ts\"",
     "test:l0:all": "wdio run ./config/wdio.conf_l0.ts",
     "test:l0:workspace": "wdio run ./config/wdio.conf.ts --spec \"./specs/l0-open-workspace.spec.ts\"",
     "test:l0:observe": "wdio run ./config/wdio.conf.ts --spec \"./specs/l0-observe.spec.ts\"",
@@ -16,6 +15,7 @@
     "test:l0:appearance": "wdio run ./config/wdio.conf.ts --spec \"./specs/l0-appearance.spec.ts\"",
     "test:l0:i18n": "wdio run ./config/wdio.conf.ts --spec \"./specs/l0-i18n.spec.ts\"",
     "test:l0:notification": "wdio run ./config/wdio.conf.ts --spec \"./specs/l0-notification.spec.ts\"",
+    "test:l0:protocol": "wdio run ./config/wdio.conf.ts --spec \"./specs/l0-webdriver-protocol.spec.ts\"",
     "test:l1": "wdio run ./config/wdio.conf_l1.ts",
     "test:l1:chat": "wdio run ./config/wdio.conf.ts --spec \"./specs/l1-chat-input.spec.ts\"",
     "test:l1:workspace": "wdio run ./config/wdio.conf.ts --spec \"./specs/l1-workspace.spec.ts\"",

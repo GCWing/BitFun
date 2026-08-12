@@ -174,6 +174,13 @@ impl AppServerClient {
             .await
     }
 
+    pub async fn project_reasoning_catalog(
+        &self,
+        request: ProjectReasoningCatalogRequest,
+    ) -> agent_client_protocol::Result<ProjectReasoningCatalogResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
     pub async fn worktree_repository_status(
         &self,
         request: WorktreeRepositoryStatusRequest,
@@ -213,28 +220,6 @@ impl AppServerClient {
         request: ExternalSourceSnapshotRequest,
     ) -> agent_client_protocol::Result<ExternalSourceSnapshotResponse> {
         self.rpc(|cx| Ok(cx.send_request(request))).await
-    }
-
-    pub async fn external_application_snapshot_v2(
-        &self,
-        request: ExternalApplicationSnapshotRequestV2,
-    ) -> agent_client_protocol::Result<ExternalApplicationSnapshotResponseV2> {
-        self.rpc(|cx| Ok(cx.send_request(request))).await
-    }
-
-    pub async fn external_application_review_page_v2(
-        &self,
-        request: ExternalApplicationReviewPageRequest,
-    ) -> agent_client_protocol::Result<ExternalApplicationReviewPageResponseV2> {
-        self.rpc(|cx| Ok(cx.send_request(request))).await
-    }
-
-    pub async fn apply_external_application_action_v2(
-        &self,
-        request: ExternalApplicationActionRequest,
-    ) -> Result<ExternalApplicationActionResponseV2, ClientError> {
-        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
-            .await
     }
 
     pub async fn external_source_control(
@@ -810,16 +795,4 @@ pub async fn connect(
         event_tx,
         shutdown_tx: Arc::new(Mutex::new(Some(shutdown_tx))),
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn client_exposes_external_application_v2_methods() {
-        let _ = AppServerClient::external_application_snapshot_v2;
-        let _ = AppServerClient::external_application_review_page_v2;
-        let _ = AppServerClient::apply_external_application_action_v2;
-    }
 }

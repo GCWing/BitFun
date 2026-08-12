@@ -322,6 +322,7 @@ fn plugin_specifier(value: &Value) -> Option<&str> {
         .filter(|value| !value.trim().is_empty())
 }
 
+#[allow(clippy::too_many_arguments)] // walk state shared across one recursive traversal
 fn discover_plugin_files(
     layer: &HookLayer,
     directory_name: &str,

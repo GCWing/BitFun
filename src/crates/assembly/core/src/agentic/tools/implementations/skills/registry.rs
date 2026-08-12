@@ -81,6 +81,7 @@ struct RemoteSkillRootEntry {
 #[derive(Debug, Clone)]
 struct UserSkillSources {
     standard: Vec<SkillCandidate>,
+    #[cfg(feature = "file-watch")]
     cacheable: bool,
     #[cfg(feature = "file-watch")]
     watch_roots: Vec<LocalSkillWatchRoot>,
@@ -807,6 +808,7 @@ impl SkillRegistry {
     }
 
     async fn scan_user_skill_sources() -> UserSkillSources {
+        #[cfg(feature = "file-watch")]
         let mut cacheable = match ensure_builtin_skills_installed().await {
             Ok(()) => true,
             Err(error) => {
@@ -814,16 +816,26 @@ impl SkillRegistry {
                 false
             }
         };
+        #[cfg(not(feature = "file-watch"))]
+        if let Err(error) = ensure_builtin_skills_installed().await {
+            debug!("Failed to install built-in skills: {}", error);
+        }
 
         let mut standard = Vec::new();
         for entry in Self::get_user_skill_roots() {
             let mut scan = Self::scan_skills_in_dir_with_status(&entry).await;
-            cacheable &= scan.cacheable;
+            #[cfg(feature = "file-watch")]
+            {
+                cacheable &= scan.cacheable;
+            }
+            #[cfg(not(feature = "file-watch"))]
+            let _ = scan.cacheable;
             standard.append(&mut scan.candidates);
         }
 
         UserSkillSources {
             standard,
+            #[cfg(feature = "file-watch")]
             cacheable,
             #[cfg(feature = "file-watch")]
             watch_roots: Self::standard_user_skill_watch_roots(),
@@ -918,10 +930,12 @@ impl SkillRegistry {
             .iter()
             .position(|root| root.source_id == "opencode")
             .expect("OpenCode project Skill root is registered");
-        let user_anchor = has_workspace
-            .then_some(PROJECT_SKILL_ROOTS.len())
-            .unwrap_or_default()
-            .saturating_add(
+        let user_anchor = (if has_workspace {
+            PROJECT_SKILL_ROOTS.len()
+        } else {
+            0
+        })
+        .saturating_add(
                 USER_HOME_SKILL_ROOTS
                     .iter()
                     .position(|root| root.source_id == "opencode")
@@ -930,12 +944,16 @@ impl SkillRegistry {
 
         for candidate in &mut standard {
             let original_priority = candidate.priority;
-            let project_shift = (has_project && original_priority >= project_anchor)
-                .then_some(OPENCODE_CONFIGURED_PRIORITY_BAND)
-                .unwrap_or_default();
-            let user_shift = (has_user && original_priority >= user_anchor)
-                .then_some(OPENCODE_CONFIGURED_PRIORITY_BAND)
-                .unwrap_or_default();
+            let project_shift = if has_project && original_priority >= project_anchor {
+                OPENCODE_CONFIGURED_PRIORITY_BAND
+            } else {
+                0
+            };
+            let user_shift = if has_user && original_priority >= user_anchor {
+                OPENCODE_CONFIGURED_PRIORITY_BAND
+            } else {
+                0
+            };
             candidate.priority = original_priority
                 .saturating_add(project_shift)
                 .saturating_add(user_shift);
@@ -943,11 +961,11 @@ impl SkillRegistry {
         for candidate in &mut configured {
             let anchor = match candidate.info.level {
                 SkillLocation::Project => project_anchor,
-                SkillLocation::User => user_anchor.saturating_add(
-                    has_project
-                        .then_some(OPENCODE_CONFIGURED_PRIORITY_BAND)
-                        .unwrap_or_default(),
-                ),
+                SkillLocation::User => user_anchor.saturating_add(if has_project {
+                    OPENCODE_CONFIGURED_PRIORITY_BAND
+                } else {
+                    0
+                }),
             };
             candidate.priority = candidate.priority.saturating_add(anchor);
         }

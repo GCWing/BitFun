@@ -1,12 +1,13 @@
 use bitfun_harness::{HarnessCapability, HarnessInput, HarnessStepKind, HarnessWorkflow};
 use bitfun_product_capabilities::{
-    default_product_assembly_plan, default_product_capability_assembly,
-    default_product_capability_registry, default_product_harness_registry,
-    product_assembly_plan_for_profile, product_delivery_profile_entries,
-    product_harness_registry_for_profile, DeliveryProfile, ProductAssembler, ProductAssemblyError,
-    ProductAssemblyInput, ProductCapabilityBuildError, ProductCapabilityId, ProductCapabilityPack,
-    ProductCapabilityRegistry, ProductCoreDependencyMode, ProductFeatureGroup,
-    ProductRuntimeAssembly, ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
+    agent_runtime_baseline_tool_plan, default_product_assembly_plan,
+    default_product_capability_assembly, default_product_capability_registry,
+    default_product_harness_registry, product_assembly_plan_for_profile,
+    product_delivery_profile_entries, product_harness_registry_for_profile, DeliveryProfile,
+    ProductAssembler, ProductAssemblyError, ProductAssemblyInput, ProductCapabilityBuildError,
+    ProductCapabilityId, ProductCapabilityPack, ProductCapabilityRegistry,
+    ProductCoreDependencyMode, ProductFeatureGroup, ProductRuntimeAssembly,
+    ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
 };
 use bitfun_runtime_ports::{
     PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
@@ -20,6 +21,32 @@ use bitfun_runtime_services::{
 use std::sync::Arc;
 
 struct AvailablePluginRuntimeClient;
+
+#[test]
+fn agent_runtime_baseline_tool_plan_requests_only_baseline_feature_owners() {
+    let plan = agent_runtime_baseline_tool_plan();
+
+    assert_eq!(
+        plan.feature_groups()
+            .iter()
+            .map(|feature_group| feature_group.id())
+            .collect::<Vec<_>>(),
+        ["basic", "agent-control"]
+    );
+    assert_eq!(
+        plan.tool_provider_group_plan()
+            .iter()
+            .map(|provider| provider.provider_id())
+            .collect::<Vec<_>>(),
+        [
+            "core.basic",
+            "core.agent",
+            "core.canvas",
+            "core.session",
+            "core.integration",
+        ]
+    );
+}
 
 #[async_trait::async_trait]
 impl PluginRuntimeClient for AvailablePluginRuntimeClient {
@@ -490,28 +517,28 @@ fn product_assembly_plan_exposes_build_feature_groups_explicitly() {
         plan.feature_groups(),
         &[
             ProductFeatureGroup::Basic,
+            ProductFeatureGroup::ImageAnalysis,
             ProductFeatureGroup::AgentControl,
+            ProductFeatureGroup::Git,
             ProductFeatureGroup::Canvas,
             ProductFeatureGroup::BrowserWeb,
             ProductFeatureGroup::Mcp,
-            ProductFeatureGroup::Git,
             ProductFeatureGroup::MiniApp,
             ProductFeatureGroup::ComputerUse,
-            ProductFeatureGroup::ImageAnalysis,
         ]
     );
     assert_eq!(
         plan.feature_group_ids(),
         vec![
             "basic",
+            "image-analysis",
             "agent-control",
+            "git",
             "canvas",
             "browser-web",
             "mcp",
-            "git",
             "miniapp",
             "computer-use",
-            "image-analysis",
         ]
     );
 }

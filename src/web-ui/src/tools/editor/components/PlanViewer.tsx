@@ -14,6 +14,7 @@ import { fileSystemService } from '@/tools/file-system/services/FileSystemServic
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { basenamePath, dirnameAbsolutePath } from '@/shared/utils/pathUtils';
+import { resolveTodoLineage } from '@/flow_chat/utils/todoLineage';
 import './PlanViewer.scss';
 
 const log = createLogger('PlanViewer');
@@ -511,11 +512,21 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     ];
   }, [isTrailingTodoEditing, planData, trailingAddedTodos, trailingDeletedTodoKeys]);
 
+  // Dependency lineage for tree rendering (flat fallback when a cycle exists).
+  const inlineTodoLineage = useMemo(
+    () => resolveTodoLineage(displayedInlineTodos),
+    [displayedInlineTodos],
+  );
+  const trailingTodoLineage = useMemo(
+    () => resolveTodoLineage(displayedTrailingTodos),
+    [displayedTrailingTodos],
+  );
+
   const renderSharedTodoPanel = useCallback((placement: 'inline' | 'trailing') => {
     const isInline = placement === 'inline';
     const isYamlEditingInPanel = yamlEditorPlacement === placement;
     const isPanelEditing = isInline ? isInlineTodoEditing : isTrailingTodoEditing;
-    const panelTodos = isInline ? displayedInlineTodos : displayedTrailingTodos;
+    const lineage = isInline ? inlineTodoLineage : trailingTodoLineage;
     const panelDrafts = isInline ? inlineTodoDrafts : trailingTodoDrafts;
     const startEdit = isInline ? startInlineTodoEdit : startTrailingTodoEdit;
     const cancelEdit = isInline ? cancelInlineTodoEdit : cancelTrailingTodoEdit;
@@ -620,10 +631,11 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
           </div>
         ) : (
           <div className="todos-list" data-bf-component="plan-viewer" data-bf-part="todos">
-            {panelTodos.map((todo, index) => (
+            {lineage.items.map(({ todo, depth }, index) => (
               <div
                 key={todo.id || index}
                 className={`todo-item status-${todo.status || 'pending'}`}
+                style={depth > 0 ? { paddingLeft: 12 + depth * 16 } : undefined}
                 data-bf-component="plan-viewer"
                 data-bf-part="todo"
               >
@@ -665,14 +677,13 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     cancelInlineTodoEdit,
     cancelTrailingTodoEdit,
     closeYamlEditor,
-    displayedInlineTodos,
-    displayedTrailingTodos,
     handleAddInlineTodo,
     handleAddTrailingTodo,
     handleDeleteInlineTodo,
     handleDeleteTrailingTodo,
     handleSave,
     handleYamlChange,
+    inlineTodoLineage,
     isInlineTodoEditing,
     isEditingYaml,
     isTodosExpanded,
@@ -685,6 +696,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     t,
     inlineTodoDrafts,
     trailingTodoDrafts,
+    trailingTodoLineage,
     yamlContent,
     yamlEditorPlacement,
   ]);
@@ -698,11 +710,12 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       const todoIds = planData.todos.map(t => t.id);
       planBuildStateService.startBuild(filePath, todoIds);
 
-      // Process todos, keep only id, content, and status
+      // Process todos, keep id, content, status, and dependencies
       const simpleTodos = planData.todos.map(t => ({
         id: t.id,
         content: t.content,
         status: t.status,
+        dependencies: t.dependencies,
       }));
 
       const message = `Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself. To-do's from the plan have already been created. Do not create them again. Mark them as in_progress as you work, starting with the first one. Don't stop until you have completed all the to-dos.

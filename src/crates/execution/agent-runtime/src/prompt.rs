@@ -251,6 +251,64 @@ pub fn render_runtime_context_reminder(facts: &RuntimeContextFacts) -> Option<St
     Some(lines.join("\n"))
 }
 
+/// Numeric runtime facts supplied by the execution engine each turn.
+///
+/// `context_usage_ratio` is `total_tokens / context_window` from the engine's
+/// token pressure snapshot; `compression_preview_ratio` is the dynamic
+/// compression trigger point `input_limit / context_window` (context_window -
+/// output reserve - safety reserve), never a hard-coded 75%. Both are `None`
+/// when the calling chain cannot provide a pressure snapshot.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct RuntimeFactsUsage {
+    pub context_usage_ratio: Option<f32>,
+    pub compression_preview_ratio: Option<f32>,
+}
+
+/// Fully formatted runtime facts for prompt injection. Time strings are
+/// formatted by the caller with `chrono::Local`, matching the GetTime tool
+/// shape (RFC3339 seconds precision, `%A` weekday, `%:z` offset).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeFactsInput {
+    pub local_time_rfc3339: String,
+    pub utc_time_rfc3339: String,
+    pub weekday_name: String,
+    pub weekday_number: u32,
+    pub local_hhmm: String,
+    pub timezone_offset: String,
+    pub context_usage_ratio: Option<f32>,
+    pub compression_preview_ratio: Option<f32>,
+}
+
+/// Render the per-turn runtime facts reminder: current time facts + live
+/// context usage percentage. Owner ruling (P-02): keep only the bare number
+/// next to the real-time clock; the 30% warning, compression preview, and
+/// peak/off-peak pricing guidance are removed (they wasted tokens and backfired).
+pub fn render_runtime_facts_reminder(facts: &RuntimeFactsInput) -> String {
+    let mut lines = vec![
+        "[Runtime Facts]".to_string(),
+        format!(
+            "- 当前本地时间: {}（周{} {}）",
+            facts.local_time_rfc3339, facts.weekday_number, facts.weekday_name
+        ),
+        format!("- UTC 时间: {}", facts.utc_time_rfc3339),
+        format!("- 时区偏移: {}", facts.timezone_offset),
+    ];
+
+    // 用户裁决（P-02）：上下文占比只保留纯数字，与实时时间并列即可；
+    // 删除 30% 提醒/压缩预览/峰谷定价长句（"加那多戏还浪费 token，起反效果"）。
+    if let Some(usage_ratio) = facts.context_usage_ratio {
+        let percent = usage_percent(usage_ratio);
+        lines.push(format!("- 当前上下文占比: {}%", percent));
+    }
+
+    lines.join("\n")
+}
+
+/// 0-100 integer percentage, rounded; clamped at 100 defensively.
+fn usage_percent(usage_ratio: f32) -> u32 {
+    ((usage_ratio * 100.0).round() as u32).min(100)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptRelatedPath {
     pub path: String,
@@ -670,11 +728,22 @@ pub struct PrependedPromptReminders {
     pub skill_listing: Option<String>,
     pub agent_listing: Option<String>,
     pub runtime_context: Option<String>,
+    pub runtime_facts: Option<String>,
     pub user_context: Option<String>,
 }
 
 impl PrependedPromptReminders {
     pub fn ordered_reminders(&self) -> Vec<&str> {
+        let mut reminders = self.static_ordered_reminders();
+        reminders.extend(self.dynamic_ordered_reminders());
+        reminders
+    }
+
+    /// Static reminders that stay stable across rounds within a turn:
+    /// deferred tool listing, skill listing, agent listing, runtime context.
+    /// These keep the provider-side prompt/prefix cache stable when injected
+    /// right after the system message (before the conversation history).
+    pub fn static_ordered_reminders(&self) -> Vec<&str> {
         let mut reminders = Vec::new();
         if let Some(deferred_tool_listing) = self.deferred_tool_listing.as_deref() {
             reminders.push(deferred_tool_listing);
@@ -687,6 +756,19 @@ impl PrependedPromptReminders {
         }
         if let Some(runtime_context) = self.runtime_context.as_deref() {
             reminders.push(runtime_context);
+        }
+        reminders
+    }
+
+    /// Per-round dynamic reminders: runtime facts (live time + context usage
+    /// ratio, refreshed every round) and user context. These must be appended
+    /// at the end of the message sequence (after the newest user message) so
+    /// they never break the stable cache prefix built from the system message,
+    /// static reminders and the full conversation history.
+    pub fn dynamic_ordered_reminders(&self) -> Vec<&str> {
+        let mut reminders = Vec::new();
+        if let Some(runtime_facts) = self.runtime_facts.as_deref() {
+            reminders.push(runtime_facts);
         }
         if let Some(user_context) = self.user_context.as_deref() {
             reminders.push(user_context);

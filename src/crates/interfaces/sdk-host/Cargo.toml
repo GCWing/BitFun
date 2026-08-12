@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-sdk-host"
 version.workspace = true
 authors.workspace = true

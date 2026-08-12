@@ -10,7 +10,8 @@ import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer'
 import { ThumbnailCard } from './ThumbnailCard';
 import { SearchFilter } from './SearchFilter';
 import { useCanvasStore } from '../stores';
-import type { EditorGroupId } from '../types';
+import { EDITOR_GROUP_IDS } from '../types';
+import type { CanvasTab, EditorGroupId } from '../types';
 import './MissionControl.scss';
 
 export interface MissionControlProps {
@@ -30,12 +31,25 @@ export const MissionControl: React.FC<MissionControlProps> = ({
   const { t } = useTranslation('components');
   const rootRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGroups, setSelectedGroups] = useState<Set<EditorGroupId>>(new Set(['primary', 'secondary', 'tertiary']));
+  const [selectedGroups, setSelectedGroups] = useState<Set<EditorGroupId>>(new Set(EDITOR_GROUP_IDS));
   const [, setDraggingTabId] = useState<string | null>(null);
   // Fine-grained selectors so unrelated store changes do not re-render.
   const primaryGroup = useCanvasStore(state => state.primaryGroup);
   const secondaryGroup = useCanvasStore(state => state.secondaryGroup);
   const tertiaryGroup = useCanvasStore(state => state.tertiaryGroup);
+  const slot4Group = useCanvasStore(state => state.slot4Group);
+  const slot5Group = useCanvasStore(state => state.slot5Group);
+  const slot6Group = useCanvasStore(state => state.slot6Group);
+  const slot7Group = useCanvasStore(state => state.slot7Group);
+  const slot8Group = useCanvasStore(state => state.slot8Group);
+  const slot9Group = useCanvasStore(state => state.slot9Group);
+  const slot10Group = useCanvasStore(state => state.slot10Group);
+  const slot11Group = useCanvasStore(state => state.slot11Group);
+  const slot12Group = useCanvasStore(state => state.slot12Group);
+  const slot13Group = useCanvasStore(state => state.slot13Group);
+  const slot14Group = useCanvasStore(state => state.slot14Group);
+  const slot15Group = useCanvasStore(state => state.slot15Group);
+  const slot16Group = useCanvasStore(state => state.slot16Group);
   const activeGroupId = useCanvasStore(state => state.activeGroupId);
   const layout = useCanvasStore(state => state.layout);
   const switchToTab = useCanvasStore(state => state.switchToTab);
@@ -49,25 +63,52 @@ export const MissionControl: React.FC<MissionControlProps> = ({
     id: 'canvas-mission-control',
   });
 
+  const groupsById = useMemo(() => ({
+    primary: primaryGroup,
+    secondary: secondaryGroup,
+    tertiary: tertiaryGroup,
+    slot4: slot4Group,
+    slot5: slot5Group,
+    slot6: slot6Group,
+    slot7: slot7Group,
+    slot8: slot8Group,
+    slot9: slot9Group,
+    slot10: slot10Group,
+    slot11: slot11Group,
+    slot12: slot12Group,
+    slot13: slot13Group,
+    slot14: slot14Group,
+    slot15: slot15Group,
+    slot16: slot16Group,
+  } as const), [
+    primaryGroup,
+    secondaryGroup,
+    tertiaryGroup,
+    slot4Group,
+    slot5Group,
+    slot6Group,
+    slot7Group,
+    slot8Group,
+    slot9Group,
+    slot10Group,
+    slot11Group,
+    slot12Group,
+    slot13Group,
+    slot14Group,
+    slot15Group,
+    slot16Group,
+  ]);
+
   // Organize tabs by group
   const organizedTabs = useMemo(() => {
-    const primary = primaryGroup.tabs
-      .filter(t => !t.isHidden)
-      .map(t => ({ tab: t, groupId: 'primary' as EditorGroupId }));
-    const secondary = secondaryGroup.tabs
-      .filter(t => !t.isHidden)
-      .map(t => ({ tab: t, groupId: 'secondary' as EditorGroupId }));
-    const tertiary = tertiaryGroup.tabs
-      .filter(t => !t.isHidden)
-      .map(t => ({ tab: t, groupId: 'tertiary' as EditorGroupId }));
-
-    return {
-      primary,
-      secondary,
-      tertiary,
-      all: [...primary, ...secondary, ...tertiary],
-    };
-  }, [primaryGroup.tabs, secondaryGroup.tabs, tertiaryGroup.tabs]);
+    const entries = EDITOR_GROUP_IDS.map((id) => ({
+      groupId: id,
+      tabs: groupsById[id].tabs.filter(t => !t.isHidden).map(tab => ({ tab, groupId: id as EditorGroupId })),
+    }));
+    const all = entries.flatMap(e => e.tabs);
+    const byId = Object.fromEntries(entries.map(e => [e.groupId, e.tabs])) as Record<EditorGroupId, { tab: CanvasTab; groupId: EditorGroupId }[]>;
+    return { ...byId, all } as Record<EditorGroupId, { tab: CanvasTab; groupId: EditorGroupId }[]> & { all: { tab: CanvasTab; groupId: EditorGroupId }[] };
+  }, [groupsById]);
 
   // Aggregate all tabs (for search and stats)
   const allTabs = organizedTabs.all;
@@ -77,7 +118,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
     let result = allTabs;
     
     // Filter by group first
-    if (selectedGroups.size < 3) {
+    if (selectedGroups.size < EDITOR_GROUP_IDS.length) {
       result = result.filter(({ groupId }) => selectedGroups.has(groupId));
     }
     
@@ -98,13 +139,8 @@ export const MissionControl: React.FC<MissionControlProps> = ({
 
   // Active tab ID
   const activeTabId = useMemo(() => {
-    const group = activeGroupId === 'primary' 
-      ? primaryGroup 
-      : activeGroupId === 'secondary' 
-        ? secondaryGroup 
-        : tertiaryGroup;
-    return group.activeTabId;
-  }, [activeGroupId, primaryGroup, secondaryGroup, tertiaryGroup]);
+    return groupsById[activeGroupId].activeTabId;
+  }, [activeGroupId, groupsById]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -152,7 +188,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery('');
-      setSelectedGroups(new Set(['primary', 'secondary', 'tertiary']));
+      setSelectedGroups(new Set(EDITOR_GROUP_IDS));
     }
   }, [isOpen]);
 
@@ -173,6 +209,12 @@ export const MissionControl: React.FC<MissionControlProps> = ({
   const hasMultipleGroups = useMemo(() => {
     return layout.splitMode !== 'none';
   }, [layout.splitMode]);
+
+  /** Short slot label: 1..9 in row-major order. */
+  const slotLabel = useCallback((id: EditorGroupId): string => {
+    const idx = EDITOR_GROUP_IDS.indexOf(id);
+    return String(idx + 1);
+  }, []);
 
   // Merge all groups into primary
   const handleMergeAll = useCallback(() => {
@@ -231,12 +273,9 @@ export const MissionControl: React.FC<MissionControlProps> = ({
             {/* Group filters - compact icon buttons */}
             {hasMultipleGroups && (
               <div data-bf-component="mission-control" data-bf-part="groupFilters" className="canvas-mission-control__group-filters">
-                {[
-                  { id: 'primary' as EditorGroupId, labelKey: 'canvas.groupPrimaryFull', shortLabelKey: 'canvas.groupPrimary' },
-                  { id: 'secondary' as EditorGroupId, labelKey: 'canvas.groupSecondaryFull', shortLabelKey: 'canvas.groupSecondary' },
-                  { id: 'tertiary' as EditorGroupId, labelKey: 'canvas.groupTertiaryFull', shortLabelKey: 'canvas.groupTertiary' },
-                ].map(({ id, labelKey, shortLabelKey }) => {
-                  const hasTabs = organizedTabs[id as keyof typeof organizedTabs].length > 0;
+                {EDITOR_GROUP_IDS.map((id) => {
+                  const group = groupsById[id];
+                  const hasTabs = group.tabs.filter(t => !t.isHidden).length > 0;
                   if (!hasTabs) return null;
                   
                   return (
@@ -244,10 +283,10 @@ export const MissionControl: React.FC<MissionControlProps> = ({
                       key={id}
                       className={`canvas-mission-control__group-filter canvas-mission-control__group-filter--${id} ${selectedGroups.has(id) ? 'is-active' : ''}`}
                       onClick={() => toggleGroupFilter(id)}
-                      title={t(labelKey)}
+                      title={t('canvas.groupSlot', { slot: slotLabel(id) })}
                     >
                       <span className="canvas-mission-control__group-filter-indicator" />
-                      <span className="canvas-mission-control__group-filter-text">{t(shortLabelKey)}</span>
+                      <span className="canvas-mission-control__group-filter-text">{slotLabel(id)}</span>
                     </button>
                   );
                 })}
@@ -274,7 +313,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
             ))
           ) : (
             <div data-bf-component="mission-control" data-bf-part="empty" className="canvas-mission-control__empty">
-              {searchQuery || selectedGroups.size < 3 ? (
+              {searchQuery || selectedGroups.size < EDITOR_GROUP_IDS.length ? (
                 <span>{t('canvas.noMatchingFiles')}</span>
               ) : (
                 <span>{t('canvas.noOpenFiles')}</span>

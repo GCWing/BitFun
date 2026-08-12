@@ -9,5 +9,6 @@ export const agentsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'coreGrid' },
     { id: 'filters' },
     { id: 'detailSection' },
+    { id: 'legionsGrid' },
   ],
 };

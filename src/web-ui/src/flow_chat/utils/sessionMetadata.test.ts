@@ -32,7 +32,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
     lastActiveAt: 1000,
     error: null,
     todos: [],
-    maxContextTokens: 128128,
+    maxContextTokens: 1048576,
     mode: 'agentic',
     workspacePath: '/workspace',
     parentSessionId: undefined,

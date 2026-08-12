@@ -6,7 +6,7 @@ impl TaskTool {
         bg_task_id: &str,
     ) -> String {
         format!(
-            "Background subagent started successfully.\nagent_id: \"{}\"\nbg_task_id: \"{}\"\nUse AgentWait with this bg_task_id when you need its result. The result will not be delivered automatically.",
+            "Background subagent started successfully.\nagent_id: \"{}\"\nbg_task_id: \"{}\"\nA completion notice will be delivered back to this session automatically when the subagent finishes; use SessionHistory on the subagent session to view the full reply. Use AgentWait with this bg_task_id if you need to block for the result in-band.",
             agent_id, bg_task_id
         )
     }

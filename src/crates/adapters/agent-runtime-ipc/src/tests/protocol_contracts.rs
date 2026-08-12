@@ -19,6 +19,11 @@ use bitfun_runtime_ports::{
 use serde_json::{json, Map};
 
 #[test]
+fn shared_runtime_protocol_stays_at_version_17() {
+    assert_eq!(PROTOCOL_VERSION, 17);
+}
+
+#[test]
 fn protocol_rejects_unknown_fields_and_operations() {
     let unknown_field =
         r#"{"type":"request","request_id":1,"operation":{"operation":"health"},"metadata":{}}"#
@@ -137,6 +142,7 @@ fn protocol_round_trips_exact_turn_steering_without_replacing_turn_admission() {
             turn_id: "turn-1".to_string(),
             content: "check tests".to_string(),
             display_content: Some("Check tests".to_string()),
+            prepended_reminders: Vec::new(),
         },
     };
     let result = RuntimeIpcOperationResult::TurnSteered {

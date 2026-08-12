@@ -54,6 +54,26 @@ Cargo 会统一同一 package 在依赖图中的 feature；workspace dependency 
 
 入口应选择真实需要的 owner feature；`product-full` 只能描述确实需要完整产品装配的兼容入口，不能作为尚未完成 feature/owner 分解时的占位解法。缩小某个产品的 capability 集合时必须从实际 construction/command path 反推，并保留行为等价或明确 unsupported-state 测试。
 
+Core 的 `agent-runtime` 只承载 Agent 生命周期基线和明确的基线工具，不得再次把 MCP、Remote Connect、模型目录、Browser/Web、Git/LSP 或产品工具组藏成 capability union。具体 service 由同名 owner feature 选择，内置工具由 `tools-*` 选择；`product-full` 显式相加全部 owner，CLI/ACP 等窄入口则按真实命令与构造路径列出自己的闭包。
+
+Owner feature 不等于“无前置依赖”。当实现确实调用较低层基线时，依赖必须按 `owner → baseline` 显式组合，禁止反向把 owner 藏回基线：例如 Core MCP 工具桥和 Remote Connect 依赖 Agent 生命周期，Workspace Search 依赖本地 Workspace Runtime。每个新增或调整后的 owner 闭包都必须单独 `cargo check`，避免被 Desktop/CLI 的 feature union 偶然补齐。
+
+只为已经启用的 optional dependency 增加子能力时，使用 Cargo 的弱依赖转发
+`dependency?/feature`，并把 modifier 与 runtime owner 分开命名和看护。modifier 单独启用不得激活
+runtime dependency；真实产品入口必须同时显式选择 owner 与 modifier。不要为了复用一个子 feature
+把完整 adapter、service 或 tool runtime 拉回窄闭包。
+
+Function Agent 的 Git/AI 适配由 `function-agents` 选择，MiniApp 的 domain/runtime/market
+闭包由 `tools-miniapp` 选择；不得再通过一个通用 `product-domains` Core feature 把两者、
+Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品装配计划若声明了当前
+二进制未编译的工具组，必须在 registry materialization 前明确失败，不能静默删掉该组。
+
+工具 provider group 只维护稳定分组与注册顺序，不等于 Cargo feature owner。每个内置工具
+必须映射到唯一 `ToolPackFeatureGroup`；Product Assembly 通过 `ProductToolPlan` 明确选择本次
+交付需要的 owner，Core materializer 只物化这些 owner 的工具，并对“计划已选择但二进制未
+编译”的 owner 返回类型化错误。`agent-runtime` 基线计划只选择 `Basic` 与 `AgentControl`；
+它不是隐式 Delivery Profile，也不得从当前二进制已编译的 feature union 反推产品能力。
+
 ### 3.3 Workspace dependency 只提供共同底座
 
 - workspace 声明负责版本和真正跨产品共享的最小 feature；
@@ -62,11 +82,11 @@ Cargo 会统一同一 package 在依赖图中的 feature；workspace dependency 
 - target-specific dependency 放在最接近平台实现的 owner，不因单一平台需求污染跨平台 crate；
 - 修改共享 dependency feature 视为构建影响变更，必须检查真实产品组合的 feature graph。
 
-### 3.4 Reqwest TLS 后端由客户端 owner 选择
+### 3.4 Reqwest 能力由客户端 owner 选择
 
-- workspace 级 `reqwest` 只统一版本以及跨产品共享的 HTTP、序列化和流能力，不启用 TLS 后端；
-- 真正创建 HTTPS client 的 app、service 或 adapter 必须在自身依赖声明中显式选择 `reqwest/rustls`，只使用 `reqwest::Url` 的 contract/assembly 路径不加载 TLS；
-- capability crate 的每个 Reqwest owner feature 必须独立带齐 `reqwest/rustls`，不能依赖 `product-full` 或其他 feature 的 Cargo feature-union 偶然补齐；
+- workspace 级 `reqwest` 只统一版本并关闭默认 feature，不替任何客户端选择 HTTP/2、序列化、表单、流、代理或 TLS 能力；
+- 真正创建 client 的 app、service 或 adapter 必须在自身依赖声明中显式选择实际使用的 Reqwest feature 和 `reqwest/rustls`；只使用 `reqwest::Url` 的 contract/assembly 路径不加载传输能力；
+- capability crate 的每个 Reqwest owner feature 必须独立带齐自己的数据/传输 feature 与 `reqwest/rustls`，不能依赖 `product-full` 或其他 feature 的 Cargo feature-union 偶然补齐；
 - 边界检查以 Cargo metadata 的解码结果看护全部直接 consumer，并检查 resolved Reqwest feature union，防止传递依赖重新激活 Native TLS；
 - 不并列启用 native-tls 兼容栈。只有真实产品场景无法由 Rustls 平台证书验证承载时，才以明确行为证据评审替换方案，而不是重新叠加第二后端。
 

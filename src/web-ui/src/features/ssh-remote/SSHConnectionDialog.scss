@@ -503,3 +503,8 @@
 .ssh-connection-dialog__modal-overlay {
   z-index: 20000;
 }
+
+/** Portalled Select menus must remain above the dialog's raised overlay. */
+.select__dropdown.ssh-connection-dialog__select-dropdown {
+  z-index: 20001;
+}

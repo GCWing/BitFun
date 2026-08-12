@@ -147,26 +147,24 @@ pub(super) fn explicit_bash_mutation_targets(command: &str) -> Vec<ShellMutation
                     push_bash_target(&mut targets, argument, ShellMutationOperation::Delete);
                 }
             }
-            "sed" | "perl" => {
-                if arguments.iter().any(|argument| in_place_flag(argument)) {
-                    let mut script_seen = false;
-                    for argument in arguments
-                        .iter()
-                        .filter(|argument| !argument.starts_with('-'))
+            "sed" | "perl" if arguments.iter().any(|argument| in_place_flag(argument)) => {
+                let mut script_seen = false;
+                for argument in arguments
+                    .iter()
+                    .filter(|argument| !argument.starts_with('-'))
+                {
+                    if !script_seen {
+                        script_seen = true;
+                        continue;
+                    }
+                    if argument.starts_with('/')
+                        || argument.starts_with("./")
+                        || argument.starts_with("../")
+                        || argument.contains('.')
+                        || argument.starts_with("test/")
+                        || argument.starts_with("tests/")
                     {
-                        if !script_seen {
-                            script_seen = true;
-                            continue;
-                        }
-                        if argument.starts_with('/')
-                            || argument.starts_with("./")
-                            || argument.starts_with("../")
-                            || argument.contains('.')
-                            || argument.starts_with("test/")
-                            || argument.starts_with("tests/")
-                        {
-                            push_bash_target(&mut targets, argument, ShellMutationOperation::Write);
-                        }
+                        push_bash_target(&mut targets, argument, ShellMutationOperation::Write);
                     }
                 }
             }

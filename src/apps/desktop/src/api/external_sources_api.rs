@@ -1,13 +1,10 @@
 //! Desktop host API for ecosystem-neutral external AI application sources.
 
 use bitfun_core::external_sources::{
-    acknowledge_external_ecosystems,
-    apply_external_application_action_v2 as core_apply_external_application_action_v2,
-    apply_external_source_control_action, choose_external_mcp_conflict,
-    choose_external_subagent_conflict, expand_external_prompt_command,
-    external_source_location_for_host_action, external_source_snapshot,
-    get_external_application_review_page_v2 as core_get_external_application_review_page_v2,
-    get_external_application_snapshot_v2 as core_get_external_application_snapshot_v2,
+    acknowledge_external_ecosystems, apply_external_source_control_action,
+    choose_external_mcp_conflict, choose_external_subagent_conflict,
+    expand_external_prompt_command, external_source_location_for_host_action,
+    external_source_snapshot,
     get_external_source_control_snapshot as core_get_external_source_control_snapshot,
     native_prompt_command_conflicts, set_external_mcp_server_decision,
     set_external_prompt_command_conflict_choice, set_external_source_enabled,
@@ -27,11 +24,6 @@ use bitfun_core::service::remote_ssh::workspace_state::{
     canonicalize_local_workspace_root, local_workspace_roots_equal,
 };
 use bitfun_core::service::workspace::manager::WorkspaceKind;
-use bitfun_product_domains::external_source_control::{
-    ExternalApplicationControlRequestV2, ExternalApplicationControlResultV2,
-    ExternalApplicationHostCapabilitiesV2, ExternalApplicationReviewPageRequestV2,
-    ExternalApplicationReviewPageV2, ExternalApplicationSnapshotV2,
-};
 use bitfun_product_domains::external_sources::{
     ExternalMcpImportApplyRequestV1, ExternalMcpImportApplyResultV1, ExternalMcpImportPlanV1,
 };
@@ -48,28 +40,6 @@ pub struct ExternalSourceSnapshotRequest {
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub force_refresh: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExternalApplicationSnapshotCommandRequest {
-    pub workspace_path: Option<String>,
-    #[serde(default)]
-    pub force_refresh: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExternalApplicationReviewPageCommandRequest {
-    pub workspace_path: Option<String>,
-    pub request: ExternalApplicationReviewPageRequestV2,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExternalApplicationActionCommandRequest {
-    pub workspace_path: Option<String>,
-    pub request: ExternalApplicationControlRequestV2,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -263,9 +233,6 @@ pub struct ApplyExternalMcpImportRequest {
 }
 
 pub type ExternalSourceSnapshotResponse = ExternalSourcePublicSnapshot;
-pub type ExternalApplicationSnapshotResponseV2 = ExternalApplicationSnapshotV2;
-pub type ExternalApplicationReviewPageResponseV2 = ExternalApplicationReviewPageV2;
-pub type ExternalApplicationActionResponseV2 = ExternalApplicationControlResultV2;
 pub type ExternalSourceControlResponse = ExternalSourceSurfaceSnapshotV1;
 pub type ExpandExternalPromptCommandResponse = PromptCommandInvocationOutcome;
 pub type NativePromptCommandConflictsResponse = NativePromptCommandConflictSnapshot;
@@ -314,44 +281,6 @@ pub(super) async fn require_local_workspace(
     Ok(Some(path))
 }
 
-fn ensure_application_v2_workspace_binding(
-    requested_workspace: Option<&Path>,
-    current_workspace: Option<&Path>,
-) -> ExternalSourceOperationResult<()> {
-    let Some(requested_workspace) = requested_workspace else {
-        return Ok(());
-    };
-    let Some(current_workspace) = current_workspace else {
-        return Err(ExternalSourceOperationError::invalid_request(
-            "External application workspace scope requires an active workspace",
-        ));
-    };
-    if !local_workspace_roots_equal(requested_workspace, current_workspace) {
-        return Err(ExternalSourceOperationError::invalid_request(
-            "External application workspace scope does not match the active workspace",
-        ));
-    }
-    Ok(())
-}
-
-async fn require_application_v2_workspace<'a>(
-    state: &State<'_, AppState>,
-    workspace_path: Option<&'a str>,
-) -> ExternalSourceOperationResult<Option<&'a Path>> {
-    let workspace = require_local_workspace(workspace_path).await?;
-    if workspace.is_none() {
-        return Ok(None);
-    }
-    let current_workspace = state.workspace_service.get_current_workspace().await;
-    ensure_application_v2_workspace_binding(
-        workspace,
-        current_workspace
-            .as_ref()
-            .map(|workspace| workspace.root_path.as_path()),
-    )?;
-    Ok(workspace)
-}
-
 #[tauri::command]
 pub async fn update_external_integration_policy_command(
     request: UpdateExternalIntegrationPolicyRequest,
@@ -371,54 +300,6 @@ pub async fn get_external_source_snapshot(
     external_source_snapshot(workspace, request.force_refresh)
         .await
         .map(|snapshot| ExternalSourcePublicSnapshot::from(snapshot).into_legacy_v0_compatible())
-        .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
-}
-
-#[tauri::command]
-pub async fn get_external_application_snapshot_v2(
-    state: State<'_, AppState>,
-    request: ExternalApplicationSnapshotCommandRequest,
-) -> ExternalSourceOperationResult<ExternalApplicationSnapshotResponseV2> {
-    let workspace =
-        require_application_v2_workspace(&state, request.workspace_path.as_deref()).await?;
-    core_get_external_application_snapshot_v2(
-        workspace,
-        request.force_refresh,
-        ExternalApplicationHostCapabilitiesV2::read_write(),
-    )
-    .await
-    .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
-}
-
-#[tauri::command]
-pub async fn get_external_application_review_page_v2(
-    state: State<'_, AppState>,
-    request: ExternalApplicationReviewPageCommandRequest,
-) -> ExternalSourceOperationResult<ExternalApplicationReviewPageResponseV2> {
-    request
-        .request
-        .validate()
-        .map_err(ExternalSourceOperationError::invalid_request)?;
-    let workspace =
-        require_application_v2_workspace(&state, request.workspace_path.as_deref()).await?;
-    core_get_external_application_review_page_v2(workspace, request.request)
-        .await
-        .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
-}
-
-#[tauri::command]
-pub async fn apply_external_application_action_v2(
-    state: State<'_, AppState>,
-    request: ExternalApplicationActionCommandRequest,
-) -> ExternalSourceOperationResult<ExternalApplicationActionResponseV2> {
-    request
-        .request
-        .validate()
-        .map_err(ExternalSourceOperationError::invalid_request)?;
-    let workspace =
-        require_application_v2_workspace(&state, request.workspace_path.as_deref()).await?;
-    core_apply_external_application_action_v2(workspace, request.request)
-        .await
         .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
 }
 
@@ -826,37 +707,6 @@ mod tests {
     }
 
     #[test]
-    fn desktop_application_v2_workspace_binding_accepts_only_the_current_workspace() {
-        let directory = tempfile::tempdir().unwrap();
-        let current_root = directory.path().join("current");
-        let unrelated_root = directory.path().join("unrelated");
-        for path in [&current_root, &unrelated_root] {
-            std::fs::create_dir_all(path).unwrap();
-        }
-
-        assert!(ensure_application_v2_workspace_binding(None, Some(&current_root)).is_ok());
-        assert!(
-            ensure_application_v2_workspace_binding(Some(&current_root), Some(&current_root))
-                .is_ok()
-        );
-
-        let unrelated =
-            ensure_application_v2_workspace_binding(Some(&unrelated_root), Some(&current_root))
-                .unwrap_err();
-        assert_eq!(
-            unrelated.code,
-            ExternalSourceOperationErrorCode::InvalidRequest
-        );
-
-        let missing_current =
-            ensure_application_v2_workspace_binding(Some(&current_root), None).unwrap_err();
-        assert_eq!(
-            missing_current.code,
-            ExternalSourceOperationErrorCode::InvalidRequest
-        );
-    }
-
-    #[test]
     fn desktop_snapshot_never_serializes_prompt_templates() {
         let snapshot: ExternalSourceCatalogSnapshot = serde_json::from_value(serde_json::json!({
             "generation": 1,
@@ -1025,53 +875,5 @@ mod tests {
             }))
             .is_err()
         );
-    }
-
-    #[test]
-    fn desktop_application_v2_requests_wrap_only_host_scope_and_typed_domain_input() {
-        let snapshot: ExternalApplicationSnapshotCommandRequest =
-            serde_json::from_value(serde_json::json!({
-                "workspacePath": null,
-                "forceRefresh": true
-            }))
-            .unwrap();
-        assert!(snapshot.workspace_path.is_none());
-        assert!(snapshot.force_refresh);
-
-        let page: ExternalApplicationReviewPageCommandRequest =
-            serde_json::from_value(serde_json::json!({
-                "workspacePath": "D:/workspace/project",
-                "request": {
-                    "schemaVersion": 2,
-                    "executionDomainId": "host-a",
-                    "workspaceScopeId": "workspace-a",
-                    "targetScope": "workspace_override",
-                    "reviewId": "review-a",
-                    "preferenceRevision": 2,
-                    "expectedGenerations": [],
-                    "pageSize": 32
-                }
-            }))
-            .unwrap();
-        assert_eq!(page.request.page_size, 32);
-
-        let action: ExternalApplicationActionCommandRequest =
-            serde_json::from_value(serde_json::json!({
-                "workspacePath": "D:/workspace/project",
-                "request": {
-                    "schemaVersion": 2,
-                    "executionDomainId": "host-a",
-                    "workspaceScopeId": "workspace-a",
-                    "targetScope": "workspace_override",
-                    "operationId": "operation-a",
-                    "expectedPreferenceRevision": 2,
-                    "action": {
-                        "type": "set_application_deferred",
-                        "applicationId": "codex"
-                    }
-                }
-            }))
-            .unwrap();
-        assert_eq!(action.request.operation_id, "operation-a");
     }
 }

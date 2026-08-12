@@ -1,6 +1,6 @@
 //! Agentic API
 
-use log::{debug, warn};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use std::path::{Path, PathBuf};
@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tauri::{AppHandle, State};
 
+use crate::api::acp_client_api::StartAcpDialogTurnRequest;
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use crate::runtime::{
@@ -1623,7 +1624,7 @@ pub async fn create_session(
     let config = request
         .config
         .map(|c| SessionConfig {
-            max_context_tokens: c.max_context_tokens.unwrap_or(128128),
+            max_context_tokens: c.max_context_tokens.unwrap_or(1_048_576),
             auto_compact: c.auto_compact.unwrap_or(true),
             enable_tools: c.enable_tools.unwrap_or(true),
             safe_mode: c.safe_mode.unwrap_or(true),
@@ -2007,10 +2008,38 @@ pub async fn ensure_coordinator_session(
 
 #[tauri::command]
 pub async fn start_dialog_turn(
-    _app: AppHandle,
+    app: AppHandle,
+    app_state: State<'_, AppState>,
     runtime: State<'_, DesktopRuntimeContext>,
     request: StartDialogTurnRequest,
 ) -> Result<StartDialogTurnResponse, String> {
+    // ACP bridge sessions (`acp__<client>`) stream through the external ACP
+    // client process instead of the internal executor. This branch must run
+    // before `desktop_dialog_turn_request` consumes `request`.
+    if let Some(client_id) = request.agent_type.trim().strip_prefix("acp__") {
+        let acp_request = StartAcpDialogTurnRequest {
+            session_id: request.session_id,
+            client_id: client_id.to_string(),
+            user_input: request.user_input,
+            original_user_input: request.original_user_input,
+            turn_id: request.turn_id.unwrap_or_default(),
+            workspace_path: request.project_workspace_path.or(request.workspace_path),
+            remote_connection_id: request.remote_connection_id,
+            remote_ssh_host: request.remote_ssh_host,
+            timeout_seconds: None,
+            // L2-P2-1：ACP 分支同样透传图片上下文与用户消息元数据，避免
+            // start_dialog_turn（agentic 路径）带图消息在 ACP 直通时静默丢弃。
+            image_contexts: request.image_contexts,
+            user_message_metadata: request.user_message_metadata,
+        };
+        crate::api::acp_client_api::start_acp_dialog_turn_impl(app, &app_state, acp_request)
+            .await?;
+        return Ok(StartDialogTurnResponse {
+            success: true,
+            message: "Dialog turn started".to_string(),
+        });
+    }
+
     let runtime_request = desktop_dialog_turn_request(request)?;
 
     runtime
@@ -2763,6 +2792,7 @@ pub async fn steer_dialog_turn(
             turn_id: dialog_turn_id,
             content,
             display_content,
+            prepended_reminders: Vec::new(),
         })
         .await
         .map_err(|error| format!("Failed to steer dialog turn: {}", error.into_message()))?;
@@ -3093,7 +3123,15 @@ pub async fn delete_session(
     runtime: State<'_, DesktopRuntimeContext>,
     request: DeleteSessionRequest,
 ) -> Result<(), String> {
-    runtime
+    info!(
+        "delete_session entry: session_id={}, workspace_path={}, remote_connection_id={:?}, remote_ssh_host={:?}",
+        request.session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+    );
+    let session_id = request.session_id.clone();
+    let result = runtime
         .session_application()
         .delete_session(
             desktop_session_scope(
@@ -3101,10 +3139,67 @@ pub async fn delete_session(
                 request.remote_connection_id,
                 request.remote_ssh_host,
             ),
-            request.session_id,
+            session_id.clone(),
         )
         .await
-        .map_err(|error| format!("Failed to delete session: {error}"))
+        .map_err(|error| {
+            log::error!(
+                "delete_session failed: session_id={}, error={}",
+                session_id,
+                error
+            );
+            format!("Failed to delete session: {error}")
+        });
+    if result.is_ok() {
+        info!("delete_session completed: session_id={}", session_id);
+    }
+    result
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteSessionTreeResponse {
+    pub deleted_session_ids: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn delete_session_tree(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: DeleteSessionRequest,
+) -> Result<DeleteSessionTreeResponse, String> {
+    info!(
+        "delete_session_tree entry: session_id={}, workspace_path={}, remote_connection_id={:?}, remote_ssh_host={:?}",
+        request.session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+    );
+    let session_id = request.session_id.clone();
+    let deleted_session_ids = runtime
+        .session_application()
+        .delete_session_tree(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            session_id.clone(),
+        )
+        .await
+        .map_err(|error| {
+            log::error!(
+                "delete_session_tree failed: session_id={}, error={}",
+                session_id,
+                error
+            );
+            format!("Failed to delete session tree: {error}")
+        })?;
+    info!(
+        "delete_session_tree completed: session_id={}, deleted_count={}",
+        session_id,
+        deleted_session_ids.len()
+    );
+    Ok(DeleteSessionTreeResponse { deleted_session_ids })
 }
 
 #[tauri::command]

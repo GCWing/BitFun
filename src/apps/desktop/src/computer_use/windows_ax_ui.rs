@@ -24,6 +24,9 @@
 // follow-up step. Until then, suppress dead-code lints without weakening real
 // warnings elsewhere.
 #![allow(dead_code)]
+// All unsafe blocks are single Win32/UIA COM calls through the windows crate;
+// COM pointers are validated by the windows crate wrappers before invocation.
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 use crate::computer_use::ui_locate_common;
 use bitfun_core::agentic::tools::computer_use_host::{

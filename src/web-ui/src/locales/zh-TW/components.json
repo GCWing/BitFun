@@ -352,6 +352,9 @@
     "unsaved": "未儲存",
     "fileDeleted": "已刪除",
     "missionControl": "全景模式",
+    "mergeCell": "合併到此視窗",
+    "exitGrid": "退出網格",
+    "removeCell": "刪除此宮格",
     "hiddenTabsCount": "{{count}} 個隱藏標籤",
     "confirmCloseWithDirty": "檔案 \"{{title}}\" 有未儲存的更改。\n\n是否放棄更改並關閉？",
     "confirmCloseAllWithDirty": "以下 {{count}} 個檔案有未儲存的更改：\n\n{{fileList}}\n\n是否放棄所有更改並關閉？"
@@ -577,7 +580,14 @@
     "dropRight": "右",
     "dropTop": "上",
     "dropBottom": "下",
-    "dropCenter": "放置"
+    "dropCenter": "放置",
+    "dropHere": "拖入此處",
+    "dropExpand": "擴展為九宮格",
+    "dropAddCol": "添加列",
+    "dropAddRow": "添加行",
+    "dropToSlot": "放置到此格",
+    "groupSlot": "分欄 {{slot}}",
+    "grid9EmptyHint": "請先拖入或打開一個面板，再使用九宮格排列"
   },
   "flexiblePanel": {
     "empty": {

@@ -1,16 +1,10 @@
 import { ConversationUiImage, ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiToolStatus } from './ConversationUiModels';
-import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ACCENT, CARD, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
-import { FileReferenceCard } from './FileReferenceCard';
-import { MarkdownContent } from './MarkdownContent';
-import { StreamingMarkdownContent } from './StreamingMarkdownContent';
+import { INK, LINE, MUTED, SOFT } from './Theme';
+import { MessageFileCards, MessageImageGallery, MessageMarkdown } from './ChatMessageContent';
+import { ChatMessageRetryAction, ChatTypingDots, ChatUserMessageBubble } from './ChatMessageChrome';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolStatusList } from './ToolStatusList';
-import { FileTargetResolver } from '../../services/FileTargetResolver';
-import {
-  MessageFileReference,
-  MessageFileReferenceProjectionCache
-} from '../../services/MessageFileReferenceProjector';
+import { MessageFileReference, MessageFileReferenceProjectionCache } from '../../services/MessageFileReferenceProjector';
 
 interface SubagentTaskInput {
   description?: string;
@@ -26,13 +20,6 @@ interface StructuredRenderGroup {
   tools: ConversationUiToolStatus[];
   key: string;
   path: string;
-}
-
-interface ActivityGroupStats {
-  thinkingCount: number;
-  readCount: number;
-  searchCount: number;
-  otherCount: number;
 }
 
 @ComponentV2
@@ -63,81 +50,19 @@ export struct ChatMessageBubble {
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
   @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
   @Event onDownloadFile: (path: string) => void = (_path: string) => {};
-  @Local expandedActivityPath: string = '';
-  @Local typingPhase: number = 0;
-  private typingTimerId: number = 0;
   private readonly fileReferenceCache: MessageFileReferenceProjectionCache =
     new MessageFileReferenceProjectionCache();
 
-  aboutToAppear(): void {
-    if (!this.shouldShowTypingDots(this.item) && !this.hasRunningSubagentTask(this.item)) {
-      return;
-    }
-    this.typingTimerId = setInterval(() => {
-      this.typingPhase = (this.typingPhase + 1) % 3;
-    }, 360);
-  }
-
-  aboutToDisappear(): void {
-    if (this.typingTimerId !== 0) {
-      clearInterval(this.typingTimerId);
-      this.typingTimerId = 0;
-    }
-  }
-
   build() {
     if (this.item.role === 'user') {
-      this.UserBubble()
+      ChatUserMessageBubble({
+        item: this.item,
+        showRetryAction: this.showRetryAction,
+        onRetryMessage: this.onRetryMessage
+      })
     } else {
       this.AssistantBubble()
     }
-  }
-
-  @Builder
-  UserBubble() {
-    Row() {
-      Blank()
-      Column({ space: 6 }) {
-        if (this.visibleMessageText(this.item).length > 0 || (this.item.images && this.item.images.length > 0)) {
-          Column({ space: 8 }) {
-            if (this.item.images && this.item.images.length > 0) {
-              this.UserMessageImages(this.item.images)
-            }
-            if (this.visibleMessageText(this.item).length > 0) {
-              Text(this.visibleMessageText(this.item))
-                .fontSize(14)
-                .lineHeight(20)
-                .fontColor(INK)
-            }
-          }
-          .padding({ left: 10, right: 10, top: 10, bottom: 10 })
-          .backgroundColor(SOFT)
-          .borderRadius(18)
-          .alignItems(HorizontalAlign.Start)
-        }
-        if (this.item.status === 'failed' && this.showRetryAction) {
-          Row({ space: 8 }) {
-            Text(RemoteI18n.t('chat.sendFailed'))
-              .fontSize(12)
-              .fontColor(RED)
-            Text(RemoteI18n.t('common.retry'))
-              .fontSize(12)
-              .fontColor(PRIMARY_ACTION_TEXT)
-              .height(28)
-              .padding({ left: 10, right: 10 })
-              .backgroundColor(ACCENT)
-              .borderRadius(14)
-              .onClick(() => {
-                this.onRetryMessage(this.item.text);
-              })
-          }
-        }
-      }
-      .constraintSize({ maxWidth: '70%' })
-      .alignItems(HorizontalAlign.End)
-    }
-    .width('100%')
-    .padding({ top: 8, bottom: 12 })
   }
 
   @Builder
@@ -154,21 +79,11 @@ export struct ChatMessageBubble {
         }
         if (this.item.status === 'failed' && this.showRetryAction &&
           (this.item.detail || '').trim().length > 0) {
-          Row({ space: 8 }) {
-            Text(RemoteI18n.t('generalChat.replyInterrupted'))
-              .fontSize(12)
-              .fontColor(RED)
-            Text(RemoteI18n.t('common.retry'))
-              .fontSize(12)
-              .fontColor(PRIMARY_ACTION_TEXT)
-              .height(28)
-              .padding({ left: 10, right: 10 })
-              .backgroundColor(ACCENT)
-              .borderRadius(14)
-              .onClick(() => {
-                this.onRetryMessage(this.item.detail || '')
-              })
-          }
+          ChatMessageRetryAction({
+            assistant: true,
+            retryText: this.item.detail || '',
+            onRetry: this.onRetryMessage
+          })
         }
       }
       .layoutWeight(1)
@@ -203,7 +118,7 @@ export struct ChatMessageBubble {
         }
       }
       if (this.shouldShowTypingDots(item)) {
-        this.TypingDots()
+        ChatTypingDots()
       }
       if (item.tools && item.tools.length > 0) {
         this.Tools(item.tools)
@@ -217,28 +132,6 @@ export struct ChatMessageBubble {
         this.isStreamingAssistant()
       )
     }
-  }
-
-  @Builder
-  AssistantAvatar() {
-    Row({ space: 4 }) {
-      Text('')
-        .width(6)
-        .height(6)
-        .backgroundColor(PRIMARY_ACTION_TEXT)
-        .borderRadius(3)
-      Text('')
-        .width(6)
-        .height(6)
-        .backgroundColor(PRIMARY_ACTION_TEXT)
-        .borderRadius(3)
-    }
-    .width(32)
-    .height(32)
-    .backgroundColor(ACCENT)
-    .borderRadius(16)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(VerticalAlign.Center)
   }
 
   @Builder
@@ -357,7 +250,7 @@ export struct ChatMessageBubble {
       }
       .width('100%')
       if (entry.tool && this.isRunningTool(entry.tool)) {
-        this.TypingDots()
+        ChatTypingDots()
       }
       if (entry.content && entry.content.trim().length > 0 && !this.isTextEntry(entry) && !this.isThinkingEntry(entry)) {
         this.MessageText(entry.content, activeScope && (!entry.subItems || entry.subItems.length === 0), `${this.item.id}-${path}-subagent`)
@@ -423,121 +316,37 @@ export struct ChatMessageBubble {
   }
 
   @Builder
-  TypingDots() {
-    Row({ space: 5 }) {
-      Text('•')
-        .width(6)
-        .height(18)
-        .fontSize(16)
-        .fontColor(MUTED)
-        .opacity(this.typingDotOpacity(0))
-        .animation({ duration: 180, curve: Curve.EaseInOut })
-      Text('•')
-        .width(6)
-        .height(18)
-        .fontSize(16)
-        .fontColor(MUTED)
-        .opacity(this.typingDotOpacity(1))
-        .animation({ duration: 180, curve: Curve.EaseInOut })
-      Text('•')
-        .width(6)
-        .height(18)
-        .fontSize(16)
-        .fontColor(MUTED)
-        .opacity(this.typingDotOpacity(2))
-        .animation({ duration: 180, curve: Curve.EaseInOut })
-    }
-    .height(24)
-    .padding({ left: 2 })
-  }
-
-  private typingDotOpacity(index: number): number {
-    return this.typingPhase === index ? 1.0 : 0.34;
-  }
-
-  @Builder
   MessageImages(images: ConversationUiImage[]) {
-    Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
-      ForEach(images, (image: ConversationUiImage) => {
-        Image(image.data_url)
-          .width(92)
-          .height(92)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(14)
-          .border({ width: 1, color: LINE })
-          .margin({ right: 8, bottom: 8 })
-      }, (image: ConversationUiImage) => image.name)
-    }
-    .width('100%')
-  }
-
-  @Builder
-  UserMessageImages(images: ConversationUiImage[]) {
-    Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
-      ForEach(images, (image: ConversationUiImage, index: number) => {
-        Image(image.data_url)
-          .width(112)
-          .height(112)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(12)
-          .border({ width: 1, color: LINE })
-          .margin({ right: index % 2 === 0 && images.length > 1 ? 8 : 0, bottom: index < images.length - 2 ? 8 : 0 })
-      }, (image: ConversationUiImage, index: number) => `${image.name}-${index}`)
-    }
-    .width(images.length > 1 ? 232 : 112)
+    MessageImageGallery({ images })
   }
 
   @Builder
   MessageText(text: string, active: boolean = false, streamKey: string = '') {
-    if (active) {
-      StreamingMarkdownContent({
-        text,
-        active,
-        streamKey,
-        onCopyText: (body: string) => {
-          this.onCopyMessage(body);
-        },
-        onOpenLink: (reference: string, label: string) => {
-          this.onOpenFilePreview(reference, label);
-        }
-      })
-    } else {
-      MarkdownContent({
-        text,
-        onCopyText: (body: string) => {
-          this.onCopyMessage(body);
-        },
-        onOpenLink: (reference: string, label: string) => {
-          this.onOpenFilePreview(reference, label);
-        }
-      })
-    }
+    MessageMarkdown({
+      text,
+      active,
+      streamKey,
+      onCopyText: this.onCopyMessage,
+      onOpenLink: this.onOpenFilePreview
+    })
   }
 
   @Builder
   FileCards(text: string) {
-    Column({ space: 8 }) {
-      ForEach(this.fileReferences(text), (file: MessageFileReference) => {
-        FileReferenceCard({
-          path: file.path,
-          label: file.label,
-          status: this.fileStatus(file.path),
-          previewLabel: RemoteI18n.t('common.open'),
-          buttonLabel: this.fileButtonLabel(file.path),
-          disabled: this.downloadingFilePath === file.path,
-          selected: FileTargetResolver.matchesRemotePath(file.path, this.activeFilePreviewPath),
-          previewLoading: this.activeFilePreviewLoading &&
-            FileTargetResolver.matchesRemotePath(file.path, this.activeFilePreviewPath),
-          onPreview: (path: string, label: string) => {
-            this.onOpenFilePreview(path, label);
-          },
-          onDownload: (path: string) => {
-            this.onDownloadFile(path);
-          }
-        })
-      }, (file: MessageFileReference) => file.id)
-    }
-    .width('100%')
+    MessageFileCards({
+      text,
+      downloadingFilePath: this.downloadingFilePath,
+      downloadedFilePath: this.downloadedFilePath,
+      fileDownloadStatus: this.fileDownloadStatus,
+      activeFilePreviewPath: this.activeFilePreviewPath,
+      activeFilePreviewLoading: this.activeFilePreviewLoading,
+      onPreview: this.onOpenFilePreview,
+      onDownload: this.onDownloadFile
+    })
+  }
+
+  private fileReferences(text: string): MessageFileReference[] {
+    return this.fileReferenceCache.referencesFor(text);
   }
 
   private visibleMessageText(item: ConversationUiMessage): string {
@@ -896,56 +705,6 @@ export struct ChatMessageBubble {
     return '';
   }
 
-  private activityGroupTitle(group: StructuredRenderGroup): string {
-    const stats = this.activityGroupStats(group.items);
-    const total = stats.thinkingCount + stats.readCount + stats.searchCount + stats.otherCount;
-    return `已折叠 ${total} 个思考和工具调用`;
-  }
-
-  private activityGroupDetail(group: StructuredRenderGroup): string {
-    const stats = this.activityGroupStats(group.items);
-    const parts: string[] = [];
-    if (stats.thinkingCount > 0) {
-      parts.push(`思考 ${stats.thinkingCount}`);
-    }
-    if (stats.readCount > 0) {
-      parts.push(`读取 ${stats.readCount}`);
-    }
-    if (stats.searchCount > 0) {
-      parts.push(`搜索 ${stats.searchCount}`);
-    }
-    if (stats.otherCount > 0) {
-      parts.push(`其他 ${stats.otherCount}`);
-    }
-    return parts.join(' · ');
-  }
-
-  private activityGroupStats(items: ConversationUiMessageItem[]): ActivityGroupStats {
-    const stats: ActivityGroupStats = {
-      thinkingCount: 0,
-      readCount: 0,
-      searchCount: 0,
-      otherCount: 0
-    };
-    items.forEach((entry: ConversationUiMessageItem) => {
-      if (this.isThinkingEntry(entry)) {
-        stats.thinkingCount += 1;
-        return;
-      }
-      if (entry.tool) {
-        const kind = this.activityToolKind(entry.tool);
-        if (kind === 'read') {
-          stats.readCount += 1;
-        } else if (kind === 'search') {
-          stats.searchCount += 1;
-        } else {
-          stats.otherCount += 1;
-        }
-      }
-    });
-    return stats;
-  }
-
   private activityGroupTools(group: StructuredRenderGroup): ConversationUiToolStatus[] {
     const tools: ConversationUiToolStatus[] = [];
     group.items.forEach((entry: ConversationUiMessageItem) => {
@@ -1141,13 +900,6 @@ export struct ChatMessageBubble {
     return '';
   }
 
-  private hasRunningSubagentTask(item: ConversationUiMessage): boolean {
-    return (item.items || []).some((entry: ConversationUiMessageItem) => {
-      return !!entry.tool && this.normalizedToolName(entry.tool) === 'task' &&
-        this.isRunningTool(entry.tool);
-    });
-  }
-
   private structuredItemKey(entry: ConversationUiMessageItem, path: string): string {
     if (entry.tool && entry.tool.id) {
       return `${path}-tool-${entry.tool.id}`;
@@ -1217,30 +969,4 @@ export struct ChatMessageBubble {
       normalized === 'ask_user_question';
   }
 
-  private fileReferences(text: string): MessageFileReference[] {
-    return this.fileReferenceCache.referencesFor(text);
-  }
-
-  private fileStatus(path: string): string {
-    if ((this.downloadingFilePath === path || this.downloadedFilePath === path) && this.fileDownloadStatus.length > 0) {
-      return this.fileDownloadStatus;
-    }
-    if (path.indexOf('computer://') === 0) {
-      return RemoteI18n.t('chat.desktopFile');
-    }
-    if (path.indexOf('file://') === 0) {
-      return RemoteI18n.t('chat.fileLink');
-    }
-    return path;
-  }
-
-  private fileButtonLabel(path: string): string {
-    if (this.downloadingFilePath === path) {
-      return RemoteI18n.t('chat.reading');
-    }
-    if (this.downloadedFilePath === path) {
-      return RemoteI18n.t('common.done');
-    }
-    return RemoteI18n.t('chat.download');
-  }
 }

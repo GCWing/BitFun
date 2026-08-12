@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "bitfun-desktop"
 version.workspace = true
 authors.workspace = true
@@ -66,7 +67,7 @@ dark-light = { workspace = true }
 similar = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
-reqwest = { workspace = true, features = ["rustls"] }
+reqwest = { workspace = true, features = ["http2", "json", "query", "rustls", "stream"] }
 semver = { workspace = true }
 zip = { workspace = true }
 tar = { workspace = true }
@@ -86,6 +87,9 @@ enigo = { workspace = true }
 image = { workspace = true }
 resvg = { workspace = true }
 tempfile = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 bitflags = { workspace = true }

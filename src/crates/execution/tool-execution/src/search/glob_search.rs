@@ -474,7 +474,16 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
         } else {
             format!("rg --files failed: {}", stderr)
         };
-        if stderr.contains("No such file or directory") || stderr.contains("not found") {
+        // rg 执行环境不可用（二进制缺失/损坏/路径不可达）统一降级到
+        // fallback_walk：stderr 关键词命中（"Cannot find file at ...rg.exe"、
+        // "not found"、"No such file or directory"）或 stderr 为空但进程以
+        // 非零退出码失败（如 Windows 下 `exit code: 0xffffffff`，stderr 空）
+        // 都按 rg 不可用处理，避免 Glob 工具直接报错。
+        let rg_environment_unavailable = stderr.contains("No such file or directory")
+            || stderr.contains("Cannot find file")
+            || stderr.contains("not found")
+            || stderr.is_empty();
+        if rg_environment_unavailable {
             info!(
                 "Glob backend selected: backend=fallback_walk, reason=rg_execution_failed, search_root={}, pattern={}",
                 walk_root.display(),

@@ -8,7 +8,7 @@ use bitfun_events::{
 use log::{debug, trace, warn};
 use std::collections::{BinaryHeap, HashMap};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, RwLock as StdRwLock, Weak,
 };
 use tokio::sync::{broadcast, Mutex, Notify};
@@ -134,8 +134,32 @@ pub struct EventQueue {
     /// Configuration
     config: EventQueueConfig,
 
-    /// Statistics
-    stats: Arc<Mutex<QueueStats>>,
+    /// Statistics (PERF-02: lock-free counters so the per-delta enqueue path
+    /// does not pay two async Mutex acquisitions; pending_events stays behind
+    /// a lightweight atomic since it is only a diagnostic snapshot).
+    stats: Arc<EventQueueStats>,
+}
+
+/// Lock-free queue statistics (PERF-02).
+///
+/// `total_enqueued`/`total_processed` are `AtomicU64` updated on the hot
+/// enqueue/dequeue paths; `pending_events` is a snapshot refreshed on the
+/// same writes (and on explicit reads) without ever taking a Mutex.
+#[derive(Debug, Default)]
+struct EventQueueStats {
+    pending_events: AtomicU64,
+    total_enqueued: AtomicU64,
+    total_processed: AtomicU64,
+}
+
+impl EventQueueStats {
+    fn snapshot(&self) -> QueueStats {
+        QueueStats {
+            pending_events: self.pending_events.load(Ordering::Relaxed) as usize,
+            total_enqueued: self.total_enqueued.load(Ordering::Relaxed),
+            total_processed: self.total_processed.load(Ordering::Relaxed),
+        }
+    }
 }
 
 impl EventQueue {
@@ -152,7 +176,7 @@ impl EventQueue {
             session_broadcasts: Arc::new(StdRwLock::new(HashMap::new())),
             has_session_broadcasts: Arc::new(AtomicBool::new(false)),
             config,
-            stats: Arc::new(Mutex::new(QueueStats::default())),
+            stats: Arc::new(EventQueueStats::default()),
         }
     }
 
@@ -200,11 +224,9 @@ impl EventQueue {
         }
         let _ = self.broadcast_tx.send(envelope);
 
-        {
-            let mut stats = self.stats.lock().await;
-            stats.total_enqueued += 1;
-            stats.pending_events = queue_len;
-        }
+        // PERF-02: lock-free counters — no async Mutex on the hot path.
+        self.stats.total_enqueued.fetch_add(1, Ordering::Relaxed);
+        self.stats.pending_events.store(queue_len as u64, Ordering::Relaxed);
 
         if queued {
             self.notify.notify_one();
@@ -257,11 +279,14 @@ impl EventQueue {
             }
         }
 
-        // Update statistics
+        // Update statistics (PERF-02: lock-free counters)
         if !batch.is_empty() {
-            let mut stats = self.stats.lock().await;
-            stats.total_processed += batch.len() as u64;
-            stats.pending_events = remaining_queue_len;
+            self.stats
+                .total_processed
+                .fetch_add(batch.len() as u64, Ordering::Relaxed);
+            self.stats
+                .pending_events
+                .store(remaining_queue_len as u64, Ordering::Relaxed);
         }
 
         batch
@@ -349,20 +374,20 @@ impl EventQueue {
             queue.len() // Get size before releasing queue lock
         };
 
-        // Update statistics: use the size obtained earlier
-        {
-            let mut stats = self.stats.lock().await;
-            stats.pending_events = queue_len;
-        }
+        // Update statistics: use the size obtained earlier (PERF-02:
+        // lock-free snapshot write)
+        self.stats
+            .pending_events
+            .store(queue_len as u64, Ordering::Relaxed);
 
         debug!("Cleared all events for session: session_id={}", session_id);
 
         Ok(())
     }
 
-    /// Get queue statistics
+    /// Get queue statistics (PERF-02: lock-free snapshot read).
     pub async fn stats(&self) -> QueueStats {
-        self.stats.lock().await.clone()
+        self.stats.snapshot()
     }
 
     /// Wait for events (used for consumers)

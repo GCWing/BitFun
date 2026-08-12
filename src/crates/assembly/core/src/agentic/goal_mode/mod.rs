@@ -29,6 +29,13 @@ pub use bitfun_runtime_ports::{
     MAX_GOAL_CONTINUATIONS, MAX_THREAD_GOAL_AUTO_CONTINUATIONS, MAX_THREAD_GOAL_OBJECTIVE_CHARS,
     THREAD_GOAL_METADATA_KEY,
 };
+
+/// Idle window before the goal safety net wakes the commander.
+///
+/// Immediate after-turn auto-continuation is disabled; a goal is only picked up
+/// again when a session with an active thread goal has been idle for this long
+/// with no new user submission.
+pub const GOAL_IDLE_WAKEUP_DELAY_MS: u64 = 600_000;
 use log::{info, warn};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -124,6 +131,7 @@ impl<'a> ThreadGoalStore<'a> {
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn set_thread_goal(
         &self,
         session_id: &str,
@@ -131,6 +139,7 @@ impl<'a> ThreadGoalStore<'a> {
         objective: Option<String>,
         status: Option<ThreadGoalStatus>,
         token_budget: Option<Option<i64>>,
+        reference_files: Option<Vec<String>>,
         replace_existing: bool,
     ) -> BitFunResult<SetThreadGoalResult> {
         let existing = self.get_thread_goal(session_id, workspace_path).await?;
@@ -145,6 +154,7 @@ impl<'a> ThreadGoalStore<'a> {
             objective,
             status,
             token_budget,
+            reference_files,
             replace_existing,
             now_epoch_seconds: now_epoch_seconds(),
             new_goal_id: Uuid::new_v4().to_string(),
@@ -170,6 +180,7 @@ impl<'a> ThreadGoalStore<'a> {
         workspace_path: &Path,
         objective: String,
         token_budget: Option<i64>,
+        reference_files: Vec<String>,
     ) -> BitFunResult<ThreadGoal> {
         if self
             .get_thread_goal(session_id, workspace_path)
@@ -187,6 +198,7 @@ impl<'a> ThreadGoalStore<'a> {
                 Some(objective),
                 Some(ThreadGoalStatus::Active),
                 Some(token_budget),
+                Some(reference_files),
                 false,
             )
             .await?;
@@ -207,6 +219,7 @@ pub async fn maybe_build_continuation_after_turn(
         return Ok(None);
     };
 
+    let max_auto_continuations = configured_goal_max_auto_continuations().await;
     let outcome = runtime.continuation_after_turn(
         goal,
         ThreadGoalContinuationFacts {
@@ -215,6 +228,7 @@ pub async fn maybe_build_continuation_after_turn(
             turn_completed,
             now_epoch_seconds: now_epoch_seconds(),
         },
+        max_auto_continuations,
     );
 
     if outcome.reached_auto_continuation_limit {
@@ -235,13 +249,33 @@ pub async fn maybe_build_continuation_after_turn(
                 "Scheduling thread goal auto-continuation: session_id={}, attempt={}/{}, objective={}",
                 session_id,
                 goal.auto_continuation_count,
-                MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+                max_auto_continuations,
                 goal.objective
             );
         }
     }
 
     Ok(outcome.plan)
+}
+
+/// Resolve the configured goal auto-continuation budget
+/// (`ai.thresholds.goal.max_auto_continuations`), falling back to
+/// `MAX_THREAD_GOAL_AUTO_CONTINUATIONS = 10` when unset or invalid.
+async fn configured_goal_max_auto_continuations() -> u32 {
+    let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+        return MAX_THREAD_GOAL_AUTO_CONTINUATIONS;
+    };
+    let Ok(thresholds) = config_service
+        .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
+        .await
+    else {
+        return MAX_THREAD_GOAL_AUTO_CONTINUATIONS;
+    };
+    let count = thresholds.goal.max_auto_continuations;
+    if count == 0 {
+        return MAX_THREAD_GOAL_AUTO_CONTINUATIONS;
+    }
+    count
 }
 
 pub fn user_facing_thread_goal_error(error: BitFunError) -> BitFunError {
@@ -276,26 +310,30 @@ mod tests {
 
     #[test]
     fn continuation_plan_metadata_marks_completion_check() {
-        let plan = build_thread_goal_continuation_plan(&ThreadGoal {
-            goal_id: "g1".to_string(),
-            session_id: "s1".to_string(),
-            objective: "sync upstream".to_string(),
-            status: ThreadGoalStatus::Active,
-            token_budget: None,
-            tokens_used: 0,
-            time_used_seconds: 0,
-            created_at: 1,
-            updated_at: 2,
-            auto_continuation_count: 2,
-        });
+        let plan = build_thread_goal_continuation_plan(
+            &ThreadGoal {
+                goal_id: "g1".to_string(),
+                session_id: "s1".to_string(),
+                objective: "sync upstream".to_string(),
+                status: ThreadGoalStatus::Active,
+                token_budget: None,
+                tokens_used: 0,
+                time_used_seconds: 0,
+                created_at: 1,
+                updated_at: 2,
+                auto_continuation_count: 2,
+                reference_files: Vec::new(),
+            },
+            MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+        );
         assert!(plan.display_message.contains("completion check"));
-        assert!(plan.display_message.contains("2/100"));
+        assert!(plan.display_message.contains("2/10"));
         assert_eq!(
             plan.user_message_metadata["threadGoalContinuationCheck"],
             true
         );
         assert_eq!(plan.user_message_metadata["autoContinuationAttempt"], 2);
-        assert_eq!(plan.user_message_metadata["autoContinuationMax"], 100);
+        assert_eq!(plan.user_message_metadata["autoContinuationMax"], 10);
     }
 
     #[test]
@@ -311,6 +349,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             auto_continuation_count: 0,
+            reference_files: Vec::new(),
         });
         assert!(prompt.contains("finish stack"));
         assert!(prompt.contains("update_goal"));
@@ -348,8 +387,8 @@ mod tests {
 
     #[test]
     fn max_goal_continuations_matches_legacy_limit() {
-        assert_eq!(MAX_GOAL_CONTINUATIONS, 100);
-        assert_eq!(MAX_THREAD_GOAL_AUTO_CONTINUATIONS, 100);
+        assert_eq!(MAX_GOAL_CONTINUATIONS, 10);
+        assert_eq!(MAX_THREAD_GOAL_AUTO_CONTINUATIONS, 10);
     }
 
     #[test]
@@ -391,6 +430,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             auto_continuation_count: 0,
+            reference_files: Vec::new(),
         })
         .user_message_metadata;
         assert!(should_skip_goal_for_turn("Adjust work", Some(&metadata)));

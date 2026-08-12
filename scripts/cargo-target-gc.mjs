@@ -117,6 +117,47 @@ export function selectStaleByMtime(entries, keep) {
   return sorted.slice(keep).map((entry) => entry.path);
 }
 
+/**
+ * Keep the newest `keep` entries per crate by mtime, but refuse to delete any
+ * entry whose session is still active elsewhere (d8-P2-6): another worktree
+ * compiling the same crate on a different branch may own the newest
+ * s-*-working root. `isActive` is injected so the decision is testable.
+ */
+export function selectStaleByMtimeWithLiveness(entries, keep, isActive = defaultRootActive) {
+  if (keep < 1) {
+    throw new Error('keep must be >= 1');
+  }
+  if (entries.length <= keep) {
+    return [];
+  }
+  const sorted = [...entries].sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return sorted
+    .slice(keep)
+    .filter((entry) => !isActive(entry.path));
+}
+
+function defaultRootActive(path) {
+  return false;
+}
+
+function rootHasActiveSession(rootPath) {
+  // An incremental root is "active" when it contains a s-*-working session
+  // that is still compiling (fresh mtime). The default keep of 1 protects the
+  // newest root; a concurrent worktree reusing the same CARGO_TARGET_DIR
+  // creates its own s-*-working subdir inside a *different* crate root, so we
+  // additionally keep any root whose newest s-*-working is younger than a
+  // short grace window — even if it is not the newest root by directory mtime
+  // (d8-P2-6).
+  const workingDirs = listDirs(rootPath)
+    .filter((name) => name.endsWith('-working'))
+    .map((name) => join(rootPath, name));
+  if (workingDirs.length === 0) {
+    return false;
+  }
+  const newest = Math.max(...workingDirs.map((p) => safeStatMtimeMs(p)));
+  return Date.now() - newest < 60_000;
+}
+
 export function planIncrementalPrune(incrementalDir, { keepSessions = 1 } = {}) {
   const toDelete = [];
   const groups = new Map();
@@ -133,7 +174,16 @@ export function planIncrementalPrune(incrementalDir, { keepSessions = 1 } = {}) 
   }
 
   for (const entries of groups.values()) {
-    toDelete.push(...selectStaleByMtime(entries, 1));
+    // Keep 2 roots per crate instead of 1 so a concurrent worktree compiling
+    // the same crate keeps its incremental root even when its directory mtime
+    // is older than the newest one here (d8-P2-6). Roots with a live
+    // s-*-working session are additionally protected below.
+    const stale = selectStaleByMtime(entries, 2);
+    for (const path of stale) {
+      if (!rootHasActiveSession(path)) {
+        toDelete.push(path);
+      }
+    }
   }
 
   const keptRoots = listDirs(incrementalDir)
@@ -257,6 +307,14 @@ export function planFingerprintPrune(
 
 export function planDepsOrphanPrune(depsDir, keptHashes) {
   const toDelete = [];
+  // Conservative guard (d8-P2-5): when the fingerprint plan produced no kept
+  // hashes at all (e.g. .fingerprint was cleared/corrupted externally), every
+  // deps artifact would otherwise match the orphan rule and the whole cache
+  // would be deleted, forcing a full rebuild. Treat the empty set as "unknown
+  // state, keep everything".
+  if (!keptHashes || keptHashes.size === 0) {
+    return toDelete;
+  }
   for (const name of listFiles(depsDir)) {
     const hash = extractDepsArtifactHash(name);
     if (!hash) {
@@ -278,6 +336,10 @@ export function planDepsOrphanPrune(depsDir, keptHashes) {
 
 export function planBuildOrphanPrune(buildDir, keptHashes) {
   const toDelete = [];
+  // Same conservative guard as planDepsOrphanPrune (d8-P2-5).
+  if (!keptHashes || keptHashes.size === 0) {
+    return toDelete;
+  }
   for (const name of listDirs(buildDir)) {
     const split = splitFingerprintDir(name);
     if (split && !keptHashes.has(split.hash)) {
@@ -314,12 +376,20 @@ function sleepMs(ms) {
 export function isCompilerBusy({ exec = execFileSync, platform = process.platform } = {}) {
   try {
     if (platform === 'win32') {
-      const out = exec(
-        'cmd.exe',
-        ['/d', '/s', '/c', 'tasklist /FI "IMAGENAME eq cargo.exe" & tasklist /FI "IMAGENAME eq rustc.exe"'],
+      // Pass each /FI filter as a single argument. Routing the whole command
+      // through cmd.exe /c re-splits the quoted filter, so tasklist receives
+      // `eq` as a standalone option and fails with `无效参数/选项 - 'eq'`.
+      const cargo = exec(
+        'tasklist',
+        ['/FI', 'IMAGENAME eq cargo.exe', '/NH'],
         { encoding: 'utf8' }
       );
-      return /\bcargo\.exe\b/i.test(out) || /\brustc\.exe\b/i.test(out);
+      const rustc = exec(
+        'tasklist',
+        ['/FI', 'IMAGENAME eq rustc.exe', '/NH'],
+        { encoding: 'utf8' }
+      );
+      return /\bcargo\.exe\b/i.test(cargo) || /\brustc\.exe\b/i.test(rustc);
     }
     const cargo = exec('pgrep', ['-x', 'cargo'], { encoding: 'utf8' }).trim();
     if (cargo) {
@@ -496,7 +566,13 @@ export function runCargoTargetGc(options = {}) {
 }
 
 export function parseGcArgs(argv) {
-  const args = { profile: 'debug', triple: null, dryRun: undefined, help: false };
+  const args = {
+    profile: 'debug',
+    triple: null,
+    dryRun: undefined,
+    fingerprintMinAgeHours: undefined,
+    help: false,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--help' || arg === '-h') {
@@ -513,15 +589,33 @@ export function parseGcArgs(argv) {
       i += 1;
     } else if (arg.startsWith('--target=')) {
       args.triple = arg.slice('--target='.length);
+    } else if (arg === '--min-age-hours') {
+      const value = Number(argv[i + 1]);
+      if (Number.isFinite(value) && value >= 0) {
+        args.fingerprintMinAgeHours = value;
+      }
+      i += 1;
+    } else if (arg.startsWith('--min-age-hours=')) {
+      const value = Number(arg.slice('--min-age-hours='.length));
+      if (Number.isFinite(value) && value >= 0) {
+        args.fingerprintMinAgeHours = value;
+      }
     }
   }
   return args;
 }
 
 function printHelp() {
-  console.log(`Usage: node scripts/cargo-target-gc.mjs [--profile debug] [--target TRIPLE] [--dry-run]
+  console.log(`Usage: node scripts/cargo-target-gc.mjs [--profile debug] [--target TRIPLE] [--min-age-hours HOURS] [--dry-run]
 
 Prune stale Cargo incremental / fingerprint / deps caches for one profile.
+
+Options:
+  --profile <debug|release>  profile dir under target (default debug)
+  --target <TRIPLE>          target triple subdir (default none)
+  --min-age-hours <HOURS>    fingerprint minimum age before pruning
+                             (default 24, env BITFUN_TARGET_GC_MIN_AGE_HOURS)
+  --dry-run                  report only, do not delete
 
 Environment:
   BITFUN_TARGET_GC=0           disable
@@ -581,6 +675,7 @@ if (isMain) {
     profile: args.profile,
     triple: args.triple,
     dryRun: args.dryRun,
+    fingerprintMinAgeHours: args.fingerprintMinAgeHours,
   });
   process.exit(result.skipped && result.reason === 'error' ? 1 : 0);
 }

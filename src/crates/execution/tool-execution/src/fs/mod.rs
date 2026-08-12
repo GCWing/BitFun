@@ -1,6 +1,5 @@
 pub mod backend;
 pub mod delete_path;
-#[cfg(feature = "document-read")]
 pub mod document;
 pub mod edit_file;
 pub mod list_dir;
@@ -49,11 +48,13 @@ pub fn path_has_multiple_hard_links(path: &std::path::Path) -> std::io::Result<b
 
         let file = std::fs::File::open(path)?;
         let mut information = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: `file` owns an open handle from `File::open(path)` and outlives
+        // this call; `information` is a valid out-buffer for the call.
         unsafe {
             GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut information)
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
         }
-        return Ok(information.nNumberOfLinks > 1);
+        Ok(information.nNumberOfLinks > 1)
     }
 
     #[cfg(not(any(unix, windows)))]
@@ -63,5 +64,15 @@ pub fn path_has_multiple_hard_links(path: &std::path::Path) -> std::io::Result<b
             std::io::ErrorKind::Unsupported,
             "hard-link identity checks are unavailable on this platform",
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn document_path_recognition_is_available_without_conversion_support() {
+        assert!(super::document::is_supported_document_path("report.DOCX"));
+        assert!(super::document::is_supported_document_path("paper.pdf"));
+        assert!(!super::document::is_supported_document_path("src/lib.rs"));
     }
 }

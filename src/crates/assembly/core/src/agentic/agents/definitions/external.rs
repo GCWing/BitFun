@@ -22,6 +22,7 @@ pub(crate) struct ExternalProvidedAgent {
 }
 
 impl ExternalProvidedAgent {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         runtime_key: String,
         name: String,

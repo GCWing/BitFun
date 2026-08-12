@@ -53,6 +53,16 @@ pub struct BrowserInfo {
     pub cdp_available: bool,
 }
 
+/// Browser-level CDP endpoint published by a Chromium browser's user-approved
+/// remote debugging flow. Unlike the legacy fixed-port endpoint, this points
+/// at the user's real browser profile and the WebSocket handshake requires an
+/// explicit approval in the browser.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BrowserDebugEndpoint {
+    pub port: u16,
+    pub web_socket_url: String,
+}
+
 /// Cache for browser installation status to avoid repeated filesystem checks.
 /// The cache is valid for the lifetime of the process since browser installations
 /// don't change during a session.
@@ -64,6 +74,11 @@ pub struct BrowserLauncher;
 pub struct BrowserLaunchOptions {
     pub user_data_dir: Option<PathBuf>,
     pub managed_profile_root: Option<PathBuf>,
+    /// Wait for the user to enable guarded remote debugging in the browser's
+    /// settings page. Product surfaces should opt into this only for an
+    /// explicit setup action; ordinary agent connects should return guidance
+    /// quickly instead of holding a tool call open.
+    pub wait_for_user_profile_setup: bool,
 }
 
 impl BrowserLauncher {
@@ -325,6 +340,265 @@ impl BrowserLauncher {
             .join(Self::browser_profile_slug(kind))
     }
 
+    /// Return the browser's normal user-data directory. Browsers that expose
+    /// approval-based remote debugging write `DevToolsActivePort` here.
+    pub fn user_profile_data_dir(kind: &BrowserKind) -> Option<PathBuf> {
+        #[cfg(target_os = "macos")]
+        {
+            let home = dirs::home_dir()?;
+            let application_support = home.join("Library").join("Application Support");
+            let relative = match kind {
+                BrowserKind::Chrome => Path::new("Google/Chrome"),
+                BrowserKind::Edge => Path::new("Microsoft Edge"),
+                BrowserKind::Chromium => Path::new("Chromium"),
+                BrowserKind::Brave => Path::new("BraveSoftware/Brave-Browser"),
+                BrowserKind::Arc => Path::new("Arc/User Data"),
+                BrowserKind::Unknown(_) => return None,
+            };
+            return Some(application_support.join(relative));
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            let local_app_data = std::env::var_os("LOCALAPPDATA").map(PathBuf::from)?;
+            let relative = match kind {
+                BrowserKind::Chrome => Path::new("Google/Chrome/User Data"),
+                BrowserKind::Edge => Path::new("Microsoft/Edge/User Data"),
+                BrowserKind::Chromium => Path::new("Chromium/User Data"),
+                BrowserKind::Brave => Path::new("BraveSoftware/Brave-Browser/User Data"),
+                BrowserKind::Arc => Path::new("Arc/User Data"),
+                BrowserKind::Unknown(_) => return None,
+            };
+            return Some(local_app_data.join(relative));
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let config_root = std::env::var_os("CHROME_CONFIG_HOME")
+                .or_else(|| std::env::var_os("XDG_CONFIG_HOME"))
+                .map(PathBuf::from)
+                .or_else(|| dirs::home_dir().map(|home| home.join(".config")))?;
+            let relative = match kind {
+                BrowserKind::Chrome => Path::new("google-chrome"),
+                BrowserKind::Edge => Path::new("microsoft-edge"),
+                BrowserKind::Chromium => Path::new("chromium"),
+                BrowserKind::Brave => Path::new("BraveSoftware/Brave-Browser"),
+                BrowserKind::Arc => Path::new("arc"),
+                BrowserKind::Unknown(_) => return None,
+            };
+            return Some(config_root.join(relative));
+        }
+    }
+
+    fn parse_devtools_active_port(contents: &str) -> Result<BrowserDebugEndpoint> {
+        let mut lines = contents
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty());
+        let raw_port = lines
+            .next()
+            .ok_or_else(|| anyhow!("DevToolsActivePort is missing its port"))?;
+        let web_socket_path = lines
+            .next()
+            .ok_or_else(|| anyhow!("DevToolsActivePort is missing its WebSocket path"))?;
+        let port = raw_port
+            .parse::<u16>()
+            .map_err(|_| anyhow!("DevToolsActivePort contains an invalid port"))?;
+        if port == 0 {
+            return Err(anyhow!("DevToolsActivePort contains port zero"));
+        }
+        if !web_socket_path.starts_with("/devtools/browser/")
+            || web_socket_path.chars().any(char::is_whitespace)
+        {
+            return Err(anyhow!(
+                "DevToolsActivePort contains an invalid browser WebSocket path"
+            ));
+        }
+
+        Ok(BrowserDebugEndpoint {
+            port,
+            web_socket_url: format!("ws://127.0.0.1:{port}{web_socket_path}"),
+        })
+    }
+
+    /// Discover a browser-level endpoint for the real user profile. This works
+    /// for every supported Chromium browser that publishes `DevToolsActivePort`
+    /// in its normal user-data directory. Malformed or stale files are treated
+    /// as unavailable; the subsequent WebSocket connection is the source of truth.
+    pub fn user_profile_debug_endpoint(kind: &BrowserKind) -> Option<BrowserDebugEndpoint> {
+        let path = Self::user_profile_data_dir(kind)?.join("DevToolsActivePort");
+        let contents = std::fs::read_to_string(&path).ok()?;
+        match Self::parse_devtools_active_port(&contents) {
+            Ok(endpoint) => {
+                let address = std::net::SocketAddr::from(([127, 0, 0, 1], endpoint.port));
+                if std::net::TcpStream::connect_timeout(&address, Duration::from_millis(150))
+                    .is_ok()
+                {
+                    Some(endpoint)
+                } else {
+                    debug!(
+                        "Ignoring stale browser DevToolsActivePort file at {}",
+                        path.display()
+                    );
+                    None
+                }
+            }
+            Err(error) => {
+                debug!(
+                    "Ignoring invalid browser DevToolsActivePort file at {}: {}",
+                    path.display(),
+                    error
+                );
+                None
+            }
+        }
+    }
+
+    fn user_profile_debugging_setup_url(kind: &BrowserKind) -> Option<&'static str> {
+        match kind {
+            BrowserKind::Chrome => Some("chrome://inspect/#remote-debugging"),
+            BrowserKind::Edge => Some("edge://inspect/#remote-debugging"),
+            _ => None,
+        }
+    }
+
+    pub fn supports_default_cdp(kind: &BrowserKind) -> bool {
+        // Chrome 144+ and current Edge document an inspect-page toggle that
+        // starts approval-based remote debugging for the normal user profile.
+        matches!(kind, BrowserKind::Chrome | BrowserKind::Edge)
+    }
+
+    fn default_cdp_preference_enabled(contents: &str) -> bool {
+        serde_json::from_str::<serde_json::Value>(contents)
+            .ok()
+            .and_then(|value| {
+                value
+                    .pointer("/devtools/remote_debugging/user-enabled")
+                    .and_then(serde_json::Value::as_bool)
+            })
+            .unwrap_or(false)
+    }
+
+    /// Whether the browser's persistent, approval-based CDP preference is on.
+    /// The endpoint is also accepted as proof because the browser may create it
+    /// before its Local State update has been flushed to disk.
+    pub fn is_default_cdp_enabled(kind: &BrowserKind) -> bool {
+        if !Self::supports_default_cdp(kind) {
+            return false;
+        }
+        if Self::user_profile_debug_endpoint(kind).is_some() {
+            return true;
+        }
+        let Some(path) =
+            Self::user_profile_data_dir(kind).map(|directory| directory.join("Local State"))
+        else {
+            return false;
+        };
+        std::fs::read_to_string(path)
+            .ok()
+            .is_some_and(|contents| Self::default_cdp_preference_enabled(&contents))
+    }
+
+    /// Open the browser's Remote debugging settings page.
+    ///
+    /// Chromium drops `chrome://` URLs handed to it on the command line and
+    /// silently substitutes the New Tab Page, so spawning the executable with
+    /// the settings URL looks to the user like "the browser opened and nothing
+    /// happened". macOS can route the URL through the browser's own AppleScript
+    /// `open location` handler, which is not subject to that filter; other
+    /// platforms have no equivalent, so the caller must hand the URL to the
+    /// user instead. Returns whether the page was actually opened.
+    fn open_user_profile_debugging_setup(kind: &BrowserKind, setup_url: &str) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(app_name) = Self::launch_app_name(kind) else {
+                return false;
+            };
+            let script = format!(
+                "tell application \"{}\" to open location \"{}\"",
+                app_name.replace('"', "\\\""),
+                setup_url
+            );
+            match silent_command("osascript").args(["-e", &script]).output() {
+                Ok(output) if output.status.success() => true,
+                Ok(output) => {
+                    debug!(
+                        "Failed to open {} remote debugging settings: {}",
+                        kind,
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    );
+                    false
+                }
+                Err(error) => {
+                    debug!(
+                        "Failed to run osascript for {} remote debugging settings: {}",
+                        kind, error
+                    );
+                    false
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = setup_url;
+            // Start the browser when it is not up yet so the user has somewhere
+            // to paste the URL. Passing the URL itself would only reach the New
+            // Tab Page, which is what made this flow look broken.
+            if !Self::is_browser_running(kind) {
+                let exe = Self::browser_executable(kind);
+                if let Err(error) = silent_command(&exe).spawn() {
+                    debug!(
+                        "Failed to start {} for remote debugging setup: {}",
+                        kind, error
+                    );
+                }
+            }
+            false
+        }
+    }
+
+    async fn prepare_user_profile_connection(
+        kind: &BrowserKind,
+        wait_for_user_setup: bool,
+    ) -> Result<LaunchResult> {
+        if let Some(endpoint) = Self::user_profile_debug_endpoint(kind) {
+            return Ok(LaunchResult::UserProfileReady { endpoint });
+        }
+
+        let setup_url = Self::user_profile_debugging_setup_url(kind)
+            .ok_or_else(|| anyhow!("{} does not support guarded user-profile CDP", kind))?;
+        let opened = Self::open_user_profile_debugging_setup(kind, setup_url);
+
+        // An explicit Settings action waits up to one minute so the user can
+        // tick the browser-owned consent checkbox; an ordinary agent connect
+        // only waits for the normal-start fast path before returning guidance.
+        let attempts = if wait_for_user_setup { 240 } else { 8 };
+        for _ in 0..attempts {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            if let Some(endpoint) = Self::user_profile_debug_endpoint(kind) {
+                return Ok(LaunchResult::UserProfileReady { endpoint });
+            }
+        }
+
+        let instructions = if opened {
+            format!(
+                "{kind} opened its Remote debugging settings. Turn on \"Allow remote debugging for this browser instance\" there; the browser remembers this preference for normal future starts. Then connect again and approve BitFun's connection request. This guarded flow uses your current browser profile, including its existing tabs and login state."
+            )
+        } else {
+            format!(
+                "Open {setup_url} in {kind} and turn on \"Allow remote debugging for this browser instance\"; the browser remembers this preference for normal future starts. Then connect again and approve BitFun's connection request. This guarded flow uses your current browser profile, including its existing tabs and login state."
+            )
+        };
+
+        Ok(LaunchResult::UserProfileSetupRequired {
+            browser: kind.to_string(),
+            setup_url: setup_url.to_string(),
+            opened,
+            instructions,
+        })
+    }
+
     fn default_managed_profile_root() -> PathBuf {
         dirs::data_local_dir()
             .or_else(dirs::data_dir)
@@ -522,6 +796,22 @@ impl BrowserLauncher {
         port: u16,
         options: BrowserLaunchOptions,
     ) -> Result<LaunchResult> {
+        if options.user_data_dir.is_none() {
+            // Opportunistically reuse the real profile for any Chromium browser
+            // that already publishes a browser-level endpoint. Chrome and Edge
+            // additionally get a first-class setup flow when it is not enabled.
+            if let Some(endpoint) = Self::user_profile_debug_endpoint(kind) {
+                return Ok(LaunchResult::UserProfileReady { endpoint });
+            }
+            if Self::supports_default_cdp(kind) {
+                return Self::prepare_user_profile_connection(
+                    kind,
+                    options.wait_for_user_profile_setup,
+                )
+                .await;
+            }
+        }
+
         if Self::is_cdp_available(port).await {
             info!("CDP already available on port {} for {}", port, kind);
             return Ok(LaunchResult::AlreadyConnected);
@@ -739,55 +1029,6 @@ impl BrowserLauncher {
             false
         }
     }
-
-    /// Create a macOS `.app` wrapper that launches the browser with CDP enabled.
-    #[cfg(target_os = "macos")]
-    pub fn create_cdp_launcher_app(kind: &BrowserKind, port: u16) -> Result<String> {
-        let app_name = format!("{} Debug", kind);
-        let app_dir = format!("/Applications/{}.app", app_name);
-        let macos_dir = format!("{}/Contents/MacOS", app_dir);
-        let script_path = format!("{}/launch", macos_dir);
-        let exe = Self::browser_executable(kind);
-
-        std::fs::create_dir_all(&macos_dir)
-            .map_err(|e| anyhow!("Failed to create app bundle: {}", e))?;
-
-        let script = format!(
-            "#!/bin/bash\nexec \"{}\" --remote-debugging-port={} \"$@\"\n",
-            exe, port
-        );
-        std::fs::write(&script_path, &script)
-            .map_err(|e| anyhow!("Failed to write launcher script: {}", e))?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
-                .map_err(|e| anyhow!("Failed to set executable permission: {}", e))?;
-        }
-
-        let plist = format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleName</key>
-    <string>{}</string>
-    <key>CFBundleExecutable</key>
-    <string>launch</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.bitfun.browser-debug-launcher</string>
-</dict>
-</plist>"#,
-            app_name
-        );
-
-        std::fs::write(format!("{}/Contents/Info.plist", app_dir), &plist)
-            .map_err(|e| anyhow!("Failed to write Info.plist: {}", e))?;
-
-        info!("Created CDP launcher app at {}", app_dir);
-        Ok(app_dir)
-    }
 }
 
 /// Result of a browser launch attempt.
@@ -795,6 +1036,17 @@ impl BrowserLauncher {
 pub enum LaunchResult {
     AlreadyConnected,
     Launched,
+    UserProfileReady {
+        endpoint: BrowserDebugEndpoint,
+    },
+    UserProfileSetupRequired {
+        browser: String,
+        setup_url: String,
+        /// Whether the settings page could be opened for the user. Platforms
+        /// without a browser automation entry point can only show the URL.
+        opened: bool,
+        instructions: String,
+    },
     LaunchedButCdpNotReady {
         port: u16,
         message: String,
@@ -842,5 +1094,55 @@ mod tests {
             &BrowserKind::Unknown("Custom Browser!".to_string()),
         );
         assert_eq!(dir, root.join("browser-control").join("custom-browser"));
+    }
+
+    #[test]
+    fn devtools_active_port_parser_accepts_guarded_browser_endpoint() {
+        let endpoint = BrowserLauncher::parse_devtools_active_port(
+            "62314\n/devtools/browser/598cf21d-ec63-45f3-abba-698f26a88807\n",
+        )
+        .expect("valid endpoint");
+
+        assert_eq!(endpoint.port, 62314);
+        assert_eq!(
+            endpoint.web_socket_url,
+            "ws://127.0.0.1:62314/devtools/browser/598cf21d-ec63-45f3-abba-698f26a88807"
+        );
+    }
+
+    #[test]
+    fn devtools_active_port_parser_rejects_non_browser_paths() {
+        let error = BrowserLauncher::parse_devtools_active_port(
+            "9222\nhttp://attacker.example/devtools/browser/token\n",
+        )
+        .expect_err("non-local path must be rejected");
+
+        assert!(error.to_string().contains("invalid browser WebSocket path"));
+    }
+
+    #[test]
+    fn guarded_real_profile_setup_is_available_for_chrome_and_edge() {
+        assert!(BrowserLauncher::supports_default_cdp(&BrowserKind::Chrome));
+        assert!(BrowserLauncher::supports_default_cdp(&BrowserKind::Edge));
+        assert_eq!(
+            BrowserLauncher::user_profile_debugging_setup_url(&BrowserKind::Chrome),
+            Some("chrome://inspect/#remote-debugging")
+        );
+        assert_eq!(
+            BrowserLauncher::user_profile_debugging_setup_url(&BrowserKind::Edge),
+            Some("edge://inspect/#remote-debugging")
+        );
+        assert!(!BrowserLauncher::supports_default_cdp(&BrowserKind::Brave));
+    }
+
+    #[test]
+    fn default_cdp_preference_reads_chromium_local_state_shape() {
+        assert!(BrowserLauncher::default_cdp_preference_enabled(
+            r#"{"devtools":{"remote_debugging":{"user-enabled":true}}}"#
+        ));
+        assert!(!BrowserLauncher::default_cdp_preference_enabled(
+            r#"{"devtools":{"remote_debugging":{"user-enabled":false}}}"#
+        ));
+        assert!(!BrowserLauncher::default_cdp_preference_enabled("{}"));
     }
 }

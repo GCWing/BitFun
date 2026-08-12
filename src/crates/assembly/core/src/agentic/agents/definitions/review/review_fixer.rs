@@ -1,4 +1,4 @@
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
+use crate::agentic::agents::{subagent_default_tools, Agent, AgentToolPolicyOverrides, UserContextPolicy};
 use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
@@ -18,21 +18,20 @@ impl ReviewFixerAgent {
         let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
         tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Direct);
         tool_exposure_overrides.insert("Git".to_string(), ToolExposure::Direct);
+        // 执行者工具模板改 agentic 全工具：ReviewFixer 也是执行修复的
+        // 角色，工具不足一用就卡，改用 subagent_default_tools() 全工具清单
+        // （TodoWrite/Plan 系列/Session 系列/Web 系列等），再补上专属的
+        // GetFileDiff（不在 shared_coding_mode_tools 内）。
+        let mut default_tools = subagent_default_tools();
+        if !default_tools.contains(&"GetFileDiff".to_string()) {
+            default_tools.push("GetFileDiff".to_string());
+        }
+        // 审查类智能体统一配齐 submit_code_review（severity 结构化提交）。
+        if !default_tools.contains(&"submit_code_review".to_string()) {
+            default_tools.push("submit_code_review".to_string());
+        }
         Self {
-            default_tools: vec![
-                "Read".to_string(),
-                "Grep".to_string(),
-                "Glob".to_string(),
-                "LS".to_string(),
-                "GetFileDiff".to_string(),
-                "Edit".to_string(),
-                "Write".to_string(),
-                "ExecCommand".to_string(),
-                "WriteStdin".to_string(),
-                "ExecControl".to_string(),
-                "TodoWrite".to_string(),
-                "Git".to_string(),
-            ],
+            default_tools,
             tool_exposure_overrides,
         }
     }
@@ -100,6 +99,13 @@ mod tests {
         assert!(tools.contains(&"ExecCommand".to_string()));
         assert!(tools.contains(&"WriteStdin".to_string()));
         assert!(tools.contains(&"ExecControl".to_string()));
+        // 执行修复角色也用 agentic 全工具底子（TodoWrite/GetFileDiff）。
+        assert!(tools.contains(&"TodoWrite".to_string()));
+        assert!(tools.contains(&"GetFileDiff".to_string()));
+        // 审查类智能体统一配齐 submit_code_review（severity 结构化提交）。
+        assert!(tools.contains(&"submit_code_review".to_string()));
+        // 审查工具全家桶：ReviewPlatform（subagent_default_tools 已含）。
+        assert!(tools.contains(&"ReviewPlatform".to_string()));
         assert!(!agent.is_readonly());
     }
 }

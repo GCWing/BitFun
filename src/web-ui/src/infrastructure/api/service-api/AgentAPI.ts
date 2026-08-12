@@ -465,6 +465,21 @@ export interface OpenBuiltInBrowserEvent {
   replaceExisting?: boolean;
 }
 
+/** Payload delivered on `agentic://thread-goal-updated`. */
+export interface ThreadGoalUpdatedPayload {
+  sessionId: string;
+  goal?: {
+    goalId: string;
+    objective: string;
+    status: string;
+    tokensUsed?: number;
+    tokenBudget?: number | null;
+    timeUsedSeconds?: number;
+    updatedAt?: number;
+    autoContinuationCount?: number;
+  } | null;
+}
+
 export interface TextChunkEvent extends AgenticEvent {
   roundId: string;
   attemptId?: string;
@@ -489,6 +504,16 @@ export interface SubagentSessionLinkedEvent extends AgenticEvent {
   agentType?: string;
   modelId?: string;
   focusedReviewDisplayLabel?: string;
+}
+
+export interface SubagentTurnCompletedEvent extends AgenticEvent {
+  subagentDialogTurnId?: string;
+  parentSessionId: string;
+  parentDialogTurnId: string;
+  parentToolCallId: string;
+  agentType?: string;
+  status?: string;
+  outputText?: string;
 }
 
 export type DeepReviewQueueStatus =
@@ -844,6 +869,22 @@ export class AgentAPI {
     }
   }
 
+  async deleteSessionTree(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<string[]> {
+    try {
+      const response = await api.invoke<{ deletedSessionIds: string[] }>('delete_session_tree', {
+        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost },
+      });
+      return response.deletedSessionIds;
+    } catch (error) {
+      throw createTauriCommandError('delete_session_tree', error, { sessionId, workspacePath });
+    }
+  }
+
    
   async restoreSession(
     sessionId: string,
@@ -1185,6 +1226,15 @@ export class AgentAPI {
     );
   }
 
+  onSubagentTurnCompleted(
+    callback: (event: SubagentTurnCompletedEvent) => void
+  ): () => void {
+    return api.listen<SubagentTurnCompletedEvent>(
+      'agentic://subagent-turn-completed',
+      callback
+    );
+  }
+
   onDeepReviewQueueStateChanged(
     callback: (event: DeepReviewQueueStateChangedEvent) => void
   ): () => void {
@@ -1245,9 +1295,9 @@ export class AgentAPI {
   }
 
   onThreadGoalUpdated(
-    callback: (event: { sessionId: string; goal?: Record<string, unknown> | null }) => void
+    callback: (event: ThreadGoalUpdatedPayload) => void
   ): () => void {
-    return api.listen('agentic://thread-goal-updated', callback);
+    return api.listen<ThreadGoalUpdatedPayload>('agentic://thread-goal-updated', callback);
   }
 
   onOpenBuiltInBrowser(callback: (event: OpenBuiltInBrowserEvent) => void): () => void {

@@ -408,7 +408,9 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
         return Err("no attached Peer controller can receive Agent events".to_string());
     }
     let generation = state.turns.current_event_stream_generation()?;
-    let owner = crate::account::capture_peer_fanout_owner()
+    let owner = state
+        .account_routing
+        .capture_peer_fanout_owner()
         .await
         .map_err(|error| format!("Peer event routing owner unavailable: {error}"))?;
     enqueue_peer_device_event(
@@ -546,8 +548,14 @@ pub(crate) async fn fanout_peer_device_event(event: String, payload: serde_json:
     let inherits_routing_lease = inherited_owner.is_some();
     let owner = match inherited_owner {
         Some(owner) => owner,
-        None => match crate::account::capture_peer_fanout_owner().await {
-            Ok(owner) => owner,
+        None => match super::state::peer_host_state().map(|state| state.account_routing.clone()) {
+            Ok(routing) => match routing.capture_peer_fanout_owner().await {
+                Ok(owner) => owner,
+                Err(error) => {
+                    tracing::debug!("Peer event fanout skipped before enqueue: {error}");
+                    return;
+                }
+            },
             Err(error) => {
                 tracing::debug!("Peer event fanout skipped before enqueue: {error}");
                 return;

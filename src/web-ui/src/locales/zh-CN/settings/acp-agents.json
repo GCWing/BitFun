@@ -69,8 +69,13 @@
     "title": "远程服务器",
     "description": "已保存的 SSH 服务器会复用同一份 ACP Agent 列表，并自动检测每台远端主机的状态。",
     "empty": "没有已保存的 SSH 服务器。",
+    "emptyVisible": "没有显示中的 SSH 服务器。",
     "noAgents": "请先添加 ACP Agent，再检测远程服务器。",
     "refreshDetection": "刷新检测",
+    "hideConnection": "在 ACP Agents 中隐藏「{{name}}」",
+    "restoreConnection": "在 ACP Agents 中显示「{{name}}」",
+    "showHiddenConnections": "已隐藏的服务器（{{count}}）",
+    "hideHiddenConnections": "收起已隐藏的服务器",
     "summary": "{{available}} / {{total}} 可用",
     "issueSummary": "{{count}} 个异常"
   },
@@ -112,6 +117,8 @@
     "downloadSuccess": "ACP Agent CLI 已下载",
     "downloadFailed": "下载 ACP Agent CLI 失败",
     "predownloadSuccess": "ACP 适配器已下载",
-    "predownloadFailed": "下载 ACP 适配器失败"
+    "predownloadFailed": "下载 ACP 适配器失败",
+    "connectionHidden": "已在 ACP Agents 中隐藏「{{name}}」",
+    "connectionRestored": "已在 ACP Agents 中显示「{{name}}」"
   }
 }

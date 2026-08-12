@@ -96,13 +96,19 @@ slices that are outside pure product logic but still platform-neutral.
 
 ## Verification
 
+Select one integration family and its minimum feature set. Remote SSH uses a
+grouped target for tests within the same boundary; use
+`--test <target> <module>::<filter>` for a single source module instead of
+creating another Cargo target. Real transport/system boundaries such as MCP
+streamable HTTP stay independent. Representative stable entry points are:
+
 ```bash
-cargo test -p bitfun-services-integrations
-cargo test -p bitfun-services-integrations --no-default-features --features plugin-source plugin_source --lib
-cargo test -p bitfun-services-integrations --features debug-log --test debug_log_owner_contracts
-cargo test -p bitfun-services-integrations --features remote-ssh --test remote_ssh_disabled_contracts
-cargo test -p bitfun-services-integrations --features remote-ssh,workspace-search --test remote_workspace_search_disabled_contracts
-cargo test -p bitfun-services-integrations --features remote-ssh,remote-ssh-concrete,workspace-search remote_ssh
-node scripts/check-core-boundaries.mjs
-cargo check -p bitfun-core --features product-full
+cargo check -p bitfun-services-integrations --no-default-features
+cargo test -p bitfun-services-integrations --no-default-features --features mcp --test mcp_contracts
+cargo test -p bitfun-services-integrations --no-default-features --features remote-ssh --test remote_ssh_contracts remote_ssh_disabled_contracts::
+cargo test -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
+pnpm run check:core-boundaries
 ```
+
+Other family-specific targets remain in `Cargo.toml`; add a guide command only
+for a recurring workflow, not to mirror every test target.

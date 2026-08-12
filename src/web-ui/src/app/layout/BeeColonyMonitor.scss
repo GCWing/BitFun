@@ -1,0 +1,152 @@
+/**
+ * BeeColonyMonitor — floating trigger button + expandable panel for the
+ * bee-colony-dag MiniApp. Follows the FloatingMiniChat floating-panel pattern.
+ */
+
+@use '../../component-library/styles/tokens' as *;
+
+$bee-button-size: 42px;
+$bee-button-offset: 20px;
+$bee-panel-width: min(480px, calc(100vw - 32px));
+$bee-panel-height: min(620px, calc(100vh - 48px));
+
+.bee-monitor {
+  position: fixed;
+  bottom: $bee-button-offset;
+  right: $bee-button-offset;
+  z-index: $z-overlay + 1;
+  pointer-events: none;
+
+  &--open {
+    pointer-events: auto;
+  }
+}
+
+.bee-monitor__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+}
+
+.bee-monitor__button {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  width: $bee-button-size;
+  height: $bee-button-size;
+  border-radius: 50%;
+  border: 1px solid var(--bf-appearance-token-border-strong);
+  background: var(--bf-appearance-token-color-bg-secondary);
+  color: var(--bf-appearance-token-color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--bf-appearance-token-shadow-sm);
+
+  &:hover {
+    background: var(--bf-appearance-token-color-bg-tertiary);
+  }
+}
+
+.bee-monitor__panel {
+  position: fixed;
+  bottom: calc(#{$bee-button-offset} + #{$bee-button-size} + 12px);
+  right: $bee-button-offset;
+  z-index: 1;
+  width: $bee-panel-width;
+  height: $bee-panel-height;
+  display: flex;
+  flex-direction: column;
+  background: var(--bf-appearance-token-color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: 12px;
+  box-shadow: var(--bf-appearance-token-shadow-lg);
+  opacity: 0;
+  transform: translateY(8px);
+  visibility: hidden;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms;
+
+  &--open {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+  }
+
+  &--maximized {
+    width: min(860px, calc(100vw - 32px));
+    height: min(760px, calc(100vh - 48px));
+  }
+}
+
+.bee-monitor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  flex-shrink: 0;
+}
+
+.bee-monitor__title {
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  font-weight: var(--bf-appearance-token-font-weight-bold);
+  color: var(--bf-appearance-token-color-text-primary);
+}
+
+.bee-monitor__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bee-monitor__header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bf-appearance-token-element-bg-hover);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+}
+
+.bee-monitor__body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.bee-monitor__loading {
+  padding: 24px;
+  text-align: center;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+}
+
+.bee-monitor__error {
+  padding: 20px 24px;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+
+  p {
+    margin: 0 0 6px;
+    color: var(--bf-appearance-token-color-error);
+    font-weight: var(--bf-appearance-token-font-weight-bold);
+  }
+
+  small {
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+}

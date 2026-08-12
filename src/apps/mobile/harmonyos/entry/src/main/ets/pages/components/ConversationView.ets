@@ -6,6 +6,7 @@ import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from './C
 import { ChatSurface } from './ChatSurface';
 import { ChatStatusBar } from './ChatStatusBar';
 import { ChatTimeline } from './ChatTimeline';
+import { ConversationLoadingState } from './ConversationLoadingState';
 import { ConversationViewContract } from './ConversationViewContract';
 import {
   ConversationUiModelCatalog,
@@ -34,6 +35,7 @@ export struct ConversationView {
   @Param connectionState: string = 'connected';
   @Param composerCapabilities: ChatComposerCapabilities = REMOTE_CHAT_COMPOSER_CAPABILITIES;
   @Param isBusy: boolean = false;
+  @Param isLoadingConversation: boolean = false;
   @Param canStop: boolean = false;
   @Param hasMoreMessages: boolean = false;
   @Param timelineItems: ChatTimelineItem[] = [];
@@ -110,7 +112,12 @@ export struct ConversationView {
           if (this.shouldShowStatusBar()) {
             this.ExecutionStatusBar()
           }
-          if (this.shouldShowSuggestions()) {
+          if (this.isLoadingConversation) {
+            ConversationLoadingState({
+              maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 800 : 0
+            })
+              .layoutWeight(1)
+          } else if (this.shouldShowSuggestions()) {
             Blank().layoutWeight(1)
             if (!this.isVoiceListening) {
               this.PromptArea()
@@ -179,6 +186,7 @@ export struct ConversationView {
         workspaceBranch: this.workspaceBranch,
         desktopName: this.desktopName,
         showBackButton: this.showBackButton,
+        showSidebarButton: this.showSidebarButton,
         showSidebarRestoreButton: this.showSidebarRestoreButton,
         showActionsMenu: this.showHeaderActions,
         actionsMenu: () => {
@@ -186,6 +194,9 @@ export struct ConversationView {
         },
         onBack: () => {
           this.onBack();
+        },
+        onOpenSidebar: () => {
+          this.onOpenSidebar();
         },
         onRestoreSidebar: () => {
           this.onRestoreSidebar();
@@ -224,7 +235,7 @@ export struct ConversationView {
       timelineItems: this.visibleTimelineItems(),
       timelineRevision: this.timelineRevision,
       hasMoreMessages: this.hasMoreMessages,
-      isBusy: this.isBusy,
+      isBusy: this.isBusy || this.isLoadingConversation,
       connectionState: this.connectionState,
       statusText: this.statusText,
       downloadingFilePath: this.downloadingFilePath,
@@ -675,7 +686,7 @@ export struct ConversationView {
   }
 
   private shouldShowStatusBar(): boolean {
-    return this.surface === ChatSurface.Remote && this.connectionState !== 'connected';
+    return !this.isLoadingConversation && this.surface === ChatSurface.Remote && this.connectionState !== 'connected';
   }
 
   private connectionColor(): ResourceColor {

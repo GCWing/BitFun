@@ -505,6 +505,7 @@ async fn process_mailboxes(
                 turn_id: turn_id.to_string(),
                 content: request.content.clone(),
                 display_content: request.display_content.clone(),
+                prepended_reminders: Vec::new(),
             })
             .await
             .map_err(|error| anyhow!(error.into_message()))

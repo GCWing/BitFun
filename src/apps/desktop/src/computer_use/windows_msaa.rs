@@ -40,6 +40,9 @@
 //! desktop host.
 
 #![allow(dead_code)]
+// All unsafe blocks are single MSAA/oleacc COM calls through the windows crate;
+// IAccessible pointers are validated by the windows crate wrappers.
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 use std::ptr::null_mut;
 

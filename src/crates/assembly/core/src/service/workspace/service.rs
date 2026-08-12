@@ -480,7 +480,7 @@ impl WorkspaceService {
 
         // Prefer the most recently accessed match when the path alone is ambiguous
         // (e.g. the same POSIX root opened on two SSH hosts).
-        matches.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
+        matches.sort_by_key(|m| std::cmp::Reverse(m.last_accessed));
         matches.first().map(|workspace| (*workspace).clone())
     }
 
@@ -2901,6 +2901,7 @@ mod tests {
         assert!(service.get_opened_workspaces().await.is_empty());
     }
 
+    #[cfg(feature = "remote-workspace")]
     #[tokio::test]
     async fn open_workspace_resolving_known_reopens_remote_without_local_exists() {
         let env = TestEnvironment::new();

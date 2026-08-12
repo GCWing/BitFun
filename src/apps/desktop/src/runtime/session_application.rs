@@ -381,24 +381,59 @@ impl DesktopSessionApplication {
         &self,
         request: DesktopSessionScopeRequest,
     ) -> DesktopSessionApplicationResult<Vec<SessionMetadata>> {
+        self.list_persisted_sessions_with_options(request, false)
+            .await
+    }
+
+    pub(crate) async fn list_persisted_sessions_with_options(
+        &self,
+        request: DesktopSessionScopeRequest,
+        include_hidden: bool,
+    ) -> DesktopSessionApplicationResult<Vec<SessionMetadata>> {
         let scope = self.resolved_scope(request).await;
         let storage_path = self.storage_path(&scope);
         self.compatibility
-            .list_persisted_sessions(&storage_path)
+            .list_persisted_sessions_with_options(&storage_path, include_hidden)
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }
 
+    /// List session ids recorded in the workspace deletion tombstone registry
+    /// (frontend ghost-resurrection guard on the initialization path).
+    pub(crate) async fn list_deleted_session_ids(
+        &self,
+        request: DesktopSessionScopeRequest,
+    ) -> DesktopSessionApplicationResult<Vec<String>> {
+        let scope = self.resolved_scope(request).await;
+        let storage_path = self.storage_path(&scope);
+        self.coordinator
+            .list_deleted_session_ids(&storage_path)
+            .await
+            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+    }
+
+    #[allow(dead_code)]
     pub(crate) async fn list_persisted_sessions_page(
         &self,
         request: DesktopSessionScopeRequest,
         cursor: Option<&str>,
         limit: usize,
     ) -> DesktopSessionApplicationResult<SessionMetadataPage> {
+        self.list_persisted_sessions_page_with_options(request, cursor, limit, false)
+            .await
+    }
+
+    pub(crate) async fn list_persisted_sessions_page_with_options(
+        &self,
+        request: DesktopSessionScopeRequest,
+        cursor: Option<&str>,
+        limit: usize,
+        include_hidden: bool,
+    ) -> DesktopSessionApplicationResult<SessionMetadataPage> {
         let scope = self.resolved_scope(request).await;
         let storage_path = self.storage_path(&scope);
         self.compatibility
-            .list_persisted_sessions_page(&storage_path, cursor, limit)
+            .list_persisted_sessions_page_with_options(&storage_path, cursor, limit, include_hidden)
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }
@@ -694,6 +729,43 @@ impl DesktopSessionApplication {
         .await
     }
 
+    /// Cascade-delete a session and its full descendant subtree through the
+    /// coordinator, then notify the host for every removed session id.
+    ///
+    /// Authorization note (L4-P2-D): this is the UI's primary delete path
+    /// (FlowChatStore.deleteSession → deleteSessionTree) and intentionally does
+    /// NOT go through `resolve_session_mutation_authorization`. That gate
+    /// protects the RBAC scenario where one AI session deletes another AI
+    /// session (SessionControl / acp_control); here the delete is a direct
+    /// user action on the desktop process, where the Tauri command has no
+    /// privilege-escalating subject. The only checks applied are workspace
+    /// scope resolution (`resolved_scope`) and runtime ownership
+    /// (`ensure_runtime_ownership`) so a request cannot reach a workspace the
+    /// process does not own.
+    pub(crate) async fn delete_session_tree(
+        &self,
+        request: DesktopSessionScopeRequest,
+        session_id: String,
+    ) -> DesktopSessionApplicationResult<Vec<String>> {
+        let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
+        let deleted_session_ids = self
+            .coordinator
+            .delete_session_tree(
+                Path::new(&scope.workspace_path),
+                scope.remote_connection_id.as_deref(),
+                scope.resolved_remote_ssh_host.as_deref(),
+                &session_id,
+            )
+            .await
+            .map_err(desktop_core_session_error)?;
+        for deleted_session_id in &deleted_session_ids {
+            self.host_effects.release_session(deleted_session_id).await;
+            self.host_effects.notify_session_deleted(deleted_session_id);
+        }
+        Ok(deleted_session_ids)
+    }
+
     pub(crate) async fn rename_session(
         &self,
         request: Option<DesktopSessionScopeRequest>,
@@ -710,8 +782,13 @@ impl DesktopSessionApplication {
                 .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?
             {
                 let storage_path = self.storage_path(&scope);
+                // 断点 3 修复（2026-08-08）：前端 UI 重命名未加载的 hidden 子对话
+                // （Subagent/EphemeralSubagent）时，restore 必须 include_internal=true
+                // 放行——否则 hidden 拒绝 RestoreBeforeRename，子对话无法在前端重命名。
+                // 对齐 SessionControl 通道（coordinator.rename_session 已用
+                // restore_internal_session_from_storage_path）与 manual compaction 语义。
                 self.compatibility
-                    .restore_session_from_storage_path(&storage_path, &session_id, false)
+                    .restore_session_from_storage_path(&storage_path, &session_id, true)
                     .await
                     .map_err(|error| {
                         DesktopSessionApplicationError::RestoreBeforeRename(error.to_string())

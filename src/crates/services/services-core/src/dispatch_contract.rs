@@ -55,6 +55,39 @@ pub const DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY: &str = "account_daemo
 
 pub const DISPATCH_ACCOUNT_DAEMON_PROVISIONING_SCHEMA_VERSION: u32 = 1;
 
+/// Setup-audit action every target has accepted since the audit channel
+/// existed. A target rejects a submission carrying any action it does not
+/// know, so this list — not the controller's journal — bounds what may be
+/// forwarded to an arbitrary target.
+pub const DISPATCH_BASE_SETUP_AUDIT_ACTIONS: &[&str] = &["cli-install"];
+
+/// Audit action for an automatic model-configuration push performed while
+/// preparing a submission.
+pub const DISPATCH_MODEL_SYNC_SETUP_AUDIT_ACTION: &str = "model-sync";
+
+/// Optional capability: the target accepts [`DISPATCH_MODEL_SYNC_SETUP_AUDIT_ACTION`]
+/// rows. Deliberately outside [`dispatch_required_target_capabilities`]: an
+/// older CLI still runs the job perfectly well, it just cannot render the
+/// controller's model-sync record, so the controller drops those rows instead
+/// of failing an otherwise valid submission.
+pub const DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY: &str = "setup_audit_model_sync";
+
+/// Whether a target advertising `capabilities` accepts this audit action.
+pub fn dispatch_target_accepts_setup_audit_action(action: &str, capabilities: &[&str]) -> bool {
+    DISPATCH_BASE_SETUP_AUDIT_ACTIONS.contains(&action)
+        || (action == DISPATCH_MODEL_SYNC_SETUP_AUDIT_ACTION
+            && capabilities.contains(&DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY))
+}
+
+/// Every audit action a target of *this* build accepts, used by the target's
+/// own request validation.
+pub fn dispatch_supported_setup_audit_actions() -> impl Iterator<Item = &'static str> {
+    DISPATCH_BASE_SETUP_AUDIT_ACTIONS
+        .iter()
+        .copied()
+        .chain(std::iter::once(DISPATCH_MODEL_SYNC_SETUP_AUDIT_ACTION))
+}
+
 /// Non-secret identity returned by the target before the relay issues a token.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -158,6 +191,32 @@ mod tests {
             assert!(required.contains(capability));
         }
         assert!(!required.contains(&DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY));
+        assert!(!required.contains(&DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY));
+    }
+
+    #[test]
+    fn model_sync_audit_rows_need_the_optional_capability() {
+        assert!(dispatch_target_accepts_setup_audit_action(
+            "cli-install",
+            &[]
+        ));
+        assert!(!dispatch_target_accepts_setup_audit_action(
+            DISPATCH_MODEL_SYNC_SETUP_AUDIT_ACTION,
+            &[]
+        ));
+        assert!(dispatch_target_accepts_setup_audit_action(
+            DISPATCH_MODEL_SYNC_SETUP_AUDIT_ACTION,
+            &[DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY]
+        ));
+        assert!(!dispatch_target_accepts_setup_audit_action(
+            "something-else",
+            &[DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY]
+        ));
+        let supported: Vec<&str> = dispatch_supported_setup_audit_actions().collect();
+        assert!(supported.contains(&DISPATCH_MODEL_SYNC_SETUP_AUDIT_ACTION));
+        for action in DISPATCH_BASE_SETUP_AUDIT_ACTIONS {
+            assert!(supported.contains(action));
+        }
     }
 
     #[test]

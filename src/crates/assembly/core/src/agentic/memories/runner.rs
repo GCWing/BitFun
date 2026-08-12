@@ -761,6 +761,8 @@ fn memory_phase2_tool_restrictions(memory_root: &std::path::Path) -> ToolRuntime
             edit_roots: vec![root.clone()],
             delete_roots: vec![root],
         },
+        allowed_operation_classes: BTreeSet::new(),
+        denied_operation_classes: BTreeSet::new(),
     }
 }
 

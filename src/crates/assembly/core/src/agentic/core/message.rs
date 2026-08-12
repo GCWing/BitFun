@@ -74,6 +74,15 @@ pub struct MessageMetadata {
     /// reminders so activation can be reconstructed from persisted history.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub activated_instruction_sources: Vec<String>,
+    /// Deduplication marker for mid-turn UserSteering injections (TOKEN-01).
+    /// Carried only by the injected `InternalReminderKind::UserSteering`
+    /// message so the same steering can be recognized across round/turn
+    /// boundaries without content scanning (which risks prompt-cache prefix
+    /// drift). Persisted with the message into snapshots; `None` for all other
+    /// message kinds. When present, the round-injection buffer prefers this id
+    /// over content-based dedup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steering_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,7 +99,14 @@ pub enum MessageSemanticKind {
     ComputerUsePostActionSnapshot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+// Serialization is hand-written so the three private variants below
+// (PokePenalty / ChallengePoke / LifecycleContext) are persisted as the
+// stable "generic" name: upstream builds do not know these variants and
+// would otherwise fail to deserialize snapshot JSON. Deserialization keeps
+// the derived snake_case mapping so legacy snapshots written by this build
+// still read back, and `#[serde(other)] Unknown` absorbs future/upstream
+// variant names instead of erroring.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InternalReminderKind {
     Generic,
@@ -123,6 +139,63 @@ pub enum InternalReminderKind {
     HookContext,
     /// Instructions activated after a successful read of a matching file.
     ConditionalInstructions,
+    /// Warden penalty outcome injected after a violating turn (kept through
+    /// compaction so the agent sees the consequence).
+    PokePenalty,
+    /// Warden challenge poke injected when the poke-first protocol fires
+    /// (kept through compaction so the agent sees the challenge).
+    ChallengePoke,
+    /// Legion role / hierarchy context injected at SessionStart and
+    /// SubagentStart custom points (outside hook gating, so the lifecycle
+    /// context is not controlled by `app.hooks.enabled`).
+    LifecycleContext,
+    /// Fallback for variant names unknown to this build (e.g. written by a
+    /// newer or upstream build). Keeps deserialization from failing on an
+    /// unrecognized kind.
+    #[serde(other)]
+    Unknown,
+}
+
+impl Serialize for InternalReminderKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let name = match self {
+            Self::Generic => "generic",
+            Self::SkillListingDiff => "skill_listing_diff",
+            Self::AgentListingDiff => "agent_listing_diff",
+            Self::AgentMode => "agent_mode",
+            Self::SideQuestion => "side_question",
+            Self::InitAgentsMd => "init_agents_md",
+            Self::ScheduledJob => "scheduled_job",
+            Self::ForkSubagent => "fork_subagent",
+            Self::GoalMode => "goal_mode",
+            Self::GoalContinuation => "goal_continuation",
+            Self::GoalObjectiveUpdated => "goal_objective_updated",
+            Self::RemoteFileDelivery => "remote_file_delivery",
+            Self::SessionMessageRequest => "session_message_request",
+            Self::SessionMessageReply => "session_message_reply",
+            Self::LoopRecovery => "loop_recovery",
+            Self::PeriodicLoopRecovery => "periodic_loop_recovery",
+            Self::UserSteering => "user_steering",
+            Self::BackgroundResult => "background_result",
+            Self::InterruptedContinue => "interrupted_continue",
+            Self::ThinkingOnlyRescue => "thinking_only_rescue",
+            Self::FinalizeCacheAnchor => "finalize_cache_anchor",
+            Self::CompressionContinuation => "compression_continuation",
+            Self::StopHookBlock => "stop_hook_block",
+            Self::HookContext => "hook_context",
+            Self::ConditionalInstructions => "conditional_instructions",
+            // Private variants and the unknown fallback serialize as the stable
+            // "generic" name so upstream builds (which lack these variants)
+            // can still deserialize snapshot JSON.
+            Self::PokePenalty | Self::ChallengePoke | Self::LifecycleContext | Self::Unknown => {
+                "generic"
+            }
+        };
+        serializer.serialize_str(name)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -572,6 +645,19 @@ impl Message {
         &self.metadata.activated_instruction_sources
     }
 
+    /// Attach the dedup marker of the UserSteering injection that produced
+    /// this message (TOKEN-01). Used by the round-injection buffer to
+    /// recognize an already-injected steering across round/turn boundaries
+    /// without content scanning.
+    pub fn with_steering_id(mut self, steering_id: String) -> Self {
+        self.metadata.steering_id = Some(steering_id);
+        self
+    }
+
+    pub fn steering_id(&self) -> Option<&str> {
+        self.metadata.steering_id.as_deref()
+    }
+
     pub fn with_compression_payload(mut self, compression_payload: CompressionPayload) -> Self {
         self.metadata.compression_payload = Some(compression_payload);
         self.metadata.tokens = None;
@@ -773,6 +859,121 @@ mod tests {
             ToolArgumentRepairKind::PermissiveNormalToolJsonRepair
         );
         assert!(!tool_call.recovered_from_truncation);
+    }
+
+    #[test]
+    fn private_reminder_kinds_serialize_as_generic_for_upstream_compat() {
+        use super::InternalReminderKind;
+
+        let cases = [
+            (InternalReminderKind::PokePenalty, "generic"),
+            (InternalReminderKind::ChallengePoke, "generic"),
+            (InternalReminderKind::LifecycleContext, "generic"),
+            (InternalReminderKind::Unknown, "generic"),
+            (InternalReminderKind::Generic, "generic"),
+            (InternalReminderKind::SkillListingDiff, "skill_listing_diff"),
+            (InternalReminderKind::HookContext, "hook_context"),
+            (InternalReminderKind::CompressionContinuation, "compression_continuation"),
+        ];
+        for (kind, expected) in cases {
+            assert_eq!(
+                serde_json::to_string(&kind).unwrap(),
+                format!("\"{}\"", expected),
+                "kind {:?} should serialize as {}",
+                kind,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn private_reminder_kinds_deserialize_from_legacy_snapshots() {
+        use super::InternalReminderKind;
+
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"poke_penalty\"").unwrap(),
+            InternalReminderKind::PokePenalty
+        );
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"challenge_poke\"").unwrap(),
+            InternalReminderKind::ChallengePoke
+        );
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"lifecycle_context\"").unwrap(),
+            InternalReminderKind::LifecycleContext
+        );
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"generic\"").unwrap(),
+            InternalReminderKind::Generic
+        );
+        // Unknown future/upstream variant names fall back instead of erroring.
+        assert_eq!(
+            serde_json::from_str::<InternalReminderKind>("\"some_future_kind\"").unwrap(),
+            InternalReminderKind::Unknown
+        );
+    }
+
+    #[test]
+    fn steering_id_metadata_round_trips_and_is_backwards_compatible() {
+        use super::{
+            InternalReminderKind, Message, MessageSemanticKind,
+        };
+        use std::time::SystemTime;
+
+        // 携带 steering_id 的消息序列化后必须能读回（快照持久化往返）。
+        let steered = Message::internal_reminder(
+            InternalReminderKind::UserSteering,
+            "<system_reminder>steering payload</system_reminder>",
+        )
+        .with_steering_id("steer-001".to_string());
+        assert_eq!(steered.steering_id(), Some("steer-001"));
+        let json = serde_json::to_string(&steered).expect("steered message should serialize");
+        let restored: Message =
+            serde_json::from_str(&json).expect("steered message should deserialize");
+        assert_eq!(restored.steering_id(), Some("steer-001"));
+        assert!(json.contains("steering_id"));
+
+        // 非 UserSteering 消息不携带 steering_id（None 默认，不污染快照）。
+        let plain = Message::user("plain user text".to_string());
+        assert_eq!(plain.steering_id(), None);
+        let plain_json = serde_json::to_string(&plain).expect("plain message should serialize");
+        assert!(
+            !plain_json.contains("steering_id"),
+            "None steering_id must be skipped in serialization"
+        );
+
+        // 旧快照（无 steering_id 字段）必须仍可反序列化（serde default）。
+        let legacy = json!({
+            "id": "m1",
+            "role": "User",
+            "content": { "Text": "legacy" },
+            "timestamp": SystemTime::now(),
+            "metadata": { "turn_id": "turn-1" }
+        });
+        let legacy_msg: Message =
+            serde_json::from_value(legacy).expect("legacy snapshot without steering_id must load");
+        assert_eq!(legacy_msg.steering_id(), None);
+        assert_eq!(
+            legacy_msg.metadata.semantic_kind,
+            None,
+            "legacy metadata has no semantic_kind either"
+        );
+
+        // 语义种类：UserSteering 提醒 + steering_id 的组合是注入消息的特征。
+        let full = Message::internal_reminder(
+            InternalReminderKind::UserSteering,
+            "<system_reminder>full</system_reminder>",
+        )
+        .with_steering_id("steer-002".to_string())
+        .with_semantic_kind(MessageSemanticKind::InternalReminder);
+        let full_json = serde_json::to_string(&full).expect("full message should serialize");
+        let full_restored: Message =
+            serde_json::from_str(&full_json).expect("full message should deserialize");
+        assert_eq!(full_restored.steering_id(), Some("steer-002"));
+        assert_eq!(
+            full_restored.metadata.internal_reminder_kind,
+            Some(InternalReminderKind::UserSteering)
+        );
     }
 }
 

@@ -7,7 +7,9 @@
 //! `opencode-antigravity-auth`.
 
 use super::store::{self, StoredCredential};
-use super::{jwt, oauth_server, pkce, pkce::Pkce, ResolvedCredential, StartedLogin};
+use super::{
+    jwt, oauth_server, pkce, pkce::Pkce, ResolvedCredential, StartedLogin, SubscriptionHttpOptions,
+};
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -107,15 +109,17 @@ fn build_authorize_url(pkce: &Pkce, state: &str, redirect_uri: &str) -> String {
     format!("{AUTHORIZE_URL}?{query}")
 }
 
-fn http_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .context("build antigravity http client")
+fn http_client(options: &SubscriptionHttpOptions) -> Result<reqwest::Client> {
+    super::build_http_client(options, "Antigravity")
 }
 
-async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result<TokenResponse> {
-    let client = http_client()?;
+async fn exchange_code(
+    code: &str,
+    verifier: &str,
+    redirect_uri: &str,
+    options: &SubscriptionHttpOptions,
+) -> Result<TokenResponse> {
+    let client = http_client(options)?;
     let secret = client_secret();
     let params = [
         ("grant_type", "authorization_code"),
@@ -143,8 +147,8 @@ async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result
         .context("parse antigravity token response")
 }
 
-async fn refresh(refresh_token: &str) -> Result<TokenResponse> {
-    let client = http_client()?;
+async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Result<TokenResponse> {
+    let client = http_client(options)?;
     let secret = client_secret();
     let params = [
         ("grant_type", "refresh_token"),
@@ -223,6 +227,7 @@ async fn persist_tokens(tokens: TokenResponse, expected_revision: u64) -> Result
 pub(crate) async fn begin_login(
     cancel: CancellationToken,
     expected_revision: u64,
+    options: SubscriptionHttpOptions,
 ) -> Result<StartedLogin> {
     let pkce = Pkce::generate();
     let state = pkce::random_state();
@@ -242,7 +247,7 @@ pub(crate) async fn begin_login(
                     .get("code")
                     .cloned()
                     .ok_or_else(|| anyhow!("antigravity callback missing code"))?;
-                exchange_code(&code, &verifier, &redirect_uri).await
+                exchange_code(&code, &verifier, &redirect_uri, &options).await
             },
             move |tokens| persist_tokens(tokens, expected_revision),
         )
@@ -259,7 +264,7 @@ pub(crate) async fn begin_login(
 
 /// Ensures the stored access token is fresh, refreshing it when needed. Returns
 /// the current `(access, expires_ms)`.
-async fn ensure_fresh() -> Result<(String, i64)> {
+async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64)> {
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
@@ -279,7 +284,7 @@ async fn ensure_fresh() -> Result<(String, i64)> {
         return Ok((access, expires));
     }
 
-    let refreshed = refresh(&refresh_token).await?;
+    let refreshed = refresh(&refresh_token, options).await?;
     let new_access = refreshed
         .access_token
         .clone()
@@ -299,14 +304,38 @@ async fn ensure_fresh() -> Result<(String, i64)> {
         },
     )
     .await?;
-    super::require_current_store_revision(super::SubscriptionProvider::Antigravity, outcome)?;
-    log::info!("antigravity subscription tokens refreshed");
-    Ok((new_access, new_expires))
+    match outcome {
+        store::ConditionalCommitOutcome::Committed { .. } => {
+            log::info!("antigravity subscription tokens refreshed");
+            Ok((new_access, new_expires))
+        }
+        store::ConditionalCommitOutcome::Conflict { current_revision } => {
+            let current = super::load_current_store_after_conflict(
+                super::SubscriptionProvider::Antigravity,
+                current_revision,
+            )
+            .await?;
+            match current.credential {
+                Some(StoredCredential::Oauth {
+                    access, expires, ..
+                }) if expires > now_ms() => {
+                    log::info!(
+                        "antigravity refresh reused tokens committed by a concurrent refresh"
+                    );
+                    Ok((access, expires))
+                }
+                _ => Err(super::store_revision_conflict(
+                    super::SubscriptionProvider::Antigravity,
+                    current_revision,
+                )),
+            }
+        }
+    }
 }
 
 /// Resolves the runtime credential (refreshing tokens if required).
-pub(crate) async fn resolve() -> Result<ResolvedCredential> {
-    let (access, expires) = ensure_fresh().await?;
+pub(crate) async fn resolve(options: &SubscriptionHttpOptions) -> Result<ResolvedCredential> {
+    let (access, expires) = ensure_fresh(options).await?;
     let (ua_platform, meta_platform) = platform_tokens();
     let mut headers = HashMap::new();
     headers.insert(

@@ -12,7 +12,7 @@ use crate::agentic::tools::browser_control::actions::BrowserActions;
 use crate::agentic::tools::browser_control::browser_launcher::{
     BrowserKind, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
 };
-use crate::agentic::tools::browser_control::cdp_client::{CdpClient, CdpVersionInfo};
+use crate::agentic::tools::browser_control::cdp_client::{CdpClient, CdpPageInfo, CdpVersionInfo};
 use crate::agentic::tools::browser_control::session_registry::{
     BrowserSession, BrowserSessionRegistry, BrowserSessionState, DialogHandler,
 };
@@ -41,10 +41,10 @@ static BROWSER_SESSIONS: std::sync::OnceLock<Arc<BrowserSessionRegistry>> =
 const OPEN_BUILT_IN_BROWSER_EVENT: &str = "agentic://open-built-in-browser";
 
 /// `connect { mode: "headless" }` only attaches, it never launches. It must
-/// therefore not default to the port the `default` mode's managed browser
-/// occupies: otherwise a session that already ran `connect { mode: "default" }`
-/// can never reach a headless browser, because `verify_headless_cdp_browser`
-/// hard-rejects the headed browser sitting on that port.
+/// therefore not default to the logical port used by the `default` mode:
+/// otherwise a session that already connected the user's browser can never
+/// reach a headless browser, because `verify_headless_cdp_browser` hard-rejects
+/// the headed browser sitting on that port.
 const DEFAULT_HEADLESS_CDP_PORT: u16 = DEFAULT_CDP_PORT + 1;
 
 /// Computer Use is an independent switch from browser control (`ai.computer_use_enabled`
@@ -80,15 +80,75 @@ impl ControlHubTool {
     }
 
     fn default_browser_connect_hints(kind: &BrowserKind, port: u16) -> Vec<String> {
-        let exe = BrowserLauncher::browser_executable(kind);
-        vec![
-            "Drive pages over CDP rather than desktop mouse/keyboard automation. Note this is BitFun's managed browser profile, not the user's everyday profile: it keeps its own cookies and logins across runs, so on a login wall ask the user to sign in once in that window instead of retrying or typing credentials.".to_string(),
-            format!(
-                "If CDP is not ready on test port {}, retry browser.connect — it starts \"{}\" against BitFun's managed profile with CDP enabled. Do not ask the user to enable a debug port on their everyday browser profile.",
-                port, exe
-            ),
-            "After the browser is listening on the test port, use browser.connect / snapshot / click / fill to drive the DOM directly.".to_string(),
-        ]
+        match kind {
+            BrowserKind::Chrome | BrowserKind::Edge => {
+                let setup_url = if matches!(kind, BrowserKind::Chrome) {
+                    "chrome://inspect/#remote-debugging"
+                } else {
+                    "edge://inspect/#remote-debugging"
+                };
+                vec![
+                    format!(
+                        "{} can connect BitFun to the current real profile, preserving its open tabs, cookies, extensions, and login state.",
+                        kind
+                    ),
+                    format!(
+                        "For one-time setup, ask the user to click Enable default CDP in BitFun Settings > Browser control. BitFun opens {}; enable Remote debugging there (the browser remembers this for normal future starts), then approve BitFun's connection dialog in {}.",
+                        setup_url, kind
+                    ),
+                    "After approval, keep using browser.connect / snapshot / click / fill; BitFun retains one guarded browser connection to avoid repeated prompts.".to_string(),
+                ]
+            }
+            _ => {
+                let exe = BrowserLauncher::browser_executable(kind);
+                vec![
+                    format!(
+                        "If {} already publishes DevToolsActivePort from its normal user-data directory, BitFun reuses that real profile automatically; otherwise it starts a persistent managed profile.",
+                        kind
+                    ),
+                    format!(
+                        "If CDP is not ready on test port {}, retry browser.connect — it starts \"{}\" with BitFun's managed profile.",
+                        port, exe
+                    ),
+                    "After the browser is listening, use browser.connect / snapshot / click / fill to drive the DOM directly.".to_string(),
+                ]
+            }
+        }
+    }
+
+    async fn browser_version(port: u16) -> BitFunResult<CdpVersionInfo> {
+        if let Some(connection) = CdpClient::browser_connection(port).await {
+            connection.client.browser_version().await
+        } else {
+            CdpClient::get_version(port).await
+        }
+    }
+
+    async fn browser_pages(port: u16) -> BitFunResult<Vec<CdpPageInfo>> {
+        if let Some(connection) = CdpClient::browser_connection(port).await {
+            connection.client.browser_pages().await
+        } else {
+            CdpClient::list_pages(port).await
+        }
+    }
+
+    async fn create_browser_page(port: u16, url: Option<&str>) -> BitFunResult<CdpPageInfo> {
+        if let Some(connection) = CdpClient::browser_connection(port).await {
+            connection.client.create_browser_page(url).await
+        } else {
+            CdpClient::create_page(port, url).await
+        }
+    }
+
+    async fn connect_page(port: u16, page: &CdpPageInfo) -> BitFunResult<CdpClient> {
+        if let Some(connection) = CdpClient::browser_connection(port).await {
+            connection.client.attach_to_page(&page.id).await
+        } else {
+            let ws_url = page.web_socket_debugger_url.as_ref().ok_or_else(|| {
+                BitFunError::tool("Page has no WebSocket debugger URL".to_string())
+            })?;
+            CdpClient::connect(ws_url).await
+        }
     }
 
     fn headless_browser_connect_hints(port: u16) -> Vec<String> {
@@ -134,7 +194,11 @@ impl ControlHubTool {
         if browser.to_ascii_lowercase().contains("headless") {
             return Ok(());
         }
-        let reported = if browser.is_empty() { "unknown" } else { browser };
+        let reported = if browser.is_empty() {
+            "unknown"
+        } else {
+            browser
+        };
         Err(ControlHubError::new(
             ErrorCode::NotAvailable,
             format!(
@@ -144,7 +208,7 @@ impl ControlHubTool {
         )
         .with_hints(Self::headless_browser_connect_hints(port))
         .with_hint(
-            "Use connect { mode: \"default\" } to drive the BitFun-managed browser profile instead.",
+            "Use connect { mode: \"default\" } for the user-approved current Chrome or Edge profile, or the compatible managed-profile fallback instead.",
         ))
     }
 
@@ -198,8 +262,8 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
   * Do not call `connect`, `tab_new`, or `navigate` merely to display a URL. Use the CDP workflow only when the agent must read page content or interact with the DOM.
 - UI action:
   * `open_builtin { url, title?, replace_existing? }` — open an http(s) URL in BitFun's built-in right-side browser panel. This changes the BitFun UI only; it does not fetch page text for reasoning. The panel is display-only for the user — the agent cannot snapshot, read, or interact with it; use `connect` + `snapshot` when page content is needed.
-- Automation modes (external managed browser):
-  * `connect { mode: "default" }` (default) — start or attach BitFun's managed browser profile with CDP enabled on port 9222.
+- Automation modes (external browser):
+  * `connect { mode: "default" }` (default) — on Chrome 144+ and current Edge, request a user-approved connection to the currently running real profile so existing tabs and login state are preserved. Other supported Chromium browsers also reuse the real profile when it publishes DevToolsActivePort; otherwise BitFun starts or attaches its persistent managed profile on port 9222.
   * `connect { mode: "headless" }` — attach to an already-running headless browser on the headless test port 9223. This mode never starts a browser; when nothing is listening it returns `NOT_AVAILABLE` together with the exact launch command.
   * `params.port` overrides the CDP port for `connect` and for every other CDP action; after `connect`, actions reuse the connected session's port automatically.
 - Actions: open_builtin, connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, read_article, close, list_pages, tab_query, switch_page, list_sessions.
@@ -402,8 +466,8 @@ Branch on `ok` and `error.code`, not on English messages.
                 // The value of a capability probe is entirely in the field
                 // values, so the assistant-visible text must be the payload
                 // itself — a one-line summary tells the model nothing.
-                let assistant = serde_json::to_string_pretty(&body)
-                    .unwrap_or_else(|_| body.to_string());
+                let assistant =
+                    serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string());
                 Ok(vec![ToolResult::ok(body, Some(assistant))])
             }
             "route_hint" => {
@@ -425,13 +489,14 @@ Branch on `ok` and `error.code`, not on English messages.
                 // otherwise send an unroutable request.
                 let mut suggestions: Vec<(&'static str, Option<&'static str>, u32, &'static str)> =
                     vec![];
-                let push = |s: &mut Vec<(&'static str, Option<&'static str>, u32, &'static str)>,
-                            domain: &'static str,
-                            tool: Option<&'static str>,
-                            score: u32,
-                            why: &'static str| {
-                    s.push((domain, tool, score, why));
-                };
+                let push =
+                    |s: &mut Vec<(&'static str, Option<&'static str>, u32, &'static str)>,
+                     domain: &'static str,
+                     tool: Option<&'static str>,
+                     score: u32,
+                     why: &'static str| {
+                        s.push((domain, tool, score, why));
+                    };
 
                 let browser_kw = [
                     "http",
@@ -738,8 +803,69 @@ Branch on `ok` and `error.code`, not on English messages.
                 let user_data_dir = params.get("user_data_dir").and_then(|v| v.as_str());
                 let launch_result = if mode == "headless" {
                     LaunchResult::AlreadyConnected
+                } else if user_data_dir.is_none()
+                    && CdpClient::browser_connection_for_kind(port, &kind)
+                        .await
+                        .is_some()
+                {
+                    LaunchResult::AlreadyConnected
                 } else {
+                    // Every browser shares the same logical tool port. When
+                    // the selection or explicit profile changes, stop routing
+                    // new actions through the previously retained browser.
+                    if CdpClient::browser_connection(port).await.is_some() {
+                        CdpClient::remove_browser_connection(port).await;
+                    }
                     BrowserLauncher::launch_with_cdp_opts(&kind, port, user_data_dir).await?
+                };
+
+                let uses_user_profile = match &launch_result {
+                    LaunchResult::UserProfileReady { endpoint } => {
+                        if let Err(error) = CdpClient::connect_user_profile_browser(
+                            port,
+                            endpoint.port,
+                            &kind,
+                            &endpoint.web_socket_url,
+                        )
+                        .await
+                        {
+                            return Ok(err_response(
+                                "browser",
+                                "connect",
+                                ControlHubError::new(
+                                    ErrorCode::NotAvailable,
+                                    format!(
+                                        "{} did not approve the connection to the current profile, or the approval request timed out.",
+                                        kind
+                                    ),
+                                )
+                                .with_hint(error.to_string())
+                                .with_hints(Self::default_browser_connect_hints(&kind, port)),
+                            ));
+                        }
+                        true
+                    }
+                    LaunchResult::UserProfileSetupRequired {
+                        setup_url,
+                        instructions,
+                        ..
+                    } => {
+                        return Ok(err_response(
+                            "browser",
+                            "connect",
+                            ControlHubError::new(
+                                ErrorCode::NotAvailable,
+                                format!(
+                                    "{} needs one-time setup before BitFun can use the current logged-in profile.",
+                                    kind
+                                ),
+                            )
+                            .with_hint(instructions)
+                            .with_hint(format!("{} setup page: {setup_url}", kind))
+                            .with_hints(Self::default_browser_connect_hints(&kind, port)),
+                        ));
+                    }
+                    _ => CdpClient::browser_connection(port).await.is_some(),
                 };
 
                 // UX shortcut: a frequent flow is "drive my Gmail tab" /
@@ -764,14 +890,16 @@ Branch on `ok` and `error.code`, not on English messages.
                     .unwrap_or(true);
 
                 match &launch_result {
-                    LaunchResult::AlreadyConnected | LaunchResult::Launched => {
-                        let version = CdpClient::get_version(port).await?;
+                    LaunchResult::AlreadyConnected
+                    | LaunchResult::Launched
+                    | LaunchResult::UserProfileReady { .. } => {
+                        let version = Self::browser_version(port).await?;
                         if mode == "headless" {
                             if let Err(error) = Self::verify_headless_cdp_browser(&version, port) {
                                 return Ok(err_response("browser", "connect", error));
                             }
                         }
-                        let pages = CdpClient::list_pages(port).await?;
+                        let pages = Self::browser_pages(port).await?;
                         let connected_browser = if mode == "headless" {
                             "Headless test browser".to_string()
                         } else {
@@ -781,7 +909,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         // Selection: explicit target_* > first real page > first.
                         let matched_by_target = if target_url.is_some() || target_title.is_some() {
                             pages.iter().find(|p| {
-                                if p.web_socket_debugger_url.is_none() {
+                                if !uses_user_profile && p.web_socket_debugger_url.is_none() {
                                     return false;
                                 }
                                 let url_ok = target_url
@@ -825,17 +953,15 @@ Branch on `ok` and `error.code`, not on English messages.
                             .or_else(|| {
                                 pages.iter().find(|p| {
                                     p.page_type.as_deref() == Some("page")
-                                        && p.web_socket_debugger_url.is_some()
+                                        && (uses_user_profile
+                                            || p.web_socket_debugger_url.is_some())
                                 })
                             })
                             .or_else(|| pages.first())
                             .ok_or_else(|| {
                                 BitFunError::tool("No browser pages found via CDP".to_string())
                             })?;
-                        let ws_url = page.web_socket_debugger_url.as_ref().ok_or_else(|| {
-                            BitFunError::tool("Page has no WebSocket debugger URL".to_string())
-                        })?;
-                        let client = CdpClient::connect(ws_url).await?;
+                        let client = Self::connect_page(port, page).await?;
                         let session = BrowserSession {
                             session_id: page.id.clone(),
                             port,
@@ -874,6 +1000,7 @@ Branch on `ok` and `error.code`, not on English messages.
                             "success": true,
                             "browser": connected_browser,
                             "browser_mode": mode,
+                            "browser_profile": if uses_user_profile { "current_user" } else { "managed" },
                             "browser_version": version.browser,
                             "port": port,
                             "session_id": session.session_id,
@@ -883,6 +1010,8 @@ Branch on `ok` and `error.code`, not on English messages.
                             "activated": activated,
                             "status": if mode == "headless" {
                                 "attached"
+                            } else if uses_user_profile {
+                                "connected_user_profile"
                             } else if matches!(launch_result, LaunchResult::AlreadyConnected) {
                                 "already_connected"
                             } else {
@@ -892,7 +1021,12 @@ Branch on `ok` and `error.code`, not on English messages.
                         if let Some(w) = activate_warning {
                             result["warning"] = json!(w);
                         }
-                        let summary = if targeted {
+                        let summary = if uses_user_profile {
+                            format!(
+                                "Connected to the current {} profile via user-approved DOM/CDP (session {}, page '{}')",
+                                connected_browser, session.session_id, page.title
+                            )
+                        } else if targeted {
                             format!(
                                 "Connected to {} via DOM/CDP (session {}, page '{}')",
                                 connected_browser, session.session_id, page.title
@@ -905,6 +1039,24 @@ Branch on `ok` and `error.code`, not on English messages.
                         };
                         Ok(vec![ToolResult::ok(result, Some(summary))])
                     }
+                    LaunchResult::UserProfileSetupRequired {
+                        setup_url,
+                        instructions,
+                        ..
+                    } => Ok(err_response(
+                        "browser",
+                        "connect",
+                        ControlHubError::new(
+                            ErrorCode::NotAvailable,
+                            format!(
+                                "{} needs one-time setup before BitFun can use the current logged-in profile.",
+                                kind
+                            ),
+                        )
+                        .with_hint(instructions)
+                        .with_hint(format!("{} setup page: {setup_url}", kind))
+                        .with_hints(Self::default_browser_connect_hints(&kind, port)),
+                    )),
                     LaunchResult::LaunchedButCdpNotReady { message, .. } => Ok(err_response(
                         "browser",
                         "connect",
@@ -925,7 +1077,7 @@ Branch on `ok` and `error.code`, not on English messages.
             }
 
             "list_pages" => {
-                let pages = CdpClient::list_pages(port).await?;
+                let pages = Self::browser_pages(port).await?;
                 let default_id = browser_sessions().default_id().await;
                 let summary: Vec<Value> = pages
                     .iter()
@@ -976,7 +1128,7 @@ Branch on `ok` and `error.code`, not on English messages.
                     .unwrap_or(20)
                     .max(1);
 
-                let pages = CdpClient::list_pages(port).await?;
+                let pages = Self::browser_pages(port).await?;
                 let default_id = browser_sessions().default_id().await;
                 let total = pages.len();
                 let filtered: Vec<Value> = pages
@@ -1031,12 +1183,8 @@ Branch on `ok` and `error.code`, not on English messages.
                     .get("activate")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(true);
-                let page = CdpClient::create_page(port, url).await?;
-                let ws_url = page
-                    .web_socket_debugger_url
-                    .as_ref()
-                    .ok_or_else(|| BitFunError::tool("New tab has no WebSocket URL".to_string()))?;
-                let client = CdpClient::connect(ws_url).await?;
+                let page = Self::create_browser_page(port, url).await?;
+                let client = Self::connect_page(port, &page).await?;
                 let session = BrowserSession {
                     session_id: page.id.clone(),
                     port,
@@ -1089,14 +1237,11 @@ Branch on `ok` and `error.code`, not on English messages.
                     reused = true;
                     registry.get(Some(page_id)).await?
                 } else {
-                    let pages = CdpClient::list_pages(port).await?;
+                    let pages = Self::browser_pages(port).await?;
                     let page = pages.iter().find(|p| p.id == page_id).ok_or_else(|| {
                         BitFunError::tool(format!("Page '{}' not found", page_id))
                     })?;
-                    let ws_url = page.web_socket_debugger_url.as_ref().ok_or_else(|| {
-                        BitFunError::tool("Page has no WebSocket URL".to_string())
-                    })?;
-                    let client = CdpClient::connect(ws_url).await?;
+                    let client = Self::connect_page(port, page).await?;
                     let session = BrowserSession {
                         session_id: page.id.clone(),
                         port,
@@ -2509,7 +2654,10 @@ mod control_hub_tests {
             .unwrap_or_default();
         assert!(msg.contains("Unknown domain"), "got: {msg}");
         for d in ["browser", "terminal", "meta"] {
-            assert!(msg.contains(d), "valid domain {d} missing from error: {msg}");
+            assert!(
+                msg.contains(d),
+                "valid domain {d} missing from error: {msg}"
+            );
         }
         // ComputerUse is a separate tool, not a ControlHub domain — listing it
         // as one sent models chasing a domain that never existed.
@@ -2799,9 +2947,7 @@ mod control_hub_tests {
             .expect("open_builtin succeeds without a frontend emitter");
         let payload = results.first().expect("one result").content();
         assert_eq!(
-            payload
-                .get("observable_by_agent")
-                .and_then(|v| v.as_bool()),
+            payload.get("observable_by_agent").and_then(|v| v.as_bool()),
             Some(false),
             "open_builtin must state the panel is not agent-observable: {payload}"
         );
@@ -2920,7 +3066,7 @@ mod control_hub_tests {
             );
             assert!(
                 err.hints.iter().any(|h| h.contains("mode: \"default\"")),
-                "hints must offer the default managed-profile mode: {:?}",
+                "hints must offer the default interactive-browser mode: {:?}",
                 err.hints
             );
         }
@@ -2944,17 +3090,32 @@ mod control_hub_tests {
     }
 
     #[test]
-    fn default_connect_hints_point_to_managed_profile_not_user_debug_port() {
+    fn default_connect_hints_point_to_guarded_user_profile_not_raw_debug_port() {
         let hints = ControlHubTool::default_browser_connect_hints(&BrowserKind::Chrome, 9222);
         let joined = hints.join(" | ");
         assert!(
-            joined.contains("managed profile"),
-            "hints must guide toward BitFun's managed profile launch: {joined}"
+            joined.contains("current real profile")
+                && joined.contains("chrome://inspect/#remote-debugging")
+                && joined.contains("approve"),
+            "hints must guide toward Chrome's guarded real-profile connection: {joined}"
         );
         assert!(
             !joined.contains("--remote-debugging-port"),
             "hints must not teach enabling a raw debug port on the user's everyday browser: {joined}"
         );
+    }
+
+    #[test]
+    fn edge_connect_hints_use_its_guarded_real_profile_setup() {
+        let hints = ControlHubTool::default_browser_connect_hints(&BrowserKind::Edge, 9222);
+        let joined = hints.join(" | ");
+        assert!(joined.contains("current real profile"), "{joined}");
+        assert!(
+            joined.contains("edge://inspect/#remote-debugging"),
+            "{joined}"
+        );
+        assert!(joined.contains("approve"), "{joined}");
+        assert!(!joined.contains("--remote-debugging-port"), "{joined}");
     }
 
     #[test]

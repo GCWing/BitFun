@@ -146,6 +146,21 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/memories', key: 'fields.phase1MaxConcurrency.label' },
   ],
 
+  'ai-thresholds': [
+    { ns: 'settings/thresholds', key: 'title' },
+    { ns: 'settings/thresholds', key: 'subtitle' },
+    { ns: 'settings/thresholds', key: 'fields.subagent.max_hard_cap' },
+    { ns: 'settings/thresholds', key: 'fields.compression.safety_reserve_tokens' },
+    { ns: 'settings/thresholds', key: 'fields.model_retry.max_attempts' },
+    { ns: 'settings/thresholds', key: 'fields.tool_output_cap.default_chars' },
+    { ns: 'settings/thresholds', key: 'fields.tool_timeout.bash_default_ms' },
+    { ns: 'settings/thresholds', key: 'fields.knowledge_search.max_scan_depth' },
+    { ns: 'settings/thresholds', key: 'fields.acp_timeout.direct_secs' },
+    { ns: 'settings/thresholds', key: 'fields.deep_review.max_parallel_instances' },
+    { ns: 'settings/thresholds', key: 'fields.memories.summary_token_limit' },
+    { ns: 'settings/thresholds', key: 'fields.goal.idle_wakeup_delay_ms' },
+  ],
+
   'mcp-tools': [
     { ns: 'settings/mcp-tools', key: 'title' },
     { ns: 'settings/mcp-tools', key: 'subtitle' },

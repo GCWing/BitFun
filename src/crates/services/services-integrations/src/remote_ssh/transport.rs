@@ -194,6 +194,7 @@ impl WorkspaceStdio {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn spawn_local_process(executable: &str, args: &[String]) -> anyhow::Result<Self> {
         Self::spawn_local_process_with_signal_hook(executable, args, None)
     }
@@ -773,6 +774,7 @@ mod ssh_channel_tests {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]

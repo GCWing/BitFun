@@ -2,7 +2,7 @@ import { Want } from '@kit.AbilityKit';
 import { Driver, ON, abilityDelegatorRegistry } from '@kit.TestKit';
 import { describe, it, expect } from '@ohos/hypium';
 
-const APP_BUNDLE: string = 'com.example.bitfun_mobile';
+const APP_BUNDLE: string = 'com.bitfun.app';
 const APP_ABILITY: string = 'EntryAbility';
 
 export default function deviceSmokeTest() {

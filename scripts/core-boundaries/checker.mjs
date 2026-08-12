@@ -32,6 +32,7 @@ import { runManifestParserSelfTest } from './self-test.mjs';
 import {
   featureReferencesDependency,
   featureReferencesFeature,
+  featureReferencesOptionalDependencyOwner,
   unexpectedDependencyOwnerFeatures,
   unexpectedReachableLocalFeatures,
 } from './manifest-feature-helpers.mjs';
@@ -40,6 +41,7 @@ import {
   agentRuntimeIntegrationTestTargets,
   checkAgentRuntimeIntegrationTestTopology,
   checkCliIntegrationTestTopology,
+  checkServiceIntegrationTestTopologies,
   cliIntegrationTestTargets,
   validateExplicitIntegrationTestTopology,
 } from './explicit-test-topology.mjs';
@@ -544,7 +546,7 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
         });
         continue;
       }
-      if (!featureReferencesDependency(feature, dependency.depName)) {
+      if (!featureReferencesOptionalDependencyOwner(feature, dependency.depName)) {
         failures.push({
           path: manifestPath,
           line: feature.line,
@@ -1122,6 +1124,7 @@ export function runCoreBoundaryCheck() {
   failures.push(...checkCargoDependencyBoundariesSafely({ root: ROOT, crateLayoutRules }));
   failures.push(...checkAgentRuntimeIntegrationTestTopology(ROOT));
   failures.push(...checkCliIntegrationTestTopology(ROOT));
+  failures.push(...checkServiceIntegrationTestTopologies(ROOT));
 
   for (const rule of forbiddenManifestDependencyRules) {
     checkForbiddenManifestDependencyRule(rule);

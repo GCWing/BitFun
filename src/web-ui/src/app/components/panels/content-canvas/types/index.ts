@@ -28,10 +28,16 @@ export type {
 
 export {
   LAYOUT_CONFIG,
+  EDITOR_GROUP_IDS,
+  EDITOR_GROUP_COL,
+  EDITOR_GROUP_ROW,
+  GRID_MAX_DIM,
+  GRID9_RATIO_CONFIG,
   createEditorGroupState,
   createLayoutState,
   createCanvasState,
   clampSplitRatio,
+  clampGrid9Ratio,
   clampAnchorSize,
 } from './layout';
 

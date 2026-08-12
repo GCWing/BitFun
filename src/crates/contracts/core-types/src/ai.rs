@@ -198,6 +198,26 @@ pub struct ReasoningCatalogProjection {
     pub default_preset: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub presets: Vec<ReasoningPresetDescriptor>,
+    /// Presets declared by the selected models.dev model that the active
+    /// request adapter cannot compile reliably. These are informational only
+    /// and must not be offered as selectable presets.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unavailable_presets: Vec<ReasoningPresetDescriptor>,
+}
+
+/// Secret-free model facts used to preview the effective reasoning presets
+/// while a model configuration is still being edited.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReasoningCatalogProjectionRequest {
+    pub provider: String,
+    pub model_name: String,
+    pub base_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    pub reasoning: ReasoningConfig,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]

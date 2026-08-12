@@ -14,6 +14,7 @@ pub mod framework;
 pub mod input_validator;
 pub mod mcp_tool_bridge;
 pub mod permission_intent;
+pub mod poke;
 pub mod tool_execution_presentation;
 pub mod tool_result_storage;
 pub mod tool_snapshot;
@@ -56,6 +57,7 @@ pub use framework::{
     build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
     build_tool_manifest_policy_tools, build_tool_path_policy_denial_message,
     build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
+    classify_tool_call,
     collect_loaded_deferred_tool_specs, get_tool_spec_input_schema,
     get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_short_description,
     is_bitfun_current_session_uri, is_bitfun_runtime_uri, is_bitfun_tool_uri,
@@ -73,7 +75,8 @@ pub use framework::{
     resolve_host_path, resolve_host_path_with_workspace, resolve_readonly_enabled_tools,
     resolve_tool_manifest_policy, resolve_tool_path_with_context,
     resolve_tool_path_with_context_roots, resolve_workspace_tool_path,
-    sort_tool_manifest_definitions, summarize_get_tool_spec_deferred_tools,
+    sort_tool_manifest_definitions, subagent_tool_restrictions,
+    summarize_get_tool_spec_deferred_tools,
     tool_manifest_sort_rank, tool_path_is_effectively_absolute,
     tool_restrictions_for_delegation_policy, validate_deferred_tool_usage,
     validate_get_tool_spec_input, validate_tool_allowed_by_list, ContextualToolManifest,
@@ -81,7 +84,7 @@ pub use framework::{
     DynamicToolInfo, GetToolSpecCatalogProvider, GetToolSpecDeferredToolSummary, GetToolSpecDetail,
     GetToolSpecExecutionError, GetToolSpecExecutionPlan, GetToolSpecLoadObservation,
     GetToolSpecRuntime, LoadedDeferredToolSpec, ParsedBitFunCurrentSessionUri,
-    ParsedBitFunRuntimeUri, PortableToolContextProvider, PromptVisibleToolManifestItem,
+    ParsedBitFunRuntimeUri, PortableToolContextProvider, OperationClass, PromptVisibleToolManifestItem,
     SnapshotToolDecorator, SnapshotToolWrapper, SnapshotToolWrapperRef,
     StaticToolMaterializationError, StaticToolProvider, StaticToolProviderFactory,
     StaticToolProviderGroup, StaticToolProviderPlan, ToolCatalogRuntime,
@@ -89,8 +92,9 @@ pub use framework::{
     ToolExposure, ToolManifestDefinition, ToolManifestPolicyResolution, ToolManifestPolicyTool,
     ToolPathBackend, ToolPathContractError, ToolPathOperation, ToolPathPolicy, ToolPathResolution,
     ToolRef, ToolRegistry, ToolRegistryItem, ToolRenderOptions, ToolRestrictionError, ToolResult,
-    ToolRuntimeAssembly, ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult,
-    BITFUN_CURRENT_SESSION_URI_PREFIX, BITFUN_RUNTIME_URI_PREFIX, GET_TOOL_SPEC_TOOL_NAME,
+    ToolRuntimeAssembly, ToolRuntimeRestrictions, ToolRuntimeRestrictionsPatch, ToolWorkspaceKind,
+    ValidationResult, BITFUN_CURRENT_SESSION_URI_PREFIX, BITFUN_RUNTIME_URI_PREFIX,
+    GET_TOOL_SPEC_TOOL_NAME,
 };
 pub use input_validator::InputValidator;
 pub use mcp_tool_bridge::{
@@ -102,6 +106,10 @@ pub use mcp_tool_bridge::{
     MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
 };
 pub use permission_intent::PermissionIntent;
+pub use poke::{
+    AppealStatement, PokeMessage, PokeResponse, PokeStatus, PokeType, PokeValidator,
+    SelfCheckStatement,
+};
 pub use tool_execution_presentation::{
     build_invalid_tool_call_error_message, build_normal_tool_json_repair_notice,
     build_permission_denied_tool_presentation, build_tool_call_truncation_recovery_notice,

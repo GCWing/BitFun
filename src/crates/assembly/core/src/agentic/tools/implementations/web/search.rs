@@ -32,13 +32,19 @@ impl WebSearchTool {
         crawl: &str,
         ctx: u64,
     ) -> BitFunResult<String> {
-        WebToolNetworkProvider::search_exa(ExaSearchRequest {
-            query,
-            num_results: num,
-            kind,
-            livecrawl: crawl,
-            context_max_characters: ctx,
-        })
+        // 阈值参数配置化：ai.thresholds.tool_timeout.exa_secs
+        let exa_timeout_secs =
+            crate::agentic::tools::implementations::web::timeouts::configured_exa_timeout_secs().await;
+        WebToolNetworkProvider::search_exa_with_timeout(
+            ExaSearchRequest {
+                query,
+                num_results: num,
+                kind,
+                livecrawl: crawl,
+                context_max_characters: ctx,
+            },
+            exa_timeout_secs,
+        )
         .await
         .map_err(|error| {
             error!("WebSearch Exa error: {}", error);

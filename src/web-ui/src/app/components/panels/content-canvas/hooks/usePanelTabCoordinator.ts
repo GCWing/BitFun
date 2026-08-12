@@ -12,6 +12,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useCanvasStore } from '../stores';
 import { useApp } from '@/app/hooks/useApp';
 import { TAB_EVENTS } from '../types';
+import { EDITOR_GROUP_IDS } from '../types/layout';
 import { loadPanelWidth, STORAGE_KEYS, RIGHT_PANEL_CONFIG } from '@/app/layout/panelConfig';
 interface UsePanelTabCoordinatorOptions {
   /** Auto-collapse when all tabs are closed */
@@ -50,6 +51,20 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
   const {
     primaryGroup,
     secondaryGroup,
+    tertiaryGroup,
+    slot4Group,
+    slot5Group,
+    slot6Group,
+    slot7Group,
+    slot8Group,
+    slot9Group,
+    slot10Group,
+    slot11Group,
+    slot12Group,
+    slot13Group,
+    slot14Group,
+    slot15Group,
+    slot16Group,
   } = useCanvasStore();
 
   const { state, toggleRightPanel, updateRightPanelWidth } = useApp();
@@ -131,10 +146,32 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
       return;
     }
 
-    // Count visible tabs
-    const primaryVisible = primaryGroup.tabs.filter(t => !t.isHidden).length;
-    const secondaryVisible = secondaryGroup.tabs.filter(t => !t.isHidden).length;
-    const visibleCount = primaryVisible + secondaryVisible;
+    // Count visible tabs across all 16 editor groups (legacy primary/secondary/
+    // tertiary plus the grid9 extension slots slot4..slot16). Counting only the
+    // first three groups let grid9 windows be wrongly auto-collapsed while
+    // their tabs were still open (d7-P1-1).
+    const tabsByGroup = {
+      primary: primaryGroup.tabs,
+      secondary: secondaryGroup.tabs,
+      tertiary: tertiaryGroup.tabs,
+      slot4: slot4Group.tabs,
+      slot5: slot5Group.tabs,
+      slot6: slot6Group.tabs,
+      slot7: slot7Group.tabs,
+      slot8: slot8Group.tabs,
+      slot9: slot9Group.tabs,
+      slot10: slot10Group.tabs,
+      slot11: slot11Group.tabs,
+      slot12: slot12Group.tabs,
+      slot13: slot13Group.tabs,
+      slot14: slot14Group.tabs,
+      slot15: slot15Group.tabs,
+      slot16: slot16Group.tabs,
+    };
+    const visibleCount = EDITOR_GROUP_IDS.reduce(
+      (sum, gid) => sum + tabsByGroup[gid].filter((tab) => !tab.isHidden).length,
+      0,
+    );
     
     const isCollapsed = rightPanelCollapsedRef.current;
 
@@ -149,6 +186,20 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
   }, [
     primaryGroup.tabs,
     secondaryGroup.tabs,
+    tertiaryGroup.tabs,
+    slot4Group.tabs,
+    slot5Group.tabs,
+    slot6Group.tabs,
+    slot7Group.tabs,
+    slot8Group.tabs,
+    slot9Group.tabs,
+    slot10Group.tabs,
+    slot11Group.tabs,
+    slot12Group.tabs,
+    slot13Group.tabs,
+    slot14Group.tabs,
+    slot15Group.tabs,
+    slot16Group.tabs,
     autoCollapseOnEmpty,
     autoExpandOnTabOpen,
     expandPanel,
