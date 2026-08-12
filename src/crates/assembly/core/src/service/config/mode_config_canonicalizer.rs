@@ -314,11 +314,26 @@ async fn get_mode_defaults() -> HashMap<String, Vec<String>> {
         .collect()
 }
 
+/// Default tool lists for every agent that can own a stored profile.
+///
+/// Profiles are not a mode-only concept: sub-agents carry their own skill
+/// selection, so a mode-only lookup rejects writes for agents the UI already
+/// lets users configure (`ComputerUse` being the built-in case).
+async fn get_agent_defaults() -> HashMap<String, Vec<String>> {
+    let mut defaults = get_mode_defaults().await;
+    for subagent in get_agent_registry().get_subagents_info(None).await {
+        defaults
+            .entry(subagent.id)
+            .or_insert(subagent.default_tools);
+    }
+    defaults
+}
+
 async fn get_profile_defaults() -> HashMap<String, Vec<String>> {
     let mut defaults = HashMap::new();
-    for (mode_id, default_tools) in get_mode_defaults().await {
+    for (agent_id, default_tools) in get_agent_defaults().await {
         defaults
-            .entry(resolve_profile_id(&mode_id))
+            .entry(resolve_profile_id(&agent_id))
             .or_insert(default_tools);
     }
     defaults
@@ -363,8 +378,8 @@ pub async fn get_agent_profile_view(agent_id: &str) -> BitFunResult<AgentProfile
 pub async fn persist_agent_profile_from_value(agent_id: &str, config: Value) -> BitFunResult<()> {
     let config_service = GlobalConfigManager::get_service().await?;
     let mut stored_configs = get_agent_profile_configs().await?;
-    let mode_defaults = get_mode_defaults().await;
-    let default_tools = mode_defaults
+    let agent_defaults = get_agent_defaults().await;
+    let default_tools = agent_defaults
         .get(agent_id)
         .ok_or_else(|| BitFunError::config(format!("Agent does not exist: {}", agent_id)))?;
     let valid_tools = get_valid_tool_names().await;
@@ -552,9 +567,20 @@ pub async fn canonicalize_agent_profile_configs(
         }
     }
 
-    for profile_id in raw_agent_profiles.keys() {
-        if !profile_defaults.contains_key(profile_id) {
-            removed_profile_configs.push(profile_id.clone());
+    // Profiles we cannot resolve defaults for are kept, not dropped. Canonicalization
+    // runs at startup with no workspace, so project-scoped sub-agents are invisible
+    // here; pruning them would silently discard the user's stored selection every
+    // launch. Records that no longer deserialize are still removed, so one bad entry
+    // cannot take the whole map down when it is read back.
+    for (profile_id, raw_profile) in &raw_agent_profiles {
+        if profile_defaults.contains_key(profile_id) {
+            continue;
+        }
+        match serde_json::from_value::<AgentProfileConfig>(raw_profile.clone()) {
+            Ok(config) => {
+                rewritten_agent_profiles.insert(profile_id.clone(), serde_json::to_value(config)?);
+            }
+            Err(_) => removed_profile_configs.push(profile_id.clone()),
         }
     }
 
@@ -589,15 +615,40 @@ pub fn agent_profile_member_mode_ids_for(agent_id: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        agent_profile_member_mode_ids_for, canonicalize_agent_profile,
+        agent_profile_member_mode_ids_for, canonicalize_agent_profile, get_agent_defaults,
         normalize_skill_override_lists, resolve_effective_tools,
         stored_agent_profile_from_overrides, StoredAgentProfileOverrides,
     };
+    use crate::agentic::agents::get_agent_registry;
     use crate::service::config::types::{AgentProfileConfig, AgentSubagentOverrideState};
     use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
     use bitfun_runtime_ports::{PermissionEffect, PermissionRule};
     use serde_json::Value;
     use std::collections::HashSet;
+
+    /// Skill selection is stored per agent profile, so every agent whose default
+    /// tools include `Skill` must resolve to a profile default. Otherwise saving
+    /// its selection fails with "Agent does not exist" — which is what happened
+    /// to `ComputerUse`, a sub-agent the agents scene renders as a core card.
+    #[tokio::test]
+    async fn agents_shipping_the_skill_tool_can_own_a_stored_profile() {
+        let defaults = get_agent_defaults().await;
+
+        assert!(
+            defaults.contains_key("ComputerUse"),
+            "ComputerUse ships the Skill tool but cannot own a stored profile"
+        );
+
+        for subagent in get_agent_registry().get_subagents_info(None).await {
+            if subagent.default_tools.iter().any(|tool| tool == "Skill") {
+                assert!(
+                    defaults.contains_key(&subagent.id),
+                    "sub-agent '{}' ships the Skill tool but cannot own a stored profile",
+                    subagent.id
+                );
+            }
+        }
+    }
 
     #[test]
     fn mode_profiles_cannot_remove_required_thread_goal_tools() {
