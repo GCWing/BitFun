@@ -67,6 +67,15 @@ export const GroupChatMentionPicker: React.FC<GroupChatMentionPickerProps> = ({
     setSelectedIndex(0);
   }, [isOpen, searchQuery]);
 
+  // P2-14: when members arrive asynchronously (or the filter narrows), keep the
+  // selected index inside the item list instead of pointing past the end.
+  useEffect(() => {
+    setSelectedIndex((index) => {
+      if (items.length === 0) return 0;
+      return Math.min(index, items.length - 1);
+    });
+  }, [items.length]);
+
   const handleSelect = useCallback(
     (actor: GroupChatActor) => {
       onSelect(actor);

@@ -17,6 +17,7 @@ import {
   type RichTextInputElement,
 } from './RichTextInput';
 import { FileMentionPicker } from './FileMentionPicker';
+import { GroupChatMentionPicker, GROUP_CHAT_ALL_ITEM } from './GroupChatMentionPicker';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import {
   useSessionDerivedState,
@@ -5484,26 +5485,62 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               />
 
               
-              <FileMentionPicker
-                isOpen={mentionState.isActive}
-                searchQuery={mentionState.query}
-                workspacePath={sessionBoundWorkspacePath}
-                excludeSessionId={effectiveTargetSessionId || undefined}
-                anchorRef={mentionAnchorRef}
-                onSelect={(context: FileContext | DirectoryContext | SessionReferenceContext) => {
-                  addContext(context);
-                  
-                  if (richTextInputRef.current && (richTextInputRef.current as any).insertTagReplacingMention) {
-                    (richTextInputRef.current as any).insertTagReplacingMention(context);
-                  }
-                }}
-                onClose={() => {
-                  if (richTextInputRef.current && (richTextInputRef.current as any).closeMention) {
-                    (richTextInputRef.current as any).closeMention();
-                  }
-                  setMentionState({ isActive: false, query: '', startOffset: 0 });
-                }}
-              />
+              {mentionState.isActive && mentionState.memberMode && registration?.groupChatMention ? (
+                <GroupChatMentionPicker
+                  isOpen
+                  searchQuery={mentionState.query}
+                  members={registration.groupChatMention.members}
+                  onSelect={(target) => {
+                    // Record the mention for the group chat transport.
+                    registration.groupChatMention?.onMentionSelect(target);
+                    // Insert a session-reference tag in place of the @@query.
+                    const member = registration.groupChatMention?.members.find((m) =>
+                      target.kind === 'claw' ? m.sessionId === target.sessionId : true,
+                    );
+                    const context: SessionReferenceContext = {
+                      id: target.kind === 'claw' ? `group-member-${target.sessionId}` : 'group-member-all',
+                      timestamp: Date.now(),
+                      type: 'session-reference',
+                      sessionId: target.kind === 'claw' ? target.sessionId : GROUP_CHAT_ALL_ITEM,
+                      sessionName: target.kind === 'claw' ? (member?.displayName ?? target.sessionId) : GROUP_CHAT_ALL_ITEM,
+                      workspacePath: workspacePath || '',
+                      workspaceLabel: GROUP_CHAT_ALL_ITEM,
+                      metadata: { groupChatMention: target },
+                    };
+                    addContext(context);
+                    if (richTextInputRef.current && (richTextInputRef.current as any).insertTagReplacingMention) {
+                      (richTextInputRef.current as any).insertTagReplacingMention(context);
+                    }
+                  }}
+                  onClose={() => {
+                    if (richTextInputRef.current && (richTextInputRef.current as any).closeMention) {
+                      (richTextInputRef.current as any).closeMention();
+                    }
+                    setMentionState({ isActive: false, query: '', startOffset: 0 });
+                  }}
+                />
+              ) : (
+                <FileMentionPicker
+                  isOpen={mentionState.isActive}
+                  searchQuery={mentionState.query}
+                  workspacePath={sessionBoundWorkspacePath}
+                  excludeSessionId={effectiveTargetSessionId || undefined}
+                  anchorRef={mentionAnchorRef}
+                  onSelect={(context: FileContext | DirectoryContext | SessionReferenceContext) => {
+                    addContext(context);
+                    
+                    if (richTextInputRef.current && (richTextInputRef.current as any).insertTagReplacingMention) {
+                      (richTextInputRef.current as any).insertTagReplacingMention(context);
+                    }
+                  }}
+                  onClose={() => {
+                    if (richTextInputRef.current && (richTextInputRef.current as any).closeMention) {
+                      (richTextInputRef.current as any).closeMention();
+                    }
+                    setMentionState({ isActive: false, query: '', startOffset: 0 });
+                  }}
+                />
+              )}
               
               {slashCommandState.isActive && createPortal((() => {
                 if (slashCommandState.kind === 'actions') {

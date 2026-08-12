@@ -45,7 +45,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
@@ -73,6 +73,7 @@ use bitfun_runtime_ports::{
     DialogSubmitQueueAction, DialogSubmitQueueFacts, PortError, PortErrorKind, PortResult,
     SessionStoragePathRequest, SessionStorePort, SessionTranscriptRequest,
 };
+use bitfun_services_core::session::GroupChatStore;
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
     DialogSubmitOutcome,
@@ -2952,6 +2953,43 @@ impl DialogScheduler {
         )];
         let user_message_metadata = plan.user_message_metadata;
 
+        // Group chat reply ingestion (P0-3): when the finished turn was a group
+        // dispatch (metadata carries groupId/groupMessageId), ingest the reply
+        // into the room — mark the original message Replied and persist the
+        // reply body (P2-1). Best-effort: a failed ingest must never break the
+        // normal reply forwarding below.
+        if let Some(serde_json::Value::Object(metadata)) = user_message_metadata.as_ref() {
+            if metadata.get("groupId").is_some() && metadata.get("groupMessageId").is_some() {
+                let now_ms = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as i64;
+                let reply_author = bitfun_runtime_ports::GroupChatActor::Claw {
+                    session_id: responder_session_id.to_string(),
+                    agent_type: "Claw".to_string(),
+                };
+                if let Ok(store) = self
+                    .resolve_group_chat_store(target_workspace_path.as_str())
+                    .await
+                {
+                    if let Err(error) = crate::agentic::tools::implementations::group_chat_router::GroupChatRouter::ingest_reply(
+                        &store,
+                        metadata,
+                        &reply_user_input,
+                        &reply_author,
+                        now_ms,
+                    )
+                    .await
+                    {
+                        warn!(
+                            "Failed to ingest group chat reply (best-effort): responder_session_id={}, error={}",
+                            responder_session_id, error
+                        );
+                    }
+                }
+            }
+        }
+
         if let Err(error) = self
             .submit_with_prepended_messages(
                 target_session_id.clone(),
@@ -3013,6 +3051,30 @@ impl DialogScheduler {
 
     fn take_suppressed_cancelled_reply(&self, session_id: &str, turn_id: &str) -> bool {
         self.suppressed_cancelled_replies.take(session_id, turn_id)
+    }
+
+    /// Resolves the group-chat store for a workspace (sibling of the sessions
+    /// root), mirroring the group_chat_tool resolution. Used by the reply
+    /// ingestion hook (P0-3). Returns an error when the workspace is absent so
+    /// the reply forwarding path stays best-effort.
+    async fn resolve_group_chat_store(
+        &self,
+        workspace_path: &str,
+    ) -> Result<GroupChatStore, String> {
+        let request = bitfun_runtime_ports::SessionStoragePathRequest {
+            workspace_path: PathBuf::from(workspace_path),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        let resolution = crate::agentic::session::session_store_port::CoreSessionStorePort::default()
+            .resolve_session_storage_path(request)
+            .await
+            .map_err(|error| error.to_string())?;
+        let sessions_root = resolution.effective_storage_path;
+        let parent = sessions_root
+            .parent()
+            .ok_or_else(|| "sessions root has no parent".to_string())?;
+        Ok(GroupChatStore::new(parent.join("group-chats")))
     }
 
     async fn dispatch_next_if_idle(&self, session_id: &str) -> Result<(), String> {

@@ -4,12 +4,46 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GroupChatPane } from './GroupChatPane';
+import { GroupChatPane, buildGroupChatSubmission } from './GroupChatPane';
 import { useGroupChatStore } from '../store/groupChatStore';
 import type { GroupChatMember, GroupChatMessage, GroupChatRoom } from '../types/flow-chat';
+import type { ChatInputSubmission } from './chatInputRegistration';
+import type { SessionReferenceContext } from '@/shared/types/context';
 
 vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({
   api: { invoke: vi.fn() },
+}));
+
+// The shared ChatInput is a heavy composer; stub it here so the pane-level
+// tests stay focused on GroupChatPane wiring (Task A: full ChatInput reuse
+// is verified by the registration contract + buildGroupChatSubmission tests).
+vi.mock('./ChatInput', () => ({
+  ChatInput: (props: { registration?: { onSubmit?: unknown } }) =>
+    React.createElement('div', {
+      'data-testid': 'chat-input-textarea',
+      'data-registration': props.registration ? 'present' : undefined,
+    }),
+}));
+
+vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
+  useOptionalWorkspaceContext: () => ({ workspacePath: '/ws' }),
+  useWorkspaceContext: () => ({
+    activeWorkspace: null,
+    loading: false,
+    error: null,
+    hasWorkspace: true,
+    workspaceName: 'ws',
+    workspacePath: '/ws',
+    openedWorkspaces: { values: () => [] },
+  }),
+  useCurrentWorkspace: () => ({
+    workspace: null,
+    loading: false,
+    error: null,
+    hasWorkspace: true,
+    workspaceName: 'ws',
+    workspacePath: '/ws',
+  }),
 }));
 
 import { api } from '@/infrastructure/api/service-api/ApiClient';
@@ -113,21 +147,62 @@ describe('GroupChatPane', () => {
     expect(messages[1].textContent).toContain('reply from assistant');
   });
 
+  it('renders the shared ChatInput in the input footer (Task A)', () => {
+    renderPane();
+    // The full composer is reused instead of the legacy plain-text input.
+    expect(container.querySelector('[data-bf-part="textInput"]')).toBeNull();
+    expect(container.querySelector('[data-testid="chat-input-textarea"]')).toBeTruthy();
+  });
+
+  it('normalizes group-member mentions into body + mention targets (buildGroupChatSubmission)', () => {
+    const memberContext: SessionReferenceContext = {
+      id: 'group-member-m-1',
+      timestamp: 1,
+      type: 'session-reference',
+      sessionId: 'm-1',
+      sessionName: 'Assistant One',
+      workspacePath: '/ws',
+      workspaceLabel: '@all',
+      metadata: { groupChatMention: { kind: 'claw', sessionId: 'm-1', agentType: 'Claw' } },
+    };
+    const submission: ChatInputSubmission = {
+      text: 'Please review [session-ref:1] the draft',
+      displayText: 'Please review [Session reference: Assistant One] the draft',
+      contexts: [memberContext],
+      composerPresentation: null,
+    };
+    const result = buildGroupChatSubmission(submission, []);
+    expect(result.text).toBe('Please review @Assistant One the draft');
+    expect(result.mentionTargets).toEqual([{ kind: 'claw', sessionId: 'm-1', agentType: 'Claw' }]);
+  });
+
+  it('deduplicates pending and context mention targets', () => {
+    const memberContext: SessionReferenceContext = {
+      id: 'group-member-m-2',
+      timestamp: 1,
+      type: 'session-reference',
+      sessionId: 'm-2',
+      sessionName: 'Assistant Two',
+      workspacePath: '/ws',
+      workspaceLabel: '@all',
+      metadata: { groupChatMention: { kind: 'claw', sessionId: 'm-2', agentType: 'Claw' } },
+    };
+    const submission: ChatInputSubmission = {
+      text: 'hi',
+      displayText: 'hi',
+      contexts: [memberContext],
+      composerPresentation: null,
+    };
+    const result = buildGroupChatSubmission(submission, [{ kind: 'claw', sessionId: 'm-2', agentType: 'Claw' }]);
+    expect(result.mentionTargets).toEqual([{ kind: 'claw', sessionId: 'm-2', agentType: 'Claw' }]);
+  });
+
   it('sends a message via sendMessage with master author', async () => {
-    // useEffect 触发 loadMembers + loadMessages；Enter 触发 send。
+    // useEffect 触发 loadMembers + loadMessages；通过 store 直接驱动发送路径。
     mockedInvoke.mockResolvedValue([]);
     renderPane();
 
-    const input = container.querySelector('[data-bf-part="textInput"]') as HTMLInputElement;
-    // 受控 input：用 native setter + input 事件驱动 React 状态。
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-    act(() => {
-      setter?.call(input, 'hi group');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    act(() => {
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    });
+    await useGroupChatStore.getState().sendMessage('room-1', { kind: 'master' }, 'hi group', []);
 
     const sendCall = mockedInvoke.mock.calls.find(([command]) => command === 'group_chat_send');
     expect(sendCall).toBeTruthy();

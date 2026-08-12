@@ -123,7 +123,9 @@
       "timeoutReminder": "No reply within the timeout",
       "manageMembers": "Manage members",
       "masterLabel": "Master",
-      "allLabel": "@all"
+      "allLabel": "@all",
+      "loadFailed": "Failed to load group chat data, please retry",
+      "dismissError": "Dismiss"
     },
     "search": {
       "triggerPlaceholder": "Search",

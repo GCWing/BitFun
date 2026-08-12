@@ -885,13 +885,25 @@ pub async fn delete_all_archived_sessions(
 // ---------------------------------------------------------------------------
 // Group chat commands (R-GC-12, P2-1: 11 commands unified naming)
 // ---------------------------------------------------------------------------
+// P0-2/P1-4: every command is a thin wrapper over the shared GroupChatTool
+// pipeline (create_room_impl / join_room_impl / leave_room_impl /
+// delete_room_impl / set_mode_impl / send_message_impl), so the UI path shares
+// validation, back-index (S-38), dispatch routing, and error codes with the
+// tool path — no parallel implementation.
 
+use bitfun_core::agentic::coordination::{get_global_coordinator, ConversationCoordinator};
 use bitfun_core::agentic::session::session_store_port::CoreSessionStorePort;
-use bitfun_core::service::session::GroupChatStore;
-use bitfun_runtime_ports::{
-    GroupChatActor, GroupChatMember, GroupChatMessage, GroupChatMessagesResponse, GroupChatMode,
-    GroupChatRoom, GroupChatSendResult, SessionStoragePathRequest, SessionStorePort,
+use bitfun_core::agentic::tools::implementations::group_chat_tool::{
+    parse_group_chat_error_code, GroupChatTool,
 };
+use bitfun_core::service::session::GroupChatStore;
+use bitfun_core::util::errors::BitFunError;
+use bitfun_runtime_ports::{
+    GroupChatActor, GroupChatError, GroupChatErrorCode, GroupChatMember, GroupChatMessage,
+    GroupChatMessagesResponse, GroupChatMode, GroupChatRoom, GroupChatSendResult,
+    SessionStoragePathRequest, SessionStorePort,
+};
+use std::sync::Arc;
 
 /// Resolves the group-chats root (sibling of the sessions root) for a workspace.
 async fn group_chats_root(workspace_path: &str) -> Result<std::path::PathBuf, String> {
@@ -916,20 +928,41 @@ async fn group_chat_store(workspace_path: &str) -> Result<GroupChatStore, String
     Ok(GroupChatStore::new(root))
 }
 
-fn group_chat_unix_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
+/// Converts a tool error into a structured `GroupChatError` so the frontend
+/// can branch on the contract error code (P1-5). Legacy plain errors degrade
+/// to a generic message with no code.
+fn group_chat_command_error(error: BitFunError) -> GroupChatError {
+    let message = error.to_string();
+    let code = parse_group_chat_error_code(&message).unwrap_or(GroupChatErrorCode::NotFound);
+    GroupChatError { code, message }
+}
+
+/// Resolves the global coordinator (the shared pipeline entry). Falls back to
+/// an error string when the coordinator is not initialized.
+fn require_coordinator() -> Result<Arc<ConversationCoordinator>, GroupChatError> {
+    get_global_coordinator().ok_or_else(|| GroupChatError {
+        code: GroupChatErrorCode::NotFound,
+        message: "coordinator not initialized".to_string(),
+    })
 }
 
 #[tauri::command]
-pub async fn group_chat_list(workspace_path: String) -> Result<Vec<GroupChatRoom>, String> {
-    let store = group_chat_store(&workspace_path).await?;
+pub async fn group_chat_list(
+    workspace_path: String,
+) -> Result<Vec<GroupChatRoom>, GroupChatError> {
+    let store = group_chat_store(&workspace_path)
+        .await
+        .map_err(|message| GroupChatError {
+            code: GroupChatErrorCode::NotFound,
+            message,
+        })?;
     let (rooms, _) = store
         .list_rooms()
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| GroupChatError {
+            code: group_chat_store_error_code(&error),
+            message: error.to_string(),
+        })?;
     Ok(rooms)
 }
 
@@ -937,24 +970,37 @@ pub async fn group_chat_list(workspace_path: String) -> Result<Vec<GroupChatRoom
 pub async fn group_chat_load(
     workspace_path: String,
     room_id: String,
-) -> Result<GroupChatRoom, String> {
-    let store = group_chat_store(&workspace_path).await?;
-    store
-        .load_room(&room_id)
+) -> Result<GroupChatRoom, GroupChatError> {
+    let store = group_chat_store(&workspace_path)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|message| GroupChatError {
+            code: GroupChatErrorCode::NotFound,
+            message,
+        })?;
+    store.load_room(&room_id).await.map_err(|error| GroupChatError {
+        code: group_chat_store_error_code(&error),
+        message: error.to_string(),
+    })
 }
 
 #[tauri::command]
 pub async fn group_chat_members(
     workspace_path: String,
     room_id: String,
-) -> Result<Vec<GroupChatMember>, String> {
-    let store = group_chat_store(&workspace_path).await?;
+) -> Result<Vec<GroupChatMember>, GroupChatError> {
+    let store = group_chat_store(&workspace_path)
+        .await
+        .map_err(|message| GroupChatError {
+            code: GroupChatErrorCode::NotFound,
+            message,
+        })?;
     store
         .list_members(&room_id)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| GroupChatError {
+            code: group_chat_store_error_code(&error),
+            message: error.to_string(),
+        })
 }
 
 #[tauri::command]
@@ -964,54 +1010,18 @@ pub async fn group_chat_create(
     owner: GroupChatActor,
     members: Vec<String>,
     mode: Option<GroupChatMode>,
-) -> Result<GroupChatRoom, String> {
-    let store = group_chat_store(&workspace_path).await?;
-    let (rooms, _) = store
-        .list_rooms()
-        .await
-        .map_err(|error| error.to_string())?;
-    if rooms.iter().any(|room| room.name == name) {
-        return Err(format!("group chat name '{name}' already exists"));
-    }
-    let now = group_chat_unix_ms();
-    let room_id = format!("group-{}", uuid_slug(&name));
-    let members_list: Vec<GroupChatMember> = members
-        .iter()
-        .enumerate()
-        .map(|(index, session_id)| GroupChatMember {
-            session_id: session_id.clone(),
-            role: if index == 0 {
-                bitfun_runtime_ports::GroupChatMemberRole::Owner
-            } else {
-                bitfun_runtime_ports::GroupChatMemberRole::Member
-            },
-            joined_at: now,
-            agent_type: "Claw".to_string(),
-            display_name: None,
-        })
-        .collect();
-    let room = GroupChatRoom {
-        schema_version: 1,
-        room_id: room_id.clone(),
-        name,
+) -> Result<GroupChatRoom, GroupChatError> {
+    let coordinator = require_coordinator()?;
+    GroupChatTool::create_room_impl(
+        &coordinator,
+        &workspace_path,
+        &name,
         owner,
-        mode: mode.unwrap_or(GroupChatMode::Free),
-        round_robin_cursor: 0,
-        created_at: now,
-        last_active_at: now,
-        status: bitfun_runtime_ports::GroupChatStatus::Active,
-        member_limit: 50,
-        members: Vec::new(),
-    };
-    store
-        .save_room(&room)
-        .await
-        .map_err(|error| error.to_string())?;
-    store
-        .save_members(&room_id, &members_list)
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(room)
+        &members,
+        mode.unwrap_or(GroupChatMode::Free),
+    )
+    .await
+    .map_err(group_chat_command_error)
 }
 
 #[tauri::command]
@@ -1020,50 +1030,11 @@ pub async fn group_chat_join(
     room_id: String,
     session_id: String,
     actor: GroupChatActor,
-) -> Result<GroupChatRoom, String> {
-    let store = group_chat_store(&workspace_path).await?;
-    let mut room = store
-        .load_room(&room_id)
+) -> Result<GroupChatRoom, GroupChatError> {
+    let coordinator = require_coordinator()?;
+    GroupChatTool::join_room_impl(&coordinator, &workspace_path, &room_id, &session_id, actor)
         .await
-        .map_err(|error| error.to_string())?;
-    if room
-        .members
-        .iter()
-        .any(|member| member.session_id == session_id)
-    {
-        return Err(format!("session '{session_id}' is already a member"));
-    }
-    let is_owner_or_master = match (&room.owner, &actor) {
-        (
-            GroupChatActor::Claw {
-                session_id: owner_id,
-                ..
-            },
-            GroupChatActor::Claw {
-                session_id: actor_id,
-                ..
-            },
-        ) => owner_id == actor_id,
-        _ => matches!(actor, GroupChatActor::Master),
-    };
-    if !is_owner_or_master {
-        return Err("only the owner or the master can add members".to_string());
-    }
-    let now = group_chat_unix_ms();
-    let mut members = room.members.clone();
-    members.push(GroupChatMember {
-        session_id: session_id.clone(),
-        role: bitfun_runtime_ports::GroupChatMemberRole::Member,
-        joined_at: now,
-        agent_type: "Claw".to_string(),
-        display_name: None,
-    });
-    store
-        .save_members(&room_id, &members)
-        .await
-        .map_err(|error| error.to_string())?;
-    room.members = members;
-    Ok(room)
+        .map_err(group_chat_command_error)
 }
 
 #[tauri::command]
@@ -1072,60 +1043,23 @@ pub async fn group_chat_leave(
     room_id: String,
     session_id: String,
     actor: GroupChatActor,
-) -> Result<GroupChatRoom, String> {
-    let store = group_chat_store(&workspace_path).await?;
-    let room = store
-        .load_room(&room_id)
+) -> Result<GroupChatRoom, GroupChatError> {
+    let coordinator = require_coordinator()?;
+    GroupChatTool::leave_room_impl(&coordinator, &workspace_path, &room_id, &session_id, actor)
         .await
-        .map_err(|error| error.to_string())?;
-    let can_leave = matches!(actor, GroupChatActor::Master)
-        || match (&room.owner, &actor) {
-            (
-                GroupChatActor::Claw {
-                    session_id: owner_id,
-                    ..
-                },
-                GroupChatActor::Claw {
-                    session_id: actor_id,
-                    ..
-                },
-            ) => owner_id == actor_id || actor_id == &session_id,
-            _ => match &actor {
-                GroupChatActor::Claw {
-                    session_id: claw, ..
-                } => claw == &session_id,
-                _ => false,
-            },
-        };
-    if !can_leave {
-        return Err("only the owner, the master, or the member itself can leave".to_string());
-    }
-    let members: Vec<GroupChatMember> = room
-        .members
-        .iter()
-        .filter(|member| member.session_id != session_id)
-        .cloned()
-        .collect();
-    store
-        .save_members(&room_id, &members)
-        .await
-        .map_err(|error| error.to_string())?;
-    let mut updated = room;
-    updated.members = members;
-    Ok(updated)
+        .map_err(group_chat_command_error)
 }
 
 #[tauri::command]
 pub async fn group_chat_delete(
     workspace_path: String,
     room_id: String,
-    _actor: GroupChatActor,
-) -> Result<(), String> {
-    let store = group_chat_store(&workspace_path).await?;
-    store
-        .delete_room(&room_id)
+    actor: GroupChatActor,
+) -> Result<(), GroupChatError> {
+    let coordinator = require_coordinator()?;
+    GroupChatTool::delete_room_impl(&coordinator, &workspace_path, &room_id, actor)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(group_chat_command_error)
 }
 
 #[tauri::command]
@@ -1133,20 +1067,11 @@ pub async fn group_chat_set_mode(
     workspace_path: String,
     room_id: String,
     mode: GroupChatMode,
-    _actor: GroupChatActor,
-) -> Result<GroupChatRoom, String> {
-    let store = group_chat_store(&workspace_path).await?;
-    let mut room = store
-        .load_room(&room_id)
+    actor: GroupChatActor,
+) -> Result<GroupChatRoom, GroupChatError> {
+    GroupChatTool::set_mode_impl(&workspace_path, &room_id, mode, actor)
         .await
-        .map_err(|error| error.to_string())?;
-    room.mode = mode;
-    room.round_robin_cursor = 0; // 模式切换时 reset cursor (R-GC-10)
-    store
-        .save_room(&room)
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(room)
+        .map_err(group_chat_command_error)
 }
 
 #[tauri::command]
@@ -1157,56 +1082,27 @@ pub async fn group_chat_send(
     content: String,
     mention_targets: Vec<GroupChatActor>,
     urgent: bool,
-) -> Result<GroupChatSendResult, String> {
-    let store = group_chat_store(&workspace_path).await?;
-    let room = store
-        .load_room(&room_id)
-        .await
-        .map_err(|error| error.to_string())?;
-    if room.members.is_empty() {
-        return Err("group has no members".to_string());
-    }
-    let now = group_chat_unix_ms();
-    let message_id = format!("msg-{}", uuid_slug(&format!("{room_id}-{content}-{now}")));
-    let message = GroupChatMessage {
-        message_id: message_id.clone(),
-        room_id: room_id.clone(),
-        author: author.clone(),
-        kind: match &author {
-            GroupChatActor::Master => bitfun_runtime_ports::GroupChatMessageKind::User,
-            GroupChatActor::Claw { .. } => bitfun_runtime_ports::GroupChatMessageKind::Agent,
-            GroupChatActor::All => bitfun_runtime_ports::GroupChatMessageKind::System,
-        },
-        content,
-        mention_targets: mention_targets.clone(),
-        reply_to_message_id: None,
-        timestamp: now,
-        status: bitfun_runtime_ports::GroupChatMessageStatus::Pending,
-    };
-    store
-        .append_message(&room_id, &message)
-        .await
-        .map_err(|error| error.to_string())?;
-    let delivered_to: Vec<String> = room
-        .members
-        .iter()
-        .map(|member| member.session_id.clone())
+) -> Result<GroupChatSendResult, GroupChatError> {
+    let coordinator = require_coordinator()?;
+    let (message_id, delivered_to, failed_to) = GroupChatTool::send_message_impl(
+        &coordinator,
+        &workspace_path,
+        &room_id,
+        &author,
+        &content,
+        &mention_targets,
+        urgent,
+    )
+    .await
+    .map_err(group_chat_command_error)?;
+    let failed_to = failed_to
+        .into_iter()
+        .filter_map(|value| serde_json::from_value(value).ok())
         .collect();
-    if !delivered_to.is_empty() {
-        store
-            .update_message_status(
-                &room_id,
-                &message_id,
-                bitfun_runtime_ports::GroupChatMessageStatus::Delivered,
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-    }
-    let _ = urgent;
     Ok(GroupChatSendResult {
         message_id,
         delivered_to,
-        failed_to: Vec::new(),
+        failed_to,
     })
 }
 
@@ -1216,12 +1112,20 @@ pub async fn group_chat_messages(
     room_id: String,
     limit: Option<usize>,
     cursor: Option<usize>,
-) -> Result<GroupChatMessagesResponse, String> {
-    let store = group_chat_store(&workspace_path).await?;
+) -> Result<GroupChatMessagesResponse, GroupChatError> {
+    let store = group_chat_store(&workspace_path)
+        .await
+        .map_err(|message| GroupChatError {
+            code: GroupChatErrorCode::NotFound,
+            message,
+        })?;
     let window = store
         .list_messages(&room_id, limit, cursor)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| GroupChatError {
+            code: group_chat_store_error_code(&error),
+            message: error.to_string(),
+        })?;
     Ok(GroupChatMessagesResponse {
         messages: window.messages,
         next_cursor: window.next_cursor.map(|index| index.to_string()),
@@ -1233,11 +1137,18 @@ pub async fn group_chat_ingest_reply(
     workspace_path: String,
     room_id: String,
     message_id: String,
-    _reply_content: String,
-    _author: GroupChatActor,
-    _timestamp: i64,
-) -> Result<(), String> {
-    let store = group_chat_store(&workspace_path).await?;
+    reply_content: String,
+    author: GroupChatActor,
+    timestamp: i64,
+) -> Result<(), GroupChatError> {
+    // P0-3/P2-1: mark the original message Replied AND persist the reply body
+    // into the room stream so the group shows the reply text.
+    let store = group_chat_store(&workspace_path)
+        .await
+        .map_err(|message| GroupChatError {
+            code: GroupChatErrorCode::NotFound,
+            message,
+        })?;
     store
         .update_message_status(
             &room_id,
@@ -1245,26 +1156,70 @@ pub async fn group_chat_ingest_reply(
             bitfun_runtime_ports::GroupChatMessageStatus::Replied,
         )
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| GroupChatError {
+            code: group_chat_store_error_code(&error),
+            message: error.to_string(),
+        })?;
+    if !reply_content.trim().is_empty() {
+        let reply = GroupChatMessage {
+            message_id: format!("msg-reply-{message_id}-{timestamp}"),
+            room_id: room_id.clone(),
+            author,
+            kind: bitfun_runtime_ports::GroupChatMessageKind::Agent,
+            content: reply_content,
+            mention_targets: Vec::new(),
+            reply_to_message_id: Some(message_id),
+            timestamp,
+            status: bitfun_runtime_ports::GroupChatMessageStatus::Delivered,
+        };
+        store
+            .append_message(&room_id, &reply)
+            .await
+            .map_err(|error| GroupChatError {
+                code: group_chat_store_error_code(&error),
+                message: error.to_string(),
+            })?;
+    }
+    Ok(())
 }
 
-/// P1-1 修复：超时提醒消费端——扫描全部房间的 Pending/Delivered 超时消息
-/// （消费 group_chat.reply_timeout_secs，R-GC-26），返回超时提醒列表。
+/// Maps a store error to the closest contract error code (P1-5).
+fn group_chat_store_error_code(
+    error: &bitfun_core::service::session::GroupChatStoreError,
+) -> GroupChatErrorCode {
+    use bitfun_core::service::session::GroupChatStoreError;
+    match error {
+        GroupChatStoreError::RoomNotFound(_) => GroupChatErrorCode::NotFound,
+        GroupChatStoreError::MessageNotFound(_) => GroupChatErrorCode::NotFound,
+        _ => GroupChatErrorCode::NotFound,
+    }
+}
+
+/// 超时提醒消费端（P2-3/P2-4）：只扫描 `room_id`（传入时）或全表（None），
+/// 消费 group_chat.reply_timeout_secs（R-GC-26），返回超时提醒列表。
+/// room_id 参数让每个 Pane 只扫自己的房间，避免 N 个 Pane = N 倍全表 IO。
 #[tauri::command]
 pub async fn group_chat_scan_timeouts(
     workspace_path: String,
     reply_timeout_secs: u64,
+    room_id: Option<String>,
 ) -> Result<Vec<serde_json::Value>, String> {
     let store = group_chat_store(&workspace_path).await?;
-    let (rooms, _) = store
-        .list_rooms()
-        .await
-        .map_err(|error| error.to_string())?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as i64;
     let mut reminders = Vec::new();
+    let rooms = match &room_id {
+        Some(room_id) => {
+            let room = store.load_room(room_id).await.map_err(|e| e.to_string())?;
+            vec![room]
+        }
+        None => {
+            let (rooms, _) = store.list_rooms().await.map_err(|e| e.to_string())?;
+            rooms
+        }
+    };
     for room in rooms {
         let timed_out = store
             .scan_timed_out_messages(&room.room_id, reply_timeout_secs, now)
@@ -1280,17 +1235,4 @@ pub async fn group_chat_scan_timeouts(
         }
     }
     Ok(reminders)
-}
-
-fn uuid_slug(seed: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(b"bitfun-group-chat-v1\0");
-    hasher.update(seed.as_bytes());
-    let digest = hasher.finalize();
-    digest
-        .iter()
-        .take(16)
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
 }

@@ -123,7 +123,9 @@
       "timeoutReminder": "逾時未回覆",
       "manageMembers": "管理成員",
       "masterLabel": "主人",
-      "allLabel": "@全體"
+      "allLabel": "@全體",
+      "loadFailed": "載入群聊資料失敗，請重試",
+      "dismissError": "關閉提示"
     },
     "search": {
       "triggerPlaceholder": "搜尋...",
