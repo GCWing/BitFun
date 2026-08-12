@@ -62,6 +62,7 @@ export const ToolbarMode: React.FC = () => {
   });
 
   const isMacOS = useMemo(() => isMacOSDesktopRuntime(), []);
+  const isOpenHarmony = useMemo(() => isOpenHarmonyRuntime(), []);
   const { workspacePath } = useCurrentWorkspace();
   const { activeSession, sessionTitle } = useFlowChatSessions();
 
@@ -230,6 +231,7 @@ export const ToolbarMode: React.FC = () => {
     toolbarState.hasError && 'bitfun-toolbar-mode--error',
     toolbarState.hasPendingConfirmation && 'bitfun-toolbar-mode--confirm',
     isMacOS && 'bitfun-toolbar-mode--macos',
+    isOpenHarmony && 'bitfun-toolbar-mode--ohos',
   ].filter(Boolean).join(' ');
 
   return (
