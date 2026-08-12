@@ -522,7 +522,7 @@ export const dispatchSessionDriver: SessionDriver = {
     context: FlowChatContext,
     sessionId: string,
     uiParams: UsageReportUiParams,
-  ): Promise<{ inserted: boolean }> {
+  ): Promise<{ shown: boolean }> {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) {
       throw new Error(
@@ -539,16 +539,14 @@ export const dispatchSessionDriver: SessionDriver = {
     const result = await runUsageReportCommand({
       session,
       ...uiParams,
-      // The target computes the report from its persisted session; the
-      // rendered turn stays in the projection (transcript cache), never in
-      // local session persistence.
+      // The target computes the report from its persisted session; nothing is
+      // written back, here or there.
       fetchReport: async () => {
         const response = await dispatchApi.query(jobId, 'usageReport');
         return response.report as SessionUsageReport;
       },
-      persistTurn: false,
     });
-    return { inserted: result.inserted };
+    return { shown: result.shown };
   },
 
   permissionRequestSource(sessionId: string) {

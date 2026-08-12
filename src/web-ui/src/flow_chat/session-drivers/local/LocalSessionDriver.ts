@@ -241,14 +241,14 @@ export const localSessionDriver: SessionDriver = {
     context: FlowChatContext,
     sessionId: string,
     uiParams: UsageReportUiParams,
-  ): Promise<{ inserted: boolean }> {
+  ): Promise<{ shown: boolean }> {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) {
       throw new Error(`Session does not exist: ${sessionId}`);
     }
     const { runUsageReportCommand } = await import('../../services/usageReportService');
     const result = await runUsageReportCommand({ session, ...uiParams });
-    return { inserted: result.inserted };
+    return { shown: result.shown };
   },
 
   permissionRequestSource(): 'live' {

@@ -174,7 +174,6 @@
       "tokens": "{{value}} tokens"
     },
     "loading": {
-      "markdown": "Generating usage report...",
       "title": "Generating usage report",
       "description": "Reading local session records and preparing a privacy-safe summary.",
       "steps": {

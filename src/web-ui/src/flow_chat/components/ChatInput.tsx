@@ -3296,11 +3296,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           noWorkspaceMessage: t('chatInput.usageNoWorkspace'),
           failedTitle: t('chatInput.usageFailed'),
           unknownErrorMessage: t('error.unknown'),
-          loadingMarkdown: t('usage.loading.markdown'),
         },
       );
 
-      if (result.inserted) {
+      if (result.shown) {
         dispatchInput({ type: 'DEACTIVATE' });
       }
     } catch (error) {

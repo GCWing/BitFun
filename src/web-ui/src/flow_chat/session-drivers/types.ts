@@ -104,7 +104,6 @@ export interface UsageReportUiParams {
   noWorkspaceMessage: string;
   failedTitle: string;
   unknownErrorMessage: string;
-  loadingMarkdown: string;
 }
 
 /**
@@ -228,15 +227,15 @@ export interface SessionDriver {
   compactSession(context: FlowChatContext, sessionId: string): Promise<void>;
 
   /**
-   * Generate and insert the session usage report turn. `uiParams` carries the
-   * caller's localized strings; the driver decides where the report data
-   * comes from and whether the rendered turn persists.
+   * Produce the session usage report and show it. `uiParams` carries the
+   * caller's localized strings; the driver decides where the report data comes
+   * from. The report is not written into the transcript.
    */
   runUsageReport(
     context: FlowChatContext,
     sessionId: string,
     uiParams: UsageReportUiParams,
-  ): Promise<{ inserted: boolean }>;
+  ): Promise<{ shown: boolean }>;
 
   /** How pending permission requests for this session are obtained. */
   permissionRequestSource(sessionId: string): PermissionRequestSource;

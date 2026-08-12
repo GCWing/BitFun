@@ -174,7 +174,6 @@
       "tokens": "{{value}} Tokens"
     },
     "loading": {
-      "markdown": "正在生成用量报告...",
       "title": "正在生成用量报告",
       "description": "正在读取本地会话记录，并整理隐私安全的统计摘要。",
       "steps": {

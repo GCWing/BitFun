@@ -767,11 +767,11 @@ export class FlowChatManager {
     return driverForSession(sessionId, session).compactSession(this.context, sessionId);
   }
 
-  /** Generate and insert the session usage report through its driver. */
+  /** Produce the session usage report and show it, through its driver. */
   async runSessionUsageReport(
     sessionId: string,
     uiParams: import('../session-drivers/types').UsageReportUiParams,
-  ): Promise<{ inserted: boolean }> {
+  ): Promise<{ shown: boolean }> {
     const session = this.context.flowChatStore.getState().sessions.get(sessionId);
     return driverForSession(sessionId, session).runUsageReport(this.context, sessionId, uiParams);
   }
