@@ -801,10 +801,8 @@ impl Tool for GetMCPPromptTool {
                 name: name.to_string(),
                 messages: result.messages.clone(),
             });
-        let (rendered_text, truncated) = truncate_text(
-            &prompt_text,
-            configured_mcp_render_chars().await,
-        );
+        let (rendered_text, truncated) =
+            truncate_text(&prompt_text, configured_mcp_render_chars().await);
         let mut rendered = rendered_text;
         if truncated {
             rendered

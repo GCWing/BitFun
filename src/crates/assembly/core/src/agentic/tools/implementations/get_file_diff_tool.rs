@@ -634,9 +634,7 @@ impl GetFileDiffTool {
             )));
         }
 
-        let end = diff_offset
-            .saturating_add(page_chars)
-            .min(consumable_chars);
+        let end = diff_offset.saturating_add(page_chars).min(consumable_chars);
         let page = chars[diff_offset..end].iter().collect::<String>();
         let has_more = end < consumable_chars;
         let budget_truncated = total_chars > consumable_chars;

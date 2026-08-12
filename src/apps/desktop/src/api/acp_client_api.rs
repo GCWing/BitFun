@@ -296,8 +296,7 @@ fn acp_tool_event_to_tool_item(event: &ToolEventData) -> Option<ToolItemData> {
         id: identity.tool_id.clone(),
         tool_name: identity.effective_name().to_string(),
         tool_call: ToolCallData {
-            input: acp_tool_event_started_input(event)
-                .unwrap_or_else(|| serde_json::json!({})),
+            input: acp_tool_event_started_input(event).unwrap_or_else(|| serde_json::json!({})),
             id: identity.tool_id.clone(),
         },
         tool_result,
@@ -502,7 +501,10 @@ async fn persist_acp_dialog_turn_backend(
         status,
         error,
     );
-    if let Err(error) = persistence.save_dialog_turn(session_storage_path, &turn).await {
+    if let Err(error) = persistence
+        .save_dialog_turn(session_storage_path, &turn)
+        .await
+    {
         log::warn!(
             "Failed to persist ACP dialog turn: session_id={} turn_id={} error={}",
             session_id,
@@ -1314,8 +1316,8 @@ mod tests {
 
     #[test]
     fn acp_tool_event_maps_lifecycle_variants() {
-        let started = acp_tool_event_to_tool_item(&started_event("tool-1"))
-            .expect("started maps to an item");
+        let started =
+            acp_tool_event_to_tool_item(&started_event("tool-1")).expect("started maps to an item");
         assert_eq!(started.id, "tool-1");
         assert_eq!(started.tool_name, "Bash");
         assert_eq!(started.status.as_deref(), Some("in_progress"));
@@ -1329,8 +1331,8 @@ mod tests {
         assert!(result.success);
         assert_eq!(result.duration_ms, Some(12));
 
-        let failed = acp_tool_event_to_tool_item(&failed_event("tool-1"))
-            .expect("failed maps to an item");
+        let failed =
+            acp_tool_event_to_tool_item(&failed_event("tool-1")).expect("failed maps to an item");
         assert_eq!(failed.status.as_deref(), Some("failed"));
         let result = failed.tool_result.expect("failed has a result");
         assert!(!result.success);
@@ -1366,7 +1368,10 @@ mod tests {
         accumulator.apply_tool_event(&failed_event("tool-2"));
         accumulator.finish_current_round();
         assert_eq!(accumulator.rounds[1].tool_items.len(), 1);
-        assert_eq!(accumulator.rounds[1].tool_items[0].status.as_deref(), Some("failed"));
+        assert_eq!(
+            accumulator.rounds[1].tool_items[0].status.as_deref(),
+            Some("failed")
+        );
     }
 
     #[test]

@@ -222,6 +222,45 @@ impl CronTool {
         Ok(resolved)
     }
 
+    /// Whether a schedule fires more than once.
+    ///
+    /// Only a repeating schedule takes over a cadence the agent would
+    /// otherwise drive by hand; a one-shot `at` job is a reminder and says
+    /// nothing about what the agent should do with the rest of its turn.
+    fn schedule_repeats(schedule: &CronSchedule) -> bool {
+        match schedule {
+            CronSchedule::At { .. } => false,
+            CronSchedule::Every { .. } | CronSchedule::Cron { .. } => true,
+        }
+    }
+
+    /// Describe a created job to the model.
+    ///
+    /// Handing a cadence to the scheduler is a handoff, but creating the job
+    /// does not end the turn — no tool can. Saying only "created job X" leaves
+    /// `add` looking like any other successful call, so the agent keeps
+    /// driving the loop the schedule was meant to take over, and a turn that
+    /// outruns the interval delays the very trigger it is racing (a scheduled
+    /// run is queued at low priority, never run concurrently).
+    fn add_result_summary(job: &CronJob, current_session_id: Option<&str>) -> String {
+        let mut summary = format!(
+            "Created scheduled job '{}' ({}) for session '{}' in workspace '{}'.",
+            job.name,
+            job.id,
+            job.session_id().unwrap_or(""),
+            job.workspace().workspace_path
+        );
+        if Self::schedule_repeats(&job.schedule) && job.session_id() == current_session_id {
+            summary.push_str(
+                " The schedule owns this cadence now. Creating the job did not end your turn — finish only what is \
+                 already in flight and then end it, instead of starting another round or waiting for one. When the job \
+                 fires it delivers its payload to this session as a new user message, and that is what begins the next \
+                 round; a turn still running when it fires just makes that round start late.",
+            );
+        }
+        summary
+    }
+
     fn normalize_add_name(name: Option<String>) -> String {
         match name {
             Some(name) if !name.trim().is_empty() => name.trim().to_string(),
@@ -634,6 +673,12 @@ impl Tool for CronTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(r#"Manage scheduled jobs.
+
+Scheduling is a handoff, not a step:
+- Creating a job does NOT end the current turn. No tool can end a turn — only you can, by stopping.
+- After scheduling a repeating job for this session, finish what is already in flight and then end your turn. Do not start the next round yourself and do not wait for it.
+- A job delivers its payload to the target session as a new user message when it fires; that message is what starts the next round.
+- A run that fires while the session is still busy is queued, never run in parallel, so a turn that outlives the interval only makes the next round start late. Pick an interval comfortably longer than one round takes.
 
 Defaults:
 - "session_id": defaults to the current session for "list" and "add".
@@ -1109,13 +1154,8 @@ Patch schema for "update":
                     })
                     .await?;
                 let serialized_job = Self::serialize_job(&created)?;
-                let result_for_assistant = format!(
-                    "Created scheduled job '{}' ({}) for session '{}' in workspace '{}'.",
-                    created.name,
-                    created.id,
-                    created.session_id().unwrap_or(""),
-                    created.workspace().workspace_path
-                );
+                let result_for_assistant =
+                    Self::add_result_summary(&created, context.session_id.as_deref());
 
                 Ok(vec![ToolResult::Result {
                     data: json!({
@@ -1396,5 +1436,106 @@ mod tests {
             Some("conn-1")
         );
         assert_eq!(workspace_ref.remote_ssh_host.as_deref(), Some("ssh.dev"));
+    }
+
+    fn job_with_schedule(schedule: CronSchedule, session_id: &str) -> CronJob {
+        CronJob {
+            id: "cron_4d437971".to_string(),
+            name: "round every 30min".to_string(),
+            schedule,
+            payload: CronJobPayload {
+                text: "run the next round".to_string(),
+            },
+            enabled: true,
+            target: CronJobTarget::Session {
+                session_id: session_id.to_string(),
+                workspace: CronWorkspaceRef {
+                    workspace_id: None,
+                    workspace_path: "/home/wsp/projects/test".to_string(),
+                    project_workspace_path: None,
+                    execution_target: None,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                },
+            },
+            created_at_ms: 0,
+            config_updated_at_ms: 0,
+            updated_at_ms: 0,
+            state: Default::default(),
+        }
+    }
+
+    fn every_30_minutes() -> CronSchedule {
+        CronSchedule::Every {
+            every_ms: 30 * 60 * 1_000,
+            anchor_ms: None,
+        }
+    }
+
+    #[test]
+    fn a_recurring_job_for_this_session_tells_the_agent_to_end_its_turn() {
+        // Without this, `add` reads as an ordinary success and the agent keeps
+        // driving the loop it just handed to the scheduler — the round then
+        // outruns the interval and delays the trigger it is racing.
+        let summary = CronTool::add_result_summary(
+            &job_with_schedule(every_30_minutes(), "session_1"),
+            Some("session_1"),
+        );
+
+        assert!(summary.contains("cron_4d437971"), "got: {summary}");
+        assert!(summary.contains("end your turn"), "got: {summary}");
+        // The turn does not end by itself, and the guidance has to say so:
+        // no tool can end a turn, only the model choosing to stop.
+        assert!(summary.contains("did not end your turn"), "got: {summary}");
+    }
+
+    #[test]
+    fn a_cron_expression_schedule_also_hands_over_the_cadence() {
+        let summary = CronTool::add_result_summary(
+            &job_with_schedule(
+                CronSchedule::Cron {
+                    expr: "0 9 * * 1-5".to_string(),
+                    tz: None,
+                },
+                "session_1",
+            ),
+            Some("session_1"),
+        );
+
+        assert!(summary.contains("end your turn"), "got: {summary}");
+    }
+
+    #[test]
+    fn a_one_shot_job_leaves_the_current_turn_alone() {
+        // A single reminder says nothing about what to do with the rest of the
+        // turn, so telling the agent to stop would cut real work short.
+        let summary = CronTool::add_result_summary(
+            &job_with_schedule(
+                CronSchedule::At {
+                    at: "2026-03-17T12:00:00+08:00".to_string(),
+                },
+                "session_1",
+            ),
+            Some("session_1"),
+        );
+
+        assert!(!summary.contains("end your turn"), "got: {summary}");
+    }
+
+    #[test]
+    fn scheduling_work_for_another_session_leaves_the_current_turn_alone() {
+        // The cadence being handed over is not this turn's, so this agent has
+        // no reason to stop what it is doing.
+        let summary = CronTool::add_result_summary(
+            &job_with_schedule(every_30_minutes(), "session_other"),
+            Some("session_1"),
+        );
+
+        assert!(!summary.contains("end your turn"), "got: {summary}");
+
+        // Same when the caller has no session identity to compare against.
+        let summary =
+            CronTool::add_result_summary(&job_with_schedule(every_30_minutes(), "session_1"), None);
+        assert!(!summary.contains("end your turn"), "got: {summary}");
     }
 }

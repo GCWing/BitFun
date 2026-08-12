@@ -75,8 +75,7 @@ static EXTERNAL_INSTRUCTION_SOURCES_ENABLED_CACHE: AtomicBool = AtomicBool::new(
 /// Dot-path of the external user instruction sources switch inside the
 /// settings document. Config paths resolve against the serialized
 /// `GlobalConfig`, where `AIConfig` lives under `ai`.
-pub(crate) const EXTERNAL_INSTRUCTION_SOURCES_CONFIG_PATH: &str =
-    "ai.external_instruction_sources";
+pub(crate) const EXTERNAL_INSTRUCTION_SOURCES_CONFIG_PATH: &str = "ai.external_instruction_sources";
 
 /// Current value of the external user instruction sources switch (cached,
 /// synchronous).

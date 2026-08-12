@@ -322,6 +322,7 @@ mod tests {
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // environment lock is intentionally held for the whole test body
     async fn an_unmatched_read_does_not_freeze_rule_content_before_activation() {
         let _environment = lock_environment();
         let temp = tempfile::tempdir().expect("tempdir");

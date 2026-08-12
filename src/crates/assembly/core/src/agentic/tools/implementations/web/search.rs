@@ -34,7 +34,8 @@ impl WebSearchTool {
     ) -> BitFunResult<String> {
         // 阈值参数配置化：ai.thresholds.tool_timeout.exa_secs
         let exa_timeout_secs =
-            crate::agentic::tools::implementations::web::timeouts::configured_exa_timeout_secs().await;
+            crate::agentic::tools::implementations::web::timeouts::configured_exa_timeout_secs()
+                .await;
         WebToolNetworkProvider::search_exa_with_timeout(
             ExaSearchRequest {
                 query,

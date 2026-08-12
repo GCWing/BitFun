@@ -10,6 +10,20 @@ pub mod tree;
 pub mod types;
 mod write_lock;
 
+pub mod group_chat_layout;
+mod group_chat_membership;
+pub mod group_chat_store;
+pub use group_chat_layout::{validate_room_id, GroupChatStorageLayout};
+pub use group_chat_membership::{
+    add_room_to_group_chats, group_chats_of, remove_room_from_group_chats, GROUP_CHATS_METADATA_KEY,
+};
+pub use group_chat_store::{
+    GroupChatCatalogEntry, GroupChatMessagesWindow, GroupChatStore, GroupChatStoreError,
+    StoredGroupChatIndexFile, StoredGroupChatMembersFile, StoredGroupChatMessageCatalog,
+    StoredGroupChatMetaFile, GROUP_CHAT_CATALOG_PREVIEW_CHAR_LIMIT,
+    GROUP_CHAT_INDEX_SCHEMA_VERSION, GROUP_CHAT_STORAGE_SCHEMA_VERSION,
+};
+
 pub use bitfun_core_types::SessionKind;
 pub use layout::SessionStorageLayout;
 pub use lineage::{

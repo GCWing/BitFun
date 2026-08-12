@@ -1240,11 +1240,10 @@ async fn register_delegated_identity_providers() {
                     let account_lease = lock_account_sync(generation)
                         .await
                         .map_err(|_| "Desktop account changed; try again".to_string())?;
-                    let context = account_context
-                        .read()
-                        .await
-                        .clone()
-                        .ok_or_else(|| "Desktop is not logged into a BitFun account".to_string())?;
+                    let context =
+                        account_context.read().await.clone().ok_or_else(|| {
+                            "Desktop is not logged into a BitFun account".to_string()
+                        })?;
                     if !account_context_matches(generation, &context.session.token).await {
                         return Err("Desktop account changed; try again".to_string());
                     }

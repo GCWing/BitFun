@@ -210,6 +210,19 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
     /// is not blocked solely because of a prior click / scroll.
     fn computer_use_trust_pointer_after_text_input(&self) {}
 
+    /// Clear the stale-capture guard because it **cannot be satisfied** on this
+    /// run, not because the pointer became trustworthy.
+    ///
+    /// The guard exists to force a fresh look before a committing action. That
+    /// only means something for a model that can look. When the primary model
+    /// is text-only, `screenshot` returns no image and never reaches
+    /// `transition_after_screenshot`, so the guard latches on forever: the
+    /// error says "call `screenshot` first", the model calls `screenshot`,
+    /// nothing changes, and every `click` / Enter `key_chord` is refused for the
+    /// rest of the session. Text-only observation (`describe_screen`) is the
+    /// real equivalent of a capture there, so it waives the guard instead.
+    fn computer_use_waive_fresh_capture_guard(&self) {}
+
     /// Refuse `mouse_click` if the pointer moved (or a click happened) since the last screenshot,
     /// or if the latest capture is not a valid “fine” basis (desktop: ~500×500 point crop **or**
     /// quadrant navigation region with longest side < [`COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE`]).

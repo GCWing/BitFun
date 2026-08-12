@@ -2614,7 +2614,8 @@ impl ToolRuntimeRestrictions {
             self.denied_tool_messages
                 .insert(name.clone(), message.clone());
         }
-        self.allowed_tool_names = merge_allow_sets(&self.allowed_tool_names, &other.allowed_tool_names);
+        self.allowed_tool_names =
+            merge_allow_sets(&self.allowed_tool_names, &other.allowed_tool_names);
         self.allowed_operation_classes = merge_allow_sets(
             &self.allowed_operation_classes,
             &other.allowed_operation_classes,
@@ -2644,10 +2645,7 @@ impl ToolRuntimeRestrictions {
     }
 }
 
-fn merge_allow_sets<T: Ord + Clone>(
-    current: &BTreeSet<T>,
-    other: &BTreeSet<T>,
-) -> BTreeSet<T> {
+fn merge_allow_sets<T: Ord + Clone>(current: &BTreeSet<T>, other: &BTreeSet<T>) -> BTreeSet<T> {
     if other.is_empty() {
         current.clone()
     } else if current.is_empty() {
@@ -3032,255 +3030,171 @@ mod tests {
     #[test]
     fn classify_exec_command_rm_is_delete() {
         let input = json!({ "cmd": "rm -rf /data" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::DeleteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::DeleteFile);
     }
 
     #[test]
     fn classify_exec_command_rmdir_is_delete() {
         let input = json!({ "cmd": "rmdir /s /q temp_dir" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::DeleteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::DeleteFile);
     }
 
     #[test]
     fn classify_exec_command_del_is_delete() {
         let input = json!({ "cmd": "del /f old_file.txt" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::DeleteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::DeleteFile);
     }
 
     #[test]
     fn classify_exec_command_remove_item_is_delete() {
         let input = json!({ "cmd": "Remove-Item -Path 'C:\\temp\\file.txt'" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::DeleteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::DeleteFile);
     }
 
     #[test]
     fn classify_exec_command_redirect_write_is_write() {
         let input = json!({ "cmd": "echo x >> file" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::WriteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::WriteFile);
     }
 
     #[test]
     fn classify_exec_command_redirect_overwrite_is_write() {
         let input = json!({ "cmd": "echo x > file" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::WriteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::WriteFile);
     }
 
     #[test]
     fn classify_exec_command_tee_is_write() {
         let input = json!({ "cmd": "echo 'hello' | tee output.txt" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::WriteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::WriteFile);
     }
 
     #[test]
     fn classify_exec_command_standalone_tee_is_write() {
         let input = json!({ "cmd": "tee output.txt" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::WriteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::WriteFile);
     }
 
     #[test]
     fn classify_exec_command_out_file_is_write() {
         let input = json!({ "cmd": "Out-File -FilePath test.txt -InputObject $data" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::WriteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::WriteFile);
     }
 
     #[test]
     fn classify_exec_command_set_content_is_write() {
         let input = json!({ "cmd": "Set-Content -Path file.txt -Value 'data'" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::WriteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::WriteFile);
     }
 
     #[test]
     fn classify_exec_command_add_content_is_write() {
         let input = json!({ "cmd": "Add-Content -Path file.txt -Value 'data'" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::WriteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::WriteFile);
     }
 
     #[test]
     fn classify_exec_command_echo_alone_is_execute() {
         // echo without redirect does NOT write a file
         let input = json!({ "cmd": "echo hello" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_cat_alone_is_execute() {
         // cat without redirect does NOT write a file
         let input = json!({ "cmd": "cat file.txt" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_cat_pipe_is_execute() {
         // pipe to cat (without redirect) does NOT write a file
         let input = json!({ "cmd": "ls | cat" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_dir_is_execute() {
         let input = json!({ "cmd": "dir" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_ls_is_execute() {
         let input = json!({ "cmd": "ls -la" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_grep_is_execute() {
         let input = json!({ "cmd": "grep pattern file.txt" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_echo_pipe_grep_is_execute() {
         let input = json!({ "cmd": "echo 'pattern' | grep foo" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_multi_line_redirect_is_write() {
         let input = json!({ "cmd": "cat > file.txt << EOF\nhello\nEOF" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::WriteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::WriteFile);
     }
 
     #[test]
     fn classify_exec_command_piped_tee_is_write() {
         let input = json!({ "cmd": "ls -la | tee listing.txt" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::WriteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::WriteFile);
     }
 
     #[test]
     fn classify_exec_command_empty_cmd_is_execute() {
         let input = json!({ "cmd": "" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_missing_cmd_is_execute() {
         let input = json!({});
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_uses_cmd_field_before_command_field() {
         let input = json!({ "cmd": "echo hello", "command": "rm file" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::ExecuteCode
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::ExecuteCode);
     }
 
     #[test]
     fn classify_exec_command_falls_back_to_command_field() {
         let input = json!({ "command": "rm file.txt" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::DeleteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::DeleteFile);
     }
 
     #[test]
     fn classify_exec_command_erase_is_delete() {
         // Windows `erase` alias must classify as DeleteFile.
         let input = json!({ "cmd": "erase report.tmp" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::DeleteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::DeleteFile);
         let input = json!({ "cmd": "erase" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::DeleteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::DeleteFile);
     }
 
     #[test]
     fn classify_exec_command_unlink_is_delete() {
         // POSIX `unlink` single-file deletion alias.
         let input = json!({ "cmd": "unlink lockfile" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::DeleteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::DeleteFile);
     }
 
     #[test]
     fn classify_exec_command_rd_is_delete() {
         // Windows `rd` (remove directory) alias.
         let input = json!({ "cmd": "rd /s /q build" });
-        assert_eq!(
-            classify_exec_command(&input),
-            OperationClass::DeleteFile
-        );
+        assert_eq!(classify_exec_command(&input), OperationClass::DeleteFile);
     }
 
     #[test]

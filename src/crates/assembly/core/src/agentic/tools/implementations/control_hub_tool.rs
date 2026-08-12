@@ -8,7 +8,7 @@
 //! Local desktop and OS/system actions are intentionally surfaced through the
 //! dedicated ComputerUse tool/agent, not through public ControlHub domains.
 
-use crate::agentic::tools::browser_control::actions::BrowserActions;
+use crate::agentic::tools::browser_control::actions::{BrowserActions, MAX_WAIT_MS};
 use crate::agentic::tools::browser_control::browser_launcher::{
     BrowserKind, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
 };
@@ -267,6 +267,11 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
   * `connect { mode: "headless" }` — attach to an already-running headless browser on the headless test port 9223. This mode never starts a browser; when nothing is listening it returns `NOT_AVAILABLE` together with the exact launch command.
   * `params.port` overrides the CDP port for `connect` and for every other CDP action; after `connect`, actions reuse the connected session's port automatically.
 - Actions: open_builtin, connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, read_article, close, list_pages, tab_query, switch_page, list_sessions.
+- Pausing:
+  * `wait { duration_ms }` — pause for a fixed time, up to 60 minutes (`ms` and `seconds` are accepted spellings). This is the action to use when you must idle between rounds of work, e.g. `{ "duration_ms": 1800000 }` to resume in 30 minutes. It needs no browser session, and the result reports the `ms` actually waited, so check that figure before assuming the full pause happened.
+  * `wait { condition, timeout_ms? }` — wait on the page instead: 'load' | 'domcontentloaded' | 'networkidle' | a CSS/@ref selector, bounded by `timeout_ms` (default 15s). Requires a connected session. When a `condition` is present it always wins, and any duration you pass becomes its timeout rather than a separate sleep.
+  * A `wait` carrying neither is rejected with `INVALID_PARAMS` — it never silently returns.
+  * `wait` holds the turn open for its whole duration, so it suits a one-off pause, not a schedule. For work that should repeat ("produce another round every 30 minutes") or resume more than an hour out, create a job with the `Cron` tool instead, then **end your turn** — creating the job does not end it for you. The job re-invokes you when it fires, so a turn left running is idling with the context loaded and only delays the next round. Every built-in mode that has ControlHub also has `Cron`; if it is genuinely absent from your tool list, say so rather than substituting a chain of long `wait` calls.
 - Automation workflow: connect -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill with `{ "selector": "@e1" }` (the key `ref` is accepted too).
 - Take a fresh snapshot after any DOM mutation; a stale `@eN` ref returns `error.code = STALE_REF`, while a selector that matches nothing returns `NOT_FOUND`.
 
@@ -682,12 +687,100 @@ Branch on `ok` and `error.code`, not on English messages.
         )
     }
 
+    /// Sleep for `requested_ms`, interruptibly.
+    ///
+    /// The sleep races the turn's cancellation token: a 30-minute pace wait
+    /// that ignored it would leave the user unable to stop the agent for half
+    /// an hour. Cancellation surfaces as `BitFunError::Cancelled`, which the
+    /// pipeline already records as a terminal cancelled state rather than a
+    /// tool failure.
+    async fn wait_for_duration(
+        requested_ms: u64,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let waited_ms = requested_ms.min(MAX_WAIT_MS);
+        let sleep = tokio::time::sleep(std::time::Duration::from_millis(waited_ms));
+
+        if let Some(token) = context.cancellation_token() {
+            tokio::select! {
+                _ = sleep => {}
+                _ = token.cancelled() => {
+                    return Err(BitFunError::Cancelled(format!(
+                        "browser.wait cancelled before the {} pause elapsed",
+                        format_duration_ms(waited_ms)
+                    )));
+                }
+            }
+        } else {
+            sleep.await;
+        }
+
+        let (data, summary) = Self::wait_outcome(requested_ms);
+        Ok(vec![ToolResult::ok(data, Some(summary))])
+    }
+
+    /// Describe a completed duration wait.
+    ///
+    /// The old payload carried no duration at all, so a wait that returned
+    /// instantly was indistinguishable from one that ran to completion; both
+    /// printed "Wait completed". State the elapsed time, and say plainly when
+    /// the request was clamped instead of quietly waiting less than asked.
+    fn wait_outcome(requested_ms: u64) -> (Value, String) {
+        let waited_ms = requested_ms.min(MAX_WAIT_MS);
+        let clamped = waited_ms != requested_ms;
+        let summary = if clamped {
+            format!(
+                "Waited {} (requested {} — clamped to the {} maximum)",
+                format_duration_ms(waited_ms),
+                format_duration_ms(requested_ms),
+                format_duration_ms(MAX_WAIT_MS)
+            )
+        } else {
+            format!("Waited {}", format_duration_ms(waited_ms))
+        };
+        (
+            json!({
+                "success": true,
+                "action": "wait",
+                "ms": waited_ms,
+                "requested_ms": requested_ms,
+                "clamped": clamped,
+            }),
+            summary,
+        )
+    }
+
     async fn handle_browser(
         &self,
         action: &str,
         params: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        // A duration wait is a pure pause: it touches no page, so it must not
+        // require (or even resolve) a CDP session — agents pace themselves with
+        // this long before they open a browser. Condition waits fall through to
+        // the session-backed path below, where any duration the caller also
+        // passed becomes the condition's timeout rather than a separate sleep.
+        if action == "wait" && wait_condition(params).is_none() {
+            if let Some(requested_ms) = wait_duration_ms(params) {
+                return Self::wait_for_duration(requested_ms, context).await;
+            }
+            return Ok(err_response(
+                "browser",
+                "wait",
+                ControlHubError::new(
+                    ErrorCode::InvalidParams,
+                    "browser.wait requires either a duration or a `condition`.",
+                )
+                .with_hint(
+                    "To pause, pass `duration_ms` (alias `ms`), e.g. { \"duration_ms\": 1800000 } for 30 minutes.",
+                )
+                .with_hint(
+                    "To wait on the page, pass `condition`: 'load' | 'domcontentloaded' | 'networkidle' | a CSS/@ref selector.",
+                ),
+            ));
+        }
+
         let session_id_param = params
             .get("session_id")
             .and_then(|v| v.as_str())
@@ -1642,10 +1735,23 @@ Branch on `ok` and `error.code`, not on English messages.
                         )])
                     }
                     "wait" => {
-                        let ms = params.get("duration_ms").and_then(|v| v.as_u64());
-                        let cond = params.get("condition").and_then(|v| v.as_str());
-                        let result = actions.wait(ms, cond).await?;
-                        Ok(vec![ToolResult::ok(result, Some("Wait completed".to_string()))])
+                        // Duration waits already returned from the session-free
+                        // path in `handle_browser`; only condition waits, which
+                        // genuinely need the page, reach here. A duration passed
+                        // alongside the condition bounds it instead of being
+                        // dropped.
+                        let cond = wait_condition(params);
+                        let result = actions
+                            .wait(None, cond, wait_condition_timeout_ms(params))
+                            .await?;
+                        let summary = match result.get("timed_out").and_then(|v| v.as_bool()) {
+                            Some(true) => format!(
+                                "Timed out waiting for '{}'",
+                                cond.unwrap_or("condition")
+                            ),
+                            _ => format!("Waited for '{}'", cond.unwrap_or("condition")),
+                        };
+                        Ok(vec![ToolResult::ok(result, Some(summary))])
                     }
                     "get_text" => {
                         let selector = match selector_param(params) {
@@ -2416,6 +2522,11 @@ impl Tool for ControlHubTool {
         // Wrap legacy handler results into the unified envelope.
         match dispatched {
             Ok(results) => Ok(envelope_wrap_results(domain, action, results)),
+            // Cancellation is the pipeline's own terminal state, not a tool
+            // failure. Folding it into an `ok: false` envelope would both hide
+            // the user's stop from the pipeline and invite the model to
+            // "recover" from a turn that is already being torn down.
+            Err(err @ BitFunError::Cancelled(_)) => Err(err),
             Err(err) => Ok(err_response(
                 domain,
                 action,
@@ -2469,6 +2580,94 @@ fn selector_param(params: &Value) -> Option<&str> {
         .find_map(|key| params.get(*key).and_then(|v| v.as_str()))
         .map(str::trim)
         .filter(|selector| !selector.is_empty())
+}
+
+/// A duration parameter, in milliseconds, under any of `keys`.
+///
+/// A model that writes `"1800000"` as a string still means 1_800_000 ms, and
+/// one that writes `1.5` seconds means 1500 ms.
+fn duration_param_ms(params: &Value, keys: &[&str], unit_ms: f64) -> Option<u64> {
+    keys.iter()
+        .find_map(|key| {
+            let value = params.get(*key)?;
+            value
+                .as_f64()
+                .or_else(|| value.as_str()?.trim().parse::<f64>().ok())
+                .filter(|n| n.is_finite() && *n >= 0.0)
+        })
+        .map(|n| (n * unit_ms).round() as u64)
+}
+
+/// Read a `wait` pause duration out of `params`, in milliseconds.
+///
+/// The action used to read `duration_ms` and nothing else, so the very
+/// plausible `{ "ms": 1800000 }` was dropped on the floor and the call
+/// returned instantly while still reporting success. Accept the obvious
+/// spellings instead — a wait that silently does not wait is far worse than a
+/// slightly wide parameter surface. Millisecond keys are checked before second
+/// keys so a call carrying both cannot be read in the wrong unit.
+///
+/// A `condition` always wins: next to one, every duration key reads as "wait
+/// for this, but no longer than" rather than as a pause, so this returns
+/// `None` and [`wait_condition_timeout_ms`] takes the value instead. Sleeping
+/// on `{ condition, timeout_ms }` would never look at the page at all.
+fn wait_duration_ms(params: &Value) -> Option<u64> {
+    const MS_KEYS: [&str; 5] = ["duration_ms", "ms", "wait_ms", "sleep_ms", "timeout_ms"];
+    const SECOND_KEYS: [&str; 6] = [
+        "duration_seconds",
+        "duration_s",
+        "seconds",
+        "secs",
+        "sleep_seconds",
+        "wait_seconds",
+    ];
+
+    if wait_condition(params).is_some() {
+        return None;
+    }
+    duration_param_ms(params, &MS_KEYS, 1.0)
+        .or_else(|| duration_param_ms(params, &SECOND_KEYS, 1_000.0))
+}
+
+/// The `condition` a `wait` should watch for, if the caller named a usable one.
+fn wait_condition(params: &Value) -> Option<&str> {
+    params
+        .get("condition")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|cond| !cond.is_empty())
+}
+
+/// Read the bound on a `wait { condition }` — how long to keep waiting for the
+/// page before giving up.
+fn wait_condition_timeout_ms(params: &Value) -> Option<u64> {
+    duration_param_ms(
+        params,
+        &["condition_timeout_ms", "timeout_ms", "duration_ms", "ms"],
+        1.0,
+    )
+    .or_else(|| duration_param_ms(params, &["timeout_seconds", "seconds"], 1_000.0))
+}
+
+/// Render a wait duration the way a person would say it, so the tool summary
+/// reads as "Waited 30m" rather than "Wait completed" — the latter is exactly
+/// what a zero-length wait used to print.
+fn format_duration_ms(ms: u64) -> String {
+    let total_secs = ms / 1_000;
+    let (hours, minutes, seconds) = (
+        total_secs / 3_600,
+        (total_secs % 3_600) / 60,
+        total_secs % 60,
+    );
+    if hours > 0 {
+        format!("{hours}h{minutes:02}m")
+    } else if minutes > 0 {
+        format!("{minutes}m{seconds:02}s")
+    } else if total_secs > 0 {
+        format!("{total_secs}s")
+    } else {
+        format!("{ms}ms")
+    }
 }
 
 /// An `@eN` ref that no longer resolves means the snapshot it came from is
@@ -2665,6 +2864,182 @@ mod control_hub_tests {
             !msg.contains("ComputerUse"),
             "ComputerUse must not be advertised as a ControlHub domain: {msg}"
         );
+    }
+
+    #[test]
+    fn wait_duration_accepts_the_spellings_models_actually_emit() {
+        // `ms` is what the model reached for in the field; reading only
+        // `duration_ms` dropped it and turned a 30-minute pause into a no-op.
+        for key in ["duration_ms", "ms", "wait_ms", "sleep_ms"] {
+            assert_eq!(
+                wait_duration_ms(&json!({ key: 1_800_000u64 })),
+                Some(1_800_000),
+                "millisecond key {key} must be honoured"
+            );
+        }
+        for key in [
+            "duration_seconds",
+            "duration_s",
+            "seconds",
+            "secs",
+            "sleep_seconds",
+            "wait_seconds",
+        ] {
+            assert_eq!(
+                wait_duration_ms(&json!({ key: 90 })),
+                Some(90_000),
+                "second key {key} must be converted to milliseconds"
+            );
+        }
+        assert_eq!(wait_duration_ms(&json!({ "ms": "1500" })), Some(1_500));
+        assert_eq!(wait_duration_ms(&json!({ "seconds": 1.5 })), Some(1_500));
+        // Both units present: milliseconds win, so the wait can never be read
+        // a thousand times too short.
+        assert_eq!(
+            wait_duration_ms(&json!({ "seconds": 5, "duration_ms": 1_800_000u64 })),
+            Some(1_800_000)
+        );
+        assert_eq!(wait_duration_ms(&json!({ "condition": "load" })), None);
+        assert_eq!(wait_duration_ms(&json!({ "ms": -5 })), None);
+        assert_eq!(wait_duration_ms(&json!({ "ms": "soon" })), None);
+        // On its own `timeout_ms` can only mean the pause itself.
+        assert_eq!(
+            wait_duration_ms(&json!({ "timeout_ms": 5_000 })),
+            Some(5_000)
+        );
+    }
+
+    #[test]
+    fn a_condition_wait_keeps_its_timeout_instead_of_becoming_a_sleep() {
+        // `{ condition, timeout_ms }` means "wait for this, but no longer
+        // than". Reading `timeout_ms` as a pause would sleep and never look at
+        // the page at all.
+        let params = json!({ "condition": "networkidle", "timeout_ms": 30_000 });
+        assert_eq!(wait_duration_ms(&params), None);
+        assert_eq!(wait_condition_timeout_ms(&params), Some(30_000));
+
+        // A duration passed next to a condition bounds it rather than being
+        // dropped on the floor.
+        let params = json!({ "condition": "#done", "duration_ms": 45_000 });
+        assert_eq!(wait_duration_ms(&params), None);
+        assert_eq!(wait_condition_timeout_ms(&params), Some(45_000));
+
+        // Nothing given: the action falls back to its own default.
+        assert_eq!(
+            wait_condition_timeout_ms(&json!({ "condition": "load" })),
+            None
+        );
+        assert_eq!(
+            wait_condition_timeout_ms(&json!({ "condition": "load", "timeout_seconds": 20 })),
+            Some(20_000)
+        );
+    }
+
+    #[tokio::test]
+    async fn browser_wait_actually_sleeps_and_reports_the_elapsed_time() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let started = std::time::Instant::now();
+        let results = tool
+            // No browser session exists in this test: a duration wait must not
+            // need one.
+            .dispatch("browser", "wait", &json!({ "ms": 250 }), &ctx)
+            .await
+            .expect("duration wait should succeed");
+        assert!(
+            started.elapsed() >= std::time::Duration::from_millis(240),
+            "wait returned after only {:?}",
+            started.elapsed()
+        );
+        // `dispatch` returns the raw handler payload; `call_impl` is what adds
+        // the `{ ok, domain, action, data }` envelope.
+        let data = results.first().expect("one result").content();
+        assert_eq!(data.get("ms").and_then(|v| v.as_u64()), Some(250));
+        assert_eq!(data.get("clamped").and_then(|v| v.as_bool()), Some(false));
+        assert_eq!(data.get("success").and_then(|v| v.as_bool()), Some(true));
+    }
+
+    #[test]
+    fn browser_wait_clamps_absurd_durations_and_says_so() {
+        // Asserted on the reporting helper rather than through `dispatch`, so
+        // the test does not have to sit through the wait itself.
+        let (data, summary) = ControlHubTool::wait_outcome(MAX_WAIT_MS * 3);
+        assert_eq!(data.get("ms").and_then(|v| v.as_u64()), Some(MAX_WAIT_MS));
+        assert_eq!(
+            data.get("requested_ms").and_then(|v| v.as_u64()),
+            Some(MAX_WAIT_MS * 3)
+        );
+        assert_eq!(data.get("clamped").and_then(|v| v.as_bool()), Some(true));
+        // A shortened wait must announce itself; silently waiting less than
+        // asked is how the agent ends up out of step with the schedule.
+        assert!(summary.contains("clamped"), "got: {summary}");
+
+        let (data, summary) = ControlHubTool::wait_outcome(1_800_000);
+        assert_eq!(data.get("clamped").and_then(|v| v.as_bool()), Some(false));
+        assert_eq!(summary, "Waited 30m00s");
+    }
+
+    #[tokio::test]
+    async fn browser_wait_without_duration_or_condition_is_rejected() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch("browser", "wait", &json!({}), &ctx)
+            .await
+            .expect("reported in-band");
+        let payload = results.first().unwrap().content();
+        // Reporting success for a wait that did not wait is the failure this
+        // guards: the agent moved straight on believing it had paused.
+        assert_eq!(payload.get("ok").and_then(|v| v.as_bool()), Some(false));
+        let error = payload.get("error").expect("error envelope");
+        assert_eq!(
+            error.get("code").and_then(|v| v.as_str()),
+            Some("INVALID_PARAMS")
+        );
+    }
+
+    #[tokio::test]
+    async fn browser_wait_is_interrupted_by_cancellation() {
+        let token = tokio_util::sync::CancellationToken::new();
+        let mut ctx = empty_context();
+        ctx.runtime_handles =
+            bitfun_runtime_ports::ToolRuntimeHandles::new(None, Some(token.clone()));
+
+        let started = std::time::Instant::now();
+        // Driven through `call_impl` so this also covers the envelope layer,
+        // which must let a cancellation through instead of reporting it as an
+        // ordinary `ok: false` tool error.
+        let waiter = tokio::spawn(async move {
+            ControlHubTool::new()
+                .call_impl(
+                    &json!({
+                        "domain": "browser",
+                        "action": "wait",
+                        "params": { "seconds": 600 },
+                    }),
+                    &ctx,
+                )
+                .await
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        token.cancel();
+        let outcome = waiter.await.expect("wait task joins");
+
+        // Without this, stopping the agent could not take effect until the
+        // pause elapsed — ten minutes of an unstoppable turn.
+        assert!(
+            matches!(outcome, Err(BitFunError::Cancelled(_))),
+            "a long pace wait must stay interruptible"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(30));
+    }
+
+    #[test]
+    fn wait_durations_are_formatted_for_humans() {
+        assert_eq!(format_duration_ms(1_800_000), "30m00s");
+        assert_eq!(format_duration_ms(MAX_WAIT_MS), "1h00m");
+        assert_eq!(format_duration_ms(1_500), "1s");
+        assert_eq!(format_duration_ms(250), "250ms");
     }
 
     #[tokio::test]
@@ -2972,6 +3347,23 @@ mod control_hub_tests {
         assert!(
             !desc.contains("domain: \"desktop\"") && !desc.contains("domain: \"system\""),
             "ControlHub description must not advertise desktop/system domains"
+        );
+    }
+
+    #[tokio::test]
+    async fn description_documents_wait_params_and_routes_schedules_to_cron() {
+        let desc = ControlHubTool::new().description().await.unwrap();
+        // The action took `duration_ms` and documented nothing, so the model
+        // guessed `ms` and got a silent no-op.
+        assert!(
+            desc.contains("`wait { duration_ms }`") && desc.contains("`ms`"),
+            "description must name the wait duration parameter and its aliases"
+        );
+        // A recurring pace should not be built out of hour-long waits that pin
+        // the turn open.
+        assert!(
+            desc.contains("`Cron` tool"),
+            "description must point repeating schedules at Cron"
         );
     }
 

@@ -296,10 +296,8 @@ mod tests {
             image_attachments: None,
         });
 
-        let loaded_specs = collect_product_loaded_deferred_tool_specs(
-            &[stale, fresh],
-            &["WebFetch".to_string()],
-        );
+        let loaded_specs =
+            collect_product_loaded_deferred_tool_specs(&[stale, fresh], &["WebFetch".to_string()]);
 
         assert_eq!(loaded_specs, vec![loaded_spec("WebFetch")]);
         assert_eq!(loaded_specs[0].catalog_generation, 42);

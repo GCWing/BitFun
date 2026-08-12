@@ -176,7 +176,9 @@ impl ContextCompressor {
         summary_request_messages.extend(summary_messages.clone());
 
         let retained_user_token_budget = (context_window / 10).min(
-            max_retained_user_tokens.unwrap_or(Self::MAX_RETAINED_USER_TOKENS).max(1),
+            max_retained_user_tokens
+                .unwrap_or(Self::MAX_RETAINED_USER_TOKENS)
+                .max(1),
         );
         let (retained_user_messages, retained_user_tokens) =
             Self::retain_historical_user_messages(&summary_messages, retained_user_token_budget);

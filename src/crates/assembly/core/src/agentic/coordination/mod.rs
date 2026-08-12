@@ -4,9 +4,10 @@
 
 mod background_outcomes;
 mod coordination_store;
-pub(crate) mod plan_todo_binding;
 pub mod coordinator;
+pub(crate) mod plan_todo_binding;
 mod review_propagation;
+pub mod round_robin;
 
 pub use review_propagation::ReviewPropagationManager;
 pub mod scheduler;
@@ -15,6 +16,7 @@ pub mod turn_outcome;
 mod turn_settlement;
 
 pub use coordinator::*;
+pub use round_robin::next as round_robin_next;
 pub use scheduler::*;
 pub use state_manager::*;
 pub use turn_outcome::*;

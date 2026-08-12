@@ -1,14 +1,12 @@
-mod common;
-
+use crate::common::sse_fixture_server::FixtureSseServerOptions;
+use crate::common::stream_test_harness::{
+    run_stream_fixture, run_stream_fixture_with_options, StreamFixtureProvider,
+    StreamFixtureRunOptions,
+};
 use bitfun_agent_stream::StreamResult;
 use bitfun_ai_adapters::providers::{openai::OpenAIMessageConverter, AnthropicMessageConverter};
 use bitfun_ai_adapters::{Message as AIMessage, ToolCall as AIToolCall};
 use bitfun_events::{AgenticEvent, ToolEventData};
-use common::sse_fixture_server::FixtureSseServerOptions;
-use common::stream_test_harness::{
-    run_stream_fixture, run_stream_fixture_with_options, StreamFixtureProvider,
-    StreamFixtureRunOptions,
-};
 use serde_json::json;
 
 fn build_replay_assistant_message(result: &StreamResult) -> AIMessage {

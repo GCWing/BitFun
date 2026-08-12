@@ -560,14 +560,14 @@ async fn publish_bundle(
         && validate_bundle_content(root, final_path, content_digest)
             .await
             .is_ok()
-        {
-            return Ok(BundlePublication {
-                root: root.to_path_buf(),
-                final_path: final_path.to_path_buf(),
-                retired_path: None,
-                changed: false,
-            });
-        }
+    {
+        return Ok(BundlePublication {
+            root: root.to_path_buf(),
+            final_path: final_path.to_path_buf(),
+            retired_path: None,
+            changed: false,
+        });
+    }
     let staging = root
         .join(".staging")
         .join(format!("import-{}", uuid::Uuid::new_v4()));

@@ -181,12 +181,16 @@ impl DeepReviewBudgetTracker {
         diff_max_chars_per_turn: Option<usize>,
         diff_max_acquisitions_per_turn: Option<usize>,
     ) {
-        *self.configured_diff_max_chars.lock().unwrap_or_else(|e| e.into_inner()) =
+        *self
+            .configured_diff_max_chars
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) =
             diff_max_chars_per_turn.filter(|value| *value > 0);
         *self
             .configured_diff_max_acquisitions
             .lock()
-            .unwrap_or_else(|e| e.into_inner()) = diff_max_acquisitions_per_turn.filter(|value| *value > 0);
+            .unwrap_or_else(|e| e.into_inner()) =
+            diff_max_acquisitions_per_turn.filter(|value| *value > 0);
     }
 
     fn configured_budgets(&self) -> (Option<usize>, Option<usize>) {
@@ -305,8 +309,7 @@ impl DeepReviewBudgetTracker {
         let max_acquisitions = turn
             .configured_diff_max_acquisitions
             .unwrap_or(REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN);
-        if turn.review_provider_diff_acquisitions >= max_acquisitions
-        {
+        if turn.review_provider_diff_acquisitions >= max_acquisitions {
             turn.review_diff_limited = true;
             turn.updated_at = now;
             return false;

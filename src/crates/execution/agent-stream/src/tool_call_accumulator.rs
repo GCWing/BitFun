@@ -1110,7 +1110,10 @@ mod tests {
         assert_eq!(finalized.tool_name, "GetTime");
         assert_eq!(finalized.arguments, json!({}));
         assert_eq!(finalized.raw_arguments, "");
-        assert!(!finalized.is_error, "empty arguments must not mark the call invalid");
+        assert!(
+            !finalized.is_error,
+            "empty arguments must not mark the call invalid"
+        );
         assert!(finalized.parse_error.is_none());
     }
 
@@ -1125,7 +1128,10 @@ mod tests {
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({}));
-        assert!(!finalized.is_error, "whitespace-only arguments must stay valid");
+        assert!(
+            !finalized.is_error,
+            "whitespace-only arguments must stay valid"
+        );
         assert!(finalized.parse_error.is_none());
     }
 

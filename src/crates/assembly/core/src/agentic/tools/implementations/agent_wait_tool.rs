@@ -133,7 +133,9 @@ impl AgentWaitTool {
         let timeouts = &thresholds.tool_timeout;
         (
             timeouts.agent_wait_default_ms.max(1),
-            timeouts.agent_wait_max_ms.max(timeouts.agent_wait_default_ms.max(1)),
+            timeouts
+                .agent_wait_max_ms
+                .max(timeouts.agent_wait_default_ms.max(1)),
         )
     }
 
@@ -278,11 +280,8 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
         let mut request = Self::parse_request(input)?;
         // 阈值参数配置化：ai.thresholds.tool_timeout.agent_wait_default_ms / agent_wait_max_ms
         let (default_ms, max_ms) = Self::configured_agent_wait_timeout_bounds().await;
-        request.timeout_ms = Self::parse_timeout_ms_with_bounds(
-            input.get("timeout_ms"),
-            default_ms,
-            max_ms,
-        );
+        request.timeout_ms =
+            Self::parse_timeout_ms_with_bounds(input.get("timeout_ms"), default_ms, max_ms);
         let session_id = context
             .session_id
             .as_deref()

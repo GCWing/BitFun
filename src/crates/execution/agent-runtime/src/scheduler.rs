@@ -5,10 +5,9 @@ use crate::thread_goal::{build_objective_updated_plan, build_thread_goal_continu
 use bitfun_runtime_ports::{
     should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
     AgentDialogPrependedReminder, AgentSessionReplyRoute, DialogQueuePriority,
-    DialogRoundInjectionSource, DialogSessionStateFact, DialogSteerOutcome,
-    DialogSubmissionPolicy, DialogTriggerSource, RoundInjection, RoundInjectionKind,
-    RoundInjectionTarget, RoundInjectionToolPreemption, ThreadGoal,
-    MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+    DialogRoundInjectionSource, DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy,
+    DialogTriggerSource, RoundInjection, RoundInjectionKind, RoundInjectionTarget,
+    RoundInjectionToolPreemption, ThreadGoal, MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
 };
 use std::collections::VecDeque;
 use std::fmt;
@@ -276,7 +275,7 @@ struct QueuedDialogTurn<T> {
 /// Per-session dialog-turn queue with product scheduler priority semantics.
 #[derive(Debug)]
 pub struct DialogTurnQueue<T> {
-    max_depth: usize,
+    max_depth: std::sync::atomic::AtomicUsize,
     inner: dashmap::DashMap<String, VecDeque<QueuedDialogTurn<T>>>,
 }
 
@@ -289,13 +288,24 @@ impl<T> Default for DialogTurnQueue<T> {
 impl<T> DialogTurnQueue<T> {
     pub fn with_max_depth(max_depth: usize) -> Self {
         Self {
-            max_depth,
+            max_depth: std::sync::atomic::AtomicUsize::new(max_depth),
             inner: dashmap::DashMap::new(),
         }
     }
 
-    pub const fn max_depth(&self) -> usize {
-        self.max_depth
+    /// Updates the queue depth cap at runtime (群聊阈值参数配置化, R-GC-26).
+    ///
+    /// Used to inject `group_chat.queue_limit` after construction; a value of
+    /// `0` is ignored so a misconfigured document cannot disable the cap.
+    pub fn set_max_depth(&self, max_depth: usize) {
+        if max_depth > 0 {
+            self.max_depth
+                .store(max_depth, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    pub fn max_depth(&self) -> usize {
+        self.max_depth.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn depth(&self, session_id: &str) -> usize {
@@ -313,10 +323,11 @@ impl<T> DialogTurnQueue<T> {
         priority: DialogQueuePriority,
     ) -> Result<usize, DialogTurnQueueError> {
         let mut queue = self.inner.entry(session_id.to_string()).or_default();
-        if queue.len() >= self.max_depth {
+        let max_depth = self.max_depth();
+        if queue.len() >= max_depth {
             return Err(DialogTurnQueueError::Full {
                 session_id: session_id.to_string(),
-                max_depth: self.max_depth,
+                max_depth,
             });
         }
 
@@ -658,19 +669,21 @@ impl SessionRoundInjectionBuffer {
             return;
         }
         let mut entry = self.inner.entry(session_id.to_string()).or_default();
-        let duplicate = entry.iter().any(|existing| match (&existing.kind, &message.kind) {
-            (RoundInjectionKind::BackgroundResult, RoundInjectionKind::BackgroundResult)
-            | (
-                RoundInjectionKind::ThreadGoalObjectiveUpdated,
-                RoundInjectionKind::ThreadGoalObjectiveUpdated,
-            ) => Self::within_dedup_window(existing, &message),
-            (RoundInjectionKind::UserSteering, RoundInjectionKind::UserSteering) => {
-                existing.content == message.content
-                    && existing.prepended_reminders == message.prepended_reminders
-                    && existing.dedup_key() == message.dedup_key()
-            }
-            _ => false,
-        });
+        let duplicate = entry
+            .iter()
+            .any(|existing| match (&existing.kind, &message.kind) {
+                (RoundInjectionKind::BackgroundResult, RoundInjectionKind::BackgroundResult)
+                | (
+                    RoundInjectionKind::ThreadGoalObjectiveUpdated,
+                    RoundInjectionKind::ThreadGoalObjectiveUpdated,
+                ) => Self::within_dedup_window(existing, &message),
+                (RoundInjectionKind::UserSteering, RoundInjectionKind::UserSteering) => {
+                    existing.content == message.content
+                        && existing.prepended_reminders == message.prepended_reminders
+                        && existing.dedup_key() == message.dedup_key()
+                }
+                _ => false,
+            });
         if duplicate {
             log::debug!(
                 "Round injection deduplicated: session_id={}, kind={:?}, pending={}",
@@ -688,12 +701,16 @@ impl SessionRoundInjectionBuffer {
     /// session is cleared/recycled (`clear`). TOKEN-01: prefers the steering
     /// id metadata key when available, falling back to the content key for
     /// legacy steering entries without an id.
-    pub fn mark_steering_consumed(&self, session_id: &str, content: &str, steering_id: Option<&str>) {
+    pub fn mark_steering_consumed(
+        &self,
+        session_id: &str,
+        content: &str,
+        steering_id: Option<&str>,
+    ) {
         let key = steering_id
             .map(|id| format!("id:{id}"))
             .unwrap_or_else(|| format!("content:{content}"));
-        self.consumed_steering
-            .insert((session_id.to_string(), key));
+        self.consumed_steering.insert((session_id.to_string(), key));
     }
 
     /// Whether the (session, key) is currently marked consumed. TOKEN-01:
@@ -704,9 +721,10 @@ impl SessionRoundInjectionBuffer {
             Some(steering_id) => self
                 .consumed_steering
                 .contains(&(session_id.to_string(), format!("id:{steering_id}"))),
-            None => self
-                .consumed_steering
-                .contains(&(session_id.to_string(), format!("content:{}", message.content))),
+            None => self.consumed_steering.contains(&(
+                session_id.to_string(),
+                format!("content:{}", message.content),
+            )),
         }
     }
 
@@ -794,7 +812,11 @@ impl SessionRoundInjectionBuffer {
     /// consumed (the turn ended before a round boundary drained them). These
     /// are returned so the scheduler can re-deliver them as a normal follow-up
     /// turn instead of silently dropping a real user message.
-    pub fn drain_undelivered_steering(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
+    pub fn drain_undelivered_steering(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Vec<RoundInjection> {
         let Some(mut entry) = self.inner.get_mut(session_id) else {
             return Vec::new();
         };
@@ -1335,7 +1357,10 @@ mod tests {
         // entry (one model request) while keeping the fixed template text
         // byte-identical.
         for _ in 0..5 {
-            buffer.push("session-1", injection(RoundInjectionKind::BackgroundResult, "bg"));
+            buffer.push(
+                "session-1",
+                injection(RoundInjectionKind::BackgroundResult, "bg"),
+            );
         }
         let pending = buffer.drain_for_turn("session-1", "turn-1");
         assert_eq!(pending.len(), 1);
@@ -1412,7 +1437,11 @@ mod tests {
         buffer.push("session-1", first);
         buffer.push("session-1", second);
         let pending = buffer.drain_for_turn("session-1", "turn-1");
-        assert_eq!(pending.len(), 2, "notification beyond the window is a new event");
+        assert_eq!(
+            pending.len(),
+            2,
+            "notification beyond the window is a new event"
+        );
     }
 
     #[test]
@@ -1618,6 +1647,34 @@ mod tests {
             Some(2)
         );
         assert!(queue.inner.is_empty());
+    }
+
+    #[test]
+    fn dialog_turn_queue_set_max_depth_injects_configured_cap() {
+        let queue: DialogTurnQueue<usize> = DialogTurnQueue::default();
+        assert_eq!(queue.max_depth(), DEFAULT_MAX_DIALOG_QUEUE_DEPTH);
+
+        // R-GC-26: group_chat.queue_limit injection path.
+        queue.set_max_depth(7);
+        assert_eq!(queue.max_depth(), 7);
+
+        // A zero value must be ignored so a misconfigured document cannot
+        // disable the cap (defense in depth).
+        queue.set_max_depth(0);
+        assert_eq!(queue.max_depth(), 7);
+
+        // The cap is enforced by enqueue.
+        let queue = DialogTurnQueue::with_max_depth(2);
+        queue
+            .enqueue("s", 1, DialogQueuePriority::Normal)
+            .expect("first");
+        queue
+            .enqueue("s", 2, DialogQueuePriority::Normal)
+            .expect("second");
+        assert!(matches!(
+            queue.enqueue("s", 3, DialogQueuePriority::Normal),
+            Err(DialogTurnQueueError::Full { .. })
+        ));
     }
 
     #[test]

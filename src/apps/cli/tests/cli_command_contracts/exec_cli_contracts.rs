@@ -368,6 +368,48 @@ fn stream_json_patch_success_emits_one_success_terminal() {
 }
 
 #[test]
+fn stream_json_malformed_sse_retries_then_completes() {
+    let server = MockOpenAiServer::malformed_sse_then_immediate();
+    let environment = CliTestEnvironment::new();
+    environment.configure_mock_model(server.base_url());
+    let mut command = environment.std_command();
+    command.args([
+        "exec",
+        "exercise malformed provider stream retry",
+        "--output-format",
+        "stream-json",
+    ]);
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
+    server.assert_chat_completion_requests(2);
+
+    let stdout = stdout(&output);
+    assert!(output.status.success(), "{}\n{stdout}", stderr(&output));
+    let events = jsonl_events(&stdout);
+    assert!(
+        events.iter().any(|value| {
+            value["event"]["type"] == "TextChunk"
+                && value["event"]["text"]
+                    .as_str()
+                    .is_some_and(|text| text.contains(STREAM_COMPLETED_MARKER))
+        }),
+        "retried model stream did not complete: {stdout}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|value| is_terminal_event(value))
+            .count(),
+        1,
+        "retried stream must emit exactly one terminal envelope: {stdout}"
+    );
+    assert_eq!(
+        events.last().expect("retried stream terminal event")["event"]["type"],
+        "DialogTurnCompleted",
+        "retried stream terminal must be last: {stdout}"
+    );
+}
+
+#[test]
 fn stream_json_provider_http_403_emits_one_error_terminal() {
     let server = MockOpenAiServer::http_403("provider authorization denied");
     let environment = CliTestEnvironment::new();
@@ -493,7 +535,7 @@ fn stream_json_disconnect_then_exhausted_retry_failure_emits_one_error_terminal(
         "stream-json",
     ]);
     let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
-    server.assert_chat_completion_requests(11);
+    server.assert_chat_completion_requests(10);
 
     let stdout = stdout(&output);
     assert!(!output.status.success(), "{stdout}");

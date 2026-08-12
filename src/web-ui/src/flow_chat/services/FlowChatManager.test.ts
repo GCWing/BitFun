@@ -183,6 +183,7 @@ describe('FlowChatManager initialization', () => {
     storeMocks.initializeEventListeners.mockReturnValue(listenerInitialization.promise);
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async () => ({
         sessions: [],
         totalTopLevelCount: 0,
@@ -216,6 +217,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(() => metadataLoad.promise),
       getState: vi.fn(() => ({
         sessions,
@@ -269,6 +271,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async () => ({
         sessions: [],
         totalTopLevelCount: 2,
@@ -321,6 +324,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async () => ({
         sessions: [],
         totalTopLevelCount: 1,
@@ -369,6 +373,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async (
         workspacePath: string,
       ) => ({
@@ -435,6 +440,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async () => ({
         sessions: [],
         totalTopLevelCount: 2,
@@ -456,5 +462,95 @@ describe('FlowChatManager initialization', () => {
     expect(storeMocks.store.switchSession).toHaveBeenCalledTimes(1);
     expect(storeMocks.store.switchSession).toHaveBeenCalledWith('parent-1');
     expect(storeMocks.store.switchSession).not.toHaveBeenCalledWith('subagent-1');
+  });
+
+  // Peer Device Mode enter/exit is the only thing that bumps the store surface
+  // generation, and the metadata processor drops a page whose generation went
+  // stale. Reconnecting to a peer therefore used to leave the chat blank: the
+  // page still reported sessions, so nothing was selected and nothing created.
+  it('reloads session metadata when a peer surface switch discarded the first page', async () => {
+    const sessions = new Map<string, any>();
+    let surfaceGeneration = 4;
+    let activeSessionId: string | null = null;
+
+    storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => surfaceGeneration),
+      loadSessionMetadataPage: vi.fn(async () => {
+        if (storeMocks.store.loadSessionMetadataPage.mock.calls.length === 1) {
+          // First load raced a peer switch: the page is returned but the store
+          // never received it.
+          surfaceGeneration = 5;
+          return { sessions: [{ sessionId: 'history-1' }], totalTopLevelCount: 1, hasMore: false };
+        }
+        sessions.set('history-1', createHistoricalSession({ historyState: 'ready', isHistorical: false }));
+        return { sessions: [{ sessionId: 'history-1' }], totalTopLevelCount: 1, hasMore: false };
+      }),
+      getState: vi.fn(() => ({ sessions, activeSessionId })),
+      loadSessionHistory: vi.fn(async () => undefined),
+      switchSession: vi.fn((sessionId: string) => {
+        activeSessionId = sessionId;
+      }),
+    };
+
+    const manager = FlowChatManager.getInstance();
+    await expect(manager.initialize('D:/workspace/BitFun')).resolves.toBe(true);
+
+    expect(storeMocks.store.loadSessionMetadataPage).toHaveBeenCalledTimes(2);
+    expect(storeMocks.store.switchSession).toHaveBeenCalledWith('history-1');
+  });
+
+  it('restores history for a session that is already active but still metadata-only', async () => {
+    const activeSession = createHistoricalSession({ sessionId: 'active-1' });
+    const sessions = new Map<string, any>([['active-1', activeSession]]);
+
+    storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
+      loadSessionMetadataPage: vi.fn(async () => ({
+        sessions: [{ sessionId: 'active-1' }],
+        totalTopLevelCount: 1,
+        hasMore: false,
+      })),
+      getState: vi.fn(() => ({ sessions, activeSessionId: 'active-1' })),
+      loadSessionHistory: vi.fn(async () => undefined),
+      switchSession: vi.fn(),
+    };
+
+    const manager = FlowChatManager.getInstance();
+    await expect(manager.initialize('D:/workspace/BitFun')).resolves.toBe(true);
+
+    // Without this the breadcrumb and turn rail render from the catalog while
+    // the message area stays blank until the user clicks the session.
+    expect(storeMocks.store.loadSessionHistory).toHaveBeenCalledWith(
+      'active-1',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('reports no history when metadata claims sessions but none are selectable', async () => {
+    storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 7),
+      loadSessionMetadataPage: vi.fn(async () => ({
+        sessions: [{ sessionId: 'history-1' }],
+        totalTopLevelCount: 1,
+        hasMore: false,
+      })),
+      getState: vi.fn(() => ({ sessions: new Map(), activeSessionId: null })),
+      loadSessionHistory: vi.fn(async () => undefined),
+      switchSession: vi.fn(),
+    };
+
+    const manager = FlowChatManager.getInstance();
+
+    // `false` is the caller's signal to create a session against the live
+    // workspace. Returning `true` here would leave the surface with no active
+    // session and no new one.
+    await expect(manager.initialize('D:/workspace/BitFun')).resolves.toBe(false);
+    expect(storeMocks.store.switchSession).not.toHaveBeenCalled();
   });
 });

@@ -76,8 +76,7 @@ pub async fn load_default_deep_review_policy() -> BitFunResult<DeepReviewExecuti
         }
     };
 
-    let mut policy =
-        DeepReviewExecutionPolicy::from_config_value(raw_config.as_ref());
+    let mut policy = DeepReviewExecutionPolicy::from_config_value(raw_config.as_ref());
 
     // 阈值参数配置化：ai.thresholds.deep_review.max_parallel_instances /
     // max_queue_wait_secs / auto_retry_elapsed_guard_secs —— 注入到默认
@@ -93,8 +92,8 @@ pub async fn load_default_deep_review_policy() -> BitFunResult<DeepReviewExecuti
     if deep_review.max_parallel_instances > 0 {
         policy.configured_max_parallel_instances = Some(deep_review.max_parallel_instances);
     }
-    policy.configured_queue_wait_seconds = (deep_review.max_queue_wait_secs > 0)
-        .then_some(deep_review.max_queue_wait_secs);
+    policy.configured_queue_wait_seconds =
+        (deep_review.max_queue_wait_secs > 0).then_some(deep_review.max_queue_wait_secs);
     policy.configured_auto_retry_elapsed_guard_seconds =
         (deep_review.auto_retry_elapsed_guard_secs > 0)
             .then_some(deep_review.auto_retry_elapsed_guard_secs);
@@ -102,8 +101,7 @@ pub async fn load_default_deep_review_policy() -> BitFunResult<DeepReviewExecuti
     // 阈值参数配置化：ai.thresholds.deep_review.diff_max_chars_per_turn /
     // diff_max_acquisitions_per_turn —— 注入全局 Review diff 预算 tracker。
     bitfun_agent_runtime::deep_review::set_deep_review_configured_diff_budgets(
-        (deep_review.diff_max_chars_per_turn > 0)
-            .then_some(deep_review.diff_max_chars_per_turn),
+        (deep_review.diff_max_chars_per_turn > 0).then_some(deep_review.diff_max_chars_per_turn),
         (deep_review.diff_max_acquisitions_per_turn > 0)
             .then_some(deep_review.diff_max_acquisitions_per_turn),
     );

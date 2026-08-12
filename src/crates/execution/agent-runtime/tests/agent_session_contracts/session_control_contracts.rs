@@ -15,6 +15,7 @@ fn base_input(action: SessionControlAction) -> SessionControlInput {
         agent_type: None,
         short_name: None,
         model_id: None,
+        worktree: None,
         detail: None,
     }
 }

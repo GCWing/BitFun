@@ -431,6 +431,15 @@ pub(super) struct DumpOpts {
     pub max_depth: u32,
     pub max_nodes: usize,
     pub focus_window_only: bool,
+    /// Walk into menus that are currently closed. Off by default.
+    ///
+    /// A closed `AXMenu` still reports its whole item hierarchy, but every item
+    /// comes back collapsed at a zero-size off-screen frame — unclickable until
+    /// the menu is opened, and useless for addressing. They dominate the dump
+    /// anyway: observing a windowless app produced 188 nodes, 180 of them
+    /// closed menu items. `get_app_shortcuts` is the supported way to read menu
+    /// structure (and walks menus itself), so `get_app_state` stops at the menu.
+    pub include_closed_menus: bool,
 }
 
 impl Default for DumpOpts {
@@ -439,7 +448,25 @@ impl Default for DumpOpts {
             max_depth: 32,
             max_nodes: 4_000,
             focus_window_only: false,
+            include_closed_menus: false,
         }
+    }
+}
+
+/// Whether a node is a menu container that is not currently open, and whose
+/// children are therefore off-screen and unclickable.
+///
+/// macOS gives an open menu's items real on-screen frames; a closed one leaves
+/// them at a zero-size origin. Size is the reliable signal here — `AXExpanded`
+/// is not exposed consistently by `AXMenu` across apps.
+fn is_closed_menu_container(role: &str, frame: Option<(f64, f64, f64, f64)>) -> bool {
+    if role != "AXMenu" {
+        return false;
+    }
+    match frame {
+        // No frame at all: treat as closed.
+        None => true,
+        Some((_, _, w, h)) => w < 1.0 || h < 1.0,
     }
 }
 
@@ -501,6 +528,7 @@ pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnap
         depth: 0,
     });
     let mut visited: usize = 0;
+    let mut pruned_menu_subtrees: usize = 0;
 
     while let Some(cur) = queue.pop_front() {
         if cur.depth > opts.max_depth || visited >= opts.max_nodes {
@@ -530,10 +558,13 @@ pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnap
         let frame = unsafe { read_global_frame(cur.elem) };
         let actions = unsafe { read_action_names(cur.elem) };
 
+        let role = role.unwrap_or_default();
+        let is_closed_menu = is_closed_menu_container(&role, frame);
+
         nodes.push(AxNode {
             idx,
             parent_idx: cur.parent_idx,
-            role: role.unwrap_or_default(),
+            role,
             title,
             value,
             description,
@@ -551,6 +582,14 @@ pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnap
         });
         // Cache the retained ref so future actions can look it up.
         refs.push(AxRef(cur.elem));
+
+        // A closed menu is a leaf for our purposes: keep the container node so
+        // the model can see the menu exists (and `AXPress` it), but skip the
+        // subtree of unclickable zero-size items underneath.
+        if is_closed_menu && !opts.include_closed_menus {
+            pruned_menu_subtrees += 1;
+            continue;
+        }
 
         // Enqueue children — but DO NOT release `cur.elem`; the cache owns it.
         // At the application root (parent_idx is None), union `AXChildren`
@@ -600,7 +639,18 @@ pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnap
         unsafe { ax_release(q.elem as CFTypeRef) };
     }
 
-    let tree_text = render_tree_text(&nodes);
+    let mut tree_text = render_tree_text(&nodes);
+    // Say that menus were skipped on purpose, and where to get them. Otherwise
+    // an agent that needs a menu command sees a bare `AXMenu` leaf and has no
+    // way to tell "pruned" from "this app has no menu items".
+    if pruned_menu_subtrees > 0 {
+        tree_text.push_str(&format!(
+            "\n[note] {} closed menu subtree(s) omitted — their items are off-screen and \
+unclickable until the menu opens. Use `get_app_shortcuts` for menu commands and their key \
+equivalents, or AXPress the menu first.\n",
+            pruned_menu_subtrees
+        ));
+    }
     let digest = compute_digest(&nodes);
     let captured_at_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -888,6 +938,28 @@ mod tests {
     }
 
     #[test]
+    fn closed_menus_are_pruned_but_open_ones_are_kept() {
+        // A closed menu reports its items at a zero-size off-screen frame.
+        assert!(is_closed_menu_container(
+            "AXMenu",
+            Some((0.0, 982.0, 0.0, 0.0))
+        ));
+        assert!(is_closed_menu_container("AXMenu", None));
+        // An open menu has a real frame and must still be walked.
+        assert!(!is_closed_menu_container(
+            "AXMenu",
+            Some((100.0, 40.0, 220.0, 380.0))
+        ));
+        // Only menus are ever pruned — a zero-size button is still a node the
+        // model may need to reason about.
+        assert!(!is_closed_menu_container(
+            "AXButton",
+            Some((0.0, 0.0, 0.0, 0.0))
+        ));
+        assert!(!is_closed_menu_container("AXMenuItem", None));
+    }
+
+    #[test]
     fn quote_clip_truncates_on_char_boundary() {
         let s = "中文字符测试abcdef";
         let q = quote_clip(s, 4);
@@ -901,6 +973,83 @@ mod tests {
         a[0].title = Some("Saved".to_string());
         let d2 = compute_digest(&a);
         assert_ne!(d1, d2);
+    }
+
+    /// Measure the closed-menu pruning against a real running app rather than
+    /// trusting the unit test's synthetic frames.
+    ///
+    /// Dumps the frontmost application twice — once with menus walked, once
+    /// with the default pruning — and reports both node counts. Requires
+    /// Accessibility permission and a GUI session, so it is `#[ignore]`d.
+    #[test]
+    #[ignore]
+    fn closed_menu_pruning_shrinks_a_real_app_dump() {
+        let pid = crate::computer_use::macos_bg_input::frontmost_pid_macos()
+            .expect("a GUI session has a frontmost app");
+
+        let with_menus = dump_app_ax(
+            pid,
+            DumpOpts {
+                include_closed_menus: true,
+                ..Default::default()
+            },
+        )
+        .expect("dump with menus");
+        let pruned = dump_app_ax(pid, DumpOpts::default()).expect("pruned dump");
+
+        // What `describe_screen` actually asks for: depth 8, focused window
+        // only. Reported alongside so the cost of the observe path is visible
+        // next to the cost of a full `get_app_state`.
+        let observe = dump_app_ax(
+            pid,
+            DumpOpts {
+                max_depth: 8,
+                focus_window_only: true,
+                ..Default::default()
+            },
+        )
+        .expect("describe_screen-shaped dump");
+
+        eprintln!(
+            "pid={pid}\n  full+menus:  {:>5} nodes, {:>7} bytes\n  full pruned: {:>5} nodes, {:>7} bytes\n  observe:     {:>5} nodes, {:>7} bytes",
+            with_menus.nodes.len(),
+            with_menus.tree_text.len(),
+            pruned.nodes.len(),
+            pruned.tree_text.len(),
+            observe.nodes.len(),
+            observe.tree_text.len(),
+        );
+        // Depth profile of the focused window. Run this when retuning
+        // `DESCRIBE_SCREEN_AX_DEPTH`: "actionable" (has AX actions and a real
+        // frame) is what the agent can actually click, and it is the column
+        // that matters — node count and bytes grow long after it plateaus.
+        for d in [8u32, 12, 16, 20, 24, 32] {
+            let s = dump_app_ax(
+                pid,
+                DumpOpts {
+                    max_depth: d,
+                    focus_window_only: true,
+                    ..Default::default()
+                },
+            )
+            .expect("depth dump");
+            let actionable = s
+                .nodes
+                .iter()
+                .filter(|n| !n.actions.is_empty() && n.frame_global.is_some())
+                .count();
+            eprintln!(
+                "  depth {:>2}: {:>5} nodes, {:>4} actionable, {:>7} bytes",
+                d,
+                s.nodes.len(),
+                actionable,
+                s.tree_text.len()
+            );
+        }
+        assert!(
+            pruned.nodes.len() <= with_menus.nodes.len(),
+            "pruning must never grow the tree"
+        );
     }
 
     /// Smoke test: dump the AX tree of *this* test process. The test process

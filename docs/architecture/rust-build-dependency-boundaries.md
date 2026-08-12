@@ -54,6 +54,12 @@ Cargo 会统一同一 package 在依赖图中的 feature；workspace dependency 
 
 入口应选择真实需要的 owner feature；`product-full` 只能描述确实需要完整产品装配的兼容入口，不能作为尚未完成 feature/owner 分解时的占位解法。缩小某个产品的 capability 集合时必须从实际 construction/command path 反推，并保留行为等价或明确 unsupported-state 测试。
 
+Core library 的默认 feature 集合为空；完整产品必须显式选择 `product-full`。若 interface crate 以多个
+公开角色复用一条 optional Core dependency，则 dependency 声明本身保持无 feature，每个角色 feature
+分别激活 Core 并选择自己的非空 owner 闭包；兼容默认值只能组合这些已评审角色，不能重新引入
+`product-full`。每个角色必须独立编译，产品消费者还要显式关闭该 interface crate 的默认 feature 并选择
+真实使用的角色，避免 workspace feature union 掩盖边界缺口。
+
 Core 的 `agent-runtime` 只承载 Agent 生命周期基线和明确的基线工具，不得再次把 MCP、Remote Connect、模型目录、Browser/Web、Git/LSP 或产品工具组藏成 capability union。具体 service 由同名 owner feature 选择，内置工具由 `tools-*` 选择；`product-full` 显式相加全部 owner，CLI/ACP 等窄入口则按真实命令与构造路径列出自己的闭包。
 
 Owner feature 不等于“无前置依赖”。当实现确实调用较低层基线时，依赖必须按 `owner → baseline` 显式组合，禁止反向把 owner 藏回基线：例如 Core MCP 工具桥和 Remote Connect 依赖 Agent 生命周期，Workspace Search 依赖本地 Workspace Runtime。每个新增或调整后的 owner 闭包都必须单独 `cargo check`，避免被 Desktop/CLI 的 feature union 偶然补齐。

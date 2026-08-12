@@ -1604,7 +1604,12 @@ impl SessionManager {
             return None;
         };
         while let Ok(Some(entry)) = project_dirs.next_entry().await {
-            if !entry.file_type().await.map(|kind| kind.is_dir()).unwrap_or(false) {
+            if !entry
+                .file_type()
+                .await
+                .map(|kind| kind.is_dir())
+                .unwrap_or(false)
+            {
                 continue;
             }
             let session_storage_path = entry.path().join("sessions");
@@ -1975,11 +1980,7 @@ impl SessionManager {
     /// turn-boundary / compression / rollback points where the snapshot must be
     /// durable before the caller proceeds; hot append paths use the debounced
     /// variant instead.
-    async fn persist_current_turn_context_snapshot_forced(
-        &self,
-        session_id: &str,
-        reason: &str,
-    ) {
+    async fn persist_current_turn_context_snapshot_forced(&self, session_id: &str, reason: &str) {
         // Take the per-session flush lock so an in-flight debounced flush
         // cannot interleave with this synchronous write (the background task
         // and the forced path share the same lock).
@@ -2053,11 +2054,12 @@ impl SessionManager {
                     let Some(config) = sessions.get(&session_id).map(|s| s.config.clone()) else {
                         continue;
                     };
-                    let Some(workspace_path) = SessionManager::effective_storage_path_for_config_with_persistence(
-                        persistence_manager.as_ref(),
-                        &config,
-                    )
-                    .await
+                    let Some(workspace_path) =
+                        SessionManager::effective_storage_path_for_config_with_persistence(
+                            persistence_manager.as_ref(),
+                            &config,
+                        )
+                        .await
                     else {
                         continue;
                     };
@@ -3163,7 +3165,8 @@ impl SessionManager {
     /// 直到缓存世代因上下文压缩/恢复而递增）。
     pub async fn user_context_injected_generation(&self, session_id: &str) -> Option<u64> {
         self.ensure_prompt_cache_loaded(session_id).await;
-        self.prompt_cache_store.user_context_injected_generation(session_id)
+        self.prompt_cache_store
+            .user_context_injected_generation(session_id)
     }
 
     /// P-18（每会话一次）：记录该 session 已在指定缓存世代实际注入过 User Context
@@ -5099,7 +5102,10 @@ impl SessionManager {
                 first_error.get_or_insert(error);
                 continue;
             }
-            if let Err(error) = self.delete_session(workspace_path, &orphan.session_id).await {
+            if let Err(error) = self
+                .delete_session(workspace_path, &orphan.session_id)
+                .await
+            {
                 warn!(
                     "Failed to delete archived orphaned session: session_id={}, error={}",
                     orphan.session_id, error
@@ -7153,64 +7159,64 @@ impl SessionManager {
                 .await;
             self.reconcile_loaded_sessions_with_disk(&storage_path)
                 .await?;
-                let metadata_list = self
-                    .persistence_manager
-                    .list_session_metadata_with_options(workspace_path, include_internal)
-                    .await?;
-                // Backend tombstone filter (F6): read the durable deletion
-                // registry once and drop any confirmed-deleted session id so
-                // every list consumer (SessionControl list, tools, scheduler,
-                // coordinator) is protected even when the frontend pre-warm
-                // filter is bypassed. Fail-closed by contract (L4-P2-A): a
-                // corrupt/unreadable registry propagates Err via `?` (see
-                // list_deleted_session_ids) instead of silently degrading to an
-                // empty filter — silently returning nothing to filter would let
-                // tombstoned sessions reappear in listings. This mirrors the
-                // product-runtime list path and the corrupt-tombstone test
-                // (corrupt_tombstone_surfaces_error_and_keeps_file_untouched).
-                let deleted_ids = self.list_deleted_session_ids(&storage_path).await?;
-                let deleted: HashSet<&str> = deleted_ids.iter().map(String::as_str).collect();
-                let mut summaries = Vec::with_capacity(metadata_list.len());
-                for metadata in metadata_list {
-                    if deleted.contains(metadata.session_id.as_str()) {
-                        continue;
-                    }
-                    let reasoning_preset = self
-                        .persistence_manager
-                        .load_stored_session_state(workspace_path, &metadata.session_id)
-                        .await?
-                        .and_then(|value| value.config.reasoning_preset);
-                    let state = metadata
-                        .runtime_state
-                        .as_ref()
-                        .and_then(|v| serde_json::from_value::<SessionState>(v.clone()).ok())
-                        .unwrap_or(SessionState::Idle);
-                    summaries.push(SessionSummary {
-                        session_id: metadata.session_id,
-                        session_name: metadata.session_name,
-                        agent_type: metadata.agent_type,
-                        model_id: (!metadata.model_name.trim().is_empty())
-                            .then_some(metadata.model_name),
-                        reasoning_preset,
-                        last_user_dialog_agent_type: metadata.last_user_dialog_agent_type,
-                        last_submitted_agent_type: metadata.last_submitted_agent_type,
-                        created_by: metadata.created_by,
-                        kind: metadata.session_kind,
-                        turn_count: metadata.turn_count,
-                        created_at: std::time::UNIX_EPOCH
-                            + std::time::Duration::from_millis(metadata.created_at),
-                        last_activity_at: std::time::UNIX_EPOCH
-                            + std::time::Duration::from_millis(metadata.last_active_at),
-                        state,
-                        parent_session_id: metadata
-                            .relationship
-                            .as_ref()
-                            .and_then(|r| r.parent_session_id.clone()),
-                        is_daemon: metadata.is_daemon,
-                    });
+            let metadata_list = self
+                .persistence_manager
+                .list_session_metadata_with_options(workspace_path, include_internal)
+                .await?;
+            // Backend tombstone filter (F6): read the durable deletion
+            // registry once and drop any confirmed-deleted session id so
+            // every list consumer (SessionControl list, tools, scheduler,
+            // coordinator) is protected even when the frontend pre-warm
+            // filter is bypassed. Fail-closed by contract (L4-P2-A): a
+            // corrupt/unreadable registry propagates Err via `?` (see
+            // list_deleted_session_ids) instead of silently degrading to an
+            // empty filter — silently returning nothing to filter would let
+            // tombstoned sessions reappear in listings. This mirrors the
+            // product-runtime list path and the corrupt-tombstone test
+            // (corrupt_tombstone_surfaces_error_and_keeps_file_untouched).
+            let deleted_ids = self.list_deleted_session_ids(&storage_path).await?;
+            let deleted: HashSet<&str> = deleted_ids.iter().map(String::as_str).collect();
+            let mut summaries = Vec::with_capacity(metadata_list.len());
+            for metadata in metadata_list {
+                if deleted.contains(metadata.session_id.as_str()) {
+                    continue;
                 }
-                summaries.sort_by_key(|summary| std::cmp::Reverse(summary.last_activity_at));
-                return Ok(summaries);
+                let reasoning_preset = self
+                    .persistence_manager
+                    .load_stored_session_state(workspace_path, &metadata.session_id)
+                    .await?
+                    .and_then(|value| value.config.reasoning_preset);
+                let state = metadata
+                    .runtime_state
+                    .as_ref()
+                    .and_then(|v| serde_json::from_value::<SessionState>(v.clone()).ok())
+                    .unwrap_or(SessionState::Idle);
+                summaries.push(SessionSummary {
+                    session_id: metadata.session_id,
+                    session_name: metadata.session_name,
+                    agent_type: metadata.agent_type,
+                    model_id: (!metadata.model_name.trim().is_empty())
+                        .then_some(metadata.model_name),
+                    reasoning_preset,
+                    last_user_dialog_agent_type: metadata.last_user_dialog_agent_type,
+                    last_submitted_agent_type: metadata.last_submitted_agent_type,
+                    created_by: metadata.created_by,
+                    kind: metadata.session_kind,
+                    turn_count: metadata.turn_count,
+                    created_at: std::time::UNIX_EPOCH
+                        + std::time::Duration::from_millis(metadata.created_at),
+                    last_activity_at: std::time::UNIX_EPOCH
+                        + std::time::Duration::from_millis(metadata.last_active_at),
+                    state,
+                    parent_session_id: metadata
+                        .relationship
+                        .as_ref()
+                        .and_then(|r| r.parent_session_id.clone()),
+                    is_daemon: metadata.is_daemon,
+                });
+            }
+            summaries.sort_by_key(|summary| std::cmp::Reverse(summary.last_activity_at));
+            return Ok(summaries);
         } else {
             // Non-persistent mode: the in-memory sessions table is the only
             // source. A confirmed-deleted session is already removed from
@@ -8440,11 +8446,8 @@ impl SessionManager {
         turn.duration_ms = Some(stats.duration_ms);
         turn.end_time = Some(completion_timestamp);
 
-        self.persist_current_turn_context_snapshot_forced(
-            session_id,
-            "turn_completed",
-        )
-        .await;
+        self.persist_current_turn_context_snapshot_forced(session_id, "turn_completed")
+            .await;
 
         // Persist
         if self.should_persist_session_id(session_id) {
@@ -8505,11 +8508,8 @@ impl SessionManager {
                 .as_millis() as u64,
         );
 
-        self.persist_current_turn_context_snapshot_forced(
-            session_id,
-            "turn_failed",
-        )
-        .await;
+        self.persist_current_turn_context_snapshot_forced(session_id, "turn_failed")
+            .await;
         if self.should_persist_session_id(session_id) {
             self.persistence_manager
                 .save_dialog_turn(&workspace_path, &turn)
@@ -8566,11 +8566,8 @@ impl SessionManager {
                 .as_millis() as u64,
         );
 
-        self.persist_current_turn_context_snapshot_forced(
-            session_id,
-            "turn_cancelled",
-        )
-        .await;
+        self.persist_current_turn_context_snapshot_forced(session_id, "turn_cancelled")
+            .await;
 
         self.persistence_manager
             .save_dialog_turn(&workspace_path, &turn)
@@ -8667,11 +8664,8 @@ impl SessionManager {
         turn.duration_ms = Some(duration_ms);
         turn.end_time = Some(completion_timestamp);
 
-        self.persist_current_turn_context_snapshot_forced(
-            session_id,
-            snapshot_reason,
-        )
-        .await;
+        self.persist_current_turn_context_snapshot_forced(session_id, snapshot_reason)
+            .await;
 
         if self.should_persist_session_id(session_id) {
             self.persistence_manager
@@ -8766,11 +8760,8 @@ impl SessionManager {
         turn.duration_ms = Some(completion_timestamp.saturating_sub(turn.start_time));
         turn.end_time = Some(completion_timestamp);
 
-        self.persist_current_turn_context_snapshot_forced(
-            session_id,
-            snapshot_reason,
-        )
-        .await;
+        self.persist_current_turn_context_snapshot_forced(session_id, snapshot_reason)
+            .await;
 
         if self.should_persist_session_id(session_id) {
             self.persistence_manager
@@ -9246,7 +9237,8 @@ impl SessionManager {
                 prompt_cache_operation_locks: prompt_cache_operation_locks.clone(),
                 token_anchor_store: token_anchor_store.clone(),
                 turn_skill_agent_snapshot_store: turn_skill_agent_snapshot_store.clone(),
-                skill_agent_baseline_override_snapshot_store: skill_agent_baseline_override_snapshot_store.clone(),
+                skill_agent_baseline_override_snapshot_store:
+                    skill_agent_baseline_override_snapshot_store.clone(),
                 edit_constraints_store: edit_constraints_store.clone(),
                 file_read_state_store: file_read_state_store.clone(),
                 evidence_ledger: evidence_ledger.clone(),
@@ -9467,8 +9459,8 @@ mod tests {
     use super::{
         should_auto_migrate_session_model, CoreSessionStorePort, PermissionMode,
         SessionExecutionBindingError, SessionExecutionBindingUpdate, SessionManager,
-        SessionManagerConfig, TEST_MODEL_RESOLUTION_AI_CONFIG, CONTEXT_SNAPSHOT_FLUSH_DEBOUNCE,
-        DELETED_SESSION_IDS_FILE_NAME,
+        SessionManagerConfig, CONTEXT_SNAPSHOT_FLUSH_DEBOUNCE, DELETED_SESSION_IDS_FILE_NAME,
+        TEST_MODEL_RESOLUTION_AI_CONFIG,
     };
     use crate::agentic::core::{
         CompressionState, InternalReminderKind, Message, MessageContent, MessageRole,
@@ -9489,8 +9481,8 @@ mod tests {
     use crate::service::session::{
         DialogTurnData, DialogTurnKind, ModelRoundData, SessionContextUsage,
         SessionContextUsageSource, SessionKind, SessionMemoryMode, SessionMetadata,
-        SessionRelationship, SessionRelationshipKind, SessionStatus, ToolCallData,
-        ToolItemData, ToolResultData, TurnStatus, UserMessageData,
+        SessionRelationship, SessionRelationshipKind, SessionStatus, ToolCallData, ToolItemData,
+        ToolResultData, TurnStatus, UserMessageData,
     };
     use crate::util::errors::BitFunError;
     use bitfun_core_types::{
@@ -9985,10 +9977,7 @@ mod tests {
 
         // Simulate the cross-workspace session: it lives under a different
         // project slug and is never created/loaded through this manager.
-        let foreign_workspace_path = workspace
-            .path()
-            .join("foreign-workspace")
-            .join("code");
+        let foreign_workspace_path = workspace.path().join("foreign-workspace").join("code");
         std::fs::create_dir_all(&foreign_workspace_path).expect("foreign workspace");
         // Persist the session under its own slug's sessions directory, exactly
         // as a real cross-workspace session would be stored on disk.
@@ -10002,12 +9991,8 @@ mod tests {
             "Cross-workspace session".to_string(),
             "agentic".to_string(),
             SessionConfig {
-                workspace_path: Some(
-                    foreign_workspace_path.to_string_lossy().into_owned(),
-                ),
-                project_workspace_path: Some(
-                    foreign_workspace_path.to_string_lossy().into_owned(),
-                ),
+                workspace_path: Some(foreign_workspace_path.to_string_lossy().into_owned()),
+                project_workspace_path: Some(foreign_workspace_path.to_string_lossy().into_owned()),
                 workspace_id: Some("workspace-foreign".to_string()),
                 execution_target: Some(SessionExecutionTarget::local(
                     foreign_workspace_path.to_string_lossy().into_owned(),
@@ -13049,8 +13034,7 @@ mod tests {
             .session_tree_descendants(Some(workspace.path()), "parent-session")
             .await
             .expect("descendant lookup should succeed");
-        let descendant_set: HashSet<&str> =
-            descendants.iter().map(|id| id.as_str()).collect();
+        let descendant_set: HashSet<&str> = descendants.iter().map(|id| id.as_str()).collect();
         assert_eq!(
             descendant_set,
             HashSet::from(["child-root", "grandchild", "child-other-turn"])
@@ -13336,7 +13320,9 @@ mod tests {
             .await
             .expect_err("user-list restore must reject a hidden subagent");
         assert!(
-            rejection.to_string().contains("Session exists but is hidden"),
+            rejection
+                .to_string()
+                .contains("Session exists but is hidden"),
             "rejection should carry the hidden reason: {}",
             rejection
         );
@@ -14861,12 +14847,10 @@ mod tests {
             .expect("snapshot load should succeed")
             .expect("snapshot should exist");
         assert_eq!(snapshot_after.len(), 6);
-        assert!(snapshot_after
-            .iter()
-            .any(|message| matches!(
-                &message.content,
-                MessageContent::Text(text) if text.contains("debounced append 4")
-            )));
+        assert!(snapshot_after.iter().any(|message| matches!(
+            &message.content,
+            MessageContent::Text(text) if text.contains("debounced append 4")
+        )));
     }
 
     #[tokio::test]
@@ -14921,12 +14905,10 @@ mod tests {
             .expect("snapshot load should succeed")
             .expect("snapshot should exist");
         assert_eq!(snapshot.len(), 2);
-        assert!(snapshot
-            .iter()
-            .any(|message| matches!(
-                &message.content,
-                MessageContent::Text(text) if text == "final assistant text"
-            )));
+        assert!(snapshot.iter().any(|message| matches!(
+            &message.content,
+            MessageContent::Text(text) if text == "final assistant text"
+        )));
 
         // Let any stale background flush fire; it must not regress the file.
         tokio::time::sleep(CONTEXT_SNAPSHOT_FLUSH_DEBOUNCE * 3).await;
@@ -15268,8 +15250,9 @@ mod tests {
             .resolve_storage_path_for_workspace_path(workspace.path())
             .await;
 
-        let session_ids: Vec<String> =
-            (0..32).map(|index| format!("concurrent-deleted-{index}")).collect();
+        let session_ids: Vec<String> = (0..32)
+            .map(|index| format!("concurrent-deleted-{index}"))
+            .collect();
         let mut handles = Vec::new();
         for session_id in session_ids.clone() {
             let manager = manager.clone_for_tombstone_test();
@@ -16483,8 +16466,7 @@ mod tests {
             .await
             .expect("session should create");
         // Rewrite on-disk metadata as an orphan while the runtime session is processing.
-        let mut metadata =
-            orphan_test_metadata(&session.session_id, Some("session-ghost-parent"));
+        let mut metadata = orphan_test_metadata(&session.session_id, Some("session-ghost-parent"));
         metadata.workspace_path = Some(workspace.path().to_string_lossy().to_string());
         manager
             .save_session_metadata(workspace.path(), &metadata)
@@ -16550,7 +16532,9 @@ mod tests {
 
         let candidates = manager.list_transient_sweep_candidates();
         assert!(
-            candidates.iter().any(|c| c.session_id == session.session_id),
+            candidates
+                .iter()
+                .any(|c| c.session_id == session.session_id),
             "transient orphan should be a sweep candidate"
         );
 
@@ -16597,7 +16581,9 @@ mod tests {
                 .expect("session should be created");
             if matches!(
                 kind,
-                SessionKind::Subagent | SessionKind::EphemeralChild | SessionKind::EphemeralSubagent
+                SessionKind::Subagent
+                    | SessionKind::EphemeralChild
+                    | SessionKind::EphemeralSubagent
             ) {
                 hidden_ids.push(session.session_id);
             } else {

@@ -5,6 +5,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "Ecosystem-neutral external source lifecycle coordination"
+autotests = false
 
 [lib]
 name = "bitfun_external_sources"
@@ -18,6 +19,10 @@ tokio = { workspace = true, features = ["rt", "sync", "time"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }
+
+[[test]]
+name = "external_source_coordination_contracts"
+path = "tests/external_source_coordination_contracts.rs"
 
 [lints]
 workspace = true

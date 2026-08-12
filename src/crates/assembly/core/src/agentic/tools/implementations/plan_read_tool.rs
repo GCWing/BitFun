@@ -56,9 +56,9 @@ impl Default for PlanReadTool {
 /// Parse a plan file body into its YAML frontmatter and markdown body.
 fn parse_plan_file(content: &str) -> BitFunResult<(PlanFrontmatter, String)> {
     let trimmed = content.trim_start();
-    let after_open = trimmed
-        .strip_prefix("---")
-        .ok_or_else(|| BitFunError::tool("Plan file is missing the YAML frontmatter opener '---'"))?;
+    let after_open = trimmed.strip_prefix("---").ok_or_else(|| {
+        BitFunError::tool("Plan file is missing the YAML frontmatter opener '---'")
+    })?;
     let end = after_open.find("\n---").ok_or_else(|| {
         BitFunError::tool("Plan file is missing the YAML frontmatter closer '---'")
     })?;
@@ -71,10 +71,7 @@ fn parse_plan_file(content: &str) -> BitFunResult<(PlanFrontmatter, String)> {
         .to_string();
 
     let frontmatter: PlanFrontmatter = serde_yaml::from_str(yaml_part).map_err(|error| {
-        BitFunError::tool(format!(
-            "Failed to parse plan YAML frontmatter: {}",
-            error
-        ))
+        BitFunError::tool(format!("Failed to parse plan YAML frontmatter: {}", error))
     })?;
     Ok((frontmatter, body))
 }
@@ -131,14 +128,10 @@ impl Tool for PlanReadTool {
         let plan_file = input
             .get("plan_file")
             .and_then(|value| value.as_str())
-            .ok_or(BitFunError::validation(
-                "Missing required field: plan_file",
-            ))?;
+            .ok_or(BitFunError::validation("Missing required field: plan_file"))?;
         let plan_file = plan_file.trim();
         if plan_file.is_empty() {
-            return Err(BitFunError::validation(
-                "Missing required field: plan_file",
-            ));
+            return Err(BitFunError::validation("Missing required field: plan_file"));
         }
 
         let plan_path = resolve_plan_path(plan_file, context)?;
@@ -161,8 +154,13 @@ impl Tool for PlanReadTool {
             })
             .collect::<Vec<_>>();
 
-        let plan_reference =
-            context.build_runtime_artifact_reference(&format!("plans/{}", plan_path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()))?;
+        let plan_reference = context.build_runtime_artifact_reference(&format!(
+            "plans/{}",
+            plan_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+        ))?;
 
         let result = json!({
             "success": true,
@@ -217,7 +215,10 @@ fn require_plan_file_exists(
     // 的同步 IO 风格一致，保留现状可接受；若未来出现性能敏感场景，再改用
     // `tokio::fs::try_exists()` 或 `tokio::task::spawn_blocking` 包裹。
     if !plan_path.exists() {
-        return Err(BitFunError::tool(format!("Plan file not found: {}", display)));
+        return Err(BitFunError::tool(format!(
+            "Plan file not found: {}",
+            display
+        )));
     }
     Ok(plan_path)
 }
@@ -284,7 +285,10 @@ pub(crate) fn resolve_plan_path_with_plans_dir(
 /// Resolve the plan file argument to a concrete filesystem path inside the
 /// current workspace's plans directory. See
 /// [`resolve_plan_path_with_plans_dir`] for the accepted input forms.
-pub(crate) fn resolve_plan_path(plan_file: &str, context: &ToolUseContext) -> BitFunResult<PathBuf> {
+pub(crate) fn resolve_plan_path(
+    plan_file: &str,
+    context: &ToolUseContext,
+) -> BitFunResult<PathBuf> {
     let plans_dir = context.current_workspace_runtime_root()?.join("plans");
     resolve_plan_path_with_plans_dir(
         plan_file,
@@ -376,7 +380,10 @@ mod tests {
             &test_context(&dir),
         );
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(result.expect("absolute .plan.md path must resolve"), plan_path);
+        assert_eq!(
+            result.expect("absolute .plan.md path must resolve"),
+            plan_path
+        );
     }
 
     #[test]
@@ -406,7 +413,9 @@ mod tests {
         .expect_err("path outside plans dir must error");
         let _ = std::fs::remove_dir_all(&dir);
         assert!(
-            error.to_string().contains("resolves outside the plans directory"),
+            error
+                .to_string()
+                .contains("resolves outside the plans directory"),
             "unexpected error: {}",
             error
         );
@@ -421,7 +430,9 @@ mod tests {
             .expect_err(".. escape must error");
         let _ = std::fs::remove_dir_all(&dir);
         assert!(
-            error.to_string().contains("resolves outside the plans directory"),
+            error
+                .to_string()
+                .contains("resolves outside the plans directory"),
             "unexpected error: {}",
             error
         );
@@ -436,7 +447,9 @@ mod tests {
             .expect_err("bare name without .plan.md suffix must error");
         let _ = std::fs::remove_dir_all(&dir);
         assert!(
-            error.to_string().contains("Plan file must end with .plan.md"),
+            error
+                .to_string()
+                .contains("Plan file must end with .plan.md"),
             "unexpected error: {}",
             error
         );
@@ -446,8 +459,11 @@ mod tests {
     fn resolve_plan_path_accepts_bare_name_inside_plans_dir() {
         let dir = std::env::temp_dir().join(format!("plan-read-bare-{}", Uuid::new_v4()));
         std::fs::create_dir_all(dir.join("plans")).expect("plans dir should be created");
-        std::fs::write(dir.join("plans/plan_abc.plan.md"), "---\nname: X\n---\n\nBody")
-            .expect("write plan file");
+        std::fs::write(
+            dir.join("plans/plan_abc.plan.md"),
+            "---\nname: X\n---\n\nBody",
+        )
+        .expect("write plan file");
         let result = resolve_plan_path("plan_abc.plan.md", &test_context(&dir));
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(
@@ -462,8 +478,11 @@ mod tests {
         // remote workspaces must resolve to the local mirror plan path.
         let dir = std::env::temp_dir().join(format!("plan-read-uri-{}", Uuid::new_v4()));
         std::fs::create_dir_all(dir.join("plans")).expect("plans dir should be created");
-        std::fs::write(dir.join("plans/plan_abc.plan.md"), "---\nname: X\n---\n\nBody")
-            .expect("write plan file");
+        std::fs::write(
+            dir.join("plans/plan_abc.plan.md"),
+            "---\nname: X\n---\n\nBody",
+        )
+        .expect("write plan file");
         let uri = "bitfun://runtime/workspace-1/plans/plan_abc.plan.md";
         let result = resolve_plan_path_with_plans_dir(uri, &dir.join("plans"), Some("workspace-1"));
         let _ = std::fs::remove_dir_all(&dir);
@@ -482,7 +501,9 @@ mod tests {
         )
         .expect_err("runtime URI scope mismatch must error");
         assert!(
-            error.to_string().contains("belongs to workspace 'other-workspace'"),
+            error
+                .to_string()
+                .contains("belongs to workspace 'other-workspace'"),
             "unexpected error: {}",
             error
         );

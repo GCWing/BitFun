@@ -47,14 +47,21 @@ impl SessionTreeManager {
     /// session), so the clamp only applies to callers that cannot fail, such
     /// as `load_from_sessions` rebuilding the tree from persisted lineage.
     /// Keep both layers in sync if the max-depth policy changes.
-    pub fn register_child(&self, parent_id: &str, child_id: &str, depth: u32) -> Result<(), SessionTreeError> {
+    pub fn register_child(
+        &self,
+        parent_id: &str,
+        child_id: &str,
+        depth: u32,
+    ) -> Result<(), SessionTreeError> {
         if child_id == parent_id {
             return Err(SessionTreeError::SelfReference(child_id.to_string()));
         }
         let clamped_depth = if depth > self.max_depth {
             log::warn!(
                 "register_child: depth {} exceeds max_depth {} for child_id={}, clamping",
-                depth, self.max_depth, child_id
+                depth,
+                self.max_depth,
+                child_id
             );
             self.max_depth
         } else {
@@ -142,9 +149,7 @@ impl SessionTreeManager {
 
     /// Get the depth of a node (O(1) lookup)
     pub fn get_depth(&self, session_id: &str) -> Option<u32> {
-        self.depths
-            .get(session_id)
-            .map(|entry| *entry)
+        self.depths.get(session_id).map(|entry| *entry)
     }
 
     /// Collect all ancestor session_ids along the parent chain (nearest first)
@@ -164,9 +169,16 @@ impl SessionTreeManager {
         root_id: &str,
         sessions: &[SessionMetadata],
     ) -> Option<SessionTreeNode> {
-        let session_map: HashMap<&str, &SessionMetadata> =
-            sessions.iter().map(|s| (s.session_id.as_str(), s)).collect();
-        self.build_tree_impl(root_id, &session_map, &mut std::collections::HashSet::new(), 0)
+        let session_map: HashMap<&str, &SessionMetadata> = sessions
+            .iter()
+            .map(|s| (s.session_id.as_str(), s))
+            .collect();
+        self.build_tree_impl(
+            root_id,
+            &session_map,
+            &mut std::collections::HashSet::new(),
+            0,
+        )
     }
 
     fn build_tree_impl(
@@ -203,7 +215,9 @@ impl SessionTreeManager {
             children: self
                 .get_children(root_id)
                 .iter()
-                .filter_map(|child_id| self.build_tree_impl(child_id, sessions, visited, recursion_depth + 1))
+                .filter_map(|child_id| {
+                    self.build_tree_impl(child_id, sessions, visited, recursion_depth + 1)
+                })
                 .collect(),
             is_acp_external,
             external_provider_label: relationship.and_then(|r| r.subagent_type.clone()),
@@ -307,7 +321,9 @@ impl SessionTreeManager {
             if let Err(e) = self.register_child(&parent_id, &session.session_id, depth) {
                 log::warn!(
                     "SESSION-11 lineage rebuild failed for session {} under {}: {:?}",
-                    session.session_id, parent_id, e
+                    session.session_id,
+                    parent_id,
+                    e
                 );
             }
         }
@@ -362,12 +378,8 @@ fn session_status_to_tree_node_status(
 ) -> SessionTreeNodeStatus {
     match status {
         crate::session::types::SessionStatus::Active => SessionTreeNodeStatus::Running,
-        crate::session::types::SessionStatus::Completed => {
-            SessionTreeNodeStatus::Completed
-        }
-        crate::session::types::SessionStatus::Archived => {
-            SessionTreeNodeStatus::Completed
-        }
+        crate::session::types::SessionStatus::Completed => SessionTreeNodeStatus::Completed,
+        crate::session::types::SessionStatus::Archived => SessionTreeNodeStatus::Completed,
     }
 }
 
@@ -484,7 +496,9 @@ mod tests {
             make_metadata("b", Some("a"), Some(2)),
         ];
 
-        let tree = mgr.build_tree("root", &sessions).expect("root should exist");
+        let tree = mgr
+            .build_tree("root", &sessions)
+            .expect("root should exist");
         assert_eq!(tree.children.len(), 1);
         assert_eq!(tree.children[0].session_id, "a");
         assert_eq!(tree.children[0].children.len(), 1);
@@ -520,7 +534,10 @@ mod tests {
         mgr.register_child("A", "B", 1).unwrap();
         mgr.register_child("B", "C", 2).unwrap();
         let result = mgr.register_child("C", "A", 3);
-        assert!(matches!(result, Err(SessionTreeError::CycleDetected { .. })));
+        assert!(matches!(
+            result,
+            Err(SessionTreeError::CycleDetected { .. })
+        ));
     }
 
     #[test]

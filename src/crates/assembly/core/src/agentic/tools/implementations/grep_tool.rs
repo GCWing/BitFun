@@ -747,8 +747,8 @@ Usage:
                 match search_service.search_content(request).await {
                     Ok(search_result) => {
                         let display_base = Self::display_base(context);
-                        let (result_text, file_count, total_matches) =
-                            self.format_workspace_search_output(
+                        let (result_text, file_count, total_matches) = self
+                            .format_workspace_search_output(
                                 &output_mode,
                                 show_line_numbers,
                                 offset,

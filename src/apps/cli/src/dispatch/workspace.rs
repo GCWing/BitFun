@@ -735,8 +735,11 @@ fn bundle_commit_in_store(
         // `git bundle verify` checks the bundle's own integrity and that every
         // prerequisite commit is already present, so a bundle that would leave
         // a broken history is rejected before it touches the object store.
-        git(&repo, &["bundle", "verify", path_arg(&bundle_path)?.as_str()])
-            .context("verify dispatch bundle")?;
+        git(
+            &repo,
+            &["bundle", "verify", path_arg(&bundle_path)?.as_str()],
+        )
+        .context("verify dispatch bundle")?;
         git(
             &repo,
             &[
@@ -1142,7 +1145,12 @@ fn sync_in_store(
     let bundle_range = format!("{sync_base}..{}", provision.branch);
     git(
         &worktree,
-        &["bundle", "create", path_arg(&bundle_path)?.as_str(), &bundle_range],
+        &[
+            "bundle",
+            "create",
+            path_arg(&bundle_path)?.as_str(),
+            &bundle_range,
+        ],
     )
     .context("package dispatch result bundle")?;
     set_private_file_permissions(&bundle_path)?;
@@ -1491,8 +1499,11 @@ fn create_worktree(
         git(repo, &["update-ref", &branch_ref, base_commit])
             .context("point the dispatch branch at the requested base commit")?;
     }
-    git(repo, &["worktree", "add", path_arg(worktree_path)?.as_str(), branch])
-        .context("create the dispatch worktree")?;
+    git(
+        repo,
+        &["worktree", "add", path_arg(worktree_path)?.as_str(), branch],
+    )
+    .context("create the dispatch worktree")?;
     canonical_utf8(worktree_path)
 }
 
@@ -1933,7 +1944,12 @@ mod tests {
     fn bundle_everything(source: &Path, bundle: &Path) {
         git(
             source,
-            &["bundle", "create", path_arg(bundle).expect("path").as_str(), "main"],
+            &[
+                "bundle",
+                "create",
+                path_arg(bundle).expect("path").as_str(),
+                "main",
+            ],
         )
         .expect("bundle");
     }

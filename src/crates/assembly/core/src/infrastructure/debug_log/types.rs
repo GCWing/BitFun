@@ -4,6 +4,7 @@
 //! and writes them to the local NDJSON log file.
 
 use super::{DebugLogConfig, DebugLogEntry};
+#[cfg(feature = "workspace-runtime")]
 use crate::service::workspace::get_global_workspace_service;
 use anyhow::Result;
 use log::debug;
@@ -108,14 +109,16 @@ pub async fn handle_ingest(
     request: IngestLogRequest,
     config: &DebugLogConfig,
 ) -> Result<IngestResponse> {
+    let log_config = config.clone();
+    #[cfg(feature = "workspace-runtime")]
     let log_config = if let Some(workspace_path) =
         get_global_workspace_service().and_then(|service| service.try_get_current_workspace_path())
     {
-        let mut cfg = config.clone();
+        let mut cfg = log_config;
         cfg.log_path = workspace_path.join(".bitfun").join("debug.log");
         cfg
     } else {
-        config.clone()
+        log_config
     };
 
     let entry: DebugLogEntry = request.into();
@@ -127,4 +130,39 @@ pub async fn handle_ingest(
         success: true,
         error: None,
     })
+}
+
+#[cfg(all(test, not(feature = "workspace-runtime")))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn standalone_debug_log_uses_the_configured_path() {
+        let temp = tempfile::tempdir().expect("temp directory");
+        let log_path = temp.path().join("standalone").join("debug.log");
+        let config = DebugLogConfig {
+            log_path: log_path.clone(),
+            ingest_url: None,
+            session_id: "standalone-session".to_string(),
+        };
+
+        handle_ingest(
+            IngestLogRequest {
+                location: "standalone-test".to_string(),
+                message: "uses configured path".to_string(),
+                data: serde_json::Value::Null,
+                session_id: None,
+                run_id: None,
+                hypothesis_id: None,
+                timestamp: Some(1),
+            },
+            &config,
+        )
+        .await
+        .expect("ingest succeeds without the workspace runtime");
+
+        let contents = std::fs::read_to_string(log_path).expect("configured log is written");
+        assert!(contents.contains("\"location\":\"standalone-test\""));
+        assert!(contents.contains("\"sessionId\":\"standalone-session\""));
+    }
 }

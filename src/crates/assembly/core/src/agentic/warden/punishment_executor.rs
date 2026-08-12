@@ -419,7 +419,9 @@ mod tests {
         use crate::infrastructure::app_paths::PathManager;
 
         let root = std::env::temp_dir().join(format!("bitfun-punisher-test-{}", Uuid::new_v4()));
-        let path_manager = Arc::new(PathManager::with_user_root_for_tests(root.join("user-root")));
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.join("user-root"),
+        ));
         let persistence_manager =
             Arc::new(PersistenceManager::new(path_manager).expect("persistence manager"));
         Arc::new(SessionManager::new(
@@ -554,8 +556,12 @@ mod tests {
         assert!(outcome.rbac_change.is_none(), "R-25: L2 must not demote");
         assert!(!outcome.session_frozen);
         assert_eq!(outcome.prepended_reminders.len(), 1);
-        assert!(outcome.prepended_reminders[0].text.contains("No RBAC change"));
-        let entry = shame_wall.entry_for_session("test-r25-l2").expect("recorded");
+        assert!(outcome.prepended_reminders[0]
+            .text
+            .contains("No RBAC change"));
+        let entry = shame_wall
+            .entry_for_session("test-r25-l2")
+            .expect("recorded");
         assert_eq!(entry.cumulative_penalty_level, PenaltyLevel::L2);
     }
 
@@ -586,9 +592,15 @@ mod tests {
                 .expect("penalty execution succeeds");
 
             assert_eq!(outcome.level, level);
-            assert!(outcome.rbac_change.is_none(), "{level:?} must not change RBAC");
+            assert!(
+                outcome.rbac_change.is_none(),
+                "{level:?} must not change RBAC"
+            );
             assert!(!outcome.session_frozen, "{level:?} must not freeze");
-            assert!(!outcome.permanent_mark, "{level:?} must not mark permanently");
+            assert!(
+                !outcome.permanent_mark,
+                "{level:?} must not mark permanently"
+            );
             assert!(!outcome.prepended_reminders.is_empty());
             let entry = shame_wall.entry_for_session(&session).expect("recorded");
             assert_eq!(entry.cumulative_penalty_level, level);

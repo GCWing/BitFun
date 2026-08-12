@@ -5,6 +5,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "Claude Code static source adapter for BitFun"
+autotests = false
 
 [lib]
 name = "bitfun_claude_code_adapter"
@@ -26,6 +27,10 @@ url = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[[test]]
+name = "claude_code_source_contracts"
+path = "tests/claude_code_source_contracts.rs"
 
 [lints]
 workspace = true

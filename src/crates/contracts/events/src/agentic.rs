@@ -24,11 +24,7 @@ pub struct SubagentParentInfo {
     pub session_id: String,
     #[serde(rename = "dialogTurnId")]
     pub dialog_turn_id: String,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        rename = "depth"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "depth")]
     pub depth: Option<u32>,
     /// Delegated RBAC role key (R-14 B4); absent when the parent session has
     /// no registered role.
@@ -683,7 +679,9 @@ impl AgenticEvent {
             | Self::SessionModelAutoMigrated { session_id, .. }
             | Self::SessionReasoningPresetAutoCleared { session_id, .. } => Some(session_id),
             Self::SubagentTurnCompleted { session_id, .. } => Some(session_id),
-            Self::ReviewPropagationNeeded { parent_session_id, .. } => Some(parent_session_id),
+            Self::ReviewPropagationNeeded {
+                parent_session_id, ..
+            } => Some(parent_session_id),
             Self::SystemError { session_id, .. } => session_id.as_deref(),
         }
     }

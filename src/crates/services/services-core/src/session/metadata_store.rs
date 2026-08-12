@@ -437,7 +437,8 @@ impl SessionMetadataStore {
         cursor: Option<&str>,
         limit: usize,
     ) -> Result<SessionMetadataPage, SessionMetadataStoreError> {
-        self.list_metadata_page_with_options(cursor, limit, false).await
+        self.list_metadata_page_with_options(cursor, limit, false)
+            .await
     }
 
     /// Paginated variant of [`list_metadata_with_options`]. With
@@ -453,10 +454,7 @@ impl SessionMetadataStore {
             let mut sessions = self.scan_metadata_dirs().await?;
             sessions.sort_by_key(|metadata| std::cmp::Reverse(metadata.last_active_at));
             return Ok(build_session_metadata_page_with_options(
-                sessions,
-                cursor,
-                limit,
-                true,
+                sessions, cursor, limit, true,
             ));
         }
         if !self.sessions_root().exists() {

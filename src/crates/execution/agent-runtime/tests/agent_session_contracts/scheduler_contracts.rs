@@ -446,7 +446,8 @@ fn agent_session_reply_action_forwards_completed_outcome_with_legacy_reminder_te
         final_response: "done".to_string(),
     };
 
-    let action = resolve_agent_session_reply_action("target-session", None, None, &turn, &outcome, false);
+    let action =
+        resolve_agent_session_reply_action("target-session", None, None, &turn, &outcome, false);
 
     let AgentSessionReplyAction::Forward(plan) = action else {
         panic!("agent-session completion should forward a reply");
@@ -485,7 +486,8 @@ fn agent_session_reply_action_suppresses_cancelled_auto_reply_when_requested() {
         turn_id: "turn-1".to_string(),
     };
 
-    let action = resolve_agent_session_reply_action("target-session", None, None, &turn, &outcome, true);
+    let action =
+        resolve_agent_session_reply_action("target-session", None, None, &turn, &outcome, true);
 
     assert_eq!(
         action,
@@ -511,7 +513,8 @@ fn agent_session_reply_action_ignores_non_agent_session_turns() {
         final_response: "done".to_string(),
     };
 
-    let action = resolve_agent_session_reply_action("target-session", None, None, &turn, &outcome, false);
+    let action =
+        resolve_agent_session_reply_action("target-session", None, None, &turn, &outcome, false);
 
     assert_eq!(action, AgentSessionReplyAction::NoReply);
 }
@@ -810,12 +813,20 @@ fn agent_session_turn(source_session_id: &str) -> ActiveDialogTurn {
 /// `utc_iso8601_now` (ISO-8601 UTC, second precision, `Z` suffix).
 fn assert_utc_iso8601(value: &str) {
     let bytes = value.as_bytes();
-    assert_eq!(bytes.len(), 20, "ISO-8601 second precision length, got: {value}");
+    assert_eq!(
+        bytes.len(),
+        20,
+        "ISO-8601 second precision length, got: {value}"
+    );
     assert_eq!(&bytes[4..5], b"-", "year-month separator, got: {value}");
     assert_eq!(&bytes[7..8], b"-", "month-day separator, got: {value}");
     assert_eq!(&bytes[10..11], b"T", "date-time separator, got: {value}");
     assert_eq!(&bytes[13..14], b":", "hour-minute separator, got: {value}");
-    assert_eq!(&bytes[16..17], b":", "minute-second separator, got: {value}");
+    assert_eq!(
+        &bytes[16..17],
+        b":",
+        "minute-second separator, got: {value}"
+    );
     assert_eq!(bytes[19], b'Z', "UTC suffix, got: {value}");
     for [start, end] in [[0, 4], [5, 7], [8, 10], [11, 13], [14, 16], [17, 19]] {
         assert!(
@@ -836,7 +847,11 @@ fn assert_reminder_server_time_matches_metadata(reminder_text: &str, metadata_se
     let server_time_line = reminder_text
         .lines()
         .find(|line| line.starts_with("Server time: "))
-        .unwrap_or_else(|| panic!("reminder text should carry a Server time line: {reminder_text}"));
-    assert_eq!(&server_time_line["Server time: ".len()..], metadata_server_time);
+        .unwrap_or_else(|| {
+            panic!("reminder text should carry a Server time line: {reminder_text}")
+        });
+    assert_eq!(
+        &server_time_line["Server time: ".len()..],
+        metadata_server_time
+    );
 }
-

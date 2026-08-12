@@ -411,7 +411,9 @@ async fn persist_background_acp_turn(
     if let Err(save_error) = persistence.save_dialog_turn(storage_path, &turn).await {
         log::warn!(
             "Failed to persist background ACP turn: session_id={} turn_id={} error={}",
-            flow_session_id, turn_id, save_error
+            flow_session_id,
+            turn_id,
+            save_error
         );
     }
 }
@@ -638,7 +640,11 @@ impl TaskTool {
         // A cancelled count of zero means the target subagent has no running
         // background Task (it may have already finished or been cancelled).
         // Report that explicitly so the caller does not loop on a ghost entry.
-        let status = if cancelled_count > 0 { "cancelled" } else { "already_terminal" };
+        let status = if cancelled_count > 0 {
+            "cancelled"
+        } else {
+            "already_terminal"
+        };
         let message = if cancelled_count > 0 {
             "Cancelled the running background Task run(s)."
         } else {
@@ -1092,8 +1098,7 @@ impl TaskTool {
             Ok(sent) => sent,
             Err(error) => {
                 if temporary {
-                    recycle_acp_flow_session(port.as_ref(), &flow_session_id, workspace_path)
-                        .await;
+                    recycle_acp_flow_session(port.as_ref(), &flow_session_id, workspace_path).await;
                 }
                 return Err(BitFunError::tool(format!(
                     "ACP client port failed ({:?}): {}",
@@ -2512,7 +2517,10 @@ mod target_context_tests {
             .expect("load should succeed")
             .expect("turn should be persisted");
         assert_eq!(saved.user_message.content, "hello");
-        assert_eq!(saved.model_rounds[0].text_items[0].content, "external full reply");
+        assert_eq!(
+            saved.model_rounds[0].text_items[0].content,
+            "external full reply"
+        );
         assert_eq!(saved.status, crate::service::session::TurnStatus::Completed);
 
         // 幂等：同 turn id 再次落盘为 no-op（不覆盖已保存内容、不报错）。

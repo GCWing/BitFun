@@ -304,7 +304,9 @@ mod acp_flow_id_tests {
     fn looks_like_uuid_accepts_only_canonical_shape() {
         assert!(looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b"));
         assert!(!looks_like_uuid("7f0e1a2b3c4d4e5f8a9b0c1d2e3f4a5b"));
-        assert!(!looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b-extra"));
+        assert!(!looks_like_uuid(
+            "7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b-extra"
+        ));
         assert!(!looks_like_uuid(""));
         assert!(!looks_like_uuid("7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5"));
     }
@@ -317,8 +319,10 @@ mod acp_flow_id_tests {
             Some("codex")
         );
         assert_eq!(
-            acp_flow_client_id_from_session_id("acp_claude-code_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b")
-                .as_deref(),
+            acp_flow_client_id_from_session_id(
+                "acp_claude-code_7f0e1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b"
+            )
+            .as_deref(),
             Some("claude-code")
         );
     }

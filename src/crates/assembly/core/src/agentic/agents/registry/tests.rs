@@ -341,6 +341,30 @@ fn every_builtin_primary_mode_defaults_to_the_thread_goal_lifecycle() {
 }
 
 #[test]
+fn every_builtin_mode_with_control_hub_can_also_schedule_with_cron() {
+    // ControlHub's `wait` documentation tells the agent to schedule anything
+    // repeating — or further out than an hour — with Cron instead of holding
+    // the turn open. A mode that offers one without the other sends the agent
+    // after a tool that is not in its list; Cowork answered a "check every 30
+    // minutes" request with "I have no cron tool" for exactly this reason.
+    for spec in builtin_agent_specs()
+        .iter()
+        .filter(|spec| spec.category == AgentCategory::Mode)
+    {
+        let mode = (spec.factory)();
+        let default_tools = mode.default_tools();
+        if !default_tools.iter().any(|tool| tool == "ControlHub") {
+            continue;
+        }
+        assert!(
+            default_tools.iter().any(|tool| tool == "Cron"),
+            "builtin mode {} offers ControlHub but cannot schedule with Cron",
+            mode.id()
+        );
+    }
+}
+
+#[test]
 fn non_deep_review_builtin_subagents_default_to_primary() {
     for agent_type in [
         "Explore",
@@ -1559,7 +1583,9 @@ fn local_subagent_type_resolves_as_primary_agent_for_turn() {
             false,
             Some(bitfun_core_types::SessionAgentRouteOwner::Local),
         )
-        .expect("a session owned by a registered subagent type must resolve for continued dialog turns");
+        .expect(
+            "a session owned by a registered subagent type must resolve for continued dialog turns",
+        );
     assert_eq!(binding.runtime_agent_key, "custom-handoff");
     assert_eq!(
         binding.route_owner,
@@ -1902,7 +1928,9 @@ async fn tool_policy_subagent_has_empty_user_enabled_tools() {
     );
     registry.set_user_custom_agents_loaded(true);
 
-    let policy = registry.get_agent_tool_policy("tool-policy-sub", None).await;
+    let policy = registry
+        .get_agent_tool_policy("tool-policy-sub", None)
+        .await;
     // K-2：SubAgent 无前端 profile 勾选，user_enabled_tools 留空（RBAC 门
     // 只按模板白名单判定，保持原版行为零回归）。allowed_tools 来自该
     // agent 自身的 default_tools（TestAgent = ["Read"]）。
@@ -1924,7 +1952,9 @@ async fn tool_policy_hidden_has_empty_user_enabled_tools() {
     );
     registry.set_user_custom_agents_loaded(true);
 
-    let policy = registry.get_agent_tool_policy("tool-policy-hidden", None).await;
+    let policy = registry
+        .get_agent_tool_policy("tool-policy-hidden", None)
+        .await;
     assert_eq!(policy.allowed_tools, vec!["Read".to_string()]);
     assert!(policy.user_enabled_tools.is_empty());
 }
@@ -1943,7 +1973,9 @@ async fn tool_policy_mode_user_enabled_tools_from_default_tools() {
     );
     registry.set_user_custom_agents_loaded(true);
 
-    let policy = registry.get_agent_tool_policy("tool-policy-mode", None).await;
+    let policy = registry
+        .get_agent_tool_policy("tool-policy-mode", None)
+        .await;
     // K-1：Mode 分支经 resolve_effective_tools 产出 user_enabled_tools 并
     // 并入 allowed_tools（动态 MCP 也并入）。钉住的核心契约：
     // ① user_enabled_tools 非空（Mode 默认工具集，含 TestAgent 的 Read）

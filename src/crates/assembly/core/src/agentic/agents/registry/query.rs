@@ -106,7 +106,8 @@ impl AgentRegistry {
                 // 这是设计意图（这些工具本就模式 default 可见，放行 = 可见即
                 // 可用的一致性修复），回归对照表（17 号文档 §9.5）如实记录。
                 let resolved_tools = resolve_effective_tools(&default_tools, config, &valid_tools);
-                let allowed_tools = merge_dynamic_mcp_tools(resolved_tools.clone(), &registered_tool_names);
+                let allowed_tools =
+                    merge_dynamic_mcp_tools(resolved_tools.clone(), &registered_tool_names);
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();
                 let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();

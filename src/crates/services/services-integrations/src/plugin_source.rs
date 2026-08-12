@@ -2326,22 +2326,43 @@ fn replace_file_atomically(temp_path: &Path, target_path: &Path) -> io::Result<(
         MoveFileExW, ReplaceFileW, MOVEFILE_WRITE_THROUGH, REPLACEFILE_WRITE_THROUGH,
     };
 
-    let temp = temp_path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let target = target_path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
+    // The trust store can sit below the 260-char Win32 path limit for long
+    // workspace slugs (long-slug project runtime roots under a deep temp dir).
+    // The raw Win32 calls below do not apply the extended-length `\\?\`
+    // prefix the way std file APIs do, so normalize each path through its
+    // (existing) parent directory first (`dunce::canonicalize` also resolves
+    // mixed absolute/relative segments produced by test fixtures such as
+    // `tempdir().join("user/runtime/plugin-trust.json")`; the target file may
+    // not exist yet on first persist, hence the parent fallback) and then
+    // force the `\\?\` prefix on all three paths so ReplaceFileW/MoveFileExW
+    // never see a mix of prefixed and unprefixed forms, which fails with
+    // ERROR_PATH_NOT_FOUND.
+    fn extended(path: &Path) -> Vec<u16> {
+        let normalized = match dunce::canonicalize(path) {
+            Ok(path) => path,
+            Err(_) => path
+                .parent()
+                .and_then(|parent| dunce::canonicalize(parent).ok())
+                .map(|parent| parent.join(path.file_name().unwrap_or_default()))
+                .unwrap_or_else(|| path.to_path_buf()),
+        };
+        let os = if normalized.to_string_lossy().starts_with(r"\\?\") {
+            normalized.into_os_string()
+        } else {
+            let mut os = std::ffi::OsString::from(r"\\?\");
+            os.push(&normalized);
+            os
+        };
+        os.as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>()
+    }
+
+    let temp = extended(temp_path);
+    let target = extended(target_path);
     let backup_path = temp_path.with_extension("backup");
-    let backup = backup_path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
+    let backup = extended(&backup_path);
     // SAFETY: `target`, `temp` and `backup` are NUL-terminated wide strings
     // allocated above; the Win32 calls only read them for the duration of the
     // call and require no Rust-side aliasing.
@@ -2389,16 +2410,32 @@ fn restore_windows_backup_after_replace_failure(
     };
 
     if backup_path.exists() {
-        let backup = backup_path
-            .as_os_str()
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect::<Vec<_>>();
-        let target = target_path
-            .as_os_str()
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect::<Vec<_>>();
+        // Match `replace_file_atomically`: canonicalize through the parent
+        // and force the `\\?\` prefix so the raw Win32 call gets a consistent
+        // extended-length form even when the backup file does not exist yet.
+        fn extended(path: &Path) -> Vec<u16> {
+            let normalized = match dunce::canonicalize(path) {
+                Ok(path) => path,
+                Err(_) => path
+                    .parent()
+                    .and_then(|parent| dunce::canonicalize(parent).ok())
+                    .map(|parent| parent.join(path.file_name().unwrap_or_default()))
+                    .unwrap_or_else(|| path.to_path_buf()),
+            };
+            let os = if normalized.to_string_lossy().starts_with(r"\\?\") {
+                normalized.into_os_string()
+            } else {
+                let mut os = std::ffi::OsString::from(r"\\?\");
+                os.push(&normalized);
+                os
+            };
+            os.as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect::<Vec<_>>()
+        }
+        let backup = extended(backup_path);
+        let target = extended(target_path);
         // SAFETY: `backup` and `target` are NUL-terminated wide strings
         // allocated above; both remain valid for the duration of the call.
         let restore = unsafe {

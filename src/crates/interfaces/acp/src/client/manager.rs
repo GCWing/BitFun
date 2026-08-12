@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use agent_client_protocol::schema::{
     AgentCapabilities, CancelNotification, ClientCapabilities, CloseSessionRequest, ContentBlock,
-    Implementation, InitializeRequest, ImageContent, LoadSessionRequest, LoadSessionResponse,
+    ImageContent, Implementation, InitializeRequest, LoadSessionRequest, LoadSessionResponse,
     NewSessionRequest, NewSessionResponse, PermissionOption, PermissionOptionKind, PromptRequest,
     PromptResponse, ProtocolVersion, RequestPermissionOutcome, RequestPermissionRequest,
     RequestPermissionResponse, ResumeSessionRequest, ResumeSessionResponse,
@@ -379,8 +379,8 @@ impl AcpClientService {
         let mut probes = Vec::with_capacity(ids.len());
         for id in ids {
             let spec = acp_requirement_spec(&id, configs.get(&id));
-            let tool = probe_executable_with_timeout(spec.tool_command, requirement_probe_timeout)
-                .await;
+            let tool =
+                probe_executable_with_timeout(spec.tool_command, requirement_probe_timeout).await;
             let adapter = match spec.adapter {
                 Some(adapter) => Some(
                     probe_npm_adapter_with_timeout(
@@ -542,12 +542,8 @@ impl AcpClientService {
 
         let adapter_download_timeout =
             Duration::from_secs(self.resolved_acp_timeouts().await.adapter_download_secs);
-        predownload_npm_adapter_with_timeout(
-            adapter.package,
-            adapter.bin,
-            adapter_download_timeout,
-        )
-        .await
+        predownload_npm_adapter_with_timeout(adapter.package, adapter.bin, adapter_download_timeout)
+            .await
     }
 
     pub async fn install_client_cli(
@@ -1267,9 +1263,7 @@ impl AcpClientService {
                     // turn 的残留事件（跨 turn 污染）。根因级修复（d3-P1-1）：
                     // 发送 CancelNotification 取消外部 turn，使下一轮从干净
                     // 状态开始。
-                    if let Err(cancel_error) = self
-                        .cancel_bitfun_session(&bitfun_session_id)
-                        .await
+                    if let Err(cancel_error) = self.cancel_bitfun_session(&bitfun_session_id).await
                     {
                         warn!(
                             "ACP client turn timed out after {}s and cancel failed: client_id={}, bitfun_session_id={}, cancel_error={}",
@@ -1392,9 +1386,7 @@ impl AcpClientService {
                 Err(_) => {
                     // 同 prompt_agent 超时语义（d3-P1-1）：取消外部 turn 防
                     // 孤儿执行 + 残留事件跨 turn 污染下一次流式回复。
-                    if let Err(cancel_error) = self
-                        .cancel_bitfun_session(&bitfun_session_id)
-                        .await
+                    if let Err(cancel_error) = self.cancel_bitfun_session(&bitfun_session_id).await
                     {
                         warn!(
                             "ACP client stream timed out after {}s and cancel failed: client_id={}, bitfun_session_id={}, cancel_error={}",
@@ -1747,9 +1739,9 @@ impl AcpClientService {
     async fn resolved_acp_timeouts(&self) -> ResolvedAcpTimeouts {
         let Ok(thresholds) = self
             .config_service
-            .get_config::<bitfun_core::service::config::types::AiThresholdsConfig>(
-                Some("ai.thresholds"),
-            )
+            .get_config::<bitfun_core::service::config::types::AiThresholdsConfig>(Some(
+                "ai.thresholds",
+            ))
             .await
         else {
             return ResolvedAcpTimeouts::default();
@@ -1794,22 +1786,18 @@ impl AcpClientService {
         // Also register each ACP client as a SubAgent in the global AgentRegistry
         // so they appear in the agent selector and can be targeted by
         // SessionControl / SessionMessage for legion orchestration.
-        let agent_registry =
-            bitfun_core::agentic::agents::get_agent_registry();
+        let agent_registry = bitfun_core::agentic::agents::get_agent_registry();
         // Clean up ALL previously registered ACP agents first, mirroring the
         // tool-side `unregister_tools_by_prefix` above — otherwise clients
         // that were disabled or removed keep their `acp__<id>` agent (Mode)
         // registered forever.
-        agent_registry.unregister_agents_by_prefix(
-            bitfun_core::agentic::agents::AcpAgent::agent_id_prefix(),
-        );
+        agent_registry
+            .unregister_agents_by_prefix(bitfun_core::agentic::agents::AcpAgent::agent_id_prefix());
         for (client_id, config) in configs.iter().filter(|(_, c)| c.enabled) {
-            let agent = Arc::new(
-                bitfun_core::agentic::agents::AcpAgent::new(
-                    client_id.clone(),
-                    config.name.clone().unwrap_or_else(|| client_id.clone()),
-                ),
-            );
+            let agent = Arc::new(bitfun_core::agentic::agents::AcpAgent::new(
+                client_id.clone(),
+                config.name.clone().unwrap_or_else(|| client_id.clone()),
+            ));
             agent_registry.register_agent(
                 agent,
                 bitfun_core::agentic::agents::AgentCategory::Mode,
@@ -2137,10 +2125,7 @@ impl AcpClientService {
         {
             Ok(result) => result,
             Err(_) => Ok(TryConnectResult::FailAcp {
-                error: format!(
-                    "ACP handshake timed out after {}s",
-                    handshake_budget,
-                ),
+                error: format!("ACP handshake timed out after {}s", handshake_budget,),
             }),
         }
     }
@@ -2238,11 +2223,8 @@ impl AcpClientService {
             }
         });
 
-        let handshake_result = tokio::time::timeout(
-            Duration::from_secs(handshake_secs),
-            &mut result_rx,
-        )
-        .await;
+        let handshake_result =
+            tokio::time::timeout(Duration::from_secs(handshake_secs), &mut result_rx).await;
 
         probe_task.abort();
         terminate_child_process_tree("probe", child).await;
@@ -2265,10 +2247,7 @@ impl AcpClientService {
                 error: "ACP client exited before handshake completed".to_string(),
             }),
             Err(_) => Ok(TryConnectResult::FailAcp {
-                error: format!(
-                    "ACP handshake timed out after {}s",
-                    handshake_secs,
-                ),
+                error: format!("ACP handshake timed out after {}s", handshake_secs,),
             }),
         }
     }
@@ -2356,7 +2335,10 @@ fn build_acp_prompt_blocks(
     prompt: &str,
     image_contexts: Option<&[ImageContextData]>,
     user_message_metadata: Option<&serde_json::Value>,
-) -> (Vec<ContentBlock>, Option<serde_json::Map<String, serde_json::Value>>) {
+) -> (
+    Vec<ContentBlock>,
+    Option<serde_json::Map<String, serde_json::Value>>,
+) {
     let mut blocks = Vec::new();
     let mut has_image = false;
     if let Some(images) = image_contexts {
@@ -2391,7 +2373,10 @@ fn build_acp_prompt_blocks(
         with_text.extend(blocks);
         (with_text, meta)
     } else {
-        (vec![ContentBlock::Text(TextContent::new(prompt.to_string()))], meta)
+        (
+            vec![ContentBlock::Text(TextContent::new(prompt.to_string()))],
+            meta,
+        )
     }
 }
 
@@ -2419,9 +2404,7 @@ fn send_acp_prompt(
     if let Some(meta) = meta {
         request = request.meta(meta);
     }
-    Ok(active
-        .connection()
-        .send_request_to(Agent, request))
+    Ok(active.connection().send_request_to(Agent, request))
 }
 
 impl AcpClientConnection {
@@ -3180,11 +3163,7 @@ mod tests {
                 agent_client_protocol::schema::ToolCallUpdateFields::default(),
             ),
             vec![
-                PermissionOption::new(
-                    "allow-once",
-                    "Allow Once",
-                    PermissionOptionKind::AllowOnce,
-                ),
+                PermissionOption::new("allow-once", "Allow Once", PermissionOptionKind::AllowOnce),
                 PermissionOption::new(
                     "allow-always",
                     "Always Allow",

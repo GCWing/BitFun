@@ -21,8 +21,8 @@ use crate::agentic::tools::implementations::session_control_tool::{
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
-    AcpClientCancelRequest, AcpClientCreateRequest, AcpClientHistoryRequest, AcpClientMessageRequest,
-    AcpClientPort,
+    AcpClientCancelRequest, AcpClientCreateRequest, AcpClientHistoryRequest,
+    AcpClientMessageRequest, AcpClientPort,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -81,9 +81,7 @@ fn required_session_id(value: Option<&str>, action: &str) -> BitFunResult<String
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
-        .ok_or_else(|| {
-            BitFunError::tool(format!("session_id is required for {}", action))
-        })
+        .ok_or_else(|| BitFunError::tool(format!("session_id is required for {}", action)))
 }
 
 fn workspace_or_context(
@@ -333,10 +331,7 @@ pub(crate) async fn run_acp_message(
     let params: AcpMessageInput = serde_json::from_value(input.clone())
         .map_err(|error| BitFunError::tool(format!("Invalid input: {}", error)))?;
     let session_id = required_session_id(Some(&params.session_id), "message")?;
-    let message = params
-        .message
-        .trim()
-        .to_string();
+    let message = params.message.trim().to_string();
     if message.is_empty() {
         return Err(BitFunError::tool("message is required".to_string()));
     }
@@ -358,7 +353,10 @@ pub(crate) async fn run_acp_message(
     // task/execution.rs acp_send_input_notice 语义），不内嵌 sent.response 全文；
     // 全文留在 data JSON 的 response 字段，父会话按需取 data / SessionHistory。
     let result_for_assistant = if sent.response.trim().is_empty() {
-        format!("External ACP session '{}' returned an empty response.", session_id)
+        format!(
+            "External ACP session '{}' returned an empty response.",
+            session_id
+        )
     } else {
         format!(
             "External ACP session '{}' responded; use SessionHistory to view the full reply.",
@@ -546,10 +544,7 @@ Arguments:
                     .is_empty()
                 {
                     result = false;
-                    message = Some(format!(
-                        "session_id is required for {}",
-                        parsed.action
-                    ));
+                    message = Some(format!("session_id is required for {}", parsed.action));
                 }
             }
             "list" => {}
@@ -1278,13 +1273,9 @@ mod tests {
     #[tokio::test]
     async fn acp_history_returns_persisted_entries() {
         let port = FakeAcpClientPort::default();
-        let results = run_acp_history(
-            &port,
-            &json!({ "session_id": "acp_codex_s1" }),
-            &context(),
-        )
-        .await
-        .expect("history should succeed");
+        let results = run_acp_history(&port, &json!({ "session_id": "acp_codex_s1" }), &context())
+            .await
+            .expect("history should succeed");
 
         let histories = port.histories.lock().unwrap();
         assert_eq!(histories.len(), 1);
@@ -1309,7 +1300,9 @@ mod tests {
     #[tokio::test]
     async fn acp_control_validation_rejects_unknown_action() {
         let tool = AcpControlTool::new();
-        let result = tool.validate_input(&json!({ "action": "boom" }), None).await;
+        let result = tool
+            .validate_input(&json!({ "action": "boom" }), None)
+            .await;
         assert!(!result.result);
         assert!(result
             .message
@@ -1320,7 +1313,9 @@ mod tests {
     #[tokio::test]
     async fn acp_control_validation_requires_client_id_for_create() {
         let tool = AcpControlTool::new();
-        let result = tool.validate_input(&json!({ "action": "create" }), None).await;
+        let result = tool
+            .validate_input(&json!({ "action": "create" }), None)
+            .await;
         assert!(!result.result);
         assert!(result.message.unwrap().contains("client_id is required"));
     }
@@ -1334,10 +1329,7 @@ mod tests {
         assert!(!result.result);
 
         let ok = tool
-            .validate_input(
-                &json!({ "session_id": "s1", "message": "hi" }),
-                None,
-            )
+            .validate_input(&json!({ "session_id": "s1", "message": "hi" }), None)
             .await;
         assert!(ok.result);
     }
@@ -1348,7 +1340,9 @@ mod tests {
         let result = tool.validate_input(&json!({}), None).await;
         assert!(!result.result);
 
-        let ok = tool.validate_input(&json!({ "session_id": "s1" }), None).await;
+        let ok = tool
+            .validate_input(&json!({ "session_id": "s1" }), None)
+            .await;
         assert!(ok.result);
     }
 

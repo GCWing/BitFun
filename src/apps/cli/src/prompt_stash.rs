@@ -177,6 +177,7 @@ impl PromptStashStore {
         let lock_path = self.path.with_extension("jsonl.lock");
         let lock = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .read(true)
             .write(true)
             .open(lock_path)?;
@@ -398,6 +399,7 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let lock = std::fs::OpenOptions::new()
             .create(true)
+            .truncate(true)
             .read(true)
             .write(true)
             .open(path.with_extension("jsonl.lock"))

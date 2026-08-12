@@ -221,27 +221,55 @@ pub(crate) fn process_alive(pid: u32) -> bool {
         return false;
     };
     // SAFETY: signal 0 performs liveness/permission checking only.
-    if unsafe { libc::kill(pid, 0) } == 0 {
-        #[cfg(target_os = "linux")]
-        {
-            // A zombie still answers to kill(0), but it has already exited and
-            // must not be treated as an authenticated leader for escalation.
-            if let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) {
-                if stat
-                    .rsplit_once(") ")
-                    .and_then(|(_, fields)| fields.split_whitespace().next())
-                    == Some("Z")
-                {
-                    return false;
-                }
+    if unsafe { libc::kill(pid, 0) } != 0
+        && !matches!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::EPERM)
+        )
+    {
+        return false;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // A zombie still answers to kill(0), but it has already exited and
+        // must not be treated as an authenticated leader for escalation.
+        if let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+            if stat
+                .rsplit_once(") ")
+                .and_then(|(_, fields)| fields.split_whitespace().next())
+                == Some("Z")
+            {
+                return false;
             }
         }
-        return true;
     }
-    matches!(
-        std::io::Error::last_os_error().raw_os_error(),
-        Some(libc::EPERM)
-    )
+
+    #[cfg(target_os = "macos")]
+    {
+        // macOS also reports zombies as present to kill(0). Query the process
+        // state before using a leader PID to authenticate SIGKILL escalation;
+        // a failed/empty query means the process disappeared during the check.
+        let output = Command::new("ps")
+            .args(["-p", &pid.to_string(), "-o", "stat="])
+            .output();
+        let Ok(output) = output else {
+            return false;
+        };
+        if !output.status.success() {
+            return false;
+        }
+        return String::from_utf8_lossy(&output.stdout)
+            .trim_start()
+            .chars()
+            .next()
+            .is_some_and(|state| state != 'Z');
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
 }
 
 #[cfg(not(unix))]

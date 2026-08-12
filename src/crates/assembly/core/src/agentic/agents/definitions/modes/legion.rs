@@ -85,8 +85,12 @@ mod tests {
         assert_eq!(agent.id(), "Legion");
         assert_eq!(agent.prompt_template_name(None), "legion_mode");
         assert!(!agent.is_readonly());
-        assert!(agent.default_tools().contains(&"SessionControl".to_string()));
-        assert!(agent.default_tools().contains(&"SessionMessage".to_string()));
+        assert!(agent
+            .default_tools()
+            .contains(&"SessionControl".to_string()));
+        assert!(agent
+            .default_tools()
+            .contains(&"SessionMessage".to_string()));
         assert!(agent.default_tools().contains(&"LegionControl".to_string()));
     }
 

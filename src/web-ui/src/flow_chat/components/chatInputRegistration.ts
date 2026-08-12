@@ -1,5 +1,6 @@
 import type { ContextItem } from '@/shared/types/context';
 import type { ComposerPresentation } from '../utils/composerPresentation';
+import type { GroupChatActor, GroupChatMember } from '../types/flow-chat';
 
 /**
  * One submission produced by the shared ChatInput surface.
@@ -43,6 +44,16 @@ export interface ChatInputRegistration {
   draft?: ChatInputDraftRegistration;
   onDraftConsumed?: (id: number) => void;
   onSubmit?: (submission: ChatInputSubmission) => void | Promise<void>;
+  /**
+   * Group chat member mention (`@@`, R-GC-15/16) host. When present, a `@@`
+   * mention opens the group member picker instead of the file/session picker.
+   * `members` feed the picker; `onMentionSelect` records the chosen member
+   * (the composer insertion of the `@name` token is owned by ChatInput).
+   */
+  groupChatMention?: {
+    members: GroupChatMember[];
+    onMentionSelect: (target: GroupChatActor) => void;
+  };
 }
 
 export async function submitThroughChatInputRegistration(
@@ -57,4 +68,15 @@ export async function submitThroughChatInputRegistration(
 
   await submitToSession();
   return 'session';
+}
+
+/**
+ * Group chat registration (R-GC-18, contract §2.4, P1-3 file ownership).
+ *
+ * The group chat panel reuses the standard ChatInput and routes submissions
+ * through registration.onSubmit to groupChatStore.sendMessage.
+ */
+export interface GroupChatRegistration {
+  roomId: string;                    // passed by the group chat panel
+  onSubmit: (text: string, author: GroupChatActor, mentionTargets: GroupChatActor[], urgent?: boolean) => void;  // P2-4 adds urgent
 }

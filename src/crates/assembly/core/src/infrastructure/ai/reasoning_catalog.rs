@@ -8,14 +8,14 @@ use bitfun_ai_adapters::models_dev::{
     project_reasoning_catalog_with_limit_and_auto_binding, ModelsDevCatalog,
 };
 #[cfg(feature = "model-catalog")]
+use bitfun_core_types::ReasoningCatalogProjectionRequest;
+#[cfg(feature = "model-catalog")]
 use bitfun_core_types::{
     ModelsDevCatalogSource, ModelsDevCatalogStatus, ModelsDevRefreshResult, ModelsDevRefreshStatus,
 };
 use bitfun_core_types::{
     ReasoningCatalogBinding, ReasoningCatalogProjection, ReasoningPresetDescriptor,
 };
-#[cfg(feature = "model-catalog")]
-use bitfun_core_types::ReasoningCatalogProjectionRequest;
 #[cfg(feature = "model-catalog")]
 use bitfun_events::{AIModelCatalogUpdatedEvent, AI_MODEL_CATALOG_UPDATED_EVENT};
 #[cfg(feature = "model-catalog")]

@@ -214,7 +214,10 @@ mod tests {
             current_phase: "execution".into(),
             last_gate: "pre_write_check".into(),
             tool_calls_summary: vec!["Read(file.txt)".into(), "Write(file.txt)".into()],
-            rules_checked: vec!["R1: no_destructive_write".into(), "R3: path_whitelist".into()],
+            rules_checked: vec![
+                "R1: no_destructive_write".into(),
+                "R3: path_whitelist".into(),
+            ],
         }
     }
 

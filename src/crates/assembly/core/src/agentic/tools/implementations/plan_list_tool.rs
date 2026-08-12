@@ -189,7 +189,11 @@ impl Tool for PlanListTool {
                     if let Some((total, completed)) = counts {
                         todo_total = total;
                         todo_completed = completed;
-                        completion_pct = if total > 0 { completed * 100 / total } else { 0 };
+                        completion_pct = if total > 0 {
+                            completed * 100 / total
+                        } else {
+                            0
+                        };
                     } else if truncated {
                         // Frontmatter exceeds the bounded prefix: the true
                         // counts are unknown, not "no todos".

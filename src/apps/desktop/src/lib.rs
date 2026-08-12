@@ -534,7 +534,8 @@ pub async fn run() {
     // every model tool call sees it. The environment value wins over the
     // config value when both exist (explicit env is the escape hatch).
     if std::env::var_os("BITFUN_KNOWLEDGE_BASE_ROOT").is_none() {
-        if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await {
+        if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await
+        {
             match config_service
                 .get_config::<String>(Some("ai.knowledge_base_root"))
                 .await
@@ -1570,6 +1571,20 @@ pub async fn run() {
             archive_all_sessions,
             list_archived_sessions,
             delete_all_archived_sessions,
+            // Group chat API (R-GC-12, P0: 11 commands + scan_timeouts must be
+            // registered or the frontend hits "command not found")
+            group_chat_list,
+            group_chat_load,
+            group_chat_members,
+            group_chat_create,
+            group_chat_join,
+            group_chat_leave,
+            group_chat_delete,
+            group_chat_set_mode,
+            group_chat_send,
+            group_chat_messages,
+            group_chat_ingest_reply,
+            group_chat_scan_timeouts,
             initialize_mcp_servers,
             api::mcp_api::initialize_mcp_servers_non_destructive,
             get_mcp_servers,

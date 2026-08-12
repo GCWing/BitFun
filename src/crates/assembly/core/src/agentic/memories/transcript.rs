@@ -146,17 +146,17 @@ fn collect_memory_transcript_items(
                     kind: "function",
                     function: MemoryTranscriptToolFunction {
                         name: tool.effective_name().to_string(),
-                        arguments: serialize_tool_arguments(tool.effective_input(), limits.tool_input),
+                        arguments: serialize_tool_arguments(
+                            tool.effective_input(),
+                            limits.tool_input,
+                        ),
                     },
                 })
                 .collect::<Vec<_>>();
             if !assistant_content.is_empty() || !tool_calls.is_empty() {
                 messages.push(MemoryTranscriptMessage::Assistant {
                     role: "assistant",
-                    content: truncate_middle_tokens(
-                        &assistant_content,
-                        limits.message_content,
-                    ),
+                    content: truncate_middle_tokens(&assistant_content, limits.message_content),
                     tool_calls,
                 });
             }

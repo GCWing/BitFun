@@ -98,7 +98,10 @@ fn reference_files_persist_through_create_update_and_serde_round_trip() {
     })
     .expect("goal should be updated");
     assert_eq!(updated.goal.objective, "ship v2");
-    assert_eq!(updated.goal.reference_files, reference_files, "objective update keeps reference files");
+    assert_eq!(
+        updated.goal.reference_files, reference_files,
+        "objective update keeps reference files"
+    );
 
     // Explicit replacement swaps the list.
     let replaced = build_set_thread_goal_result(SetThreadGoalRequest {
@@ -129,8 +132,7 @@ fn reference_files_persist_through_create_update_and_serde_round_trip() {
         "createdAt": 1,
         "updatedAt": 2
     });
-    let restored_legacy: ThreadGoal =
-        serde_json::from_value(legacy).expect("legacy goal parses");
+    let restored_legacy: ThreadGoal = serde_json::from_value(legacy).expect("legacy goal parses");
     assert!(
         restored_legacy.reference_files.is_empty(),
         "missing referenceFiles defaults to an empty list"
@@ -438,8 +440,10 @@ fn prompt_and_tool_response_contracts_match_thread_goal_wire_shape() {
         true
     );
 
-    let plan =
-        build_thread_goal_continuation_plan(&goal(ThreadGoalStatus::Active), MAX_THREAD_GOAL_AUTO_CONTINUATIONS);
+    let plan = build_thread_goal_continuation_plan(
+        &goal(ThreadGoalStatus::Active),
+        MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+    );
     assert_eq!(plan.user_message_metadata["autoContinuationMax"], 10);
 }
 

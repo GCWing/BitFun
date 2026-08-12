@@ -501,9 +501,15 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             {
                 let mut p = serde_json::Map::new();
                 p.insert("sessionId".to_string(), json!(session_id));
-                p.insert("subagentDialogTurnId".to_string(), json!(subagent_dialog_turn_id));
+                p.insert(
+                    "subagentDialogTurnId".to_string(),
+                    json!(subagent_dialog_turn_id),
+                );
                 p.insert("parentSessionId".to_string(), json!(parent_session_id));
-                p.insert("parentDialogTurnId".to_string(), json!(parent_dialog_turn_id));
+                p.insert(
+                    "parentDialogTurnId".to_string(),
+                    json!(parent_dialog_turn_id),
+                );
                 p.insert("parentToolCallId".to_string(), json!(parent_tool_call_id));
                 if let Some(at) = agent_type {
                     p.insert("agentType".to_string(), json!(at));

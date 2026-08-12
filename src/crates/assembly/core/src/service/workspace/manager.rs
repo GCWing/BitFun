@@ -1001,14 +1001,19 @@ impl WorkspaceManager {
             .await
     }
 
-    /// Registers or refreshes workspace activity without changing opened UI state.
+    /// Registers or refreshes workspace activity.
+    ///
+    /// The workspace is registered into the opened UI list so agent/background
+    /// sessions (e.g. managed worktrees) appear in the left workspace panel.
+    /// The current workspace is never changed: callers control activation and
+    /// recency via `options.auto_set_current` / `options.add_to_recent`.
     pub async fn track_workspace_with_options(
         &mut self,
         path: PathBuf,
         options: WorkspaceOpenOptions,
         refresh_worktree: Option<Option<WorkspaceWorktreeInfo>>,
     ) -> BitFunResult<WorkspaceInfo> {
-        self.upsert_workspace_with_options(path, options, false, refresh_worktree)
+        self.upsert_workspace_with_options(path, options, true, refresh_worktree)
             .await
     }
 

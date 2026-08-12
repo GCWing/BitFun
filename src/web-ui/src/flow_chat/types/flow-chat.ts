@@ -753,3 +753,62 @@ export interface FlowChatConfig {
   maxHistoryRounds: number;
   enableVirtualScroll: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Group chat types (type-contract v1.3 §2.1, R-GC-13)
+// ---------------------------------------------------------------------------
+
+// P1-9 fix: enum unified as snake_case (matches backend serde) — 'round_robin', not 'round-robin'
+export type GroupChatMode = 'free' | 'round_robin';
+
+// P0-2 fix: master reserved word (matches backend GROUP_MASTER_ACTOR)
+export const GROUP_MASTER_ACTOR = '__master__';
+
+// P0-1 fix (re-reviewed): tagged union (internally tagged, matches backend serde(tag="kind"))
+// Shapes: {kind:'master'} / {kind:'claw',sessionId,agentType} / {kind:'all'}
+export type GroupChatActor =
+  | { kind: 'master' }
+  | { kind: 'claw'; sessionId: string; agentType: string }
+  | { kind: 'all' };   // @all (P1-4 fix re-reviewed)
+
+export interface GroupChatRoom {
+  schemaVersion: number;
+  roomId: string;
+  name: string;
+  owner: GroupChatActor;
+  mode: GroupChatMode;
+  roundRobinCursor: number;
+  createdAt: number;
+  lastActiveAt: number;
+  status: 'active' | 'archived';
+  memberLimit: number;
+}
+
+export interface GroupChatMember {
+  sessionId: string;
+  role: 'owner' | 'member';
+  joinedAt: number;
+  agentType: string;      // must be 'Claw'
+  displayName?: string;
+}
+
+export interface GroupChatMessage {
+  messageId: string;
+  roomId: string;
+  author: GroupChatActor;
+  kind: 'user' | 'agent' | 'system';
+  content: string;
+  mentionTargets: GroupChatActor[];
+  replyToMessageId?: string;
+  timestamp: number;
+  status: 'pending' | 'delivered' | 'replied' | 'failed';
+}
+
+export interface GroupChatState {
+  rooms: Map<string, GroupChatRoom>;
+  activeRoomId: string | null;
+  members: Map<string, GroupChatMember[]>;   // roomId -> members (P1-11: frontend single source too)
+  messages: Map<string, GroupChatMessage[]>; // roomId -> messages
+  mode: GroupChatMode;
+  roundRobinCursor: number;
+}

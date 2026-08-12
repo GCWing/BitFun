@@ -104,9 +104,7 @@ fn build_session_relationship(
 ) -> Option<SessionRelationship> {
     let mut relationship = existing.and_then(normalized_session_relationship);
     let kind = match session_kind {
-        SessionKind::Subagent | SessionKind::EphemeralSubagent => {
-            SessionRelationshipKind::Subagent
-        }
+        SessionKind::Subagent | SessionKind::EphemeralSubagent => SessionRelationshipKind::Subagent,
         SessionKind::EphemeralChild => SessionRelationshipKind::Btw,
         SessionKind::Standard => return relationship,
     };

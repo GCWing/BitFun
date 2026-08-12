@@ -274,6 +274,7 @@ impl CliConfig {
         let lock_path = config_path.with_extension("toml.lock");
         let lock_file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .read(true)
             .write(true)
             .open(lock_path)?;

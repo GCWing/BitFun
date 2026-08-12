@@ -369,12 +369,9 @@ impl FileReadStateStore {
         let end_line = start_line
             .saturating_add(limit.saturating_sub(1))
             .min(receipt.total_lines);
-        let covered = receipt
-            .ranges
-            .iter()
-            .any(|(covered_start, covered_end)| {
-                *covered_start <= start_line && *covered_end >= end_line
-            });
+        let covered = receipt.ranges.iter().any(|(covered_start, covered_end)| {
+            *covered_start <= start_line && *covered_end >= end_line
+        });
         if !covered {
             return None;
         }
@@ -422,11 +419,7 @@ impl FileReadStateStore {
     /// benefit on later ranges of the same revision ("放行一次即清零"), instead
     /// of permanently force-serving every subsequent request until the file
     /// revision changes. The ranges (what has actually been read) are kept.
-    pub fn reset_review_read_spin_counters(
-        &self,
-        session_id: &str,
-        logical_path: &str,
-    ) -> bool {
+    pub fn reset_review_read_spin_counters(&self, session_id: &str, logical_path: &str) -> bool {
         let Some(session_receipts) = self.review_read_receipts.get(session_id) else {
             return false;
         };
@@ -663,8 +656,14 @@ mod tests {
         let after = store
             .review_read_coverage("review-session", "src/large.rs", revision, 1403, 27)
             .expect("coverage after reset");
-        assert_eq!(after.file_served_count, 1, "file counter resets after force-serve");
-        assert_eq!(after.repeat_served_count, 1, "repeat counter resets after force-serve");
+        assert_eq!(
+            after.file_served_count, 1,
+            "file counter resets after force-serve"
+        );
+        assert_eq!(
+            after.repeat_served_count, 1,
+            "repeat counter resets after force-serve"
+        );
 
         // 已读 ranges 保留：同范围仍被识别为 covered。
         let another = store

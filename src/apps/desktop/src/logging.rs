@@ -780,10 +780,11 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let path = temp_dir.path().join(EARLY_STARTUP_LOG_FILE_NAME);
         let logger = EarlyFileLogger::new(path.clone());
+        let record_args = format_args!("Startup failed: code={}", 7);
         let record = log::Record::builder()
             .level(log::Level::Error)
             .target("bitfun_desktop::startup")
-            .args(format_args!("Startup failed: code={}", 7))
+            .args(record_args)
             .build();
 
         logger.write_record(&record);
