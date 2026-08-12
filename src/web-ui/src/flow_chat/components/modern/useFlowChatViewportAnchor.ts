@@ -71,6 +71,23 @@ export interface UseFlowChatViewportAnchorOptions {
   shiftViewport: (byPx: number) => void;
 }
 
+/**
+ * What an attempt to put the reading position back actually did.
+ *
+ * The settle window refreshes on evidence that the settle is still running, and
+ * only a frame that got as far as looking at the DOM has any. A boolean cannot
+ * carry that: `false` is a stand-down, a Turn not rendered yet, and no anchor at
+ * all, and the loop used to tell those apart by reading a counter that two of
+ * the three never touch. Measured: 27 seconds of `anchor.stoodDown`, one per
+ * frame, with the viewport parked and follow-output resting on it.
+ */
+type AnchorRestoreOutcome =
+  | 'corrected'
+  | 'in-place'
+  | 'awaiting-turn'
+  | 'stood-down'
+  | 'no-anchor';
+
 export interface FlowChatViewportAnchorApi {
   /** Anchor to wherever the viewport is now, unconditionally. */
   captureAnchor: () => void;
@@ -323,10 +340,10 @@ export function useFlowChatViewportAnchor({
     if (captures) captureAnchorAt('scroll');
   }, [captureAnchorAt, carryAnchorThroughScroll, scrollerRef]);
 
-  const restoreAnchor = useCallback((): boolean => {
+  const attemptRestore = useCallback((): AnchorRestoreOutcome => {
     const scroller = scrollerRef.current;
     const anchor = anchorRef.current;
-    if (!scroller || !anchor) return false;
+    if (!scroller || !anchor) return 'no-anchor';
     /*
      * Every way this declines is silent and looks like the transcript simply
      * not moving, which is why each of them is traced. Standing down for
@@ -339,7 +356,7 @@ export function useFlowChatViewportAnchor({
         message: 'anchor stood down for another owner',
         data: () => ({ turnId: anchor.turnId, scrollTopPx: roundViewportPx(scroller.scrollTop) }),
       });
-      return false;
+      return 'stood-down';
     }
     const element = findRenderedTurnAnchorElement(scroller, anchor.turnId);
     /*
@@ -373,8 +390,9 @@ export function useFlowChatViewportAnchor({
       if (givingUp) {
         reportMissingTurnWait(scroller, anchor.turnId, 'given-up');
         anchorRef.current = null;
+        return 'no-anchor';
       }
-      return false;
+      return 'awaiting-turn';
     }
     // The wait is reported before the correction it made possible, so the two
     // read as cause and effect in the order they are written down.
@@ -386,7 +404,7 @@ export function useFlowChatViewportAnchor({
     // Already where it belongs, which still counts as answered.
     if (Math.abs(correction) < ANCHOR_CORRECTION_EPSILON_PX) {
       anchorScrollTopRef.current = scroller.scrollTop;
-      return true;
+      return 'in-place';
     }
     traceViewportRepeating('anchor|correcting', {
       location: 'anchor.correct',
@@ -412,11 +430,21 @@ export function useFlowChatViewportAnchor({
     });
     shiftViewportRef.current(correction);
     anchorScrollTopRef.current = scroller.scrollTop;
-    return true;
+    return 'corrected';
   }, [reportMissingTurnWait, scrollerRef]);
 
-  const restoreAnchorRef = useRef(restoreAnchor);
-  restoreAnchorRef.current = restoreAnchor;
+  const attemptRestoreRef = useRef(attemptRestore);
+  attemptRestoreRef.current = attemptRestore;
+
+  /*
+   * The public answer is "did this leave the reading position where it belongs",
+   * which the outcome refines rather than replaces. Callers outside the settle
+   * loop only ever needed the two.
+   */
+  const restoreAnchor = useCallback((): boolean => {
+    const outcome = attemptRestoreRef.current();
+    return outcome === 'corrected' || outcome === 'in-place';
+  }, []);
 
   const openSettleWindow = useCallback(() => {
     settleFramesRef.current = ANCHOR_SETTLE_FRAMES;
@@ -431,7 +459,7 @@ export function useFlowChatViewportAnchor({
     // In the caller's own frame, so the displacement and its correction are one
     // paint rather than two. Callers are a layout effect or a ResizeObserver
     // callback; both still run before the browser paints.
-    restoreAnchorRef.current();
+    attemptRestoreRef.current();
     if (settleFrameRef.current !== null) return;
     const step = (frameStartMs: number) => {
       settleFrameRef.current = null;
@@ -452,13 +480,24 @@ export function useFlowChatViewportAnchor({
        * independent constants describing different things; this says what was
        * meant instead of relying on them coinciding.
        */
-      const corrected = restoreAnchorRef.current();
+      const outcome = attemptRestoreRef.current();
       // Counted here rather than beside `attempts`, because it is frames the
       // wait is measured in: a Turn that arrives in the next frame costs the
       // reader nothing, and one that takes five is five painted frames of
-      // being in the wrong place.
-      if (missingTurnAttemptsRef.current > 0) missingFramesRef.current += 1;
-      if (corrected || missingTurnAttemptsRef.current > 0) {
+      // being in the wrong place. A frame that stood down is none of those —
+      // it never looked, and counting it reported a 28-second wait for a
+      // reading position that was correct the whole time.
+      if (outcome === 'awaiting-turn') missingFramesRef.current += 1;
+      /*
+       * Only a frame that looked can say the settle is still running. A
+       * stand-down looked at nothing — the owner it deferred to is placing the
+       * viewport, and while that owner rests on it, as follow-output does at
+       * the tail, nothing here will ever change. Refreshing on it kept the loop
+       * alive off a missing-Turn count left by the last frame that *did* look,
+       * and that count can only advance on a frame that does not stand down:
+       * the one condition jammed the loop and made its only exit unreachable.
+       */
+      if (outcome === 'corrected' || outcome === 'in-place' || outcome === 'awaiting-turn') {
         settleFramesRef.current = ANCHOR_SETTLE_FRAMES;
       }
       correctionFrameStartMsRef.current = null;

@@ -337,11 +337,27 @@ without the keeper changing at all.
 One consequence of the refresh rule is worth stating plainly: a frame that finds
 the anchor already in place still counts as answered, so an open transcript that
 no other writer owns holds one animation frame in flight indefinitely. The cost
-is a `querySelectorAll` and two rect reads per frame. The window only winds down
-once there is no anchor to keep.
+is a `querySelectorAll` and two rect reads per frame. That is accepted; the
+window winds down when there is no anchor to keep, and when another owner holds
+the viewport.
 
 The anchor is skipped entirely while follow-output owns the viewport. Restoring
-a pre-prepend position is only meaningful when the user owns it.
+a pre-prepend position is only meaningful when the user owns it — and a frame
+spent standing down is *not* evidence the settle is still running. It looked at
+nothing. The loop used to refresh on the missing-Turn count instead, which is a
+fact about the last frame that did look, and that count can only advance on a
+frame that does not stand down: the same condition jammed the loop and put its
+only exit out of reach. Measured at the tail after a jump-to-latest, where
+follow-output does not release because resting there is what it is for: 27
+seconds of `anchor.stoodDown`, one per frame, zero travel, ending only when the
+reader scrolled. The wait it reported for that — `waitedFrames: 6609`,
+`waitedForMs: 28116`, against 20 attempts — was of a reading position that had
+been correct the whole time.
+
+So the outcome of a restore is five-valued inside the loop, not a boolean.
+`false` covers a stand-down, a Turn not rendered yet, and no anchor at all, and
+the loop has to treat those differently; the public `restoreAnchor` still
+answers the only question its other callers ask.
 
 **What the anchor cannot fix on its own** is a scroll range that was wrong to
 begin with. Holding the reading position across a burst of measurement is worth

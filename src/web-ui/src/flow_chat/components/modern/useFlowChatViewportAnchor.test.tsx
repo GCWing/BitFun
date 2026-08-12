@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ANCHOR_MISSING_TURN_ATTEMPTS,
+  ANCHOR_SETTLE_FRAMES,
   USER_DRIVEN_SCROLL_WINDOW_MS,
 } from './flowChatViewportAnchor';
 import {
@@ -400,6 +401,71 @@ describe('useFlowChatViewportAnchor', () => {
 
     expect(frames).toHaveLength(1);
     expect(scroller.scrollTop).toBe(0);
+  });
+
+  it('winds the settle window down while another owner holds the viewport', () => {
+    /*
+     * Measured: 27 seconds of `anchor.stoodDown`, one per frame, with the
+     * viewport parked at 985.3 and follow-output resting on it — which at the
+     * tail is where it lives, not a transient. The loop read the missing-Turn
+     * count left by the frame *before* the stand-down as evidence it was still
+     * waiting for something, and refreshed its own budget on it; that count can
+     * only advance on a frame that does not stand down, so the one condition
+     * jammed the loop and made its only exit unreachable. It ended when the
+     * reader scrolled, and not before.
+     */
+    scroller.scrollTop = 1000;
+    layoutTurns({ 'turn-3': 980 });
+    api.captureAnchor();
+
+    // The anchored Turn leaves the rendered window, and then another writer
+    // takes the viewport — the order that left a stale count behind.
+    layoutTurns({ 'turn-9': 980 });
+    api.openSettleWindow();
+    runFrame();
+    isOwnedElsewhere = true;
+
+    let ranFrames = 0;
+    while (frames.length > 0 && ranFrames < 200) {
+      runFrame();
+      ranFrames += 1;
+    }
+
+    expect(ranFrames).toBeLessThanOrEqual(ANCHOR_SETTLE_FRAMES);
+    expect(frames).toHaveLength(0);
+    // Given up on nothing: the reader is still owed a correction, and the
+    // carry that depends on this count still has to work when the owner lets
+    // go and the transcript moves again.
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
+  it('does not count a frame it stood down on as a frame spent waiting', () => {
+    /*
+     * `waitedFrames` is read as painted frames the reader spent in the wrong
+     * place. Frames the anchor never looked on are not that, and counting them
+     * reported a 6609-frame wait for a reading position that was correct
+     * throughout.
+     */
+    scroller.scrollTop = 1000;
+    layoutTurns({ 'turn-3': 980 });
+    api.captureAnchor();
+
+    layoutTurns({ 'turn-9': 980 });
+    api.openSettleWindow();
+    runFrame();
+
+    isOwnedElsewhere = true;
+    for (let index = 0; index < 5; index += 1) runFrame();
+
+    isOwnedElsewhere = false;
+    layoutTurns({ 'turn-3': 1100, 'turn-9': 980 });
+    runFrame();
+
+    const waits = mocks.traceViewport.mock.calls
+      .map(([probe]) => probe)
+      .filter(probe => probe.location === 'anchor.turnReturned');
+    expect(waits).toHaveLength(1);
+    expect(waits[0].data()).toMatchObject({ waitedFrames: 1 });
   });
 
   it('stops re-asserting after the component goes away', () => {

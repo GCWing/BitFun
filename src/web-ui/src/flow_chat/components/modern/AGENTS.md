@@ -108,6 +108,11 @@ before reporting a defect as new.
   the rendered window. A correction is owed there and cannot be measured yet, so
   the anchor is carried through the scroll — credited with the reader's own
   travel — never replaced by whatever else happens to be rendered.
+- The anchor's settle window is refreshed by what a frame *observed*, never by a
+  counter left over from an earlier one. A frame that stood down for another
+  owner looked at nothing, so it refreshes nothing — otherwise the loop runs at
+  frame rate for as long as that owner rests on the viewport, which at the tail
+  is indefinitely.
 - The viewport anchor lives in `flowChatViewportAnchor.ts` and
   `useFlowChatViewportAnchor.ts` and must stay independent of the virtualizer:
   it may read the scroller and the Turns rendered inside it, and nothing else.
