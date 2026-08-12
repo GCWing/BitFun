@@ -34,7 +34,7 @@ import { WorkspaceKind } from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/services/ShortcutManager';
 import { useSessionModeStore } from '../stores/sessionModeStore';
-import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
+import { isMacOSDesktopRuntime, isOpenHarmonyRuntime } from '@/infrastructure/runtime';
 import { flowChatSessionConfigForWorkspace } from '../utils/projectSessionWorkspace';
 import { notificationService } from '@/shared/notification-system';
 import { AppearanceBackgroundMediaLayer, appearanceRuntime, useAppearance } from '@/infrastructure/appearance';
@@ -83,6 +83,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { t: tCommon } = useI18n('common');
   const currentAppearance = useAppearance().current;
   const backgroundMedia = currentAppearance?.backgroundMedia;
+  const isOpenHarmony = isOpenHarmonyRuntime();
   usePermissionRequestNotify();
   const {
     currentWorkspace,
@@ -757,10 +758,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         {/* Main content — always render WorkspaceBody; WelcomeScene in viewport handles no-workspace state */}
         <main className="bitfun-app-main-workspace" data-testid="app-main-content" data-bf-component="app-layout" data-bf-part="main">
           <WorkspaceBody
-            onMinimize={canUseNativeWindowControls && !isMacOS ? handleMinimize : undefined}
-            onMaximize={canUseNativeWindowControls ? handleMaximize : undefined}
-            onClose={canUseNativeWindowControls && !isMacOS ? handleClose : undefined}
+            onMinimize={canUseNativeWindowControls && !isMacOS && !isOpenHarmony ? handleMinimize : undefined}
+            onMaximize={canUseNativeWindowControls && !isOpenHarmony ? handleMaximize : undefined}
+            onClose={canUseNativeWindowControls && !isMacOS && !isOpenHarmony ? handleClose : undefined}
             isMaximized={isMaximized}
+            reserveNativeWindowControls={isOpenHarmony}
             isEntering={transitionDir === 'entering'}
             isExiting={transitionDir === 'returning'}
           />

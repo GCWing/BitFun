@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isTauriRuntime, supportsNativeWindowControls } from './environment';
+import { isOpenHarmonyRuntime, isTauriRuntime, supportsNativeWindowControls } from './environment';
 
 const setTauriInternals = (value: unknown) => {
   vi.stubGlobal('window', {
@@ -39,5 +39,14 @@ describe('runtime environment', () => {
 
     expect(isTauriRuntime()).toBe(true);
     expect(supportsNativeWindowControls()).toBe(true);
+  });
+
+  it('recognizes the OpenHarmony webview runtime', () => {
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 OpenHarmony 5.0',
+      platform: 'OpenHarmony',
+    });
+
+    expect(isOpenHarmonyRuntime()).toBe(true);
   });
 });

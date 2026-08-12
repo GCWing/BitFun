@@ -25,7 +25,6 @@ import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/Toolb
 import { useNotification } from '@/shared/notification-system';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import NotificationButton from '../../TitleBar/NotificationButton';
-import GithubStarButton from './GithubStarButton';
 import { usePrivacy } from '../../Privacy/PrivacyContext';
 import {
   hasActionableUnreadReply,
@@ -425,7 +424,6 @@ const PersistentFooterActions: React.FC = () => {
         </div>
 
         <div className="bitfun-nav-panel__footer-right">
-          <GithubStarButton />
           <NotificationButton className="bitfun-nav-panel__footer-btn" navFooterHoverIconSwap />
         </div>
       </div>

@@ -27,6 +27,7 @@ interface SceneBarProps {
   onMaximize?: () => void;
   onClose?: () => void;
   isMaximized?: boolean;
+  reserveNativeWindowControls?: boolean;
 }
 
 const SceneBar: React.FC<SceneBarProps> = ({
@@ -35,12 +36,14 @@ const SceneBar: React.FC<SceneBarProps> = ({
   onMaximize,
   onClose,
   isMaximized = false,
+  reserveNativeWindowControls = false,
 }) => {
   const { openTabs, activeTabId, tabDefs, activateScene, closeScene } = useSceneManager();
   const sessionTitle = useCurrentSessionTitle();
   const settingsTabTitle = useCurrentSettingsTabTitle();
   const { t } = useI18n('common');
   const hasWindowControls = !!(onMinimize && onMaximize && onClose);
+  const showWindowControls = hasWindowControls || reserveNativeWindowControls;
   const sceneBarClassName = `bitfun-scene-bar ${!hasWindowControls ? 'bitfun-scene-bar--no-controls' : ''} ${className}`.trim();
   const isSingleTab = openTabs.length <= 1;
   const tabCount = Math.max(openTabs.length, 1);
@@ -108,13 +111,14 @@ const SceneBar: React.FC<SceneBarProps> = ({
         })}
       </div>
 
-      {hasWindowControls && (
+      {showWindowControls && (
         <div className="bitfun-scene-bar__controls" data-bf-component="scene-bar" data-bf-part="controls">
           <WindowControls
-            onMinimize={onMinimize!}
-            onMaximize={onMaximize!}
-            onClose={onClose!}
+            onMinimize={onMinimize}
+            onMaximize={onMaximize}
+            onClose={onClose}
             isMaximized={isMaximized}
+            nativePlaceholder={reserveNativeWindowControls && !hasWindowControls}
           />
         </div>
       )}
