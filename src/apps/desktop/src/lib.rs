@@ -1508,7 +1508,6 @@ pub async fn run() {
             load_session_turns,
             get_session_usage_report,
             save_session_turn,
-            record_local_command_turn,
             save_session_metadata,
             export_session_transcript,
             delete_persisted_session,
