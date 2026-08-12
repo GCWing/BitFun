@@ -3,6 +3,10 @@ import {
   roundViewportPx,
   traceViewportRepeating,
 } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
+import {
+  isTailFollowDiagnosticsEnabled,
+  noteTailFollowStep,
+} from '@/infrastructure/diagnostics/flowChatTailFollowDiagnostics';
 import type { FlowChatViewportOwnerApi } from './useFlowChatViewportOwner';
 import { SNAP_BACK_HOLD_MS } from './flowChatViewportOwnership';
 import {
@@ -313,7 +317,22 @@ export function useFlowChatFollowOutput({
     }
 
     if (!onTarget) {
+      const fromPx = scroller.scrollTop;
       viewportOwner.write({ owner: 'follow-output', topPx: next.target });
+      if (isTailFollowDiagnosticsEnabled()) {
+        noteTailFollowStep('list', {
+          /*
+           * Read back rather than taken from the target. The register can
+           * refuse this write outright, and a refused follow is a step of zero
+           * — believing the target there would report a follow that is being
+           * outranked as the smoothest one in the session.
+           */
+          stepPx: scroller.scrollTop - fromPx,
+          lagPx: next.target - fromPx,
+          innerScroll: true,
+          snapped: true,
+        });
+      }
     }
   }, [
     isOpeningViewport,

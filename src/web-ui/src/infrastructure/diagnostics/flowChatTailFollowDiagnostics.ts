@@ -57,8 +57,14 @@ export interface TailFollowStepBuckets {
   over28: number;
 }
 
-/** Which follow this is. One window is kept per subject. */
-export type TailFollowSubject = 'thinking';
+/**
+ * Which follow this is. One window is kept per subject.
+ *
+ * The two are never summed. They face the same question and pay for it
+ * differently, so an average over both would hide exactly the difference the
+ * cost half of this file exists to expose.
+ */
+export type TailFollowSubject = 'list' | 'thinking';
 
 export interface TailFollowStepSample {
   /** How far the scroll offset actually moved on this write. */
@@ -68,6 +74,11 @@ export interface TailFollowStepSample {
   /**
    * The box was already scrolling internally, so this write changed no layout.
    * False means the element is still growing and every step costs a re-measure.
+   *
+   * Always true for `list`, whose scroller is a fixed box that only ever
+   * scrolls — which is the trap. That write is free of *layout* and still not
+   * free: the virtualizer re-windows from the scroll events it produces, so the
+   * list's price is `listCommits` and this flag cannot show it.
    */
   innerScroll: boolean;
   /** The write skipped whatever smoothing is in force and went straight to the tail. */
