@@ -8,7 +8,6 @@ export const tuiLegacyBackendMarkers = [
   'bitfun_agent_runtime::',
   'bitfun_services_',
   'bitfun_runtime_services',
-  'bitfun_agent_runtime_ipc',
   'CliAgentRuntimeClient',
   'CliContextReloadClient',
   'CoreAgentRuntimeCompatibility',

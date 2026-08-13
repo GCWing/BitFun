@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use agent_client_protocol::{Error, Result};
 use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime, PortErrorKind, RuntimeError};
+use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_core::service::git::GitError;
 use bitfun_runtime_ports::AgentContextReloadPort;
 
@@ -80,6 +81,9 @@ impl BitfunAppRuntime {
             RuntimeError::Port(error) => match error.kind {
                 PortErrorKind::InvalidRequest => Error::invalid_params().data(error.message),
                 PortErrorKind::NotFound => Error::resource_not_found(None),
+                PortErrorKind::SessionInUse => {
+                    app_server_error(AppServerErrorKind::SessionInUse, error.message)
+                }
                 _ => Self::internal_error(error.message),
             },
             other => Self::internal_error(other.into_message()),
@@ -100,6 +104,19 @@ impl BitfunAppRuntime {
     fn internal_error(message: impl std::fmt::Display) -> Error {
         Error::internal_error().data(serde_json::json!(message.to_string()))
     }
+}
+
+fn app_server_error(kind: AppServerErrorKind, message: impl Into<String>) -> Error {
+    Error::new(kind.json_rpc_code() as i32, message.into()).data(
+        serde_json::to_value(AppServerErrorData {
+            kind,
+            retryable: false,
+            outcome_unknown: false,
+            capability: Some("agent.turn_control".to_string()),
+            request_id: None,
+        })
+        .unwrap_or(serde_json::Value::Null),
+    )
 }
 
 /// Convenience for wrapping a fallible runtime call into a JSON-RPC `Result`.

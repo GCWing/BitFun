@@ -10,7 +10,7 @@ use anyhow::Result;
 use bitfun_app_server_client::AppServerEvent;
 use bitfun_app_server_protocol::account::*;
 use bitfun_app_server_protocol::agent::*;
-use bitfun_app_server_protocol::event::EventStreamState;
+use bitfun_app_server_protocol::event::{EventStream, EventStreamState, SyncEventsRequest};
 use bitfun_app_server_protocol::external_source::*;
 use bitfun_app_server_protocol::hook::*;
 use bitfun_app_server_protocol::mcp::*;
@@ -34,16 +34,16 @@ use bitfun_runtime_ports::{
     put_agent_workspace_references, AgentContextReloadRequest, AgentDialogSteerRequest,
     AgentDialogTurnExecution, AgentDialogTurnRequest, AgentInputAttachment,
     AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
-    AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
-    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
-    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionSummary, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
-    AgentSubmissionSource, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    AgentTurnSettlementRequest, AgentUserShellCommandRequest, AgentWorkspaceReference,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult,
-    DialogSubmissionPolicy, SessionExecutionTarget, SessionTranscript, WorkspaceDiffSnapshot,
+    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSubmissionSource, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, AgentTurnSettlementRequest, AgentUserShellCommandRequest,
+    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, DialogSubmissionPolicy, SessionExecutionTarget,
+    SessionTranscript, WorkspaceDiffSnapshot,
 };
 use tokio::sync::{broadcast, Mutex};
 
@@ -222,6 +222,7 @@ impl TuiAgentClient {
         let external_source_events = Arc::new(RwLock::new(Some(external_source_sender.clone())));
         let pending_permissions = Arc::new(RwLock::new(HashMap::new()));
         spawn_event_bridge(
+            Some(backend.clone()),
             backend.subscribe_events(),
             agent_sender,
             permission_sender,
@@ -1632,6 +1633,7 @@ fn shared_receiver<T: Clone>(
 }
 
 fn spawn_event_bridge(
+    backend: Option<Arc<dyn TuiBackend>>,
     mut source: broadcast::Receiver<AppServerEvent>,
     agent_sender: broadcast::Sender<AgenticEventEnvelope>,
     permission_sender: broadcast::Sender<PermissionRequestEvent>,
@@ -1678,10 +1680,56 @@ fn spawn_event_bridge(
                     // The next TUI snapshot request is the authoritative recovery path.
                 }
                 Ok(AppServerEvent::StreamState(notification))
-                    if matches!(
-                        notification.state,
-                        EventStreamState::Closed | EventStreamState::Invalidated
-                    ) =>
+                    if notification.stream == EventStream::Permission
+                        && notification.state == EventStreamState::Lagged =>
+                {
+                    let snapshot = match &backend {
+                        Some(backend) => {
+                            backend
+                                .sync_events(SyncEventsRequest {
+                                    streams: vec![EventStream::Permission],
+                                })
+                                .await
+                        }
+                        None => Err(TuiBackendError {
+                            message: "Permission event recovery backend is unavailable".to_string(),
+                            outcome_unknown: false,
+                            kind: TuiBackendErrorKind::Backend,
+                        }),
+                    };
+                    match snapshot {
+                        Ok(snapshot) => reconcile_pending_permissions(
+                            &pending,
+                            &permission_sender,
+                            snapshot.pending_permissions,
+                        ),
+                        Err(error) => {
+                            send_stream_error(
+                                &agent_sender,
+                                format!(
+                                    "Permission event recovery failed; this view is no longer authoritative: {error}"
+                                ),
+                            );
+                            break;
+                        }
+                    }
+                }
+                Ok(AppServerEvent::StreamState(notification))
+                    if notification.stream == EventStream::Agent
+                        && notification.state == EventStreamState::Lagged =>
+                {
+                    send_stream_error(
+                        &agent_sender,
+                        "Agent events were lost and no authoritative Agent snapshot is available",
+                    );
+                    break;
+                }
+                Ok(AppServerEvent::StreamState(notification))
+                    if notification.stream == EventStream::Agent
+                        && matches!(
+                            notification.state,
+                            EventStreamState::Closed | EventStreamState::Invalidated
+                        ) =>
                 {
                     send_stream_error(
                         &agent_sender,
@@ -1726,6 +1774,42 @@ fn send_stream_error(sender: &broadcast::Sender<AgenticEventEnvelope>, message: 
     ));
 }
 
+fn reconcile_pending_permissions(
+    pending: &Arc<RwLock<HashMap<String, PermissionRequest>>>,
+    sender: &broadcast::Sender<PermissionRequestEvent>,
+    authoritative: Vec<PermissionRequest>,
+) {
+    let authoritative = authoritative
+        .into_iter()
+        .map(|request| (request.request_id.clone(), request))
+        .collect::<HashMap<_, _>>();
+    let mut current = pending
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let removed = current
+        .keys()
+        .filter(|request_id| !authoritative.contains_key(*request_id))
+        .cloned()
+        .collect::<Vec<_>>();
+    let added = authoritative
+        .iter()
+        .filter(|(request_id, _)| !current.contains_key(*request_id))
+        .map(|(_, request)| request.clone())
+        .collect::<Vec<_>>();
+    *current = authoritative;
+    drop(current);
+
+    for request_id in removed {
+        let _ = sender.send(PermissionRequestEvent::Cancelled {
+            request_id,
+            reason: "Permission request is no longer pending after event recovery".to_string(),
+        });
+    }
+    for request in added {
+        let _ = sender.send(PermissionRequestEvent::Asked { request });
+    }
+}
+
 fn session_migration_notices(
     previous: &AgentSessionSummary,
     restored: &AgentSessionSummary,
@@ -1763,4 +1847,218 @@ fn default_session_name() -> String {
         "CLI Session - {}",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_app_server_protocol::event::{
+        AgentEventNotification, EventCursor, EventStreamStateNotification, ResyncDirective,
+    };
+    use bitfun_product_domains::tool_permissions::{
+        PermissionRequestSource, PermissionRequestSourceKind,
+    };
+
+    fn cursor(stream: EventStream, sequence: u64) -> EventCursor {
+        EventCursor {
+            connection_id: "connection-1".to_string(),
+            stream,
+            sequence,
+        }
+    }
+
+    fn stream_state(stream: EventStream, state: EventStreamState, sequence: u64) -> AppServerEvent {
+        AppServerEvent::StreamState(EventStreamStateNotification {
+            cursor: cursor(stream, sequence),
+            stream,
+            state,
+            missed: None,
+            resync: ResyncDirective {
+                method: "app/syncEvents".to_string(),
+                snapshot_available: true,
+                reason: Some("test stream state".to_string()),
+            },
+        })
+    }
+
+    #[tokio::test]
+    async fn non_agent_stream_closure_keeps_agent_delivery_alive() {
+        let (source, source_rx) = broadcast::channel(8);
+        let (agent_sender, _) = broadcast::channel(8);
+        let (permission_sender, _) = broadcast::channel(8);
+        let (external_source_sender, _) = broadcast::channel(8);
+        let agent_owner = Arc::new(RwLock::new(Some(agent_sender.clone())));
+        let permission_owner = Arc::new(RwLock::new(Some(permission_sender.clone())));
+        let external_source_owner = Arc::new(RwLock::new(Some(external_source_sender.clone())));
+        let pending = Arc::new(RwLock::new(HashMap::new()));
+        let mut agent_events = agent_sender.subscribe();
+
+        spawn_event_bridge(
+            None,
+            source_rx,
+            agent_sender,
+            permission_sender,
+            external_source_sender,
+            agent_owner.clone(),
+            permission_owner,
+            external_source_owner,
+            pending,
+        );
+
+        source
+            .send(stream_state(
+                EventStream::Permission,
+                EventStreamState::Closed,
+                1,
+            ))
+            .expect("permission stream state");
+        source
+            .send(stream_state(
+                EventStream::Config,
+                EventStreamState::Invalidated,
+                1,
+            ))
+            .expect("config stream state");
+        source
+            .send(AppServerEvent::Agent(AgentEventNotification {
+                cursor: cursor(EventStream::Agent, 1),
+                event: AgenticEventEnvelope::new(
+                    AgenticEvent::SessionStateChanged {
+                        session_id: "session-1".to_string(),
+                        new_state: "idle".to_string(),
+                    },
+                    AgenticEventPriority::Normal,
+                ),
+            }))
+            .expect("agent event");
+
+        let delivered =
+            tokio::time::timeout(std::time::Duration::from_secs(1), agent_events.recv())
+                .await
+                .expect("agent event delivery timed out")
+                .expect("agent event stream closed");
+        assert!(matches!(
+            delivered.event,
+            AgenticEvent::SessionStateChanged { ref session_id, .. }
+                if session_id == "session-1"
+        ));
+        assert!(agent_owner
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .is_some());
+    }
+
+    #[test]
+    fn permission_recovery_reconciles_added_removed_and_retained_requests() {
+        fn request(id: &str) -> PermissionRequest {
+            PermissionRequest {
+                request_id: id.to_string(),
+                round_id: "round-1".to_string(),
+                order: 0,
+                tool_call_id: Some(format!("tool-{id}")),
+                project_path: None,
+                project_id: "project-1".to_string(),
+                session_id: "session-1".to_string(),
+                agent_id: "Build".to_string(),
+                action: "edit".to_string(),
+                resources: vec!["src/main.rs".to_string()],
+                save_resources: Vec::new(),
+                source: PermissionRequestSource {
+                    kind: PermissionRequestSourceKind::ToolCall,
+                    identity: "Write".to_string(),
+                },
+                delegation: None,
+                display_metadata: serde_json::Map::new(),
+            }
+        }
+
+        let retained = request("retained");
+        let removed = request("removed");
+        let added = request("added");
+        let pending = Arc::new(RwLock::new(HashMap::from([
+            (retained.request_id.clone(), retained.clone()),
+            (removed.request_id.clone(), removed),
+        ])));
+        let (sender, mut events) = broadcast::channel(8);
+
+        reconcile_pending_permissions(&pending, &sender, vec![retained, added.clone()]);
+
+        let first = events.try_recv().expect("removed event");
+        let second = events.try_recv().expect("added event");
+        assert!(matches!(
+            first,
+            PermissionRequestEvent::Cancelled { ref request_id, .. } if request_id == "removed"
+        ));
+        assert!(matches!(
+            second,
+            PermissionRequestEvent::Asked { ref request } if request.request_id == added.request_id
+        ));
+        assert!(
+            events.try_recv().is_err(),
+            "retained request must not be replayed"
+        );
+        let current = pending
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert!(current.contains_key("retained"));
+        assert!(current.contains_key("added"));
+        assert!(!current.contains_key("removed"));
+    }
+
+    #[tokio::test]
+    async fn agent_lag_fails_closed_when_no_authoritative_snapshot_exists() {
+        let (source, source_rx) = broadcast::channel(8);
+        let (agent_sender, _) = broadcast::channel(8);
+        let (permission_sender, _) = broadcast::channel(8);
+        let (external_source_sender, _) = broadcast::channel(8);
+        let agent_owner = Arc::new(RwLock::new(Some(agent_sender.clone())));
+        let permission_owner = Arc::new(RwLock::new(Some(permission_sender.clone())));
+        let external_source_owner = Arc::new(RwLock::new(Some(external_source_sender.clone())));
+        let pending = Arc::new(RwLock::new(HashMap::new()));
+        let mut agent_events = agent_sender.subscribe();
+
+        spawn_event_bridge(
+            None,
+            source_rx,
+            agent_sender,
+            permission_sender,
+            external_source_sender,
+            agent_owner.clone(),
+            permission_owner,
+            external_source_owner,
+            pending,
+        );
+        source
+            .send(stream_state(
+                EventStream::Agent,
+                EventStreamState::Lagged,
+                1,
+            ))
+            .expect("agent lag event");
+
+        let delivered =
+            tokio::time::timeout(std::time::Duration::from_secs(1), agent_events.recv())
+                .await
+                .expect("agent failure delivery timed out")
+                .expect("agent event stream closed before failure delivery");
+        assert!(matches!(
+            delivered.event,
+            AgenticEvent::SystemError { recoverable: false, ref error, .. }
+                if error.contains("no authoritative Agent snapshot")
+        ));
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                if agent_owner
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .is_none()
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("event bridge should close after unrecoverable lag");
+    }
 }

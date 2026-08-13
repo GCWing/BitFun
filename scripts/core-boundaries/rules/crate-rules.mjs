@@ -1,43 +1,5 @@
 // Boundary rules for crate dependencies and lightweight profiles.
 
-const agentRuntimeIpcForbiddenDeps = [
-  'bitfun-acp',
-  'bitfun-agent-runtime',
-  'bitfun-agent-stream',
-  'bitfun-agent-tools',
-  'bitfun-ai-adapters',
-  'bitfun-claude-code-adapter',
-  'bitfun-codex-adapter',
-  'bitfun-core',
-  'bitfun-core-types',
-  'bitfun-external-sources',
-  'bitfun-harness',
-  'bitfun-opencode-adapter',
-  'bitfun-page-function-runtime',
-  'bitfun-plugin-runtime-client',
-  'bitfun-product-capabilities',
-  'bitfun-relay-service',
-  'bitfun-runtime-services',
-  'bitfun-sdk-host',
-  'bitfun-services-core',
-  'bitfun-services-integrations',
-  'bitfun-static-hook-support',
-  'bitfun-tool-call-jsonrepair',
-  'bitfun-tool-packs',
-  'bitfun-transport',
-  'bitfun-webdriver',
-  'terminal-core',
-  'tool-runtime',
-  'tauri',
-  'reqwest',
-  'tokio-tungstenite',
-  'bitfun-cli',
-  'ratatui',
-  'crossterm',
-  'arboard',
-  'syntect-tui',
-];
-
 export const noCoreDependencyCrates = [
   'agent-content',
   'core-types',
@@ -46,7 +8,6 @@ export const noCoreDependencyCrates = [
   'agent-stream',
   'tool-call-jsonrepair',
   'agent-runtime',
-  'agent-runtime-ipc',
   'app-server-client',
   'app-server-protocol',
   'harness',
@@ -82,15 +43,6 @@ export const forbiddenManifestDependencyRules = [
     ],
     reason: 'the RMCP SDK is a concrete MCP integration service dependency',
     message: 'rmcp must stay in services-integrations and be consumed through its MCP owner facade',
-  },
-  {
-    dependencyNames: ['bitfun-agent-runtime-ipc'],
-    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
-    workspaceManifestPath: 'Cargo.toml',
-    allowManifestPaths: ['src/apps/cli/Cargo.toml'],
-    reason: 'the private local IPC protocol has one reviewed first-party Shared TUI consumer',
-    message:
-      'agent-runtime-ipc may only be consumed by the CLI Shared TUI adapter; SDK Host, GUI, remote, and other products require separate review',
   },
   {
     dependencyNames: ['sherpa-onnx'],
@@ -154,7 +106,6 @@ export const lightweightBoundaryRules = [
     forbiddenDeps: [
       'bitfun-core',
       'bitfun-agent-runtime',
-      'bitfun-agent-runtime-ipc',
       'bitfun-services-core',
       'bitfun-services-integrations',
       'bitfun-runtime-services',
@@ -180,7 +131,6 @@ export const lightweightBoundaryRules = [
     forbiddenDeps: [
       'bitfun-core',
       'bitfun-agent-runtime',
-      'bitfun-agent-runtime-ipc',
       'bitfun-services-core',
       'bitfun-services-integrations',
       'bitfun-runtime-services',
@@ -197,12 +147,6 @@ export const lightweightBoundaryRules = [
       'git2',
       'rmcp',
     ],
-  },
-  {
-    crateName: 'agent-runtime-ipc',
-    reason:
-      'agent-runtime-ipc is the non-published local protocol for the reviewed Shared TUI adapter, not a Runtime, SDK Host, service, or remote product surface',
-    forbiddenDeps: agentRuntimeIpcForbiddenDeps,
   },
   {
     crateName: 'core-types',
@@ -458,13 +402,6 @@ export const lightweightBoundaryRules = [
 ];
 
 export const dependencyProfileRules = [
-  {
-    crateName: 'agent-runtime-ipc',
-    profileName: 'private Shared TUI local IPC profile',
-    reason:
-      'agent-runtime-ipc may share stable event and Runtime DTO contracts but must not acquire Runtime owners, SDK Host, services, remote transports, or product implementations',
-    forbiddenNonOptionalDeps: agentRuntimeIpcForbiddenDeps,
-  },
   {
     crateName: 'core',
     profileName: 'no-default runtime-surface-light profile',

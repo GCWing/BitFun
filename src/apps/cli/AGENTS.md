@@ -19,7 +19,7 @@ CLI owns only surface concerns:
 - TUI state, rendering, popups, local draft history, and local effects such as
   clipboard or external-editor integration
 - projection of Runtime events into text, JSON, JSONL, and user diagnostics
-- Shared Runtime client/server adaptation and Peer Device host presentation
+- Shared App Server host/client adaptation and Peer Device host presentation
 
 Session, turn, model round, tool execution, permissions, cancellation,
 persistence, context, workspace binding, MCP, Subagent, and other product facts
@@ -39,13 +39,13 @@ ChatView -> TuiAgentClient -> TuiBackend -> App Server client
          -> App Server handler -> Agent Runtime owner -> ToolPipeline
 ```
 
-Embedded TUI uses an in-memory App Server connection. During the migration,
-Shared TUI uses a CLI Host compatibility adapter that implements `TuiBackend`
-over the private versioned Runtime IPC; the TUI client and controllers must not
-reference that IPC. Replacing the physical Shared transport with App Server
-Pipe/UDS framing belongs to Phase 5. Side-effecting operations need stable
-identities, controller/idle rules, bounded frames, and outcome-unknown handling
-before a connection can retry.
+Embedded TUI uses an in-memory App Server connection. Shared TUI uses the same
+`AppServerTuiBackend` over an authenticated loopback connection to a CLI-owned
+Shared App Server Host. The Host binds one canonical workspace and one Runtime
+owner, while each connection explicitly subscribes to the Sessions whose
+events and Permissions it consumes. Side-effecting operations need stable Turn
+identity, bounded frames, and explicit unknown-outcome handling before a
+connection can retry.
 
 Explicit Shell input follows:
 
@@ -74,7 +74,7 @@ restrictions remain enforced.
   keeps chat/shell histories separate, treats `/` as command text, and rejects
   images and structured `@` references before Runtime submission.
 - Direct paste, `Ctrl+V`, and bracketed paste share `ComposerDraft`. Shared TUI
-  rejects unsupported image payloads before IPC.
+  rejects unsupported image payloads before App Server submission.
 - Local effects such as `/editor`, copy, and export stay local. Product work
   such as shell execution, session mutation, and permissions goes through typed
   Runtime owners.
@@ -124,7 +124,7 @@ cargo test -p bitfun-cli
 ```
 
 When a CLI change crosses a shared boundary, use the focused command maintained
-by that owner: Agent Runtime for port/SDK behavior, the IPC adapter for shared
+by that owner: Agent Runtime for port/SDK behavior, App Server for Shared
 protocol behavior, Core for turn/tool/persistence behavior, Terminal for
 PTY/ConPTY lifecycle, and Product Assembly for packaging. Do not copy those
 owners' commands into this guide.

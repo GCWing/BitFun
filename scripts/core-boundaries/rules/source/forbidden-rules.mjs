@@ -8,7 +8,7 @@ export const forbiddenContentRules = [
     patterns: [
       {
         regex:
-          /\b(?:bitfun_core|bitfun_agent_runtime|bitfun_agent_runtime_ipc|bitfun_services_core|bitfun_services_integrations|bitfun_runtime_services|bitfun_product_capabilities|bitfun_external_sources|bitfun_app_server)::/,
+          /\b(?:bitfun_core|bitfun_agent_runtime|bitfun_services_core|bitfun_services_integrations|bitfun_runtime_services|bitfun_product_capabilities|bitfun_external_sources|bitfun_app_server)::/,
         message:
           'CLI-local TuiBackend must stay on the App Server client/protocol boundary',
       },
@@ -21,17 +21,6 @@ export const forbiddenContentRules = [
       {
         regex: /features\s*=\s*\[[^\]]*"product-full"/,
         message: 'app-server must not select the broad bitfun-core/product-full union',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/adapters/agent-runtime-ipc/src/operation.rs',
-    reason: 'agent-runtime-ipc operation scope is frozen to the reviewed Shared TUI slice',
-    patterns: [
-      {
-        regex: /^\s+(?!(?:Health|ListAgentModes|ListSessions|CreateSession|RestoreSession|DeleteSession|ForkSession|RenameSession|UpdateSessionMode|UpdateSessionModel|ReloadSessionContext|CompactSession|UndoSession|RedoSession|SessionUsage|WaitForSettlement|RecordLocalCommandTurn|SearchWorkspaceReferences|WorkspaceReferencesForMessage|GetSessionLineage|InspectLineageSession|CancelLineageSession|WorkspaceDiff|SubmitTurn|SteerTurn|RunUserShellCommand|CancelTurn|PendingPermissions|RespondPermission|SubmitUserAnswers|Unit|AgentModes|Sessions|SessionCreated|SessionRestored|SessionForked|SessionReverted|SessionLineage|LineageSessionInspection|WorkspaceReferenceSearch|WorkspaceReferences|TurnAccepted|TurnSteered|TurnCancelled|LocalCommandTurnRecorded|Idle|Processing|Error|Starting|Compacting|Thinking|Streaming|ToolCalling|ToolConfirming|None|CurrentController|AttachExisting|UncontrolledTarget|Self|RuntimeIpcSessionRequirement|RuntimeIpcOperationRules|RuntimeSessionForkRequest|RuntimeSessionState|RuntimeSessionProcessingPhase|AgentContextReloadRequest|AgentDialogSteerRequest|AgentDialogTurnRequest|AgentLocalCommandTurnRecordRequest|AgentLocalCommandTurnRecordResult|AgentMessageWorkspaceReferencesRequest|AgentSessionCompactionRequest|AgentSessionCreateRequest|AgentSessionCreateResult|AgentSessionLineageCancellationRequest|AgentSessionLineageInspection|AgentSessionLineageRequest|AgentSessionLineageSnapshot|AgentSessionLineageTranscriptRequest|AgentSessionListRequest|AgentSessionModeUpdateRequest|AgentSessionModelUpdateRequest|AgentSessionRevertRequest|AgentSessionRevertResult|AgentSessionSummary|AgentSessionUsageRequest|AgentTurnCancellationRequest|AgentTurnCancellationResult|AgentTurnSettlementRequest|AgentUserShellCommandRequest|AgentWorkspaceReference|AgentWorkspaceReferenceSearchRequest|AgentWorkspaceReferenceSearchResult|SessionTranscript|SessionUsageReport|WorkspaceDiffSnapshot)\b)[A-Z][A-Za-z0-9_]*\b/,
-        message:
-          'agent-runtime-ipc may not add archive, replay, observer, general controller-transfer, or other operations beyond the reviewed Shared TUI slice',
       },
     ],
   },
@@ -4049,17 +4038,6 @@ export const forbiddenContentRules = [
 ];
 
 export const forbiddenContentUnderRules = [
-  {
-    path: 'src/crates/adapters/agent-runtime-ipc/src',
-    reason: 'agent-runtime-ipc transport is restricted to Named Pipe and Unix Domain Socket',
-    patterns: [
-      {
-        regex:
-          /\b(?:(?:Tcp|Udp)[A-Za-z0-9_]*|tokio_tungstenite|reqwest|hyper|WebSocket)\b/,
-        message: 'agent-runtime-ipc must not add network or remote transports',
-      },
-    ],
-  },
   {
     path: 'src/apps',
     reason:

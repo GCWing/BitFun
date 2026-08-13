@@ -339,9 +339,6 @@ export const capabilityContractDependencyRules = [
           'workspace-ports',
         ]),
       ])],
-      ['bitfun-agent-runtime-ipc', capabilityConsumer([
-        capabilityEdge(['agent-api', 'git-port']),
-      ])],
       ['bitfun-agent-tools', capabilityConsumer([capabilityEdge()])],
       ['bitfun-app-server', capabilityConsumer(
         [capabilityEdge(['agent-api'])],

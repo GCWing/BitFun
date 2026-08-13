@@ -8,7 +8,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
         .builder()
         .name("i18n handlers")
         .on_receive_request(
-            async move |_: I18nGetCurrentLanguageMessage, p, _| {
+            async move |_request: I18nGetCurrentLanguageMessage, p, _cx| {
                 let result = async {
                     let s = bitfun_core::service::config::get_global_config_service().await?;
                     Ok::<_, bitfun_core::BitFunError>(
@@ -25,7 +25,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |r: I18nSetLanguageMessage, p, _| {
+            async move |r: I18nSetLanguageMessage, p, _cx| {
                 let result = async {
                     let locale = bitfun_core::service::i18n::LocaleId::from_str(&r.language)
                         .ok_or_else(|| {
@@ -50,7 +50,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |_: I18nGetConfigMessage, p, _| {
+            async move |_request: I18nGetConfigMessage, p, _cx| {
                 let result = async {
                     let s = bitfun_core::service::config::get_global_config_service().await?;
                     Ok::<_, bitfun_core::BitFunError>(I18nGetConfigResponse {
@@ -69,7 +69,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |r: I18nSetConfigMessage, p, _| {
+            async move |r: I18nSetConfigMessage, p, _cx| {
                 let result = async {
                     if let Some(language) = r.current_language.as_deref() {
                         let locale = bitfun_core::service::i18n::LocaleId::from_str(language)
@@ -96,7 +96,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async move |_: I18nGetSupportedLanguagesMessage, p, _| {
+            async move |_request: I18nGetSupportedLanguagesMessage, p, _cx| {
                 let locales = bitfun_core::service::i18n::LocaleMetadata::all()
                     .into_iter()
                     .map(|locale| I18nLocaleMetadata {

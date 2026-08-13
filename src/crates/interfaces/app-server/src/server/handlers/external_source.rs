@@ -9,6 +9,7 @@ use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
     management: Option<Arc<AppManagementService>>,
+    event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -16,6 +17,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 EXTERNAL_SOURCES_CAPABILITY,
                 ExternalSourceSnapshotRequest,
                 external_source_snapshot
@@ -25,6 +27,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 EXTERNAL_SOURCES_CAPABILITY,
                 ExternalSourceControlRequest,
                 external_source_control
@@ -34,6 +37,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 EXTERNAL_SOURCES_CAPABILITY,
                 ExternalSourceReviewRequest,
                 external_source_review
@@ -43,6 +47,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 EXTERNAL_SOURCES_CAPABILITY,
                 SetNativeCommandChoiceRequest,
                 set_native_command_choice
@@ -52,6 +57,7 @@ pub(in crate::server) fn builder(
         .on_receive_request(
             management_handler!(
                 management,
+                event_state,
                 EXTERNAL_SOURCES_CAPABILITY,
                 ExpandExternalCommandRequest,
                 expand_external_command

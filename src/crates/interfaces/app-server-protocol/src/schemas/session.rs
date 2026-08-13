@@ -98,6 +98,24 @@ pub struct RenameSessionRequest(pub AgentSessionRenameRequest);
 unit_response!(RenameSessionResponse);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/subscribe", response = SubscribeSessionResponse)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SubscribeSessionRequest {
+    pub session_id: String,
+}
+
+unit_response!(SubscribeSessionResponse);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(method = "session/unsubscribe", response = UnsubscribeSessionResponse)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UnsubscribeSessionRequest {
+    pub session_id: String,
+}
+
+unit_response!(UnsubscribeSessionResponse);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "session/compact", response = CompactSessionResponse)]
 pub struct CompactSessionRequest(pub AgentSessionCompactionRequest);
 
@@ -177,3 +195,38 @@ unit_response!(UpdateSessionModelResponse);
 pub struct UpdateSessionModeRequest(pub AgentSessionModeUpdateRequest);
 
 unit_response!(UpdateSessionModeResponse);
+
+#[cfg(test)]
+mod tests {
+    use agent_client_protocol::JsonRpcMessage;
+
+    use super::{SubscribeSessionRequest, UnsubscribeSessionRequest};
+
+    #[test]
+    fn subscription_requests_use_stable_session_methods() {
+        assert_eq!(
+            SubscribeSessionRequest {
+                session_id: "session-1".to_string(),
+            }
+            .method(),
+            "session/subscribe"
+        );
+        assert_eq!(
+            UnsubscribeSessionRequest {
+                session_id: "session-1".to_string(),
+            }
+            .method(),
+            "session/unsubscribe"
+        );
+    }
+
+    #[test]
+    fn subscription_requests_reject_unknown_fields() {
+        let extra = serde_json::json!({
+            "sessionId": "session-1",
+            "unexpected": true,
+        });
+        assert!(serde_json::from_value::<SubscribeSessionRequest>(extra.clone()).is_err());
+        assert!(serde_json::from_value::<UnsubscribeSessionRequest>(extra).is_err());
+    }
+}

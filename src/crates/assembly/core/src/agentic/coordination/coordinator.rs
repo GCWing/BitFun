@@ -433,6 +433,13 @@ fn runtime_tool_restrictions_for_session_lifetime(
     restrictions
 }
 
+fn session_history_needs_restore(
+    context_message_count: usize,
+    persisted_turn_count: usize,
+) -> bool {
+    persisted_turn_count > 0 && context_message_count <= 1
+}
+
 /// Subagent execution result
 ///
 /// Contains the text response after subagent execution
@@ -5369,24 +5376,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .get_context_messages(&session_id)
             .await?;
 
-        // Check if restore is needed:
-        // - Empty context needs restore
-        // - Only 1 message (likely just system prompt) with existing turns needs restore
-        // - Sessions with multiple turns should have > 1 messages (at least system + user + assistant)
-        let needs_restore = if context_messages.is_empty() {
+        // A missing or system-only context needs restore only when the Session
+        // already has persisted turns. A newly created Session legitimately has
+        // no context before its first turn.
+        let needs_restore =
+            session_history_needs_restore(context_messages.len(), session.dialog_turn_ids.len());
+        if needs_restore && context_messages.is_empty() {
             debug!(
                 "Session {} context is empty, restoring from persistence",
                 session_id
             );
-            true
-        } else if context_messages.len() == 1 && !session.dialog_turn_ids.is_empty() {
+        } else if needs_restore {
             debug!(
                 "Session {} has {} turns but only {} messages, restoring history",
                 session_id,
                 session.dialog_turn_ids.len(),
                 context_messages.len()
             );
-            true
         } else {
             debug!(
                 "Session {} context exists ({} messages, {} turns), no restore needed",
@@ -5394,8 +5400,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 context_messages.len(),
                 session.dialog_turn_ids.len()
             );
-            false
-        };
+        }
 
         if needs_restore {
             debug!(
@@ -9294,11 +9299,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .get_context_messages(session_id)
             .await?;
-        let needs_restore = if context_messages.is_empty() {
-            !session.dialog_turn_ids.is_empty()
-        } else {
-            context_messages.len() == 1 && !session.dialog_turn_ids.is_empty()
-        };
+        let needs_restore =
+            session_history_needs_restore(context_messages.len(), session.dialog_turn_ids.len());
 
         if needs_restore {
             let restore_path = self.restore_path_for_existing_session(session_id).await?;
@@ -12791,12 +12793,12 @@ mod tests {
         resolve_agent_submission_turn_id, resolve_subagent_model_selection,
         resolve_submission_permission_mode, runtime_port_error_preserving_message,
         runtime_session_summary, runtime_tool_restrictions_for_session_lifetime,
-        runtime_transcript_messages_from_turns, session_storage_workspace_locator,
-        turn_review_manifest_for_agent, validate_required_lineage_turns_settled,
-        ActiveSubagentExecution, BackgroundSubagentWaitMode, ContextCompactionOutcome,
-        ConversationCoordinator, ManualCompactionCommitGate, SessionMemoryMode,
-        SessionReferenceLocator, SessionRelationshipKind, SubagentExecutionRequest,
-        TEST_AGENT_MODEL_DEFAULTS,
+        runtime_transcript_messages_from_turns, session_history_needs_restore,
+        session_storage_workspace_locator, turn_review_manifest_for_agent,
+        validate_required_lineage_turns_settled, ActiveSubagentExecution,
+        BackgroundSubagentWaitMode, ContextCompactionOutcome, ConversationCoordinator,
+        ManualCompactionCommitGate, SessionMemoryMode, SessionReferenceLocator,
+        SessionRelationshipKind, SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
     };
     use crate::agentic::agents::ExternalSubagentModelBinding;
     use crate::agentic::coordination::coordination_store::{
@@ -12873,6 +12875,15 @@ mod tests {
                 "incomplete remote metadata must fail closed instead of becoming local"
             );
         }
+    }
+
+    #[test]
+    fn session_history_restore_requires_a_persisted_turn() {
+        assert!(!session_history_needs_restore(0, 0));
+        assert!(!session_history_needs_restore(1, 0));
+        assert!(session_history_needs_restore(0, 1));
+        assert!(session_history_needs_restore(1, 1));
+        assert!(!session_history_needs_restore(2, 1));
     }
 
     #[test]

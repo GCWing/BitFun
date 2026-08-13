@@ -74,16 +74,16 @@ Platform services
 
 ### 3.2 Shared TUI
 
-`bitfun chat --shared` 通过本机版本化 IPC 连接工作区 Runtime：
+`bitfun --shared` 或 `bitfun chat --shared` 通过认证的本机 loopback transport 连接 Shared App Server：
 
-- 多个 TUI 可以复用一个工作区 Runtime。
-- 一个 TUI 同时控制至多一个 Session；一个 Session 同时只有一个 controller。
-- 有副作用的请求携带稳定 identity，并声明 controller、idle、序列化和 side-effect 规则。
-- 超时或断线后无法证明是否已提交的请求返回 `OutcomeUnknown`，关闭连接并按已知 turn id 取消；客户端不能盲目重试。
-- IPC 只暴露经过评审的闭集操作，不演变成通用 Tool 或 Core RPC。
-- 不支持的附件或本地 effect 在 IPC 前失败。
+- 多个 TUI 复用一个工作区 Runtime 和同一套 App Server typed method/event 合同。
+- 每条连接显式订阅 Session；多个已认证客户端可以订阅、观察和操作同一 Session。
+- 独立 Turn 仍由唯一 Runtime owner 按 Session 串行准入；steer/cancel 必须携带精确 Turn ID。
+- request 为 128 KiB 上限，response/event 为 8 MiB 上限；实例发现、随机 bearer token、连接数上限和 30 秒空闲退出由 CLI Host 管理。
+- 当前没有跨连接持久 replay、透明 resume、完整慢客户端治理或通用 `outcome_unknown` 恢复，客户端不能盲目重试无法确认结果的副作用请求。
+- 不支持的附件或 controller-local effect 在 App Server 提交前失败。
 
-Automation、Desktop、Server、Relay 和公开 SDK 不因 Shared TUI 自动改用同一协议。
+Automation、Desktop、Server、Relay、Peer、ACP 和公开 SDK 不因 Shared TUI 自动改用同一协议。
 
 ## 4. 关键运行路径
 
@@ -201,7 +201,7 @@ CLI 只消费 typed summary 与 typed action：
 | --- | --- | --- |
 | Core 兼容面收敛 | 部分 Peer/ACP/维护操作仍通过兼容 facade | 只按真实调用方提取窄 port；保持旧路径等价测试，不把 DTO 提取描述成 owner migration。 |
 | TUI 模块化 | 少数编排文件仍聚集输入、effect 与生命周期 | 沿现有模块增量提取，不重写 TUI，不复制状态机。 |
-| Shared Runtime 闭集扩展 | 各形态能力仍有差异 | 逐操作评审 identity、lease、timeout、cancel 和 unsupported；不做通用 RPC。 |
+| Shared App Server 治理 | 跨连接 replay、未知结果恢复和慢客户端治理仍不完整 | 逐操作评审 identity、timeout、cancel、recovery 和 unsupported；不做通用 Core RPC。 |
 | 配置来源解释 | 非 MCP 资产的来源/冲突解释仍不统一 | 共享 owner 给出 typed provenance；CLI 只展示，不建立第二套合并器。 |
 | 插件真实执行 | 静态来源与真实可调用能力容易混淆 | 只有 worker 健康、定义已加载并注册到 Tool Runtime 后才显示 available。 |
 | 平台验证 | Windows/macOS/Linux 的终端和进程行为不同 | 在对应切片增加 PTY/ConPTY、取消、路径和进程清理测试；HarmonyOS PC 以平台专题的真机证据为准。 |

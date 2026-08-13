@@ -22,6 +22,14 @@ pub struct ServerInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransportLimits {
+    /// The maximum JSON-RPC request frame accepted by the Host transport.
+    #[serde(default)]
+    pub max_request_bytes: u64,
+    /// The maximum JSON-RPC response or notification frame emitted by the Host transport.
+    #[serde(default)]
+    pub max_response_bytes: u64,
+    /// Deprecated aggregate limit retained for older clients. New Hosts should
+    /// populate the directional limits above.
     pub max_frame_bytes: u64,
     pub event_buffer_capacity: u32,
 }
@@ -96,7 +104,7 @@ pub enum HealthStatus {
 #[cfg(test)]
 mod tests {
     use super::super::method::INITIALIZE;
-    use super::{ClientInfo, InitializeRequest};
+    use super::{ClientInfo, InitializeRequest, TransportLimits};
 
     #[test]
     fn initialize_method_is_stable() {
@@ -109,5 +117,28 @@ mod tests {
             },
         };
         assert_eq!(request.protocol_version, 1);
+    }
+
+    #[test]
+    fn transport_limits_keep_the_legacy_aggregate_field_compatible() {
+        let legacy: TransportLimits = serde_json::from_value(serde_json::json!({
+            "maxFrameBytes": 131_072,
+            "eventBufferCapacity": 1024
+        }))
+        .expect("legacy transport limits should deserialize");
+        assert_eq!(legacy.max_request_bytes, 0);
+        assert_eq!(legacy.max_response_bytes, 0);
+        assert_eq!(legacy.max_frame_bytes, 131_072);
+
+        let value = serde_json::to_value(TransportLimits {
+            max_request_bytes: 131_072,
+            max_response_bytes: 8 * 1024 * 1024,
+            max_frame_bytes: 131_072,
+            event_buffer_capacity: 1024,
+        })
+        .expect("directional transport limits should serialize");
+        assert_eq!(value["maxRequestBytes"], 131_072);
+        assert_eq!(value["maxResponseBytes"], 8 * 1024 * 1024);
+        assert_eq!(value["maxFrameBytes"], 131_072);
     }
 }
