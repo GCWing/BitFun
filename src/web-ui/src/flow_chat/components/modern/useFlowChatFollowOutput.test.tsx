@@ -2,6 +2,7 @@
 
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { flushSync } from 'react-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tailSpacerPxForViewport } from './flowChatTailFollow';
 import {
@@ -1284,6 +1285,58 @@ describe('useFlowChatFollowOutput', () => {
       }));
 
       expect(scroller.scrollTop).toBe(200);
+    });
+  });
+
+  describe('ownership across renders', () => {
+    /*
+     * Ownership is a ref because the loop reads it between renders, and it was
+     * *also* assigned from the `isFollowingOutput` state on every render. Those
+     * two writers disagree for exactly as long as a state update is queued, and
+     * React is free to render in that window: an update scheduled from a
+     * passive effect sits at a lower priority than a synchronous render, which
+     * then renders the value from before it and put the ref back to `false`.
+     *
+     * Measured on session open, which is where this always happens — the entry
+     * comes from a mount effect: `followOutput.enter` recorded, then the very
+     * first frame of the loop stood down with `not-following` and its settle
+     * budget untouched, and no `followOutput.exit` anywhere in the trail
+     * because nothing had exited. The register still held `follow-output`, so
+     * the prepend compensation for a history window that arrived 90ms later was
+     * left to a writer that was no longer running, and the transcript stayed at
+     * offset 0 — the top of the window, eight Turns above the tail.
+     */
+    it('survives a render that has not seen the entry yet', () => {
+      act(() => {
+        root.render(
+          <Harness
+            scroller={scroller}
+            latestTurnId="turn-1"
+            isStreaming={false}
+            onController={(next) => { controller = next; }}
+          />,
+        );
+      });
+      act(() => controller?.handleUserScrollIntent());
+      expect(controller?.isFollowingOutputNow()).toBe(false);
+
+      // Outside `act`, so the state update this schedules is still queued.
+      controller?.enterFollowOutput('jump-to-latest');
+      expect(controller?.isFollowingOutputNow()).toBe(true);
+
+      // A synchronous render, which does not carry the queued update.
+      flushSync(() => {
+        root.render(
+          <Harness
+            scroller={scroller}
+            latestTurnId="turn-1"
+            isStreaming={false}
+            onController={(next) => { controller = next; }}
+          />,
+        );
+      });
+
+      expect(controller?.isFollowingOutputNow()).toBe(true);
     });
   });
 });

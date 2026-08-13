@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import {
+  isViewportDiagnosticsEnabled,
   roundViewportPx,
   traceViewportRepeating,
 } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
@@ -64,6 +65,17 @@ interface UseFlowChatFollowOutputOptions {
    * nothing else has to carry a private opinion about when this hook is busy.
    */
   viewportOwner: FlowChatViewportOwnerApi;
+  /**
+   * Which transcript this hook belongs to, for the trail only.
+   *
+   * The list is keyed on the session, so every switch is a fresh instance with
+   * a fresh scroller — and two of them can overlap, or a second pane can hold
+   * one of its own. Read on its own, `followOutput.enter` followed by a
+   * boundary ask that passes the "is follow following" gate reads as an exit
+   * that left no trace; with this it reads as two instances, which is a
+   * different fault entirely.
+   */
+  viewportId?: number;
 }
 
 export interface ViewportResizeInput {
@@ -183,6 +195,7 @@ export function useFlowChatFollowOutput({
   resolveTurnTopScrollTop,
   isOpeningViewport,
   viewportOwner,
+  viewportId = 0,
 }: UseFlowChatFollowOutputOptions): UseFlowChatFollowOutputResult {
   const [isFollowingOutput, setIsFollowingOutput] = useState(false);
   const isFollowingOutputRef = useRef(false);
@@ -221,7 +234,29 @@ export function useFlowChatFollowOutput({
   const smoothScrollFromPxRef = useRef(0);
   const pendingSnapBackTargetRef = useRef<number | null>(null);
 
-  isFollowingOutputRef.current = isFollowingOutput;
+  /*
+   * Deliberately *not* mirrored from `isFollowingOutput` here.
+   *
+   * Every other ref on this line is a prop, and a prop is whatever the render
+   * that assigned it was given — consistent by construction. Ownership is not:
+   * it is written imperatively by `enterFollowOutput` and `exitFollowOutput`,
+   * and the state is only how the rest of the component hears about it. Between
+   * the two, React is free to render the value from *before* the update — an
+   * update scheduled from a passive effect sits at a lower priority than a
+   * synchronous render, which then renders without it — and the assignment took
+   * ownership away from a writer that had just taken it, with nothing anywhere
+   * saying so.
+   *
+   * Measured on session open, which is the entry that comes from a mount
+   * effect and so hits this every time: `followOutput.enter` recorded at 31976,
+   * the first frame of the loop stood down 345ms later with `not-following` and
+   * its 90-frame budget untouched, and no `followOutput.exit` in the trail
+   * because nothing exited. The register still held `follow-output`, so the
+   * 22301px prepend that landed in between was left to a writer that was no
+   * longer running — `followTargetPx: null` while `heldBy: follow-output` — and
+   * the session was revealed at offset 0 of a window starting eight Turns above
+   * the tail.
+   */
   isStreamingRef.current = isStreaming;
   isViewportActiveRef.current = isViewportActive;
   latestTurnIdRef.current = latestTurnId;
@@ -419,6 +454,45 @@ export function useFlowChatFollowOutput({
     }
 
     const onTarget = Math.abs(next.target - scroller.scrollTop) <= BOTTOM_EPSILON_PX;
+    /*
+     * What the loop decided this frame, coalesced by the decision.
+     *
+     * A frame that writes nothing is the interesting one: it means the follow
+     * rule believes the viewport is already where it belongs, and the reader is
+     * looking at something else. Measured on a reopened session, that is the
+     * whole fault — a history window arrived above a viewport at 0 during the
+     * opening reveal, and whether the loop then aimed at the new content end or
+     * was still reading an unmeasured 0 could not be told apart from outside.
+     */
+    if (isViewportDiagnosticsEnabled()) {
+      // Guarded rather than left to the coalescer, which is the rule for
+      // anything on this path: it runs on every frame of every follow, and even
+      // the key would be a string built sixty times a second for a switch that
+      // is off.
+      traceViewportRepeating(
+        `follow|frame|${onTarget}|${isOpeningViewport()}|${next.mode}`,
+        {
+          location: 'followOutput.frame',
+          message: onTarget
+            ? 'the viewport is already on the offset the follow rule owns'
+            : 'the follow rule is moving the viewport to the offset it owns',
+          travelPx: next.target - scroller.scrollTop,
+          data: () => ({
+            viewportId,
+            onTarget,
+            mode: next.mode,
+            isOpening: isOpeningViewport(),
+            desiredPx: roundViewportPx(desired),
+            targetPx: roundViewportPx(next.target),
+            pinPx: pin === null ? null : roundViewportPx(pin),
+            scrollTopPx: roundViewportPx(scroller.scrollTop),
+            scrollRangePx: roundViewportPx(scroller.scrollHeight),
+            settleFrames: settleFramesRef.current,
+            smoothYieldActive: smoothScrollUntilMsRef.current !== 0,
+          }),
+        },
+      );
+    }
     if (smoothScrollUntilMsRef.current !== 0) {
       /*
        * An animated scroll of ours is in flight and heading for this same
@@ -517,21 +591,47 @@ export function useFlowChatFollowOutput({
     readPinScrollTop,
     retirePin,
     scrollerRef,
+    viewportId,
     viewportOwner,
   ]);
 
   const runFollowFrame = useCallback(() => {
     followFrameRef.current = null;
-    if (
-      !isFollowingOutputRef.current ||
-      !isViewportActiveRef.current ||
-      document.hidden
-    ) {
-      return;
-    }
-    // Streaming holds the loop open indefinitely; anything else runs only
-    // until the transcript stops moving.
-    if (!isStreamingRef.current && settleFramesRef.current <= 0) {
+    /*
+     * Why the loop is not running, which the trail could not say.
+     *
+     * "The session opened on the wrong Turn" has looked identical from outside
+     * whether follow was refused the viewport, was never following, or simply
+     * ran out of budget — all three are a viewport that stops where it was left
+     * and a log with nothing in it after `followOutput.enter`. Measured on a
+     * reopened session: `enter` at session-open, a history window prepended
+     * 22317px above 136ms later, and not one write for the next half second.
+     */
+    const standDownReason = !isFollowingOutputRef.current
+      ? 'not-following'
+      : !isViewportActiveRef.current
+        ? 'viewport-inactive'
+        : document.hidden
+          ? 'document-hidden'
+          : (!isStreamingRef.current && settleFramesRef.current <= 0)
+            // Streaming holds the loop open indefinitely; anything else runs
+            // only until the transcript stops moving.
+            ? 'settle-exhausted'
+            : null;
+    if (standDownReason !== null) {
+      traceViewportRepeating(`follow|standDown|${standDownReason}`, {
+        location: 'followOutput.frameStoodDown',
+        message: 'the follow loop stopped running',
+        data: () => ({
+          reason: standDownReason,
+          viewportId,
+          settleFrames: settleFramesRef.current,
+          isStreaming: isStreamingRef.current,
+          isOpening: isOpeningViewport(),
+          followTargetPx: roundViewportPx(followStateRef.current.target),
+          scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+        }),
+      });
       return;
     }
     if (!isStreamingRef.current) {
@@ -540,7 +640,7 @@ export function useFlowChatFollowOutput({
 
     applyFollowTarget();
     followFrameRef.current = requestAnimationFrame(runFollowFrame);
-  }, [applyFollowTarget]);
+  }, [applyFollowTarget, isOpeningViewport, scrollerRef, viewportId]);
 
   const startFollowFrame = useCallback(() => {
     if (
@@ -554,6 +654,22 @@ export function useFlowChatFollowOutput({
 
   const enterFollowOutput = useCallback((reason: FollowOutputEnterReason) => {
     if (!isViewportActiveRef.current) {
+      /*
+       * The one way this hook can decline to take the viewport and leave no
+       * trace at all — and it leaves the transcript with no continuous writer
+       * for the rest of its life, because nothing asks again until a Turn
+       * arrives or the session changes. A second pane holding an inactive copy
+       * of the same transcript looks exactly like this from the trail.
+       */
+      traceViewportRepeating(`follow|enterDeclined|${reason}`, {
+        location: 'followOutput.enterDeclined',
+        message: 'follow-output was asked for a viewport that is not active',
+        data: () => ({
+          reason,
+          viewportId,
+          scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+        }),
+      });
       return;
     }
 
@@ -596,6 +712,7 @@ export function useFlowChatFollowOutput({
       message: 'follow-output took the viewport',
       data: () => ({
         reason,
+        viewportId,
         pinnedTurnId: pinnedTurnToTop ? pinTurnId : pinTurnIdRef.current,
         isStreaming: isStreamingRef.current,
         scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
@@ -683,6 +800,7 @@ export function useFlowChatFollowOutput({
     scrollTurnToTop,
     scrollerRef,
     startFollowFrame,
+    viewportId,
   ]);
 
   /**
@@ -691,17 +809,25 @@ export function useFlowChatFollowOutput({
    * than fall through to the tail.
    */
   const exitFollowOutput = useCallback((reason: FollowOutputExitReason) => {
-    if (isFollowingOutputRef.current) {
-      traceViewportRepeating(`follow|exit|${reason}`, {
-        location: 'followOutput.exit',
-        message: 'follow-output gave the viewport up',
-        data: () => ({
-          reason,
-          pinnedTurnId: pinTurnIdRef.current,
-          scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
-        }),
-      });
-    }
+    /*
+     * Traced whether or not there was anything to give up. An exit that finds
+     * follow already released is the answer to "who ended the follow this
+     * session opened with" being nobody — and gating the line on ownership is
+     * what made that case indistinguishable from the exit never being reached.
+     */
+    traceViewportRepeating(`follow|exit|${reason}|${isFollowingOutputRef.current}`, {
+      location: 'followOutput.exit',
+      message: isFollowingOutputRef.current
+        ? 'follow-output gave the viewport up'
+        : 'follow-output was released while it held nothing',
+      data: () => ({
+        reason,
+        viewportId,
+        wasFollowing: isFollowingOutputRef.current,
+        pinnedTurnId: pinTurnIdRef.current,
+        scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+      }),
+    });
     isFollowingOutputRef.current = false;
     setIsFollowingOutput(false);
     endSmoothScrollYield('superseded');
@@ -709,7 +835,7 @@ export function useFlowChatFollowOutput({
     viewportOwner.release('follow-output');
     viewportOwner.release('snap-back');
     stopFollowFrame();
-  }, [endSmoothScrollYield, scrollerRef, stopFollowFrame, viewportOwner]);
+  }, [endSmoothScrollYield, scrollerRef, stopFollowFrame, viewportId, viewportOwner]);
 
   /**
    * Re-assert ownership after a layout change. This deliberately does not force
