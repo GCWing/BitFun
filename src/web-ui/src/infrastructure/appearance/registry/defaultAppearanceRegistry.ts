@@ -120,6 +120,7 @@ import { reviewPlatformAppearanceDescriptor } from '@/app/components/panels/revi
 import { remoteAccountPanelAppearanceDescriptor, remoteConnectDialogAppearanceDescriptor } from '@/app/components/RemoteConnectDialog/appearance';
 import { scheduledJobsViewAppearanceDescriptor } from '@/app/components/scheduled-jobs/appearance';
 import { localizedDateTimeFieldAppearanceDescriptor } from '@/app/components/scheduled-jobs/LocalizedDateTimeField.appearance';
+import { dateTimePickerAppearanceDescriptor } from '@/app/components/scheduled-jobs/DateTimePickerPopover.appearance';
 import { todosSceneAppearanceDescriptor } from '@/app/scenes/todos/appearance';
 import { flexiblePanelAppearanceDescriptor } from '@/app/components/panels/base/FlexiblePanel.appearance';
 import { btwSessionPanelAppearanceDescriptor } from '@/flow_chat/components/btw/BtwSessionPanel.appearance';
@@ -409,6 +410,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(remoteAccountPanelAppearanceDescriptor)
     .registerComponent(scheduledJobsViewAppearanceDescriptor)
     .registerComponent(localizedDateTimeFieldAppearanceDescriptor)
+    .registerComponent(dateTimePickerAppearanceDescriptor)
     .registerComponent(flexiblePanelAppearanceDescriptor)
     .registerComponent(btwSessionPanelAppearanceDescriptor)
     .registerComponent(modernFlowChatAppearanceDescriptor)

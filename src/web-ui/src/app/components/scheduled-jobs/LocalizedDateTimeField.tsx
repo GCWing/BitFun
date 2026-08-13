@@ -8,21 +8,28 @@
  *
  * This is an ordinary text input so it looks and behaves like every other field
  * in the form, showing `2026/08/12 04:48` in Chinese and `08/12/2026 04:48` in
- * English. A calendar button opens the browser's own picker for anyone who
- * would rather click than type. Callers keep the native
- * `YYYY-MM-DDTHH:mm` value contract.
+ * English, with an in-app day picker on the calendar button. Callers keep the
+ * native `YYYY-MM-DDTHH:mm` value contract.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { IconButton, Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
+import DateTimePickerPopover from './DateTimePickerPopover';
 import {
   dateTimeFormatHint,
   formatDateTimeText,
   parseDateTimeText,
   resolveDateFieldOrder,
 } from './localizedDateTime';
+
+/** Time a picked day falls back to when the field has no time yet. */
+const DEFAULT_TIME = { hour: 9, minute: 0 };
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
+}
 
 export interface LocalizedDateTimeFieldProps {
   /** `YYYY-MM-DDTHH:mm`, matching the native datetime-local value. */
@@ -43,8 +50,9 @@ const LocalizedDateTimeField: React.FC<LocalizedDateTimeFieldProps> = ({
   'aria-label': ariaLabel,
 }) => {
   const { t, currentLanguage } = useI18n('common');
-  const pickerRef = useRef<HTMLInputElement | null>(null);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
   const editingRef = useRef(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const order = useMemo(() => resolveDateFieldOrder(currentLanguage), [currentLanguage]);
 
@@ -80,18 +88,36 @@ const LocalizedDateTimeField: React.FC<LocalizedDateTimeFieldProps> = ({
     setText(parsed ? formatDateTimeText(parsed, order) : text);
   }, [order, text]);
 
-  const openPicker = useCallback(() => {
-    const picker = pickerRef.current;
-    if (!picker) return;
-    picker.value = value;
-    picker.showPicker?.();
-  }, [value]);
+  /** Day currently represented by the field, for highlighting in the picker. */
+  const selectedDay = useMemo(() => {
+    const parsed = parseDateTimeText(text, order) ?? (value.trim() || null);
+    if (!parsed) return null;
+    const timestamp = new Date(parsed).getTime();
+    return Number.isFinite(timestamp) ? new Date(timestamp) : null;
+  }, [order, text, value]);
 
-  const canOpenPicker = typeof HTMLInputElement !== 'undefined'
-    && 'showPicker' in HTMLInputElement.prototype;
+  const handlePickDay = useCallback((day: Date) => {
+    // Keep whatever time is already set; picking a day should not silently
+    // rewind the clock to midnight.
+    const existing = selectedDay;
+    const hour = existing ? existing.getHours() : DEFAULT_TIME.hour;
+    const minute = existing ? existing.getMinutes() : DEFAULT_TIME.minute;
+
+    const next = [
+      String(day.getFullYear()).padStart(4, '0'),
+      pad(day.getMonth() + 1),
+      pad(day.getDate()),
+    ].join('-') + `T${pad(hour)}:${pad(minute)}`;
+
+    editingRef.current = false;
+    setText(formatDateTimeText(next, order));
+    onChange(next);
+    setPickerOpen(false);
+  }, [onChange, order, selectedDay]);
 
   return (
     <div
+      ref={anchorRef}
       className={['bf-datetime-field', className ?? ''].filter(Boolean).join(' ')}
       data-bf-component="localized-datetime-field"
       data-bf-part="root"
@@ -111,36 +137,25 @@ const LocalizedDateTimeField: React.FC<LocalizedDateTimeFieldProps> = ({
         onBlur={handleBlur}
       />
 
-      {canOpenPicker ? (
-        <>
-          <IconButton
-            type="button"
-            size="xs"
-            disabled={disabled}
-            aria-label={t('dateTimeField.openPicker')}
-            tooltip={t('dateTimeField.openPicker')}
-            onClick={openPicker}
-          >
-            <CalendarDays size={14} />
-          </IconButton>
-          {/*
-            Only ever opened programmatically: the browser picker is a good
-            input surface, its inline text rendering is the part we replaced.
-          */}
-          <input
-            ref={pickerRef}
-            type="datetime-local"
-            className="bf-datetime-field__picker"
-            tabIndex={-1}
-            aria-hidden="true"
-            onChange={event => {
-              editingRef.current = false;
-              const picked = event.currentTarget.value;
-              setText(formatDateTimeText(picked, order));
-              onChange(picked);
-            }}
-          />
-        </>
+      <IconButton
+        type="button"
+        size="xs"
+        disabled={disabled}
+        aria-label={t('dateTimeField.openPicker')}
+        tooltip={t('dateTimeField.openPicker')}
+        aria-expanded={pickerOpen}
+        onClick={() => setPickerOpen(open => !open)}
+      >
+        <CalendarDays size={14} />
+      </IconButton>
+
+      {pickerOpen && !disabled ? (
+        <DateTimePickerPopover
+          anchorRef={anchorRef}
+          selected={selectedDay}
+          onSelect={handlePickDay}
+          onClose={() => setPickerOpen(false)}
+        />
       ) : null}
     </div>
   );

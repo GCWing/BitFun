@@ -1553,6 +1553,11 @@
   "retry": "Retry",
   "dateTimeField": {
     "label": "Date and time",
-    "openPicker": "Open the date picker"
+    "openPicker": "Open the date picker",
+    "pickerLabel": "Choose a date",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "now": "Now",
+    "close": "Close"
   }
 }

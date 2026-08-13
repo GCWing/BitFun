@@ -1,6 +1,7 @@
 @use '../../../component-library/styles/tokens.scss' as *;
 
 .bf-datetime-field {
+  position: relative;
   display: flex;
   align-items: center;
   gap: $size-gap-1;
@@ -10,15 +11,97 @@
     flex: 1 1 auto;
     min-width: 0;
   }
+}
 
-  // Present only so the browser picker has an anchor; never shown or focused.
-  &__picker {
-    position: absolute;
-    width: 0;
-    height: 0;
+.bf-datetime-picker {
+  position: fixed;
+  z-index: 1000;
+  width: 268px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-2;
+  padding: $size-gap-3;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: $size-radius-lg;
+  background: var(--bf-appearance-token-element-bg-subtle);
+  box-shadow: var(--bf-appearance-token-shadow-sm);
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+  }
+
+  &__month {
+    flex: 1 1 auto;
+    text-align: center;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: $font-weight-semibold;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__weekdays,
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  &__weekday {
+    padding: 2px 0;
+    text-align: center;
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-weight: $font-weight-semibold;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &__day {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
     padding: 0;
-    border: 0;
-    opacity: 0;
-    pointer-events: none;
+    border: 1px solid transparent;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: background $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline-offset: 1px;
+    }
+
+    &--outside {
+      color: var(--bf-appearance-token-color-text-muted);
+      opacity: 0.55;
+    }
+
+    &--today {
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 55%, transparent);
+    }
+
+    &--selected {
+      background: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-appearance-token-color-static-white);
+    }
+  }
+
+  &__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding-top: $size-gap-2;
+    border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 70%, transparent);
   }
 }

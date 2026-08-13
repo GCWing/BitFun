@@ -1553,6 +1553,11 @@
   "retry": "重试",
   "dateTimeField": {
     "label": "日期与时间",
-    "openPicker": "打开日期选择器"
+    "openPicker": "打开日期选择器",
+    "pickerLabel": "选择日期",
+    "previousMonth": "上个月",
+    "nextMonth": "下个月",
+    "now": "此刻",
+    "close": "关闭"
   }
 }
