@@ -1087,6 +1087,10 @@ impl RoundExecutor {
                 permission_policy,
                 auto_approve_ask,
                 ai_auto_approve_ask,
+                ai_auto_approve_mode: global_config
+                    .tool_permissions
+                    .interaction
+                    .ai_auto_approve_mode,
                 ..ToolExecutionOptions::default()
             };
 

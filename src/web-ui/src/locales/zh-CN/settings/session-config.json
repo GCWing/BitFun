@@ -61,6 +61,11 @@
     "autoApproveDescription": "自动允许原本需要确认的操作。",
     "aiAutoApprove": "AI 自动批准",
     "aiAutoApproveDescription": "使用快速模型判断请求是否安全：安全则自动放行，极高危险直接拒绝，其余交给用户确认。",
+    "aiAutoApproveMode": "无人值守档位",
+    "aiAutoApproveModeDescription": "仅影响模型判定为“需要确认”的请求：激进自动放行，保守自动拒绝，标准交给用户。",
+    "aiAutoApproveModeStandard": "标准",
+    "aiAutoApproveModeAggressive": "激进",
+    "aiAutoApproveModePassive": "保守",
     "showInChatInput": "显示权限模式选择器",
     "showInChatInputDescription": "在输入框下方显示权限模式，可随时为当前会话切换。",
     "globalRules": "全局规则",
@@ -117,7 +122,13 @@
     "rulesSaveFailed": "保存静态项目规则失败",
     "rulesConflict": "规则文件已在外部变更，请重新打开项目权限后再保存。",
     "cancel": "取消",
-    "effects": { "allow": "允许", "ask": "询问", "deny": "拒绝" }
+    "effects": { "allow": "允许", "ask": "询问", "deny": "拒绝" },
+    "sensitiveResourcesTitle": "敏感资源",
+    "sensitiveResourcesDescription": "命中以下标记（目录路径或文件名片段，不区分大小写）的只读工具调用不会被自动放行，而是交给 AI 判断或您确认。该列表不会展示给 AI。",
+    "sensitiveResourcesEmpty": "尚未配置敏感资源，将使用内置默认敏感标记。",
+    "addSensitiveResource": "添加",
+    "sensitiveResourcePlaceholder": "例如 secrets/ 或 .cursorrules",
+    "removeSensitiveResource": "删除"
   },
   "deferredToolLoading": {
     "sectionTitle": "按需加载工具",

@@ -463,6 +463,7 @@ mod tests {
                 parent_tool_call_id: "parent-task".to_string(),
                 subagent_type: "Explore".to_string(),
             }),
+            permission_mode: None,
             display_metadata: serde_json::Map::new(),
         }
     }

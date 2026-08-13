@@ -34,6 +34,10 @@ pub struct ToolExecutionOptions {
     /// safe requests auto-approve, critical-risk requests are rejected, and the
     /// rest escalate to the user.
     pub ai_auto_approve_ask: bool,
+    /// Unattended sub-mode of AI auto-approve: decides what happens to requests
+    /// the judge escalated (aggressive auto-approves them, passive
+    /// auto-rejects them, standard asks the user).
+    pub ai_auto_approve_mode: bitfun_product_domains::tool_permissions::AiAutoApproveMode,
     /// Optional owner-provided token that latches cancellation before tool
     /// validation and permission preflight have registered pipeline state.
     pub parent_cancellation_token: Option<CancellationToken>,
@@ -49,6 +53,8 @@ impl Default for ToolExecutionOptions {
             permission_policy: ResolvedPermissionPolicy::default(),
             auto_approve_ask: false,
             ai_auto_approve_ask: false,
+            ai_auto_approve_mode:
+                bitfun_product_domains::tool_permissions::AiAutoApproveMode::Standard,
             parent_cancellation_token: None,
         }
     }

@@ -27,6 +27,7 @@ fn request(request_id: &str, project_id: &str) -> PermissionRequest {
             identity: "tool-1".to_string(),
         },
         delegation: None,
+        permission_mode: None,
         display_metadata: Map::new(),
     }
 }

@@ -704,6 +704,12 @@
         "label": "AI auto approve",
         "description": "A fast model judges requests: safe ones auto-approve, critical-risk ones are rejected, and the rest ask."
       },
+      "aiAutoMode": {
+        "label": "Unattended mode",
+        "standard": "Standard",
+        "aggressive": "Aggressive",
+        "passive": "Passive"
+      },
       "fullAccess": {
         "label": "Full access",
         "description": "Tools are allowed by default without confirmation."

@@ -61,17 +61,18 @@ describe('PermissionAPI', () => {
   });
 
   it('saves static rules with the revision returned by the backend', async () => {
-    invokeMock.mockResolvedValueOnce({ rules: [], revision: 'revision-2' });
+    invokeMock.mockResolvedValueOnce({ rules: [], sensitiveResources: [], revision: 'revision-2' });
     const { permissionAPI } = await import('./PermissionAPI');
 
     await permissionAPI.saveProjectRules('workspace-1', [
       { action: 'edit', resource: 'src/*', effect: 'ask' },
-    ], 'revision-1');
+    ], ['secrets/', '.cursorrules'], 'revision-1');
 
     expect(invokeMock).toHaveBeenCalledWith('save_project_permission_rules', {
       request: {
         workspaceId: 'workspace-1',
         rules: [{ action: 'edit', resource: 'src/*', effect: 'ask' }],
+        sensitiveResources: ['secrets/', '.cursorrules'],
         revision: 'revision-1',
       },
     });

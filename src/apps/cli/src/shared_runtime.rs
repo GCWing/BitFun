@@ -1658,6 +1658,7 @@ mod tests {
                 subagent_type: "general".to_string(),
             }),
             display_metadata: serde_json::Map::new(),
+            permission_mode: None,
         }
     }
 

@@ -824,6 +824,7 @@ mod tests {
                 identity: "write_file".to_string(),
             },
             delegation: None,
+            permission_mode: None,
             display_metadata: Map::new(),
         }
     }

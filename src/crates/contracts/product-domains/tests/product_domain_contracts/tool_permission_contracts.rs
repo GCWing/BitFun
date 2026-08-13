@@ -1,6 +1,6 @@
 use bitfun_product_domains::tool_permissions::{
     merge_permission_rule_layers, resolve_child_permission_policy, resolve_permission_policy,
-    wildcard_matches, ChildPermissionPolicyLayers, PermissionConstraintLayer,
+    wildcard_matches, AiAutoApproveMode, ChildPermissionPolicyLayers, PermissionConstraintLayer,
     PermissionDelegationContext, PermissionEffect, PermissionEvaluator,
     PermissionInteractionConfig, PermissionPolicyConfig, PermissionPolicyLayers,
     PermissionPolicyPreset, PermissionReply, PermissionReplySource, PermissionRequest,
@@ -72,6 +72,7 @@ fn tool_permission_config_defaults_to_ask_with_auto_approve_disabled() {
             "interaction": {
                 "auto_approve_ask": false,
                 "ai_auto_approve_ask": false,
+                "ai_auto_approve_mode": "standard",
             },
         })
     );
@@ -84,6 +85,7 @@ fn ai_auto_approve_config_round_trips() {
         interaction: PermissionInteractionConfig {
             auto_approve_ask: false,
             ai_auto_approve_ask: true,
+            ai_auto_approve_mode: AiAutoApproveMode::Standard,
         },
     };
     let serialized = serde_json::to_value(&config).expect("serialize");
@@ -563,6 +565,7 @@ fn permission_request_correlation_fields_use_stable_wire_shape() {
             parent_tool_call_id: "parent-task-call-1".to_string(),
             subagent_type: "Explore".to_string(),
         }),
+        permission_mode: None,
         display_metadata: Map::new(),
     };
     let value = serde_json::to_value(&request).expect("serialize permission request");

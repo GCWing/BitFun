@@ -310,6 +310,7 @@ mod tests {
             },
             delegation: None,
             display_metadata: Map::new(),
+            permission_mode: None,
         }
     }
 

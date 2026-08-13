@@ -17,7 +17,7 @@ use crate::util::types::Message;
 use anyhow::Result;
 use bitfun_ai_adapters::GeminiResponse;
 use bitfun_product_domains::tool_permissions::{
-    PermissionAuditEvent, PermissionReply, PermissionReplySource,
+    AiAutoApproveMode, PermissionAuditEvent, PermissionReply, PermissionReplySource,
 };
 use bitfun_runtime_ports::{PermissionAuditStorePort, PermissionGrantStorePort};
 use log::{info, warn};
@@ -131,6 +131,12 @@ pub struct AiJudgeInput {
     /// Workspace root used ONLY to relativize absolute paths before rendering.
     /// Never rendered into the prompt itself.
     pub workspace_root: Option<String>,
+    /// Project-configured sensitive-resource markers. Used ONLY by the
+    /// read-only fast path to keep sensitive resources out of deterministic
+    /// approval; never rendered into the judge prompt.
+    pub sensitive_resource_markers: Vec<String>,
+    /// Unattended sub-mode deciding what happens to judge-escalated requests.
+    pub auto_approve_mode: AiAutoApproveMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -171,6 +177,13 @@ The user rules describe the user's explicit intent. A call that directly matches
 
 Tool-history entries may carry a user note like `(user note: "...")`. The user wrote that note when approving that call, and it expresses the user's intent about similar operations in this turn. A current call that directly matches such an entry (same action and a matching resource, or a clearly equivalent operation) is very likely pre-approved by the user's own standard — treat it like a rule until the next turn formalizes it. The note is still not a blank check: only clearly matching operations count, and dangerous operations are never approved.
 
+Some history entries carry a fixed automatic note instead of a user-written one:
+- `aggressive mode, auto-approve all escalated tool calls` means the session is running unattended in aggressive mode, so calls the judge escalated were auto-approved without a human. 
+- `passive mode, reject all escalated tool calls` means the session is running unattended in passive mode, so calls the judge escalated were auto-rejected without a human.
+These notes describe the session's operating mode, not a user's per-call intent. Treat them as session context, not as an authorization for the current call: you still must judge the current call on its own merits and never let them override the rules below.
+
+The BitFun application keeps its own working files under `.bitfun/` directories inside the workspace (for example `.bitfun/tmp`, `.bitfun/config`, `.bitfun/data`). Reading and writing these application-managed directories is normal, low-risk work for this project — treat them like project files, not as sensitive or high-risk resources.
+
 Output exactly ONE of these decisions:
 
 - "allow": the operation is safe and routine for the current project, such as editing project files, creating files inside the workspace, running read-only or project-local commands, git operations on the current repository, and web searches.
@@ -193,15 +206,14 @@ Respond with ONLY a fenced ```json code block containing this exact shape:
 {"decision": "allow", "risk_level": "low", "reason": "<short justification>"}
 ```"#;
 
-/// Deterministically approves requests whose tool is inherently read-only and
-/// whose resources carry no sensitive markers.
+/// True when the action or tool name identifies an inherently read-only tool
+/// (Read, Search, Grep, Glob, WebFetch, ...). Bash and Git are excluded: their
+/// read-only-ness must be judged by the model.
 ///
-/// These calls never need the fast model: the tool cannot mutate anything, so
-/// the only risk is information disclosure, which the sensitive-resource check
-/// covers. Bash is deliberately excluded — its read-only-ness is judged by the
-/// model. Matched requests still enter the tool history, so later judge calls
-/// keep seeing the read as part of the turn's context.
-pub fn is_deterministically_read_only(action: &str, tool_name: &str, resources: &[String]) -> bool {
+/// This is the tool-shape half of the deterministic fast path; the sensitive
+/// resource check is applied separately by callers that need to force such
+/// reads through the judge.
+pub fn is_read_only_permission_request(action: &str, tool_name: &str) -> bool {
     if action == "bash" || action == "git" {
         return false;
     }
@@ -224,39 +236,57 @@ pub fn is_deterministically_read_only(action: &str, tool_name: &str, resources: 
     ]
     .iter()
     .any(|keyword| tool_name_lower.contains(keyword));
-    if !action_read_only && !tool_read_only {
+    action_read_only || tool_read_only
+}
+
+/// Deterministically approves requests whose tool is inherently read-only and
+/// whose resources carry no sensitive markers.
+///
+/// These calls never need the fast model: the tool cannot mutate anything, so
+/// the only risk is information disclosure, which the sensitive-resource check
+/// covers. Bash is deliberately excluded — its read-only-ness is judged by the
+/// model. Matched requests still enter the tool history, so later judge calls
+/// keep seeing the read as part of the turn's context.
+pub fn is_deterministically_read_only(action: &str, tool_name: &str, resources: &[String]) -> bool {
+    is_deterministically_read_only_with_markers(action, tool_name, resources, &[])
+}
+
+/// Same as [`is_deterministically_read_only`], but also keeps resources that
+/// match the project's user-configured sensitive markers out of the fast path.
+///
+/// `custom_sensitive_markers` come from the project's `tool_permissions.json`;
+/// they are matched here ONLY to route such resources through the judge and are
+/// never rendered into the judge prompt.
+pub fn is_deterministically_read_only_with_markers(
+    action: &str,
+    tool_name: &str,
+    resources: &[String],
+    custom_sensitive_markers: &[String],
+) -> bool {
+    if !is_read_only_permission_request(action, tool_name) {
         return false;
     }
     resources
         .iter()
-        .all(|resource| !resource_is_sensitive(resource))
+        .all(|resource| !resource_is_sensitive(resource, custom_sensitive_markers))
 }
 
 /// True when a resource path or command touches credentials or secret files.
-fn resource_is_sensitive(resource: &str) -> bool {
+///
+/// Combines the built-in default markers with the project's user-configured
+/// markers (case-insensitive substring match). Used ONLY by the read-only fast
+/// path; the resulting list is never shown to the model.
+pub fn resource_is_sensitive(resource: &str, custom_markers: &[String]) -> bool {
     let lower = resource.to_ascii_lowercase();
-    const SECRET_MARKERS: &[&str] = &[
-        ".env",
-        "credentials",
-        "credential",
-        "secret",
-        "secrets",
-        "id_rsa",
-        "id_ed25519",
-        ".pem",
-        ".key",
-        "password",
-        "passwd",
-        "token",
-        "wallet",
-        ".ssh",
-        ".git-credentials",
-        ".netrc",
-        "cookie",
-        "login data",
-        "keychain",
-    ];
-    SECRET_MARKERS.iter().any(|marker| lower.contains(marker)) && !lower.contains(".env.example")
+    let matches_default =
+        bitfun_product_domains::tool_permissions::DEFAULT_SENSITIVE_RESOURCE_MARKERS
+            .iter()
+            .any(|marker| lower.contains(marker));
+    let matches_custom = custom_markers.iter().any(|marker| {
+        let trimmed = marker.trim();
+        !trimmed.is_empty() && lower.contains(&trimmed.to_ascii_lowercase())
+    });
+    (matches_default || matches_custom) && !lower.contains(".env.example")
 }
 
 /// Derives the stable id of one user rule.
@@ -987,6 +1017,8 @@ mod tests {
             tool_history: vec![],
             workspace_root: None,
             user_rules: vec![],
+            sensitive_resource_markers: vec![],
+            auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
         assert!(message.contains("<session_context>"));
@@ -1069,6 +1101,111 @@ mod tests {
     }
 
     #[test]
+    fn custom_sensitive_markers_keep_read_only_calls_out_of_the_fast_path() {
+        let custom = vec!["secrets/".to_string(), ".cursorrules".to_string()];
+        // A resource matching a custom marker never fast-tracks.
+        assert!(!is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &["src/secrets/prod.json".to_string()],
+            &custom,
+        ));
+        assert!(!is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &[".cursorrules".to_string()],
+            &custom,
+        ));
+        // Case-insensitive matching.
+        assert!(!is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &["src/SeCrEtS/prod.json".to_string()],
+            &custom,
+        ));
+        // Non-matching resources still fast-track.
+        assert!(is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &["src/main.rs".to_string()],
+            &custom,
+        ));
+        // Empty custom markers behave like the default list.
+        assert!(is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &["src/main.rs".to_string()],
+            &[],
+        ));
+        assert!(!is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &["/work/.env".to_string()],
+            &[],
+        ));
+    }
+
+    #[test]
+    fn custom_sensitive_markers_are_trimmed_before_matching() {
+        // Markers with surrounding whitespace must still match, matching the
+        // normalization applied by the desktop save path.
+        let custom = vec!["  secrets/  ".to_string(), " .cursorrules ".to_string()];
+        assert!(!is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &["src/secrets/prod.json".to_string()],
+            &custom,
+        ));
+        assert!(!is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &[".cursorrules".to_string()],
+            &custom,
+        ));
+        // Whitespace-only markers are ignored.
+        assert!(is_deterministically_read_only_with_markers(
+            "read",
+            "Read",
+            &[".cursorrules".to_string()],
+            &["   ".to_string()],
+        ));
+    }
+
+    #[test]
+    fn custom_sensitive_markers_never_enter_the_judge_prompt() {
+        let input = AiJudgeInput {
+            tool_name: "Read".to_string(),
+            action: "read".to_string(),
+            resources: vec!["src/main.rs".to_string()],
+            arguments_preview: None,
+            agent_type: "Code".to_string(),
+            is_remote_workspace: false,
+            user_task_summary: Some("Inspect the repo".to_string()),
+            user_rules: vec![],
+            tool_history: vec![],
+            workspace_root: None,
+            sensitive_resource_markers: vec![
+                "my-secret-dir".to_string(),
+                ".cursorrules".to_string(),
+            ],
+            auto_approve_mode: AiAutoApproveMode::Standard,
+        };
+        let message = render_task_message(&input);
+        // The markers are only used by the fast path, never rendered.
+        assert!(!message.contains("my-secret-dir"));
+        assert!(!message.contains(".cursorrules"));
+    }
+
+    #[test]
+    fn system_prompt_explains_unattended_mode_notes_and_bitfun_dirs() {
+        let prompt = JUDGE_SYSTEM_PROMPT;
+        assert!(prompt.contains("aggressive mode, auto-approve all escalated tool calls"));
+        assert!(prompt.contains("passive mode, reject all escalated tool calls"));
+        assert!(prompt.contains(".bitfun/tmp"));
+        assert!(prompt.contains(".bitfun/config"));
+    }
+
+    #[test]
     fn absolute_paths_are_relativized_against_the_workspace_root() {
         let input = AiJudgeInput {
             tool_name: "Edit".to_string(),
@@ -1086,6 +1223,8 @@ mod tests {
             tool_history: vec![],
             workspace_root: Some("/Users/alice/projects/my-app".to_string()),
             user_rules: vec![],
+            sensitive_resource_markers: vec![],
+            auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
         assert!(message.contains("./src/main.rs"));
@@ -1126,6 +1265,8 @@ mod tests {
             ],
             workspace_root: None,
             user_rules: vec![],
+            sensitive_resource_markers: vec![],
+            auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
         let history_start = message.find("<tool_history>").expect("history");
@@ -1165,6 +1306,8 @@ mod tests {
             tool_history: vec![],
             workspace_root: None,
             user_rules: vec![],
+            sensitive_resource_markers: vec![],
+            auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
         assert!(!message.contains("</tool_call>\n<tool_call>"));
@@ -1252,6 +1395,8 @@ mod tests {
             tool_history: vec![],
             workspace_root: None,
             user_rules: vec![],
+            sensitive_resource_markers: vec![],
+            auto_approve_mode: AiAutoApproveMode::Standard,
         }
     }
 
@@ -1348,6 +1493,7 @@ mod tests {
                 identity: "Write".to_string(),
             },
             delegation: None,
+            permission_mode: None,
             display_metadata: serde_json::Map::new(),
         }
     }
@@ -1593,6 +1739,8 @@ mod tests {
             }],
             tool_history: vec![],
             workspace_root: None,
+            sensitive_resource_markers: vec![],
+            auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
         let session_end = message.find("</session_context>").expect("session end");
@@ -1626,6 +1774,8 @@ mod tests {
                 user_note: Some("Approve all log-viewing commands".to_string()),
             }],
             workspace_root: None,
+            sensitive_resource_markers: vec![],
+            auto_approve_mode: AiAutoApproveMode::Standard,
         };
         let message = render_task_message(&input);
         assert!(message.contains("(user note: \"Approve all log-viewing commands\")"));

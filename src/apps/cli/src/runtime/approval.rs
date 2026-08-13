@@ -121,6 +121,7 @@ mod tests {
                 subagent_type: "Explore".to_string(),
             }),
             display_metadata: Map::new(),
+            permission_mode: None,
         }
     }
 

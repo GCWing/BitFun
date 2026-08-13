@@ -141,6 +141,7 @@ import { SubagentAPI, type SubagentInfo } from '@/infrastructure/api/service-api
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import {
   ChatInputWorkspaceStrip,
+  type AiAutoApproveMode,
   type ChatInputPermissionMode,
 } from './ChatInputWorkspaceStrip';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
@@ -2082,6 +2083,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSession?.remoteSshHost,
     sessionPermissionMode,
     t,
+  ]);
+
+  /** Writes the AI auto-approve sub-mode (aggressive/standard/passive). */
+  const handleAiAutoApproveModeChange = useCallback(async (
+    mode: AiAutoApproveMode,
+  ) => {
+    if (permissionModeSaving || isAcpTargetSession) return;
+    const previousConfig = toolPermissionConfig;
+    if (previousConfig.interaction.ai_auto_approve_mode === mode) return;
+    setToolPermissionConfig({
+      ...previousConfig,
+      interaction: { ...previousConfig.interaction, ai_auto_approve_mode: mode },
+    });
+    setPermissionModeSaving(true);
+    try {
+      const saved = await permissionConfigService.setAiAutoApproveMode(mode);
+      setToolPermissionConfig(saved);
+    } catch (error) {
+      log.error('Failed to save AI auto-approve mode', error);
+      setToolPermissionConfig(previousConfig);
+      notificationService.error(t('chatInput.permissionMode.changeFailed'));
+    } finally {
+      setPermissionModeSaving(false);
+    }
+  }, [
+    isAcpTargetSession,
+    notificationService,
+    permissionConfigService,
+    permissionModeSaving,
+    t,
+    toolPermissionConfig,
   ]);
 
   // Full access is the one mode worth a confirmation in either scope: a
@@ -6135,6 +6167,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 nextTurnMode: turnPermissionMode
                   ? chatInputPermissionMode(turnPermissionMode)
                   : null,
+                aiAutoApproveMode: {
+                  mode: toolPermissionConfig.interaction.ai_auto_approve_mode,
+                  saving: permissionModeSaving,
+                  onChange: handleAiAutoApproveModeChange,
+                },
                 onChangeForNextTurn: isAcpTargetSession
                   ? undefined
                   : handlePermissionModeForNextTurn,

@@ -704,6 +704,12 @@
         "label": "AI 自動批准",
         "description": "快速模型判斷請求是否安全：安全自動放行，極高危險拒絕，其餘詢問。"
       },
+      "aiAutoMode": {
+        "label": "無人值守檔位",
+        "standard": "標準",
+        "aggressive": "激進",
+        "passive": "保守"
+      },
       "fullAccess": {
         "label": "完全存取",
         "description": "預設允許工具執行，無需確認。"

@@ -152,6 +152,8 @@ export interface PermissionRequest {
   saveResources?: string[];
   source: PermissionRequestSource;
   delegation?: PermissionDelegationContext;
+  /** The permission mode that produced this request, when known. */
+  permissionMode?: SessionPermissionMode;
   displayMetadata?: Record<string, unknown>;
 }
 

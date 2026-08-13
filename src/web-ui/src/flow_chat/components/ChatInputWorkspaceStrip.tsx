@@ -82,6 +82,12 @@ export interface ChatInputWorkspaceStripProps {
     onChangeForNextTurn?: (
       mode: Exclude<ChatInputPermissionMode, 'acp'>,
     ) => void | Promise<void>;
+    /** Unattended sub-mode of `ai_auto`, shown as a submenu when `mode` is `ai_auto`. */
+    aiAutoApproveMode?: {
+      mode: AiAutoApproveMode;
+      saving?: boolean;
+      onChange?: (mode: AiAutoApproveMode) => void | Promise<void>;
+    };
     onHide?: () => void | Promise<void>;
   };
   /** Keep the strip on cached Git state while historical content is still restoring. */
@@ -117,6 +123,8 @@ export interface ChatInputWorkspaceStripProps {
 }
 
 export type ChatInputPermissionMode = 'ask' | 'auto' | 'full_access' | 'ai_auto' | 'reject' | 'acp';
+
+export type AiAutoApproveMode = 'standard' | 'aggressive' | 'passive';
 
 const NATIVE_PERMISSION_MODES: Array<Exclude<ChatInputPermissionMode, 'acp' | 'reject'>> = [
   'ask',
@@ -640,6 +648,59 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                       );
                     })}
                   </div>
+                  {permissionMode === 'ai_auto' && permissionControl.aiAutoApproveMode ? (
+                    <>
+                      <div className="bitfun-chat-input-workspace-strip__permission-menu-divider" role="separator" />
+                      <div
+                        data-bf-component="chat-input-workspace-strip"
+                        data-bf-part="permissionAiAutoModes"
+                        className="bitfun-chat-input-workspace-strip__permission-ai-auto-modes"
+                      >
+                        <span className="bitfun-chat-input-workspace-strip__permission-ai-auto-modes-label">
+                          {t('chatInput.permissionMode.aiAutoMode.label')}
+                        </span>
+                        <div
+                          role="radiogroup"
+                          aria-label={t('chatInput.permissionMode.aiAutoMode.label')}
+                          className="bitfun-chat-input-workspace-strip__permission-ai-auto-mode-group"
+                        >
+                          {([
+                            ['standard', t('chatInput.permissionMode.aiAutoMode.standard')],
+                            ['aggressive', t('chatInput.permissionMode.aiAutoMode.aggressive')],
+                            ['passive', t('chatInput.permissionMode.aiAutoMode.passive')],
+                          ] as const).map(([value, label]) => {
+                            const selected = permissionControl.aiAutoApproveMode!.mode === value;
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                role="radio"
+                                aria-checked={selected}
+                                data-bf-component="chat-input-workspace-strip"
+                                data-bf-part="permissionAiAutoMode"
+                                data-bf-state={selected ? 'selected' : undefined}
+                                className={[
+                                  'bitfun-chat-input-workspace-strip__permission-ai-auto-mode',
+                                  selected && 'bitfun-chat-input-workspace-strip__permission-ai-auto-mode--selected',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
+                                disabled={permissionControl.saving || permissionControl.aiAutoApproveMode!.saving}
+                                data-testid={`chat-input-permission-ai-auto-mode-${value}`}
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  setPermissionMenuOpen(false);
+                                  void permissionControl.aiAutoApproveMode!.onChange?.(value);
+                                }}
+                              >
+                                <span>{label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
                   {permissionOverridden && permissionControl.onResetToDefault ? (
                     <>
                       <div className="bitfun-chat-input-workspace-strip__permission-menu-divider" role="separator" />

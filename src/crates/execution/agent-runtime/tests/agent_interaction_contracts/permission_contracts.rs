@@ -482,6 +482,7 @@ fn request(request_id: &str, session_id: &str) -> PermissionRequest {
             identity: format!("tool-{request_id}"),
         },
         delegation: None,
+        permission_mode: None,
         display_metadata: Map::new(),
     }
 }

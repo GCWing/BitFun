@@ -259,7 +259,7 @@ export function PermissionRequestPanel({
               >
                 <Check size={15} aria-hidden="true" /> {t('permission.allowOnce')}
               </button>
-              {!!request.saveResources?.length && (
+              {!!request.saveResources?.length && request.permissionMode !== 'ai_auto' && (
                 <Tooltip content={alwaysAllowTooltip} placement="top">
                   <button
                     type="button"

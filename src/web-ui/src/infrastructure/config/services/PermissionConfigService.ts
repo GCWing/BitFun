@@ -1,7 +1,12 @@
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
 import { configManager } from './ConfigManager';
-import type { PermissionEffect, PermissionRule, ToolPermissionConfig } from '../types';
+import type {
+  AiAutoApproveMode,
+  PermissionEffect,
+  PermissionRule,
+  ToolPermissionConfig,
+} from '../types';
 
 const log = createLogger('PermissionConfig');
 const CONFIG_PATH = 'tool_permissions';
@@ -14,6 +19,7 @@ export const DEFAULT_TOOL_PERMISSION_CONFIG: ToolPermissionConfig = {
   interaction: {
     auto_approve_ask: false,
     ai_auto_approve_ask: false,
+    ai_auto_approve_mode: 'standard',
   },
 };
 
@@ -27,7 +33,14 @@ function normalizeRule(value: unknown): PermissionRule | null {
 
 export function normalizeToolPermissionConfig(value: unknown): ToolPermissionConfig {
   const input = value && typeof value === 'object'
-    ? value as { policy?: { preset?: unknown; rules?: unknown }; interaction?: { auto_approve_ask?: unknown; ai_auto_approve_ask?: unknown } }
+    ? value as {
+        policy?: { preset?: unknown; rules?: unknown };
+        interaction?: {
+          auto_approve_ask?: unknown;
+          ai_auto_approve_ask?: unknown;
+          ai_auto_approve_mode?: unknown;
+        };
+      }
     : {};
   const policy = input.policy ?? {};
   const interaction = input.interaction ?? {};
@@ -42,6 +55,10 @@ export function normalizeToolPermissionConfig(value: unknown): ToolPermissionCon
     ? false
     : interaction.auto_approve_ask === true;
 
+  const rawMode = interaction.ai_auto_approve_mode;
+  const ai_auto_approve_mode: AiAutoApproveMode =
+    rawMode === 'aggressive' || rawMode === 'passive' ? rawMode : 'standard';
+
   return {
     policy: {
       preset: policy.preset === 'full_access' ? 'full_access' : 'ask',
@@ -50,6 +67,7 @@ export function normalizeToolPermissionConfig(value: unknown): ToolPermissionCon
     interaction: {
       auto_approve_ask,
       ai_auto_approve_ask,
+      ai_auto_approve_mode,
     },
   };
 }
@@ -65,6 +83,7 @@ export class PermissionConfigService {
         interaction: {
           auto_approve_ask: DEFAULT_TOOL_PERMISSION_CONFIG.interaction.auto_approve_ask,
           ai_auto_approve_ask: DEFAULT_TOOL_PERMISSION_CONFIG.interaction.ai_auto_approve_ask,
+          ai_auto_approve_mode: DEFAULT_TOOL_PERMISSION_CONFIG.interaction.ai_auto_approve_mode,
         },
       };
     }
@@ -91,6 +110,12 @@ export class PermissionConfigService {
 
   async setAiAutoApproveAsk(enabled: boolean): Promise<ToolPermissionConfig> {
     await configManager.setConfig(`${CONFIG_PATH}.interaction.ai_auto_approve_ask`, enabled);
+    globalEventBus.emit('permission:config:updated');
+    return this.getConfig();
+  }
+
+  async setAiAutoApproveMode(mode: AiAutoApproveMode): Promise<ToolPermissionConfig> {
+    await configManager.setConfig(`${CONFIG_PATH}.interaction.ai_auto_approve_mode`, mode);
     globalEventBus.emit('permission:config:updated');
     return this.getConfig();
   }

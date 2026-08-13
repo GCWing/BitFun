@@ -36,6 +36,7 @@ import {
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import type {
+  AiAutoApproveMode,
   DebugModeConfig,
   LanguageDebugTemplate,
   PermissionRule,
@@ -354,6 +355,29 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       { ...previousConfig, policy: { ...previousConfig.policy, rules } },
       previousConfig,
     );
+  };
+
+  const handleAiAutoApproveModeChange = async (value: string | number | (string | number)[]) => {
+    const raw = String(Array.isArray(value) ? value[0] : value);
+    const nextMode: AiAutoApproveMode = raw === 'aggressive' || raw === 'passive' ? raw : 'standard';
+    const previousConfig = toolPermissionConfig;
+    if (previousConfig.interaction.ai_auto_approve_mode === nextMode) return;
+    setToolPermissionConfig({
+      ...previousConfig,
+      interaction: { ...previousConfig.interaction, ai_auto_approve_mode: nextMode },
+    });
+    setPermissionConfigSaving(true);
+    try {
+      const saved = await permissionConfigService.setAiAutoApproveMode(nextMode);
+      setToolPermissionConfig(saved);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save AI auto-approve mode', error);
+      setToolPermissionConfig(previousConfig);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setPermissionConfigSaving(false);
+    }
   };
 
   const handlePermissionModeControlVisibilityChange = async (visible: boolean) => {
@@ -1203,6 +1227,27 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               />
             </div>
           </ConfigPageRow>
+          {resolveToolPermissionMode(toolPermissionConfig) === 'ai_auto' ? (
+            <ConfigPageRow
+              label={t('permissionPolicy.aiAutoApproveMode')}
+              description={t('permissionPolicy.aiAutoApproveModeDescription')}
+              align="center"
+            >
+              <div className="bitfun-func-agent-config__row-control" data-bf-component="session-config" data-bf-part="control">
+                <Select
+                  size="small"
+                  value={toolPermissionConfig.interaction.ai_auto_approve_mode}
+                  options={[
+                    { value: 'standard', label: t('permissionPolicy.aiAutoApproveModeStandard') },
+                    { value: 'aggressive', label: t('permissionPolicy.aiAutoApproveModeAggressive') },
+                    { value: 'passive', label: t('permissionPolicy.aiAutoApproveModePassive') },
+                  ]}
+                  disabled={permissionConfigSaving}
+                  onChange={handleAiAutoApproveModeChange}
+                />
+              </div>
+            </ConfigPageRow>
+          ) : null}
           <ConfigPageRow
             label={t('permissionPolicy.showInChatInput')}
             description={t('permissionPolicy.showInChatInputDescription')}

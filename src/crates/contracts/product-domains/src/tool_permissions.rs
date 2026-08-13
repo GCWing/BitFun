@@ -237,6 +237,54 @@ pub struct PermissionInteractionConfig {
     /// auto-replying. Safe requests are allowed, critical-risk requests are
     /// rejected, and everything else is escalated to the user.
     pub ai_auto_approve_ask: bool,
+    /// Unattended sub-mode of `ai_auto_approve_ask`: decides what happens to
+    /// requests the judge escalated (everything the judge already allowed or
+    /// denied is unaffected by this knob).
+    pub ai_auto_approve_mode: AiAutoApproveMode,
+}
+
+/// How the AI auto-approve mode treats requests the judge escalates.
+///
+/// This only changes the escalate path: requests the judge allowed stay
+/// allowed and requests the judge denied (critical risk) stay denied no
+/// matter which mode is selected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum AiAutoApproveMode {
+    /// Judge-escalated requests raise an interactive prompt (current behavior).
+    #[default]
+    Standard,
+    /// Unattended: judge-escalated requests are auto-approved with the fixed
+    /// note "aggressive mode, auto-approve all escalated tool calls".
+    Aggressive,
+    /// Unattended: judge-escalated requests are auto-rejected with the fixed
+    /// note "passive mode, reject all escalated tool calls".
+    Passive,
+}
+
+impl AiAutoApproveMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::Aggressive => "aggressive",
+            Self::Passive => "passive",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "standard" => Some(Self::Standard),
+            "aggressive" => Some(Self::Aggressive),
+            "passive" => Some(Self::Passive),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for AiAutoApproveMode {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
 }
 
 /// The interaction mode a dialog turn runs with.
@@ -251,6 +299,7 @@ pub struct PermissionInteractionConfig {
 /// agent, enforced, and constraint layers are evaluated after the baseline, so a
 /// `FullAccess` turn is still bounded by every deny those layers own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionMode {
     /// Every `ask` decision is raised to the user.
@@ -559,6 +608,34 @@ pub struct PermissionDelegationContext {
     pub subagent_type: String,
 }
 
+/// Built-in sensitive-resource markers used by the read-only fast path.
+///
+/// These are used ONLY to decide whether a read-only tool call may skip the
+/// model judge. They are never rendered into the judge prompt, so the model
+/// never learns the project's sensitive path list. Projects may extend this
+/// list via `tool_permissions.json` (`sensitive_resources`).
+pub const DEFAULT_SENSITIVE_RESOURCE_MARKERS: &[&str] = &[
+    ".env",
+    "credentials",
+    "credential",
+    "secret",
+    "secrets",
+    "id_rsa",
+    "id_ed25519",
+    ".pem",
+    ".key",
+    "password",
+    "passwd",
+    "token",
+    "wallet",
+    ".ssh",
+    ".git-credentials",
+    ".netrc",
+    "cookie",
+    "login data",
+    "keychain",
+];
+
 /// A process-local permission request projected to an interactive surface.
 ///
 /// Resource and display values stored here must already be safe for user
@@ -605,6 +682,11 @@ pub struct PermissionRequest {
     pub source: PermissionRequestSource,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delegation: Option<PermissionDelegationContext>,
+    /// The permission mode that produced this request, when the requesting
+    /// surface knows it. Used by surfaces to adjust offered actions (e.g.
+    /// hiding "always allow" in AI auto-approve mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission_mode: Option<PermissionMode>,
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     pub display_metadata: Map<String, Value>,
 }

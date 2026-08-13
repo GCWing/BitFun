@@ -2108,6 +2108,7 @@ async fn permission_without_callback_is_rejected_and_finishes_action_required() 
             identity: "edit".to_string(),
         },
         delegation: None,
+        permission_mode: None,
         display_metadata: serde_json::Map::new(),
     };
     let unrelated = permissions
@@ -2217,6 +2218,7 @@ async fn stalled_permission_rejection_is_bounded_and_cancels_the_exact_turn() {
                     identity: "edit".to_string(),
                 },
                 delegation: None,
+                permission_mode: None,
                 display_metadata: serde_json::Map::new(),
             }],
             "turn-fixture",

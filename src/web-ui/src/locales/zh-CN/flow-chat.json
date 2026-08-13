@@ -704,6 +704,12 @@
         "label": "AI 自动批准",
         "description": "快速模型判断请求是否安全：安全自动放行，极高危险拒绝，其余询问。"
       },
+      "aiAutoMode": {
+        "label": "无人值守档位",
+        "standard": "标准",
+        "aggressive": "激进",
+        "passive": "保守"
+      },
       "fullAccess": {
         "label": "完全访问",
         "description": "默认允许工具执行，无需确认。"

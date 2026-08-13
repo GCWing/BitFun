@@ -934,6 +934,7 @@ pub struct PermissionAuditPage {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectPermissionRulesResponse {
     pub rules: Vec<PermissionRule>,
+    pub sensitive_resources: Vec<String>,
     pub revision: String,
 }
 
@@ -942,6 +943,8 @@ pub struct ProjectPermissionRulesResponse {
 pub struct SaveProjectPermissionRulesRequest {
     pub workspace_id: String,
     pub rules: Vec<PermissionRule>,
+    #[serde(default)]
+    pub sensitive_resources: Vec<String>,
     pub revision: String,
 }
 
@@ -1131,6 +1134,20 @@ fn validate_project_permission_rules(rules: &[PermissionRule]) -> Result<(), Str
     Ok(())
 }
 
+/// Trims and drops empty sensitive-resource markers before they are persisted.
+///
+/// The UI keeps a draft row the user added but never filled; persisting it
+/// would grow the config with markers that can never match anything. The
+/// filter is deliberately silent — empty rows are not an error, they are
+/// just unfinished input.
+fn normalize_sensitive_resources(resources: Vec<String>) -> Vec<String> {
+    resources
+        .into_iter()
+        .map(|resource| resource.trim().to_string())
+        .filter(|resource| !resource.is_empty())
+        .collect()
+}
+
 #[tauri::command]
 pub async fn get_project_permission_rules(
     state: State<'_, AppState>,
@@ -1139,15 +1156,15 @@ pub async fn get_project_permission_rules(
     let target =
         project_permission_config_target_for_workspace(&state, &request.workspace_id).await?;
     let content = read_project_permission_config_content(&state, &target).await?;
-    let rules = content
+    let config = content
         .as_deref()
         .map(deserialize_project_permission_config)
         .transpose()
         .map_err(|error| error.to_string())?
-        .unwrap_or_default()
-        .rules;
+        .unwrap_or_default();
     Ok(ProjectPermissionRulesResponse {
-        rules,
+        rules: config.rules,
+        sensitive_resources: config.sensitive_resources,
         revision: project_permission_rules_revision(content.as_deref()),
     })
 }
@@ -1158,6 +1175,7 @@ pub async fn save_project_permission_rules(
     request: SaveProjectPermissionRulesRequest,
 ) -> Result<ProjectPermissionRulesResponse, String> {
     validate_project_permission_rules(&request.rules)?;
+    let sensitive_resources = normalize_sensitive_resources(request.sensitive_resources.clone());
 
     let target =
         project_permission_config_target_for_workspace(&state, &request.workspace_id).await?;
@@ -1173,12 +1191,14 @@ pub async fn save_project_permission_rules(
         "{}\n",
         serde_json::to_string_pretty(&ProjectPermissionConfig {
             rules: request.rules.clone(),
+            sensitive_resources: sensitive_resources.clone(),
         })
         .map_err(|error| format!("Failed to serialize project permission rules: {error}"))?
     );
     write_project_permission_config_content(&state, &target, &content).await?;
     Ok(ProjectPermissionRulesResponse {
         rules: request.rules,
+        sensitive_resources,
         revision: project_permission_rules_revision(Some(&content)),
     })
 }
@@ -3646,6 +3666,20 @@ mod tests {
     };
     use bitfun_product_domains::tool_permissions::{PermissionEffect, PermissionRule};
     use serde_json::json;
+
+    #[test]
+    fn sensitive_resources_normalization_trims_and_drops_empty_markers() {
+        assert_eq!(
+            normalize_sensitive_resources(vec![
+                "secrets/".to_string(),
+                "  ".to_string(),
+                "".to_string(),
+                " .cursorrules ".to_string(),
+            ]),
+            vec!["secrets/".to_string(), ".cursorrules".to_string()]
+        );
+        assert!(normalize_sensitive_resources(Vec::new()).is_empty());
+    }
 
     #[tokio::test]
     async fn remote_mode_catalog_never_scans_an_absolute_desktop_host_path() {

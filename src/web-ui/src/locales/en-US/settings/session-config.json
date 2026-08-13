@@ -61,6 +61,11 @@
     "autoApproveDescription": "Automatically allow actions that would normally need confirmation.",
     "aiAutoApprove": "AI auto approve",
     "aiAutoApproveDescription": "A fast model judges each request: safe requests auto-approve, critical-risk requests are rejected, and the rest ask for confirmation.",
+    "aiAutoApproveMode": "Unattended mode",
+    "aiAutoApproveModeDescription": "Only affects requests the judge escalates: aggressive auto-approves, passive auto-rejects, standard asks the user.",
+    "aiAutoApproveModeStandard": "Standard",
+    "aiAutoApproveModeAggressive": "Aggressive",
+    "aiAutoApproveModePassive": "Passive",
     "showInChatInput": "Show permission mode selector",
     "showInChatInputDescription": "Show the permission mode below the chat input so it can be changed for the current session.",
     "globalRules": "Global rules",
@@ -117,7 +122,13 @@
     "rulesSaveFailed": "Failed to save static project rules",
     "rulesConflict": "The rules file changed outside BitFun. Reopen project permissions before saving.",
     "cancel": "Cancel",
-    "effects": { "allow": "Allow", "ask": "Ask", "deny": "Deny" }
+    "effects": { "allow": "Allow", "ask": "Ask", "deny": "Deny" },
+    "sensitiveResourcesTitle": "Sensitive resources",
+    "sensitiveResourcesDescription": "Read-only tool calls whose resources match one of these markers (directory path or file-name fragment, case-insensitive) are never auto-approved by the fast path; they go through the AI judge or your confirmation instead. This list is never shown to the AI.",
+    "sensitiveResourcesEmpty": "No sensitive resources configured; the built-in defaults apply.",
+    "addSensitiveResource": "Add",
+    "sensitiveResourcePlaceholder": "For example, secrets/ or .cursorrules",
+    "removeSensitiveResource": "Remove"
   },
   "deferredToolLoading": {
     "sectionTitle": "Load tools as needed",

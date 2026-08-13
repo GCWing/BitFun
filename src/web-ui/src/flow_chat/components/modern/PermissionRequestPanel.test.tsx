@@ -168,6 +168,24 @@ describe('PermissionRequestPanel', () => {
     expect(tooltips).not.toContain('project-1');
   });
 
+  it('hides the always allow button in ai_auto permission mode even with save resources', () => {
+    act(() => {
+      root.render(
+        <PermissionRequestPanel
+          requests={[{ ...request(false), permissionMode: 'ai_auto' }]}
+          onRespond={vi.fn()}
+          onRespondBatch={vi.fn()}
+        />,
+      );
+    });
+
+    expect([...container.querySelectorAll('button')]
+      .some((button) => button.textContent?.includes('permission.allowAlways'))).toBe(false);
+    // The one-time allow action remains available.
+    expect([...container.querySelectorAll('button')]
+      .some((button) => button.textContent?.includes('permission.allowOnce'))).toBe(true);
+  });
+
   it('keeps resources to one ellipsized summary with an interactive multiline tooltip', () => {
     const longResource = 'src/a-very-long-directory-name/another-long-directory/file-with-a-long-name.ts';
     const bashRequest = {
