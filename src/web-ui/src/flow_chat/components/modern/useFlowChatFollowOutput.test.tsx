@@ -11,7 +11,11 @@ import {
   TAIL_EASE_SNAP_ABOVE_PX,
 } from '../../utils/flowChatTailEase';
 import { SMOOTH_SCROLL_STALL_MS, useFlowChatFollowOutput } from './useFlowChatFollowOutput';
-import { useFlowChatViewportOwner } from './useFlowChatViewportOwner';
+import {
+  useFlowChatViewportOwner,
+  type FlowChatViewportOwnerApi,
+} from './useFlowChatViewportOwner';
+import { USER_DRIVEN_SCROLL_WINDOW_MS } from './flowChatViewportAnchor';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -57,6 +61,8 @@ interface HarnessProps {
   resolveTurnTopScrollTop?: (turnId: string) => number | null;
   isOpeningViewport?: boolean;
   onController: (controller: Controller) => void;
+  /** The register the hook writes through, for a test that has to hold it. */
+  onViewportOwner?: (owner: FlowChatViewportOwnerApi) => void;
 }
 
 function Harness({
@@ -69,11 +75,13 @@ function Harness({
   resolveTurnTopScrollTop = () => null,
   isOpeningViewport = false,
   onController,
+  onViewportOwner,
 }: HarnessProps) {
   const scrollerRef = React.useRef<HTMLElement | null>(scroller);
   // The real register, not a stand-in: what this hook is allowed to write is
   // now part of its behaviour, so a permissive fake would test the wrong thing.
   const viewportOwner = useFlowChatViewportOwner(scrollerRef);
+  onViewportOwner?.(viewportOwner);
   const controller = useFlowChatFollowOutput({
     activeSessionId: 'session-1',
     latestTurnId,
@@ -1096,6 +1104,156 @@ describe('useFlowChatFollowOutput', () => {
       restInBlank(1000);
 
       expect(controller?.isFollowingOutput).toBe(true);
+    });
+
+    it('asks again once the gesture that refused it has lapsed', () => {
+      /*
+       * The gesture's claim is a lapse timer, because a wheel has no end of its
+       * own, and this correction is the one writer that asks from inside that
+       * window — coming to rest is what triggers it. So the first ask is
+       * refused by construction, and the answer is to ask again rather than to
+       * release the hold: a settle also lands *between* two notches of a
+       * gesture still in progress, and forcing the snap through there drags the
+       * reader out of the blank they are scrolling into, every 800ms.
+       *
+       * Measured, the case the retry is for: a wheel at the head of a
+       * three-Turn tail paged in 13 Turns, the compensation moved the reader
+       * 2727px on the virtualizer's estimates, the real heights landed ~1670px
+       * shorter and the browser clamped the offset to the end of the shrunken
+       * range — 841px past the content end, the whole reserved spacer, blank.
+       * The snap back was refused `heldBy: user-gesture` 57ms into a 200ms
+       * hold, and nothing moved for the four minutes that followed.
+       */
+      let owner: FlowChatViewportOwnerApi | null = null;
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      vi.useFakeTimers();
+      try {
+        act(() => {
+          root.render(
+            <Harness
+              latestTurnId="turn-1"
+              isStreaming={false}
+              scroller={scroller}
+              onController={next => { controller = next; }}
+              onViewportOwner={next => { owner = next; }}
+            />,
+          );
+        });
+        act(() => controller?.handleUserScrollIntent());
+        // The wheel, as the list takes it: the reader holds the viewport for
+        // the window the anchor uses, and the settle below lands inside it.
+        act(() => {
+          owner?.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+        });
+        scrollTo.mockClear();
+
+        restInBlank(1000 + TAIL_SPACER);
+        // Refused, and rightly: as far as the register knows the reader still
+        // has the viewport.
+        expect(scrollTo).not.toHaveBeenCalled();
+
+        act(() => { vi.advanceTimersByTime(USER_DRIVEN_SCROLL_WINDOW_MS + 20); });
+
+        expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('stops asking rather than chase a reader who keeps scrolling', () => {
+      // Every retry is refused while the reader keeps re-taking the viewport,
+      // and none of them move it. Their own next settle is what asks again.
+      let owner: FlowChatViewportOwnerApi | null = null;
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      vi.useFakeTimers();
+      try {
+        act(() => {
+          root.render(
+            <Harness
+              latestTurnId="turn-1"
+              isStreaming={false}
+              scroller={scroller}
+              onController={next => { controller = next; }}
+              onViewportOwner={next => { owner = next; }}
+            />,
+          );
+        });
+        act(() => controller?.handleUserScrollIntent());
+        act(() => {
+          owner?.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+        });
+        scrollTo.mockClear();
+        restInBlank(1000 + TAIL_SPACER);
+
+        // Notches inside the window they renew, for longer than the retry
+        // budget covers. This is what a wheel actually looks like: the register
+        // never stops answering with the reader.
+        for (let notch = 0; notch < 16; notch += 1) {
+          act(() => {
+            owner?.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+            vi.advanceTimersByTime(USER_DRIVEN_SCROLL_WINDOW_MS / 2);
+          });
+        }
+
+        expect(scrollTo).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('resumes on the end the content has now, not the one the snap aimed at', () => {
+      /*
+       * The snap is animated, and what it was aiming at can move while it
+       * travels — a history page whose items are still measuring is exactly
+       * that, and is also the reason the snap was needed. Resuming on
+       * `scrollTop` adopts the stale offset as the hold rule's memory, and the
+       * hold rule defends a gap rather than closing it.
+       *
+       * Measured on a 43-Turn session paged from a three-Turn tail: issued for
+       * 12336, landed 608ms later against a content end of 11972, and the first
+       * frame after it read `desired 11972, target 12336, onTarget true`. The
+       * reader kept 364px of reserved blank and a Turn cut off at the top.
+       */
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            isStreaming={false}
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      act(() => controller?.handleUserScrollIntent());
+      restInBlank(1000 + TAIL_SPACER);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+
+      // The items measured shorter while the snap travelled, so the end of
+      // content is 300px above where it was aimed.
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1200 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 1000,
+      });
+      restInBlank(1000);
+
+      expect(controller?.isFollowingOutput).toBe(true);
+      // Not 1000, which is inside the gap the hold rule tolerates and would
+      // therefore have been kept for good.
+      expect(controller?.getFollowTargetScrollTop()).toBe(700);
     });
 
     it('does not take the viewport back when a gesture overrode the snap', () => {
