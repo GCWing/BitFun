@@ -42,9 +42,9 @@ server = [
 name = "bitfun_acp"
 
 [dependencies]
-bitfun-core = { path = "../../assembly/core", default-features = false, optional = true }
+bitfun-core = { path = "../../assembly/core", optional = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
-bitfun-agent-tools = { path = "../../execution/tool-contracts", default-features = false, optional = true }
+bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 

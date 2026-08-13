@@ -70,6 +70,79 @@ test('Core and ACP defaults preserve their explicit assembly contracts', async (
   );
 });
 
+test('consumers do not repeat guarded empty internal defaults', async () => {
+  const cargoBoundaries = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  assert.equal(
+    typeof cargoBoundaries.findRedundantInternalDefaultFeatureDisables,
+    'function',
+  );
+
+  const emptyOwner = {
+    ...packageAt('empty-owner', 'src/crates/contracts/empty-owner/Cargo.toml'),
+    features: { default: [] },
+  };
+  const compatibilityOwner = {
+    ...packageAt('compatibility-owner', 'src/crates/interfaces/compatibility-owner/Cargo.toml'),
+    features: { default: ['client', 'server'] },
+  };
+  const unguardedEmptyOwner = {
+    ...packageAt('unguarded-empty-owner', 'src/crates/contracts/unguarded-empty-owner/Cargo.toml'),
+    features: { default: [] },
+  };
+  const consumer = packageAt('consumer', 'src/apps/consumer/Cargo.toml', [
+    pathDependency('src/crates/contracts/empty-owner', {
+      name: 'empty-owner',
+      usesDefaultFeatures: false,
+    }),
+    pathDependency('src/crates/interfaces/compatibility-owner', {
+      name: 'compatibility-owner',
+      usesDefaultFeatures: false,
+    }),
+    pathDependency('src/crates/contracts/unguarded-empty-owner', {
+      name: 'unguarded-empty-owner',
+      usesDefaultFeatures: false,
+    }),
+  ]);
+
+  const violations = cargoBoundaries.findRedundantInternalDefaultFeatureDisables(
+    [emptyOwner, compatibilityOwner, unguardedEmptyOwner, consumer],
+    {
+      root: TEST_ROOT,
+      guardedManifests: ['src/crates/contracts/empty-owner/Cargo.toml'],
+    },
+  );
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /empty-owner.*redundant/);
+});
+
+test('guarded internal defaults stay explicitly empty', async () => {
+  const cargoBoundaries = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  const manifestPath = 'src/crates/contracts/empty-owner/Cargo.toml';
+  const owner = {
+    ...packageAt('empty-owner', manifestPath),
+    features: { default: [] },
+  };
+  assert.deepEqual(
+    cargoBoundaries.findGuardedInternalDefaultFeatureViolations(
+      [owner],
+      { root: TEST_ROOT, guardedManifests: [manifestPath] },
+    ),
+    [],
+  );
+
+  owner.features.default = ['expanded'];
+  const violations = cargoBoundaries.findGuardedInternalDefaultFeatureViolations(
+    [owner],
+    { root: TEST_ROOT, guardedManifests: [manifestPath] },
+  );
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /guarded default feature must stay explicitly empty/);
+});
+
 test('portable contract crates expose only capability-local feature slices', async () => {
   const [runtimePortsManifest, agentToolsManifest] = await Promise.all([
     readFile(new URL('../src/crates/contracts/runtime-ports/Cargo.toml', import.meta.url), 'utf8'),
@@ -830,7 +903,7 @@ test('multiple crate feature gates combine as required feature AND conditions', 
   assert.match(violations[0].message, /second/);
 });
 
-test('product entrypoints must disable bitfun-core default features', () => {
+test('product entrypoints may inherit the guarded empty bitfun-core default', () => {
   const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
   const app = packageAt('entry', 'src/apps/example/Cargo.toml', [
     pathDependency('src/crates/assembly/core', {
@@ -844,8 +917,7 @@ test('product entrypoints must disable bitfun-core default features', () => {
     { root: TEST_ROOT, crateLayoutRules },
   );
 
-  assert.equal(violations.length, 1);
-  assert.match(violations[0].message, /default-features = false/);
+  assert.deepEqual(violations, []);
 });
 
 test('Core Agent Runtime baseline excludes concrete capability unions', () => {
@@ -3452,7 +3524,7 @@ test('closed feature profiles reject product-full hidden behind a child feature'
   );
 });
 
-test('capability contract consumers must select only their reviewed dependency features', async () => {
+test('capability contract consumers may inherit empty defaults but must select reviewed features', async () => {
   const cargoBoundaries = await import(
     './core-boundaries/cargo-dependency-boundaries.mjs'
   );
@@ -3487,7 +3559,7 @@ test('capability contract consumers must select only their reviewed dependency f
     ],
   ).map((violation) => violation.message);
 
-  assert.ok(messages.some((message) => /default-features = false/.test(message)));
+  assert.doesNotMatch(messages.join('\n'), /default-features = false/);
   assert.ok(messages.some((message) => /plugin-runtime/.test(message)));
 });
 

@@ -11,8 +11,8 @@ name = "bitfun_codex_adapter"
 crate-type = ["rlib"]
 
 [dependencies]
-bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources"] }
-bitfun-services-core = { path = "../../services/services-core", default-features = false }
+bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+bitfun-services-core = { path = "../../services/services-core" }
 bitfun-static-hook-support = { path = "../static-hook-support" }
 dirs = { workspace = true }
 dunce = { workspace = true }

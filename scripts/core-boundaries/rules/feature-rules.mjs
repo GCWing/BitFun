@@ -15,6 +15,18 @@ export const servicesReqwestOwnerFeatures = [
   'web-tools',
 ];
 
+export const guardedEmptyInternalDefaultManifestPaths = [
+  'src/crates/assembly/core/Cargo.toml',
+  'src/crates/assembly/product-capabilities/Cargo.toml',
+  'src/crates/contracts/product-domains/Cargo.toml',
+  'src/crates/contracts/runtime-ports/Cargo.toml',
+  'src/crates/execution/tool-contracts/Cargo.toml',
+  'src/crates/execution/tool-execution/Cargo.toml',
+  'src/crates/execution/tool-provider-groups/Cargo.toml',
+  'src/crates/services/services-core/Cargo.toml',
+  'src/crates/services/services-integrations/Cargo.toml',
+];
+
 export const optionalDependencyFeatureOwnerRules = [
   {
     crateName: 'services-core',

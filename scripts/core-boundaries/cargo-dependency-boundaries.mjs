@@ -6,6 +6,7 @@ import {
   acpClientCoreFeatures,
   acpServerCoreFeatures,
   capabilityContractDependencyRules,
+  guardedEmptyInternalDefaultManifestPaths,
   servicesReqwestOwnerFeatures,
 } from './rules/feature-rules.mjs';
 
@@ -1131,13 +1132,6 @@ export function findProductEntrypointCoreFeatureViolations(
       if (targetPackage?.name !== 'bitfun-core') {
         continue;
       }
-      if (dependency.uses_default_features !== false) {
-        violations.push({
-          path: sourcePackage.manifest_path,
-          line: 1,
-          message: `product entrypoint ${sourcePackage.name} must set default-features = false for its bitfun-core ${dependencyDescription(dependency)}`,
-        });
-      }
       const roleOwnedAcpDependency =
         sourcePackage.name === 'bitfun-acp' && dependency.optional === true;
       if (
@@ -1216,7 +1210,7 @@ export function findProductEntrypointCoreFeatureViolations(
         continue;
       }
       const allowedCoreFeatures = new Set(
-        reviewedActiveCoreFeatureClosures.get(rootName) ?? [],
+        ['default', ...(reviewedActiveCoreFeatureClosures.get(rootName) ?? [])],
       );
       const rootSelectedFeatures = Object.keys(rootPackage.features ?? {})
         .filter((feature) => feature !== 'default');
@@ -1474,6 +1468,95 @@ function featureTransitivelyReaches(featureGraph, sourceFeature, destinations, s
     && featureTransitivelyReaches(featureGraph, reference, destinations, seen));
 }
 
+export function findRedundantInternalDefaultFeatureDisables(
+  packages,
+  {
+    root,
+    guardedManifests = guardedEmptyInternalDefaultManifestPaths,
+  } = {},
+) {
+  if (!root) {
+    throw new Error('redundant internal default-feature check requires the repository root');
+  }
+
+  const packageByManifest = new Map(
+    packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
+  );
+  const guardedTargets = new Set(
+    guardedManifests.map((path) => normalizedPath(join(root, path))),
+  );
+  const violations = [];
+
+  for (const consumer of packages) {
+    for (const dependency of consumer.dependencies ?? []) {
+      if (dependency.uses_default_features !== false || !dependency.path) {
+        continue;
+      }
+      const targetPackage = packageByManifest.get(
+        normalizedPath(join(dependency.path, 'Cargo.toml')),
+      );
+      const targetFeatures = targetPackage?.features ?? {};
+      if (
+        !targetPackage
+        || !guardedTargets.has(normalizedPath(targetPackage.manifest_path))
+        || !Object.hasOwn(targetFeatures, 'default')
+        || !sameStringSet(targetFeatures.default, [])
+      ) {
+        continue;
+      }
+      violations.push({
+        path: consumer.manifest_path,
+        line: 1,
+        message: `${consumer.name} ${targetPackage.name} dependency has redundant default-features = false because the target default is guarded empty`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function findGuardedInternalDefaultFeatureViolations(
+  packages,
+  {
+    root,
+    guardedManifests = guardedEmptyInternalDefaultManifestPaths,
+  } = {},
+) {
+  if (!root) {
+    throw new Error('guarded internal default-feature check requires the repository root');
+  }
+
+  const packageByManifest = new Map(
+    packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
+  );
+  const violations = [];
+
+  for (const manifestPath of guardedManifests) {
+    const targetPackage = packageByManifest.get(normalizedPath(join(root, manifestPath)));
+    if (!targetPackage) {
+      violations.push({
+        path: join(root, manifestPath),
+        line: 1,
+        message: `guarded internal empty-default target is missing: ${manifestPath}`,
+      });
+      continue;
+    }
+    const targetFeatures = targetPackage.features ?? {};
+    if (
+      !Object.hasOwn(targetFeatures, 'default')
+      || !sameStringSet(targetFeatures.default, [])
+    ) {
+      violations.push({
+        path: targetPackage.manifest_path,
+        line: 1,
+        message: `${targetPackage.name} guarded default feature must stay explicitly empty`,
+      });
+    }
+  }
+
+  return violations;
+}
+
 export function findCapabilityContractConsumerViolations(
   packages,
   rules = capabilityContractDependencyRules,
@@ -1568,13 +1651,6 @@ export function findCapabilityContractConsumerViolations(
       }
       const unmatchedExpectedEdges = [...consumerProfile.edges];
       for (const dependency of managedDependencies) {
-        if (dependency.uses_default_features !== false) {
-          violations.push({
-            path: consumer.manifest_path,
-            line: 1,
-            message: `${consumer.name} ${rule.packageName} dependency must set default-features = false`,
-          });
-        }
         const matchIndex = unmatchedExpectedEdges.findIndex((edge) =>
           dependencyEdgeMatches(dependency, edge));
         if (matchIndex === -1) {
@@ -2085,6 +2161,8 @@ export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
       packages,
       { root, crateLayoutRules },
     ),
+    ...findGuardedInternalDefaultFeatureViolations(packages, { root }),
+    ...findRedundantInternalDefaultFeatureDisables(packages, { root }),
     ...findCapabilityContractConsumerViolations(packages, undefined, { root }),
     ...findFeatureGatedTestTargetViolations(packages),
     ...findRuntimeServicesTestSupportFeatureViolations(packages),

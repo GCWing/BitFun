@@ -10,7 +10,7 @@ name = "bitfun-server"
 path = "src/main.rs"
 
 [dependencies]
-bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+bitfun-core = { path = "../../crates/assembly/core", features = ["product-full"] }
 
 # App-server surface: an in-process JSON-RPC server/client pair over an
 # in-memory channel transport. The websocket handler routes agent kernel RPCs
