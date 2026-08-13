@@ -34,6 +34,10 @@ import {
   isViewportDiagnosticsEnabled,
 } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
 import type { FlowChatViewportOwner } from './flowChatViewportOwnership';
+import {
+  describeVirtualItemEstimate,
+  type VirtualItemHeightEstimateContext,
+} from './virtualMessageListLayout';
 
 /** Item-count overscan. Roughly two Turns either side of the viewport. */
 const FLOW_CHAT_OVERSCAN_ITEMS = 6;
@@ -117,7 +121,11 @@ export interface UseFlowChatVirtualizerOptions<T> {
    */
   headerRef: RefObject<HTMLElement | null>;
   getItemKey: (item: T) => string;
-  estimateItemHeightPx: (item: T) => number;
+  estimateItemHeightPx: (item: T, context?: VirtualItemHeightEstimateContext) => number;
+  /** Data-driven inputs used by estimates before an item is mounted. */
+  estimateContext?: VirtualItemHeightEstimateContext;
+  /** Stable identity for data that changes an unmeasured row's estimate. */
+  estimateContextRevision?: string | number;
   /**
    * Gap kept above a Turn that has been scrolled to the top of the viewport.
    * Applied by the virtualizer itself so that its re-aim, which runs while
@@ -278,6 +286,8 @@ export function useFlowChatVirtualizer<T>({
   headerRef,
   getItemKey,
   estimateItemHeightPx,
+  estimateContext,
+  estimateContextRevision,
   scrollPaddingStartPx,
   writeViewport,
   shiftViewport = () => false,
@@ -318,6 +328,8 @@ export function useFlowChatVirtualizer<T>({
   getItemKeyRef.current = getItemKey;
   const estimateItemHeightRef = useRef(estimateItemHeightPx);
   estimateItemHeightRef.current = estimateItemHeightPx;
+  const estimateContextRef = useRef(estimateContext);
+  estimateContextRef.current = estimateContext;
 
   const [contentStartPx, setContentStartPx] = useState(0);
   useEffect(() => {
@@ -340,13 +352,17 @@ export function useFlowChatVirtualizer<T>({
    */
   const estimateSize = useCallback((index: number) => {
     const item = itemsRef.current[index];
-    return item === undefined ? 0 : estimateItemHeightRef.current(item);
+    return item === undefined ? 0 : estimateItemHeightRef.current(item, estimateContextRef.current);
   }, []);
 
   const resolveItemKey = useCallback((index: number) => {
+    // Recreate the callback when estimate inputs change. TanStack uses the
+    // callback identity to invalidate its derived measurement positions while
+    // retaining DOM-measured sizes in its key cache.
+    void estimateContextRevision;
     const item = itemsRef.current[index];
     return item === undefined ? index : getItemKeyRef.current(item);
-  }, []);
+  }, [estimateContextRevision]);
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -420,6 +436,9 @@ export function useFlowChatVirtualizer<T>({
             applied,
             afterScrollTopPx: roundViewportPx(scroller.scrollTop),
             afterScrollHeightPx: roundViewportPx(scroller.scrollHeight),
+            estimateBreakdown: virtualItem && typeof virtualItem === 'object' && 'type' in virtualItem
+              ? describeVirtualItemEstimate(virtualItem as unknown as Parameters<typeof describeVirtualItemEstimate>[0])
+              : null,
           }),
         },
       );

@@ -21,7 +21,15 @@ pass: `size = measured ?? estimateSize(i)`. A per-item estimate for everything
 unmeasured. react-virtuoso reserves a single scalar (`lastSize`) for all of
 them, and this transcript alternates 38px user messages with model rounds up to
 5012px, so the scroll range was wrong by an order of magnitude until an item was
-actually measured. `estimateVirtualMessageItemHeight` now feeds it directly.
+actually measured. `estimateVirtualMessageItemHeightWithContext` now feeds it
+directly. The estimate is owned by the data shape in
+`virtualItemHeightEstimators.ts`: text, thinking, user messages, model rounds,
+Explore groups, and tool families each derive a bounded height from their
+content, status, width, and expansion state. This code is pure and runs before
+a row has a DOM node. Once mounted, DOM measurement remains authoritative and
+replaces the estimate. Width and volatile Explore expansion changes invalidate
+only the derived position pass; TanStack's key-based measured-size cache is
+retained.
 
 **Items stay in normal flow inside a padded window**, not absolutely positioned.
 Everything outside the window stands in as `padding-top` and `padding-bottom`

@@ -69,8 +69,10 @@ import {
   type HistoryBoundaryProximity,
 } from './flowChatHistoryBoundary';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
+import { useFlowChatVolatileContext } from './FlowChatContext';
 import {
-  estimateVirtualMessageItemHeight,
+  estimateVirtualMessageItemHeightWithContext,
+  type VirtualItemHeightEstimateContext,
 } from './virtualMessageListLayout';
 import { resolveVisibleFlowChatTurnIds } from './flowChatVisibleTurns';
 import { warnHistoryPagingRefusedWithPendingTurns } from '../../services/historySessionDiagnostics';
@@ -371,6 +373,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   });
   const canonicalVirtualItems = useVirtualItems();
   const virtualItems = items ?? canonicalVirtualItems;
+  const { exploreGroupStates } = useFlowChatVolatileContext();
   const activeSession = useActiveSession();
   const activeSessionState = useActiveSessionState();
   const activeSessionId = activeSession?.sessionId ?? null;
@@ -414,6 +417,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const headerElementRef = useRef<HTMLDivElement | null>(null);
   const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
   const [viewportHeightPx, setViewportHeightPx] = useState(0);
+  const [viewportWidthPx, setViewportWidthPx] = useState(0);
   /** Last scroller box the resize observer saw, to tell it apart from a content change. */
   const observedViewportBoxRef = useRef({ width: 0, height: 0 });
   /** Remaining resize callbacks over which to keep a resting viewport at the end. */
@@ -485,7 +489,20 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollerRef: scrollerElementRef,
     headerRef: headerElementRef,
     getItemKey: getVirtualItemStableKey,
-    estimateItemHeightPx: estimateVirtualMessageItemHeight,
+    estimateItemHeightPx: estimateVirtualMessageItemHeightWithContext,
+    estimateContext: {
+      availableWidthPx: viewportWidthPx > 0 ? viewportWidthPx : scrollerElement?.clientWidth,
+      isHistorical: activeSession?.isHistorical === true,
+      exploreGroupStates,
+    } satisfies VirtualItemHeightEstimateContext,
+    estimateContextRevision: [
+      viewportWidthPx,
+      activeSession?.isHistorical === true ? 'historical' : 'live',
+      [...(exploreGroupStates?.entries() ?? [])]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([groupId, expanded]) => `${groupId}:${expanded ? 1 : 0}`)
+        .join(','),
+    ].join('|'),
     scrollPaddingStartPx: FLOWCHAT_TURN_TOP_GAP_PX,
     writeViewport: viewportOwner.write,
     shiftViewport: viewportOwner.shift,
@@ -1298,6 +1315,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         tailRealignCallbacksRef.current = TAIL_REALIGN_RESIZE_CALLBACKS;
       }
       setViewportHeightPx(nextViewportBox.height);
+      setViewportWidthPx(nextViewportBox.width);
 
       /*
        * Before paint, and ahead of everything below: this observer is the one

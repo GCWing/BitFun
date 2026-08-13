@@ -429,11 +429,11 @@ to nothing else. That is what let the virtualizer underneath it be replaced
 without the keeper changing at all.
 
 One consequence of the refresh rule is worth stating plainly: a frame that finds
-the anchor already in place still counts as answered, so an open transcript that
-no other writer owns holds one animation frame in flight indefinitely. The cost
-is a `querySelectorAll` and two rect reads per frame. That is accepted; the
-window winds down when there is no anchor to keep, and when another owner holds
-the viewport.
+the anchor already in place consumes the remaining settle budget rather than
+refreshing it. The cost is a `querySelectorAll` and two rect reads per frame for
+the bounded settle window. A correction or a Turn still waiting to render
+refreshes the window, while a stable anchor winds it down and another owner
+holding the viewport still stands it down.
 
 The anchor is skipped entirely while follow-output owns the viewport. Restoring
 a pre-prepend position is only meaningful when the user owns it — and a frame

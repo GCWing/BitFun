@@ -670,13 +670,15 @@ export function useFlowChatViewportAnchor({
        */
       correctionFrameStartMsRef.current = frameStartMs;
       /*
-       * A frame that answered refreshes the window — and so does one still
-       * waiting for the anchored Turn to be rendered. "Not there yet" is
+       * A frame that made a correction refreshes the window, and so does one
+       * still waiting for the anchored Turn to be rendered. "Not there yet" is
        * neither a repair nor a failure, and spending a frame on it makes the
        * settle outlast the wait only for as long as `ANCHOR_SETTLE_FRAMES` and
        * `ANCHOR_MISSING_TURN_ATTEMPTS` happen to be the same number. They are
        * independent constants describing different things; this says what was
-       * meant instead of relying on them coinciding.
+       * meant instead of relying on them coinciding. An in-place frame is
+       * already settled and must consume the remaining budget, otherwise an
+       * anchor that never moves keeps this RAF loop alive forever.
        */
       const outcome = attemptRestoreRef.current();
       // Counted here rather than beside `attempts`, because it is frames the
@@ -695,7 +697,7 @@ export function useFlowChatViewportAnchor({
        * and that count can only advance on a frame that does not stand down:
        * the one condition jammed the loop and made its only exit unreachable.
        */
-      if (outcome === 'corrected' || outcome === 'in-place' || outcome === 'awaiting-turn') {
+      if (outcome === 'corrected' || outcome === 'awaiting-turn') {
         settleFramesRef.current = ANCHOR_SETTLE_FRAMES;
       }
       correctionFrameStartMsRef.current = null;
