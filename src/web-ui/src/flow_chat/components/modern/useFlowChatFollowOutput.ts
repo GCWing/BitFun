@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import {
   isViewportDiagnosticsEnabled,
   roundViewportPx,
+  traceViewport,
   traceViewportRepeating,
 } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
 import {
@@ -19,9 +20,12 @@ import { SNAP_BACK_HOLD_MS } from './flowChatViewportOwnership';
 import {
   contentEndScrollTop,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
+  isTailBlankMeasurable,
   memorylessFollowState,
   nextTailFollowState,
   resolveAnimatedJumpBehavior,
+  resolveTailDepartureCrossing,
+  shouldResumeFollowAfterDeparture,
   tailHoldMaxGapPx,
   tailSnapBackScrollTop,
   type TailFollowState,
@@ -32,6 +36,7 @@ export type FollowOutputEnterReason =
   | 'new-turn'
   | 'session-open'
   | 'streaming-resumed'
+  | 'tail-caught-up'
   | 'tail-snap-back'
   | 'turns-rolled-back';
 export type FollowOutputExitReason =
@@ -39,6 +44,21 @@ export type FollowOutputExitReason =
   | 'user-scroll'
   | 'scroll-to-turn'
   | 'scroll-to-index';
+
+/**
+ * Why a watch over a reader who owns the viewport ended.
+ *
+ * All four are follow taking it back or the transcript going away. A *crossing*
+ * is deliberately not on this list: the reader can climb out of the reserved
+ * blank and scroll back down into it any number of times before either happens,
+ * and each of those is another chance for output to catch up with them.
+ */
+type TailWatchOutcome =
+  /** Something handed the viewport back — a new Turn, a jump, a snap, this. */
+  | 'followed-again'
+  | 'navigated'
+  | 'session-changed'
+  | 'unmounted';
 
 interface UseFlowChatFollowOutputOptions {
   activeSessionId?: string;
@@ -399,6 +419,150 @@ export function useFlowChatFollowOutput({
   const resolveFollowTargetScrollTop = useCallback((scroller: HTMLElement) => (
     resolveFollowState(scroller).target
   ), [resolveFollowState]);
+
+  /*
+   * ---------------------------------------------------------------------------
+   * A viewport in the reader's hands, watched for output catching up with them.
+   *
+   * Scrolling up gives the follow away, and that is right only if the reader
+   * actually left the live region. They may not have. The reserved blank is up
+   * to 60% of a viewport under `hold-tail` and the whole gap under a pinned
+   * Turn, so a small scroll up can leave the reader still looking at empty space
+   * below the newest output — nothing is being hidden from them yet — and then
+   * output grows past the bottom edge and they silently stop seeing it.
+   *
+   * "Still looking at the blank" is `scrollTop > contentEnd`, because
+   * `contentEnd` is by definition the offset that puts the end of real content
+   * on the viewport's bottom edge. Note this is *not* the predicate the snap
+   * back uses: that one is relative to the follow target, and under a pin the
+   * target sits inside the blank, so a reader above it is reported as having
+   * nothing to snap back from. These are the two edges of the same region, and
+   * between them they cover it: the snap back returns a reader who came to rest
+   * *below* the follow target, and this returns one whom output caught up with
+   * from above.
+   *
+   * The watch therefore runs for as long as the reader holds the viewport, not
+   * for one crossing. `blankWasVisible` is the whole state it keeps between
+   * samples, and the rule is the obvious one: the blank was on screen and now it
+   * is not. Scoping it to a single crossing was tried and is wrong — a reader
+   * who climbs out of the blank, reads for a while and scrolls back down to sit
+   * in it again is in exactly the position the rule exists for, and had already
+   * spent the one crossing it was given.
+   *
+   * `content-caught-up` is what hands the viewport back, subject to
+   * `shouldResumeFollowAfterDeparture`; `reader-left-blank` is a reader who
+   * really did go and read history, and only clears the latch. Both raw deltas
+   * and the gesture claim are traced at each crossing rather than only the
+   * verdict, so the tie-break can still be revisited from a trail.
+   * ---------------------------------------------------------------------------
+   */
+  const tailWatchRef = useRef<{
+    openedAtMs: number;
+    /** Blank on screen when the reader took the viewport. */
+    exitBlankPx: number;
+    exitScrollTopPx: number;
+    exitContentEndPx: number;
+    exitPinned: boolean;
+    exitStreaming: boolean;
+    /** Previous sample, so a crossing can be attributed to whatever moved. */
+    lastScrollTopPx: number;
+    lastContentEndPx: number;
+    /** Whether the reserved blank was on screen as of the previous sample. */
+    blankWasVisible: boolean;
+    samples: number;
+    crossings: number;
+  } | null>(null);
+
+  const closeTailWatch = useCallback((
+    outcome: TailWatchOutcome,
+    extra?: Record<string, unknown>,
+  ) => {
+    const watch = tailWatchRef.current;
+    if (!watch) return;
+    tailWatchRef.current = null;
+    const scroller = scrollerRef.current;
+    const scrollTopPx = scroller?.scrollTop ?? watch.lastScrollTopPx;
+    const contentEndPx = scroller
+      ? readContentEndScrollTop(scroller)
+      : watch.lastContentEndPx;
+    traceViewport({
+      location: 'followOutput.tailWatchEnded',
+      message: 'follow-output has the viewport back',
+      data: () => ({
+        outcome,
+        viewportId,
+        forMs: Math.round(performance.now() - watch.openedAtMs),
+        samples: watch.samples,
+        crossings: watch.crossings,
+        blankAtExitPx: roundViewportPx(watch.exitBlankPx),
+        blankNowPx: roundViewportPx(scrollTopPx - contentEndPx),
+        // The two movements, over the whole life of the watch.
+        contentGrewPx: roundViewportPx(contentEndPx - watch.exitContentEndPx),
+        readerMovedPx: roundViewportPx(scrollTopPx - watch.exitScrollTopPx),
+        pinnedAtExit: watch.exitPinned,
+        streamingAtExit: watch.exitStreaming,
+        streamingNow: isStreamingRef.current,
+        ...(extra ?? {}),
+      }),
+    });
+  }, [readContentEndScrollTop, scrollerRef, viewportId]);
+  /*
+   * Held by identity for the unmount cleanup below.
+   *
+   * That cleanup must run when the transcript goes away and at no other time,
+   * and depending on the callback would instead run it whenever the callback is
+   * rebuilt — which is whenever `getTailSpacerPx` changes identity, and so
+   * potentially on every render of whoever owns this hook. A watch lives for as
+   * long as the reader keeps the viewport and spans many renders by
+   * construction, so an effect that tears down with the callback closes every
+   * one of them a frame after it opens.
+   */
+  const closeTailWatchRef = useRef(closeTailWatch);
+  closeTailWatchRef.current = closeTailWatch;
+
+  /**
+   * Start watching a viewport the reader has taken.
+   *
+   * Opened whether or not blank is on screen at the time. Where the reader was
+   * standing when they took it settles nothing — they can scroll down into the
+   * blank at any point afterwards, and the whole question is where they are when
+   * output next reaches the bottom edge.
+   */
+  const openTailWatch = useCallback(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const contentEndPx = readContentEndScrollTop(scroller);
+    const blankPx = scroller.scrollTop - contentEndPx;
+    const pinned = pinTurnIdRef.current !== null;
+    traceViewport({
+      location: 'followOutput.tailWatch',
+      message: 'the reader has the viewport, and is watched for output catching up',
+      data: () => ({
+        viewportId,
+        blankPx: roundViewportPx(blankPx),
+        blankVisible: blankPx > 0,
+        scrollTopPx: roundViewportPx(scroller.scrollTop),
+        contentEndPx: roundViewportPx(contentEndPx),
+        clientHeightPx: scroller.clientHeight,
+        // A pin is the case where the gap between the two predicates is widest.
+        pinned,
+        isStreaming: isStreamingRef.current,
+      }),
+    });
+    tailWatchRef.current = {
+      openedAtMs: performance.now(),
+      exitBlankPx: blankPx,
+      exitScrollTopPx: scroller.scrollTop,
+      exitContentEndPx: contentEndPx,
+      exitPinned: pinned,
+      exitStreaming: isStreamingRef.current,
+      lastScrollTopPx: scroller.scrollTop,
+      lastContentEndPx: contentEndPx,
+      blankWasVisible: blankPx > 0,
+      samples: 0,
+      crossings: 0,
+    };
+  }, [readContentEndScrollTop, scrollerRef, viewportId]);
 
   /**
    * Stand the frame loop down for an animated scroll this hook is about to
@@ -788,6 +952,10 @@ export function useFlowChatFollowOutput({
 
     isFollowingOutputRef.current = true;
     setIsFollowingOutput(true);
+    // Whatever this entry is, follow has the viewport, so there is nothing left
+    // to watch for. The crossing route comes through here too, having already
+    // traced why.
+    closeTailWatch('followed-again', { enterReason: reason });
     settleFramesRef.current = SETTLE_FRAMES;
     traceViewportRepeating(`follow|enter|${reason}`, {
       location: 'followOutput.enter',
@@ -886,25 +1054,42 @@ export function useFlowChatFollowOutput({
       endSmoothScrollYield('superseded');
       followStateRef.current = { mode: 'pin-turn-top', target: scroller?.scrollTop ?? contentEnd };
     } else {
+      /*
+       * The pin is dropped here even when the departure happened under one, and
+       * that is deliberate. The pin's reservation is the blank the reader just
+       * scrolled out of; restoring it would pull them back down to the offset
+       * they left. Following the content end keeps them where they put
+       * themselves and shows what arrives below.
+       */
       retirePin();
       followStateRef.current = { mode: 'hold-tail', target: contentEnd };
       /*
-       * Only a jump to latest is ever a candidate for an animation, and only a
-       * near one. Every other entry reason is the transcript resuming a follow
-       * it already owned, where an animation would be a movement the reader did
-       * not ask for.
+       * Output that caught up with a stationary reader is already at the end —
+       * the blank between them closing is what raised this — so the whole
+       * distance left is one sample of growth, and the frame loop's ease covers
+       * it on the next few frames. A one-shot scroll would spend that as a snap
+       * the reader can see, for a correction they cannot.
        */
-      runContentEndScroll(
-        reason === 'jump-to-latest' && scroller
-          ? resolveJumpBehavior(scroller, contentEnd)
-          : 'auto',
-      );
+      if (reason !== 'tail-caught-up') {
+        /*
+         * Only a jump to latest is ever a candidate for an animation, and only
+         * a near one. Every other entry reason is the transcript resuming a
+         * follow it already owned, where an animation would be a movement the
+         * reader did not ask for.
+         */
+        runContentEndScroll(
+          reason === 'jump-to-latest' && scroller
+            ? resolveJumpBehavior(scroller, contentEnd)
+            : 'auto',
+        );
+      }
     }
 
     startFollowFrame();
   }, [
     viewportOwner,
     beginSmoothScrollYield,
+    closeTailWatch,
     endSmoothScrollYield,
     readContentEndScrollTop,
     readPinScrollTop,
@@ -950,7 +1135,152 @@ export function useFlowChatFollowOutput({
     viewportOwner.release('follow-output');
     viewportOwner.release('snap-back');
     stopFollowFrame();
-  }, [endSmoothScrollYield, scrollerRef, stopFollowFrame, viewportId, viewportOwner]);
+
+    /*
+     * A watch is open exactly while the reader holds the viewport, which is what
+     * every branch below maintains. `wasFollowing` is deliberately not the gate:
+     * this runs on every wheel notch rather than once per gesture, so gating on
+     * it would open a watch on the notch that took the viewport and nowhere
+     * else, and any exit that found follow already released — a reader scrolling
+     * on from a navigation, say — would be watched by nothing.
+     *
+     * Re-opening is what must not happen instead. The offsets a crossing is
+     * judged against are the previous sample's, and re-baselining them halfway
+     * through the gesture being judged is how a reader climbing steadily reads
+     * as one standing still.
+     */
+    if (reason === 'session-changed') {
+      closeTailWatch('session-changed');
+      return;
+    }
+    if (reason === 'scroll-to-turn' || reason === 'scroll-to-index') {
+      // A navigation puts the reader somewhere they did not travel to, so the
+      // watch starts again from there rather than carrying offsets across it.
+      closeTailWatch('navigated', { navigationReason: reason });
+    }
+    if (tailWatchRef.current === null) {
+      openTailWatch();
+    }
+  }, [
+    closeTailWatch,
+    endSmoothScrollYield,
+    openTailWatch,
+    scrollerRef,
+    stopFollowFrame,
+    viewportId,
+    viewportOwner,
+  ]);
+
+  /**
+   * One sample of an open watch, from wherever the geometry can change.
+   *
+   * Costs a null check whenever follow owns the viewport, which is when nothing
+   * is being watched. Otherwise it reads `scrollHeight` — the same measurement
+   * the follow loop takes every frame while it *does* own the viewport, so this
+   * is that measurement continuing across the gap where it does not.
+   *
+   * Defined below `enterFollowOutput` because a crossing can hand the viewport
+   * back, which is the whole point of watching.
+   */
+  const sampleTailWatch = useCallback(() => {
+    const watch = tailWatchRef.current;
+    if (!watch) return;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    const scrollTopPx = scroller.scrollTop;
+    const contentEndPx = readContentEndScrollTop(scroller);
+    const blankPx = scrollTopPx - contentEndPx;
+    const contentDeltaPx = contentEndPx - watch.lastContentEndPx;
+    const scrollDeltaPx = scrollTopPx - watch.lastScrollTopPx;
+    watch.lastScrollTopPx = scrollTopPx;
+    watch.lastContentEndPx = contentEndPx;
+    watch.samples += 1;
+
+    /*
+     * Geometry read from two different moments, so neither the latch nor a
+     * verdict can be taken from it. A history prepend is the case: it shifts the
+     * viewport by the height it inserted, before that height has been measured
+     * into the scroll range, and the blank between the two reads as thousands of
+     * pixels. Left alone rather than cleared — a restructure says nothing about
+     * where the reader was standing before it, and the next honest sample is a
+     * frame away.
+     */
+    if (!isTailBlankMeasurable({ blankPx, tailSpacerPx: getTailSpacerPx() })) return;
+
+    const crossing = resolveTailDepartureCrossing({
+      blankPx,
+      contentDeltaPx,
+      scrollDeltaPx,
+    });
+    /*
+     * A snap back of ours is travelling, so the viewport is moving under a rule
+     * rather than under the reader — and it is travelling *down* through the
+     * blank, which crosses this line from the wrong side. The latch and the
+     * offsets are kept current so the next real sample compares against
+     * something recent; no verdict is taken, because the snap hands the viewport
+     * to follow by its own route the moment it lands.
+     */
+    if (pendingSnapBackTargetRef.current !== null) {
+      watch.blankWasVisible = crossing === 'watching';
+      return;
+    }
+    if (crossing === 'watching') {
+      watch.blankWasVisible = true;
+      return;
+    }
+    /*
+     * The blank is gone, but it was already gone last time: the reader is above
+     * the end of content and staying there, which is reading history and is not
+     * a crossing of anything. Only the transition is a question.
+     */
+    if (!watch.blankWasVisible) return;
+
+    // Whether the reader's hand is still on it. The claim lapses on its own,
+    // so this separates a crossing during a gesture from one after it.
+    const gestureLive = viewportOwner.currentOwner() === 'user-gesture';
+    const resumed = shouldResumeFollowAfterDeparture({ crossing, gestureLive });
+    watch.crossings += 1;
+    /*
+     * A crossing the gesture vetoed keeps the latch, so the next sample judges
+     * the same transition again: the reader either keeps climbing, and is let go
+     * by a verdict that no longer needs the veto, or stops, and is followed once
+     * the claim lapses. Every other verdict is final for this crossing — coming
+     * back is what the reader has to do to raise the question again.
+     */
+    if (!(crossing === 'content-caught-up' && gestureLive)) {
+      watch.blankWasVisible = false;
+    }
+    traceViewport({
+      location: 'followOutput.tailCrossing',
+      message: resumed
+        ? 'output caught up with the reader, so follow takes the viewport back'
+        : 'the blank closed under the reader, and follow leaves it alone',
+      data: () => ({
+        crossing,
+        resumed,
+        gestureLive,
+        viewportId,
+        blankPx: roundViewportPx(blankPx),
+        contentDeltaPx: roundViewportPx(contentDeltaPx),
+        scrollDeltaPx: roundViewportPx(scrollDeltaPx),
+        scrollTopPx: roundViewportPx(scrollTopPx),
+        contentEndPx: roundViewportPx(contentEndPx),
+        crossingIndex: watch.crossings,
+        intoWatchMs: Math.round(performance.now() - watch.openedAtMs),
+      }),
+    });
+    if (resumed) {
+      enterFollowOutput('tail-caught-up');
+    }
+  }, [
+    enterFollowOutput,
+    getTailSpacerPx,
+    readContentEndScrollTop,
+    scrollerRef,
+    viewportId,
+    viewportOwner,
+  ]);
 
   /**
    * Re-assert ownership after a layout change. This deliberately does not force
@@ -960,12 +1290,21 @@ export function useFlowChatFollowOutput({
    */
   const scheduleFollowToLatest = useCallback(() => {
     if (!isFollowingOutputRef.current || !isViewportActiveRef.current) {
+      /*
+       * This is the transcript's content-change signal — the resize observer
+       * calls it before paint on every content box change — and for a viewport
+       * nobody is following it is the one place a blank closing under a
+       * stationary reader can be seen at all. Without it the departure would
+       * only ever be sampled when the reader moved, which is the case it is not
+       * watching for.
+       */
+      sampleTailWatch();
       return;
     }
     settleFramesRef.current = SETTLE_FRAMES;
     applyFollowTarget();
     startFollowFrame();
-  }, [applyFollowTarget, startFollowFrame]);
+  }, [applyFollowTarget, sampleTailWatch, startFollowFrame]);
 
   const handleUserScrollIntent = useCallback(() => {
     pendingSnapBackTargetRef.current = null;
@@ -1004,7 +1343,13 @@ export function useFlowChatFollowOutput({
     // Scroll events describe the resulting viewport position, but do not prove user intent.
     // Layout growth and virtualizer remeasurement can emit them while output follow still owns
     // the viewport. Explicit wheel, touch, and keyboard handlers release that ownership instead.
-  }, []);
+    //
+    // The other half of the departure sampler. Without it the remembered offset
+    // goes stale whenever the reader moves and the content does not, and the
+    // next crossing is attributed to the wrong one — which here would mean
+    // handing the viewport back to a reader who is still climbing out of it.
+    sampleTailWatch();
+  }, [sampleTailWatch]);
 
   /**
    * A scroll gesture has come to rest.
@@ -1386,6 +1731,9 @@ export function useFlowChatFollowOutput({
 
   useEffect(() => stopFollowFrame, [stopFollowFrame]);
   useEffect(() => clearSnapBackRetry, [clearSnapBackRetry]);
+  // A watch the transcript outlived is not an outcome, and leaving it open
+  // would drop it from the trail entirely.
+  useEffect(() => () => closeTailWatchRef.current('unmounted'), []);
 
   return {
     isFollowingOutput,

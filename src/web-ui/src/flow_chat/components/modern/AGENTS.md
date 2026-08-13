@@ -50,6 +50,14 @@ before reporting a defect as new.
   and lands outright past it. Measured in viewports, never in pixels: the
   question is whether the reader can follow the movement, and what they can
   follow is a share of what they can see.
+- Scrolling up loses the follow only once the reader is past the end of real
+  content. Until then they are in the reserved blank, having missed nothing, and
+  output growing to fill it hands the viewport back — unless their own gesture
+  claim is still live, in which case the crossing is deferred, not spent. Judged
+  by which side moved further between two samples, never by geometry alone.
+- That watch runs for as long as the reader holds the viewport, not for one
+  crossing. A reader may climb out of the blank and scroll back down into it any
+  number of times, and each time is another chance for output to reach them.
 - Footer height represents only the current input-stack layout and real footer
   content such as history state and `RuntimeStatusSlot`. The tail spacer is a
   separate sibling and must not be folded into it.

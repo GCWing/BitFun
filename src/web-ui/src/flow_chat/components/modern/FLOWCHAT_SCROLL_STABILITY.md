@@ -190,6 +190,89 @@ picks for the same viewport state — having the two disagree would be worse tha
 either choice. The exemption therefore outlives the Turn: a short Turn stays
 pinned until a newer one replaces it.
 
+## Output Catching Up With a Reader in the Blank
+
+The snap back covers the reader who came to rest *below* the follow target.
+This covers the other edge of the same region: the reader who scrolled up out of
+the tail but is still looking at reserved blank, and whom output then overtakes.
+
+Scrolling up gives the follow away permanently, and that is right only for a
+reader who left the live region. A small scroll up may not have. The blank is up
+to `tailHoldMaxGapPx` under `hold-tail` and the whole gap under a pinned Turn,
+so the reader can be a few hundred pixels off the tail with nothing hidden from
+them at all — until output grows past the bottom edge, and they silently stop
+seeing it with no affordance saying so.
+
+So a watch runs for as long as the reader holds the viewport — from the scroll
+that took it to whatever hands it back. `scrollTop > contentEnd` is the
+predicate for "the blank is on screen", deliberately *not* the snap back's,
+which is relative to the follow target and therefore reports a reader above a
+pin as having nothing to snap back from. The watch keeps one bit between
+samples: whether the blank was on screen at the previous one. A crossing is that
+bit going from set to clear, and which side moved decides who keeps the viewport
+(`resolveTailDepartureCrossing`):
+
+- **`content-caught-up`** — the content end rose further than the reader moved.
+  Output filled the space under someone who was standing still, so follow takes
+  the viewport back.
+- **`reader-left-blank`** — the reader moved further than the content end rose.
+  They went to read history, and are left alone. The latch clears, so nothing
+  asks again until they put the blank back on screen themselves.
+
+A crossing does **not** end the watch. Scoping it to one was tried and is wrong:
+a reader who climbs out of the blank, reads for a while and scrolls back down to
+sit in it again is in exactly the position the rule exists for, and had already
+spent the single crossing they were given. The watch also opens on any exit that
+finds none open, not only the one that took the follow — every wheel notch
+exits, and only the first of them finds anything to give up.
+
+Streaming does not stop because the reader scrolled, so both sides usually move
+between samples and the tie-break above is doing real work. Two guards keep it
+honest:
+
+**A live gesture vetoes the resume.** Measured over one session's twenty
+departures: nine left blank on screen, and two of those ended `content-caught-up`
+— one a reader who had been still for 1.6s and was overtaken, one 320ms into a
+live gesture with the reader climbing 200px while content grew 237. The
+tie-break called the second for the content, correctly, and acting on it would
+have taken the viewport back mid-scroll. `user-gesture` on the register
+separates them, because a wheel claim lapses `USER_DRIVEN_SCROLL_WINDOW_MS`
+after the last notch and notches arrive faster than that. A veto *defers* the
+crossing rather than settling it — the latch stays set, so the next sample
+judges the same transition again: a reader who carries on climbing out-moves the
+content and is let go by a verdict that never needed the veto, and one who has
+stopped is followed as soon as the claim lapses.
+
+**A travelling snap back is not the reader.** It crosses the same line from the
+wrong side — downwards through the blank — so samples taken while one is in
+flight update the offsets and take no verdict.
+
+**Geometry read from two moments is not geometry.** `scrollTop` is clamped to
+`scrollHeight - clientHeight`, so no settled viewport is more than the spacer
+past the content end (`isTailBlankMeasurable`). A larger reading means the
+transcript is mid-restructure: a history prepend shifts the viewport by the
+height it inserted before that height is in the scroll range, and the blank
+between the two reads as thousands of pixels. Measured on a session that paged
+its whole history on the first scroll up — 14252px of shift against a content
+end still reading 989, a blank of 6239px. Read at face value that is a reader
+deep in the blank, which is the one state this acts on, so the next sample would
+have pulled them out of the history they had just asked for. Such a sample takes
+no verdict and does not touch the latch: a restructure says nothing about where
+the reader was standing before it.
+
+Resuming does not scroll. The blank closing *is* the two offsets meeting, so
+what remains is one sample of growth, and the follow loop's ease covers it; a
+one-shot scroll here would be a snap the reader can see for a correction they
+cannot. It also retires the pin, even when the departure happened under one: the
+pin's reservation is the blank the reader just scrolled out of, and restoring it
+would pull them back down to the offset they left.
+
+The whole watch is a ref. `followOutput.tailWatch` and
+`followOutput.tailWatchEnded` bracket it — the second carrying `crossings`, so a
+watch that never resolved anything can be told from one that resolved against
+the reader — and `followOutput.tailCrossing` records each transition with its
+verdict, both raw deltas, and whether a gesture was live.
+
 ## The Follow Eases Its Write, Never Its Target
 
 The follow target moves when the transcript reflows, and Markdown reflows a
@@ -456,6 +539,49 @@ content such as history state and `RuntimeStatusSlot`.
   reserved blank at all, and take the empty-range gap below with it.
 - A collapse larger than `tailHoldMaxGapPx` still moves the viewport, by the
   excess only.
+- **A reader who scrolls out of the blank and stops at the content end keeps no
+  follow.** Measured, and more common than the case above covers: four of nine
+  watched departures moved almost exactly the blank's height and stopped —
+  `readerMovedPx` −665.3 against a 664px blank, −294.7 against 294.7, −296
+  against 296 — then sat there for up to 2.9s. That is not reading history, it
+  is getting rid of the blank. But it ends the departure as `reader-left-blank`,
+  and the snap back cannot help either, because under a pin the reader is
+  *above* the follow target. Output then accumulates below the bottom edge
+  unseen. Deliberately not covered yet: acting on it means reading intent from a
+  resting position that has content in it, which is the thing the snap back's
+  licence explicitly does not extend to.
+- **Paging a long history while still scrolling throws the reading position a
+  long way.** Reproduced four times: a session opened on its three-Turn tail
+  pages the rest on the first scroll up, the prepend is compensated, and the
+  reader keeps wheeling through the settle that follows. Their Turn is out of
+  the rendered window for the whole of it, so `captureAnchorForScroll` cannot
+  re-capture and carries instead — adding each scroll to the Turn's expected
+  offset with no DOM to check the result against. Measured: three attempts,
+  5532.7px, an anchor agreed at 112.6px from the viewport top becoming one
+  agreed at 3356px in a 985px viewport, and a −1349px correction computed
+  against that. Worst case it clamps at `scrollTop: 0` with the session's first
+  Turn at the top. `ANCHOR_MISSING_TURN_ATTEMPTS` does not bound it — that is
+  frames, not distance.
+
+  **Three fixes were tried and reverted; do not re-derive them.** *Refuse a
+  correction whose offset left the viewport* — an anchored offset legitimately
+  leaves it, both when the reader scrolls past their own Turn and when a
+  registered writer's travel is taken out, and each has a test asserting the
+  correction that follows. *Subtract the browser's clamp,*
+  `previousScrollTop - max(0, scrollHeight - clientHeight)` — unsound, because
+  the previous offset was valid at the previous range, so any shrink at all
+  makes it exceed the new maximum whether or not the viewport was ever clamped;
+  measured, it took 2790.7px off a descent the reader had made themselves.
+  *Track the smallest range since the last credit* — the floor came back equal
+  to the current range, so no dip was ever observed. `overflow-anchor` is a dead
+  end too: already `none` on every scrolling box here.
+
+  What the four logs do establish: the reader is wheeling continuously
+  throughout (the `user-gesture` claims are coalesced, so read `suppressedCount`
+  before concluding they stopped), and the descent is largely theirs. The next
+  attempt should probably bound the *result* — an offset several screens outside
+  the viewport is wrong whatever put it there — rather than try to attribute the
+  movement, which is what all three failures had in common.
 - An animated scroll aims at the target it was issued for. Jumping to latest
   while output is arriving therefore ends with one catch-up step covering
   whatever content grew during the animation — under the ease's snap threshold

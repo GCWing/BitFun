@@ -3,10 +3,13 @@ import {
   contentEndScrollTop,
   FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
+  isTailBlankMeasurable,
   isViewportAtTail,
   memorylessFollowState,
   nextTailFollowState,
   resolveAnimatedJumpBehavior,
+  resolveTailDepartureCrossing,
+  shouldResumeFollowAfterDeparture,
   tailHoldMaxGapPx,
   tailSnapBackScrollTop,
   tailSpacerPxForViewport,
@@ -409,5 +412,132 @@ describe('resolveAnimatedJumpBehavior', () => {
       targetPx: 0,
       clientHeight: 0,
     })).toBe('auto');
+  });
+});
+
+describe('resolveTailDepartureCrossing', () => {
+  it('keeps watching while the blank is still on screen', () => {
+    expect(resolveTailDepartureCrossing({
+      blankPx: 180,
+      contentDeltaPx: 40,
+      scrollDeltaPx: 0,
+    })).toBe('watching');
+  });
+
+  it('reads content rising to meet a stationary reader as the tail catching up', () => {
+    // The case the resume acts on: the reader has not moved, and the empty
+    // space they were left looking at has just been filled.
+    expect(resolveTailDepartureCrossing({
+      blankPx: -12,
+      contentDeltaPx: 190,
+      scrollDeltaPx: 0,
+    })).toBe('content-caught-up');
+  });
+
+  it('reads a reader climbing out past a still content end as reading history', () => {
+    expect(resolveTailDepartureCrossing({
+      blankPx: -240,
+      contentDeltaPx: 0,
+      scrollDeltaPx: -420,
+    })).toBe('reader-left-blank');
+  });
+
+  it('gives a crossing where both moved to whichever moved further', () => {
+    // Streaming does not stop because the reader scrolled, so both sides move
+    // between samples and the tie-break decides. Callers record the two deltas
+    // beside the verdict so this line can be revisited from the trail.
+    expect(resolveTailDepartureCrossing({
+      blankPx: -5,
+      contentDeltaPx: 120,
+      scrollDeltaPx: -40,
+    })).toBe('content-caught-up');
+    expect(resolveTailDepartureCrossing({
+      blankPx: -5,
+      contentDeltaPx: 40,
+      scrollDeltaPx: -120,
+    })).toBe('reader-left-blank');
+  });
+
+  it('counts the blank as gone the moment content reaches the bottom edge', () => {
+    // `blankPx` is `scrollTop - contentEnd`, so zero is the content end exactly
+    // on the viewport's bottom edge — no blank, and the departure is over.
+    expect(resolveTailDepartureCrossing({
+      blankPx: 0,
+      contentDeltaPx: 30,
+      scrollDeltaPx: 0,
+    })).toBe('content-caught-up');
+    expect(resolveTailDepartureCrossing({
+      blankPx: 0.5,
+      contentDeltaPx: 30,
+      scrollDeltaPx: 0,
+    })).toBe('watching');
+  });
+
+  it('does not read a shrinking transcript as the reader leaving', () => {
+    // A tool card collapsing moves the content end *down*, which cannot end a
+    // departure — and if it somehow coincides with a crossing, a negative
+    // content delta must not out-vote the reader.
+    expect(resolveTailDepartureCrossing({
+      blankPx: -30,
+      contentDeltaPx: -200,
+      scrollDeltaPx: -60,
+    })).toBe('reader-left-blank');
+  });
+});
+
+describe('isTailBlankMeasurable', () => {
+  it('accepts a blank the reserved spacer can account for', () => {
+    expect(isTailBlankMeasurable({ blankPx: SPACER, tailSpacerPx: SPACER })).toBe(true);
+    expect(isTailBlankMeasurable({ blankPx: -400, tailSpacerPx: SPACER })).toBe(true);
+  });
+
+  it('refuses a blank larger than the whole spacer, which cannot have been seen', () => {
+    /*
+     * `scrollTop` is clamped to `scrollHeight - clientHeight`, so a settled
+     * viewport is never more than the spacer past the content end. Measured on
+     * a session that paged its whole history on the first scroll up: the
+     * prepend shifted the viewport 14252px to hold the reader's Turn still,
+     * against a content end still reading 989 — a blank of 6239px in a
+     * transcript reserving a few hundred.
+     */
+    expect(isTailBlankMeasurable({ blankPx: 6239, tailSpacerPx: SPACER })).toBe(false);
+  });
+});
+
+describe('shouldResumeFollowAfterDeparture', () => {
+  it('takes the viewport back when output caught up with a reader who had stopped', () => {
+    expect(shouldResumeFollowAfterDeparture({
+      crossing: 'content-caught-up',
+      gestureLive: false,
+    })).toBe(true);
+  });
+
+  it('leaves a reader who is still scrolling alone, whatever the geometry says', () => {
+    /*
+     * Measured, and the reason the gesture is an input at all: 320ms into a
+     * live gesture the reader had climbed 200px while content grew 237, so the
+     * tie-break called the crossing for the content — correctly — and acting on
+     * it would have taken the viewport back mid-scroll.
+     */
+    expect(shouldResumeFollowAfterDeparture({
+      crossing: 'content-caught-up',
+      gestureLive: true,
+    })).toBe(false);
+  });
+
+  it('never resumes for a reader who climbed out past the content end', () => {
+    // Reading history is the case the whole departure exists to tell apart, and
+    // a lapsed gesture claim does not make it something else.
+    expect(shouldResumeFollowAfterDeparture({
+      crossing: 'reader-left-blank',
+      gestureLive: false,
+    })).toBe(false);
+  });
+
+  it('decides nothing while the departure is still open', () => {
+    expect(shouldResumeFollowAfterDeparture({
+      crossing: 'watching',
+      gestureLive: false,
+    })).toBe(false);
   });
 });

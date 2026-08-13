@@ -126,6 +126,25 @@ group does not renumber the others.
    be gone — this is the one path where the viewport arrives at the tail
    without a scroll event to notice it.
 
+### Output catching up with a reader in the blank
+
+1. Send a message so a short Turn pins with blank below it, then wheel up a
+   little — far enough to leave the tail, not far enough to push the blank off
+   screen — and take your hand off. As the answer grows past the bottom edge the
+   transcript must resume following, easing rather than snapping, and the
+   jump-to-latest affordance must disappear with it.
+2. The same scroll, but keep wheeling. The transcript must not take the viewport
+   back mid-gesture, and once you are above the end of content it must leave you
+   there however much more arrives — until you go back down yourself.
+3. Scroll up past the end of content, stop, and let output arrive. Nothing may
+   move. This is the case the rule must never claim.
+4. From there — above the end of content, follow long gone — scroll back *down*
+   until the blank shows again and stop. Follow must resume as output reaches
+   the bottom edge. Repeat it a third time. Nothing about this is once-only.
+5. With no blank on screen at all — a transcript that fills the viewport, mid
+   answer — scroll up a little. Follow must not resume until you bring the blank
+   back on screen; nothing was crossed.
+
 ### The scrollbar
 
 1. Drag the scrollbar to the very bottom. The screen must not be entirely

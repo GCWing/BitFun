@@ -228,6 +228,119 @@ export function tailSnapBackScrollTop(input: TailSnapBackInput): number | null {
     : null;
 }
 
+export type TailDepartureCrossing =
+  /** The blank is still on screen; nothing has been crossed. */
+  | 'watching'
+  /** Output grew until the blank was gone under a reader who stayed put. */
+  | 'content-caught-up'
+  /** The reader scrolled up past the end of content. Reading history. */
+  | 'reader-left-blank';
+
+/**
+ * Where a reader stands relative to the reserved blank, and who moved them
+ * there.
+ *
+ * Losing the follow permanently is right only for a reader who left the live
+ * region, and `scrollTop > contentEnd` says they have not. The reserved blank
+ * is up to `tailHoldMaxGapPx` under `hold-tail` and the whole gap under a
+ * pinned Turn, so a small scroll up can leave the reader looking at empty space
+ * below the newest output — nothing hidden from them yet — until output grows
+ * past the bottom edge and they silently stop seeing it.
+ *
+ * Note this is deliberately *not* the predicate `tailSnapBackScrollTop` uses.
+ * That one is relative to the follow target, and under a pin the target sits
+ * inside the blank, so a reader above it is reported as having nothing to snap
+ * back from. These are the two edges of the same region.
+ *
+ * `watching` is a *position*, not a pending outcome: the blank is on screen
+ * right now. It says nothing about whether the reader has ever left it, and the
+ * caller is the one that remembers — the transition from `watching` to either
+ * verdict is the event, and a reader who has been above the content end for
+ * minutes reports `reader-left-blank` on every sample without anything having
+ * happened.
+ *
+ * The two ways out are told apart by which side moved. Content rising to meet a
+ * stationary reader is the case `shouldResumeFollowAfterDeparture` acts on; a
+ * reader climbing out past a stationary content end is the case it must leave
+ * alone. When both moved, the larger one is the cause — and callers record the
+ * raw deltas beside the verdict, so the tie-break can be revisited from the
+ * trail.
+ */
+export function resolveTailDepartureCrossing(input: {
+  /** `scrollTop - contentEndScrollTop` now. Positive while blank is on screen. */
+  blankPx: number;
+  /** How far the content end rose since the previous sample. */
+  contentDeltaPx: number;
+  /** How far the reader moved the viewport since the previous sample. */
+  scrollDeltaPx: number;
+}): TailDepartureCrossing {
+  if (input.blankPx > 0) {
+    return 'watching';
+  }
+  return input.contentDeltaPx >= Math.abs(input.scrollDeltaPx)
+    ? 'content-caught-up'
+    : 'reader-left-blank';
+}
+
+/**
+ * Whether a departure that has just ended hands the viewport back to follow.
+ *
+ * `content-caught-up` is the case the whole rule exists for, but it is not
+ * sufficient on its own. Streaming does not stop because the reader scrolled,
+ * so a reader still working the wheel can cross the same line by scrolling into
+ * output that is rising to meet them — and resuming there takes the viewport
+ * out of their hands while their hand is still on it.
+ *
+ * Measured over one session's twenty departures: nine left blank on screen, and
+ * exactly two of those ended `content-caught-up`. One was a reader who had
+ * stopped 1.6s earlier and was overtaken by output, which is the case to act
+ * on. The other was 320ms into a live gesture, with the reader climbing 200px
+ * while content grew 237 — the tie-break called it for the content, correctly,
+ * and acting on it would have yanked the viewport back mid-scroll. The register
+ * separates the two cleanly, because a wheel claim lapses
+ * `USER_DRIVEN_SCROLL_WINDOW_MS` after the last notch and notches arrive faster
+ * than that.
+ *
+ * A refusal here defers the crossing rather than settling it. The caller keeps
+ * its "blank was visible" latch, so the same transition is judged again on the
+ * next sample: a reader who carries on climbing out-moves the content and is
+ * let go by a verdict that never needed the veto, and one who has stopped is
+ * followed as soon as the claim lapses. Nothing has to be given up to stay off
+ * a live gesture — only postponed by one sample.
+ */
+export function shouldResumeFollowAfterDeparture(input: {
+  crossing: TailDepartureCrossing;
+  /** Whether the reader's own claim on the viewport is still live. */
+  gestureLive: boolean;
+}): boolean {
+  return input.crossing === 'content-caught-up' && !input.gestureLive;
+}
+
+/**
+ * Whether the blank a sample just measured can be real.
+ *
+ * `scrollTop` is clamped to `scrollHeight - clientHeight`, and the spacer is
+ * everything below the end of real content, so no settled viewport can be more
+ * than `tailSpacerPx` past it. A larger reading means the two halves were read
+ * from different moments — the transcript has been restructured and the browser
+ * has not clamped `scrollTop` to the new range yet, or something wrote the
+ * offset to compensate for content that has not been measured.
+ *
+ * Measured on a session that paged its whole history on the first scroll up:
+ * the prepend shifted the viewport 14252px to hold the reader's Turn still,
+ * against a content end that was still 989 — a blank of 6239px in a transcript
+ * whose spacer reserves a few hundred. Read as a reader sitting deep in the
+ * blank, which is the one state the follow rule is watching for, so the next
+ * sample would have handed the viewport to follow and pulled them out of the
+ * history they had just asked for.
+ */
+export function isTailBlankMeasurable(input: {
+  blankPx: number;
+  tailSpacerPx: number;
+}): boolean {
+  return input.blankPx <= input.tailSpacerPx;
+}
+
 export interface ViewportAtTailInput {
   scrollTop: number;
   contentEndScrollTop: number;

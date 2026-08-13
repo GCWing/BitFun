@@ -1544,4 +1544,237 @@ describe('useFlowChatFollowOutput', () => {
       expect(controller?.isFollowingOutputNow()).toBe(true);
     });
   });
+
+  /*
+   * Scrolling up gives the follow away, and the reserved blank is what makes
+   * that too blunt on its own: a reader can leave the tail by a hundred pixels
+   * and still be looking at empty space below the newest output, having missed
+   * nothing. The departure watches those readers until the blank is gone, and
+   * which side closed it decides who keeps the viewport.
+   */
+  describe('resuming a follow that output caught up with', () => {
+    const CONTENT_END = 1_000;
+    let viewportOwner: FlowChatViewportOwnerApi | null = null;
+
+    /** Move the end of real content, leaving the viewport where it is. */
+    function setContentEnd(contentEndPx: number) {
+      Object.defineProperty(scroller, 'scrollHeight', {
+        configurable: true,
+        value: contentEndPx + VIEWPORT + TAIL_SPACER,
+      });
+    }
+
+    /**
+     * Mount a following transcript, then have the reader take the viewport from
+     * `blankPx` into the reserved blank — `0` being the end of real content, on
+     * the viewport's bottom edge. Returns the one-shot scroll, so a test can
+     * assert nothing reached for it.
+     */
+    function departWithBlank(blankPx: number) {
+      const scrollToContentEnd = vi.fn();
+      setScrollerMetrics(scroller, {
+        scrollHeight: CONTENT_END + VIEWPORT + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: CONTENT_END,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            scroller={scroller}
+            scrollToContentEnd={scrollToContentEnd}
+            onController={next => { controller = next; }}
+            onViewportOwner={next => { viewportOwner = next; }}
+          />,
+        );
+      });
+      expect(controller?.isFollowingOutput).toBe(true);
+      scrollToContentEnd.mockClear();
+      frames.length = 0;
+
+      scroller.scrollTop = CONTENT_END + blankPx;
+      act(() => controller?.handleUserScrollIntent());
+      expect(controller?.isFollowingOutput).toBe(false);
+      return scrollToContentEnd;
+    }
+
+    it('takes the viewport back when output fills the blank under a stationary reader', () => {
+      departWithBlank(100);
+
+      // The resize observer's signal, which is the only one that arrives when
+      // the content moves and the reader does not.
+      setContentEnd(CONTENT_END + 150);
+      act(() => controller?.scheduleFollowToLatest());
+
+      expect(controller?.isFollowingOutput).toBe(true);
+    });
+
+    it('resumes where the reader is instead of scrolling them to the end', () => {
+      const scrollToContentEnd = departWithBlank(100);
+      setContentEnd(CONTENT_END + 150);
+      act(() => controller?.scheduleFollowToLatest());
+
+      // Nothing to travel that the follow loop is not already about to cover:
+      // the blank closing *is* the two offsets meeting. What is left is the one
+      // sample of growth that closed it, and the loop eases that away — a
+      // quarter of the 50px on the first frame it runs, which is the one the
+      // resume's own re-render asks for.
+      expect(scrollToContentEnd).not.toHaveBeenCalled();
+      expect(scroller.scrollTop).toBe(CONTENT_END + 100 + 50 * TAIL_EASE_ALPHA);
+    });
+
+    it('leaves the viewport with a reader whose hand is still on it', () => {
+      /*
+       * Measured: 320ms into a live gesture, a reader had climbed 200px while
+       * content grew 237, so the crossing was attributed to the content — which
+       * is correct, and acting on it would still have been wrong.
+       */
+      departWithBlank(400);
+      viewportOwner?.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+
+      scroller.scrollTop = CONTENT_END + 200;
+      setContentEnd(CONTENT_END + 237);
+      act(() => controller?.handleScroll());
+
+      expect(controller?.isFollowingOutput).toBe(false);
+    });
+
+    it('leaves a reader who climbed out past the content end reading history', () => {
+      departWithBlank(100);
+
+      scroller.scrollTop = CONTENT_END - 300;
+      act(() => controller?.handleScroll());
+      // Output arriving afterwards must not fetch them back down.
+      setContentEnd(CONTENT_END + 150);
+      act(() => controller?.scheduleFollowToLatest());
+
+      expect(controller?.isFollowingOutput).toBe(false);
+    });
+
+    it('leaves a reader who was never in the blank where they are', () => {
+      // Nothing crossed: they were above the end of content when they took the
+      // viewport and they are still above it. Only a transition is a question.
+      departWithBlank(0);
+
+      setContentEnd(CONTENT_END + 150);
+      act(() => controller?.scheduleFollowToLatest());
+
+      expect(controller?.isFollowingOutput).toBe(false);
+    });
+
+    it('follows a reader who left the blank and came back down into it', () => {
+      /*
+       * The case a per-departure watch got wrong, and the reason the watch runs
+       * for as long as the reader holds the viewport. Measured as a report:
+       * scroll up until the blank is gone, scroll back down until it shows
+       * again, wait — and nothing happened, because the one crossing the watch
+       * was given had been spent on the way up.
+       */
+      departWithBlank(400);
+
+      // Up and out of the blank entirely.
+      scroller.scrollTop = CONTENT_END - 200;
+      act(() => controller?.handleScroll());
+      expect(controller?.isFollowingOutput).toBe(false);
+
+      // Back down until the blank is on screen again, and stop.
+      scroller.scrollTop = CONTENT_END + 300;
+      act(() => controller?.handleScroll());
+      expect(controller?.isFollowingOutput).toBe(false);
+
+      setContentEnd(CONTENT_END + 300);
+      act(() => controller?.scheduleFollowToLatest());
+
+      expect(controller?.isFollowingOutput).toBe(true);
+    });
+
+    it('watches a reader who took the viewport from a follow that was already gone', () => {
+      // Every wheel notch exits, and only the first finds follow to give up.
+      // Gating the watch on that notch left the rest of the gesture unwatched.
+      departWithBlank(0);
+      act(() => controller?.handleUserScrollIntent());
+
+      scroller.scrollTop = CONTENT_END + 300;
+      act(() => controller?.handleScroll());
+      setContentEnd(CONTENT_END + 300);
+      act(() => controller?.scheduleFollowToLatest());
+
+      expect(controller?.isFollowingOutput).toBe(true);
+    });
+
+    it('reads nothing into a viewport a history prepend has just shifted', () => {
+      /*
+       * Measured: a session opened on three Turns, one scroll up paged the whole
+       * seven, and the prepend shifted the viewport 14252px to hold the reader's
+       * Turn still — before those heights were in the scroll range, so the blank
+       * between the two read as 6239px against a spacer of a few hundred. Taken
+       * at face value that is a reader sitting deep in the blank, which is the
+       * one state this rule acts on, and the next sample would have pulled them
+       * out of the history they had just asked for.
+       */
+      departWithBlank(0);
+
+      // The compensation: the viewport moves, the content end has not caught up.
+      scroller.scrollTop = CONTENT_END + TAIL_SPACER + 5_000;
+      act(() => controller?.handleScroll());
+      // ...and now it has. Nothing crossed, because nothing was ever measured.
+      setContentEnd(CONTENT_END + TAIL_SPACER + 5_000);
+      act(() => controller?.scheduleFollowToLatest());
+
+      expect(controller?.isFollowingOutput).toBe(false);
+    });
+
+    it('judges a vetoed crossing again rather than spending it', () => {
+      /*
+       * The veto is about the reader's hand being on the wheel, not about the
+       * crossing being wrong. Deferring costs one sample; settling it would cost
+       * the whole episode.
+       */
+      departWithBlank(400);
+      viewportOwner?.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+
+      setContentEnd(CONTENT_END + 400);
+      act(() => controller?.scheduleFollowToLatest());
+      expect(controller?.isFollowingOutput).toBe(false);
+
+      // The claim lapses, the reader has not moved, and output is still coming.
+      viewportOwner?.release('user-gesture');
+      setContentEnd(CONTENT_END + 420);
+      act(() => controller?.scheduleFollowToLatest());
+
+      expect(controller?.isFollowingOutput).toBe(true);
+    });
+
+    it('lets a reader who kept climbing through a vetoed crossing go', () => {
+      departWithBlank(400);
+      viewportOwner?.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+
+      setContentEnd(CONTENT_END + 400);
+      act(() => controller?.scheduleFollowToLatest());
+      expect(controller?.isFollowingOutput).toBe(false);
+
+      // Still climbing, and now out-moving the content: the deferred crossing
+      // resolves against them, and the latch is spent for good.
+      scroller.scrollTop = CONTENT_END + 100;
+      setContentEnd(CONTENT_END + 410);
+      act(() => controller?.handleScroll());
+      viewportOwner?.release('user-gesture');
+      setContentEnd(CONTENT_END + 430);
+      act(() => controller?.scheduleFollowToLatest());
+
+      expect(controller?.isFollowingOutput).toBe(false);
+    });
+
+    it('keeps watching while the blank is only partly filled', () => {
+      departWithBlank(400);
+
+      setContentEnd(CONTENT_END + 150);
+      act(() => controller?.scheduleFollowToLatest());
+      expect(controller?.isFollowingOutput).toBe(false);
+
+      setContentEnd(CONTENT_END + 400);
+      act(() => controller?.scheduleFollowToLatest());
+      expect(controller?.isFollowingOutput).toBe(true);
+    });
+  });
 });
