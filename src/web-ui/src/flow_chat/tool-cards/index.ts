@@ -14,9 +14,11 @@ export {
   READ_TOOL_NAMES,
   SEARCH_TOOL_NAMES,
   COMMAND_TOOL_NAMES,
+  DEDICATED_TOOL_CARD_NAMES,
   isCollapsibleTool,
   isCollapsibleItem,
   isCollapsibleItemWithContext,
+  usesDefaultToolCard,
 } from './toolCardMetadata';
 
 const log = createLogger('ToolCardRegistry');

@@ -11,10 +11,26 @@ vi.mock('./FlowChatStore', () => ({
 }));
 
 vi.mock('../tool-cards/toolCardMetadata', () => ({
-  isCollapsibleTool: (toolName: string) => ['Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash', 'Git'].includes(toolName),
+  isCollapsibleTool: (toolName: string) => [
+    'Read',
+    'LS',
+    'Grep',
+    'Glob',
+    'WebSearch',
+    'WebFetch',
+    'GetFileDiff',
+    'GetToolSpec',
+    'ReviewSessionSummary',
+    'TerminalControl',
+    'SessionControl',
+    'ExecControl',
+    'view_image',
+    'ReadCanvas',
+    'ControlHub',
+  ].includes(toolName),
   READ_TOOL_NAMES: new Set(['Read']),
   SEARCH_TOOL_NAMES: new Set(['Grep', 'Glob', 'WebSearch']),
-  COMMAND_TOOL_NAMES: new Set(['Bash', 'Git']),
+  COMMAND_TOOL_NAMES: new Set(),
 }));
 
 import { sessionToVirtualItems, type VirtualItem } from './modernFlowChatStore';
@@ -135,6 +151,70 @@ describe('sessionToVirtualItems explore grouping', () => {
 
     expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
   });
+
+  it.each([
+    'WebFetch',
+    'GetFileDiff',
+    'GetToolSpec',
+    'ReviewSessionSummary',
+    'TerminalControl',
+    'SessionControl',
+    'ExecControl',
+    'view_image',
+    'ReadCanvas',
+    'ControlHub',
+  ])('collects non-critical %s rounds into explore groups', (toolName) => {
+    const session = makeSession({
+      sessionId: `non-critical-${toolName}`,
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: `non-critical-${toolName}`,
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound({
+          items: [makeTool(`tool-${toolName}`, toolName)],
+        })],
+        status: 'completed',
+        startTime: 900,
+      }],
+    });
+
+    expect(sessionToVirtualItems(session).map(item => item.type)).toEqual([
+      'user-message',
+      'explore-group',
+    ]);
+  });
+
+  it.each(['Bash', 'Git', 'ExecCommand', 'TodoWrite', 'ContextCompression', 'Skill', 'SessionMessage'])(
+    'keeps conditionally important %s rounds visible',
+    (toolName) => {
+      const session = makeSession({
+        sessionId: `critical-${toolName}`,
+        dialogTurns: [{
+          id: 'turn-1',
+          sessionId: `critical-${toolName}`,
+          userMessage: {
+            id: 'user-1',
+            content: 'Help',
+            timestamp: 900,
+          },
+          modelRounds: [makeRound({
+            items: [makeTool(`tool-${toolName}`, toolName)],
+          })],
+          status: 'completed',
+          startTime: 900,
+        }],
+      });
+
+      expect(sessionToVirtualItems(session).map(item => item.type)).toEqual([
+        'user-message',
+        'model-round',
+      ]);
+    },
+  );
 
   it('projects the absolute Turn index for a sparse history-window message', () => {
     const session = makeSession({

@@ -498,13 +498,79 @@ export function getAllToolNames(): string[] {
 
 // ==================== Collapsible explorer tools ====================
 
+/**
+ * Tools with a dedicated FlowChat card renderer.
+ *
+ * Keep this lightweight mirror aligned with TOOL_CARD_COMPONENTS. The registry
+ * test enforces equality so classification callers do not need to import every
+ * card component just to tell dedicated cards from the DefaultToolCard.
+ */
+export const DEDICATED_TOOL_CARD_NAMES = new Set([
+  'Read',
+  'Write',
+  'Edit',
+  'Delete',
+  'Grep',
+  'Glob',
+  'LS',
+  'WebSearch',
+  'WebFetch',
+  'Task',
+  'LaunchReviewAgent',
+  'TodoWrite',
+  'submit_code_review',
+  'ContextCompression',
+  'GetToolSpec',
+  'Skill',
+  'AskUserQuestion',
+  'ReviewSessionSummary',
+  'Git',
+  'GetFileDiff',
+  'CreatePlan',
+  'TerminalControl',
+  'SessionControl',
+  'SessionMessage',
+  'Bash',
+  'ExecCommand',
+  'WriteStdin',
+  'ExecControl',
+  'InitMiniApp',
+  'PageDeploy',
+  'PagePublish',
+  'GenerativeUI',
+  'ComputerUse',
+  'view_image',
+  'CreateCanvas',
+  'ReadCanvas',
+  'UpdateCanvas',
+  'PatchCanvas',
+]);
+
+/** Whether FlowChat renders this tool through DefaultToolCard. */
+export function usesDefaultToolCard(toolName: string): boolean {
+  return !isMcpToolName(toolName) && !DEDICATED_TOOL_CARD_NAMES.has(toolName);
+}
+
 
 /**
- * Collapsible explorer tools.
- * They are auto-collapsed during streaming to reduce visual noise.
+ * Explicit non-critical tools collected into explore groups.
+ * Tools rendered by DefaultToolCard are also collected; see isCollapsibleTool.
  */
 export const COLLAPSIBLE_TOOL_NAMES = new Set([
-  'Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash', 'Git',
+  'Read',
+  'LS',
+  'Grep',
+  'Glob',
+  'WebSearch',
+  'WebFetch',
+  'GetFileDiff',
+  'GetToolSpec',
+  'ReviewSessionSummary',
+  'TerminalControl',
+  'SessionControl',
+  'ExecControl',
+  'view_image',
+  'ReadCanvas',
 ]);
 
 /** Read tools (counted in readCount). */
@@ -514,11 +580,11 @@ export const READ_TOOL_NAMES = new Set(['Read', 'LS']);
 export const SEARCH_TOOL_NAMES = new Set(['Grep', 'Glob', 'WebSearch']);
 
 /** Command tools (counted in commandCount). */
-export const COMMAND_TOOL_NAMES = new Set(['Bash', 'Git']);
+export const COMMAND_TOOL_NAMES = new Set<string>();
 
 /** Check whether a tool is collapsible. */
 export function isCollapsibleTool(toolName: string): boolean {
-  return COLLAPSIBLE_TOOL_NAMES.has(toolName);
+  return COLLAPSIBLE_TOOL_NAMES.has(toolName) || usesDefaultToolCard(toolName);
 }
 
 /**
