@@ -21,7 +21,7 @@ import {
 } from '@/infrastructure/peer-device/peerModeFlag';
 import { CubeLoading, Button } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
-import CodeEditor from './CodeEditor';
+import CodeEditor, { MAX_TEXT_FILE_SIZE_BYTES } from './CodeEditor';
 import {
   diskVersionFromMetadata,
   diskVersionsDiffer,
@@ -40,10 +40,10 @@ import 'highlight.js/styles/github-dark.css';
 const log = createLogger('MarkdownEditor');
 
 const FILE_SYNC_POLL_INTERVAL_MS = 1000;
-export const MARKDOWN_RICH_EDITOR_MAX_BYTES = 2 * 1024 * 1024;
+export const MARKDOWN_RICH_EDITOR_MAX_BYTES = 512 * 1024;
 
 export function shouldUseLargeMarkdownSourceMode(fileSize?: number): boolean {
-  return typeof fileSize === 'number' && fileSize > MARKDOWN_RICH_EDITOR_MAX_BYTES;
+  return typeof fileSize === 'number' && fileSize >= MARKDOWN_RICH_EDITOR_MAX_BYTES;
 }
 
 function getPollOffsetMs(filePath: string): number {
@@ -102,8 +102,10 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const [unsafeViewMode, setUnsafeViewMode] = useState<'source' | 'preview'>('source');
   const [loading, setLoading] = useState(!!filePath);
   const [error, setError] = useState<string | null>(null);
+  const [fileTooLarge, setFileTooLarge] = useState(false);
   const [copied, setCopied] = useState(false);
   const [useLargeFileSourceMode, setUseLargeFileSourceMode] = useState(false);
+  const [largeFilePreviewLoading, setLargeFilePreviewLoading] = useState(false);
   const [editability, setEditability] = useState<MarkdownEditabilityAnalysis>(() => analyzeMarkdownEditability(initialContent));
   const editorRef = useRef<EditorInstance>(null);
   const isUnmountedRef = useRef(false);
@@ -191,6 +193,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
     setLoading(true);
     setError(null);
+    setFileTooLarge(false);
 
     try {
       const { workspaceAPI } = await import('@/infrastructure/api');
@@ -205,8 +208,26 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           if (v) {
             diskVersionRef.current = v;
           }
+          if (typeof fileInfo.size === 'number' && fileInfo.size >= MAX_TEXT_FILE_SIZE_BYTES) {
+            setFileTooLarge(true);
+            setError(t('editor.common.fileTooLarge'));
+            return;
+          }
           if (shouldUseLargeMarkdownSourceMode(fileInfo.size)) {
             setUseLargeFileSourceMode(true);
+            if (!isUnmountedRef.current) {
+              const largeFileEditability = analyzeMarkdownEditability('');
+              setUnsafeViewMode('source');
+              setContent('');
+              contentRef.current = '';
+              setEditability({
+                ...largeFileEditability,
+                canonicalMarkdown: '',
+                mode: 'unsafe',
+              });
+              setHasChanges(false);
+              lastReportedDirtyRef.current = false;
+            }
             return;
           }
         }
@@ -256,6 +277,35 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       }
     }
   }, [fetchFileMetadata, filePath, reportFileMissingFromDisk, t, toNormalizedMarkdown]);
+
+  const showLargeFilePreview = useCallback(async () => {
+    if (!useLargeFileSourceMode || !filePath) {
+      setUnsafeViewMode('preview');
+      return;
+    }
+
+    if (contentRef.current) {
+      setUnsafeViewMode('preview');
+      return;
+    }
+
+    setLargeFilePreviewLoading(true);
+    try {
+      const { workspaceAPI } = await import('@/infrastructure/api');
+      const fileContent = await workspaceAPI.readFileContent(filePath);
+      if (!isUnmountedRef.current) {
+        contentRef.current = fileContent;
+        setContent(fileContent);
+        setUnsafeViewMode('preview');
+      }
+    } catch (err) {
+      log.warn('Failed to load large Markdown preview', err);
+    } finally {
+      if (!isUnmountedRef.current) {
+        setLargeFilePreviewLoading(false);
+      }
+    }
+  }, [filePath, useLargeFileSourceMode]);
 
   // Initial file load - only run once when filePath changes
   const loadFileContentCalledRef = useRef(false);
@@ -662,43 +712,12 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         <div className="error-content">
           <AlertCircle className="error-icon" />
           <p>{error}</p>
-          {filePath && (
+          {filePath && !fileTooLarge && (
             <Button variant="secondary" size="small" onClick={loadFileContent}>
               {t('editor.common.retry')}
             </Button>
           )}
         </div>
-      </div>
-    );
-  }
-
-  if (useLargeFileSourceMode && filePath) {
-    return (
-      <div className={`bitfun-markdown-editor ${className}`}>
-        <CodeEditor
-          filePath={filePath}
-          workspacePath={workspacePath}
-          fileName={filePath.split(/[/\\]/).pop() || fileName}
-          language="markdown"
-          readOnly={readOnly}
-          showLineNumbers={true}
-          showMinimap={false}
-          jumpToLine={jumpToLine}
-          jumpToColumn={jumpToColumn}
-          isActiveTab={isActiveTab}
-          onFileMissingFromDiskChange={onFileMissingFromDiskChange}
-          onContentChange={(_newContent, dirty) => {
-            if (lastReportedDirtyRef.current === dirty) {
-              return;
-            }
-            lastReportedDirtyRef.current = dirty;
-            onContentChangeRef.current?.(_newContent, dirty);
-          }}
-          onSave={(savedContent) => {
-            lastReportedDirtyRef.current = false;
-            onContentChangeRef.current?.(savedContent, false);
-          }}
-        />
       </div>
     );
   }
@@ -733,7 +752,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               size="small"
               variant={unsafeViewMode === 'preview' ? 'primary' : 'secondary'}
               className="bitfun-markdown-editor__toolbar-button"
-              onClick={() => setUnsafeViewMode('preview')}
+              onClick={() => void showLargeFilePreview()}
+              disabled={largeFilePreviewLoading}
               aria-pressed={unsafeViewMode === 'preview'}
             >
               {t('editor.markdownEditor.preview')}
@@ -759,7 +779,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           </div>
         </div>
         <div className="bitfun-markdown-editor__unsafe-body" data-bf-component="markdown-editor" data-bf-part="body">
-          {unsafeViewMode === 'source' ? (
+          <div className="bitfun-markdown-editor__unsafe-panel" hidden={unsafeViewMode !== 'source'}>
             <CodeEditor
               filePath={filePath}
               workspacePath={workspacePath}
@@ -770,7 +790,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               showMinimap={true}
               jumpToLine={jumpToLine}
               jumpToColumn={jumpToColumn}
-              isActiveTab={isActiveTab}
+              isActiveTab={isActiveTab && unsafeViewMode === 'source'}
               onFileMissingFromDiskChange={onFileMissingFromDiskChange}
               onContentChange={(newContent, dirty) => {
                 contentRef.current = newContent;
@@ -789,22 +809,30 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
                 onContentChangeRef.current?.(contentRef.current, false);
               }}
             />
-          ) : (
-            <MEditor
-              ref={editorRef}
-              value={content}
-              onChange={handleContentChange}
-              onSave={handleSave}
-              onDirtyChange={handleDirtyChange}
-              mode="preview"
-              height="100%"
-              width="100%"
-              placeholder={t('editor.markdownEditor.placeholder')}
-              readonly={true}
-              toolbar={false}
-              filePath={filePath}
-              basePath={basePath}
-            />
+          </div>
+          {unsafeViewMode === 'preview' && (
+            <div className="bitfun-markdown-editor__unsafe-panel">
+              {largeFilePreviewLoading ? (
+                <CubeLoading size="medium" text={t('editor.markdownEditor.loadingFile')} />
+              ) : (
+                <MEditor
+                  ref={editorRef}
+                  value={content}
+                  progressivePreview={useLargeFileSourceMode}
+                  onChange={handleContentChange}
+                  onSave={handleSave}
+                  onDirtyChange={handleDirtyChange}
+                  mode="preview"
+                  height="100%"
+                  width="100%"
+                  placeholder={t('editor.markdownEditor.placeholder')}
+                  readonly={true}
+                  toolbar={false}
+                  filePath={filePath}
+                  basePath={basePath}
+                />
+              )}
+            </div>
           )}
         </div>
       </div>

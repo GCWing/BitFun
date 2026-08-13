@@ -19,7 +19,7 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types';
 import { CubeLoading } from '@/component-library';
-import { getMonacoLanguage } from '@/infrastructure/language-detection';
+import { getFileIconType, getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
@@ -102,9 +102,8 @@ export interface CodeEditorProps {
   autoSaveDelayMs?: number;
 }
 
+export const MAX_TEXT_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 const LARGE_FILE_SIZE_THRESHOLD_BYTES = 1 * 1024 * 1024; // 1MB
-const LARGE_FILE_FULL_LOAD_LIMIT_BYTES = 100 * 1024 * 1024;
-const LARGE_FILE_PREVIEW_BYTES = 8 * 1024 * 1024;
 const LARGE_FILE_MAX_LINE_LENGTH = 20000;
 const LARGE_FILE_RENDER_LINE_LIMIT = 10000;
 const LARGE_FILE_MAX_TOKENIZATION_LINE_LENGTH = 2000;
@@ -249,6 +248,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     minimap: { enabled: showMinimap, side: 'right', size: 'proportional' }
   });
   const isMemoryContent = initialContent !== undefined;
+  const isUnsupportedFileType = !isMemoryContent && ['archive', 'binary'].includes(getFileIconType(filePath));
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [selection, setSelection] = useState({ chars: 0, lines: 0 });
   const [statusBarPopover, setStatusBarPopover] = useState<null | 'position' | 'indent' | 'encoding' | 'language'>(null);
@@ -1509,6 +1509,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       return;
     }
 
+    if (isUnsupportedFileType) {
+      setLoading(false);
+      setError(t('editor.common.unsupportedFileType'));
+      return;
+    }
+
     if (isMemoryContent) {
       const fileContent = initialContent ?? '';
       setLoading(true);
@@ -1570,15 +1576,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       if (isFileMissingFromMetadata(fileInfoBefore)) {
         throw new Error('File does not exist');
       }
-      let fileSizeBytes = typeof fileInfoBefore?.size === 'number'
+      const fileSizeBytes = typeof fileInfoBefore?.size === 'number'
         ? fileInfoBefore.size
         : undefined;
-      const shouldPreview = !readEncoding && typeof fileSizeBytes === 'number'
-        && fileSizeBytes > LARGE_FILE_FULL_LOAD_LIMIT_BYTES;
-      const fileContent = shouldPreview
-        ? await workspaceAPI.readFileContentPrefix(filePath, LARGE_FILE_PREVIEW_BYTES)
-        : await workspaceAPI.readFileContent(filePath, readEncoding);
-      setLargeFilePreview(shouldPreview);
+      if (typeof fileSizeBytes === 'number' && fileSizeBytes >= MAX_TEXT_FILE_SIZE_BYTES) {
+        setError(t('editor.common.fileTooLarge'));
+        return;
+      }
+      const fileContent = await workspaceAPI.readFileContent(filePath, readEncoding);
+      setLargeFilePreview(false);
       reportFileMissingFromDisk(false);
       try {
         const fileInfoAfter = await fetchFileMetadata();
@@ -1590,9 +1596,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           if (v) {
             diskVersionRef.current = v;
           }
-        }
-        if (typeof fileInfoAfter?.size === 'number') {
-          fileSizeBytes = fileInfoAfter.size;
         }
       } catch (err) {
         if (isLikelyFileNotFoundError(err)) {
@@ -1650,6 +1653,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     filePath,
     initialContent,
     isMemoryContent,
+    isUnsupportedFileType,
     readEncoding,
     reportFileMissingFromDisk,
     t,
@@ -2350,13 +2354,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         <div className="code-editor-tool__error-overlay" data-bf-component="editor-tool" data-bf-part="error">
           <AlertCircle className="code-editor-tool__error-icon" />
           <p className="code-editor-tool__error-message">{error}</p>
-          <button
-            onClick={loadFileContent}
-            className="code-editor-tool__error-retry-btn"
-            type="button"
-          >
-            {t('editor.common.retry')}
-          </button>
+          {!isUnsupportedFileType && error !== t('editor.common.fileTooLarge') && (
+            <button
+              onClick={loadFileContent}
+              className="code-editor-tool__error-retry-btn"
+              type="button"
+            >
+              {t('editor.common.retry')}
+            </button>
+          )}
         </div>
       )}
 

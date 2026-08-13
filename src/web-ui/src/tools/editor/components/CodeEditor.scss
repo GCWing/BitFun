@@ -125,9 +125,16 @@ $_editor-padding-desktop: 32px;
     flex: 1;
     min-height: 0;
     position: relative;
-    
+
     > div {
       height: 100%;
+    }
+  }
+
+  &.is-error {
+    > .code-editor-tool__content,
+    > .editor-status-bar {
+      display: none;
     }
   }
   

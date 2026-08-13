@@ -5,6 +5,7 @@ import { Circle, ArrowRight, Check, XCircle, Loader2, CheckCircle, AlertCircle, 
 import yaml from 'yaml';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
+import { MAX_TEXT_FILE_SIZE_BYTES } from './CodeEditor';
 import { createLogger } from '@/shared/utils/logger';
 import { CubeLoading, Button, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -60,6 +61,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
   const { t } = useI18n('tools');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fileTooLarge, setFileTooLarge] = useState(false);
   const [planData, setPlanData] = useState<PlanData | null>(null);
   const [planContent, setPlanContent] = useState<string>('');
   // Initialize build state from the shared service to survive unmounts.
@@ -128,8 +130,15 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
 
     setLoading(true);
     setError(null);
+    setFileTooLarge(false);
 
     try {
+      const fileInfo = await workspaceAPI.getFileMetadata(filePath);
+      if (typeof fileInfo?.size === 'number' && fileInfo.size >= MAX_TEXT_FILE_SIZE_BYTES) {
+        setFileTooLarge(true);
+        setError(t('editor.common.fileTooLarge'));
+        return;
+      }
       const content = await workspaceAPI.readFileContent(filePath);
 
       const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -755,9 +764,11 @@ ${JSON.stringify(simpleTodos, null, 2)}
         <div className="error-content">
           <AlertCircle className="error-icon" />
           <p>{error}</p>
-          <Button variant="secondary" size="small" onClick={loadFileContent}>
-            {t('editor.common.retry')}
-          </Button>
+          {!fileTooLarge && (
+            <Button variant="secondary" size="small" onClick={loadFileContent}>
+              {t('editor.common.retry')}
+            </Button>
+          )}
         </div>
       </div>
     );

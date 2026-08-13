@@ -111,7 +111,7 @@ export class ContextMenuManager {
    
   async show(event: MouseEvent | React.MouseEvent): Promise<void> {
     if (this.isShowing) {
-      this.hide();
+      await this.hide();
     }
 
     this.isShowing = true;

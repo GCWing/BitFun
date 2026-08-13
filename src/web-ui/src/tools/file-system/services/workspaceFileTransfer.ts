@@ -49,6 +49,11 @@ export interface UploadToWorkspaceOptions {
 
 const PEER_FILE_CHUNK_BYTES = 1024 * 1024;
 
+export function isFilePermissionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /permission denied|access denied|eacces|eperm|os error (?:5|13)\b/i.test(message);
+}
+
 interface PeerFileInfoResponse extends PeerDeviceCommandResponse {
   resp: "file_info";
   name: string;
@@ -775,13 +780,6 @@ export async function uploadLocalPathsToWorkspaceDirectory(
       indeterminate: false,
     });
     window.setTimeout(() => onProgress(null), 450);
-
-    if (successCount === 0 && failedFiles.length > 0) {
-      const details = failedFiles
-        .map((entry) => `${entry.path}: ${entry.error}`)
-        .join("; ");
-      throw new Error(details);
-    }
 
     return { successCount, directoryCount, failedFiles };
   }

@@ -41,6 +41,7 @@ import type {
 import {
   downloadWorkspaceFileToDisk,
   joinWorkspaceTargetPath,
+  isFilePermissionError,
   normalizeWorkspaceTargetDirectory,
   pasteClipboardFilesToWorkspaceDirectory,
   resolvePasteTargetDirectory,
@@ -77,6 +78,17 @@ function getChildNames(nodes: FileSystemNode[], parentPath: string): string[] {
 function isAlreadyExistsError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /already exists|file exists|os error 17|os error 183|EEXIST/i.test(message);
+}
+
+function getPasteErrorMessage(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  name: string,
+  error: string,
+): string {
+  return t('notifications.pasteErrorDetail', {
+    name,
+    error: isFilePermissionError(error) ? t('notifications.pastePermissionDenied') : error,
+  });
 }
 
 /** Format a byte-per-second speed value for display, e.g. "1.4 MB/s". */
@@ -737,7 +749,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       if (result.failedFiles.length > 0) {
         const failedNames = result.failedFiles.map((entry) => {
           const name = entry.path.split(/[/\\]/).pop() || entry.path;
-          return `${name}: ${entry.error}`;
+          return getPasteErrorMessage(t, name, entry.error);
         }).join('\n');
         notification.error(
           t('notifications.pasteFailed', { count: result.failedFiles.length }) + `:\n${failedNames}`,
@@ -758,7 +770,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       if (cancelledTransferIdsRef.current.has(id)) {
         cancelledTransferIdsRef.current.delete(id);
       } else {
-        notification.error(t('notifications.pasteFailed', { count: 1 }));
+        notification.error(
+          isFilePermissionError(error)
+            ? t('notifications.pastePermissionDenied')
+            : t('notifications.pasteFailed', { count: 1 })
+        );
       }
     }
   }, [

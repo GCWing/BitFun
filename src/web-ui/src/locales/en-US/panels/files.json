@@ -148,6 +148,8 @@
     "pasteSuccessFolders": "Successfully pasted {{count}} folders",
     "pasteSuccessItems": "Successfully pasted {{count}} items",
     "pasteFailed": "{{count}} files failed to paste",
+    "pastePermissionDenied": "Permission denied. Check the source file and destination folder permissions.",
+    "pasteErrorDetail": "{{name}}: {{error}}",
     "pasteNoFiles": "No files in clipboard",
     "pastingFiles": "Pasting {{count}} files to {{target}}...",
     "openExplorerFailed": "Failed to open file explorer: {{error}}",
