@@ -1571,9 +1571,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     if (status === 'settled') preparedTurnNavigationRef.current = null;
   }, [navigateToTurnWithStatus, virtualItems]);
 
+  /**
+   * Land on a Turn by its position in the transcript on screen.
+   *
+   * Instant, like the other two ways the same request can be resolved. This is
+   * the last-resort branch of a focus request — `resolvedTurnId` and
+   * `resolvedVirtualIndex` are tried first, both instant — and which branch runs
+   * depends only on what the request happened to carry, not on anything the
+   * reader did. Animating this one made the same usage-report click animate or
+   * jump depending on whether the report knew the Turn's id.
+   */
   const scrollToTurn = useCallback((turnIndex: number) => {
     const target = userMessageItems[turnIndex - 1];
-    if (target) navigateToTurn(target.item.turnId, { behavior: 'smooth' });
+    if (target) navigateToTurn(target.item.turnId, { behavior: 'auto' });
   }, [navigateToTurn, userMessageItems]);
 
   const scrollToIndex = useCallback((index: number) => {
