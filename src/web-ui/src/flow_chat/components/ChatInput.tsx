@@ -2109,8 +2109,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     isAcpTargetSession,
-    notificationService,
-    permissionConfigService,
     permissionModeSaving,
     t,
     toolPermissionConfig,
