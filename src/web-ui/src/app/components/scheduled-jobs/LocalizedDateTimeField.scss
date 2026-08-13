@@ -15,7 +15,7 @@
 
 .bf-datetime-picker {
   position: fixed;
-  z-index: 1000;
+  z-index: 9999;
   width: 268px;
   box-sizing: border-box;
   display: flex;
@@ -24,8 +24,10 @@
   padding: $size-gap-3;
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-lg;
-  background: var(--bf-appearance-token-element-bg-subtle);
-  box-shadow: var(--bf-appearance-token-shadow-sm);
+  // Opaque elevated surface, matching the nav workspace menu. A translucent
+  // element background let the form behind it read through the grid.
+  background: var(--bf-appearance-token-color-bg-elevated);
+  box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
 
   &__head {
     display: flex;
