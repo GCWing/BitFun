@@ -1399,7 +1399,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * apart. The drift in particular: a navigation that lands and is then taken
      * away leaves the same final position as one that never aimed right.
      */
-    const traceNavigation = (branch: string, place: () => void, targetPx?: number) => {
+    const traceNavigation = (
+      branch: string,
+      place: () => void,
+      targetPx?: number,
+      extra?: () => Record<string, unknown>,
+    ) => {
       traceViewportPlacement(
         scroller,
         {
@@ -1423,6 +1428,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
             itemCount: virtualItems.length,
             behavior,
             presentationMode,
+            ...(extra?.() ?? {}),
           }),
         },
         place,
@@ -1448,31 +1454,55 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return 'settled';
     }
 
-    // Placed instantly on purpose: an animated scroll has not arrived yet, so
-    // there would be nothing to read back. The requested behaviour is spent on
-    // the placement, which is what turn-rail navigation already asks for.
-    traceNavigation('unrendered-placed-instantly', () => {
-      virtualizer.scrollItemIntoView(targetIndex, {
-        align: 'start',
-        owner: 'one-shot-navigation',
-        holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
-      });
-    });
-    if (scroller && turnTopAlignmentEntersReservedBlank({
-      turnTopScrollTop: scroller.scrollTop,
-      // Re-read: placing the viewport renders items, which re-measures the
-      // transcript and moves the content end with it.
-      contentEndScrollTop: readContentEndScrollTop(scroller),
-    })) {
-      traceNavigation(
-        'unrendered-clamped-to-content-end',
-        () => scrollToContentEndThroughVirtualizer(
+    /*
+     * Placed instantly on purpose: an animated scroll has not arrived yet, so
+     * there would be nothing to read back. The requested behaviour is spent on
+     * the placement, which is what turn-rail navigation already asks for.
+     *
+     * The clamp belongs to the same placement rather than being a second one.
+     * It is decided from where the instant placement landed and applied in the
+     * same task, so the reader sees one movement — and tracing it as two made
+     * the first one's outcome sample compare the offset the viewport came to
+     * rest at against a position this function had itself replaced 20ms
+     * earlier. Measured: `driftPx: -892.7` against a target of 2484 that was
+     * superseded by 1591, which is the clamp working exactly as intended
+     * reported as the largest displacement in the recording.
+     */
+    let clampedToContentEnd = false;
+    let unclampedPx: number | null = null;
+    traceNavigation(
+      'unrendered-placed-instantly',
+      () => {
+        virtualizer.scrollItemIntoView(targetIndex, {
+          align: 'start',
+          owner: 'one-shot-navigation',
+          holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
+        });
+        if (!scroller) return;
+        unclampedPx = scroller.scrollTop;
+        if (!turnTopAlignmentEntersReservedBlank({
+          turnTopScrollTop: scroller.scrollTop,
+          // Re-read: placing the viewport renders items, which re-measures the
+          // transcript and moves the content end with it.
+          contentEndScrollTop: readContentEndScrollTop(scroller),
+        })) {
+          return;
+        }
+        clampedToContentEnd = true;
+        scrollToContentEndThroughVirtualizer(
           'auto',
           'one-shot-navigation',
           ONE_SHOT_NAVIGATION_HOLD_MS,
-        ),
-      );
-    }
+        );
+      },
+      undefined,
+      // Where the Turn's own alignment would have put the viewport, kept
+      // because the clamp is only correct if that offset was in the blank.
+      () => ({
+        clampedToContentEnd,
+        unclampedPx: unclampedPx === null ? null : roundViewportPx(unclampedPx),
+      }),
+    );
     return 'settled';
   }, [
     exitFollowOutput,
@@ -1739,9 +1769,22 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
        * to fetch more. That is correct once history really is exhausted, and a
        * silent data loss when it is not — the boundary status stays idle either
        * way, so the transcript looks like it simply has no earlier Turns.
+       *
+       * The head, and only the head. `after` latches the moment the reader
+       * reaches the newest Turn, which is every session that has ever been
+       * paged, and a partial session stays partial throughout — so raising this
+       * for it is a warning that fires on the ordinary case and means nothing.
+       * Measured: four of them in one recording, all `after`, all correct
+       * behaviour. `resolveHistoryBoundaryTarget` draws the same line one layer
+       * down, between `reached-latest` and `beyond-known-total`.
        */
       const session = activeSessionRef.current;
-      if (latchedExhausted && session?.sessionId && session.isPartial === true) {
+      if (
+        direction === 'before'
+        && latchedExhausted
+        && session?.sessionId
+        && session.isPartial === true
+      ) {
         warnHistoryPagingRefusedWithPendingTurns(session.sessionId, {
           direction,
           reason: 'latched-exhausted-while-partial',

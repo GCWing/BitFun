@@ -75,6 +75,65 @@ export interface RenderedTranscriptRange {
   endOrdinalExclusive: number;
 }
 
+export type TailBoundaryPrecondition =
+  /** The ask can be resolved against the catalog; carry on. */
+  | 'ask'
+  /** There is nothing in this direction until the presentation changes. */
+  | 'exhausted'
+  /** Not answerable *yet*, so the direction stays armed. */
+  | 'cancelled';
+
+/**
+ * Whether a boundary ask made with no history window open is worth resolving.
+ *
+ * The three answers are not interchangeable, and the difference is entirely
+ * about what happens next: `cancelled` re-arms the direction, `exhausted`
+ * latches it off until the window moves. Getting that wrong in the safe-looking
+ * direction costs a boundary that asks forever — measured, 652 asks in one
+ * session, 648 of them answered `precondition` because the session had every
+ * Turn it was ever going to have and the reader was resting at its head. Every
+ * one re-armed, and the next scroll event asked again.
+ *
+ * A session that is not partial *is* the transcript on screen, so its head is
+ * the first Turn and there is nothing before it — the same fact
+ * `resolveHistoryBoundaryTarget` reports as `reached-start`, arrived at from
+ * the ledger rather than from an ordinal.
+ *
+ * A catalog that has not arrived is the opposite case and must stay
+ * `cancelled`: nothing can be resolved against it yet, and it is expected to
+ * turn up.
+ */
+export function resolveTailBoundaryPrecondition(input: {
+  direction: 'before' | 'after';
+  /** Absent when the session is not in the store at all. */
+  isPartial: boolean | undefined;
+  hasSession: boolean;
+  turnCatalogMatches: boolean;
+}): TailBoundaryPrecondition {
+  /*
+   * `after` is deliberately not latched, even though the canonical tail ends at
+   * the newest Turn by construction.
+   *
+   * It reaches here at all only through the retained continuous projection,
+   * which renders as a history window while the viewport intent is the live
+   * tail — and the latch is cleared by the *window bounds* changing, which that
+   * projection does not have. Latching would therefore be permanent for the
+   * rest of the presentation, to save asks that are not the ones being
+   * measured: of 652 wasted asks in the reported session, 648 were `before`
+   * against a fully loaded transcript and none were this.
+   */
+  if (input.direction === 'after') {
+    return 'cancelled';
+  }
+  if (!input.hasSession) {
+    return 'cancelled';
+  }
+  if (input.isPartial !== true) {
+    return 'exhausted';
+  }
+  return input.turnCatalogMatches ? 'ask' : 'cancelled';
+}
+
 export type HistoryBoundaryTargetResolution =
   /** The ordinal a page in this direction has to load. */
   | { status: 'ask'; targetOrdinal: number }

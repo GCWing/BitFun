@@ -99,6 +99,7 @@ import {
 } from '../../services/historySessionDiagnostics';
 import {
   resolveHistoryBoundaryTarget,
+  resolveTailBoundaryPrecondition,
   resolveTailWindowGrowth,
   transcriptReachesLatestTurn,
   type RenderedTranscriptRange,
@@ -1846,18 +1847,31 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           ? renderedHistoryPresentationRef.current.range
           : null;
       if (!presentation) {
-        if (
-          direction !== 'before'
-          || session?.isPartial !== true
-          || session.turnCatalog?.sessionId !== sessionId
-        ) {
-          recordHistoryPagingEvent(sessionId, 'outcome_cancelled', {
-            direction,
-            reason: 'precondition',
-            isPartial: session?.isPartial,
-            turnCatalogMatches: session?.turnCatalog?.sessionId === sessionId,
-          });
-          return 'cancelled';
+        const precondition = resolveTailBoundaryPrecondition({
+          direction,
+          isPartial: session?.isPartial,
+          hasSession: session !== undefined,
+          turnCatalogMatches: session?.turnCatalog?.sessionId === sessionId,
+        });
+        if (precondition !== 'ask') {
+          /*
+           * Told apart because only one of them stops the asking. A boundary
+           * that answers `cancelled` is re-armed and asked again on the
+           * reader's next scroll event, which is right while the catalog is
+           * still on its way and is a treadmill once the session has every Turn
+           * it will ever have.
+           */
+          recordHistoryPagingEvent(
+            sessionId,
+            precondition === 'exhausted' ? 'outcome_exhausted' : 'outcome_cancelled',
+            {
+              direction,
+              reason: precondition === 'exhausted' ? 'no-window-nothing-loadable' : 'precondition',
+              isPartial: session?.isPartial,
+              turnCatalogMatches: session?.turnCatalog?.sessionId === sessionId,
+            },
+          );
+          return precondition;
         }
         const canonicalTailRange = flowChatStore.getSessionCanonicalTailRange(sessionId);
         if (!canonicalTailRange) {
