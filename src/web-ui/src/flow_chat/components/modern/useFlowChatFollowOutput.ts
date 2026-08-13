@@ -20,6 +20,7 @@ import {
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
   memorylessFollowState,
   nextTailFollowState,
+  resolveAnimatedJumpBehavior,
   tailHoldMaxGapPx,
   tailSnapBackScrollTop,
   type TailFollowState,
@@ -455,6 +456,40 @@ export function useFlowChatFollowOutput({
     scrollToContentEnd(behavior);
   }, [beginSmoothScrollYield, endSmoothScrollYield, scrollToContentEnd]);
 
+  /**
+   * Decide how a jump to latest travels, and record the decision.
+   *
+   * Traced because the two outcomes are indistinguishable afterwards — an
+   * animation that was never issued and one the loop cut short both end as a
+   * viewport that arrived without moving through anything — and they call for
+   * opposite fixes. This line says which one a reader is describing.
+   */
+  const resolveJumpBehavior = useCallback((scroller: HTMLElement, targetPx: number) => {
+    const behavior = resolveAnimatedJumpBehavior({
+      fromPx: scroller.scrollTop,
+      targetPx,
+      clientHeight: scroller.clientHeight,
+    });
+    const distancePx = Math.abs(targetPx - scroller.scrollTop);
+    traceViewportRepeating(`follow|jumpBehavior|${behavior}`, {
+      location: 'followOutput.jumpBehavior',
+      message: behavior === 'smooth'
+        ? 'the jump to latest is near enough to animate'
+        : 'the jump to latest is too far to animate, so it lands outright',
+      travelPx: targetPx - scroller.scrollTop,
+      data: () => ({
+        behavior,
+        viewportId,
+        distancePx: roundViewportPx(distancePx),
+        viewports: scroller.clientHeight > 0
+          ? Math.round((distancePx / scroller.clientHeight) * 10) / 10
+          : null,
+        clientHeightPx: scroller.clientHeight,
+      }),
+    });
+    return behavior;
+  }, [viewportId]);
+
   /** Move the viewport to whatever the follow state currently owns. */
   const applyFollowTarget = useCallback(() => {
     const scroller = scrollerRef.current;
@@ -814,15 +849,21 @@ export function useFlowChatFollowOutput({
     ) {
       const pinTarget = readPinScrollTop() ?? scroller?.scrollTop ?? contentEnd;
       followStateRef.current = { mode: 'pin-turn-top', target: pinTarget };
-      // Animated like every other jump to latest. The frame loop would cancel
-      // the animation on its next tick, so it stands down for it exactly as it
-      // does for `runContentEndScroll`.
+      // Travels like every other jump to latest, animated or not. The frame
+      // loop would cancel an animation on its next tick, so it stands down for
+      // this one exactly as it does for `runContentEndScroll` — and an instant
+      // write of ours replaces whatever was still travelling.
       if (scroller && Math.abs(scroller.scrollTop - pinTarget) > BOTTOM_EPSILON_PX) {
-        beginSmoothScrollYield();
+        const behavior = resolveJumpBehavior(scroller, pinTarget);
+        if (behavior === 'smooth') {
+          beginSmoothScrollYield();
+        } else {
+          endSmoothScrollYield('superseded');
+        }
         viewportOwner.write({
           owner: 'follow-output',
           topPx: pinTarget,
-          behavior: 'smooth',
+          behavior,
         });
       }
       startFollowFrame();
@@ -839,7 +880,17 @@ export function useFlowChatFollowOutput({
     } else {
       retirePin();
       followStateRef.current = { mode: 'hold-tail', target: contentEnd };
-      runContentEndScroll(reason === 'jump-to-latest' ? 'smooth' : 'auto');
+      /*
+       * Only a jump to latest is ever a candidate for an animation, and only a
+       * near one. Every other entry reason is the transcript resuming a follow
+       * it already owned, where an animation would be a movement the reader did
+       * not ask for.
+       */
+      runContentEndScroll(
+        reason === 'jump-to-latest' && scroller
+          ? resolveJumpBehavior(scroller, contentEnd)
+          : 'auto',
+      );
     }
 
     startFollowFrame();
@@ -850,6 +901,7 @@ export function useFlowChatFollowOutput({
     readContentEndScrollTop,
     readPinScrollTop,
     resolveFollowState,
+    resolveJumpBehavior,
     retirePin,
     runContentEndScroll,
     scrollTurnToTop,

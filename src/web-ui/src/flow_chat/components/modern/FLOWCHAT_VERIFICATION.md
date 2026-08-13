@@ -83,21 +83,24 @@ group does not renumber the others.
    off once its answer overflows the viewport.
 2. With output streaming, scroll up and hold still. Follow must not write while
    the gesture is recent, and must resume once it goes quiet.
-3. Jump to latest is animated rather than an instant jump — including from the
-   top of a long transcript, which is the longest animation anything here
-   issues and the one a frame-counted stand-down used to cut short. It must
-   glide the whole way, with at most a small catch-up for content that arrived
-   while it travelled.
-4. While reading a history window, let output arrive from somewhere else. The
+3. Jump to latest from a screen or two up is animated rather than an instant
+   jump. It must glide the whole way, with at most a small catch-up for content
+   that arrived while it travelled — a stand-down counted in frames rather than
+   milliseconds used to cut this short.
+4. Jump to latest from the top of a long transcript lands outright. Half an
+   animation followed by a jump is the failure to look for, and it is what the
+   distance cap exists to prevent; `followOutput.jumpBehavior` says which of the
+   two was chosen and how many viewports away the target was.
+5. While reading a history window, let output arrive from somewhere else. The
    viewport must not move — this is the case the submission event exists to
    stay out of.
-5. Watch a Markdown answer stream past the bottom of the viewport. It must
+6. Watch a Markdown answer stream past the bottom of the viewport. It must
    scroll rather than step: no move of a whole line, and none of the ease's
    lag left behind once the stream stops.
-6. Stream a burst — a code fence or a table arriving at once — and confirm it
+7. Stream a burst — a code fence or a table arriving at once — and confirm it
    goes the whole way in one move rather than gliding through content nobody
    has seen, and that the jump-to-latest bar does not flash while it does.
-7. Turn on `prefers-reduced-motion` and stream again. The follow must step
+8. Turn on `prefers-reduced-motion` and stream again. The follow must step
    straight to its target, as it did before the ease.
 
 ### Collapse

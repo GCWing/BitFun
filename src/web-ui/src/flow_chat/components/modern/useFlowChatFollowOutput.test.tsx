@@ -569,8 +569,14 @@ describe('useFlowChatFollowOutput', () => {
     expect(cancelAnimationFrame).toHaveBeenCalled();
   });
 
-  it('uses smooth behavior only for an explicit jump to latest', () => {
+  /** Mount on a transcript of `contentEndPx`, then jump to latest from the top. */
+  function jumpToLatestAcross(contentEndPx: number) {
     const scrollToContentEnd = vi.fn();
+    setScrollerMetrics(scroller, {
+      scrollHeight: contentEndPx + VIEWPORT + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 0,
+    });
     act(() => {
       root.render(
         <Harness
@@ -581,8 +587,32 @@ describe('useFlowChatFollowOutput', () => {
         />,
       );
     });
+    runNextFrame();
+    expect(scroller.scrollTop).toBe(contentEndPx);
+    scroller.scrollTop = 0;
+    scrollToContentEnd.mockClear();
     act(() => controller?.enterFollowOutput('jump-to-latest'));
-    expect(scrollToContentEnd).toHaveBeenCalledWith('smooth');
+    return scrollToContentEnd;
+  }
+
+  it('uses smooth behavior only for an explicit jump to latest', () => {
+    // Well inside `FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS`, so the distance is not
+    // what this is testing.
+    expect(jumpToLatestAcross(VIEWPORT)).toHaveBeenCalledWith('smooth');
+  });
+
+  it('lands a jump too far to follow rather than animate part of it', () => {
+    /*
+     * The animation cannot finish this and the frame loop takes the viewport
+     * back wherever it has got to — measured, a jump issued for 8717px animated
+     * 5480 of them and was finished in one 3290px write. The reader sees two
+     * thirds of a scroll and then a jump, which is worse than either.
+     *
+     * It would not be worth watching even if it did finish: three screens on,
+     * the transcript in between is going past faster than anyone can read it,
+     * so the continuity an animation exists to show is not there to see.
+     */
+    expect(jumpToLatestAcross(VIEWPORT * 10)).toHaveBeenCalledWith('auto');
   });
 
   it('yields the frame loop to its own animated scroll instead of overwriting it', () => {
@@ -633,9 +663,20 @@ describe('useFlowChatFollowOutput', () => {
       nowSpy.mockRestore();
     });
 
+    /*
+     * A viewport tall enough that the jump below is one the follow rule agrees
+     * to animate at all: only a jump inside
+     * `FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS` is animated, and everything in
+     * this block is about what happens *during* an animation, so it has to be
+     * given one. The distance is left where it was so the frame counts below
+     * still mean what their comments say.
+     */
+    const TALL_VIEWPORT = 1_600;
+    const CONTENT_END = 4_500;
+
     /**
-     * Mounts a transcript whose content ends at 4500, settles there, and then
-     * issues an animated jump to latest from the top.
+     * Mounts a transcript whose content ends at `CONTENT_END`, settles there,
+     * and then issues an animated jump to latest from the top.
      *
      * jsdom does not animate, so the animation is played by hand below. That is
      * the point of these tests: what ends the stand-down is the viewport having
@@ -644,8 +685,8 @@ describe('useFlowChatFollowOutput', () => {
      */
     function jumpToLatestFromTheTop() {
       setScrollerMetrics(scroller, {
-        scrollHeight: 5000 + TAIL_SPACER,
-        clientHeight: VIEWPORT,
+        scrollHeight: CONTENT_END + TALL_VIEWPORT + spacerFor(TALL_VIEWPORT),
+        clientHeight: TALL_VIEWPORT,
         scrollTop: 0,
       });
       act(() => {
@@ -658,7 +699,7 @@ describe('useFlowChatFollowOutput', () => {
         );
       });
       runNextFrame();
-      expect(scroller.scrollTop).toBe(4500);
+      expect(scroller.scrollTop).toBe(CONTENT_END);
       scroller.scrollTop = 0;
       act(() => controller?.enterFollowOutput('jump-to-latest'));
     }
@@ -712,7 +753,7 @@ describe('useFlowChatFollowOutput', () => {
       expect(scroller.scrollTop).toBe(50);
 
       animateFrame(0, 20);
-      expect(scroller.scrollTop).toBe(4500);
+      expect(scroller.scrollTop).toBe(CONTENT_END);
     });
 
     it('takes the viewport back on the backstop when the animation never ends', () => {
@@ -722,7 +763,7 @@ describe('useFlowChatFollowOutput', () => {
         animateFrame(1, 100);
       }
 
-      expect(scroller.scrollTop).toBe(4500);
+      expect(scroller.scrollTop).toBe(CONTENT_END);
     });
   });
 

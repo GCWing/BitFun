@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   contentEndScrollTop,
+  FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
   isViewportAtTail,
   memorylessFollowState,
   nextTailFollowState,
+  resolveAnimatedJumpBehavior,
   tailHoldMaxGapPx,
   tailSnapBackScrollTop,
   tailSpacerPxForViewport,
@@ -323,5 +325,89 @@ describe('isViewportAtTail', () => {
       followTargetScrollTop: contentEnd,
       thresholdPx: THRESHOLD,
     })).toBe(false);
+  });
+});
+
+describe('resolveAnimatedJumpBehavior', () => {
+  const budget = VIEWPORT * FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS;
+
+  it('animates a jump the reader can follow', () => {
+    expect(resolveAnimatedJumpBehavior({
+      fromPx: 4000,
+      targetPx: 4000 + VIEWPORT,
+      clientHeight: VIEWPORT,
+    })).toBe('smooth');
+  });
+
+  it('animates a pinned Turn coming back into place, which is under a screen', () => {
+    // The `pin-turn-top` branch of a jump to latest, where the newest Turn's
+    // answer is shorter than the viewport by construction.
+    expect(resolveAnimatedJumpBehavior({
+      fromPx: 12_000,
+      targetPx: 12_180,
+      clientHeight: VIEWPORT,
+    })).toBe('smooth');
+  });
+
+  it('lands a jump from the head of a long transcript outright', () => {
+    /*
+     * The measurement the budget comes from: a jump issued for 8717px animated
+     * 5480 of them inside the yield and was finished by the follow loop in one
+     * 3290px write. Reading it as an animation is the mistake — what the reader
+     * saw was two thirds of a scroll and then a jump.
+     */
+    expect(resolveAnimatedJumpBehavior({
+      fromPx: 0,
+      targetPx: 8717,
+      clientHeight: VIEWPORT,
+    })).toBe('auto');
+  });
+
+  it('measures the distance in viewports, not pixels', () => {
+    // The same travel, on a display tall enough to still show where it went.
+    const travelPx = VIEWPORT * FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS + 400;
+    expect(resolveAnimatedJumpBehavior({
+      fromPx: 0,
+      targetPx: travelPx,
+      clientHeight: VIEWPORT,
+    })).toBe('auto');
+    expect(resolveAnimatedJumpBehavior({
+      fromPx: 0,
+      targetPx: travelPx,
+      clientHeight: travelPx,
+    })).toBe('smooth');
+  });
+
+  it('takes the budget itself as near enough', () => {
+    expect(resolveAnimatedJumpBehavior({
+      fromPx: 0,
+      targetPx: budget,
+      clientHeight: VIEWPORT,
+    })).toBe('smooth');
+    expect(resolveAnimatedJumpBehavior({
+      fromPx: 0,
+      targetPx: budget + 1,
+      clientHeight: VIEWPORT,
+    })).toBe('auto');
+  });
+
+  it('judges the distance travelled, whichever way it goes', () => {
+    // A jump to latest normally scrolls down, but `pin-turn-top` can aim above
+    // the viewport when a restored tail presentation arrives under a pin.
+    expect(resolveAnimatedJumpBehavior({
+      fromPx: 9000,
+      targetPx: 9000 - budget - 1,
+      clientHeight: VIEWPORT,
+    })).toBe('auto');
+  });
+
+  it('does not animate against a scroller that has not been measured', () => {
+    // No budget to scale and nothing on screen to follow. Every other reading
+    // of a zero height makes this a *short* jump, which is the wrong one.
+    expect(resolveAnimatedJumpBehavior({
+      fromPx: 0,
+      targetPx: 0,
+      clientHeight: 0,
+    })).toBe('auto');
   });
 });
