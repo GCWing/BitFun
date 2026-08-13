@@ -76,6 +76,9 @@ export type VirtualItem =
       turnId: string;
       isLastRound: boolean;
       isTurnComplete: boolean;
+      layoutHints?: {
+        expandedThinkingItemIds: string[];
+      };
       turnStartedAt?: number;
       turnEndedAt?: number;
       turnDurationMs?: number;
@@ -501,6 +504,12 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             turnId: turn.id,
             isLastRound: roundIndex === rounds.length - 1,
             isTurnComplete,
+            layoutHints: {
+              expandedThinkingItemIds: roundIndex === rounds.length - 1
+                && round.items.at(-1)?.type === 'thinking'
+                ? [round.items.at(-1)!.id]
+                : [],
+            },
             turnStartedAt: turn.startTime,
             turnEndedAt: turn.endTime,
             turnDurationMs: typeof turn.endTime === 'number'

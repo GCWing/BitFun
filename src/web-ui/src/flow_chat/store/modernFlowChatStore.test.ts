@@ -370,6 +370,55 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
   });
 
+  it('projects the thinking expansion state used by the renderer into layout hints', () => {
+    const thinkingItem = {
+      id: 'thinking-1',
+      type: 'thinking' as const,
+      content: 'Inspecting the implementation',
+      isStreaming: true,
+      timestamp: 1000,
+      status: 'streaming' as const,
+    };
+    const session = makeSession({
+      sessionId: 'thinking-layout-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'thinking-layout-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [
+          makeRound({
+            id: 'earlier-thinking',
+            items: [{ ...thinkingItem, id: 'thinking-0', isStreaming: false, status: 'completed' }],
+            renderHints: { disableExploreGrouping: true },
+          }),
+          makeRound({
+            id: 'active-thinking',
+            index: 1,
+            items: [thinkingItem],
+            isStreaming: true,
+            isComplete: false,
+            status: 'streaming',
+            renderHints: { disableExploreGrouping: true },
+          }),
+        ],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const modelRounds = sessionToVirtualItems(session)
+      .filter((item): item is ModelRoundVirtualItem => item.type === 'model-round');
+
+    expect(modelRounds.map(item => item.layoutHints?.expandedThinkingItemIds)).toEqual([
+      [],
+      ['thinking-1'],
+    ]);
+  });
+
   it('appends a completion notice for abnormal completed turns', () => {
     const session = makeSession({
       dialogTurns: [{

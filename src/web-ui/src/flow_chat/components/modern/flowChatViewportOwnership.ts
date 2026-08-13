@@ -197,12 +197,15 @@ export function claimViewport(
  * the reader belongs, so a displacement applied underneath them is either
  * redundant or a fight.
  *
+ * `snap-back` is deliberately not one of them either: a late measurement of
+ * history above the reader invalidates the snap target's coordinate. Letting
+ * that displacement through cancels the stale animation by changing the real
+ * scroll position; the next settle re-evaluates the target from fresh geometry.
  * `user-gesture` is deliberately not one of them, and that is the whole point
  * of this being a separate question.
  */
 const OWNERS_THAT_HOLD_A_TARGET: ReadonlySet<FlowChatViewportOwner> = new Set([
   'one-shot-navigation',
-  'snap-back',
   'follow-output',
 ]);
 

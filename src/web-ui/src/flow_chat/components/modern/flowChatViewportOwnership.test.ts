@@ -166,12 +166,13 @@ describe('canShiftViewport', () => {
     expect(canShiftViewport(heldBy('user-gesture', { holdForMs: 200 }), NOW)).toBe(true);
   });
 
-  it('leaves the displacement to anyone holding a target', () => {
-    // All three re-assert a position of their own, so a shift underneath is
-    // either redundant or a fight.
+  it('leaves the displacement to navigation and follow targets', () => {
+    // Those writers re-assert a position of their own. Snap-back is different:
+    // a late history measurement invalidates its target coordinate, so the
+    // displacement must cancel the stale animation and be reconsidered.
     expect(canShiftViewport(heldBy('follow-output'), NOW)).toBe(false);
     expect(canShiftViewport(heldBy('one-shot-navigation', { holdForMs: 600 }), NOW)).toBe(false);
-    expect(canShiftViewport(heldBy('snap-back', { holdForMs: 1_200 }), NOW)).toBe(false);
+    expect(canShiftViewport(heldBy('snap-back', { holdForMs: 1_200 }), NOW)).toBe(true);
   });
 
   it('shifts an unheld viewport, and one held only by a correction', () => {

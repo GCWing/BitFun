@@ -72,7 +72,8 @@ function getFlowItemTextLength(item: AnyFlowItem): number {
   return 0;
 }
 
-function estimateFlowItemHeight(item: AnyFlowItem): number {
+function estimateFlowItemHeight(item: AnyFlowItem, expandedThinkingItemIds: readonly string[]): number {
+  if (item.type === 'thinking' && !expandedThinkingItemIds.includes(item.id)) return 40;
   const textLength = getFlowItemTextLength(item);
   if (textLength > 0) {
     return Math.min(
@@ -103,7 +104,10 @@ function estimateModelRoundHeight(item: Extract<VirtualItem, { type: 'model-roun
   }
 
   const contentHeight = flowItems.reduce(
-    (total, flowItem) => total + estimateFlowItemHeight(flowItem),
+    (total, flowItem) => total + estimateFlowItemHeight(
+      flowItem,
+      item.layoutHints?.expandedThinkingItemIds ?? [],
+    ),
     0,
   );
   return Math.min(3600, Math.max(LIVE_SESSION_DEFAULT_ITEM_HEIGHT_PX, MODEL_ROUND_BASE_HEIGHT_PX + contentHeight));

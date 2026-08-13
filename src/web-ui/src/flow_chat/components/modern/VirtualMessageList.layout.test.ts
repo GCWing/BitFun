@@ -71,6 +71,35 @@ describe('estimateVirtualMessageItemHeight', () => {
     expect(estimateVirtualMessageItemHeight(item)).toBeGreaterThan(1000);
   });
 
+  it('uses the shared collapsed hint for completed thinking rounds', () => {
+    const item = {
+      type: 'model-round',
+      turnId: 'turn-1',
+      isLastRound: false,
+      isTurnComplete: true,
+      layoutHints: { expandedThinkingItemIds: [] },
+      data: {
+        id: 'round-thinking',
+        status: 'completed',
+        isStreaming: false,
+        items: [{
+          id: 'thinking-1',
+          type: 'thinking',
+          content: 'x'.repeat(13_016),
+          status: 'completed',
+          timestamp: 1,
+        }],
+      },
+    } as VirtualItem;
+
+    expect(estimateVirtualMessageItemHeight(item)).toBe(200);
+
+    expect(estimateVirtualMessageItemHeight({
+      ...item,
+      layoutHints: { expandedThinkingItemIds: ['thinking-1'] },
+    })).toBeGreaterThan(1000);
+  });
+
   it('keeps compact user-only rows small enough for partial history tails', () => {
     const item = {
       type: 'user-message',

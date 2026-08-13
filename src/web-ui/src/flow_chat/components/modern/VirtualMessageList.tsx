@@ -488,6 +488,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     estimateItemHeightPx: estimateVirtualMessageItemHeight,
     scrollPaddingStartPx: FLOWCHAT_TURN_TOP_GAP_PX,
     writeViewport: viewportOwner.write,
+    shiftViewport: viewportOwner.shift,
   });
 
   const userMessageItems = useMemo(() => virtualItems

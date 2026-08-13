@@ -29,12 +29,14 @@ interface ModelThinkingDisplayProps {
   thinkingItem: FlowThinkingItem;
   /** Whether this is the last item in the current round. */
   isLastItem?: boolean;
+  forceExpanded?: boolean;
   displayContext?: 'default' | 'subagent-projection';
 }
 
 export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   thinkingItem,
   isLastItem = true,
+  forceExpanded = false,
   displayContext = 'default',
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -50,10 +52,11 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   const isActive = isStreaming || status === 'streaming';
   const { displayText: displayContent, isRevealing } = useTypewriter(content, isActive);
   useReportTypewriterReveal(thinkingItem.id, isRevealing);
-  const shouldDefaultExpanded =
+  const shouldDefaultExpanded = forceExpanded || (
     displayContext === 'subagent-projection'
       ? isActive || isLastItem
-      : isLastItem;
+      : isLastItem
+  );
 
   const [isExpanded, setIsExpanded] = useState(shouldDefaultExpanded);
   const userToggledRef = useRef(false);

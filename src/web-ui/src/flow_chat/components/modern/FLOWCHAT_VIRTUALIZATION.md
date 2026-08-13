@@ -30,18 +30,23 @@ inside the window changes height, the browser reflows the ones below it in the
 same layout pass, so there is no frame where the scroll has been corrected but
 the items have not moved yet.
 
-**The virtualizer does not compensate for its own late measurements.**
-`shouldAdjustScrollPositionOnItemSizeChange` is set to refuse, always. Its rule
-is the right shape — this item's delta, only for an item above the viewport —
-but it applies that delta to `scrollOffset`, the library's own copy of the
-scroll position, refreshed only from scroll events. Every continuous writer here
-assigns `scrollTop` directly and the matching scroll event lands a frame later,
-so a measurement arriving in between is compensated from a position the viewport
-has already left. Measured on session open: **nine corrections across two frames
-walked the viewport from 7440 back to 3556**, and the follow loop wrote 7440
-again on the next frame. The interception this replaces was written for
-react-virtuoso and removed on the assumption that TanStack asked the right
-question. It does — from a stale base.
+**The virtualizer does not use TanStack's own late-measurement adjustment.**
+`shouldAdjustScrollPositionOnItemSizeChange` reads the real scroller position
+and asks the viewport owner to apply the delta only when the whole item is above
+the viewport. A partly visible row is left alone because its changed content is
+inside what the reader is looking at. TanStack's adjustment is always refused:
+it applies its delta to `scrollOffset`, the library's copy refreshed only from
+scroll events. Every continuous writer here assigns `scrollTop` directly and
+the matching scroll event lands a frame later, so that base can be stale. The
+owner's displacement is applied before the new size enters the cache, while
+the anchor remains responsible for restoring relationships across larger layout
+transactions.
+
+The measurement decision is recorded as the switch-gated, coalesced
+`virtualizer.itemResize` probe: item identity, estimated and measured sizes,
+the above-viewport decision, and the real scroll geometry before and after the
+owner's displacement. It deliberately omits flow-item contents, which made the
+temporary investigation probe too large for a lasting diagnostic trail.
 
 **Measurement is forced before any position is read in the commit that changed
 the items.** The library skips its inline resize while the reader is scrolling,
