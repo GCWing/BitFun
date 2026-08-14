@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
+import type { ThreadGoalSnapshot } from '../services/goalService';
 
 const mocks = vi.hoisted(() => ({
   refreshBasic: vi.fn(async () => undefined),
@@ -32,18 +33,19 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  // Forwards the rest of the props so state carried on data attributes stays
+  // observable; `variant`/`size` are the library's own and have no DOM meaning.
   IconButton: ({
     children,
-    onClick,
-    className,
-    'data-testid': testId,
+    variant: _variant,
+    size: _size,
+    ...rest
   }: {
     children: React.ReactNode;
-    onClick?: () => void;
-    className?: string;
-    'data-testid'?: string;
-  }) => (
-    <button type="button" className={className} data-testid={testId} onClick={onClick}>{children}</button>
+    variant?: string;
+    size?: string;
+  } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" {...rest}>{children}</button>
   ),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -125,153 +127,77 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     }));
   });
 
-  it('keeps reasoning intensity and context usage in one runtime group', async () => {
-    let reasoningHost: HTMLDivElement | null = null;
+  it('splits the situation from the contract for the next turn', async () => {
     await act(async () => {
       root.render(
         <ChatInputWorkspaceStrip
           repositoryPath="D:/workspace/BitFun"
           workspaceLabel="BitFun"
-          harnessControl={{ onActivateBalanced: vi.fn() }}
-          reasoningControl={{
-            visible: true,
-            hostRef: node => { reasoningHost = node; },
-          }}
+          threadGoal={{ visible: true, goal: null, onOpen: vi.fn() }}
+          permissionControl={{ mode: 'auto', onChange: vi.fn() }}
           usageReport={{ visible: true, percentage: 12, onOpen: vi.fn() }}
         />
       );
     });
 
-    expect(container.textContent).toContain('BitFun');
-    expect(container.textContent).not.toContain('chatInput.harness.menuTitle');
-    expect(container.textContent).toContain('12%');
-    expect(container.querySelector('[data-bf-part="harness"]')).not.toBeNull();
-    expect(container.querySelector('.bitfun-chat-input-workspace-strip__goal-summary--inactive')).not.toBeNull();
-    const runtime = container.querySelector<HTMLElement>('[data-bf-part="runtime"]');
-    expect(runtime).not.toBeNull();
-    expect(reasoningHost).not.toBeNull();
-    expect(runtime?.contains(reasoningHost)).toBe(true);
-    expect(runtime?.querySelector('[data-bf-part="usageAction"]')).not.toBeNull();
-    expect(runtime?.querySelector('.bitfun-chat-input-workspace-strip__runtime-divider')).not.toBeNull();
-  });
+    const context = container.querySelector<HTMLElement>('[data-bf-part="context"]');
+    const next = container.querySelector<HTMLElement>('[data-bf-part="next"]');
+    expect(context).not.toBeNull();
+    expect(next).not.toBeNull();
 
-  it('keeps the three-tier Harness list but drops the heavy menu chrome', async () => {
-    await act(async () => {
-      root.render(
-        <ChatInputWorkspaceStrip
-          repositoryPath="D:/workspace/BitFun"
-          workspaceLabel="BitFun"
-          harnessControl={{ onActivateBalanced: vi.fn() }}
-        />
-      );
-    });
+    // Where the session runs and what it is chasing read as one situation.
+    expect(context?.querySelector('[data-bf-part="workspace"]')).not.toBeNull();
+    expect(context?.querySelector('[data-bf-part="branch"]')).not.toBeNull();
+    expect(context?.querySelector('[data-testid="thread-goal-strip-button"]')).not.toBeNull();
 
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    const menu = document.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
-    expect(menu).not.toBeNull();
-    expect(menu?.querySelectorAll('[data-bf-part="profile"]').length).toBe(3);
-    // Simplified list: no header, hint, footer, icons, or descriptions.
-    expect(menu?.querySelector('.bitfun-harness-selector__header')).toBeNull();
-    expect(menu?.querySelector('.bitfun-harness-selector__footer')).toBeNull();
-    expect(menu?.querySelector('.bitfun-harness-selector__profile-icon')).toBeNull();
-    expect(menu?.querySelector('.bitfun-harness-selector__profile-description')).toBeNull();
-    expect(menu?.querySelector('[data-bf-part="profile"][data-bf-profile="balanced"]'))
-      .not.toBeNull();
-  });
-
-  it('activates the Balanced harness from the simplified list', async () => {
-    const onActivateBalanced = vi.fn();
-    await act(async () => {
-      root.render(
-        <ChatInputWorkspaceStrip
-          repositoryPath="D:/workspace/BitFun"
-          workspaceLabel="BitFun"
-          harnessControl={{ onActivateBalanced }}
-        />
-      );
-    });
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    const balancedRow = document.querySelector<HTMLButtonElement>(
-      '[data-bf-part="profile"][data-bf-profile="balanced"]',
-    );
-    expect(balancedRow?.dataset.bfState).toBe('current');
-
-    await act(async () => {
-      balancedRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(onActivateBalanced).toHaveBeenCalledTimes(1);
-    expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
-  });
-
-  it('shows goal text only while the goal is active', async () => {
-    await act(async () => {
-      root.render(
-        <ChatInputWorkspaceStrip
-          repositoryPath="D:/workspace/BitFun"
-          workspaceLabel="BitFun"
-          harnessControl={{ onActivateBalanced: vi.fn() }}
-          threadGoal={{
-            visible: true,
-            goal: null,
-            onOpen: vi.fn(),
-          }}
-        />
-      );
-    });
-
-    const goalButton = container.querySelector<HTMLElement>('[data-testid="thread-goal-strip-button"]');
-    expect(goalButton?.textContent).toBe('');
-    expect(goalButton?.classList.contains('bitfun-chat-input-workspace-strip__goal-btn--none')).toBe(true);
-
-    await act(async () => {
-      root.render(
-        <ChatInputWorkspaceStrip
-          repositoryPath="D:/workspace/BitFun"
-          workspaceLabel="BitFun"
-          harnessControl={{ onActivateBalanced: vi.fn() }}
-          threadGoal={{
-            visible: true,
-            goal: { objective: 'Optimize input interaction', status: 'active' },
-            onOpen: vi.fn(),
-          }}
-        />
-      );
-    });
-
-    expect(
-      container.querySelector<HTMLElement>('[data-testid="thread-goal-strip-button"]')?.textContent,
-    ).toBe('Optimize input interaction');
-  });
-
-  it('places automatic approval immediately after the Harness profile', async () => {
-    await act(async () => {
-      root.render(
-        <ChatInputWorkspaceStrip
-          repositoryPath="D:/workspace/BitFun"
-          workspaceLabel="BitFun"
-          harnessControl={{ onActivateBalanced: vi.fn() }}
-          permissionControl={{ mode: 'auto', onChange: vi.fn() }}
-        />
-      );
-    });
-
-    const harness = container.querySelector<HTMLElement>('[data-bf-part="harness"]');
-    const trigger = container.querySelector<HTMLElement>(
+    // What the next submission runs with reads as one contract.
+    const permissionTrigger = next?.querySelector<HTMLElement>(
       '[data-testid="chat-input-permission-trigger"]',
     );
-    expect(trigger?.textContent).toContain('chatInput.permissionMode.auto.label');
-    expect(harness?.contains(trigger ?? null)).toBe(true);
-    expect(
-      container.querySelector('.bitfun-chat-input-workspace-strip__actions--portal-only'),
-    ).not.toBeNull();
+    expect(permissionTrigger?.textContent).toContain('chatInput.permissionMode.auto.label');
+    expect(next?.querySelector('[data-bf-part="usageAction"]')).not.toBeNull();
+    expect(container.textContent).toContain('12%');
+
+    // The harness and the reasoning strength live in the capsule now, so the
+    // strip must not grow a second home for either.
+    expect(container.querySelector('[data-testid="harness-profile-selector"]')).toBeNull();
+    expect(container.querySelector('[data-bf-part="harness"]')).toBeNull();
+    expect(container.querySelector('[data-bf-part="runtime"]')).toBeNull();
+  });
+
+  it('names the goal only once it is worth reading, and keeps its state visible', async () => {
+    const renderGoal = async (goal: ThreadGoalSnapshot | null) => {
+      await act(async () => {
+        root.render(
+          <ChatInputWorkspaceStrip
+            repositoryPath="D:/workspace/BitFun"
+            workspaceLabel="BitFun"
+            threadGoal={{ visible: true, goal, onOpen: vi.fn() }}
+          />
+        );
+      });
+      return container.querySelector<HTMLElement>('[data-testid="thread-goal-strip-button"]');
+    };
+
+    // No goal: the crosshair is an invitation, not a status.
+    let goalButton = await renderGoal(null);
+    expect(goalButton?.textContent).toBe('');
+    expect(goalButton?.dataset.goalTone).toBe('none');
+
+    goalButton = await renderGoal({ objective: 'Optimize input interaction', status: 'active' });
+    expect(goalButton?.textContent).toBe('Optimize input interaction');
+    expect(goalButton?.dataset.goalTone).toBe('active');
+
+    // A goal that stopped on its own must not read like a running one.
+    goalButton = await renderGoal({ objective: 'Optimize input interaction', status: 'paused' });
+    expect(goalButton?.dataset.goalTone).toBe('paused');
+    goalButton = await renderGoal({ objective: 'Optimize input interaction', status: 'blocked' });
+    expect(goalButton?.dataset.goalTone).toBe('blocked');
+
+    // A finished goal keeps the entry but stops competing for attention.
+    goalButton = await renderGoal({ objective: 'Optimize input interaction', status: 'complete' });
+    expect(goalButton?.dataset.goalTone).toBe('complete');
+    expect(goalButton?.textContent).toBe('');
   });
 
   it('keeps an ask-mode permission entry visible and switches from its menu', async () => {
@@ -624,7 +550,10 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
   });
 
-  it('keeps the ACP strip groups in one row with the policy and runtime column layout', async () => {
+  it('keeps both rails present whatever the session happens to expose', async () => {
+    // The two rails are the layout. A session with fewer controls empties a
+    // rail rather than switching the strip to a different arrangement, so the
+    // remaining controls cannot drift sideways between sessions.
     await act(async () => {
       root.render(
         <ChatInputWorkspaceStrip
@@ -637,20 +566,11 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     });
 
     const strip = container.querySelector<HTMLElement>('[data-testid="chat-input-workspace-strip"]');
-    expect(strip).not.toBeNull();
-    // ACP sessions have no Harness group, but the approval and runtime groups
-    // must still be placed on the strip's single grid row instead of stacking
-    // into additional lines below the workspace breadcrumb.
-    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-workspace');
-    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-policy');
-    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-runtime');
-    expect(strip?.className).not.toContain('bitfun-chat-input-workspace-strip--with-harness');
-    expect(strip?.querySelector('[data-bf-part="main"]')).not.toBeNull();
-    expect(strip?.querySelector('[data-bf-part="actions"]')).not.toBeNull();
-    expect(strip?.querySelector('[data-bf-part="runtime"]')).not.toBeNull();
-  });
+    expect(strip?.className).toBe('bitfun-chat-input-workspace-strip');
+    expect(strip?.children.length).toBe(2);
+    expect(strip?.children[0]?.getAttribute('data-bf-part')).toBe('context');
+    expect(strip?.children[1]?.getAttribute('data-bf-part')).toBe('next');
 
-  it('keeps the ACP strip on a single row without a runtime group', async () => {
     await act(async () => {
       root.render(
         <ChatInputWorkspaceStrip
@@ -661,11 +581,12 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
       );
     });
 
-    const strip = container.querySelector<HTMLElement>('[data-testid="chat-input-workspace-strip"]');
-    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-workspace');
-    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-policy');
-    expect(strip?.className).not.toContain('bitfun-chat-input-workspace-strip--with-runtime');
-    expect(strip?.className).not.toContain('bitfun-chat-input-workspace-strip--with-harness');
+    const withoutUsage = container.querySelector<HTMLElement>(
+      '[data-testid="chat-input-workspace-strip"]',
+    );
+    expect(withoutUsage?.className).toBe('bitfun-chat-input-workspace-strip');
+    expect(withoutUsage?.children.length).toBe(2);
+    expect(withoutUsage?.querySelector('[data-bf-part="usageAction"]')).toBeNull();
   });
 
   it('reuses the permission control with dispatch-scoped choices', async () => {

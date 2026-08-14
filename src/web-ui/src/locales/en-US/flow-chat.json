@@ -2,8 +2,6 @@
   "permission": {
     "title": "Permission required",
     "subagentOwner": "{{subagent}} subagent",
-    "feedbackLabel": "Rejection feedback",
-    "feedbackPlaceholder": "Optional guidance when rejecting",
     "responseFailed": "The permission response could not be delivered. Try again.",
     "allowOnce": "Allow once",
     "allowAlways": "Always allow",
@@ -21,11 +19,12 @@
       "public": "public"
     },
     "reject": "Reject",
+    "rejectWithReason": "Reject with reason",
+    "rejectWithReasonTooltip": "Rejects with what you typed in the composer, then clears it.",
+    "scopeLabel": "Reply scope",
+    "scopeThis": "This one",
+    "scopeAll": "All",
     "batchCount": "{{count}} permission requests",
-    "collapsePanel": "Collapse permission requests",
-    "expandPanel": "Expand {{count}} pending permission requests",
-    "current": "Current",
-    "pending": "Pending",
     "actions": {
       "read": "Read files",
       "edit": "Edit files",
@@ -172,7 +171,9 @@
       "turns": "{{count}} turns",
       "calls": "{{count}} calls",
       "operations": "{{count}} ops",
-      "tokens": "{{value}} tokens"
+      "tokens": "{{value}} tokens",
+      "tokenUsage": "Tokens usage",
+      "dataDelayDisclaimer": "Usage statistics may be delayed. System records are authoritative."
     },
     "loading": {
       "title": "Generating usage report",
@@ -688,9 +689,9 @@
       "comingSoonNotice": "{{name}} Harness is in development.",
       "legacySessionNotice": "This legacy session keeps its original agent mode. Create a new session to use Agent Harness.",
       "profiles": {
-        "minimal": { "name": "Minimal" },
-        "balanced": { "name": "Balanced" },
-        "ultimate": { "name": "Ultimate" }
+        "minimal": { "name": "Minimal", "promise": "Acts directly, with the least planning and checking" },
+        "balanced": { "name": "Balanced", "promise": "Plans first, then verifies what matters" },
+        "ultimate": { "name": "Ultimate", "promise": "Deep planning, more collaboration, full verification" }
       }
     },
     "specialistAgents": {

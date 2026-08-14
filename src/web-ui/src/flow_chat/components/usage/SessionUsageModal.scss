@@ -1,50 +1,120 @@
-@use '../../../component-library/styles/tokens' as *;
-
 /*
- * The card was drawn to sit in the transcript: side margins that line it up
- * with the message column, and a frame that separates it from the messages
- * around it. Inside a dialog both are wrong — the margins indent it from a
- * surface that is already inset, and the frame draws a box inside a box.
- *
- * Its own `padding` is kept, and becomes the dialog's inset. It is the spacing
- * the report was drawn with, and it is equal on all four sides, which neither
- * of the dialog's own options is: `.modal__content` ships `padding: 0`, and
- * `contentInset` sets `padding-inline` only.
- *
- * The modal renders the card in its `compact` variant, which trims the
- * duplicate heading and secondary export option while keeping the report
- * metrics and summaries readable.
-
+ * The usage report is a single focused surface. Its dimensions are tuned to
+ * the desktop reference at a 724 x 543 CSS viewport: 16px horizontal and 12px
+ * vertical scene gutters leave a 692 x 519 dialog, while larger windows keep
+ * the report at a comfortable 720 x 520 maximum.
  */
-.session-usage-modal__content {
-  .session-usage-report-card {
-    margin: 0;
-    border: none;
-    background: none;
-    box-shadow: none;
+/*
+ * The Appearance runtime emits root-scoped generic Modal rules. Anchoring the
+ * focused variant to the canonical overlay host keeps these product-specific
+ * dimensions and paint above that generic contract without abandoning tokens.
+ */
+#bitfun-appearance-overlay-host > .modal-overlay.session-usage-modal {
+  padding: 12px 16px;
+  background: var(--bf-appearance-token-color-bg-primary);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  > .modal.modal--xlarge {
+    width: min(720px, 100%);
+    max-width: 720px;
+    height: min(520px, calc(100vh - 24px));
+    max-height: calc(100vh - 24px);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-border-base) 70%, transparent);
+    border-radius: 16px;
+    background: var(--bf-appearance-token-color-bg-secondary);
+    box-shadow:
+      0 18px 48px var(--bf-appearance-token-color-overlay-black-20),
+      0 2px 10px var(--bf-appearance-token-color-overlay-black-08);
+  }
+
+  > .modal.modal--xlarge > .modal__header-shell > .modal__header {
+    padding: 22px 24px 8px;
+    border-bottom: 0;
+  }
+
+  > .modal.modal--xlarge > .modal__header-shell .modal__title-group {
+    min-width: 0;
+  }
+
+  > .modal.modal--xlarge > .modal__header-shell .modal__title {
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+
+  > .modal.modal--xlarge > .modal__header-shell > .modal__close {
+    right: 20px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    color: var(--bf-appearance-token-color-text-secondary);
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  > .modal.modal--xlarge > .modal__content {
+    padding: 0 24px 16px;
+    overflow: hidden;
+    background: var(--bf-appearance-token-color-bg-secondary);
   }
 }
 
+.session-usage-modal__content {
+  height: 100%;
+  min-height: 0;
+}
 
-/*
- * The dialog is the focused summary surface, so its title bar reads as the
- * report title. Slightly stronger type, a touch more header padding, and a
- * scene-tinted content area keep the compact card below from feeling like a
- * second, unrelated block.
- */
-.session-usage-modal {
-  .modal__title {
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    font-weight: 650;
+@media (max-width: 640px) {
+  #bitfun-appearance-overlay-host > .modal-overlay.session-usage-modal {
+    padding: 10px 12px;
+
+    > .modal.modal--xlarge {
+      height: calc(100vh - 20px);
+      max-height: calc(100vh - 20px);
+      border-radius: 14px;
+    }
+
+    > .modal.modal--xlarge > .modal__header-shell > .modal__header {
+      padding: 18px 18px 9px;
+    }
+
+    > .modal.modal--xlarge > .modal__header-shell > .modal__close {
+      right: 14px;
+    }
+
+    > .modal.modal--xlarge > .modal__content {
+      padding: 0 18px 14px;
+      overflow-y: auto;
+    }
   }
+}
 
-  .modal__header {
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
+@media (max-width: 420px) {
+  #bitfun-appearance-overlay-host > .modal-overlay.session-usage-modal {
+    padding: 8px;
 
-  .modal__content {
-    background: var(--bf-appearance-token-color-bg-scene);
+    > .modal.modal--xlarge {
+      height: calc(100vh - 16px);
+      max-height: calc(100vh - 16px);
+      border-radius: 12px;
+    }
+
+    > .modal.modal--xlarge > .modal__header-shell > .modal__header {
+      padding-inline: 14px;
+    }
+
+    > .modal.modal--xlarge > .modal__header-shell .modal__title {
+      font-size: 19px;
+    }
+
+    > .modal.modal--xlarge > .modal__content {
+      padding-inline: 14px;
+    }
   }
 }

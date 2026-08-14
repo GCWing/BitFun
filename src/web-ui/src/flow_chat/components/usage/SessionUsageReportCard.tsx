@@ -9,9 +9,16 @@ import {
   Clock3,
   Database,
   FileText,
+  GitBranch,
+  Globe2,
+  PencilLine,
+  Search,
+  Terminal,
+  Wrench,
 } from 'lucide-react';
 import { IconButton, MarkdownRenderer, ToolProcessingDots, Tooltip } from '@/component-library';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
+import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import {
   buildSessionUsageExportMarkdown,
   formatHitRateSuffix,
@@ -74,14 +81,14 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
 
   const handleCopy = useCallback(async (event: React.MouseEvent) => {
     event.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(buildSessionUsageExportMarkdown(markdown, report, {
-        redactPaths: redactExportPaths,
-        t,
-      }));
+    const didCopy = await copyTextToClipboard(buildSessionUsageExportMarkdown(markdown, report, {
+      redactPaths: redactExportPaths,
+      t,
+    }));
+    if (didCopy) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
-    } catch {
+    } else {
       setCopied(false);
     }
   }, [markdown, redactExportPaths, report, t]);
@@ -181,6 +188,203 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
   const workspacePathLabel = getUsageDisplayPathLabel(report.workspace.pathLabel, t, {
     redactPaths: redactExportPaths,
   });
+  const coverageBadgeClassName =
+    `session-usage-report-card__coverage session-usage-report-card__coverage--${coverageTone}` +
+    (report.coverage.level !== 'complete' ? ' session-usage-report-card__coverage--hint' : '');
+
+  if (compact) {
+    const primaryModel = topModels[0];
+    const primaryModelSource = primaryModel?.modelIdSource
+      ?? (primaryModel?.modelId === 'unknown_model' ? 'legacy_missing' : undefined);
+    const primaryModelLabel = primaryModel
+      ? getModelLabel(primaryModel.modelId, t, primaryModelSource)
+      : t('usage.status.modelNotRecorded');
+    const primaryModelHelp = primaryModel
+      ? getModelHelp(primaryModelSource, t, primaryModel.modelId)
+      : undefined;
+    const compactMetrics = [
+      {
+        key: 'wall',
+        label: t('usage.metrics.wall'),
+        value: formatUsageDuration(report.time.wallTimeMs, t),
+        icon: Clock3,
+        help: t('usage.help.wall'),
+      },
+      {
+        key: 'active',
+        label: t('usage.metrics.active'),
+        value: formatUsageDuration(report.time.activeTurnMs, t),
+        icon: Activity,
+        help: t('usage.help.active'),
+      },
+      {
+        key: 'files',
+        label: t('usage.metrics.files'),
+        value: getFileSummaryLabel(report, t),
+        icon: FileText,
+        help: fileMetricHelp,
+      },
+      {
+        key: 'errors',
+        label: t('usage.metrics.errors'),
+        value: formatUsageNumber(report.errors.totalErrors, t),
+        icon: AlertTriangle,
+        tone: report.errors.totalErrors > 0 ? 'warning' : undefined,
+        help: t('usage.help.errors'),
+      },
+    ];
+    const showAllTools = buildShowAllAction({
+      totalCount: report.tools.length,
+      visibleCount: topTools.length,
+      sectionLabel: t('usage.sections.tools'),
+      t,
+      onClick: onOpenDetails ? handleOpenSectionDetails('tools') : undefined,
+    });
+
+    return (
+      <div
+        data-bf-component="session-usage-report-card"
+        data-bf-part="root"
+        className="session-usage-report-card session-usage-report-card--compact"
+        data-report-id={report.reportId}
+      >
+        <div className="session-usage-report-card__header" data-bf-component="session-usage-report-card" data-bf-part="header">
+          <div className="session-usage-report-card__title-block" data-bf-component="session-usage-report-card" data-bf-part="title">
+            <div className="session-usage-report-card__meta">
+              <span>{formatUsageTimestamp(generatedAt ?? report.generatedAt, t)}</span>
+              <span>{t('usage.card.turns', { count: report.scope.turnCount })}</span>
+              <span>{workspacePathLabel}</span>
+            </div>
+          </div>
+          <div className="session-usage-report-card__actions" data-bf-component="session-usage-report-card" data-bf-part="actions">
+            <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
+              <IconButton
+                className="session-usage-report-card__copy-action"
+                variant="ghost"
+                size="xs"
+                onClick={handleCopy}
+                data-testid="session-usage-copy"
+                aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
+              >
+                {copied ? <Check size={17} /> : <Copy size={17} />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip content={t('usage.actions.openDetails')}>
+              <button
+                type="button"
+                className="session-usage-report-card__details-button"
+                onClick={handleOpenDetails}
+                disabled={!onOpenDetails}
+                data-testid="session-usage-details"
+                aria-label={t('usage.actions.openDetails')}
+              >
+                <span>{t('usage.actions.viewDetails')}</span>
+                <ChevronRight size={15} aria-hidden />
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+
+        <div className="session-usage-report-card__compact-overview">
+          <section className="session-usage-report-card__compact-token" data-bf-component="session-usage-report-card" data-bf-part="metric">
+            <div className="session-usage-report-card__compact-token-label">
+              <Database size={16} strokeWidth={1.8} aria-hidden />
+              <span>{t('usage.card.tokenUsage')}</span>
+            </div>
+            <div className="session-usage-report-card__compact-token-value">
+              {formatUsageNumber(tokenTotal, t)}
+            </div>
+            <div className="session-usage-report-card__compact-model">
+              {primaryModelHelp ? (
+                <Tooltip content={primaryModelHelp}>
+                  <span className="session-usage-report-card__compact-model-name session-usage-report-card__compact-model-name--help">
+                    {primaryModelLabel}
+                  </span>
+                </Tooltip>
+              ) : (
+                <span className="session-usage-report-card__compact-model-name">{primaryModelLabel}</span>
+              )}
+              <span className="session-usage-report-card__compact-model-separator" aria-hidden />
+              <span>{t('usage.card.calls', { count: primaryModel?.callCount ?? 0 })}</span>
+            </div>
+            <div className="session-usage-report-card__compact-cache">
+              <Database size={15} strokeWidth={1.7} aria-hidden />
+              <span className="session-usage-report-card__compact-cache-label">{t('usage.metrics.cached')}</span>
+              <UsageMetricValue value={cachedTokenText} help={cachedTokenHelp} />
+            </div>
+          </section>
+
+          <div className="session-usage-report-card__compact-metrics" data-bf-component="session-usage-report-card" data-bf-part="metrics">
+            {compactMetrics.map(metric => {
+              const Icon = metric.icon;
+              return (
+                <div
+                  data-bf-component="session-usage-report-card"
+                  data-bf-part="metric"
+                  className={`session-usage-report-card__compact-metric${metric.tone ? ` session-usage-report-card__compact-metric--${metric.tone}` : ''}`}
+                  key={metric.key}
+                >
+                  <div className="session-usage-report-card__compact-metric-label">
+                    <Icon size={18} strokeWidth={1.8} aria-hidden />
+                    <span>{metric.label}</span>
+                  </div>
+                  <UsageMetricValue value={metric.value} help={metric.help} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <section className="session-usage-report-card__compact-tools" data-bf-component="session-usage-report-card" data-bf-part="lists">
+          <div className="session-usage-report-card__compact-tools-header">
+            <h4>{t('usage.sections.tools')}</h4>
+            {showAllTools && (
+              <Tooltip content={showAllTools.ariaLabel}>
+                <button
+                  type="button"
+                  className="session-usage-report-card__mini-list-more session-usage-report-card__compact-tools-more"
+                  onClick={showAllTools.onClick}
+                  data-testid="session-usage-tools-details"
+                  aria-label={showAllTools.ariaLabel}
+                >
+                  <span>{showAllTools.label}</span>
+                  <ChevronRight size={14} aria-hidden />
+                </button>
+              </Tooltip>
+            )}
+          </div>
+          <div className="session-usage-report-card__compact-tool-list" data-bf-component="session-usage-report-card" data-bf-part="list">
+            {topTools.length === 0 ? (
+              <div className="session-usage-report-card__compact-tool-empty">
+                {t('usage.empty.tools')}
+              </div>
+            ) : topTools.map(tool => (
+              <div
+                className="session-usage-report-card__compact-tool-row"
+                data-bf-component="session-usage-report-card"
+                data-bf-part="listRow"
+                key={tool.toolName}
+              >
+                <span className="session-usage-report-card__compact-tool-icon" aria-hidden>
+                  {renderCompactToolIcon(tool.toolName, tool.category)}
+                </span>
+                <span className="session-usage-report-card__compact-tool-name">
+                  {tool.redacted ? getRedactedLabel(t) : tool.toolName}
+                </span>
+                <span className="session-usage-report-card__compact-tool-calls">
+                  {t('usage.card.calls', { count: tool.callCount })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <p className="session-usage-report-card__compact-disclaimer">
+          {t('usage.card.dataDelayDisclaimer')}
+        </p>
+      </div>
+    );
+  }
 
   const metrics = [
     {
@@ -226,10 +430,6 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
       help: t('usage.help.errors'),
     },
   ];
-
-  const coverageBadgeClassName =
-    `session-usage-report-card__coverage session-usage-report-card__coverage--${coverageTone}` +
-    (report.coverage.level !== 'complete' ? ' session-usage-report-card__coverage--hint' : '');
 
   return (
     <div data-bf-component="session-usage-report-card" data-bf-part="root" className={`session-usage-report-card${compactClassName}`} data-report-id={report.reportId}>
@@ -391,6 +591,49 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
     </div>
   );
 };
+
+function renderCompactToolIcon(toolName: string, category?: string) {
+  const normalizedName = toolName.toLowerCase();
+  const iconProps = { size: 17, strokeWidth: 1.8 } as const;
+
+  if (
+    normalizedName.includes('exec')
+    || normalizedName.includes('bash')
+    || normalizedName.includes('command')
+    || normalizedName.includes('terminal')
+    || category === 'shell'
+  ) {
+    return <Terminal {...iconProps} />;
+  }
+  if (
+    normalizedName.includes('grep')
+    || normalizedName.includes('glob')
+    || normalizedName.includes('search')
+  ) {
+    return <Search {...iconProps} />;
+  }
+  if (
+    normalizedName.includes('edit')
+    || normalizedName.includes('write')
+    || normalizedName.includes('patch')
+  ) {
+    return <PencilLine {...iconProps} />;
+  }
+  if (normalizedName.includes('web')) {
+    return <Globe2 {...iconProps} />;
+  }
+  if (normalizedName.includes('git') || category === 'git') {
+    return <GitBranch {...iconProps} />;
+  }
+  if (
+    normalizedName.includes('read')
+    || normalizedName.includes('file')
+    || category === 'file'
+  ) {
+    return <FileText {...iconProps} />;
+  }
+  return <Wrench {...iconProps} />;
+}
 
 function UsageMetricValue({ value, help }: { value: string; help?: string }) {
   const node = (

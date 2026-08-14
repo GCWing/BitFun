@@ -500,56 +500,433 @@
 
 /*
  * Compact variant used when the card is shown inside the session-usage modal.
- * The dialog already provides a title and an outer frame, so the card drops
- * its own heading and the export-redaction toggle (the full panel still has
- * it), tightens the vertical rhythm, and turns the three summary columns into
- * light, borderless lists.
+ * The modal is a focused summary rather than a smaller transcript card: the
+ * token total owns the left half, four supporting metrics form a quiet 2x2
+ * grid, and only the highest-volume tools remain above the footer note.
  */
 .session-usage-report-card--compact {
-  gap: 8px;
+  gap: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   animation: none;
 }
 
-.session-usage-report-card--compact .session-usage-report-card__title,
-.session-usage-report-card--compact .session-usage-report-card__export-option {
-  display: none;
+.session-usage-report-card--compact.session-usage-report-card--loading,
+.session-usage-report-card--compact.session-usage-report-card--fallback {
+  height: auto;
+  min-height: 112px;
+  padding: 24px;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__header {
+  min-height: 32px;
+  gap: 18px;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__title-block {
+  gap: 0;
 }
 
 .session-usage-report-card--compact .session-usage-report-card__meta {
   flex-basis: auto;
-  gap: 6px 10px;
+  flex-wrap: nowrap;
+  gap: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__meta span {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  max-width: 172px;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__meta span + span::before {
+  width: 1px;
+  height: 11px;
+  margin: 0 13px;
+  background: color-mix(in srgb, var(--bf-appearance-token-border-base) 72%, transparent);
+  content: '';
+  flex: 0 0 auto;
 }
 
 .session-usage-report-card--compact .session-usage-report-card__actions {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__copy-action {
+  width: 30px;
+  height: 30px;
+  color: var(--bf-appearance-token-color-text-primary);
+}
+
+.session-usage-report-card--compact .session-usage-report-card__details-button {
+  height: 30px;
+  padding: 0 2px 0 7px;
   gap: 6px;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
 }
 
-.session-usage-report-card--compact .session-usage-report-card__metric {
-  min-height: 32px;
-  padding: 5px 8px;
-  border-color: color-mix(in srgb, var(--bf-appearance-token-border-base) 42%, transparent);
-  background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 44%, transparent);
+.session-usage-report-card__compact-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.97fr) minmax(0, 1.03fr);
+  min-height: 145px;
+  margin-top: 26px;
 }
 
-.session-usage-report-card--compact .session-usage-report-card__lists {
-  gap: 6px;
+.session-usage-report-card__compact-token {
+  position: relative;
+  min-width: 0;
+  padding: 6px 25px 0 6px;
 }
 
-.session-usage-report-card--compact .session-usage-report-card__mini-list {
-  padding: 0;
-  border: 0;
-  background: transparent;
+.session-usage-report-card__compact-token::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 144px;
+  background: color-mix(in srgb, var(--bf-appearance-token-border-base) 68%, transparent);
+  content: '';
 }
 
-.session-usage-report-card--compact .session-usage-report-card__mini-list-row {
-  min-height: 30px;
-  padding: 4px 0;
+.session-usage-report-card__compact-token-label,
+.session-usage-report-card__compact-model,
+.session-usage-report-card__compact-cache,
+.session-usage-report-card__compact-metric-label {
+  display: flex;
+  align-items: center;
 }
 
-.session-usage-report-card--compact .session-usage-report-card__mini-list-empty {
-  min-height: 24px;
+.session-usage-report-card__compact-token-label {
+  gap: 9px;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
-.session-usage-report-card--compact .session-usage-report-card__mini-list-empty span {
-  display: none;
+.session-usage-report-card__compact-token-label svg,
+.session-usage-report-card__compact-cache svg {
+  flex: 0 0 auto;
+}
+
+.session-usage-report-card__compact-token-value {
+  margin-top: 15px;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: 39px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 670;
+  letter-spacing: 0.01em;
+  line-height: 0.98;
+  white-space: nowrap;
+}
+
+.session-usage-report-card__compact-model {
+  min-width: 0;
+  margin-top: 17px;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.session-usage-report-card__compact-model-name {
+  min-width: 0;
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-usage-report-card__compact-model-name--help {
+  cursor: help;
+}
+
+.session-usage-report-card__compact-model-separator {
+  width: 1px;
+  height: 12px;
+  margin: 0 15px;
+  background: color-mix(in srgb, var(--bf-appearance-token-border-base) 78%, transparent);
+  flex: 0 0 auto;
+}
+
+.session-usage-report-card__compact-cache {
+  width: max-content;
+  min-width: 158px;
+  max-width: 100%;
+  margin-top: 12px;
+  padding-top: 11px;
+  gap: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 68%, transparent);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.session-usage-report-card__compact-cache-label {
+  flex: 0 0 auto;
+}
+
+.session-usage-report-card__compact-cache .session-usage-report-card__metric-value {
+  margin-left: 0;
+  overflow: hidden;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: 15px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+}
+
+.session-usage-report-card__compact-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+  padding-left: 0;
+}
+
+.session-usage-report-card__compact-metric {
+  min-width: 0;
+  padding: 8px 12px 10px 29px;
+}
+
+.session-usage-report-card__compact-metric:nth-child(odd) {
+  border-right: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 68%, transparent);
+}
+
+.session-usage-report-card__compact-metric:nth-child(-n + 2) {
+  border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 68%, transparent);
+}
+
+.session-usage-report-card__compact-metric-label {
+  min-width: 0;
+  gap: 10px;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.session-usage-report-card__compact-metric-label svg {
+  flex: 0 0 auto;
+  color: var(--bf-appearance-token-color-text-primary);
+}
+
+.session-usage-report-card__compact-metric-label span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-usage-report-card__compact-metric > .session-usage-report-card__metric-value {
+  display: block;
+  width: fit-content;
+  max-width: none;
+  margin: 5px 0 0 28px;
+  overflow: visible;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 1.15;
+  text-decoration: none;
+}
+
+.session-usage-report-card__compact-metric > [data-tooltip] {
+  display: block;
+  width: fit-content;
+  max-width: none;
+  margin: 5px 0 0 28px;
+}
+
+.session-usage-report-card__compact-metric > [data-tooltip] .session-usage-report-card__metric-value {
+  display: block;
+  max-width: none;
+  margin: 0;
+  overflow: visible;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 1.15;
+  text-decoration: none;
+}
+
+.session-usage-report-card__compact-metric--warning .session-usage-report-card__compact-metric-label svg,
+.session-usage-report-card__compact-metric--warning > .session-usage-report-card__metric-value,
+.session-usage-report-card__compact-metric--warning > [data-tooltip] .session-usage-report-card__metric-value {
+  color: var(--bf-appearance-token-color-warning);
+}
+
+.session-usage-report-card__compact-tools {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 68%, transparent);
+}
+
+.session-usage-report-card__compact-tools-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 27px;
+  gap: 12px;
+}
+
+.session-usage-report-card__compact-tools-header h4 {
+  margin: 0;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: 17px;
+  font-weight: 680;
+  line-height: 1.2;
+}
+
+.session-usage-report-card__compact-tools-more {
+  height: 27px;
+  padding: 0 2px 0 7px;
+  gap: 5px;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: 12px;
+}
+
+.session-usage-report-card__compact-tool-list {
+  min-height: 0;
+  margin-top: 0;
+}
+
+.session-usage-report-card__compact-tool-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 45px;
+  gap: 11px;
+  color: var(--bf-appearance-token-color-text-primary);
+}
+
+.session-usage-report-card__compact-tool-row + .session-usage-report-card__compact-tool-row {
+  border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 60%, transparent);
+}
+
+.session-usage-report-card__compact-tool-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 7%, var(--bf-appearance-token-color-bg-primary));
+  color: var(--bf-appearance-token-color-text-primary);
+}
+
+.session-usage-report-card__compact-tool-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-usage-report-card__compact-tool-calls {
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.session-usage-report-card__compact-tool-empty {
+  padding: 18px 0;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: 13px;
+}
+
+.session-usage-report-card__compact-disclaimer {
+  flex: 0 0 auto;
+  margin: auto 0 0;
+  padding-top: 11px;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .session-usage-report-card--compact {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .session-usage-report-card--compact .session-usage-report-card__header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .session-usage-report-card--compact .session-usage-report-card__title-block {
+    flex-basis: 100%;
+  }
+
+  .session-usage-report-card--compact .session-usage-report-card__meta span {
+    max-width: 132px;
+  }
+
+  .session-usage-report-card--compact .session-usage-report-card__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .session-usage-report-card__compact-overview {
+    grid-template-columns: 1fr;
+    margin-top: 22px;
+  }
+
+  .session-usage-report-card__compact-token {
+    padding: 4px 0 22px;
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 68%, transparent);
+  }
+
+  .session-usage-report-card__compact-token::after {
+    display: none;
+  }
+
+  .session-usage-report-card__compact-metrics {
+    min-height: 145px;
+    padding: 18px 0 0;
+  }
+
+  .session-usage-report-card__compact-tools {
+    flex: 0 0 auto;
+    margin-top: 22px;
+  }
+}
+
+@media (max-width: 420px) {
+  .session-usage-report-card__compact-token-value {
+    font-size: 34px;
+  }
+
+  .session-usage-report-card__compact-metric {
+    padding-inline: 10px;
+  }
+
+  .session-usage-report-card__compact-metric > .session-usage-report-card__metric-value,
+  .session-usage-report-card__compact-metric > [data-tooltip] .session-usage-report-card__metric-value {
+    margin-left: 28px;
+    font-size: 18px;
+  }
 }

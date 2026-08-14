@@ -143,6 +143,9 @@ import {
   ChatInputWorkspaceStrip,
   type ChatInputPermissionMode,
 } from './ChatInputWorkspaceStrip';
+import { HarnessProfileSelector } from './HarnessProfileSelector';
+import { ChatInputApprovalBand } from './ChatInputApprovalBand';
+import { usePermissionRequests } from './modern/usePermissionRequests';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
 import {
@@ -465,8 +468,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const [permissionModeSaving, setPermissionModeSaving] = useState(false);
   const [showPermissionModeControl, setShowPermissionModeControl] = useState(true);
-  const [reasoningControlHost, setReasoningControlHost] = useState<HTMLDivElement | null>(null);
-  const [reasoningControlVisible, setReasoningControlVisible] = useState(false);
   // The session's own selection. `null` means it follows the global default,
   // which is what keeps switching modes in one conversation from moving every
   // other open session.
@@ -626,6 +627,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     inputState.value.trim()
   );
   const currentReviewActivity = useSessionReviewActivity(currentSessionId);
+  // A blocked turn is answered from the composer, so the request the runtime is
+  // waiting on is composer state like any other part of the next turn.
+  const {
+    activeBatch: activePermissionBatch,
+    requests: pendingPermissionRequests,
+    respond: respondPermission,
+    respondBatch: respondPermissionBatch,
+  } = usePermissionRequests(effectiveTargetSessionId || undefined);
   useSessionStateMachine(effectiveTargetSessionId);
   const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
   // isMultiLine: true when content overflows a single line (scrollHeight > threshold or has newlines)
@@ -5303,6 +5312,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         <div className="bitfun-chat-input__container" data-bf-component="chat-input" data-bf-part="container">
           <AcpPlanPanel entries={acpPlanEntries} />
+          {/* The request sits directly above the field that answers it, so the
+              transcript it is about stays readable while deciding. */}
+          {activePermissionBatch ? (
+            <ChatInputApprovalBand
+              key={`${activePermissionBatch.sessionId}:${activePermissionBatch.roundId}`}
+              requests={activePermissionBatch.requests}
+              totalPendingCount={pendingPermissionRequests.length}
+              rejectReason={inputState.value}
+              onRejectReasonConsumed={() => dispatchInput({ type: 'CLEAR_VALUE' })}
+              onRespond={respondPermission}
+              onRespondBatch={respondPermissionBatch}
+            />
+          ) : null}
           <div className={`bitfun-chat-input__box ${isMultiLine ? 'bitfun-chat-input__box--multi-line' : 'bitfun-chat-input__box--capsule'}`} data-bf-component="chat-input" data-bf-part="box">
             {showTargetSwitcher && (
               <div className="bitfun-chat-input__target-switcher" data-bf-component="chat-input" data-bf-part="targetSwitcher" data-testid="chat-input-target-switcher">
@@ -6152,6 +6174,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     getAppearanceOverlayHost(),
                   )}
                 </div>
+                {/* The two ends of the capsule carry the two halves of the next
+                    turn's contract: how it runs on the left, what runs it on
+                    the right. */}
+                {!isAcpTargetSession && !isSubagentInputTarget && !isAssistantWorkspace ? (
+                  <HarnessProfileSelector
+                    legacySession={!canSwitchModes}
+                    active={currentMode === 'agentic'}
+                    onActivateBalanced={() => {
+                      if (currentMode !== 'agentic') {
+                        requestSessionModeChange('agentic');
+                      }
+                    }}
+                  />
+                ) : null}
               </div>
               <div className="bitfun-chat-input__actions-right" data-bf-component="chat-input" data-bf-part="actionsRight">
                 {voiceInput.phase === 'idle' ? (
@@ -6167,8 +6203,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     externalSelection={dispatchModelSelection}
                     modeDefaultModelId={targetModeInfo?.model}
                     persistSharedModeDefault={Boolean(targetModeInfo && targetModeInfo.source !== 'external')}
-                    reasoningControlHost={reasoningControlHost}
-                    onReasoningAvailabilityChange={setReasoningControlVisible}
                   />
                   </div>
                 ) : null}
@@ -6185,25 +6219,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <ChatInputWorkspaceStrip
         repositoryPath={chatStripRepositoryPath}
         workspaceLabel={chatStripWorkspaceLabel}
-        harnessControl={!isAcpTargetSession && !isSubagentInputTarget && !isAssistantWorkspace
-          ? {
-              legacySession: !canSwitchModes,
-              active: currentMode === 'agentic',
-              onActivateBalanced: () => {
-                if (currentMode !== 'agentic') {
-                  requestSessionModeChange('agentic');
-                }
-              },
-            }
-          : undefined}
         executionTarget={effectiveTargetSession?.config.executionTarget}
         dispatchControl={dispatchControl}
         worktreeControl={worktreeControl}
         deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
-        reasoningControl={{
-          visible: reasoningControlVisible,
-          hostRef: setReasoningControlHost,
-        }}
         permissionControl={showPermissionModeControl
           ? caps.sessionScopedApproval
             ? {

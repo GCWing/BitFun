@@ -67,9 +67,10 @@ export const SessionUsageModal: React.FC = () => {
       isOpen
       onClose={closeSessionUsageModal}
       title={t('usage.title')}
-      size="large"
+      size="xlarge"
       overlayClassName="session-usage-modal"
       testId="session-usage-modal"
+      closeButtonTestId="session-usage-modal-close"
     >
       <div
         className="session-usage-modal__content"

@@ -1,10 +1,13 @@
 import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const chatInputWorkspaceStripAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'chat-input-workspace-strip',
+  // The strip is two rails: `context` is the situation the next turn starts
+  // from, `next` is what that turn is configured with. The old `main` /
+  // `harness` / `runtime` / `actions` grouping went with the conditional grid.
   parts: [
-    { id: 'root' }, { id: 'main' }, { id: 'workspace' }, { id: 'branch' },
-    { id: 'harness' }, { id: 'runtime' },
-    { id: 'actions' }, { id: 'permission' }, { id: 'permissionMenu' },
+    { id: 'root' }, { id: 'context' }, { id: 'next' },
+    { id: 'workspace' }, { id: 'branch' },
+    { id: 'permission' }, { id: 'permissionMenu' },
     { id: 'permissionOptions' }, { id: 'permissionOptionRow' },
     { id: 'permissionOption' }, { id: 'permissionOptionTrailing' },
     { id: 'permissionOptionNextTurn' }, { id: 'usageAction' },

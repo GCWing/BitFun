@@ -367,9 +367,10 @@
         flex-shrink: 0;
         display: flex;
         align-items: center;
+        gap: 4px;
         padding: 0;
-        // Keep the input text clear of the enlarged Plus control.
-        margin-right: 20px;
+        // Keep the input text clear of the left-hand controls.
+        margin-right: 10px;
 
         // Enlarge the Plus button to match the capsule height
         .bitfun-chat-input__agent-boost-add {
@@ -455,28 +456,50 @@
           align-items: center;
         }
 
-        // The reference keeps the composer model control to one responsibility.
-        // Reasoning and context usage remain available in their owning menus and
-        // in the status track below instead of being repeated inside the capsule.
-        .bitfun-reasoning-preset-selector,
+        // Context usage is a situation fact and belongs to the status track's
+        // right rail. The capsule carries only what the next turn is configured
+        // with, so the percentage is not repeated here.
         .bitfun-model-selector__ctx-usage {
           display: none;
         }
 
-        .bitfun-model-selector__trigger {
+        // Model and reasoning are one decision with two dials, so they share a
+        // single pill: what runs the turn, and how hard it thinks.
+        .bitfun-model-selector {
+          box-sizing: border-box;
+          display: flex;
+          align-items: center;
+          gap: 2px;
           height: 30px;
-          padding: 0 12px;
+          padding: 0 5px 0 0;
           border: 1px solid var(--bf-appearance-token-border-subtle);
           border-radius: 15px;
           background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 66%, transparent);
-          font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-          opacity: 1;
 
           &:hover,
-          &--open {
+          &[data-bf-state='open'] {
             border-color: var(--bf-appearance-token-border-medium);
             background: var(--bf-appearance-token-element-bg-soft);
           }
+        }
+
+        // The pill owns the border and background; the trigger inside it is a
+        // plain segment so the pair does not read as two stacked controls.
+        .bitfun-model-selector__trigger {
+          height: 28px;
+          padding: 0 6px 0 11px;
+          border: 0;
+          border-radius: 14px;
+          background: transparent;
+          font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+          opacity: 1;
+        }
+
+        // The meter is the whole control, so its segment of the pill is round.
+        .bitfun-reasoning-preset-selector__trigger {
+          width: 22px;
+          height: 22px;
+          border-radius: 11px;
         }
 
         .bitfun-model-selector__name {
@@ -488,8 +511,8 @@
           height: 32px;
           min-width: 32px;
           min-height: 32px;
-          border: 1px solid var(--bf-appearance-token-border-subtle);
-          background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 58%, transparent);
+          border: none;
+          background: transparent;
 
           svg {
             width: 16px;
@@ -2209,16 +2232,17 @@
   }
 }
 
-// In the light reference the send affordance remains a charcoal disk even
-// before content is entered. The muted arrow communicates the disabled state
-// without changing the control into a large pale circle.
+// In the light reference the disabled send affordance is grayed out as a
+// whole — a muted disk with a muted arrow — instead of keeping the charcoal
+// disk and only dimming the glyph.
 :root[data-bf-appearance-mode='light'] .bitfun-chat-input--capsule,
 .light .bitfun-chat-input--capsule {
   .bitfun-chat-input__box--capsule
     .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing):disabled {
     border: 1px solid transparent;
-    background: rgb(var(--private-chat-input-send-inverse-surface-end-rgb));
-    color: rgba(var(--private-chat-input-send-inverse-text-rgb), 0.58);
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-disabled);
+    opacity: 1;
     filter: none;
   }
 }

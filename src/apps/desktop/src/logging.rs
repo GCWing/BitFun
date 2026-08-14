@@ -207,7 +207,7 @@ pub struct LogConfig {
     pub session_log_dir: PathBuf,
 }
 
-fn is_embedded_webdriver_mode() -> bool {
+pub(crate) fn is_embedded_webdriver_mode() -> bool {
     (cfg!(debug_assertions) || cfg!(feature = "devtools"))
         && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some()
 }
