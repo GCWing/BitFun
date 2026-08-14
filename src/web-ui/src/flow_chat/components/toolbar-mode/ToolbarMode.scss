@@ -119,6 +119,10 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: auto;
 }
 
+.bitfun-toolbar-mode--ohos .bitfun-toolbar-mode__header-overflow {
+  display: none;
+}
+
 .bitfun-toolbar-mode__header-collapsed-actions {
   display: flex;
   align-items: center;

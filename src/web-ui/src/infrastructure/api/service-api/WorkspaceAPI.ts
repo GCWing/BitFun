@@ -1199,10 +1199,10 @@ export class WorkspaceAPI {
     }
   }
 
-  async currentMonitorOhos(): Promise<{ width: number; height: number; scaleFactor: number }> {
+  async currentMonitorOhos(): Promise<{ width: number; height: number; scaleFactor: number; avoidArea: { top: number; bottom: number; left: number; right: number } }> {
     try {
       const raw = await api.invoke<string>('current_monitor_ohos');
-      return JSON.parse(raw) as { width: number; height: number; scaleFactor: number };
+      return JSON.parse(raw) as { width: number; height: number; scaleFactor: number; avoidArea: { top: number; bottom: number; left: number; right: number } };
     } catch (error) {
       throw createTauriCommandError('current_monitor_ohos', error);
     }

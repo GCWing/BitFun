@@ -197,10 +197,22 @@ const ohosOps = (): WindowOps => ({
   },
   async currentMonitor(): Promise<ToolbarMonitorGeometry | null> {
     const m = await workspaceAPI.currentMonitorOhos();
+    const avoid = m.avoidArea;
+    const hasAvoid = avoid && (avoid.top > 0 || avoid.bottom > 0 || avoid.left > 0 || avoid.right > 0);
+    const workArea = hasAvoid
+      ? {
+          position: { x: avoid.left, y: avoid.top },
+          size: {
+            width: Math.max(0, m.width - avoid.left - avoid.right),
+            height: Math.max(0, m.height - avoid.top - avoid.bottom),
+          },
+        }
+      : undefined;
     return {
       position: { x: 0, y: 0 },
       size: { width: m.width, height: m.height },
       scaleFactor: m.scaleFactor,
+      workArea,
     };
   },
 });

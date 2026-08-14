@@ -205,7 +205,7 @@ const PersistentFooterActions: React.FC = () => {
     } catch {
       // Web and older desktop hosts retain the external feedback behavior.
     }
-    await systemAPI.openExternal('https://gitcode.com/OpenHarmonyPCDeveloper/BitFun/issues');
+    await systemAPI.openExternal('https://gitcode.com/OpenBitFun/bitfun_ade/issues');
   }, [closeMenu, feedbackPlatformEnabled]);
 
   // const handleAccountLogin = () => {

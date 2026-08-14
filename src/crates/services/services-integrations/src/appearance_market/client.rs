@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::miniapp_market::{
     DesktopAuthPollRequest, DesktopAuthPollResponse, DesktopAuthStart, MarketClient,
-    MarketClientError, MarketMe,
+    MarketClientError, MarketCredentialStore, MarketMe,
 };
 
 const DEFAULT_APPEARANCE_MARKET_API_URL: &str = "https://market.openbitfun.com/skin/api/v1";
@@ -40,6 +40,15 @@ impl AppearanceMarketClient {
         let base_url = std::env::var("BITFUN_APPEARANCE_MARKET_API_URL")
             .unwrap_or_else(|_| DEFAULT_APPEARANCE_MARKET_API_URL.to_string());
         let identity = MarketClient::from_environment().await?;
+        Self::with_identity(base_url, identity)
+    }
+
+    pub async fn from_environment_with_credential_store(
+        credential_store: Arc<dyn MarketCredentialStore>,
+    ) -> Result<Self, MarketClientError> {
+        let base_url = std::env::var("BITFUN_APPEARANCE_MARKET_API_URL")
+            .unwrap_or_else(|_| DEFAULT_APPEARANCE_MARKET_API_URL.to_string());
+        let identity = MarketClient::from_environment_with_credential_store(credential_store).await?;
         Self::with_identity(base_url, identity)
     }
 

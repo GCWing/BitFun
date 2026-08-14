@@ -21,6 +21,8 @@ use bitfun_services_integrations::appearance_market::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+#[cfg(target_env = "ohos")]
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,13 +80,25 @@ struct NormalizedManualSubmission {
     repository_url: Option<String>,
 }
 
+async fn appearance_market_client() -> Result<AppearanceMarketClient, String> {
+    #[cfg(target_env = "ohos")]
+    {
+        let store =
+            Arc::new(crate::api::ohos::market_credentials::OhosMarketCredentialStore::new());
+        return AppearanceMarketClient::from_environment_with_credential_store(store)
+            .await
+            .map_err(market_error);
+    }
+
+    #[cfg(not(target_env = "ohos"))]
+    AppearanceMarketClient::from_environment().await.map_err(market_error)
+}
+
 #[tauri::command]
 pub async fn appearance_market_browse(
     request: AppearanceMarketBrowseRequest,
 ) -> Result<AppearanceCursorPage<AppearanceMarketListingSummary>, String> {
-    let client = AppearanceMarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let client = appearance_market_client().await?;
     client.browse(&request).await.map_err(market_error)
 }
 
@@ -93,9 +107,7 @@ pub async fn appearance_market_get_listing(
     request: AppearanceMarketSlugRequest,
 ) -> Result<AppearanceMarketListingDetail, String> {
     validate_slug(&request.slug)?;
-    let client = AppearanceMarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let client = appearance_market_client().await?;
     client.listing(&request.slug).await.map_err(market_error)
 }
 
@@ -104,9 +116,7 @@ pub async fn appearance_market_download_release(
     request: AppearanceMarketDownloadRequest,
 ) -> Result<tauri::ipc::Response, String> {
     validate_slug(&request.slug)?;
-    let client = AppearanceMarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let client = appearance_market_client().await?;
     let detail = client.listing(&request.slug).await.map_err(market_error)?;
     let release = find_release(&detail, request.release_number)?;
     if release.listing_id != detail.summary.listing_id
@@ -142,9 +152,7 @@ pub async fn appearance_market_download_release(
 #[tauri::command]
 pub async fn appearance_market_list_submissions() -> Result<Vec<AppearanceMarketSubmission>, String>
 {
-    let mut client = AppearanceMarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = appearance_market_client().await?;
     client.list_submissions().await.map_err(market_error)
 }
 
@@ -153,9 +161,7 @@ pub async fn appearance_market_submit_package(
     request: AppearanceMarketSubmitPackageRequest,
 ) -> Result<AppearanceMarketSubmission, String> {
     let normalized = normalize_manual_submission(request)?;
-    let mut client = AppearanceMarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = appearance_market_client().await?;
     let submissions = client.list_submissions().await.map_err(market_error)?;
     let (listing_id, release_number) = match resolve_appearance_release_target(
         &submissions,
@@ -204,9 +210,7 @@ pub async fn appearance_market_submit_package(
 pub async fn appearance_market_withdraw_submission(
     request: AppearanceMarketSubmissionIdRequest,
 ) -> Result<AppearanceMarketSubmission, String> {
-    let mut client = AppearanceMarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = appearance_market_client().await?;
     client
         .withdraw_submission(&request.submission_id)
         .await
@@ -216,9 +220,7 @@ pub async fn appearance_market_withdraw_submission(
 #[tauri::command]
 pub async fn appearance_market_list_review_submissions(
 ) -> Result<Vec<AppearanceMarketSubmission>, String> {
-    let mut client = AppearanceMarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = appearance_market_client().await?;
     client
         .list_admin_submissions(AppearanceMarketSubmissionStatus::Submitted)
         .await
@@ -229,9 +231,7 @@ pub async fn appearance_market_list_review_submissions(
 pub async fn appearance_market_get_review_submission(
     request: AppearanceMarketSubmissionIdRequest,
 ) -> Result<AppearanceAdminSubmissionDetail, String> {
-    let mut client = AppearanceMarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = appearance_market_client().await?;
     client
         .admin_submission(&request.submission_id)
         .await
@@ -242,9 +242,7 @@ pub async fn appearance_market_get_review_submission(
 pub async fn appearance_market_review_submission(
     request: AppearanceMarketReviewRequest,
 ) -> Result<AppearanceAdminSubmissionDetail, String> {
-    let mut client = AppearanceMarketClient::from_environment()
-        .await
-        .map_err(market_error)?;
+    let mut client = appearance_market_client().await?;
     client
         .review_submission(
             &request.submission_id,

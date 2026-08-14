@@ -70,6 +70,14 @@ interface MonitorResult {
   width: number;
   height: number;
   scaleFactor: number;
+  avoidArea: MonitorAvoidArea;
+}
+
+interface MonitorAvoidArea {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
 }
 
 export default class EntryAbility extends RustAbility {
@@ -317,6 +325,10 @@ export default class EntryAbility extends RustAbility {
       let dispWidth: number = 0;
       let dispHeight: number = 0;
       let scale: number = 1;
+      let avoidTop: number = 0;
+      let avoidBottom: number = 0;
+      let avoidLeft: number = 0;
+      let avoidRight: number = 0;
       try {
         const disp = display.getDefaultDisplaySync();
         dispWidth = disp.width;
@@ -326,7 +338,29 @@ export default class EntryAbility extends RustAbility {
         const be = e as BusinessError;
         hilog.warn(DOMAIN, TAG, `getDefaultDisplaySync failed: ${be.message}`);
       }
-      const result: MonitorResult = { width: dispWidth, height: dispHeight, scaleFactor: scale };
+      try {
+        const avoidArea = windowStage.getMainWindowSync()
+          .getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+        avoidTop = avoidArea.topRect.height;
+        avoidBottom = avoidArea.bottomRect.height;
+        avoidLeft = avoidArea.leftRect.width;
+        avoidRight = avoidArea.rightRect.width;
+      } catch (e) {
+        const be = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, `getWindowAvoidArea failed: ${be.message}`);
+      }
+      const avoid: MonitorAvoidArea = {
+        top: avoidTop,
+        bottom: avoidBottom,
+        left: avoidLeft,
+        right: avoidRight,
+      };
+      const result: MonitorResult = {
+        width: dispWidth,
+        height: dispHeight,
+        scaleFactor: scale,
+        avoidArea: avoid,
+      };
       return JSON.stringify(result);
     });
     RustModule.registerArktsFunction('unmaximize_ohos', async (err: Error, arg: string): Promise<string> => {
