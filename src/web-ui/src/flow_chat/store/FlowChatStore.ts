@@ -45,6 +45,7 @@ import type {
 import {
   agentAPI,
   type LoadSessionTurnWindowResponse,
+  type PendingUserInputSnapshot,
   type SessionInfo as AgentSessionInfo,
   type SessionViewRestoreTiming,
 } from '@/infrastructure/api/service-api/AgentAPI';
@@ -99,6 +100,20 @@ import {
 } from '../utils/flowChatTurnIdentity';
 
 const log = createLogger('FlowChatStore');
+const MAX_PENDING_USER_INPUT_LIFECYCLE = 2048;
+
+type PendingUserInputIdentity = NonNullable<FlowToolItem['userInputIdentity']>;
+type PendingUserInputLifecycleState =
+  | { kind: 'ready'; identity: PendingUserInputIdentity }
+  | { kind: 'terminal'; identity: PendingUserInputIdentity };
+
+function pendingUserInputLifecycleKey(
+  sessionId: string,
+  turnId: string,
+  toolId: string,
+): string {
+  return JSON.stringify([sessionId, turnId, toolId]);
+}
 
 function firstNonEmptyString(...values: unknown[]): string | undefined {
   for (const value of values) {
@@ -1482,6 +1497,12 @@ export class FlowChatStore {
   private sessionTurnWindowProtections = new Map<string, SessionTurnWindowProtection>();
   private unsupportedRestoreCommands = new Set<string>();
   private pendingRemoveSessionOptions = new Map<string, RemoveSessionOptions>();
+  /**
+   * UserInputRequested may race a late history attach. Keep only the monotonic
+   * ready/terminal fact until the matching Ask card is present; terminal facts
+   * remain as tombstones so an older restore snapshot cannot re-enable input.
+   */
+  private pendingUserInputLifecycle = new Map<string, PendingUserInputLifecycleState>();
   private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
 
   private constructor() {
@@ -4597,6 +4618,7 @@ export class FlowChatStore {
     const resolvedOptions = options ?? this.pendingRemoveSessionOptions.get(sessionId);
     this.pendingRemoveSessionOptions.delete(sessionId);
     this.clearRemovedSessionHistoryState(removedSessionIds, 'session-removed');
+    this.clearPendingUserInputLifecycleForSessions(removedSessionIds);
     useBackgroundSubagentActivityStore.getState().removeSessions(removedSessionIds);
 
     this.setState(prev => {
@@ -4665,6 +4687,7 @@ export class FlowChatStore {
   public clearSession(sessionId?: string): void {
     const targetSessionId = sessionId || this.state.activeSessionId;
     if (!targetSessionId) return;
+    this.clearPendingUserInputLifecycleForSessions([targetSessionId]);
 
     this.setState(prev => {
       const session = prev.sessions.get(targetSessionId);
@@ -4765,6 +4788,7 @@ export class FlowChatStore {
       return [];
     }
     this.clearRemovedSessionHistoryState(removedSessionIds, 'sessions-removed');
+    this.clearPendingUserInputLifecycleForSessions(removedSessionIds);
 
     const removedSessionIdSet = new Set(removedSessionIds);
 
@@ -4798,6 +4822,7 @@ export class FlowChatStore {
     this.metadataListRequests.clear();
     this.metadataPageRequests.clear();
     if (removedSessionIds.length === 0) {
+      this.pendingUserInputLifecycle.clear();
       this.setState(prev => ({
         ...prev,
         sessions: new Map(),
@@ -5439,6 +5464,10 @@ export class FlowChatStore {
         modelRounds: updatedModelRounds
       };
     });
+    if (item.type === 'tool') {
+      const toolId = (item as FlowToolItem).toolCall?.id || item.id;
+      this.applyPendingUserInputLifecycle(sessionId, dialogTurnId, toolId);
+    }
   }
 
   /**
@@ -5556,6 +5585,150 @@ export class FlowChatStore {
     }
 
     return null;
+  }
+
+  private retainPendingUserInputLifecycle(
+    key: string,
+    state: PendingUserInputLifecycleState,
+  ): void {
+    this.pendingUserInputLifecycle.delete(key);
+    this.pendingUserInputLifecycle.set(key, state);
+    while (this.pendingUserInputLifecycle.size > MAX_PENDING_USER_INPUT_LIFECYCLE) {
+      const oldestKey = this.pendingUserInputLifecycle.keys().next().value;
+      if (typeof oldestKey !== 'string') {
+        break;
+      }
+      this.pendingUserInputLifecycle.delete(oldestKey);
+    }
+  }
+
+  private applyPendingUserInputLifecycle(
+    sessionId: string,
+    turnId: string,
+    toolId: string,
+  ): boolean {
+    const key = pendingUserInputLifecycleKey(sessionId, turnId, toolId);
+    const pending = this.pendingUserInputLifecycle.get(key);
+    if (!pending) {
+      return false;
+    }
+    const item = this.findToolItem(sessionId, turnId, toolId);
+    if (item?.type !== 'tool' || (item as FlowToolItem).toolName !== 'AskUserQuestion') {
+      return false;
+    }
+
+    if (pending.kind === 'terminal') {
+      const currentIdentity = (item as FlowToolItem).userInputIdentity;
+      if (
+        currentIdentity
+        && currentIdentity.registrationSequence !== pending.identity.registrationSequence
+      ) {
+        return false;
+      }
+      this.updateModelRoundItem(sessionId, turnId, toolId, {
+        userInputReady: false,
+        userInputIdentity: undefined,
+      } as Partial<FlowToolItem>);
+      return true;
+    }
+
+    this.updateModelRoundItem(sessionId, turnId, toolId, {
+      userInputReady: true,
+      userInputIdentity: pending.identity,
+    } as Partial<FlowToolItem>);
+    this.pendingUserInputLifecycle.delete(key);
+    return true;
+  }
+
+  public recordPendingUserInputReady(
+    identity: PendingUserInputIdentity,
+    _source: 'live' | 'snapshot',
+  ): void {
+    const key = pendingUserInputLifecycleKey(
+      identity.sessionId,
+      identity.turnId,
+      identity.toolId,
+    );
+    const current = this.pendingUserInputLifecycle.get(key);
+    if (
+      current?.kind === 'terminal'
+      && current.identity.registrationSequence >= identity.registrationSequence
+    ) {
+      this.applyPendingUserInputLifecycle(identity.sessionId, identity.turnId, identity.toolId);
+      return;
+    }
+    if (
+      current?.kind === 'ready'
+      && current.identity.registrationSequence > identity.registrationSequence
+    ) {
+      return;
+    }
+    this.retainPendingUserInputLifecycle(key, { kind: 'ready', identity });
+    this.applyPendingUserInputLifecycle(identity.sessionId, identity.turnId, identity.toolId);
+  }
+
+  public recordPendingUserInputTerminal(
+    sessionId: string,
+    turnId: string,
+    toolId: string,
+    registrationSequence: number,
+  ): void {
+    const key = pendingUserInputLifecycleKey(sessionId, turnId, toolId);
+    const item = this.findToolItem(sessionId, turnId, toolId);
+    const currentItemIdentity = item?.type === 'tool'
+      ? (item as FlowToolItem).userInputIdentity
+      : undefined;
+    if (currentItemIdentity && currentItemIdentity.registrationSequence > registrationSequence) {
+      return;
+    }
+    const current = this.pendingUserInputLifecycle.get(key);
+    if (
+      current
+      && current.identity.registrationSequence > registrationSequence
+    ) {
+      return;
+    }
+    this.retainPendingUserInputLifecycle(key, {
+      kind: 'terminal',
+      identity: { sessionId, turnId, toolId, registrationSequence },
+    });
+    this.applyPendingUserInputLifecycle(sessionId, turnId, toolId);
+  }
+
+  private clearPendingUserInputLifecycleForSessions(sessionIds: readonly string[]): void {
+    const removed = new Set(sessionIds);
+    for (const key of this.pendingUserInputLifecycle.keys()) {
+      const parsed = JSON.parse(key) as [string, string, string];
+      if (removed.has(parsed[0])) {
+        this.pendingUserInputLifecycle.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Projects an authoritative pending-input snapshot after restored turns attach.
+   * The Desktop owner has already filtered it to the Runtime's active turn;
+   * this projection still requires the active UI session and exact turn/tool.
+   */
+  private hydratePendingUserInputReadiness(
+    sessionId: string,
+    pendingInputs: readonly PendingUserInputSnapshot[],
+  ): void {
+    if (this.state.activeSessionId !== sessionId) {
+      return;
+    }
+
+    for (const pending of pendingInputs) {
+      if (pending.sessionId !== sessionId) {
+        continue;
+      }
+      this.recordPendingUserInputReady({
+        sessionId,
+        turnId: pending.turnId,
+        toolId: pending.toolId,
+        registrationSequence: pending.registrationSequence,
+      }, 'snapshot');
+    }
   }
 
   public updateTokenUsage(
@@ -6795,6 +6968,7 @@ export class FlowChatStore {
     const replaceExistingTurns =
       !backendActive || options?.replaceRunningSnapshot === true;
     let applied = false;
+    let snapshotAccepted = false;
 
     this.setState(prev => {
       if (
@@ -6813,6 +6987,7 @@ export class FlowChatStore {
       if (!session || session !== initialSession) {
         return prev;
       }
+      snapshotAccepted = true;
 
       const mergedTurns = [...session.dialogTurns];
       let turnsChanged = false;
@@ -6896,6 +7071,9 @@ export class FlowChatStore {
 
     if (applied) {
       this.seedSessionHistoryLoadedRanges(sessionId, 'initial-tail');
+    }
+    if (snapshotAccepted) {
+      this.hydratePendingUserInputReadiness(sessionId, restored.pendingUserInputs ?? []);
     }
 
     const latestTurn = snapshotTurns[snapshotTurns.length - 1];
@@ -7016,6 +7194,7 @@ export class FlowChatStore {
       let restoredTurnCatalog: SessionTurnCatalog | undefined;
       let restoredTiming: SessionViewRestoreTiming | undefined;
       let restoredCurrentContextUsage: SessionContextUsage | null | undefined;
+      let restoredPendingUserInputs: PendingUserInputSnapshot[] = [];
 
       // Finish or resume relay history import before Core restores its model
       // context. Ordinary local sessions return after one metadata read, while
@@ -7157,6 +7336,7 @@ export class FlowChatStore {
                 : undefined;
               restoredTiming = restored.timings;
               restoredCurrentContextUsage = restored.currentContextUsage;
+              restoredPendingUserInputs = restored.pendingUserInputs ?? [];
             } catch (error) {
               if (!isUnsupportedTauriCommandError(error, 'restore_session_view')) {
                 throw error;
@@ -7358,6 +7538,7 @@ export class FlowChatStore {
           sessions: newSessions,
         };
       });
+      this.hydratePendingUserInputReadiness(sessionId, restoredPendingUserInputs);
       this.seedSessionHistoryLoadedRanges(sessionId, 'initial-tail');
       startupTrace.markPhase('historical_session_state_commit_end', {
         remote,

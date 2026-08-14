@@ -614,6 +614,68 @@ describe('processToolEvent completed image behavior', () => {
   });
 });
 
+describe('processToolEvent AskUserQuestion readiness', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('updates one tool item from started to post-registration ready', () => {
+    const session = createSessionWithTool({
+      ...makeAskUserQuestionTool('placeholder', 'preparing'),
+      id: 'unrelated-tool',
+      toolName: 'Read',
+    });
+    session.dialogTurns[0].modelRounds[0].items = [];
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+    const params = {
+      questions: [{
+        header: 'Decision',
+        question: 'Continue?',
+        multiSelect: false,
+        options: [
+          { label: 'Yes', description: 'Continue' },
+          { label: 'No', description: 'Stop' },
+        ],
+      }],
+    };
+
+    processToolEvent(makeToolContext(), 'session-1', 'turn-1', 'round-1', {
+      event_type: 'Started',
+      tool_id: 'question-1',
+      tool_name: 'AskUserQuestion',
+      params,
+    });
+    let items = FlowChatStore.getInstance().getState()
+      .sessions.get('session-1')?.dialogTurns[0]?.modelRounds[0]?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect((items[0] as FlowToolItem).userInputReady).toBeUndefined();
+
+    const ready = {
+      event_type: 'UserInputRequested' as const,
+      tool_id: 'question-1',
+      tool_name: 'AskUserQuestion',
+      registration_sequence: 11,
+      params,
+    };
+    processToolEvent(makeToolContext(), 'session-1', 'turn-1', 'round-1', ready);
+    processToolEvent(makeToolContext(), 'session-1', 'turn-1', 'round-1', ready);
+
+    items = FlowChatStore.getInstance().getState()
+      .sessions.get('session-1')?.dialogTurns[0]?.modelRounds[0]?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect((items[0] as FlowToolItem).userInputReady).toBe(true);
+    expect((items[0] as FlowToolItem).userInputIdentity).toEqual({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolId: 'question-1',
+      registrationSequence: 11,
+    });
+  });
+});
+
 describe('processToolEvent AskUserQuestion retry superseded handling', () => {
   afterEach(() => {
     resetStore();

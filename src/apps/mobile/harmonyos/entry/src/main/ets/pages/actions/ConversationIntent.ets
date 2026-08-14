@@ -1,4 +1,4 @@
-import { ConversationUiQuestionAnswer } from '../state/ConversationUiModels';
+import { ConversationUiQuestionAnswer, ConversationUiUserInputIdentity } from '../state/ConversationUiModels';
 import { FilePreviewRequest } from '../../model/FilePreviewTarget';
 
 export enum ConversationIntentType {
@@ -34,6 +34,7 @@ export class ConversationIntent {
   readonly toolId: string;
   readonly updatedInput?: Object;
   readonly answers?: ConversationUiQuestionAnswer;
+  readonly userInputIdentity?: ConversationUiUserInputIdentity;
   readonly filePreviewRequest?: FilePreviewRequest;
 
   constructor(
@@ -42,7 +43,8 @@ export class ConversationIntent {
     toolId: string = '',
     updatedInput?: Object,
     answers?: ConversationUiQuestionAnswer,
-    filePreviewRequest?: FilePreviewRequest
+    filePreviewRequest?: FilePreviewRequest,
+    userInputIdentity?: ConversationUiUserInputIdentity
   ) {
     this.type = type;
     this.value = value;
@@ -50,6 +52,7 @@ export class ConversationIntent {
     this.updatedInput = updatedInput;
     this.answers = answers;
     this.filePreviewRequest = filePreviewRequest;
+    this.userInputIdentity = userInputIdentity;
   }
 }
 
@@ -70,8 +73,16 @@ export class ConversationIntents {
     return new ConversationIntent(type, '', toolId);
   }
 
-  static answerQuestion(toolId: string, answers: ConversationUiQuestionAnswer): ConversationIntent {
-    return new ConversationIntent(ConversationIntentType.AnswerQuestion, '', toolId, undefined, answers);
+  static answerQuestion(identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer): ConversationIntent {
+    return new ConversationIntent(
+      ConversationIntentType.AnswerQuestion,
+      '',
+      identity.tool_id,
+      undefined,
+      answers,
+      undefined,
+      identity
+    );
   }
 
   static openFilePreview(reference: string, label: string): ConversationIntent {

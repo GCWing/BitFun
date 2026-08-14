@@ -485,6 +485,22 @@ pub enum ToolEventData {
         #[serde(skip_serializing_if = "Option::is_none")]
         timeout_seconds: Option<u64>,
     },
+    /// The tool has registered an authoritative pending user-input channel.
+    /// This follows `Started` and makes restore/subscription handoff lossless.
+    UserInputRequested {
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
+        registration_sequence: u64,
+        params: serde_json::Value,
+    },
+    /// The authoritative pending user-input registration stopped waiting.
+    /// Consumers must match the complete registration identity before revoking
+    /// an answerable prompt because provider tool ids may be reused.
+    UserInputResolved {
+        #[serde(flatten)]
+        identity: ToolEventIdentity,
+        registration_sequence: u64,
+    },
     Progress {
         #[serde(flatten)]
         identity: ToolEventIdentity,
@@ -712,6 +728,8 @@ impl ToolEventData {
             | Self::Queued { identity, .. }
             | Self::Waiting { identity, .. }
             | Self::Started { identity, .. }
+            | Self::UserInputRequested { identity, .. }
+            | Self::UserInputResolved { identity, .. }
             | Self::Progress { identity, .. }
             | Self::Streaming { identity, .. }
             | Self::StreamChunk { identity, .. }
@@ -739,9 +757,12 @@ impl ToolEventData {
     /// Get the default priority for a specific tool event variant.
     pub fn default_priority(&self) -> AgenticEventPriority {
         match self {
-            Self::Cancelled { .. } => AgenticEventPriority::Critical,
+            Self::Cancelled { .. } | Self::UserInputResolved { .. } => {
+                AgenticEventPriority::Critical
+            }
 
             Self::Started { .. }
+            | Self::UserInputRequested { .. }
             | Self::Completed { .. }
             | Self::Failed { .. }
             | Self::ConfirmationNeeded { .. } => AgenticEventPriority::High,
@@ -812,6 +833,21 @@ mod tests {
             }
             _ => panic!("unexpected event"),
         }
+    }
+
+    #[test]
+    fn user_input_resolved_deserializes_the_authoritative_registration_identity() {
+        let event = serde_json::from_value::<ToolEventData>(json!({
+            "event_type": "UserInputResolved",
+            "tool_id": "question-1",
+            "tool_name": "AskUserQuestion",
+            "registration_sequence": 7
+        }));
+
+        assert!(
+            event.is_ok(),
+            "resolved user input must be a typed tool event"
+        );
     }
 
     #[test]

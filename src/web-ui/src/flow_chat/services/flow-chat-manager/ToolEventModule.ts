@@ -23,6 +23,7 @@ import type {
   QueuedToolEvent,
   RejectedToolEvent,
   StartedToolEvent,
+  UserInputRequestedToolEvent,
   WaitingToolEvent,
 } from '../EventBatcher';
 
@@ -88,6 +89,12 @@ export function processToolEvent(
     }
     
     case 'Started': {
+      flushPendingBatchedEvents(context);
+      handleStarted(store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
+      break;
+    }
+
+    case 'UserInputRequested': {
       flushPendingBatchedEvents(context);
       handleStarted(store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
       break;
@@ -167,7 +174,11 @@ function reconcileToolEventWireIdentity(
   }
 
   const updates: Partial<FlowToolItem> = { toolName: toolEvent.tool_name };
-  if (toolEvent.event_type === 'Started' || toolEvent.event_type === 'ConfirmationNeeded') {
+  if (
+    toolEvent.event_type === 'Started'
+    || toolEvent.event_type === 'UserInputRequested'
+    || toolEvent.event_type === 'ConfirmationNeeded'
+  ) {
     updates.toolCall = {
       input: toolEvent.params,
       id: toolEvent.tool_id,
@@ -458,7 +469,7 @@ function handleStarted(
   turnId: string,
   roundId: string,
   dialogTurn: DialogTurn,
-  toolEvent: StartedToolEvent,
+  toolEvent: StartedToolEvent | UserInputRequestedToolEvent,
   attemptId?: string,
   attemptIndex?: number,
   options?: ToolEventOptions
@@ -468,10 +479,21 @@ function handleStarted(
   const toolCallData = {
     input: toolEvent.params,
     id: toolEvent.tool_id,
-    ...(typeof toolEvent.timeout_seconds === 'number' && {
+    ...('timeout_seconds' in toolEvent && typeof toolEvent.timeout_seconds === 'number' && {
       timeout_seconds: toolEvent.timeout_seconds
     })
   };
+  const isUserInputReady = toolEvent.tool_name === 'AskUserQuestion'
+    && toolEvent.event_type === 'UserInputRequested';
+  const userInputState = isUserInputReady ? {
+    userInputReady: true,
+    userInputIdentity: {
+      sessionId,
+      turnId,
+      toolId: toolEvent.tool_id,
+      registrationSequence: toolEvent.registration_sequence,
+    },
+  } : {};
 
   if (existingItem) {
     store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
@@ -482,6 +504,7 @@ function handleStarted(
       partialParams: undefined,
       attemptId,
       attemptIndex,
+      ...userInputState,
     } as any);
     applyPendingTerminalSessionId(store, sessionId, turnId, toolEvent.tool_id);
     applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
@@ -498,6 +521,7 @@ function handleStarted(
       startTime: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
       attemptId,
       attemptIndex,
+      ...userInputState,
     };
 
     const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);

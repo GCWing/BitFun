@@ -231,12 +231,8 @@ impl
     }
 }
 
-impl From<bitfun_app_server_protocol::external_source::ExternalSourceConflictPreferences>
-    for ExternalSourceConflictPreferences
-{
-    fn from(
-        preferences: bitfun_app_server_protocol::external_source::ExternalSourceConflictPreferences,
-    ) -> Self {
+impl From<crate::tui_management::ExternalSourcePreferences> for ExternalSourceConflictPreferences {
+    fn from(preferences: crate::tui_management::ExternalSourcePreferences) -> Self {
         Self {
             choices: preferences.choices,
             lineage_current_keys: preferences.lineage_current_keys,
@@ -435,8 +431,8 @@ impl ChatMode {
                 if matches!(&task_action, ExternalControlUiAction::Show) {
                     let response = agent.external_source_snapshot(false).await?;
                     return Ok((
-                        response.control,
-                        Some(response.snapshot),
+                        response.surface.control,
+                        Some(response.surface.catalog),
                         Some(response.preferences.into()),
                     ));
                 }
@@ -467,8 +463,8 @@ impl ChatMode {
                     .await?;
                 Ok((
                     response.surface.control,
-                    Some(response.snapshot.snapshot),
-                    Some(response.snapshot.preferences.into()),
+                    Some(response.surface.catalog),
+                    Some(response.preferences.into()),
                 ))
             }
             .await;
@@ -636,7 +632,7 @@ impl ChatMode {
                 }
                 ExternalToolReviewAction::Show => unreachable!(),
             }
-            .map(|response| response.snapshot);
+            .map(|response| response.surface.catalog);
             let _ = sender.send(ExternalToolMutationResult {
                 action: task_action,
                 result,
@@ -860,7 +856,7 @@ impl ChatMode {
                 }
                 ExternalAgentReviewAction::Show => unreachable!(),
             }
-            .map(|response| response.snapshot);
+            .map(|response| response.surface.catalog);
             let _ = sender.send(ExternalAgentMutationResult {
                 action: task_action,
                 result,

@@ -705,6 +705,199 @@ pub struct NativeHookOverview {
     pub issues: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct NativeHookManagementHandler {
+    pub command_summary: String,
+    pub command_truncated: bool,
+    pub timeout_seconds: u64,
+    pub status_message: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NativeHookManagementRule {
+    pub event: String,
+    pub matcher: String,
+    pub matcher_is_valid: bool,
+    pub scope: String,
+    pub handlers: Vec<NativeHookManagementHandler>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NativeHookManagementFile {
+    pub scope: String,
+    pub location: String,
+    pub exists: bool,
+    pub loaded: bool,
+}
+
+/// Host-safe read model. Filesystem paths and unbounded command text are
+/// redacted here once so every management surface follows the same policy.
+#[derive(Debug, Clone)]
+pub struct NativeHookManagementOverview {
+    pub enabled: bool,
+    pub project_hooks_enabled: bool,
+    pub files: Vec<NativeHookManagementFile>,
+    pub rules: Vec<NativeHookManagementRule>,
+    pub total_handlers: usize,
+    pub issues: Vec<String>,
+}
+
+const MAX_NATIVE_HOOK_COMMAND_CHARS: usize = 200;
+const MAX_NATIVE_HOOK_STATUS_CHARS: usize = 200;
+
+fn bounded_management_text(value: &str, max_chars: usize) -> (String, bool) {
+    let value = value.trim();
+    let truncated = value.chars().count() > max_chars;
+    let mut summary = value
+        .chars()
+        .take(max_chars)
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<String>();
+    if truncated {
+        summary.push_str("...");
+    }
+    (summary, truncated)
+}
+
+fn managed_hook_location(path: &Path, workspace: &Path, user_hooks_file: Option<&Path>) -> String {
+    if user_hooks_file.is_some_and(|user| user == path) {
+        return "<user-config>/config/hooks.json".to_string();
+    }
+    if let Ok(relative) = path.strip_prefix(workspace) {
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        return if relative.is_empty() {
+            "<workspace>".to_string()
+        } else {
+            format!("<workspace>/{relative}")
+        };
+    }
+    let import_id = path
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::file_name)
+        .map(|value| value.to_string_lossy())
+        .map(|value| {
+            value
+                .chars()
+                .map(|character| {
+                    if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                        character
+                    } else {
+                        '_'
+                    }
+                })
+                .collect::<String>()
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "import".to_string());
+    format!("<managed-hooks>/{import_id}/hooks.json")
+}
+
+pub async fn overview_for_management(workspace: &Path) -> NativeHookManagementOverview {
+    let overview = overview(Some(workspace)).await;
+    let user_hooks_file = try_get_path_manager_arc()
+        .ok()
+        .map(|manager| manager.user_hooks_file());
+    let path_labels = overview
+        .files
+        .iter()
+        .map(|file| {
+            (
+                file.path.clone(),
+                managed_hook_location(&file.path, workspace, user_hooks_file.as_deref()),
+            )
+        })
+        .collect::<Vec<_>>();
+    let sanitize_issue = |issue: String| {
+        path_labels.iter().fold(issue, |sanitized, (path, label)| {
+            let native = path.to_string_lossy();
+            let sanitized = sanitized.replace(native.as_ref(), label);
+            sanitized.replace(&native.replace('\\', "/"), label)
+        })
+    };
+    NativeHookManagementOverview {
+        enabled: overview.enabled,
+        project_hooks_enabled: overview.project_hooks_enabled,
+        files: overview
+            .files
+            .into_iter()
+            .zip(path_labels.iter())
+            .map(|(file, (_, location))| NativeHookManagementFile {
+                scope: file.scope.to_string(),
+                location: location.clone(),
+                exists: file.exists,
+                loaded: file.loaded,
+            })
+            .collect(),
+        rules: overview
+            .rules
+            .into_iter()
+            .map(|rule| NativeHookManagementRule {
+                event: rule.event.to_string(),
+                matcher: rule.matcher,
+                matcher_is_valid: rule.matcher_is_valid,
+                scope: rule.scope.to_string(),
+                handlers: rule
+                    .handlers
+                    .into_iter()
+                    .map(|handler| {
+                        let (command_summary, command_truncated) = bounded_management_text(
+                            &handler.command,
+                            MAX_NATIVE_HOOK_COMMAND_CHARS,
+                        );
+                        NativeHookManagementHandler {
+                            command_summary,
+                            command_truncated,
+                            timeout_seconds: handler.timeout_seconds,
+                            status_message: handler.status_message.map(|message| {
+                                bounded_management_text(&message, MAX_NATIVE_HOOK_STATUS_CHARS).0
+                            }),
+                        }
+                    })
+                    .collect(),
+            })
+            .collect(),
+        total_handlers: overview.total_handlers,
+        issues: overview.issues.into_iter().map(sanitize_issue).collect(),
+    }
+}
+
+#[cfg(test)]
+mod management_projection_tests {
+    use super::{bounded_management_text, managed_hook_location};
+    use std::path::Path;
+
+    #[test]
+    fn management_projection_bounds_commands_and_hides_host_paths() {
+        let (summary, truncated) =
+            bounded_management_text(&format!("secret\n{}", "x".repeat(240)), 200);
+        assert!(truncated);
+        assert_eq!(summary.chars().count(), 203);
+        assert!(!summary.contains('\n'));
+
+        assert_eq!(
+            managed_hook_location(
+                Path::new("D:/secret/project/.bitfun/config/hooks.json"),
+                Path::new("D:/secret/project"),
+                None,
+            ),
+            "<workspace>/.bitfun/config/hooks.json"
+        );
+        assert!(!managed_hook_location(
+            Path::new("C:/private/runtime/hook-imports/bundles/import-one/version/hooks.json"),
+            Path::new("D:/secret/project"),
+            None,
+        )
+        .contains("C:/private"));
+    }
+}
+
 /// Read the hook configuration for a workspace without dispatching anything.
 ///
 /// This is the read-only view behind the CLI `/hooks` command and any other

@@ -54,7 +54,7 @@ export function checkTuiLegacyBackendRatchet(root) {
             path: filePath,
             line: 1,
             message:
-              `TUI backend direct-call debt must only decrease; marker ${marker} has ${actual} occurrences, budget ${allowed}. Route new backend work through the CLI-local TuiBackend and App Server`,
+              `TUI backend direct-call debt must only decrease; marker ${marker} has ${actual} occurrences, budget ${allowed}. Route Runtime behavior through CliAgentRuntimeClient and management behavior through concrete tui_management owner providers`,
           });
         }
       }

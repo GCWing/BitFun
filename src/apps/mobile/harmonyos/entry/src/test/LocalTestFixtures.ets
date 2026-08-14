@@ -118,6 +118,7 @@ import {
   CreateSessionOptions,
   RemoteImageContext,
   RemoteQuestionAnswerPayload,
+  RemoteUserInputIdentity,
   RemoteModelCatalog,
   ReadFileChunkResult,
   ReadFileResult,
@@ -769,8 +770,8 @@ export class FakeRemoteToolActionClient implements RemoteToolActionClient {
     this.failIfNeeded();
   }
 
-  async answerQuestion(toolId: string, answers: RemoteQuestionAnswerPayload): Promise<void> {
-    this.actions.push(`answer:${toolId}:${JSON.stringify(answers)}`);
+  async answerQuestion(identity: RemoteUserInputIdentity, answers: RemoteQuestionAnswerPayload): Promise<void> {
+    this.actions.push(`answer:${identity.session_id}:${identity.turn_id}:${identity.tool_id}:${identity.registration_sequence}:${JSON.stringify(answers)}`);
     this.failIfNeeded();
   }
 

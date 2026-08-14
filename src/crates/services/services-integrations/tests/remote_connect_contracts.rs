@@ -14,15 +14,15 @@ use bitfun_services_integrations::remote_connect::{
     build_remote_chat_messages, build_remote_image_attachment, build_remote_image_contexts,
     build_remote_image_submission_request, build_remote_model_catalog,
     build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
-    handle_remote_command, handle_remote_workspace_file_command, make_slim_tool_params,
-    normalize_remote_model_selection, normalize_remote_session_model_id, project_remote_chat_user,
-    read_remote_workspace_file, read_remote_workspace_file_chunk, read_remote_workspace_file_info,
-    remote_answer_question_response, remote_assistant_list_response,
-    remote_assistant_updated_response, remote_dialog_submit_outcome_from_scheduler,
-    remote_dialog_submit_response, remote_file_chunk_response, remote_file_content_response,
-    remote_file_display_name, remote_file_info_response, remote_initial_sync_response,
-    remote_interaction_accepted_response, remote_messages_response,
-    remote_model_catalog_poll_delta, remote_model_selection_needs_config,
+    handle_remote_command, handle_remote_interaction_command, handle_remote_workspace_file_command,
+    make_slim_tool_params, normalize_remote_model_selection, normalize_remote_session_model_id,
+    project_remote_chat_user, read_remote_workspace_file, read_remote_workspace_file_chunk,
+    read_remote_workspace_file_info, remote_answer_question_response,
+    remote_assistant_list_response, remote_assistant_updated_response,
+    remote_dialog_submit_outcome_from_scheduler, remote_dialog_submit_response,
+    remote_file_chunk_response, remote_file_content_response, remote_file_display_name,
+    remote_file_info_response, remote_initial_sync_response, remote_interaction_accepted_response,
+    remote_messages_response, remote_model_catalog_poll_delta, remote_model_selection_needs_config,
     remote_no_change_poll_response, remote_persisted_poll_response,
     remote_recent_workspaces_response, remote_session_created_response,
     remote_session_deleted_response, remote_session_info, remote_session_list_response,
@@ -33,24 +33,30 @@ use bitfun_services_integrations::remote_connect::{
     resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
     ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, DeviceIdentity,
     ImageAttachment, KeyPair, PairingChallenge, PairingProtocol, PairingResponse, PairingState,
-    QrGenerator, QrPayload, RelayMessage, RemoteAssistantWorkspaceFacts, RemoteCancelDecision,
-    RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteChatHistoryRound,
+    QrGenerator, QrPayload, RelayMessage, RemoteActiveTurnSeed, RemoteAssistantWorkspaceFacts,
+    RemoteCancelDecision, RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteChatHistoryRound,
     RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
     RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost,
     RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
     RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
     RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome,
     RemoteDialogWorkspaceBinding, RemoteImageContext, RemoteImageContextAdapter,
-    RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelConfig,
-    RemoteModelFacts, RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata,
+    RemoteInteractionRuntimeHost, RemoteModelCapabilityFact, RemoteModelCatalog,
+    RemoteModelCatalogFacts, RemoteModelConfig, RemoteModelFacts, RemotePendingUserInputSeed,
+    RemotePermissionMode, RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata,
     RemoteSessionModelSelection, RemoteSessionStateTracker, RemoteSessionTrackerHost,
     RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity, RemoteTerminalPrewarmRequest,
-    RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
-    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
-    RemoteWorkspaceUpdate, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
+    RemoteToolStatus, RemoteUserInputIdentity, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
+    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind, RemoteWorkspaceUpdate, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES,
+    REMOTE_FILE_MAX_READ_BYTES,
 };
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    mpsc, Arc, Barrier, Mutex,
+};
+use std::time::Duration;
 
 #[tokio::test]
 async fn remote_connect_pairing_primitives_live_in_services_owner() {
@@ -857,6 +863,7 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
             assistant_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
+            capabilities: vec!["answer_question_identity_v1".to_string()],
         }
     }
 
@@ -1661,6 +1668,85 @@ fn remote_connect_execution_response_helpers_preserve_wire_shape() {
 }
 
 #[test]
+fn remote_connect_legacy_answer_question_payload_decodes_for_safe_upgrade_rejection() {
+    let decoded = serde_json::from_value::<RemoteCommand>(serde_json::json!({
+        "cmd": "answer_question",
+        "tool_id": "question-1",
+        "answers": { "0": "yes" }
+    }));
+
+    assert!(
+        decoded.is_ok(),
+        "legacy payload must reach compatibility handling"
+    );
+}
+
+#[derive(Default)]
+struct RecordingInteractionHost {
+    answer_calls: AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl RemoteInteractionRuntimeHost for RecordingInteractionHost {
+    async fn cancel_tool(&self, _tool_id: &str, _reason: String) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn confirm_tool(&self, _tool_id: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn reject_tool(&self, _tool_id: &str, _reason: String) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn get_permission_mode(&self) -> Result<RemotePermissionMode, String> {
+        Ok(RemotePermissionMode::Ask)
+    }
+
+    async fn set_permission_mode(
+        &self,
+        mode: RemotePermissionMode,
+    ) -> Result<RemotePermissionMode, String> {
+        Ok(mode)
+    }
+
+    fn answer_question(
+        &self,
+        _identity: &RemoteUserInputIdentity,
+        _answers: serde_json::Value,
+    ) -> Result<(), String> {
+        self.answer_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_legacy_answer_question_returns_structured_upgrade_required() {
+    let command = serde_json::from_value::<RemoteCommand>(serde_json::json!({
+        "cmd": "answer_question",
+        "tool_id": "question-1",
+        "answers": { "0": "yes" }
+    }))
+    .expect("legacy payload decodes");
+    let host = RecordingInteractionHost::default();
+
+    let response = handle_remote_interaction_command(&host, &command).await;
+
+    assert_eq!(host.answer_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        serde_json::to_value(response).expect("serialize compatibility response"),
+        serde_json::json!({
+            "resp": "error",
+            "code": "upgrade_required",
+            "capability": "answer_question_identity_v1",
+            "message": "This version cannot safely answer the question because it did not send the full registration identity.",
+            "recovery": "Upgrade the mobile client, reconnect to Desktop, and answer the question again."
+        })
+    );
+}
+
+#[test]
 fn remote_connect_workspace_response_helpers_own_wire_shape() {
     let workspace = RemoteWorkspaceFacts {
         path: "D:/workspace/project".to_string(),
@@ -1683,11 +1769,19 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
     assert_eq!(info_json["assistant_id"], "assistant-1");
     assert_eq!(info_json["remote_connection_id"], "ssh-1");
     assert_eq!(info_json["remote_ssh_host"], "dev-host");
+    assert_eq!(
+        info_json["capabilities"],
+        serde_json::json!(["answer_question_identity_v1"])
+    );
 
     let empty_json =
         serde_json::to_value(remote_workspace_info_response(None)).expect("serialize empty info");
     assert_eq!(empty_json["resp"], "workspace_info");
     assert_eq!(empty_json["has_workspace"], false);
+    assert_eq!(
+        empty_json["capabilities"],
+        serde_json::json!(["answer_question_identity_v1"])
+    );
     assert!(empty_json.get("workspace_kind").is_none());
 
     let recent_json = serde_json::to_value(remote_recent_workspaces_response(vec![
@@ -1832,6 +1926,10 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
     assert_eq!(initial_json["has_more_sessions"], true);
     assert_eq!(initial_json["sessions"].as_array().unwrap().len(), 3);
     assert_eq!(initial_json["authenticated_user_id"], "user-1");
+    assert_eq!(
+        initial_json["capabilities"],
+        serde_json::json!(["answer_question_identity_v1"])
+    );
 
     assert_eq!(
         remote_session_created_response("session-new"),
@@ -1928,6 +2026,7 @@ fn remote_connect_message_dtos_keep_current_wire_shape() {
             start_ms: Some(42),
             input_preview: Some("{\"cmd\":\"git status\"}".to_string()),
             tool_input: None,
+            user_input_identity: None,
         }]),
         thinking: None,
         items: Some(vec![ChatMessageItem {
@@ -2105,6 +2204,7 @@ fn remote_connect_response_wire_shape_lives_in_owner_contract() {
             start_ms: Some(42),
             input_preview: Some("{\"path\":\"README.md\"}".to_string()),
             tool_input: None,
+            user_input_identity: None,
         }],
         round_index: 2,
         items: Some(vec![ChatMessageItem {
@@ -2338,21 +2438,52 @@ fn remote_model_catalog_version_tracks_provider_catalog_revision() {
 struct RecordingTrackerHost {
     subscribed: Mutex<Vec<String>>,
     unsubscribed: Mutex<Vec<String>>,
-    active_turn_id: Mutex<Option<String>>,
+    active_turn_seed: Mutex<Option<RemoteActiveTurnSeed>>,
+    tracker: Mutex<Option<Arc<RemoteSessionStateTracker>>>,
+    resolve_before_seed_returns: bool,
 }
 
 impl RecordingTrackerHost {
     fn with_active_turn(turn_id: impl Into<String>) -> Self {
         Self {
-            active_turn_id: Mutex::new(Some(turn_id.into())),
+            active_turn_seed: Mutex::new(Some(RemoteActiveTurnSeed {
+                turn_id: turn_id.into(),
+                pending_user_inputs: Vec::new(),
+            })),
             ..Self::default()
+        }
+    }
+
+    fn with_pending_question() -> Self {
+        Self {
+            active_turn_seed: Mutex::new(Some(RemoteActiveTurnSeed {
+                turn_id: "turn-1".to_string(),
+                pending_user_inputs: vec![RemotePendingUserInputSeed {
+                    identity: RemoteUserInputIdentity {
+                        session_id: "session-1".to_string(),
+                        turn_id: "turn-1".to_string(),
+                        tool_id: "question-1".to_string(),
+                        registration_sequence: 7,
+                    },
+                    params: serde_json::json!({ "questions": [{ "question": "Continue?" }] }),
+                }],
+            })),
+            ..Self::default()
+        }
+    }
+
+    fn with_pending_question_resolved_before_hydrate() -> Self {
+        Self {
+            resolve_before_seed_returns: true,
+            ..Self::with_pending_question()
         }
     }
 }
 
 impl RemoteSessionTrackerHost for RecordingTrackerHost {
-    fn subscribe_tracker(&self, session_id: &str, _tracker: Arc<RemoteSessionStateTracker>) {
+    fn subscribe_tracker(&self, session_id: &str, tracker: Arc<RemoteSessionStateTracker>) {
         self.subscribed.lock().unwrap().push(session_id.to_string());
+        *self.tracker.lock().unwrap() = Some(tracker);
     }
 
     fn unsubscribe_tracker(&self, session_id: &str) {
@@ -2362,9 +2493,142 @@ impl RemoteSessionTrackerHost for RecordingTrackerHost {
             .push(session_id.to_string());
     }
 
-    fn active_turn_id(&self, _session_id: &str) -> Option<String> {
-        self.active_turn_id.lock().unwrap().clone()
+    fn active_turn_seed(&self, session_id: &str) -> Option<RemoteActiveTurnSeed> {
+        assert_eq!(
+            self.subscribed.lock().unwrap().as_slice(),
+            &[session_id.to_string()],
+            "tracker must subscribe before capturing the owner seed"
+        );
+        let seed = self.active_turn_seed.lock().unwrap().clone();
+        if self.resolve_before_seed_returns {
+            let pending = seed
+                .as_ref()
+                .and_then(|seed| seed.pending_user_inputs.first())
+                .expect("interleaving fixture pending question");
+            self.tracker
+                .lock()
+                .unwrap()
+                .as_ref()
+                .expect("subscribed tracker")
+                .handle_agentic_event(&AgenticEvent::ToolEvent {
+                    session_id: pending.identity.session_id.clone(),
+                    turn_id: pending.identity.turn_id.clone(),
+                    round_id: "round-1".to_string(),
+                    attempt_id: None,
+                    attempt_index: None,
+                    tool_event: ToolEventData::UserInputResolved {
+                        identity: bitfun_events::ToolEventIdentity::direct(
+                            &pending.identity.tool_id,
+                            "AskUserQuestion",
+                        ),
+                        registration_sequence: pending.identity.registration_sequence,
+                    },
+                });
+        }
+        seed
     }
+}
+
+struct BlockingTrackerHost {
+    subscribe_entered: Barrier,
+    release_subscribe: Barrier,
+    subscriptions: AtomicUsize,
+    unsubscriptions: AtomicUsize,
+}
+
+struct BlockingUnsubscribeTrackerHost {
+    unsubscribe_entered: Barrier,
+    release_unsubscribe: Barrier,
+    subscriptions: AtomicUsize,
+    unsubscriptions: AtomicUsize,
+}
+
+impl BlockingUnsubscribeTrackerHost {
+    fn new() -> Self {
+        Self {
+            unsubscribe_entered: Barrier::new(2),
+            release_unsubscribe: Barrier::new(2),
+            subscriptions: AtomicUsize::new(0),
+            unsubscriptions: AtomicUsize::new(0),
+        }
+    }
+}
+
+impl RemoteSessionTrackerHost for BlockingUnsubscribeTrackerHost {
+    fn subscribe_tracker(&self, _session_id: &str, _tracker: Arc<RemoteSessionStateTracker>) {
+        self.subscriptions.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn unsubscribe_tracker(&self, _session_id: &str) {
+        self.unsubscriptions.fetch_add(1, Ordering::SeqCst);
+        self.unsubscribe_entered.wait();
+        self.release_unsubscribe.wait();
+    }
+
+    fn active_turn_seed(&self, _session_id: &str) -> Option<RemoteActiveTurnSeed> {
+        None
+    }
+}
+
+impl BlockingTrackerHost {
+    fn new() -> Self {
+        Self {
+            subscribe_entered: Barrier::new(2),
+            release_subscribe: Barrier::new(2),
+            subscriptions: AtomicUsize::new(0),
+            unsubscriptions: AtomicUsize::new(0),
+        }
+    }
+}
+
+impl RemoteSessionTrackerHost for BlockingTrackerHost {
+    fn subscribe_tracker(&self, _session_id: &str, _tracker: Arc<RemoteSessionStateTracker>) {
+        self.subscriptions.fetch_add(1, Ordering::SeqCst);
+        self.subscribe_entered.wait();
+        self.release_subscribe.wait();
+    }
+
+    fn unsubscribe_tracker(&self, _session_id: &str) {
+        self.unsubscriptions.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn active_turn_seed(&self, _session_id: &str) -> Option<RemoteActiveTurnSeed> {
+        None
+    }
+}
+
+#[test]
+fn remote_connect_late_attach_hydrates_owner_pending_question_after_subscription() {
+    let registry = RemoteSessionTrackerRegistry::new();
+    let host = RecordingTrackerHost::with_pending_question();
+
+    let tracker = registry.ensure_tracker_with_host("session-1", &host);
+    let active = tracker.snapshot_active_turn().expect("active turn seeded");
+    assert_eq!(active.turn_id, "turn-1");
+    assert_eq!(active.tools.len(), 1);
+    assert_eq!(active.tools[0].status, "waiting_for_user");
+    assert_eq!(
+        active.tools[0]
+            .user_input_identity
+            .as_ref()
+            .expect("authoritative question identity")
+            .registration_sequence,
+        7
+    );
+}
+
+#[test]
+fn remote_connect_late_attach_does_not_revive_question_resolved_before_hydrate() {
+    let registry = RemoteSessionTrackerRegistry::new();
+    let host = RecordingTrackerHost::with_pending_question_resolved_before_hydrate();
+
+    let tracker = registry.ensure_tracker_with_host("session-1", &host);
+    let active = tracker.snapshot_active_turn().expect("active turn seeded");
+    assert_eq!(active.turn_id, "turn-1");
+    assert!(
+        active.tools.is_empty(),
+        "the captured pending snapshot must not revive the resolved registration"
+    );
 }
 
 #[test]
@@ -2397,6 +2661,126 @@ fn remote_connect_tracker_registry_owns_lifecycle_without_core_state() {
         host.unsubscribed.lock().unwrap().as_slice(),
         &["session-1".to_string()]
     );
+}
+
+#[test]
+fn remote_connect_tracker_registry_does_not_publish_before_initialization() {
+    let registry = Arc::new(RemoteSessionTrackerRegistry::new());
+    let host = Arc::new(BlockingTrackerHost::new());
+    let first_registry = registry.clone();
+    let first_host = host.clone();
+    let first = std::thread::spawn(move || {
+        first_registry.ensure_tracker_with_host("session-1", first_host.as_ref())
+    });
+    host.subscribe_entered.wait();
+
+    let second_registry = registry.clone();
+    let second_host = host.clone();
+    let (second_tx, second_rx) = mpsc::channel();
+    let second = std::thread::spawn(move || {
+        let tracker = second_registry.ensure_tracker_with_host("session-1", second_host.as_ref());
+        second_tx.send(tracker).expect("report second tracker");
+    });
+    assert!(
+        second_rx.recv_timeout(Duration::from_millis(50)).is_err(),
+        "a concurrent ensure must wait until subscription and hydration finish"
+    );
+
+    host.release_subscribe.wait();
+    let first_tracker = first.join().expect("first ensure");
+    let second_tracker = second_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("second ensure after initialization");
+    second.join().expect("second ensure task");
+    assert!(Arc::ptr_eq(&first_tracker, &second_tracker));
+    assert_eq!(host.subscriptions.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn remote_connect_tracker_removal_waits_for_initialization_without_ghost_subscription() {
+    let registry = Arc::new(RemoteSessionTrackerRegistry::new());
+    let host = Arc::new(BlockingTrackerHost::new());
+    let ensure_registry = registry.clone();
+    let ensure_host = host.clone();
+    let ensure = std::thread::spawn(move || {
+        ensure_registry.ensure_tracker_with_host("session-1", ensure_host.as_ref())
+    });
+    host.subscribe_entered.wait();
+
+    let remove_registry = registry.clone();
+    let remove_host = host.clone();
+    let (remove_tx, remove_rx) = mpsc::channel();
+    let remove = std::thread::spawn(move || {
+        let removed = remove_registry.remove_tracker_with_host("session-1", remove_host.as_ref());
+        remove_tx.send(removed.is_some()).expect("report removal");
+    });
+    assert!(
+        remove_rx.recv_timeout(Duration::from_millis(50)).is_err(),
+        "removal must not race ahead of subscription initialization"
+    );
+
+    host.release_subscribe.wait();
+    ensure.join().expect("ensure task");
+    assert!(remove_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("removal after initialization"));
+    remove.join().expect("remove task");
+    assert!(registry.get_tracker("session-1").is_none());
+    assert_eq!(host.subscriptions.load(Ordering::SeqCst), 1);
+    assert_eq!(host.unsubscriptions.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn remote_connect_tracker_replacement_waits_for_previous_unsubscribe() {
+    let registry = Arc::new(RemoteSessionTrackerRegistry::new());
+    let host = Arc::new(BlockingUnsubscribeTrackerHost::new());
+    let previous = registry.ensure_tracker_with_host("session-1", host.as_ref());
+
+    let remove_registry = registry.clone();
+    let remove_host = host.clone();
+    let remove = std::thread::spawn(move || {
+        remove_registry.remove_tracker_with_host("session-1", remove_host.as_ref())
+    });
+    host.unsubscribe_entered.wait();
+
+    let ensure_registry = registry.clone();
+    let ensure_host = host.clone();
+    let (ensure_tx, ensure_rx) = mpsc::channel();
+    let ensure = std::thread::spawn(move || {
+        let tracker = ensure_registry.ensure_tracker_with_host("session-1", ensure_host.as_ref());
+        ensure_tx.send(tracker).expect("report replacement tracker");
+    });
+    let early_replacement = ensure_rx.recv_timeout(Duration::from_millis(50));
+    let replacement_waited = early_replacement.is_err();
+
+    host.release_unsubscribe.wait();
+    let removed = remove
+        .join()
+        .expect("remove task")
+        .expect("previous tracker removed");
+    let replacement = match early_replacement {
+        Ok(tracker) => tracker,
+        Err(_) => ensure_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("replacement after previous unsubscribe"),
+    };
+    ensure.join().expect("replacement ensure task");
+
+    assert!(
+        replacement_waited,
+        "a replacement must not subscribe before the previous generation unsubscribes"
+    );
+    assert!(Arc::ptr_eq(&previous, &removed));
+    assert!(!Arc::ptr_eq(&previous, &replacement));
+    assert!(Arc::ptr_eq(
+        registry
+            .get_tracker("session-1")
+            .as_ref()
+            .expect("replacement registry entry"),
+        &replacement
+    ));
+    assert_eq!(host.subscriptions.load(Ordering::SeqCst), 2);
+    assert_eq!(host.unsubscriptions.load(Ordering::SeqCst), 1);
 }
 
 #[test]
@@ -2542,6 +2926,348 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         TrackerEvent::TurnCancelled { turn_id } => assert_eq!(turn_id, "turn-1"),
         other => panic!("unexpected event: {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn remote_connect_tracker_only_authorizes_question_answers_after_ready_event() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+    let mut events = tracker.subscribe();
+    let tool_identity = bitfun_events::ToolEventIdentity::direct("tool-1", "AskUserQuestion");
+    let params = serde_json::json!({ "questions": [{ "question": "Continue?" }] });
+
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        turn_index: 0,
+        user_input: "hello".to_string(),
+        original_user_input: None,
+        user_message_metadata: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        tool_event: ToolEventData::Started {
+            identity: tool_identity.clone(),
+            params: params.clone(),
+            timeout_seconds: None,
+        },
+    });
+
+    assert!(
+        tracker.snapshot_active_turn().expect("active turn").tools[0]
+            .user_input_identity
+            .is_none()
+    );
+    assert!(matches!(
+        events.recv().await.expect("started event"),
+        TrackerEvent::ToolStarted { .. }
+    ));
+
+    tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        tool_event: ToolEventData::UserInputRequested {
+            identity: tool_identity.clone(),
+            registration_sequence: 7,
+            params: params.clone(),
+        },
+    });
+
+    let expected_identity = RemoteUserInputIdentity {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        tool_id: "tool-1".to_string(),
+        registration_sequence: 7,
+    };
+    match events.recv().await.expect("ready event") {
+        TrackerEvent::UserInputRequested {
+            identity,
+            params: actual,
+        } => {
+            assert_eq!(identity, expected_identity);
+            assert_eq!(actual, params);
+        }
+        other => panic!("unexpected event: {other:?}"),
+    }
+    let tool = &tracker.snapshot_active_turn().expect("active turn").tools[0];
+    assert_eq!(tool.status, "waiting_for_user");
+    assert_eq!(tool.user_input_identity.as_ref(), Some(&expected_identity));
+
+    tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        tool_event: ToolEventData::UserInputResolved {
+            identity: tool_identity.clone(),
+            registration_sequence: 6,
+        },
+    });
+    let tool = &tracker.snapshot_active_turn().expect("active turn").tools[0];
+    assert_eq!(tool.status, "waiting_for_user");
+    assert_eq!(tool.user_input_identity.as_ref(), Some(&expected_identity));
+
+    tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        tool_event: ToolEventData::UserInputResolved {
+            identity: tool_identity.clone(),
+            registration_sequence: 7,
+        },
+    });
+    let tool = &tracker.snapshot_active_turn().expect("active turn").tools[0];
+    assert_eq!(tool.status, "completed");
+    assert_eq!(tool.user_input_identity.as_ref(), Some(&expected_identity));
+
+    tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        tool_event: ToolEventData::Completed {
+            identity: tool_identity,
+            result: serde_json::json!({ "status": "answered" }),
+            result_for_assistant: None,
+            image_attachments: None,
+            duration_ms: 1,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
+        },
+    });
+    assert_eq!(
+        tracker.snapshot_active_turn().expect("active turn").tools[0].status,
+        "completed"
+    );
+}
+
+#[test]
+fn remote_connect_tracker_hydrates_same_tool_id_registrations_as_distinct_questions() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+    tracker.hydrate_active_turn(RemoteActiveTurnSeed {
+        turn_id: "turn-1".to_string(),
+        pending_user_inputs: vec![
+            RemotePendingUserInputSeed {
+                identity: RemoteUserInputIdentity {
+                    session_id: "session-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    tool_id: "question-1".to_string(),
+                    registration_sequence: 7,
+                },
+                params: serde_json::json!({ "questions": [{ "question": "First?" }] }),
+            },
+            RemotePendingUserInputSeed {
+                identity: RemoteUserInputIdentity {
+                    session_id: "session-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    tool_id: "question-1".to_string(),
+                    registration_sequence: 8,
+                },
+                params: serde_json::json!({ "questions": [{ "question": "Second?" }] }),
+            },
+        ],
+    });
+
+    let snapshot = tracker.snapshot_active_turn().expect("active turn");
+    let identities = snapshot
+        .tools
+        .iter()
+        .filter_map(|tool| tool.user_input_identity.as_ref())
+        .collect::<Vec<_>>();
+    assert_eq!(identities.len(), 2);
+    assert_eq!(identities[0].registration_sequence, 7);
+    assert_eq!(identities[1].registration_sequence, 8);
+}
+
+#[test]
+fn remote_connect_tracker_settles_each_resolved_same_tool_id_registration_exactly() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+    let identities = [7, 8].map(|registration_sequence| RemoteUserInputIdentity {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        tool_id: "question-1".to_string(),
+        registration_sequence,
+    });
+    tracker.hydrate_active_turn(RemoteActiveTurnSeed {
+        turn_id: "turn-1".to_string(),
+        pending_user_inputs: identities
+            .iter()
+            .cloned()
+            .map(|identity| RemotePendingUserInputSeed {
+                identity,
+                params: serde_json::json!({ "questions": [{ "question": "Continue?" }] }),
+            })
+            .collect(),
+    });
+
+    let tool_identity = bitfun_events::ToolEventIdentity::direct("question-1", "AskUserQuestion");
+    for registration_sequence in [7, 8] {
+        tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            tool_event: ToolEventData::UserInputResolved {
+                identity: tool_identity.clone(),
+                registration_sequence,
+            },
+        });
+    }
+    let resolved = tracker.snapshot_active_turn().expect("active turn");
+    assert_eq!(resolved.tools.len(), 2);
+    assert!(resolved
+        .tools
+        .iter()
+        .all(|tool| { tool.status == "completed" && tool.user_input_identity.is_some() }));
+    assert_eq!(
+        resolved
+            .tools
+            .iter()
+            .filter_map(|tool| tool.user_input_identity.as_ref())
+            .collect::<Vec<_>>(),
+        identities.iter().collect::<Vec<_>>()
+    );
+
+    tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        tool_event: ToolEventData::Completed {
+            identity: tool_identity,
+            result: serde_json::json!({ "status": "answered" }),
+            result_for_assistant: None,
+            image_attachments: None,
+            duration_ms: 1,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
+        },
+    });
+
+    let snapshot = tracker.snapshot_active_turn().expect("active turn");
+    assert_eq!(snapshot.tools.len(), 2);
+    assert!(snapshot.tools.iter().all(|tool| tool.status == "completed"));
+}
+
+#[test]
+fn remote_connect_tracker_resolves_only_the_exact_same_tool_id_registration() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        turn_index: 0,
+        user_input: "hello".to_string(),
+        original_user_input: None,
+        user_message_metadata: None,
+    });
+    let tool_identity = bitfun_events::ToolEventIdentity::direct("question-1", "AskUserQuestion");
+    for registration_sequence in [7, 8] {
+        let params = serde_json::json!({
+            "questions": [{ "question": format!("Question {registration_sequence}?") }]
+        });
+        tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            tool_event: ToolEventData::Started {
+                identity: tool_identity.clone(),
+                params: params.clone(),
+                timeout_seconds: None,
+            },
+        });
+        tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            tool_event: ToolEventData::UserInputRequested {
+                identity: tool_identity.clone(),
+                registration_sequence,
+                params,
+            },
+        });
+    }
+
+    tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        tool_event: ToolEventData::UserInputResolved {
+            identity: tool_identity.clone(),
+            registration_sequence: 7,
+        },
+    });
+
+    tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
+        tool_event: ToolEventData::Completed {
+            identity: tool_identity,
+            result: serde_json::json!({ "status": "answered" }),
+            result_for_assistant: None,
+            image_attachments: None,
+            duration_ms: 1,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
+        },
+    });
+
+    let snapshot = tracker.snapshot_active_turn().expect("active turn");
+    assert_eq!(snapshot.tools.len(), 2);
+    let first = snapshot
+        .tools
+        .iter()
+        .find(|tool| {
+            tool.tool_input
+                .as_ref()
+                .and_then(|input| input["questions"][0]["question"].as_str())
+                == Some("Question 7?")
+        })
+        .expect("first registration remains projected");
+    let second = snapshot
+        .tools
+        .iter()
+        .find(|tool| {
+            tool.user_input_identity
+                .as_ref()
+                .is_some_and(|identity| identity.registration_sequence == 8)
+        })
+        .expect("second registration remains addressable");
+    assert_eq!(first.status, "completed");
+    assert_eq!(
+        first
+            .user_input_identity
+            .as_ref()
+            .map(|identity| identity.registration_sequence),
+        Some(7)
+    );
+    assert_eq!(second.status, "waiting_for_user");
 }
 
 #[test]

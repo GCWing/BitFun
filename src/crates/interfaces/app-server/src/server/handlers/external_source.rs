@@ -1,60 +1,46 @@
-use std::sync::Arc;
-
 use agent_client_protocol::{Builder, HandleDispatchFrom};
 use bitfun_app_server_protocol::external_source::*;
 
-use super::capability::management_handler;
-use crate::management::{AppManagementService, EXTERNAL_SOURCES_CAPABILITY};
+use super::capability::unsupported_management_handler;
+use crate::management::EXTERNAL_SOURCES_CAPABILITY;
 use crate::role::{AppClient, AppServer};
 
-pub(in crate::server) fn builder(
-    management: Option<Arc<AppManagementService>>,
-) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
+pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
         .name("external source handlers")
         .on_receive_request(
-            management_handler!(
-                management,
+            unsupported_management_handler!(
                 EXTERNAL_SOURCES_CAPABILITY,
-                ExternalSourceSnapshotRequest,
-                external_source_snapshot
+                ExternalSourceSnapshotRequest
             ),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
+            unsupported_management_handler!(
                 EXTERNAL_SOURCES_CAPABILITY,
-                ExternalSourceControlRequest,
-                external_source_control
+                ExternalSourceControlRequest
             ),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
+            unsupported_management_handler!(
                 EXTERNAL_SOURCES_CAPABILITY,
-                ExternalSourceReviewRequest,
-                external_source_review
+                ExternalSourceReviewRequest
             ),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
+            unsupported_management_handler!(
                 EXTERNAL_SOURCES_CAPABILITY,
-                SetNativeCommandChoiceRequest,
-                set_native_command_choice
+                SetNativeCommandChoiceRequest
             ),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
+            unsupported_management_handler!(
                 EXTERNAL_SOURCES_CAPABILITY,
-                ExpandExternalCommandRequest,
-                expand_external_command
+                ExpandExternalCommandRequest
             ),
             agent_client_protocol::on_receive_request!(),
         )

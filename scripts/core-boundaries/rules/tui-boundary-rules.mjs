@@ -1,7 +1,8 @@
 // Ratchet for legacy backend references that still live in the CLI TUI.
 // Counts may decrease without updating this file. Adding a marker to a new
 // file, moving debt between files, or increasing a count requires migration
-// through the CLI-local TuiBackend/App Server boundary instead.
+// through CliAgentRuntimeClient for Runtime behavior or concrete
+// tui_management domain owner providers for management behavior instead.
 
 export const tuiLegacyBackendMarkers = [
   'bitfun_core::',
@@ -9,7 +10,6 @@ export const tuiLegacyBackendMarkers = [
   'bitfun_services_',
   'bitfun_runtime_services',
   'bitfun_agent_runtime_ipc',
-  'CliAgentRuntimeClient',
   'CliContextReloadClient',
   'CoreAgentRuntimeCompatibility',
   'crate::account::',
@@ -24,9 +24,9 @@ export const tuiLegacyBackendMarkers = [
 
 export const tuiLegacyBackendBudgets = {
   'src/apps/cli/src/modes/chat.rs': {
-    'bitfun_core::': 12,
-    'bitfun_agent_runtime::': 3,
-    CoreAgentRuntimeCompatibility: 3,
+    'bitfun_core::': 0,
+    'bitfun_agent_runtime::': 0,
+    CoreAgentRuntimeCompatibility: 0,
   },
   'src/apps/cli/src/modes/chat/commands.rs': { 'bitfun_services_': 1 },
   'src/apps/cli/src/modes/chat/external_editor.rs': {
@@ -44,36 +44,36 @@ export const tuiLegacyBackendBudgets = {
     'crate::account_sync::': 0,
   },
   'src/apps/cli/src/modes/chat/run.rs': {
-    'bitfun_core::': 2,
-    'bitfun_agent_runtime::': 3,
+    'bitfun_core::': 0,
+    'bitfun_agent_runtime::': 0,
     'bitfun_services_': 1,
-    'crate::account_sync::': 1,
+    'crate::account_sync::': 0,
   },
-  'src/apps/cli/src/modes/chat/session_lineage.rs': { 'bitfun_agent_runtime::': 1 },
+  'src/apps/cli/src/modes/chat/session_lineage.rs': { 'bitfun_agent_runtime::': 0 },
   'src/apps/cli/src/modes/chat/selection.rs': {
-    'bitfun_core::': 1,
-    'crate::account::': 2,
+    'bitfun_core::': 0,
+    'crate::account::': 0,
   },
   'src/apps/cli/src/modes/chat/tests.rs': {
-    'bitfun_core::': 8,
+    'bitfun_core::': 0,
     'bitfun_agent_runtime::': 3,
   },
   'src/apps/cli/src/modes/chat/worktree.rs': { 'bitfun_core::': 0 },
   'src/apps/cli/src/ui/chat/popups.rs': {
-    'bitfun_core::': 1,
+    'bitfun_core::': 0,
     'bitfun_agent_runtime::': 2,
-    'crate::account::': 3,
-    'crate::account_sync::': 2,
+    'crate::account::': 0,
+    'crate::account_sync::': 0,
   },
   'src/apps/cli/src/ui/chat/input.rs': { 'bitfun_agent_runtime::': 4 },
   'src/apps/cli/src/ui/chat/state.rs': { 'bitfun_agent_runtime::': 1 },
   'src/apps/cli/src/ui/composer.rs': { 'bitfun_agent_runtime::': 2 },
   'src/apps/cli/src/ui/image_paste.rs': { 'std::fs': 5 },
   'src/apps/cli/src/ui/login_form.rs': {
-    'crate::account::': 1,
-    'crate::account_sync::': 1,
+    'crate::account::': 0,
+    'crate::account_sync::': 0,
   },
-  'src/apps/cli/src/ui/prompt_command_shell_review.rs': { 'bitfun_core::': 2 },
+  'src/apps/cli/src/ui/prompt_command_shell_review.rs': { 'bitfun_core::': 0 },
   'src/apps/cli/src/ui/permission.rs': { 'bitfun_agent_runtime::': 2 },
   'src/apps/cli/src/ui/session_lineage_selector.rs': { 'bitfun_agent_runtime::': 1 },
   'src/apps/cli/src/ui/startup.rs': {

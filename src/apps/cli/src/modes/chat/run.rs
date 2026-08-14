@@ -151,10 +151,6 @@ impl ChatMode {
         let Some(effect) = self.pending_local_effect.take() else {
             return Ok(false);
         };
-        debug_assert_eq!(
-            crate::tui_backend::TuiEffect::route(&effect),
-            crate::tui_backend::TuiEffectRoute::Local
-        );
         match effect {
             PendingLocalEffect::EditComposer { command, mut draft } => {
                 let cwd = self.local_cwd.clone();
@@ -360,22 +356,16 @@ impl ChatMode {
         let mut chat_view = ChatView::new(theme, shortcut_hints);
         chat_view.apply_presentation_config(&self.config.ui);
 
+        // Subscribe before create/restore so events emitted in the restore
+        // response-to-projection window remain buffered for this TUI.
+        let mut event_rx = self
+            .agent
+            .subscribe_events()
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let mut permission_rx = self.agent.subscribe_permission_requests().ok();
+
         // Create or restore core session
         let rt_handle = tokio::runtime::Handle::current();
-        self.auto_approve_ask_default = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let Ok(service) = bitfun_core::service::config::get_global_config_service().await
-                else {
-                    return false;
-                };
-                service
-                    .get_config::<bitfun_core::service::config::types::GlobalConfig>(None)
-                    .await
-                    .map(|config| config.tool_permissions.interaction.auto_approve_ask)
-                    .unwrap_or(false)
-            })
-        });
-
         let (mut session_id, mut chat_state, migration_notices) =
             if let Some(ref restore_id) = self.restore_session_id {
                 // Restore existing session
@@ -386,24 +376,14 @@ impl ChatMode {
                 tokio::task::block_in_place(|| {
                     rt_handle.block_on(async {
                         // Restore session in core (loads metadata, messages, managers)
-                        let (summary, workspace_binding, migration_notices, transcript) =
-                            agent.restore_session_in_current_workspace(&rid).await?;
-                        let effective_workspace = Some(workspace_binding.workspace_path.clone());
-
-                        let mut state = ChatState::from_session_transcript(
-                            rid.clone(),
-                            summary.session_name,
-                            summary.agent_type,
-                            effective_workspace,
-                            &transcript,
-                        );
-                        state.current_model_id = summary.model_id;
-                        state.apply_workspace_binding(workspace_binding);
+                        let restored = agent.restore_session_in_current_workspace(&rid).await?;
+                        let message_count = restored.transcript.messages.len();
+                        let (state, migration_notices) = project_restored_session(restored);
 
                         tracing::info!(
                             "Session restored: {}, {} messages loaded",
                             rid,
-                            transcript.messages.len()
+                            message_count
                         );
 
                         Ok::<_, anyhow::Error>((rid, state, migration_notices))
@@ -416,8 +396,9 @@ impl ChatMode {
                 let (session_id, workspace_binding, session_summary) =
                     tokio::task::block_in_place(|| {
                         rt_handle.block_on(async {
-                            let session_id = agent.ensure_session(&agent_type).await?;
-                            let binding = agent.session_workspace_binding(&session_id).await?;
+                            let (session_id, binding) = agent
+                                .ensure_session_with_workspace_binding(&agent_type)
+                                .await?;
                             let summary = agent
                                 .list_sessions()
                                 .await?
@@ -484,7 +465,7 @@ impl ChatMode {
         match initial_external_sources {
             Ok(response) => {
                 self.replace_external_conflict_preferences(response.preferences.into());
-                let snapshot = response.snapshot;
+                let snapshot = response.surface.catalog;
                 let (available, restricted) = external_command_counts(&snapshot);
                 let pending_conflicts = snapshot
                     .command_conflicts
@@ -538,11 +519,6 @@ impl ChatMode {
             }
         }
 
-        let mut event_rx = self
-            .agent
-            .subscribe_events()
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-        let mut permission_rx = self.agent.subscribe_permission_requests().ok();
         if let Ok(pending) = self.agent.pending_permission_requests() {
             for request in pending.into_iter().filter(|request| {
                 crate::runtime::approval::permission_request_targets_session(request, &session_id)
@@ -639,6 +615,10 @@ impl ChatMode {
                     fatal_event_stream_error = Some(message);
                     break;
                 }
+            }
+            if let Some(message) = self.pending_runtime_failure.take() {
+                fatal_event_stream_error = Some(message);
+                break;
             }
             if self.poll_external_tool_mutation(&mut chat_view) {
                 needs_redraw = true;
@@ -779,7 +759,7 @@ impl ChatMode {
                     let snapshot = match response {
                         Ok(response) => {
                             self.replace_external_conflict_preferences(response.preferences.into());
-                            response.snapshot
+                            response.surface.catalog
                         }
                         Err(error) => {
                             tracing::warn!(
@@ -896,39 +876,13 @@ impl ChatMode {
             }
 
             // 2. Process core events (non-blocking)
-            let mut events = Vec::with_capacity(20);
-            for _ in 0..20 {
-                match event_rx.try_recv() {
-                    Ok(envelope) => events.push(envelope),
-                    Err(error) => {
-                        let Some(mut failure) = agent_event_stream_failure(error) else {
-                            break;
-                        };
-
-                        // The adapter records the turn before DialogTurnStarted reaches the UI,
-                        // so cancellation must not depend on ChatState having seen that event.
-                        let agent = self.agent.clone();
-                        if let Err(cancel_error) = tokio::task::block_in_place(|| {
-                            rt_handle.block_on(agent.cancel_current_turn())
-                        }) {
-                            failure = format!(
-                                "{failure}; failed to cancel the active turn: {cancel_error}"
-                            );
-                        }
-                        mark_active_turn_failed(&mut chat_state, &failure);
-                        chat_view.invalidate_lines_cache();
-                        chat_view.set_status(Some(format!("Error: {failure}")));
-                        tracing::error!("{failure}");
-                        fatal_event_stream_error = Some(failure);
-                        break;
-                    }
-                }
-            }
-            if fatal_event_stream_error.is_some() {
-                break;
-            }
-            for envelope in events {
+            let event_batch = drain_agent_event_batch(&mut event_rx, 20);
+            let mut connection_failure = None;
+            for envelope in event_batch.events {
                 let event = &envelope.event;
+                if let Some(failure) = agent_event_connection_failure(event) {
+                    connection_failure = Some(failure.to_string());
+                }
                 if let AgenticEvent::SubagentSessionLinked {
                     session_id: subagent_session_id,
                     parent_session_id,
@@ -944,7 +898,7 @@ impl ChatMode {
                 }
 
                 // Check if this is a subagent event that belongs to our session
-                if event.session_id() != Some(&session_id) {
+                if !agent_event_is_relevant_to_session(event, &session_id) {
                     if self.project_inspected_lineage_event(event) {
                         needs_redraw = true;
                     }
@@ -1046,6 +1000,27 @@ impl ChatMode {
                         }
                     }
                 }
+            }
+            if let Some(mut failure) = connection_failure.or(event_batch.failure) {
+                // Project every event received before the failure first. A terminal event may
+                // have already settled the turn, in which case cancellation would be wrong.
+                if chat_state.current_turn_id().is_some() {
+                    // The adapter records the turn before DialogTurnStarted reaches the UI,
+                    // so cancellation must not depend on ChatState having seen that event.
+                    let agent = self.agent.clone();
+                    if let Err(cancel_error) = tokio::task::block_in_place(|| {
+                        rt_handle.block_on(agent.cancel_current_turn())
+                    }) {
+                        failure =
+                            format!("{failure}; failed to cancel the active turn: {cancel_error}");
+                    }
+                    mark_active_turn_failed(&mut chat_state, &failure);
+                }
+                chat_view.invalidate_lines_cache();
+                chat_view.set_status(Some(format!("Error: {failure}")));
+                tracing::error!("{failure}");
+                fatal_event_stream_error = Some(failure);
+                break;
             }
             if self.refresh_inspected_lineage_if_due(&mut chat_view, &rt_handle) {
                 chat_view.invalidate_lines_cache();

@@ -75,7 +75,10 @@ pub struct RunUserShellCommandResponse(pub AgentUserShellCommandResult);
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "agent/submitUserAnswers", response = SubmitUserAnswersResponse)]
 pub struct SubmitUserAnswersRequest {
+    pub session_id: String,
+    pub turn_id: String,
     pub tool_id: String,
+    pub registration_sequence: u64,
     pub answers: serde_json::Value,
 }
 

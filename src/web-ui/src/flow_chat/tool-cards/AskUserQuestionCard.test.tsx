@@ -101,6 +101,8 @@ describe('AskUserQuestionCard', () => {
           toolItem={questionTool('pending_confirmation')}
           config={config}
           isLastItem
+          sessionId="session-1"
+          turnId="turn-1"
         />,
       );
     });
@@ -113,6 +115,8 @@ describe('AskUserQuestionCard', () => {
           toolItem={questionTool('completed')}
           config={config}
           isLastItem
+          sessionId="session-1"
+          turnId="turn-1"
         />,
       );
     });
@@ -125,9 +129,49 @@ describe('AskUserQuestionCard', () => {
           toolItem={questionTool('completed')}
           config={config}
           isLastItem={false}
+          sessionId="session-1"
+          turnId="turn-1"
         />,
       );
     });
     expect(container.querySelector('.completed-summary')).not.toBeNull();
+  });
+
+  it('keeps answers disabled until the runtime registers the response channel', () => {
+    act(() => {
+      root.render(
+        <AskUserQuestionCard
+          toolItem={questionTool('running')}
+          config={config}
+          isLastItem
+          sessionId="session-1"
+          turnId="turn-1"
+        />,
+      );
+    });
+    expect(container.querySelector<HTMLInputElement>('input[type="radio"]')?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('.submit-button')?.disabled).toBe(true);
+
+    act(() => {
+      root.render(
+        <AskUserQuestionCard
+          toolItem={{
+            ...questionTool('running'),
+            userInputReady: true,
+            userInputIdentity: {
+              sessionId: 'session-1',
+              turnId: 'turn-1',
+              toolId: 'question-tool-1',
+              registrationSequence: 11,
+            },
+          }}
+          config={config}
+          isLastItem
+          sessionId="session-1"
+          turnId="turn-1"
+        />,
+      );
+    });
+    expect(container.querySelector<HTMLInputElement>('input[type="radio"]')?.disabled).toBe(false);
   });
 });

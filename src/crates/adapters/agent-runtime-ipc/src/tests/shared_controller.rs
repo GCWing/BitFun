@@ -14,12 +14,12 @@ use bitfun_runtime_ports::{
     AgentSessionModelUpdateRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
     AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSubmissionSource,
     AgentUserShellCommandRequest, DialogSubmissionPolicy, SessionExecutionTarget,
-    SessionTranscript,
+    SessionTranscript, TranscriptContent, TranscriptMessage,
 };
 use serde_json::Map;
 use std::path::Path;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
 };
 use std::time::Duration;
@@ -95,6 +95,7 @@ struct FakeHandler {
     lineage_read_delay: Option<Duration>,
     invalid_steer_result: bool,
     settle_cancel: bool,
+    restored_turn_id: Option<String>,
     events: broadcast::Sender<RuntimeIpcEvent>,
     available: watch::Sender<bool>,
 }
@@ -104,6 +105,78 @@ struct CreateRaceHandler {
     allow_create: Arc<Notify>,
     available: Arc<AtomicBool>,
     events: broadcast::Sender<RuntimeIpcEvent>,
+}
+
+struct RestoreSubscriptionHandler {
+    subscribed: AtomicBool,
+    events: broadcast::Sender<RuntimeIpcEvent>,
+}
+
+struct OversizedForkHandler {
+    fork_calls: AtomicUsize,
+    events: broadcast::Sender<RuntimeIpcEvent>,
+}
+
+#[async_trait]
+impl RuntimeIpcRequestHandler for OversizedForkHandler {
+    async fn execute(
+        &self,
+        operation: RuntimeIpcOperation,
+    ) -> Result<RuntimeIpcOperationResult, RuntimeIpcError> {
+        match operation {
+            RuntimeIpcOperation::RestoreSession { request } => Ok(restored(&request.session_id)),
+            RuntimeIpcOperation::ForkSession { .. } => {
+                self.fork_calls.fetch_add(1, Ordering::SeqCst);
+                Ok(RuntimeIpcOperationResult::SessionForked {
+                    session: summary("session-fork"),
+                    transcript: SessionTranscript {
+                        session_id: "session-fork".to_string(),
+                        messages: vec![TranscriptMessage {
+                            id: Some("oversized-message".to_string()),
+                            role: "assistant".to_string(),
+                            turn_id: Some("turn-oversized".to_string()),
+                            timestamp_ms: None,
+                            content: TranscriptContent::Text("x".repeat(9 * 1024 * 1024)),
+                        }],
+                    },
+                    workspace_binding: workspace_binding(),
+                })
+            }
+            _ => Ok(RuntimeIpcOperationResult::Unit),
+        }
+    }
+
+    fn subscribe_events(&self, _session_id: &str) -> EventSubscription {
+        Ok(self.events.subscribe())
+    }
+}
+
+#[async_trait]
+impl RuntimeIpcRequestHandler for RestoreSubscriptionHandler {
+    async fn execute(
+        &self,
+        operation: RuntimeIpcOperation,
+    ) -> Result<RuntimeIpcOperationResult, RuntimeIpcError> {
+        let RuntimeIpcOperation::RestoreSession { request } = operation else {
+            return Ok(RuntimeIpcOperationResult::Unit);
+        };
+        if !self.subscribed.load(Ordering::SeqCst) {
+            return Err(RuntimeIpcError {
+                code: RuntimeIpcErrorCode::Internal,
+                message: "restore executed before its event subscription was attached".to_string(),
+            });
+        }
+        self.events
+            .send(test_agent_event(&request.session_id, "turn-during-restore"))
+            .expect("pre-attached restore receiver");
+        Ok(restored(&request.session_id))
+    }
+
+    fn subscribe_events(&self, _session_id: &str) -> EventSubscription {
+        let receiver = self.events.subscribe();
+        self.subscribed.store(true, Ordering::SeqCst);
+        Ok(receiver)
+    }
 }
 
 impl Default for FakeHandler {
@@ -121,6 +194,7 @@ impl Default for FakeHandler {
             lineage_read_delay: None,
             invalid_steer_result: false,
             settle_cancel: true,
+            restored_turn_id: None,
             events,
             available,
         }
@@ -219,7 +293,10 @@ impl RuntimeIpcRequestHandler for FakeHandler {
             }
         }
         match operation {
-            RuntimeIpcOperation::RestoreSession { request } => Ok(restored(&request.session_id)),
+            RuntimeIpcOperation::RestoreSession { request } => Ok(match &self.restored_turn_id {
+                Some(turn_id) => restored_processing(&request.session_id, turn_id),
+                None => restored(&request.session_id),
+            }),
             RuntimeIpcOperation::ForkSession { .. } => {
                 Ok(RuntimeIpcOperationResult::SessionForked {
                     session: summary("session-fork"),
@@ -418,6 +495,48 @@ async fn oversized_event_reports_typed_invalidation_before_disconnect() {
 }
 
 #[tokio::test]
+async fn queued_terminal_and_invalidation_events_precede_runtime_unavailability() {
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("terminal-before-unavailable").await;
+    expect_response(
+        &mut client,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+
+    handler
+        .events
+        .send(test_agent_event("session-a", "turn-terminal"))
+        .unwrap();
+    handler
+        .events
+        .send(RuntimeIpcEvent::StreamInvalidated {
+            reason: crate::RuntimeIpcStreamInvalidationReason::Closed,
+        })
+        .unwrap();
+    handler.available.send_replace(false);
+
+    assert!(matches!(
+        read_frame(&mut client).await.unwrap(),
+        RuntimeIpcFrame::Event {
+            event: RuntimeIpcEvent::Agent { envelope, .. }
+        } if matches!(envelope.event, AgenticEvent::DialogTurnCancelled { ref turn_id, .. } if turn_id == "turn-terminal")
+    ));
+    assert!(matches!(
+        read_frame(&mut client).await.unwrap(),
+        RuntimeIpcFrame::Event {
+            event: RuntimeIpcEvent::StreamInvalidated {
+                reason: crate::RuntimeIpcStreamInvalidationReason::Closed,
+            }
+        }
+    ));
+    drop(client);
+    server.finish().await;
+}
+
+#[tokio::test]
 async fn first_party_timeout_reports_unknown_outcome_and_releases_the_lease() {
     let mut config = server_config();
     config.request_timeout = Duration::from_millis(100);
@@ -606,6 +725,98 @@ async fn generated_session_is_claimed_before_another_connection_can_restore_it()
     server.finish().await;
 }
 
+#[tokio::test]
+async fn restore_attaches_event_subscription_before_capturing_the_snapshot() {
+    let (event_sender, _) = broadcast::channel(16);
+    let server = TestServer::start(
+        server_config(),
+        Arc::new(RestoreSubscriptionHandler {
+            subscribed: AtomicBool::new(false),
+            events: event_sender,
+        }),
+    )
+    .await;
+    let client = RuntimeIpcClient::connect(
+        server.runtime_root.path(),
+        &server.discovery,
+        "restore-subscription",
+        "0.1.0",
+        Duration::from_secs(2),
+        Duration::from_secs(2),
+    )
+    .await
+    .expect("connect first-party client");
+    let mut client_events = client.subscribe_events();
+
+    client
+        .request(restore_operation(server.workspace.path(), "session-a"))
+        .await
+        .expect("restore after pre-subscription");
+    let event = tokio::time::timeout(Duration::from_secs(1), client_events.recv())
+        .await
+        .expect("restore event deadline")
+        .expect("restore event");
+    assert!(matches!(
+        event,
+        crate::RuntimeIpcClientEvent::Runtime(RuntimeIpcEvent::Agent { envelope, .. })
+            if matches!(envelope.event, AgenticEvent::DialogTurnCancelled { ref turn_id, .. } if turn_id == "turn-during-restore")
+    ));
+
+    drop(client);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn processing_restore_reinstates_turn_control_and_disconnect_cancellation() {
+    let handler = Arc::new(FakeHandler {
+        restored_turn_id: Some("turn-restored".to_string()),
+        ..FakeHandler::default()
+    });
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let client = RuntimeIpcClient::connect(
+        server.runtime_root.path(),
+        &server.discovery,
+        "processing-restore",
+        "0.1.0",
+        Duration::from_secs(2),
+        Duration::from_secs(2),
+    )
+    .await
+    .expect("connect first-party client");
+
+    client
+        .request(restore_operation(server.workspace.path(), "session-a"))
+        .await
+        .expect("restore processing session");
+    assert!(matches!(
+        client.request(steer_operation("session-a", "turn-restored")).await,
+        Ok(RuntimeIpcOperationResult::TurnSteered { ref turn_id, .. }) if turn_id == "turn-restored"
+    ));
+    assert!(matches!(
+        client
+            .request(rename_operation("session-a", "blocked while processing"))
+            .await,
+        Err(RuntimeIpcClientError::Remote(RuntimeIpcError {
+            code: RuntimeIpcErrorCode::SessionInUse,
+            ..
+        }))
+    ));
+
+    drop(client);
+    wait_for_calls(&handler, |calls| {
+        calls.iter().any(|operation| {
+            matches!(
+                operation,
+                RuntimeIpcOperation::CancelTurn { request }
+                    if request.session_id == "session-a"
+                        && request.turn_id.as_deref() == Some("turn-restored")
+            )
+        })
+    })
+    .await;
+    server.finish().await;
+}
+
 fn summary(session_id: &str) -> AgentSessionSummary {
     AgentSessionSummary {
         session_id: session_id.to_string(),
@@ -630,7 +841,33 @@ fn restored(session_id: &str) -> RuntimeIpcOperationResult {
             messages: Vec::new(),
         },
         pending_permissions: Vec::new(),
+        pending_user_inputs: Vec::new(),
         workspace_binding: workspace_binding(),
+    }
+}
+
+fn restored_processing(session_id: &str, turn_id: &str) -> RuntimeIpcOperationResult {
+    let RuntimeIpcOperationResult::SessionRestored {
+        session,
+        transcript,
+        pending_permissions,
+        pending_user_inputs,
+        workspace_binding,
+        ..
+    } = restored(session_id)
+    else {
+        unreachable!("restore fixture")
+    };
+    RuntimeIpcOperationResult::SessionRestored {
+        session,
+        state: crate::RuntimeSessionState::Processing {
+            current_turn_id: turn_id.to_string(),
+            phase: crate::RuntimeSessionProcessingPhase::ToolCalling,
+        },
+        transcript,
+        pending_permissions,
+        pending_user_inputs,
+        workspace_binding,
     }
 }
 
@@ -1019,6 +1256,52 @@ async fn successful_fork_atomically_transfers_control_and_releases_the_source() 
 
     drop(forker);
     drop(observer);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn oversized_fork_success_is_outcome_unknown_and_closes_before_a_retry() {
+    let handler = Arc::new(OversizedForkHandler {
+        fork_calls: AtomicUsize::new(0),
+        events: broadcast::channel(16).0,
+    });
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let client = RuntimeIpcClient::connect(
+        server.runtime_root.path(),
+        &server.discovery,
+        "oversized-fork-controller",
+        "0.1.0",
+        Duration::from_secs(2),
+        Duration::from_secs(2),
+    )
+    .await
+    .expect("connect first-party client");
+    client
+        .request(restore_operation(server.workspace.path(), "session-a"))
+        .await
+        .expect("restore source session");
+
+    let operation = fork_operation("session-a", Some("turn-2"));
+    let first = client.request(operation.clone()).await;
+    assert!(
+        matches!(
+            first,
+            Err(RuntimeIpcClientError::Remote(RuntimeIpcError {
+                code: RuntimeIpcErrorCode::OutcomeUnknown,
+                ..
+            }))
+        ),
+        "oversized completed fork must fail closed: {first:?}"
+    );
+
+    let retry = client.request(operation).await;
+    assert!(
+        matches!(retry, Err(RuntimeIpcClientError::Disconnected)),
+        "the completed fork connection must reject a replay: {retry:?}"
+    );
+    assert_eq!(handler.fork_calls.load(Ordering::SeqCst), 1);
+
+    drop(client);
     server.finish().await;
 }
 

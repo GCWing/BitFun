@@ -1,325 +1,130 @@
-//! Interactive TUI session state projected over the App Server backend boundary.
+//! Thin interactive TUI facade over the shared CLI Runtime client and domain owners.
 
-use std::collections::HashMap;
-use std::fmt;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
-use crate::tui_backend::{TuiBackend, TuiBackendError, TuiBackendErrorKind};
 use anyhow::Result;
-use bitfun_app_server_client::AppServerEvent;
-use bitfun_app_server_protocol::account::*;
-use bitfun_app_server_protocol::agent::*;
-use bitfun_app_server_protocol::event::EventStreamState;
-use bitfun_app_server_protocol::external_source::*;
-use bitfun_app_server_protocol::hook::*;
-use bitfun_app_server_protocol::mcp::*;
-use bitfun_app_server_protocol::model::*;
-use bitfun_app_server_protocol::session::*;
-use bitfun_app_server_protocol::skill::*;
-use bitfun_app_server_protocol::subagent::*;
-use bitfun_app_server_protocol::workspace::*;
-use bitfun_app_server_protocol::worktree::*;
 use bitfun_core_types::SessionUsageReport;
-use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
+use bitfun_events::AgenticEventEnvelope;
+use bitfun_product_domains::external_hook_import::{
+    ExternalHookImportApplyRequestV1, ExternalHookImportApplyResultV1,
+    ExternalHookImportMutationRequestV1, ExternalHookImportPlanV1, ExternalHookImportSnapshotV1,
+};
 use bitfun_product_domains::external_source_control::ExternalSourceControlRequestV1;
 use bitfun_product_domains::external_sources::{
     ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourcePublicSnapshot,
-    NativePromptCommandDescriptor, PromptCommandShellReviewDecision,
+    NativePromptCommandDescriptor, PromptCommandInvocationOutcome,
+    PromptCommandShellReviewDecision, SourceKey,
 };
 use bitfun_product_domains::tool_permissions::{
     PermissionReply, PermissionRequest, PermissionRequestEvent,
 };
 use bitfun_runtime_ports::{
-    put_agent_workspace_references, AgentContextReloadRequest, AgentDialogSteerRequest,
-    AgentDialogTurnExecution, AgentDialogTurnRequest, AgentInputAttachment,
-    AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
-    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionLineageCancellationRequest,
-    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
-    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsageRequest,
-    AgentSessionWorkspaceBinding, AgentSubmissionSource, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementRequest, AgentUserShellCommandRequest,
-    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, DialogSubmissionPolicy, SessionExecutionTarget,
-    SessionTranscript, WorkspaceDiffSnapshot,
+    AgentContextReloadRequest, AgentInputAttachment, AgentSessionLineageInspection,
+    AgentSessionLineageSnapshot, AgentSessionRevertResult, AgentSessionSummary,
+    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentTurnCancellationResult,
+    AgentWorkspaceReference, AgentWorkspaceReferenceSearchResult, SessionTranscript,
+    WorkspaceDiffSnapshot,
 };
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
 
-use crate::runtime::approval::{approval_metadata, CliApprovalPolicy};
+use super::runtime_client::{CliAgentMode, CliAgentRuntimeClient};
+pub(crate) use super::runtime_client::{
+    CliSessionRestoreSnapshot, SessionMigrationNotice, SessionOperationError,
+};
+use crate::runtime::approval::CliApprovalPolicy;
+use crate::tui_management::*;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct TuiAgentMode {
-    pub(crate) id: String,
-    pub(crate) description: String,
-    pub(crate) model_id: Option<String>,
-    pub(crate) is_external: bool,
-}
+pub(crate) type TuiAgentMode = CliAgentMode;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum SessionMigrationNotice {
-    Mode {
-        previous_id: String,
-        restored_id: String,
-    },
-    Model {
-        previous_id: String,
-        restored_id: String,
-    },
-}
-
-impl SessionMigrationNotice {
-    pub(crate) fn user_message(&self) -> String {
-        let (setting, previous_id, restored_id) = match self {
-            Self::Mode {
-                previous_id,
-                restored_id,
-            } => ("mode", previous_id, restored_id),
-            Self::Model {
-                previous_id,
-                restored_id,
-            } => ("model", previous_id, restored_id),
-        };
-        format!(
-            "Session {setting} \"{previous_id}\" is unavailable. This session was restored with \"{restored_id}\". Review the {setting} before continuing."
-        )
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct SessionOperationError {
-    message: String,
-    outcome_unknown: bool,
-}
-
-impl fmt::Display for SessionOperationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for SessionOperationError {}
-
-impl SessionOperationError {
-    fn backend(error: TuiBackendError) -> Self {
-        Self {
-            message: error.message,
-            outcome_unknown: error.outcome_unknown,
-        }
-    }
-
-    pub(crate) fn outcome_unknown(&self) -> bool {
-        self.outcome_unknown
-    }
-}
-
-#[derive(Clone, Debug)]
-struct TuiWorkspacePaths {
-    workspace_id: Option<String>,
-    project: Option<PathBuf>,
-    execution: Option<PathBuf>,
-    execution_target: Option<SessionExecutionTarget>,
-    remote_connection_id: Option<String>,
-    remote_ssh_host: Option<String>,
-}
-
-impl TuiWorkspacePaths {
-    fn new(workspace_path: Option<PathBuf>) -> Self {
-        Self {
-            workspace_id: None,
-            project: workspace_path.clone(),
-            execution: workspace_path,
-            execution_target: None,
-            remote_connection_id: None,
-            remote_ssh_host: None,
-        }
-    }
-
-    fn execution(&self) -> PathBuf {
-        self.execution
-            .clone()
-            .or_else(|| self.project.clone())
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| PathBuf::from("."))
-    }
-
-    fn project(&self) -> PathBuf {
-        self.project
-            .clone()
-            .or_else(|| self.execution.clone())
-            .or_else(|| std::env::current_dir().ok())
-            .unwrap_or_else(|| PathBuf::from("."))
-    }
-
-    fn apply_binding(&mut self, binding: &AgentSessionWorkspaceBinding) {
-        self.workspace_id = binding.workspace_id.clone();
-        let execution = PathBuf::from(&binding.workspace_path);
-        let project = binding
-            .project_workspace_path
-            .as_deref()
-            .filter(|path| !path.trim().is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| self.project());
-        self.execution = Some(execution);
-        self.project = Some(project);
-        self.execution_target = binding.execution_target.clone();
-        self.remote_connection_id = binding.remote_connection_id.clone();
-        self.remote_ssh_host = binding.remote_ssh_host.clone();
-    }
-
-    fn reset_execution_to_project(&mut self) -> PathBuf {
-        let project = self.project();
-        self.execution = Some(project.clone());
-        self.execution_target = Some(SessionExecutionTarget::local(
-            project.to_string_lossy().to_string(),
-        ));
-        self.workspace_id = None;
-        self.remote_connection_id = None;
-        self.remote_ssh_host = None;
-        project
-    }
-
-    fn workspace_diff_unavailable_reason(&self) -> Option<&'static str> {
-        if self.remote_connection_id.is_some() || self.remote_ssh_host.is_some() {
-            return Some("Workspace diff is unavailable for remote Sessions");
-        }
-        if !same_workspace_location(&self.execution(), &self.project()) {
-            return Some(
-                "Workspace diff is unavailable when the Session uses a different worktree",
-            );
-        }
-        None
-    }
-}
-
+/// Presentation facade only. Runtime state lives in `CliAgentRuntimeClient`;
+/// management behavior remains in the concrete owners composed below.
 pub(crate) struct TuiAgentClient {
-    backend: Arc<dyn TuiBackend>,
-    shared: bool,
-    approval_policy: Arc<RwLock<CliApprovalPolicy>>,
-    workspace_paths: Arc<RwLock<TuiWorkspacePaths>>,
-    session_id: Arc<Mutex<Option<String>>>,
-    current_turn_id: Arc<Mutex<Option<String>>>,
-    agent_events: Arc<RwLock<Option<broadcast::Sender<AgenticEventEnvelope>>>>,
-    permission_events: Arc<RwLock<Option<broadcast::Sender<PermissionRequestEvent>>>>,
-    external_source_events:
-        Arc<RwLock<Option<broadcast::Sender<(String, ExternalSourcePublicSnapshot)>>>>,
-    pending_permissions: Arc<RwLock<HashMap<String, PermissionRequest>>>,
+    runtime: Arc<CliAgentRuntimeClient>,
+    management: Arc<TuiManagementOwners>,
+    external_source_events: broadcast::Sender<(String, ExternalSourcePublicSnapshot)>,
+    external_source_subscriptions: Arc<Mutex<HashSet<String>>>,
+    external_source_tasks: Mutex<Vec<JoinHandle<()>>>,
 }
 
 impl TuiAgentClient {
     pub(crate) fn new(
-        backend: Arc<dyn TuiBackend>,
-        workspace_path: Option<PathBuf>,
-        shared: bool,
-        approval_policy: CliApprovalPolicy,
+        runtime: Arc<CliAgentRuntimeClient>,
+        management: Arc<TuiManagementOwners>,
     ) -> Self {
-        let (agent_sender, _) = broadcast::channel(256);
-        let (permission_sender, _) = broadcast::channel(64);
-        let (external_source_sender, _) = broadcast::channel(64);
-        let agent_events = Arc::new(RwLock::new(Some(agent_sender.clone())));
-        let permission_events = Arc::new(RwLock::new(Some(permission_sender.clone())));
-        let external_source_events = Arc::new(RwLock::new(Some(external_source_sender.clone())));
-        let pending_permissions = Arc::new(RwLock::new(HashMap::new()));
-        spawn_event_bridge(
-            backend.subscribe_events(),
-            agent_sender,
-            permission_sender,
-            external_source_sender,
-            agent_events.clone(),
-            permission_events.clone(),
-            external_source_events.clone(),
-            pending_permissions.clone(),
-        );
+        let (external_source_events, _) = broadcast::channel(64);
         Self {
-            backend,
-            shared,
-            approval_policy: Arc::new(RwLock::new(approval_policy)),
-            workspace_paths: Arc::new(RwLock::new(TuiWorkspacePaths::new(workspace_path))),
-            session_id: Arc::new(Mutex::new(None)),
-            current_turn_id: Arc::new(Mutex::new(None)),
-            agent_events,
-            permission_events,
+            runtime,
+            management,
             external_source_events,
-            pending_permissions,
+            external_source_subscriptions: Arc::new(Mutex::new(HashSet::new())),
+            external_source_tasks: Mutex::new(Vec::new()),
         }
     }
 
     pub(crate) fn is_shared(&self) -> bool {
-        self.shared
+        self.runtime.is_shared()
     }
 
-    pub(crate) async fn model_catalog(&self) -> Result<TuiModelCatalogResponse> {
-        Ok(self.backend.model_catalog().await?)
+    fn management_scope(&self) -> ManagementScope {
+        management_scope(
+            self.project_workspace_path_buf(),
+            self.runtime.is_remote_workspace(),
+        )
+    }
+
+    fn local_management_scope(&self, capability: &str) -> ManagementResult<ManagementScope> {
+        let scope = self.management_scope();
+        scope.local_workspace(capability)?;
+        Ok(scope)
+    }
+
+    pub(crate) async fn model_catalog(&self) -> Result<TuiModelCatalog> {
+        let scope = self.management_scope();
+        Ok(self.management.model.catalog(&scope).await?)
     }
 
     pub(crate) async fn available_agent_modes(&self) -> Result<Vec<TuiAgentMode>> {
-        let response = self
-            .backend
-            .list_agent_modes(ListAgentModesRequest {
-                workspace_path: Some(self.workspace_path_buf().to_string_lossy().to_string()),
-                include_external: true,
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))?;
-        Ok(response
-            .modes
-            .into_iter()
-            .map(|mode| TuiAgentMode {
-                id: mode.id,
-                description: mode.description,
-                model_id: mode.model_id,
-                is_external: mode.is_external,
-            })
-            .collect())
+        self.runtime.available_agent_modes().await
     }
 
-    pub(crate) async fn list_models(&self) -> Result<ListModelsResponse> {
-        self.backend
-            .list_models()
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    pub(crate) async fn list_models(&self) -> Result<ModelCatalog> {
+        let scope = self.management_scope();
+        Ok(self.management.model.list(&scope).await?)
     }
 
-    pub(crate) async fn get_model(&self, model_id: String) -> Result<GetModelResponse> {
-        self.backend
-            .get_model(GetModelRequest { model_id })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    pub(crate) async fn get_model(&self, model_id: String) -> Result<ModelEditProjection> {
+        let scope = self.management_scope();
+        Ok(self.management.model.get(&scope, &model_id).await?)
     }
 
-    pub(crate) async fn add_model(&self, request: AddModelRequest) -> Result<AddModelResponse> {
-        self.backend
-            .add_model(request)
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    pub(crate) async fn add_model(&self, request: AddModelRequest) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self
+            .management
+            .model
+            .add(&scope, request.model, request.make_primary_if_empty)
+            .await?)
     }
 
-    pub(crate) async fn update_model(
-        &self,
-        request: UpdateModelRequest,
-    ) -> Result<UpdateModelResponse> {
-        self.backend
-            .update_model(request)
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    pub(crate) async fn update_model(&self, request: UpdateModelRequest) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self
+            .management
+            .model
+            .update(&scope, &request.model_id, request.model)
+            .await?)
     }
 
-    pub(crate) async fn delete_model(&self, model_id: String) -> Result<DeleteModelResponse> {
-        self.backend
-            .delete_model(DeleteModelRequest { model_id })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
-    }
-
-    pub(crate) async fn set_model_default(
-        &self,
-        request: SetModelDefaultRequest,
-    ) -> Result<SetModelDefaultResponse> {
-        self.backend
-            .set_model_default(request)
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    pub(crate) async fn set_model_default(&self, request: SetModelDefaultRequest) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self
+            .management
+            .model
+            .set_default(&scope, request.slot, request.model_id)
+            .await?)
     }
 
     pub(crate) async fn list_skills(
@@ -327,14 +132,14 @@ impl TuiAgentClient {
         mode_id: String,
         manageable: bool,
     ) -> Result<ListSkillsResponse> {
-        self.backend
-            .list_skills(ListSkillsRequest {
-                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
-                mode_id,
-                manageable,
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+        let scope = self.management_scope();
+        Ok(ListSkillsResponse {
+            skills: self
+                .management
+                .registry
+                .list_skills(&scope, &mode_id, manageable)
+                .await?,
+        })
     }
 
     pub(crate) async fn set_skill_enabled(
@@ -344,18 +149,20 @@ impl TuiAgentClient {
         enabled: bool,
         default_enabled: bool,
         level: String,
-    ) -> Result<SetSkillEnabledResponse> {
-        self.backend
-            .set_skill_enabled(SetSkillEnabledRequest {
-                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
-                mode_id,
-                skill_key,
+    ) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self
+            .management
+            .registry
+            .set_skill_enabled(
+                &scope,
+                &mode_id,
+                &skill_key,
                 enabled,
                 default_enabled,
-                level,
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+                &level,
+            )
+            .await?)
     }
 
     pub(crate) async fn list_subagents(
@@ -363,14 +170,16 @@ impl TuiAgentClient {
         parent_mode_id: String,
         management: bool,
     ) -> Result<ListSubagentsResponse> {
-        self.backend
-            .list_subagents(ListSubagentsRequest {
-                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
-                parent_mode_id,
-                management,
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+        let scope = self.management_scope();
+        let (subagents, has_external) = self
+            .management
+            .registry
+            .list_subagents(&scope, &parent_mode_id, management, true)
+            .await?;
+        Ok(ListSubagentsResponse {
+            subagents,
+            has_external,
+        })
     }
 
     pub(crate) async fn set_subagent_enabled(
@@ -378,128 +187,103 @@ impl TuiAgentClient {
         parent_mode_id: String,
         subagent_id: String,
         enabled: bool,
-    ) -> Result<SetSubagentEnabledResponse> {
-        self.backend
-            .set_subagent_enabled(SetSubagentEnabledRequest {
-                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
-                parent_mode_id,
-                subagent_id,
-                enabled,
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    ) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self
+            .management
+            .registry
+            .set_subagent_enabled(&scope, &parent_mode_id, &subagent_id, enabled)
+            .await?)
     }
 
-    pub(crate) async fn list_mcp_servers(&self) -> Result<ListMcpServersResponse> {
-        self.backend
-            .list_mcp_servers(ListMcpServersRequest {
-                workspace_path: self.workspace_path_buf().to_string_lossy().to_string(),
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    pub(crate) async fn list_mcp_servers(&self) -> Result<McpServerList> {
+        let scope = self.management_scope();
+        Ok(self.management.mcp.list(&scope).await?)
     }
 
-    pub(crate) async fn toggle_mcp_server(
-        &self,
-        server_id: String,
-    ) -> Result<ToggleMcpServerResponse> {
-        self.backend
-            .toggle_mcp_server(ToggleMcpServerRequest { server_id })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    pub(crate) async fn toggle_mcp_server(&self, server_id: String) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self.management.mcp.toggle(&scope, &server_id).await?)
     }
 
     pub(crate) async fn add_mcp_server(
         &self,
         name: String,
         config: McpServerMutation,
-    ) -> Result<AddMcpServerResponse> {
-        self.backend
-            .add_mcp_server(AddMcpServerRequest { name, config })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    ) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self.management.mcp.add(&scope, &name, config).await?)
     }
 
-    pub(crate) async fn delete_mcp_server(
-        &self,
-        server_id: String,
-    ) -> Result<DeleteMcpServerResponse> {
-        self.backend
-            .delete_mcp_server(DeleteMcpServerRequest { server_id })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    pub(crate) async fn delete_mcp_server(&self, server_id: String) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self.management.mcp.delete(&scope, &server_id).await?)
     }
 
     pub(crate) async fn external_mcp_decision(
         &self,
         request: ExternalMcpDecisionRequest,
-    ) -> Result<ExternalMcpDecisionResponse> {
-        self.backend
-            .external_mcp_decision(request)
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    ) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self.management.mcp.decide_external(&scope, request).await?)
     }
 
     pub(crate) async fn mcp_conflict_choice(
         &self,
         request: McpConflictChoiceRequest,
-    ) -> Result<McpConflictChoiceResponse> {
-        self.backend
-            .mcp_conflict_choice(request)
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
+    ) -> Result<()> {
+        let scope = self.management_scope();
+        Ok(self.management.mcp.choose_conflict(&scope, request).await?)
     }
 
     pub(crate) async fn external_source_snapshot(
         &self,
         force_refresh: bool,
-    ) -> std::result::Result<ExternalSourceSnapshotResponse, ExternalSourceOperationError> {
-        self.backend
-            .external_source_snapshot(ExternalSourceSnapshotRequest {
-                workspace_path: self.workspace_path_string(),
-                force_refresh,
-            })
+    ) -> std::result::Result<ExternalSourceSnapshotView, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External source management")
+            .map_err(external_source_management_error)?;
+        self.ensure_external_source_subscription().await?;
+        self.management
+            .external_source
+            .snapshot(&scope, force_refresh)
             .await
-            .map_err(external_source_backend_error)
+            .map_err(external_source_management_error)
     }
 
     pub(crate) fn subscribe_external_source_updates(
         &self,
     ) -> Result<broadcast::Receiver<(String, ExternalSourcePublicSnapshot)>> {
-        shared_receiver(
-            &self.external_source_events,
-            "App Server external source event stream is unavailable",
-        )
+        Ok(self.external_source_events.subscribe())
     }
 
     pub(crate) async fn external_source_control(
         &self,
         request: ExternalSourceControlRequestV1,
-    ) -> std::result::Result<ExternalSourceControlResponse, ExternalSourceOperationError> {
-        let operation_id = request.operation_id.clone();
-        self.backend
-            .external_source_control(ExternalSourceControlRequest {
-                workspace_path: self.workspace_path_string(),
-                request,
-            })
+    ) -> std::result::Result<ExternalSourceSnapshotView, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External source management")
+            .map_err(external_source_management_error)?;
+        self.management
+            .external_source
+            .control(&scope, request)
             .await
-            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
+            .map_err(external_source_management_error)
     }
 
     pub(crate) async fn external_source_review(
         &self,
         action: ExternalSourceReviewAction,
-    ) -> std::result::Result<ExternalSourceSnapshotResponse, ExternalSourceOperationError> {
+    ) -> std::result::Result<ExternalSourceSnapshotView, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External source management")
+            .map_err(external_source_management_error)?;
         let operation_id = format!("tui-{}", uuid::Uuid::new_v4());
-        self.backend
-            .external_source_review(ExternalSourceReviewRequest {
-                workspace_path: self.workspace_path_string(),
-                operation_id: operation_id.clone(),
-                action,
-            })
+        self.management
+            .external_source
+            .review(&scope, &operation_id, action)
             .await
-            .map(|response| response.0)
-            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
+            .map_err(external_source_management_error)
     }
 
     pub(crate) async fn set_native_command_choice(
@@ -507,20 +291,29 @@ impl TuiAgentClient {
         native_commands: Vec<NativePromptCommandDescriptor>,
         selected_candidate_id: String,
         expected_preference_revision: u64,
-    ) -> std::result::Result<SetNativeCommandChoiceResponse, ExternalSourceOperationError> {
+    ) -> std::result::Result<NativeCommandChoiceView, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External command management")
+            .map_err(external_source_management_error)?;
         let operation_id = format!("tui-{}", uuid::Uuid::new_v4());
-        self.backend
-            .set_native_command_choice(SetNativeCommandChoiceRequest {
-                workspace_path: self.workspace_path_string(),
-                operation_id: operation_id.clone(),
+        self.management
+            .external_command
+            .set_native_choice(
+                &scope,
+                &operation_id,
                 native_commands,
-                selected_candidate_id,
+                &selected_candidate_id,
                 expected_preference_revision,
-            })
+            )
             .await
-            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
+            .map(|(conflicts, preferences)| NativeCommandChoiceView {
+                conflicts,
+                preferences,
+            })
+            .map_err(external_source_management_error)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn expand_external_command(
         &self,
         command_name: String,
@@ -531,114 +324,110 @@ impl TuiAgentClient {
         native_conflict_key: Option<String>,
         expected_preference_revision: Option<u64>,
         shell_review_decision: Option<PromptCommandShellReviewDecision>,
-    ) -> std::result::Result<ExpandExternalCommandResponse, ExternalSourceOperationError> {
-        let operation_id = format!("tui-{}", uuid::Uuid::new_v4());
-        self.backend
-            .expand_external_command(ExpandExternalCommandRequest {
-                workspace_path: self.workspace_path_string(),
-                operation_id: operation_id.clone(),
-                command_name,
-                arguments,
-                native_commands,
-                candidate_id,
-                content_version,
-                native_conflict_key,
-                expected_preference_revision,
-                shell_review_decision,
-            })
+    ) -> std::result::Result<PromptCommandInvocationOutcome, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External command management")
+            .map_err(external_source_management_error)?;
+        self.management
+            .external_command
+            .expand(
+                &scope,
+                ExternalCommandExpansionRequest {
+                    operation_id: format!("tui-{}", uuid::Uuid::new_v4()),
+                    command_name,
+                    arguments,
+                    native_commands,
+                    candidate_id,
+                    content_version,
+                    native_conflict_key,
+                    expected_preference_revision,
+                    shell_review_decision,
+                },
+            )
             .await
-            .map_err(|error| external_source_backend_error_with_id(error, Some(&operation_id)))
+            .map_err(external_source_management_error)
     }
 
     pub(crate) async fn native_hook_overview(
         &self,
-    ) -> std::result::Result<NativeHookOverview, ExternalSourceOperationError> {
-        self.backend
-            .native_hook_overview(NativeHookOverviewRequest {
-                workspace_path: self.project_workspace_path_string(),
-            })
+    ) -> std::result::Result<NativeHookOverviewView, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("Native hook management")
+            .map_err(external_source_management_error)?;
+        self.management
+            .native_hook
+            .overview(&scope)
             .await
-            .map(|response| response.0)
-            .map_err(external_source_backend_error)
+            .map_err(external_source_management_error)
     }
 
     pub(crate) async fn external_hook_snapshot(
         &self,
         refresh_updates: bool,
-    ) -> std::result::Result<
-        bitfun_product_domains::external_hook_import::ExternalHookImportSnapshotV1,
-        ExternalSourceOperationError,
-    > {
-        self.backend
-            .external_hook_snapshot(ExternalHookSnapshotRequest {
-                workspace_path: self.project_workspace_path_string(),
-                refresh_updates,
-            })
+    ) -> std::result::Result<ExternalHookImportSnapshotV1, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External hook management")
+            .map_err(external_source_management_error)?;
+        self.management
+            .external_hook
+            .snapshot(&scope, refresh_updates)
             .await
-            .map(|response| response.0)
-            .map_err(external_source_backend_error)
+            .map_err(external_source_management_error)
     }
 
     pub(crate) async fn external_hook_plan(
         &self,
-        source: bitfun_product_domains::external_sources::SourceKey,
-    ) -> std::result::Result<
-        bitfun_product_domains::external_hook_import::ExternalHookImportPlanV1,
-        ExternalSourceOperationError,
-    > {
-        self.backend
-            .external_hook_plan(ExternalHookPlanRequest {
-                workspace_path: self.project_workspace_path_string(),
-                source,
-            })
+        source: SourceKey,
+    ) -> std::result::Result<ExternalHookImportPlanV1, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External hook management")
+            .map_err(external_source_management_error)?;
+        self.management
+            .external_hook
+            .plan(&scope, source)
             .await
-            .map(|response| response.0)
-            .map_err(external_source_backend_error)
+            .map_err(external_source_management_error)
     }
 
     pub(crate) async fn external_hook_apply(
         &self,
-        import_request: bitfun_product_domains::external_hook_import::ExternalHookImportApplyRequestV1,
-    ) -> std::result::Result<
-        bitfun_product_domains::external_hook_import::ExternalHookImportApplyResultV1,
-        ExternalSourceOperationError,
-    > {
-        self.backend
-            .external_hook_apply(ExternalHookApplyRequest {
-                workspace_path: self.project_workspace_path_string(),
-                operation_id: format!("tui-hook-{}", uuid::Uuid::new_v4()),
-                import_request,
-            })
+        request: ExternalHookImportApplyRequestV1,
+    ) -> std::result::Result<ExternalHookImportApplyResultV1, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External hook management")
+            .map_err(external_source_management_error)?;
+        self.management
+            .external_hook
+            .apply(
+                &scope,
+                &format!("tui-hook-{}", uuid::Uuid::new_v4()),
+                request,
+            )
             .await
-            .map(|response| response.0)
-            .map_err(external_source_backend_error)
+            .map_err(external_source_management_error)
     }
 
     pub(crate) async fn external_hook_mutate(
         &self,
-        mutation: bitfun_product_domains::external_hook_import::ExternalHookImportMutationRequestV1,
-    ) -> std::result::Result<
-        bitfun_product_domains::external_hook_import::ExternalHookImportSnapshotV1,
-        ExternalSourceOperationError,
-    > {
-        self.backend
-            .external_hook_mutate(ExternalHookMutationRequest {
-                workspace_path: self.project_workspace_path_string(),
-                operation_id: format!("tui-hook-{}", uuid::Uuid::new_v4()),
-                mutation,
-            })
+        request: ExternalHookImportMutationRequestV1,
+    ) -> std::result::Result<ExternalHookImportSnapshotV1, ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External hook management")
+            .map_err(external_source_management_error)?;
+        self.management
+            .external_hook
+            .mutate(
+                &scope,
+                &format!("tui-hook-{}", uuid::Uuid::new_v4()),
+                request,
+            )
             .await
-            .map(|response| response.0)
-            .map_err(external_source_backend_error)
+            .map_err(external_source_management_error)
     }
 
     pub(crate) async fn account_snapshot(&self) -> Result<AccountSnapshotResponse> {
-        self.backend
-            .account_snapshot(AccountSnapshotRequest {
-                workspace_path: self.project_workspace_path_string(),
-            })
-            .await
-            .map_err(worktree_operation_error)
+        let scope = self.management_scope();
+        Ok(self.management.account.snapshot(&scope).await?)
     }
 
     pub(crate) async fn account_login(
@@ -646,109 +435,165 @@ impl TuiAgentClient {
         relay_url: String,
         username: String,
         password: String,
-    ) -> Result<AccountLoginResponse> {
-        self.backend
-            .account_login(AccountLoginRequest {
-                operation_id: account_operation_id(),
-                relay_url,
-                username,
-                password,
-            })
-            .await
-            .map_err(worktree_operation_error)
+    ) -> Result<AccountLoginView> {
+        let scope = self.management_scope();
+        Ok(self
+            .management
+            .account
+            .login(
+                &scope,
+                &account_operation_id(),
+                &relay_url,
+                &username,
+                &password,
+            )
+            .await?)
     }
 
     pub(crate) async fn account_finalize_login(
         &self,
         choice: AccountSyncChoice,
     ) -> Result<AccountSnapshotResponse> {
-        self.backend
-            .account_finalize_login(AccountFinalizeLoginRequest {
-                operation_id: account_operation_id(),
-                choice,
-                workspace_path: self.project_workspace_path_string(),
-            })
-            .await
-            .map_err(worktree_operation_error)
+        let scope = self.management_scope();
+        Ok(self
+            .management
+            .account
+            .finalize_login(
+                &scope,
+                account_operation_id(),
+                choice == AccountSyncChoice::Local,
+                self.project_workspace_path_buf(),
+            )
+            .await?)
     }
 
     pub(crate) async fn account_logout(&self) -> Result<AccountSnapshotResponse> {
-        self.backend
-            .account_logout(AccountLogoutRequest {
-                operation_id: account_operation_id(),
-                workspace_path: self.project_workspace_path_string(),
-            })
-            .await
-            .map_err(Into::into)
+        let scope = self.management_scope();
+        Ok(self
+            .management
+            .account
+            .logout(&scope, &account_operation_id())
+            .await?)
     }
 
     pub(crate) async fn settings_sync_start(
         &self,
         is_first_login: bool,
     ) -> Result<SettingsSyncResponse> {
-        self.backend
-            .settings_sync_start(SettingsSyncStartRequest {
-                operation_id: account_operation_id(),
-                workspace_path: self.project_workspace_path_string(),
-                is_first_login,
-            })
-            .await
-            .map_err(Into::into)
+        let scope = self.management_scope();
+        Ok(SettingsSyncResponse {
+            progress: self
+                .management
+                .settings_sync
+                .start(
+                    &scope,
+                    account_operation_id(),
+                    is_first_login,
+                    self.project_workspace_path_buf(),
+                )
+                .await?,
+        })
     }
 
     pub(crate) async fn settings_sync_snapshot(&self) -> Result<SettingsSyncResponse> {
-        self.backend
-            .settings_sync_snapshot(SettingsSyncSnapshotRequest {
-                workspace_path: self.project_workspace_path_string(),
-            })
-            .await
-            .map_err(Into::into)
+        let scope = self.management_scope();
+        Ok(SettingsSyncResponse {
+            progress: self.management.settings_sync.snapshot(&scope).await?,
+        })
     }
 
     pub(crate) async fn settings_sync_cancel(&self) -> Result<SettingsSyncResponse> {
-        self.backend
-            .settings_sync_cancel(SettingsSyncCancelRequest {
-                operation_id: account_operation_id(),
-                workspace_path: self.project_workspace_path_string(),
-            })
-            .await
-            .map_err(Into::into)
+        let scope = self.management_scope();
+        Ok(SettingsSyncResponse {
+            progress: self
+                .management
+                .settings_sync
+                .cancel(&scope, &account_operation_id())
+                .await?,
+        })
     }
 
     pub(crate) async fn settings_sync_local_changed(&self) -> Result<SettingsSyncResponse> {
-        self.backend
-            .settings_sync_local_changed(SettingsSyncLocalChangedRequest {
-                operation_id: account_operation_id(),
-                workspace_path: self.project_workspace_path_string(),
-            })
+        let scope = self.management_scope();
+        Ok(SettingsSyncResponse {
+            progress: self
+                .management
+                .settings_sync
+                .local_changed(&scope, &account_operation_id())
+                .await?,
+        })
+    }
+
+    pub(crate) async fn worktree_repository_status(
+        &self,
+        workspace_path: String,
+    ) -> Result<WorktreeRepositoryStatus> {
+        let scope = management_scope(
+            PathBuf::from(workspace_path),
+            self.runtime.is_remote_workspace(),
+        );
+        Ok(self.management.worktree.repository_status(&scope).await?)
+    }
+
+    pub(crate) async fn worktree_bind_session(
+        &self,
+        session_id: String,
+        project_workspace_path: Option<String>,
+    ) -> Result<WorktreeBindingView> {
+        self.worktree_transition(session_id, project_workspace_path, true)
             .await
-            .map_err(Into::into)
+    }
+
+    pub(crate) async fn worktree_release_session(
+        &self,
+        session_id: String,
+        project_workspace_path: Option<String>,
+    ) -> Result<WorktreeBindingView> {
+        self.worktree_transition(session_id, project_workspace_path, false)
+            .await
+    }
+
+    async fn worktree_transition(
+        &self,
+        session_id: String,
+        project_workspace_path: Option<String>,
+        enabled: bool,
+    ) -> Result<WorktreeBindingView> {
+        let workspace = project_workspace_path
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| self.project_workspace_path_buf());
+        let request = WorktreeBindingRequest {
+            scope: management_scope(workspace, self.runtime.is_remote_workspace()),
+            operation_id: worktree_operation_id(),
+            session_id,
+            project_workspace_path,
+        };
+        Ok(if enabled {
+            self.management.worktree.bind(request).await?
+        } else {
+            self.management.worktree.release(request).await?
+        })
     }
 
     pub(crate) fn subscribe_events(&self) -> Result<broadcast::Receiver<AgenticEventEnvelope>> {
-        shared_receiver(
-            &self.agent_events,
-            "App Server agent event stream is unavailable",
-        )
+        self.runtime
+            .subscribe_events()
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
     pub(crate) fn subscribe_permission_requests(
         &self,
     ) -> Result<broadcast::Receiver<PermissionRequestEvent>> {
-        shared_receiver(
-            &self.permission_events,
-            "App Server permission event stream is unavailable",
-        )
+        self.runtime
+            .subscribe_permission_requests()
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
     pub(crate) fn pending_permission_requests(&self) -> Result<Vec<PermissionRequest>> {
-        Ok(self
-            .pending_permissions
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .values()
-            .cloned()
-            .collect())
+        self.runtime
+            .pending_permission_requests()
+            .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
     pub(crate) async fn respond_permission(
@@ -756,173 +601,53 @@ impl TuiAgentClient {
         request_id: &str,
         reply: PermissionReply,
     ) -> Result<()> {
-        self.backend
-            .respond_permission(RespondPermissionRequest {
-                request_id: request_id.to_string(),
-                reply,
-            })
-            .await?;
-        self.pending_permissions
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(request_id);
-        Ok(())
+        self.runtime.respond_permission(request_id, reply).await
     }
 
     pub(crate) fn set_approval_policy(&self, policy: CliApprovalPolicy) {
-        *self
-            .approval_policy
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy;
-    }
-
-    fn approval_policy(&self) -> CliApprovalPolicy {
-        *self
-            .approval_policy
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-
-    pub(crate) fn workspace_path_buf(&self) -> PathBuf {
-        self.workspace_paths
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .execution()
+        self.runtime.set_approval_policy(policy);
     }
 
     pub(crate) fn workspace_path_string(&self) -> String {
-        self.workspace_path_buf().to_string_lossy().to_string()
+        self.runtime.workspace_path_string()
     }
 
     pub(crate) fn project_workspace_path_string(&self) -> String {
-        self.workspace_paths
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .project()
-            .to_string_lossy()
-            .to_string()
+        self.runtime.project_workspace_path_string()
+    }
+
+    fn project_workspace_path_buf(&self) -> PathBuf {
+        self.runtime.project_workspace_path_buf()
     }
 
     pub(crate) fn set_workspace_binding(&self, binding: &AgentSessionWorkspaceBinding) {
-        self.workspace_paths
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .apply_binding(binding);
-    }
-
-    pub(crate) async fn worktree_repository_status(
-        &self,
-        workspace_path: String,
-    ) -> Result<WorktreeRepositoryStatusResponse> {
-        let paths = self
-            .workspace_paths
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        self.backend
-            .worktree_repository_status(WorktreeRepositoryStatusRequest {
-                workspace_path,
-                remote_connection_id: paths.remote_connection_id.clone(),
-                remote_ssh_host: paths.remote_ssh_host.clone(),
-            })
-            .await
-            .map_err(Into::into)
-    }
-
-    pub(crate) async fn worktree_bind_session(
-        &self,
-        session_id: String,
-        project_workspace_path: Option<String>,
-    ) -> Result<WorktreeBindingResponse> {
-        let (remote_connection_id, remote_ssh_host) = self.remote_workspace_scope();
-        self.backend
-            .worktree_bind_session(WorktreeBindSessionRequest {
-                operation_id: worktree_operation_id(),
-                session_id,
-                project_workspace_path,
-                remote_connection_id,
-                remote_ssh_host,
-            })
-            .await
-            .map_err(Into::into)
-    }
-
-    pub(crate) async fn worktree_release_session(
-        &self,
-        session_id: String,
-        project_workspace_path: Option<String>,
-    ) -> Result<WorktreeBindingResponse> {
-        let (remote_connection_id, remote_ssh_host) = self.remote_workspace_scope();
-        self.backend
-            .worktree_release_session(WorktreeReleaseSessionRequest {
-                operation_id: worktree_operation_id(),
-                session_id,
-                project_workspace_path,
-                remote_connection_id,
-                remote_ssh_host,
-            })
-            .await
-            .map_err(Into::into)
-    }
-
-    fn remote_workspace_scope(&self) -> (Option<String>, Option<String>) {
-        let paths = self
-            .workspace_paths
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        (
-            paths.remote_connection_id.clone(),
-            paths.remote_ssh_host.clone(),
-        )
+        self.runtime.set_workspace_binding(binding);
     }
 
     pub(crate) async fn list_sessions(&self) -> Result<Vec<AgentSessionSummary>> {
-        Ok(self
-            .backend
-            .list_sessions(ListSessionsRequest(AgentSessionListRequest {
-                workspace_path: self.project_workspace_path_string(),
-                remote_connection_id: None,
-                remote_ssh_host: None,
-            }))
-            .await?
-            .sessions)
+        self.runtime.list_sessions().await
     }
 
     pub(crate) async fn session_lineage(
         &self,
         root_session_id: &str,
     ) -> Result<Option<AgentSessionLineageSnapshot>> {
-        Ok(self
-            .backend
-            .session_lineage(SessionLineageRequest(AgentSessionLineageRequest {
-                workspace_path: self.project_workspace_path_string(),
-                anchor_session_id: root_session_id.to_string(),
-                remote_connection_id: None,
-                remote_ssh_host: None,
-            }))
-            .await?
-            .0)
+        self.runtime.session_lineage(root_session_id).await
     }
 
     pub(crate) async fn inspect_lineage_session(
         &self,
         root_session_id: &str,
-        session_id: &str,
+        target_session_id: &str,
         required_settled_turn_ids: &[String],
     ) -> std::result::Result<AgentSessionLineageInspection, SessionOperationError> {
-        self.backend
-            .inspect_lineage(InspectLineageRequest(
-                AgentSessionLineageTranscriptRequest {
-                    workspace_path: self.project_workspace_path_string(),
-                    root_session_id: root_session_id.to_string(),
-                    session_id: session_id.to_string(),
-                    required_settled_turn_ids: required_settled_turn_ids.to_vec(),
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
-                },
-            ))
+        self.runtime
+            .inspect_lineage_session(
+                root_session_id,
+                target_session_id,
+                required_settled_turn_ids,
+            )
             .await
-            .map(|response| response.0)
-            .map_err(SessionOperationError::backend)
     }
 
     pub(crate) async fn cancel_lineage_session(
@@ -931,108 +656,25 @@ impl TuiAgentClient {
         session_id: &str,
         expected_active_turn_id: &str,
     ) -> Result<AgentTurnCancellationResult> {
-        Ok(self
-            .backend
-            .cancel_lineage(CancelLineageRequest(
-                AgentSessionLineageCancellationRequest {
-                    workspace_path: self.project_workspace_path_string(),
-                    root_session_id: root_session_id.to_string(),
-                    session_id: session_id.to_string(),
-                    expected_active_turn_id: Some(expected_active_turn_id.to_string()),
-                    source: Some(AgentSubmissionSource::Cli),
-                    reason: Some("user_cancelled".to_string()),
-                    wait_timeout_ms: Some(5_000),
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
-                },
-            ))
-            .await?
-            .0)
+        self.runtime
+            .cancel_lineage_session(root_session_id, session_id, expected_active_turn_id)
+            .await
     }
 
     pub(crate) async fn restore_session_in_current_workspace(
         &self,
         session_id: &str,
-    ) -> Result<(
-        AgentSessionSummary,
-        AgentSessionWorkspaceBinding,
-        Vec<SessionMigrationNotice>,
-        SessionTranscript,
-    )> {
-        let previous = self
-            .list_sessions()
-            .await?
-            .into_iter()
-            .find(|summary| summary.session_id == session_id)
-            .ok_or_else(|| anyhow::anyhow!("Session {session_id} was not found"))?;
-        let response = self
-            .backend
-            .sync_session(SyncSessionRequest {
-                workspace_path: self.project_workspace_path_string(),
-                session_id: session_id.to_string(),
-                include_internal: false,
-                remote_connection_id: None,
-                remote_ssh_host: None,
-            })
-            .await?;
-        self.set_workspace_binding(&response.workspace_binding);
-        *self.session_id.lock().await = Some(session_id.to_string());
-        *self.current_turn_id.lock().await = match &response.state {
-            SessionRuntimeState::Processing {
-                current_turn_id, ..
-            } => Some(current_turn_id.clone()),
-            SessionRuntimeState::Idle | SessionRuntimeState::Error { .. } => None,
-        };
-        self.replace_pending_permissions(response.pending_permissions.clone());
-        let notices = session_migration_notices(&previous, &response.session);
-        Ok((
-            response.session,
-            response.workspace_binding,
-            notices,
-            response.transcript,
-        ))
-    }
-
-    pub(crate) async fn session_workspace_binding(
-        &self,
-        session_id: &str,
-    ) -> Result<AgentSessionWorkspaceBinding> {
-        if self.session_id.lock().await.as_deref() != Some(session_id) {
-            return Err(anyhow::anyhow!("Session {session_id} is not attached"));
-        }
-        let paths = self
-            .workspace_paths
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let execution = paths.execution();
-        Ok(AgentSessionWorkspaceBinding {
-            workspace_id: paths.workspace_id.clone(),
-            workspace_path: execution.to_string_lossy().to_string(),
-            project_workspace_path: Some(paths.project().to_string_lossy().to_string()),
-            execution_target: paths.execution_target.clone().or_else(|| {
-                Some(SessionExecutionTarget::local(
-                    execution.to_string_lossy().to_string(),
-                ))
-            }),
-            remote_connection_id: paths.remote_connection_id.clone(),
-            remote_ssh_host: paths.remote_ssh_host.clone(),
-        })
+    ) -> Result<CliSessionRestoreSnapshot> {
+        self.runtime
+            .restore_session_in_current_workspace(session_id)
+            .await
     }
 
     pub(crate) async fn delete_session(
         &self,
         session_id: &str,
     ) -> std::result::Result<(), SessionOperationError> {
-        self.backend
-            .delete_session(DeleteSessionRequest(AgentSessionDeleteRequest {
-                workspace_path: self.project_workspace_path_string(),
-                session_id: session_id.to_string(),
-                remote_connection_id: None,
-                remote_ssh_host: None,
-            }))
-            .await
-            .map(|_| ())
-            .map_err(SessionOperationError::backend)
+        self.runtime.delete_session(session_id).await
     }
 
     pub(crate) async fn update_session_model(
@@ -1040,14 +682,9 @@ impl TuiAgentClient {
         session_id: &str,
         model_id: &str,
     ) -> std::result::Result<(), SessionOperationError> {
-        self.backend
-            .update_session_model(UpdateSessionModelRequest(AgentSessionModelUpdateRequest {
-                session_id: session_id.to_string(),
-                model_id: model_id.to_string(),
-            }))
+        self.runtime
+            .update_session_model(session_id, model_id)
             .await
-            .map(|_| ())
-            .map_err(SessionOperationError::backend)
     }
 
     pub(crate) async fn rename_session(
@@ -1055,17 +692,7 @@ impl TuiAgentClient {
         session_id: &str,
         session_name: &str,
     ) -> std::result::Result<(), SessionOperationError> {
-        self.backend
-            .rename_session(RenameSessionRequest(AgentSessionRenameRequest {
-                workspace_path: self.project_workspace_path_string(),
-                session_id: session_id.to_string(),
-                session_name: session_name.to_string(),
-                remote_connection_id: None,
-                remote_ssh_host: None,
-            }))
-            .await
-            .map(|_| ())
-            .map_err(SessionOperationError::backend)
+        self.runtime.rename_session(session_id, session_name).await
     }
 
     pub(crate) async fn update_session_mode(
@@ -1073,14 +700,7 @@ impl TuiAgentClient {
         session_id: &str,
         mode_id: &str,
     ) -> std::result::Result<(), SessionOperationError> {
-        self.backend
-            .update_session_mode(UpdateSessionModeRequest(AgentSessionModeUpdateRequest {
-                session_id: session_id.to_string(),
-                mode_id: mode_id.to_string(),
-            }))
-            .await
-            .map(|_| ())
-            .map_err(SessionOperationError::backend)
+        self.runtime.update_session_mode(session_id, mode_id).await
     }
 
     pub(crate) async fn fork_current_session(
@@ -1091,119 +711,38 @@ impl TuiAgentClient {
         AgentSessionWorkspaceBinding,
         SessionTranscript,
     )> {
-        let source_session_id = self.require_session_id().await?;
-        let forked = match before_turn_id {
-            Some(source_turn_id) => {
-                self.backend
-                    .fork_session_before_turn(ForkSessionBeforeTurnRequest(
-                        bitfun_runtime_ports::AgentSessionForkBeforeTurnRequest {
-                            workspace_path: self.project_workspace_path_string(),
-                            source_session_id,
-                            source_turn_id: source_turn_id.to_string(),
-                            remote_connection_id: None,
-                            remote_ssh_host: None,
-                        },
-                    ))
-                    .await?
-            }
-            None => {
-                self.backend
-                    .fork_session(ForkSessionRequest(
-                        bitfun_runtime_ports::AgentSessionForkRequest {
-                            workspace_path: self.project_workspace_path_string(),
-                            source_session_id,
-                            remote_connection_id: None,
-                            remote_ssh_host: None,
-                        },
-                    ))
-                    .await?
-            }
-        };
-        let new_session_id = forked.0.session_id;
-        let (summary, binding, _, transcript) = self
-            .restore_session_in_current_workspace(&new_session_id)
-            .await?;
-        Ok((summary, binding, transcript))
+        self.runtime.fork_current_session(before_turn_id).await
     }
 
     pub(crate) async fn revert_current_session(
         &self,
         undo: bool,
     ) -> Result<AgentSessionRevertResult> {
-        let session_id = self.require_session_id().await?;
-        let request = AgentSessionRevertRequest {
-            workspace_path: self.project_workspace_path_string(),
-            session_id: session_id.clone(),
-            remote_connection_id: None,
-            remote_ssh_host: None,
-        };
-        let mut result = if undo {
-            self.backend
-                .undo_session(UndoSessionRequest(request))
-                .await?
-                .0
-        } else {
-            self.backend
-                .redo_session(RedoSessionRequest(request))
-                .await?
-                .0
-        };
-        if let Some(turn_id) = self.current_turn_id.lock().await.take() {
-            if !result.retired_turn_ids.contains(&turn_id) {
-                result.retired_turn_ids.push(turn_id);
-            }
-        }
-        Ok(result)
+        self.runtime.revert_current_session(undo).await
     }
 
     pub(crate) async fn workspace_diff(&self) -> Result<WorkspaceDiffSnapshot> {
-        if let Some(reason) = self
-            .workspace_paths
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .workspace_diff_unavailable_reason()
-        {
-            return Err(anyhow::anyhow!(reason));
-        }
-        Ok(self.backend.workspace_diff().await?.0)
+        self.runtime.workspace_diff().await
     }
 
     pub(crate) async fn generate_session_usage_report(
         &self,
         request: AgentSessionUsageRequest,
     ) -> Result<SessionUsageReport> {
-        Ok(self
-            .backend
-            .session_usage(SessionUsageRequest(request))
-            .await?
-            .0)
+        self.runtime.generate_session_usage_report(request).await
     }
 
     pub(crate) async fn reload_context(&self, request: AgentContextReloadRequest) -> Result<()> {
-        self.backend
-            .reload_context(ReloadContextRequest(request))
-            .await?;
-        Ok(())
+        self.runtime.reload_context(request).await
     }
 
-    pub(crate) async fn wait_for_turn_settlement(
+    pub(crate) async fn ensure_session_with_workspace_binding(
         &self,
-        session_id: &str,
-        turn_id: &str,
-        wait_timeout_ms: u64,
-    ) -> Result<()> {
-        self.backend
-            .wait_for_settlement(WaitForSettlementRequest(AgentTurnSettlementRequest {
-                session_id: session_id.to_string(),
-                turn_id: turn_id.to_string(),
-                wait_timeout_ms,
-            }))
-            .await?;
-        Ok(())
-    }
-
-    pub(crate) async fn ensure_session(&self, agent_type: &str) -> Result<String> {
-        self.ensure_session_with_model(agent_type, None).await
+        agent_type: &str,
+    ) -> Result<(String, AgentSessionWorkspaceBinding)> {
+        self.runtime
+            .ensure_session_with_workspace_binding(agent_type)
+            .await
     }
 
     pub(crate) async fn ensure_session_with_model(
@@ -1211,94 +750,22 @@ impl TuiAgentClient {
         agent_type: &str,
         model_id: Option<String>,
     ) -> Result<String> {
-        if let Some(id) = self.session_id.lock().await.clone() {
-            return Ok(id);
-        }
-        self.create_session(agent_type, model_id, false).await
+        self.runtime
+            .ensure_session_with_model(agent_type, model_id)
+            .await
     }
 
-    pub(crate) async fn create_new_session(&self, agent_type: &str) -> Result<String> {
-        self.create_session(agent_type, None, true).await
-    }
-
-    async fn create_session(
+    pub(crate) async fn create_new_session_with_workspace_binding(
         &self,
         agent_type: &str,
-        model_id: Option<String>,
-        reset_to_project: bool,
-    ) -> Result<String> {
-        let workspace = if reset_to_project {
-            self.workspace_paths
-                .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .reset_execution_to_project()
-        } else {
-            self.workspace_path_buf()
-        };
-        let project = self.project_workspace_path_string();
-        let response = self
-            .backend
-            .create_session(CreateSessionRequest(AgentSessionCreateRequest {
-                session_name: default_session_name(),
-                agent_type: agent_type.to_string(),
-                workspace_path: Some(workspace.to_string_lossy().to_string()),
-                project_workspace_path: Some(project.clone()),
-                execution_target: Some(SessionExecutionTarget::local(
-                    workspace.to_string_lossy().to_string(),
-                )),
-                workspace_id: None,
-                remote_connection_id: None,
-                remote_ssh_host: None,
-                model_id,
-                metadata: serde_json::Map::new(),
-            }))
-            .await?;
-        let session = response.0;
-        let id = session.session_id.clone();
-        let binding = AgentSessionWorkspaceBinding {
-            workspace_id: session.workspace_id,
-            workspace_path: session
-                .workspace_path
-                .unwrap_or_else(|| workspace.to_string_lossy().to_string()),
-            project_workspace_path: session.project_workspace_path.or(Some(project)),
-            execution_target: session.execution_target,
-            remote_connection_id: None,
-            remote_ssh_host: None,
-        };
-        self.set_workspace_binding(&binding);
-        *self.session_id.lock().await = Some(id.clone());
-        *self.current_turn_id.lock().await = None;
-        self.replace_pending_permissions(Vec::new());
-        Ok(id)
+    ) -> Result<(String, AgentSessionWorkspaceBinding)> {
+        self.runtime
+            .create_new_session_with_workspace_binding(agent_type)
+            .await
     }
 
     pub(crate) async fn start_session_compaction(&self, session_id: &str) -> Result<String> {
-        let turn_id = uuid::Uuid::new_v4().to_string();
-        *self.current_turn_id.lock().await = Some(turn_id.clone());
-        let result = self
-            .backend
-            .compact_session(CompactSessionRequest(AgentSessionCompactionRequest {
-                session_id: session_id.to_string(),
-                turn_id: turn_id.clone(),
-            }))
-            .await;
-        match result {
-            Ok(response)
-                if response.0.session_id == session_id && response.0.turn_id == turn_id =>
-            {
-                Ok(turn_id)
-            }
-            Ok(_) => {
-                *self.current_turn_id.lock().await = None;
-                Err(anyhow::anyhow!(
-                    "App Server accepted compaction with an unexpected identity"
-                ))
-            }
-            Err(error) => {
-                *self.current_turn_id.lock().await = None;
-                Err(error.into())
-            }
-        }
+        self.runtime.start_session_compaction(session_id).await
     }
 
     pub(crate) async fn send_message_with_context(
@@ -1308,15 +775,9 @@ impl TuiAgentClient {
         attachments: Vec<AgentInputAttachment>,
         agent_type: &str,
     ) -> Result<String> {
-        self.submit_dialog_turn(
-            message,
-            None,
-            workspace_references,
-            attachments,
-            AgentDialogTurnExecution::Standard,
-            agent_type,
-        )
-        .await
+        self.runtime
+            .send_message_with_context(message, workspace_references, attachments, agent_type)
+            .await
     }
 
     pub(crate) async fn send_external_subagent_command(
@@ -1327,77 +788,15 @@ impl TuiAgentClient {
         logical_id: String,
         agent_type: &str,
     ) -> Result<String> {
-        self.submit_dialog_turn(
-            prompt,
-            Some(original_command),
-            Vec::new(),
-            Vec::new(),
-            AgentDialogTurnExecution::FreshExternalSubagent {
+        self.runtime
+            .send_external_subagent_command(
+                prompt,
+                original_command,
                 ecosystem_id,
                 logical_id,
-            },
-            agent_type,
-        )
-        .await
-    }
-
-    async fn submit_dialog_turn(
-        &self,
-        message: String,
-        original_message: Option<String>,
-        workspace_references: Vec<AgentWorkspaceReference>,
-        attachments: Vec<AgentInputAttachment>,
-        execution: AgentDialogTurnExecution,
-        agent_type: &str,
-    ) -> Result<String> {
-        let session_id = self.ensure_session(agent_type).await?;
-        let turn_id = uuid::Uuid::new_v4().to_string();
-        *self.current_turn_id.lock().await = Some(turn_id.clone());
-        let mut metadata = approval_metadata(self.approval_policy());
-        put_agent_workspace_references(&mut metadata, &workspace_references)
-            .map_err(|error| anyhow::anyhow!(error.message))?;
-        let result = self
-            .backend
-            .submit_dialog_turn(SubmitDialogTurnRequest::from(AgentDialogTurnRequest {
-                session_id: session_id.clone(),
-                message,
-                original_message,
-                turn_id: Some(turn_id.clone()),
-                execution,
-                agent_type: agent_type.to_string(),
-                workspace_path: Some(self.project_workspace_path_string()),
-                remote_connection_id: None,
-                remote_ssh_host: None,
-                policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
-                reply_route: None,
-                prepended_reminders: Vec::new(),
-                attachments,
-                metadata,
-            }))
-            .await;
-        match result {
-            Ok(SubmitDialogTurnResponse::Started {
-                session_id: accepted_session,
-                turn_id: accepted_turn,
-            })
-            | Ok(SubmitDialogTurnResponse::Queued {
-                session_id: accepted_session,
-                turn_id: accepted_turn,
-            }) if accepted_session == session_id => {
-                *self.current_turn_id.lock().await = Some(accepted_turn.clone());
-                Ok(accepted_turn)
-            }
-            Ok(_) => {
-                *self.current_turn_id.lock().await = None;
-                Err(anyhow::anyhow!(
-                    "App Server accepted a turn with an unexpected identity"
-                ))
-            }
-            Err(error) => {
-                *self.current_turn_id.lock().await = None;
-                Err(error.into())
-            }
-        }
+                agent_type,
+            )
+            .await
     }
 
     pub(crate) async fn steer_current_turn(
@@ -1405,25 +804,9 @@ impl TuiAgentClient {
         content: String,
         display_content: Option<String>,
     ) -> Result<String> {
-        let session_id = self.require_session_id().await?;
-        let turn_id = self
-            .current_turn_id
-            .lock()
+        self.runtime
+            .steer_current_turn(content, display_content)
             .await
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("No active turn is available for steering"))?;
-        Ok(self
-            .backend
-            .steer_turn(SteerTurnRequest(AgentDialogSteerRequest {
-                session_id,
-                turn_id,
-                content,
-                display_content,
-                attachments: Vec::new(),
-                metadata: serde_json::Map::new(),
-            }))
-            .await?
-            .steering_id)
     }
 
     pub(crate) async fn run_user_shell_command(
@@ -1431,51 +814,16 @@ impl TuiAgentClient {
         command: String,
         agent_type: &str,
     ) -> Result<String> {
-        let session_id = self.ensure_session(agent_type).await?;
-        let turn_id = uuid::Uuid::new_v4().to_string();
-        *self.current_turn_id.lock().await = Some(turn_id.clone());
-        let response = self
-            .backend
-            .run_user_shell_command(RunUserShellCommandRequest(AgentUserShellCommandRequest {
-                session_id: session_id.clone(),
-                turn_id: turn_id.clone(),
-                command,
-            }))
-            .await;
-        match response {
-            Ok(response)
-                if response.0.session_id == session_id && response.0.turn_id == turn_id =>
-            {
-                Ok(turn_id)
-            }
-            Ok(_) => {
-                *self.current_turn_id.lock().await = None;
-                Err(anyhow::anyhow!(
-                    "App Server accepted a Shell command with an unexpected identity"
-                ))
-            }
-            Err(error) => {
-                *self.current_turn_id.lock().await = None;
-                Err(error.into())
-            }
-        }
+        self.runtime
+            .run_user_shell_command(command, agent_type)
+            .await
     }
 
     pub(crate) async fn search_workspace_references(
         &self,
         query: String,
     ) -> Result<AgentWorkspaceReferenceSearchResult> {
-        Ok(self
-            .backend
-            .search_workspace_references(SearchWorkspaceReferencesRequest(
-                AgentWorkspaceReferenceSearchRequest {
-                    session_id: self.require_session_id().await?,
-                    query,
-                    limit: 20,
-                },
-            ))
-            .await?
-            .0)
+        self.runtime.search_workspace_references(query).await
     }
 
     pub(crate) async fn workspace_references_for_message(
@@ -1483,284 +831,128 @@ impl TuiAgentClient {
         session_id: String,
         message_id: String,
     ) -> Result<Vec<AgentWorkspaceReference>> {
-        Ok(self
-            .backend
-            .message_references(MessageReferencesRequest(
-                AgentMessageWorkspaceReferencesRequest {
-                    session_id,
-                    message_id,
-                },
-            ))
-            .await?
-            .0)
+        self.runtime
+            .workspace_references_for_message(session_id, message_id)
+            .await
     }
 
     pub(crate) async fn cancel_current_turn(&self) -> Result<()> {
-        let session_id = self.session_id.lock().await.clone();
-        let turn_id = self.current_turn_id.lock().await.clone();
-        if let (Some(session_id), Some(turn_id)) = (session_id, turn_id) {
-            self.backend
-                .cancel_turn(CancelTurnRequest(AgentTurnCancellationRequest {
-                    session_id,
-                    turn_id: Some(turn_id.clone()),
-                    source: Some(AgentSubmissionSource::Cli),
-                    requester_session_id: None,
-                    reason: Some("user_cancelled".to_string()),
-                    wait_timeout_ms: None,
-                    cancel_descendants: true,
-                }))
-                .await?;
-            let mut current = self.current_turn_id.lock().await;
-            if current.as_deref() == Some(turn_id.as_str()) {
-                *current = None;
-            }
-        }
-        Ok(())
+        self.runtime.cancel_current_turn().await
     }
 
     pub(crate) async fn submit_user_answers(
         &self,
-        tool_id: &str,
+        session_id: String,
+        turn_id: String,
+        tool_id: String,
+        registration_sequence: u64,
         answers: serde_json::Value,
     ) -> Result<()> {
-        self.backend
-            .submit_user_answers(SubmitUserAnswersRequest {
-                tool_id: tool_id.to_string(),
-                answers,
-            })
-            .await?;
+        self.runtime
+            .submit_user_answers(session_id, turn_id, tool_id, registration_sequence, answers)
+            .await
+    }
+
+    async fn ensure_external_source_subscription(
+        &self,
+    ) -> std::result::Result<(), ExternalSourceOperationError> {
+        let scope = self
+            .local_management_scope("External source management")
+            .map_err(external_source_management_error)?;
+        let workspace = scope.workspace_path;
+        let workspace_key = workspace.to_string_lossy().to_string();
+        {
+            let mut subscriptions = self
+                .external_source_subscriptions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !subscriptions.insert(workspace_key.clone()) {
+                return Ok(());
+            }
+        }
+        let mut subscription =
+            match bitfun_core::external_sources::subscribe_external_source_updates(Some(&workspace))
+                .await
+            {
+                Ok(subscription) => subscription,
+                Err(error) => {
+                    self.external_source_subscriptions
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .remove(&workspace_key);
+                    return Err(
+                        bitfun_core::external_sources::sanitize_external_source_operation_error(
+                            error,
+                        ),
+                    );
+                }
+            };
+        let sender = self.external_source_events.clone();
+        let subscriptions = self.external_source_subscriptions.clone();
+        let task = tokio::spawn(async move {
+            loop {
+                match subscription.recv().await {
+                    Ok(snapshot) => {
+                        let _ = sender.send((
+                            workspace_key.clone(),
+                            ExternalSourcePublicSnapshot::from(snapshot),
+                        ));
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            subscriptions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .remove(&workspace_key);
+        });
+        self.external_source_tasks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(task);
         Ok(())
     }
+}
 
-    async fn require_session_id(&self) -> Result<String> {
-        self.session_id
+impl Drop for TuiAgentClient {
+    fn drop(&mut self) {
+        for task in self
+            .external_source_tasks
             .lock()
-            .await
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("No active Session"))
-    }
-
-    fn replace_pending_permissions(&self, requests: Vec<PermissionRequest>) {
-        let mut pending = self
-            .pending_permissions
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        pending.clear();
-        pending.extend(
-            requests
-                .into_iter()
-                .map(|request| (request.request_id.clone(), request)),
-        );
-    }
-}
-
-fn external_source_backend_error(error: TuiBackendError) -> ExternalSourceOperationError {
-    external_source_backend_error_with_id(error, None)
-}
-
-fn external_source_backend_error_with_id(
-    error: TuiBackendError,
-    operation_id: Option<&str>,
-) -> ExternalSourceOperationError {
-    if let Some(decoded) = ExternalSourceOperationError::decode(&error.message) {
-        return attach_operation_id(decoded, operation_id);
-    }
-    let code = if error.outcome_unknown {
-        ExternalSourceOperationErrorCode::Timeout
-    } else if matches!(error.kind, TuiBackendErrorKind::Unsupported { .. }) {
-        ExternalSourceOperationErrorCode::HostCapabilityUnavailable
-    } else {
-        ExternalSourceOperationErrorCode::Internal
-    };
-    let message = error.message;
-    let retryable = error.outcome_unknown;
-    attach_operation_id(
-        ExternalSourceOperationError::new(code, message, retryable).with_default_recovery_actions(),
-        operation_id,
-    )
-}
-
-fn attach_operation_id(
-    mut error: ExternalSourceOperationError,
-    operation_id: Option<&str>,
-) -> ExternalSourceOperationError {
-    if let Some(operation_id) = operation_id.filter(|id| !id.is_empty()) {
-        if error.correlation_id.is_none() {
-            error = error.with_correlation_id(operation_id);
-        } else if error.causation_id.is_none() {
-            error = error.with_causation_id(operation_id);
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .drain(..)
+        {
+            task.abort();
         }
     }
-    error
+}
+
+fn management_scope(workspace_path: PathBuf, remote: bool) -> ManagementScope {
+    if remote {
+        ManagementScope::remote(workspace_path)
+    } else {
+        ManagementScope::local(workspace_path)
+    }
 }
 
 fn account_operation_id() -> String {
     format!("tui-account-{}", uuid::Uuid::new_v4())
 }
 
-fn worktree_operation_error(error: TuiBackendError) -> anyhow::Error {
-    if let Some(worktree) = WorktreeOperationError::decode(&error.message) {
-        let recovery = worktree
-            .recovery_path
-            .as_deref()
-            .map(|path| format!(" Recovery path: {path}"))
-            .unwrap_or_default();
-        return anyhow::anyhow!(
-            "{}: {}{}",
-            worktree.code.as_str(),
-            worktree.message,
-            recovery
-        );
-    }
-    anyhow::anyhow!(error)
-}
-
 fn worktree_operation_id() -> String {
     format!("tui-worktree-{}", uuid::Uuid::new_v4())
 }
 
-fn shared_receiver<T: Clone>(
-    source: &Arc<RwLock<Option<broadcast::Sender<T>>>>,
-    message: &str,
-) -> Result<broadcast::Receiver<T>> {
-    source
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .as_ref()
-        .map(broadcast::Sender::subscribe)
-        .ok_or_else(|| anyhow::anyhow!(message.to_string()))
-}
-
-fn spawn_event_bridge(
-    mut source: broadcast::Receiver<AppServerEvent>,
-    agent_sender: broadcast::Sender<AgenticEventEnvelope>,
-    permission_sender: broadcast::Sender<PermissionRequestEvent>,
-    external_source_sender: broadcast::Sender<(String, ExternalSourcePublicSnapshot)>,
-    agent_owner: Arc<RwLock<Option<broadcast::Sender<AgenticEventEnvelope>>>>,
-    permission_owner: Arc<RwLock<Option<broadcast::Sender<PermissionRequestEvent>>>>,
-    external_source_owner: Arc<
-        RwLock<Option<broadcast::Sender<(String, ExternalSourcePublicSnapshot)>>>,
-    >,
-    pending: Arc<RwLock<HashMap<String, PermissionRequest>>>,
-) {
-    tokio::spawn(async move {
-        loop {
-            match source.recv().await {
-                Ok(AppServerEvent::Agent(notification)) => {
-                    let _ = agent_sender.send(notification.event);
-                }
-                Ok(AppServerEvent::Permission(notification)) => {
-                    match &notification.event {
-                        PermissionRequestEvent::Asked { request } => {
-                            pending
-                                .write()
-                                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                                .insert(request.request_id.clone(), request.clone());
-                        }
-                        PermissionRequestEvent::Replied { request_id, .. }
-                        | PermissionRequestEvent::Cancelled { request_id, .. } => {
-                            pending
-                                .write()
-                                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                                .remove(request_id);
-                        }
-                    }
-                    let _ = permission_sender.send(notification.event);
-                }
-                Ok(AppServerEvent::ExternalSource(notification)) => {
-                    let _ = external_source_sender
-                        .send((notification.workspace_path, notification.snapshot));
-                }
-                Ok(AppServerEvent::StreamState(notification))
-                    if notification.stream
-                        == bitfun_app_server_protocol::event::EventStream::ExternalSource =>
-                {
-                    // The next TUI snapshot request is the authoritative recovery path.
-                }
-                Ok(AppServerEvent::StreamState(notification))
-                    if matches!(
-                        notification.state,
-                        EventStreamState::Closed | EventStreamState::Invalidated
-                    ) =>
-                {
-                    send_stream_error(
-                        &agent_sender,
-                        notification.resync.reason.unwrap_or_else(|| {
-                            "App Server event stream is unavailable".to_string()
-                        }),
-                    );
-                    break;
-                }
-                Ok(AppServerEvent::ConnectionClosed)
-                | Err(broadcast::error::RecvError::Closed)
-                | Err(broadcast::error::RecvError::Lagged(_)) => {
-                    send_stream_error(
-                        &agent_sender,
-                        "App Server connection was lost; this view is no longer authoritative",
-                    );
-                    break;
-                }
-                Ok(AppServerEvent::Config(_) | AppServerEvent::StreamState(_)) => {}
-            }
-        }
-        *agent_owner
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
-        *permission_owner
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
-        *external_source_owner
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
-    });
-}
-
-fn send_stream_error(sender: &broadcast::Sender<AgenticEventEnvelope>, message: impl Into<String>) {
-    let _ = sender.send(AgenticEventEnvelope::new(
-        AgenticEvent::SystemError {
-            session_id: None,
-            error: message.into(),
-            recoverable: false,
-        },
-        AgenticEventPriority::Critical,
-    ));
-}
-
-fn session_migration_notices(
-    previous: &AgentSessionSummary,
-    restored: &AgentSessionSummary,
-) -> Vec<SessionMigrationNotice> {
-    let mut notices = Vec::new();
-    if previous.agent_type != restored.agent_type {
-        notices.push(SessionMigrationNotice::Mode {
-            previous_id: previous.agent_type.clone(),
-            restored_id: restored.agent_type.clone(),
-        });
+fn external_source_management_error(error: ManagementError) -> ExternalSourceOperationError {
+    if let Some(decoded) = ExternalSourceOperationError::decode(&error.message) {
+        return decoded;
     }
-    if let (Some(previous_id), Some(restored_id)) =
-        (previous.model_id.as_ref(), restored.model_id.as_ref())
-    {
-        if previous_id != restored_id {
-            notices.push(SessionMigrationNotice::Model {
-                previous_id: previous_id.clone(),
-                restored_id: restored_id.clone(),
-            });
-        }
-    }
-    notices
-}
-
-fn same_workspace_location(left: &Path, right: &Path) -> bool {
-    left == right
-        || dunce::canonicalize(left)
-            .ok()
-            .zip(dunce::canonicalize(right).ok())
-            .is_some_and(|(left, right)| left == right)
-}
-
-fn default_session_name() -> String {
-    format!(
-        "CLI Session - {}",
-        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
-    )
+    let code = match error.kind {
+        ManagementErrorKind::InvalidRequest => ExternalSourceOperationErrorCode::InvalidRequest,
+        ManagementErrorKind::NotFound => ExternalSourceOperationErrorCode::NotFound,
+        ManagementErrorKind::Unsupported => ExternalSourceOperationErrorCode::Unsupported,
+        ManagementErrorKind::Internal => ExternalSourceOperationErrorCode::Internal,
+    };
+    ExternalSourceOperationError::new(code, error.message, false).with_default_recovery_actions()
 }

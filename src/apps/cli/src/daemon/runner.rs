@@ -75,7 +75,6 @@ pub(crate) async fn run_daemon() -> Result<()> {
 
     runtime.account_routing().stop_device_routing().await;
     pid::remove_pid_file();
-    crate::shutdown_mcp_servers().await;
     tracing::info!("bitfun daemon stopped");
     Ok(())
 }

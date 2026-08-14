@@ -1,4 +1,4 @@
-use bitfun_app_server_protocol::mcp::{
+use crate::tui_management::{
     ExternalMcpDecisionRequest, McpConflictChoiceRequest, McpServerAction, McpServerMutation,
     McpServerSummary, McpTransport,
 };
@@ -60,18 +60,8 @@ fn mcp_item_from_summary(server: McpServerSummary) -> McpItem {
     }
 }
 
-/// Completion message for the `/mcp` add flow. In Shared TUI mode the add
-/// mutates the local MCP compatibility owner of this CLI process, not the
-/// already-running Shared Runtime Host, so it must not be reported as
-/// "started" for that Runtime.
-fn mcp_add_completion_message(name: &str, shared: bool) -> String {
-    if shared {
-        format!(
-            "MCP server '{name}' added to the local compatibility owner; the Shared Runtime Host is not reconfigured"
-        )
-    } else {
-        format!("MCP server '{name}' added and started")
-    }
+fn mcp_add_completion_message(name: &str) -> String {
+    format!("MCP server '{name}' added and started")
 }
 
 impl ChatMode {
@@ -171,7 +161,6 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let agent = Arc::clone(&self.agent);
-        let workspace_path = self.agent.workspace_path_string();
         let action = item.action.clone();
         let item_id = item.id.clone();
         let item_name = item.name.clone();
@@ -185,7 +174,6 @@ impl ChatMode {
                     expected_preference_revision,
                 } => agent
                     .external_mcp_decision(ExternalMcpDecisionRequest {
-                        workspace_path,
                         candidate_id,
                         decision_key,
                         approved,
@@ -202,7 +190,6 @@ impl ChatMode {
                     expected_preference_revision,
                 } => agent
                     .mcp_conflict_choice(McpConflictChoiceRequest {
-                        workspace_path,
                         conflict_key,
                         candidate_id,
                         approve_external,
@@ -273,7 +260,7 @@ impl ChatMode {
                     tokio::task::block_in_place(|| rt_handle.block_on(handle)),
                 ),
                 PendingMcpTask::Add { name, handle } => (
-                    Some(mcp_add_completion_message(&name, self.agent.is_shared())),
+                    Some(mcp_add_completion_message(&name)),
                     format!("add MCP server '{name}'"),
                     tokio::task::block_in_place(|| rt_handle.block_on(handle)),
                 ),
@@ -493,19 +480,9 @@ mod mcp_terminal_tests {
     }
 
     #[test]
-    fn shared_add_does_not_report_runtime_started() {
-        // In Shared TUI mode the add mutates this CLI process's local MCP
-        // compatibility owner, not the already-running Shared Runtime Host,
-        // so the completion message must not claim the server "started" for
-        // that Runtime and must state the local scope.
-        let shared = mcp_add_completion_message("srv", true);
-        assert!(shared.contains("local compatibility owner"));
-        assert!(shared.contains("Shared Runtime Host is not reconfigured"));
-        assert!(!shared.contains("added and started"));
-
-        // Embedded mode owns the runtime, so "added and started" stays accurate.
+    fn embedded_add_reports_runtime_started() {
         assert_eq!(
-            mcp_add_completion_message("srv", false),
+            mcp_add_completion_message("srv"),
             "MCP server 'srv' added and started"
         );
     }

@@ -6,8 +6,8 @@
 //! implementations until a reviewed port/provider migration proves equivalence.
 
 use bitfun_agent_runtime::sdk::{
-    AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort,
+    AgentContextReloadPort, AgentEventSource, AgentInteractionResponsePort, AgentRuntime,
+    AgentRuntimeBuilder, AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort,
     AgentSessionModePort, AgentSessionModelPort, AgentSessionRestorePort, AgentSessionRevertPort,
     AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
 };
@@ -39,17 +39,18 @@ use bitfun_services_integrations::remote_connect::{
     normalize_remote_model_selection as normalize_remote_model_selection_contract,
     normalize_remote_session_model_id, project_remote_chat_user,
     remote_dialog_submit_outcome_from_scheduler, remote_model_selection_needs_config, ChatMessage,
-    RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost, RemoteChatHistoryRound,
-    RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
-    RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteConnectSubmissionSource,
-    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
-    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding, RemoteImageContext,
-    RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost, RemoteModelCapabilityFact,
-    RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePermissionMode,
-    RemotePollRuntimeHost, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
-    RemoteSessionModelSelection, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
-    RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
+    RemoteActiveTurnSeed, RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost,
+    RemoteChatHistoryRound, RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem,
+    RemoteChatHistoryToolCall, RemoteChatHistoryToolItem, RemoteChatHistoryTurn,
+    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
+    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
+    RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding,
+    RemoteImageContext, RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost,
+    RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts,
+    RemotePendingUserInputSeed, RemotePermissionMode, RemotePollRuntimeHost,
+    RemoteRecentWorkspaceFacts, RemoteSessionMetadata, RemoteSessionModelSelection,
+    RemoteSessionRuntimeHost, RemoteSessionStateTracker, RemoteSessionTrackerHost,
+    RemoteTerminalPrewarmRequest, RemoteUserInputIdentity, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
@@ -1510,6 +1511,12 @@ impl CoreServiceAgentRuntime {
         session_usage: Arc<dyn AgentSessionUsagePort>,
         session_lineage: Arc<dyn AgentSessionLineagePort>,
     ) -> Result<AgentRuntime, String> {
+        let context_reload: Arc<dyn AgentContextReloadPort> = Arc::new(
+            crate::product_runtime::CoreAgentRuntimeCompatibility::build(
+                coordinator.clone(),
+                scheduler.clone(),
+            ),
+        );
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
@@ -1538,6 +1545,7 @@ impl CoreServiceAgentRuntime {
             .with_session_fork_port(session_fork)
             .with_session_usage_port(session_usage)
             .with_session_lineage_port(session_lineage)
+            .with_context_reload_port(context_reload)
             .with_permission_request_manager(
                 crate::product_runtime::core_permission_request_manager()?,
             )
@@ -1675,6 +1683,12 @@ impl CoreServiceAgentRuntime {
         services: bitfun_runtime_services::RuntimeServices,
         harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
+        let context_reload: Arc<dyn AgentContextReloadPort> = Arc::new(
+            crate::product_runtime::CoreAgentRuntimeCompatibility::build(
+                coordinator.clone(),
+                scheduler.clone(),
+            ),
+        );
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
@@ -1709,6 +1723,7 @@ impl CoreServiceAgentRuntime {
             cancellation,
             interaction_response,
         )?
+        .with_context_reload_port(context_reload)
         .with_session_close_port(session_close)
         .with_session_revert_port(session_revert)
         .with_dialog_turn_port(dialog_turn)
@@ -1789,7 +1804,7 @@ impl RemoteSessionTrackerHost for CoreRemoteSessionTrackerHost {
         }
     }
 
-    fn active_turn_id(&self, session_id: &str) -> Option<String> {
+    fn active_turn_seed(&self, session_id: &str) -> Option<RemoteActiveTurnSeed> {
         let coordinator = get_global_coordinator()?;
         let session_mgr = coordinator.get_session_manager();
         let session = session_mgr.get_session(session_id)?;
@@ -1801,7 +1816,24 @@ impl RemoteSessionTrackerHost for CoreRemoteSessionTrackerHost {
                     "Seeded tracker with existing active turn {} for session {}",
                     current_turn_id, session_id
                 );
-                Some(current_turn_id.clone())
+                let pending_user_inputs = coordinator
+                    .pending_user_inputs_for_session(session_id)
+                    .into_iter()
+                    .filter(|pending| pending.turn_id == *current_turn_id)
+                    .map(|pending| RemotePendingUserInputSeed {
+                        identity: RemoteUserInputIdentity {
+                            session_id: pending.session_id,
+                            turn_id: pending.turn_id,
+                            tool_id: pending.tool_id,
+                            registration_sequence: pending.registration_sequence,
+                        },
+                        params: pending.input,
+                    })
+                    .collect();
+                Some(RemoteActiveTurnSeed {
+                    turn_id: current_turn_id.clone(),
+                    pending_user_inputs,
+                })
             }
             _ => None,
         }
@@ -2449,9 +2481,20 @@ impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
             .map_err(|error| error.to_string())
     }
 
-    fn answer_question(&self, tool_id: &str, answers: serde_json::Value) -> Result<(), String> {
-        crate::agentic::tools::user_input_manager::get_user_input_manager()
-            .send_answer(tool_id, answers)
+    fn answer_question(
+        &self,
+        identity: &bitfun_services_integrations::remote_connect::RemoteUserInputIdentity,
+        answers: serde_json::Value,
+    ) -> Result<(), String> {
+        let manager = crate::agentic::tools::user_input_manager::get_user_input_manager();
+        manager
+            .send_answer(bitfun_runtime_ports::AgentUserAnswersRequest {
+                session_id: identity.session_id.clone(),
+                turn_id: identity.turn_id.clone(),
+                tool_id: identity.tool_id.clone(),
+                registration_sequence: identity.registration_sequence,
+                answers,
+            })
             .map_err(|error| error.to_string())
     }
 }
@@ -2737,6 +2780,8 @@ mod tests {
         assert!(builder
             .contains("let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();"));
         assert!(builder.contains(".with_session_mode_port(session_mode)"));
+        assert!(builder.contains("let context_reload: Arc<dyn AgentContextReloadPort> = Arc::new("));
+        assert!(builder.contains(".with_context_reload_port(context_reload)"));
     }
 
     #[test]

@@ -6,8 +6,10 @@
 //! own `JsonRpcRequest` / `JsonRpcNotification` types; the crate binds no
 //! schema method set, unlike [`bitfun_acp`].
 //!
-//! [`BitfunAppServer`] exposes the selected Agent Kernel and management
-//! operations over a host-injected runtime. Behavior-light wire contracts are
+//! [`BitfunAppServer`] exposes the selected Agent Kernel over a host-injected
+//! runtime. Management methods are registered but remain unavailable in the
+//! generic Server Host until a trusted, scope-bound owner adapter is wired.
+//! Behavior-light wire contracts are
 //! owned by `bitfun-app-server-protocol`; [`schema`] remains a compatibility
 //! re-export for existing server-side imports. Typed clients are owned by the
 //! separate `bitfun-app-server-client` crate.
@@ -51,7 +53,7 @@
 #![recursion_limit = "256"]
 
 pub mod agent;
-pub mod management;
+mod management;
 pub mod role;
 pub mod schema;
 pub mod server;
@@ -59,11 +61,6 @@ pub mod transport;
 
 pub use agent::BitfunAppRuntime;
 pub use agent_client_protocol as protocol;
-pub use management::{
-    AppManagementCapabilities, AppManagementError, AppManagementErrorKind, AppManagementResult,
-    AppManagementService, EXTERNAL_HOOKS_CAPABILITY, EXTERNAL_SOURCES_CAPABILITY,
-    NATIVE_HOOKS_CAPABILITY,
-};
 pub use role::{AppClient, AppServer};
 pub use server::BitfunAppServer;
 

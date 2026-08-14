@@ -1,4 +1,4 @@
-import { RemoteQuestionAnswerPayload } from '../model/RemoteModels';
+import { RemoteQuestionAnswerPayload, RemoteUserInputIdentity } from '../model/RemoteModels';
 import { RemoteI18n } from '../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from './ConnectionErrorPolicy';
 import { RemoteLogger } from './RemoteLogger';
@@ -7,7 +7,7 @@ export interface RemoteToolActionClient {
   confirmTool(toolId: string, updatedInput?: Object): Promise<void>;
   rejectTool(toolId: string, reason: string): Promise<void>;
   cancelTool(toolId: string, reason: string): Promise<void>;
-  answerQuestion(toolId: string, answers: RemoteQuestionAnswerPayload): Promise<void>;
+  answerQuestion(identity: RemoteUserInputIdentity, answers: RemoteQuestionAnswerPayload): Promise<void>;
 }
 
 export class RemoteToolActionController {
@@ -74,20 +74,23 @@ export class RemoteToolActionController {
   }
 
   async answer(
-    toolId: string,
+    identity: RemoteUserInputIdentity,
     sessionId: string,
     remoteAvailable: boolean,
     answers: RemoteQuestionAnswerPayload
   ): Promise<void> {
-    RemoteLogger.info(`question answer requested tool=${RemoteToolActionController.shortId(toolId)} session=${RemoteToolActionController.shortId(sessionId)} fields=${Object.keys(answers).length}`);
+    if (identity.session_id !== sessionId) {
+      return;
+    }
+    RemoteLogger.info(`question answer requested tool=${RemoteToolActionController.shortId(identity.tool_id)} session=${RemoteToolActionController.shortId(sessionId)} fields=${Object.keys(answers).length}`);
     await this.runToolAction(
-      toolId,
+      identity.tool_id,
       sessionId,
       remoteAvailable,
       RemoteI18n.t('status.submittingAnswer'),
       RemoteI18n.t('status.answerSubmitted'),
       () => {
-        return this.client.answerQuestion(toolId, answers);
+        return this.client.answerQuestion(identity, answers);
       }
     );
   }

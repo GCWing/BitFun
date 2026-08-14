@@ -768,7 +768,7 @@ impl ChatMode {
             let snapshot = match snapshot {
                 Ok(response) => {
                     self.replace_external_conflict_preferences(response.preferences.into());
-                    response.snapshot
+                    response.surface.catalog
                 }
                 Err(error) => {
                     chat_state.add_system_message(format!(
@@ -886,12 +886,10 @@ impl ChatMode {
             ))
         });
         match expanded {
-            Ok(bitfun_app_server_protocol::external_source::ExpandExternalCommandResponse(
-                PromptCommandInvocationOutcome::Ready {
-                    content,
-                    execution_target,
-                },
-            )) => {
+            Ok(PromptCommandInvocationOutcome::Ready {
+                content,
+                execution_target,
+            }) => {
                 match execution_target {
                     PromptCommandExecutionTarget::Inline => {
                         self.send_message_to_agent(content, chat_view, chat_state, rt_handle);
@@ -918,9 +916,7 @@ impl ChatMode {
                 }
                 Ok(None)
             }
-            Ok(bitfun_app_server_protocol::external_source::ExpandExternalCommandResponse(
-                PromptCommandInvocationOutcome::ReviewRequired { review },
-            )) => {
+            Ok(PromptCommandInvocationOutcome::ReviewRequired { review }) => {
                 chat_view.show_prompt_command_shell_review(review.clone());
                 self.pending_prompt_command_shell_invocation =
                     Some(PendingPromptCommandShellInvocation { invocation, review });
@@ -1360,7 +1356,7 @@ impl ChatMode {
     }
 
     fn start_session_compaction(
-        &self,
+        &mut self,
         chat_view: &mut ChatView,
         chat_state: &ChatState,
         rt_handle: &tokio::runtime::Handle,
@@ -1371,8 +1367,15 @@ impl ChatMode {
         let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(async move { agent.start_session_compaction(&session_id).await })
         });
-        if let Err(error) = result {
-            chat_view.set_status(Some(format!("Could not compact context: {error}")));
+        match classify_side_effect_result("manual compaction", result) {
+            SideEffectUiOutcome::Applied(_) => {}
+            SideEffectUiOutcome::Retryable(error) => {
+                chat_view.set_status(Some(format!("Could not compact context: {error}")));
+            }
+            SideEffectUiOutcome::ExitAfterUnknownOutcome(message) => {
+                chat_view.set_status(Some(message.clone()));
+                self.pending_runtime_failure = Some(message);
+            }
         }
     }
 
@@ -1411,13 +1414,21 @@ impl ChatMode {
         let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(async move { agent.revert_current_session(undo).await })
         });
-        let reverted = match result {
-            Ok(reverted) => reverted,
-            Err(error) => {
+        let reverted = match classify_side_effect_result(
+            &format!("{} session", operation.to_ascii_lowercase()),
+            result,
+        ) {
+            SideEffectUiOutcome::Applied(reverted) => reverted,
+            SideEffectUiOutcome::Retryable(error) => {
                 chat_view.set_status(Some(format!(
                     "Could not {} session: {error}",
                     operation.to_ascii_lowercase()
                 )));
+                return;
+            }
+            SideEffectUiOutcome::ExitAfterUnknownOutcome(message) => {
+                chat_view.set_status(Some(message.clone()));
+                self.pending_runtime_failure = Some(message);
                 return;
             }
         };
@@ -1638,8 +1649,8 @@ impl ChatMode {
             rt_handle
                 .block_on(agent.steer_current_turn(draft.text.clone(), Some(draft.text.clone())))
         });
-        match result {
-            Ok(steering_id) => {
+        match classify_side_effect_result("steering submission", result) {
+            SideEffectUiOutcome::Applied(steering_id) => {
                 tracing::info!(
                     "Steering submitted: turn_id={:?}, steering_id={}",
                     chat_state.current_turn_id(),
@@ -1651,10 +1662,15 @@ impl ChatMode {
                 let display_name = agent_display_name(&self.agent_type);
                 chat_view.set_status(Some(format!("{} is thinking...", display_name)));
             }
-            Err(error) => {
+            SideEffectUiOutcome::Retryable(error) => {
                 tracing::error!("Failed to steer active turn: {error}");
                 chat_view.set_status(Some(format!("Error: {error}")));
                 chat_view.set_draft(draft);
+            }
+            SideEffectUiOutcome::ExitAfterUnknownOutcome(message) => {
+                tracing::error!("Steering submission outcome is unknown: {message}");
+                chat_view.set_status(Some(message.clone()));
+                self.pending_runtime_failure = Some(message);
             }
         }
     }
@@ -1677,18 +1693,24 @@ impl ChatMode {
         chat_view.set_status(Some("Running Shell command...".to_string()));
         let agent = self.agent.clone();
         let agent_type = self.agent_type.clone();
-        match tokio::task::block_in_place(|| {
+        let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(agent.run_user_shell_command(draft.text.clone(), &agent_type))
-        }) {
-            Ok(turn_id) => {
+        });
+        match classify_side_effect_result("Shell command", result) {
+            SideEffectUiOutcome::Applied(turn_id) => {
                 tracing::info!("Started Shell turn: {}", turn_id);
                 chat_view.remember_submitted_shell_command(&chat_state.core_session_id, &draft);
                 chat_view.exit_shell_mode();
             }
-            Err(error) => {
+            SideEffectUiOutcome::Retryable(error) => {
                 tracing::error!("Failed to start Shell command: {error}");
                 chat_view.set_status(Some(format!("Error: {error}")));
                 chat_view.set_draft(draft);
+            }
+            SideEffectUiOutcome::ExitAfterUnknownOutcome(message) => {
+                tracing::error!("Shell command outcome is unknown: {message}");
+                chat_view.set_status(Some(message.clone()));
+                self.pending_runtime_failure = Some(message);
             }
         }
     }

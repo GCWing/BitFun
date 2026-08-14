@@ -239,9 +239,20 @@ export interface SessionViewRestoreTiming {
   turnLoad: SessionTurnLoadTiming;
 }
 
+export interface PendingUserInputSnapshot {
+  toolId: string;
+  sessionId: string;
+  turnId: string;
+  sourceSessionId: string;
+  sourceTurnId: string;
+  registrationSequence: number;
+  input: unknown;
+}
+
 export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
+  pendingUserInputs?: PendingUserInputSnapshot[];
   currentContextUsage?: SessionContextUsage | null;
   turnCatalog?: SessionTurnCatalog;
   contextRestoreState: 'ready' | 'pending';

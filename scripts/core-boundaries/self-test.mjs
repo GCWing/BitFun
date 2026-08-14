@@ -1851,6 +1851,15 @@ export function runManifestParserSelfTest({
       throw new Error(`external source core public API budget is missing workspace Reference symbol: ${requiredSymbol}`);
     }
   }
+  for (const requiredSymbol of ['ExternalSourceReviewAction', 'review_external_source']) {
+    if (!externalSourceCorePublicApiRule?.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external source core public API budget is missing shared review use case: ${requiredSymbol}`);
+    }
+  }
   for (const requiredSymbol of [
     'ExternalMcpTimeouts',
     'MAX_EXTERNAL_MCP_TIMEOUT_MS',
@@ -2868,7 +2877,8 @@ export function runManifestParserSelfTest({
         'get_user_input_manager',
         'validate_ask_user_question_input',
         'user_input_manager_delivers_answer_and_clears_channel',
-        'user_input_manager_cancel_closes_receiver',
+        'cancel_registration',
+        'user_input_manager_cancel_closes_only_the_exact_registration',
       ],
     },
     {
@@ -4268,25 +4278,32 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/interfaces/app-server/src/management/service.rs',
+      path: 'src/apps/cli/src/agent/runtime_client.rs',
       contracts: [
-        'pub struct AppManagementService',
-        'impl AppManagementService',
-        'AppManagementCapabilities::available\\(\\)',
+        'pub\\(crate\\) struct CliAgentRuntimeClient',
+        'enum TuiRuntimePort',
+        'Embedded\\(AgentRuntime\\)',
+        'Shared\\(RuntimeIpcClient\\)',
+        'fn new_direct',
+        'fn new_shared',
       ],
     },
     {
-      path: 'src/apps/cli/src/shared_tui_backend.rs',
+      path: 'src/apps/cli/src/tui_management.rs',
       contracts: [
-        'management: Arc<AppManagementService>',
-        'fn management_service',
-        'fn set_management_scope_from_binding',
-        '\\.list_models\\(ListModelsRequest \\{\\}\\)',
-        '\\.list_skills\\(request\\)',
-        '\\.list_subagents\\(request\\)',
-        '\\.list_mcp_servers\\(request\\)',
-        'shared_management_capabilities_follow_the_local_management_service',
-        'remote_workspace_cannot_use_the_local_management_service',
+        'pub\\(crate\\) struct TuiManagementOwners',
+        'pub model: ModelProvider',
+        'pub registry: RegistryProvider',
+        'pub mcp: McpProvider',
+        'pub account: AccountProvider',
+        'pub settings_sync: SettingsSyncProvider',
+        'pub worktree: WorktreeProvider',
+        'pub native_hook: NativeHookProvider',
+        'pub external_hook: ExternalHookProvider',
+        'pub external_source: ExternalSourceProvider',
+        'pub external_command: ExternalCommandProvider',
+        'impl TuiManagementOwners',
+        'pub\\(crate\\) async fn load',
       ],
     },
     {

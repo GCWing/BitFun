@@ -1,4 +1,4 @@
-import { ConversationUiImage, ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
+import { ConversationUiImage, ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiToolStatus, ConversationUiUserInputIdentity } from '../state/ConversationUiModels';
 import { ActivityGroupPolicy } from '../policy/ActivityGroupPolicy';
 import { AssistantProcessLayoutPolicy } from '../policy/AssistantProcessLayoutPolicy';
 import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
@@ -49,8 +49,8 @@ export struct ChatMessageBubble {
     (_toolId: string, _updatedInput?: Object) => {};
   @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
   @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
-  @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
-    (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
+  @Event onAnswerQuestion: (identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer) => void =
+    (_identity: ConversationUiUserInputIdentity, _answers: ConversationUiQuestionAnswer) => {};
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
   @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
@@ -293,8 +293,8 @@ export struct ChatMessageBubble {
       onCancelTool: (toolId: string) => {
         this.onCancelTool(toolId);
       },
-      onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => {
-        this.onAnswerQuestion(toolId, answers);
+      onAnswerQuestion: (identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer) => {
+        this.onAnswerQuestion(identity, answers);
       },
       onOpenFilePreview: (path: string, label: string) => {
         this.onOpenFilePreview(path, label);
@@ -736,7 +736,7 @@ export struct ChatMessageBubble {
   private stableToolHash(tools: ConversationUiToolStatus[]): string {
     const parts: string[] = [];
     tools.forEach((tool: ConversationUiToolStatus) => {
-      parts.push(`${tool.id || ''}:${tool.name || ''}:${tool.status || ''}`);
+      parts.push(`${this.toolIdentityKey(tool)}:${tool.name || ''}:${tool.status || ''}`);
     });
     return this.stableTextHash(parts.join('|'));
   }
@@ -789,6 +789,11 @@ export struct ChatMessageBubble {
 
   private toolCoverageKeys(tool: ConversationUiToolStatus): string[] {
     const keys: string[] = [];
+    const identityKey = this.toolIdentityKey(tool);
+    if (tool.user_input_identity) {
+      keys.push(`identity:${identityKey}`);
+      return keys;
+    }
     const toolId = tool.id || '';
     if (toolId.length > 0) {
       keys.push(`id:${toolId}`);
@@ -798,6 +803,14 @@ export struct ChatMessageBubble {
       keys.push(`stable:${this.toolFingerprint(tool, false)}`);
     }
     return keys;
+  }
+
+  private toolIdentityKey(tool: ConversationUiToolStatus): string {
+    const identity = tool.user_input_identity;
+    if (identity) {
+      return `${identity.session_id}:${identity.turn_id}:${identity.tool_id}:${identity.registration_sequence}`;
+    }
+    return tool.id || '';
   }
 
   private toolFingerprint(tool: ConversationUiToolStatus, includeStatus: boolean): string {
@@ -908,7 +921,7 @@ export struct ChatMessageBubble {
       return `${path}-thinking`;
     }
     if (entry.tool && entry.tool.id) {
-      return `${path}-tool-${entry.tool.id}`;
+      return `${path}-tool-${this.toolIdentityKey(entry.tool)}`;
     }
     const content = entry.content || '';
     const childCount = entry.subItems ? entry.subItems.length : 0;

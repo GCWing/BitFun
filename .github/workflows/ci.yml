@@ -401,6 +401,9 @@ jobs:
       - name: Build web UI
         run: pnpm run build:web
 
+      - name: Run mobile web tests
+        run: pnpm --dir src/mobile-web test
+
       - name: Type-check mobile web
         run: pnpm --dir src/mobile-web run type-check
 

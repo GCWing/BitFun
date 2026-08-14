@@ -1,57 +1,39 @@
-//! Host-injected management service and capability boundary.
+//! Structured unavailable capability projection for management methods.
+//!
+//! No production Host currently provides these owners. Keep the wire methods
+//! fail-closed; a future Host must add a scoped adapter with a real consumer.
 
 use bitfun_app_server_protocol::app::{CapabilityAvailability, CapabilityDescriptor};
 
-mod service;
-mod worktree;
-
-pub use service::AppManagementService;
-
-pub const MODES_CAPABILITY: &str = "tui.modes";
-pub const MODELS_CAPABILITY: &str = "tui.models";
-pub const SKILLS_CAPABILITY: &str = "tui.skills";
-pub const SUBAGENTS_CAPABILITY: &str = "tui.subagents";
-pub const MCP_CAPABILITY: &str = "tui.mcp";
-pub const EXTERNAL_SOURCES_CAPABILITY: &str = "tui.externalSources";
-pub const NATIVE_HOOKS_CAPABILITY: &str = "tui.nativeHooks";
-pub const EXTERNAL_HOOKS_CAPABILITY: &str = "tui.externalHooks";
-pub const ACCOUNT_CAPABILITY: &str = "tui.account";
-pub const SETTINGS_SYNC_CAPABILITY: &str = "tui.settingsSync";
-pub const WORKTREES_CAPABILITY: &str = "tui.worktrees";
+pub(crate) const MODES_CAPABILITY: &str = "tui.modes";
+pub(crate) const MODELS_CAPABILITY: &str = "tui.models";
+pub(crate) const SKILLS_CAPABILITY: &str = "tui.skills";
+pub(crate) const SUBAGENTS_CAPABILITY: &str = "tui.subagents";
+pub(crate) const MCP_CAPABILITY: &str = "tui.mcp";
+pub(crate) const EXTERNAL_SOURCES_CAPABILITY: &str = "tui.externalSources";
+pub(crate) const NATIVE_HOOKS_CAPABILITY: &str = "tui.nativeHooks";
+pub(crate) const EXTERNAL_HOOKS_CAPABILITY: &str = "tui.externalHooks";
+pub(crate) const ACCOUNT_CAPABILITY: &str = "tui.account";
+pub(crate) const SETTINGS_SYNC_CAPABILITY: &str = "tui.settingsSync";
+pub(crate) const WORKTREES_CAPABILITY: &str = "tui.worktrees";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AppManagementCapabilities {
-    pub modes: CapabilityAvailability,
-    pub models: CapabilityAvailability,
-    pub skills: CapabilityAvailability,
-    pub subagents: CapabilityAvailability,
-    pub mcp: CapabilityAvailability,
-    pub external_sources: CapabilityAvailability,
-    pub native_hooks: CapabilityAvailability,
-    pub external_hooks: CapabilityAvailability,
-    pub account: CapabilityAvailability,
-    pub settings_sync: CapabilityAvailability,
-    pub worktrees: CapabilityAvailability,
+pub(crate) struct AppManagementCapabilities {
+    pub(crate) modes: CapabilityAvailability,
+    pub(crate) models: CapabilityAvailability,
+    pub(crate) skills: CapabilityAvailability,
+    pub(crate) subagents: CapabilityAvailability,
+    pub(crate) mcp: CapabilityAvailability,
+    pub(crate) external_sources: CapabilityAvailability,
+    pub(crate) native_hooks: CapabilityAvailability,
+    pub(crate) external_hooks: CapabilityAvailability,
+    pub(crate) account: CapabilityAvailability,
+    pub(crate) settings_sync: CapabilityAvailability,
+    pub(crate) worktrees: CapabilityAvailability,
 }
 
 impl AppManagementCapabilities {
-    pub fn available() -> Self {
-        Self {
-            modes: CapabilityAvailability::Available,
-            models: CapabilityAvailability::Available,
-            skills: CapabilityAvailability::Available,
-            subagents: CapabilityAvailability::Available,
-            mcp: CapabilityAvailability::Available,
-            external_sources: CapabilityAvailability::Available,
-            native_hooks: CapabilityAvailability::Available,
-            external_hooks: CapabilityAvailability::Available,
-            account: CapabilityAvailability::Available,
-            settings_sync: CapabilityAvailability::Available,
-            worktrees: CapabilityAvailability::Available,
-        }
-    }
-
-    pub fn unavailable(reason: impl Into<String>) -> Self {
+    pub(crate) fn unavailable(reason: impl Into<String>) -> Self {
         let reason = reason.into();
         Self {
             modes: unavailable(&reason),
@@ -68,24 +50,7 @@ impl AppManagementCapabilities {
         }
     }
 
-    pub fn availability(&self, capability: &str) -> Option<&CapabilityAvailability> {
-        match capability {
-            MODES_CAPABILITY => Some(&self.modes),
-            MODELS_CAPABILITY => Some(&self.models),
-            SKILLS_CAPABILITY => Some(&self.skills),
-            SUBAGENTS_CAPABILITY => Some(&self.subagents),
-            MCP_CAPABILITY => Some(&self.mcp),
-            EXTERNAL_SOURCES_CAPABILITY => Some(&self.external_sources),
-            NATIVE_HOOKS_CAPABILITY => Some(&self.native_hooks),
-            EXTERNAL_HOOKS_CAPABILITY => Some(&self.external_hooks),
-            ACCOUNT_CAPABILITY => Some(&self.account),
-            SETTINGS_SYNC_CAPABILITY => Some(&self.settings_sync),
-            WORKTREES_CAPABILITY => Some(&self.worktrees),
-            _ => None,
-        }
-    }
-
-    pub fn descriptors(&self) -> Vec<CapabilityDescriptor> {
+    pub(crate) fn descriptors(&self) -> Vec<CapabilityDescriptor> {
         vec![
             descriptor(MODES_CAPABILITY, self.modes.clone(), &["agent/listModes"]),
             descriptor(
@@ -202,52 +167,6 @@ fn descriptor(
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AppManagementErrorKind {
-    Unsupported,
-    InvalidRequest,
-    NotFound,
-    Internal,
-}
-
-#[derive(Debug, Clone)]
-pub struct AppManagementError {
-    pub kind: AppManagementErrorKind,
-    pub message: String,
-}
-
-impl AppManagementError {
-    pub fn unsupported(message: impl Into<String>) -> Self {
-        Self {
-            kind: AppManagementErrorKind::Unsupported,
-            message: message.into(),
-        }
-    }
-
-    pub fn invalid_request(message: impl Into<String>) -> Self {
-        Self {
-            kind: AppManagementErrorKind::InvalidRequest,
-            message: message.into(),
-        }
-    }
-
-    pub fn not_found(message: impl Into<String>) -> Self {
-        Self {
-            kind: AppManagementErrorKind::NotFound,
-            message: message.into(),
-        }
-    }
-
-    pub fn internal(message: impl Into<String>) -> Self {
-        Self {
-            kind: AppManagementErrorKind::Internal,
-            message: message.into(),
-        }
-    }
-}
-
-pub type AppManagementResult<T> = Result<T, AppManagementError>;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,84 +184,5 @@ mod tests {
                 CapabilityAvailability::Unavailable { ref reason } if reason == "owner unavailable"
             ));
         }
-    }
-
-    #[test]
-    fn hook_capabilities_are_separate_and_exclude_compiled_in_hooks() {
-        let capabilities = AppManagementCapabilities::available();
-        let native = capabilities
-            .descriptors()
-            .into_iter()
-            .find(|descriptor| descriptor.id == NATIVE_HOOKS_CAPABILITY)
-            .expect("native Hook capability");
-        assert_eq!(native.methods, ["nativeHook/overview"]);
-
-        let external = capabilities
-            .descriptors()
-            .into_iter()
-            .find(|descriptor| descriptor.id == EXTERNAL_HOOKS_CAPABILITY)
-            .expect("external Hook capability");
-        assert_eq!(
-            external.methods,
-            [
-                "externalHook/snapshot",
-                "externalHook/plan",
-                "externalHook/apply",
-                "externalHook/mutate",
-            ]
-        );
-        assert!(native
-            .methods
-            .iter()
-            .chain(external.methods.iter())
-            .all(|method| !method.to_ascii_lowercase().contains("postcall")));
-    }
-
-    #[test]
-    fn account_and_settings_sync_have_separate_capabilities() {
-        let capabilities = AppManagementCapabilities::available().descriptors();
-        let account = capabilities
-            .iter()
-            .find(|descriptor| descriptor.id == ACCOUNT_CAPABILITY)
-            .expect("account capability");
-        assert_eq!(
-            account.methods,
-            [
-                "account/snapshot",
-                "account/login",
-                "account/finalizeLogin",
-                "account/logout",
-            ]
-        );
-        let sync = capabilities
-            .iter()
-            .find(|descriptor| descriptor.id == SETTINGS_SYNC_CAPABILITY)
-            .expect("settings sync capability");
-        assert_eq!(
-            sync.methods,
-            [
-                "settingsSync/start",
-                "settingsSync/snapshot",
-                "settingsSync/cancel",
-                "settingsSync/localChanged",
-            ]
-        );
-    }
-
-    #[test]
-    fn worktree_capability_exposes_only_typed_session_operations() {
-        let capabilities = AppManagementCapabilities::available().descriptors();
-        let worktrees = capabilities
-            .iter()
-            .find(|descriptor| descriptor.id == WORKTREES_CAPABILITY)
-            .expect("worktree capability");
-        assert_eq!(
-            worktrees.methods,
-            [
-                "worktree/repositoryStatus",
-                "worktree/bindSession",
-                "worktree/releaseSession",
-            ]
-        );
     }
 }

@@ -122,6 +122,7 @@ export interface RemoteCommand {
   known_model_catalog_version?: number;
   turn_id?: string;
   tool_id?: string;
+  registration_sequence?: number;
   model_id?: string;
   reason?: string;
   mode?: RemotePermissionMode;
@@ -143,6 +144,9 @@ export interface PairChallengeResponse {
 export interface CommandStatusResponse {
   resp?: string;
   message?: string;
+  code?: string;
+  capability?: string;
+  recovery?: string;
 }
 
 export interface PermissionModeResponse extends CommandStatusResponse {
@@ -158,6 +162,7 @@ export interface WorkspaceInfoResponse extends CommandStatusResponse {
   git_branch?: string;
   workspace_kind?: string;
   assistant_id?: string;
+  capabilities?: string[];
 }
 
 export interface RecentWorkspaceEntryResponse {
@@ -247,6 +252,7 @@ export interface InitialSyncResponse extends CommandStatusResponse {
   sessions?: SessionItemResponse[];
   has_more_sessions?: boolean;
   authenticated_user_id?: string;
+  capabilities?: string[];
 }
 
 export interface DelegatedIdentityResponse extends CommandStatusResponse {
@@ -353,6 +359,14 @@ export interface RemoteToolStatusResponse {
   result_preview?: string;
   error_preview?: string;
   exit_code?: number;
+  user_input_identity?: RemoteUserInputIdentity;
+}
+
+export interface RemoteUserInputIdentity {
+  session_id: string;
+  turn_id: string;
+  tool_id: string;
+  registration_sequence: number;
 }
 
 export interface RemoteQuestionAnswerPayload {

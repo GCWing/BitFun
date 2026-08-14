@@ -14,7 +14,7 @@ use bitfun_core::plugin_source::{
 use bitfun_core::product_assembly::ProductRuntimeParts;
 use bitfun_core::runtime_ports::PluginRuntimeAvailability;
 use bitfun_core::service::config::initialize_global_config;
-use bitfun_core::service::session_usage::render_usage_report_markdown;
+pub(crate) use bitfun_services_core::session_usage::render_usage_report_markdown;
 use std::io::Write;
 use std::path::Path;
 use std::time::Duration;

@@ -645,6 +645,152 @@ describe('shouldProcessEvent', () => {
       FlowChatStore.getInstance().getState().sessions.get(mockSessionId),
     ).toBeUndefined();
   });
+
+  it('does not revive pending user input for a retired rollback suffix', () => {
+    const store = FlowChatStore.getInstance();
+    const recordReady = vi.spyOn(store, 'recordPendingUserInputReady');
+    markSessionTurnsRetired(mockSessionId, [mockTurnId]);
+
+    __test_only__.handleToolEvent(
+      createFlowChatContext(),
+      {
+        sessionId: mockSessionId,
+        turnId: mockTurnId,
+        roundId: 'round-1',
+        toolEvent: {
+          event_type: 'UserInputRequested',
+          tool_id: 'question-1',
+          tool_name: 'AskUserQuestion',
+          registration_sequence: 11,
+          params: { questions: [{ question: 'Continue?' }] },
+        },
+      },
+      vi.fn(),
+    );
+
+    expect(recordReady).not.toHaveBeenCalled();
+  });
+
+  it('records UserInputRequested before a missing state machine drops the event', () => {
+    const store = FlowChatStore.getInstance();
+    const recordReady = vi.spyOn(store, 'recordPendingUserInputReady');
+
+    __test_only__.handleToolEvent(
+      createFlowChatContext(),
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        toolEvent: {
+          event_type: 'UserInputRequested',
+          tool_id: 'question-1',
+          tool_name: 'AskUserQuestion',
+          registration_sequence: 11,
+          params: { questions: [{ question: 'Continue?' }] },
+        },
+      },
+      vi.fn(),
+    );
+
+    expect(recordReady).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolId: 'question-1',
+      registrationSequence: 11,
+    }, 'live');
+  });
+
+  it('settles only the exact UserInputResolved registration before state filtering', () => {
+    const store = FlowChatStore.getInstance();
+    const recordTerminal = vi.spyOn(store, 'recordPendingUserInputTerminal');
+
+    __test_only__.handleToolEvent(
+      createFlowChatContext(),
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        toolEvent: {
+          event_type: 'UserInputResolved',
+          tool_id: 'question-1',
+          tool_name: 'AskUserQuestion',
+          registration_sequence: 11,
+        },
+      },
+      vi.fn(),
+    );
+
+    expect(recordTerminal).toHaveBeenCalledWith(
+      'session-1',
+      'turn-1',
+      'question-1',
+      11,
+    );
+  });
+
+  it('does not let a stale generic terminal event close a newer ready registration', () => {
+    const question = makeTaskTool('question-1', {
+      toolName: 'AskUserQuestion',
+      status: 'running',
+      userInputReady: true,
+      userInputIdentity: {
+        sessionId: mockSessionId,
+        turnId: mockTurnId,
+        toolId: 'question-1',
+        registrationSequence: 12,
+      },
+    });
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        mockSessionId,
+        {
+          sessionId: mockSessionId,
+          title: 'Test Session',
+          dialogTurns: [{
+            id: mockTurnId,
+            sessionId: mockSessionId,
+            userMessage: { id: 'user-1', content: 'Continue?', timestamp: 1000 },
+            modelRounds: [makeRound('round-1', [question])],
+            status: 'processing',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: mockSessionId,
+    }));
+    stateMachineManager.getOrCreate(mockSessionId);
+
+    __test_only__.handleToolEvent(
+      createFlowChatContext(),
+      {
+        sessionId: mockSessionId,
+        turnId: mockTurnId,
+        roundId: 'round-1',
+        toolEvent: {
+          event_type: 'Completed',
+          tool_id: 'question-1',
+          tool_name: 'AskUserQuestion',
+          result: { status: 'answered-old-registration' },
+          duration_ms: 1,
+        },
+      },
+      vi.fn(),
+    );
+
+    expect(
+      FlowChatStore.getInstance().findToolItem(mockSessionId, mockTurnId, 'question-1'),
+    ).toMatchObject({
+      status: 'running',
+      userInputReady: true,
+      userInputIdentity: { registrationSequence: 12 },
+    });
+  });
 });
 
 describe('handleDialogTurnFailed', () => {

@@ -37,6 +37,7 @@ import {
   type PollResponse,
   type ActiveTurnSnapshot,
   type RemoteToolStatus,
+  type RemoteUserInputIdentity,
   type ChatMessage,
   type ChatMessageItem,
   type RemoteModelCatalog,
@@ -1136,10 +1137,10 @@ const ReadFilesToggle: React.FC<{ tools: RemoteToolStatus[] }> = ({ tools }) => 
       {open && (
         <div className="chat-thinking__content-wrapper at-top at-bottom">
           <div className="chat-thinking__content">
-            {tools.map(t => {
+            {tools.map((t, index) => {
               const preview = t.input_preview || '';
               return (
-                <div key={t.id} style={{ fontSize: '12px', padding: '2px 0', opacity: 0.8 }}>
+                <div key={remoteToolRenderKey(t, index)} style={{ fontSize: '12px', padding: '2px 0', opacity: 0.8 }}>
                   {t.status === 'completed' ? '✓' : '⋯'} {t.name} {preview}
                 </div>
               );
@@ -1175,8 +1176,8 @@ const ToolList: React.FC<{
   if (tools.length <= TOOL_LIST_COLLAPSE_THRESHOLD) {
     return (
       <div className="chat-tool-list">
-        {tools.map((tc) => (
-          <ToolCard key={tc.id} tool={tc} now={now} onCancelTool={onCancelTool} />
+        {tools.map((tc, index) => (
+          <ToolCard key={remoteToolRenderKey(tc, index)} tool={tc} now={now} onCancelTool={onCancelTool} />
         ))}
       </div>
     );
@@ -1199,8 +1200,8 @@ const ToolList: React.FC<{
       </div>
       {expanded && (
         <div className="chat-tool-list__scroll" ref={scrollRef}>
-          {tools.map((tc) => (
-            <ToolCard key={tc.id} tool={tc} now={now} onCancelTool={onCancelTool} />
+          {tools.map((tc, index) => (
+            <ToolCard key={remoteToolRenderKey(tc, index)} tool={tc} now={now} onCancelTool={onCancelTool} />
           ))}
         </div>
       )}
@@ -1293,12 +1294,25 @@ const TypewriterText: React.FC<{
 
 interface AskQuestionCardProps {
   tool: RemoteToolStatus;
-  onAnswer: (toolId: string, answers: any) => Promise<void>;
+  onAnswer: (identity: RemoteUserInputIdentity, answers: any) => Promise<void>;
 }
 
 const isPendingAskUserQuestion = (tool?: RemoteToolStatus | null) => {
-  if (!tool || tool.name !== 'AskUserQuestion' || !tool.tool_input) return false;
+  if (!tool || tool.name !== 'AskUserQuestion' || !tool.tool_input || !tool.user_input_identity) return false;
   return !['completed', 'failed', 'cancelled', 'rejected'].includes(tool.status);
+};
+
+const remoteToolRenderKey = (tool: RemoteToolStatus, index: number) => {
+  const identity = tool.user_input_identity;
+  if (identity) {
+    return [
+      identity.session_id,
+      identity.turn_id,
+      identity.tool_id,
+      identity.registration_sequence,
+    ].join(':');
+  }
+  return `${tool.id || tool.name || 'tool'}:${index}`;
 };
 
 function getMessageByPath(source: unknown, path: string): string | null {
@@ -1335,6 +1349,7 @@ const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => 
   const [customTexts, setCustomTexts] = useState<Record<number, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const identity = tool.user_input_identity;
 
   const normalizedQuestions = useMemo(() => {
     return questions.map((q) => {
@@ -1357,7 +1372,7 @@ const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => 
   };
 
   const handleSubmit = async () => {
-    if (!allAnswered || submitting || submitted) return;
+    if (!identity || !allAnswered || submitting || submitted) return;
 
     const answers: Record<string, any> = {};
     normalizedQuestions.forEach((q, idx) => {
@@ -1374,7 +1389,7 @@ const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => 
 
     setSubmitting(true);
     try {
-      await onAnswer(tool.id, answers);
+      await onAnswer(identity, answers);
       setSubmitted(true);
     } finally {
       setSubmitting(false);
@@ -1420,7 +1435,7 @@ const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => 
                     key={oIdx}
                     className={`chat-ask-card__option ${isSelected ? 'is-selected' : ''}`}
                     onClick={() => handleSelect(qIdx, opt.label, q.multiSelect)}
-                    disabled={submitted || submitting}
+                    disabled={!identity || submitted || submitting}
                   >
                     <span className={`chat-ask-card__radio ${q.multiSelect ? 'chat-ask-card__radio--multi' : ''}`}>
                       {isSelected && (
@@ -1440,7 +1455,7 @@ const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => 
                 <button
                   className={`chat-ask-card__option ${isOtherSelected ? 'is-selected' : ''}`}
                   onClick={() => handleSelect(qIdx, 'Other', q.multiSelect)}
-                  disabled={submitted || submitting}
+                  disabled={!identity || submitted || submitting}
                 >
                   <span className={`chat-ask-card__radio ${q.multiSelect ? 'chat-ask-card__radio--multi' : ''}`}>
                     {isOtherSelected && (
@@ -1459,7 +1474,7 @@ const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => 
                   placeholder={t('common.typeYourAnswer')}
                   value={customTexts[qIdx] || ''}
                   onChange={(e) => setCustomTexts(prev => ({ ...prev, [qIdx]: e.target.value }))}
-                  disabled={submitted || submitting}
+                  disabled={!identity || submitted || submitting}
                 />
               )}
             </div>
@@ -1468,7 +1483,7 @@ const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => 
       })}
       <button
         className="chat-ask-card__submit chat-ask-card__submit--bottom"
-        disabled={!allAnswered || submitted || submitting}
+        disabled={!identity || !allAnswered || submitted || submitting}
         onClick={handleSubmit}
       >
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8L6 12L14 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -1531,12 +1546,12 @@ function groupChatItems(items: ChatMessageItem[]) {
 function renderQuestionEntries(
   entries: ChatMessageItem[],
   keyPrefix: string,
-  onAnswer?: (toolId: string, answers: any) => Promise<void>,
+  onAnswer?: (identity: RemoteUserInputIdentity, answers: any) => Promise<void>,
 ) {
   if (!onAnswer) return null;
   return entries.map((entry, idx) => (
     <AskQuestionCard
-      key={`${keyPrefix}-ask-${entry.tool!.id}-${idx}`}
+      key={`${keyPrefix}-ask-${remoteToolRenderKey(entry.tool!, idx)}`}
       tool={entry.tool!}
       onAnswer={onAnswer}
     />
@@ -1625,7 +1640,7 @@ function renderOrderedItems(
   rawItems: ChatMessageItem[],
   now: number,
   onCancelTool?: (toolId: string) => void,
-  onAnswer?: (toolId: string, answers: any) => Promise<void>,
+  onAnswer?: (identity: RemoteUserInputIdentity, answers: any) => Promise<void>,
   onFileDownload?: (path: string, onProgress?: (downloaded: number, total: number) => void) => Promise<void>,
   onGetFileInfo?: (path: string) => Promise<{ name: string; size: number; mimeType: string }>,
 ) {
@@ -1665,7 +1680,7 @@ function renderActiveTurnItems(
   sessionMgr: RemoteSessionManager,
   setError: (e: string) => void,
   isTargetCurrent: () => boolean,
-  onAnswer: (toolId: string, answers: any) => Promise<void>,
+  onAnswer: (identity: RemoteUserInputIdentity, answers: any) => Promise<void>,
   onFileDownload?: (path: string, onProgress?: (downloaded: number, total: number) => void) => Promise<void>,
   onGetFileInfo?: (path: string) => Promise<{ name: string; size: number; mimeType: string }>,
 ) {
@@ -2324,11 +2339,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const isStreaming = activeTurn != null && activeTurn.status === 'active';
 
   const [now, setNow] = useState(() => Date.now());
-  const handleAnswerQuestion = useCallback(async (toolId: string, answers: any) => {
+  const handleAnswerQuestion = useCallback(async (identity: RemoteUserInputIdentity, answers: any) => {
     const targetEpoch = captureChatTargetEpoch();
     if (targetEpoch === null) throw new RemoteControlTargetChangedError();
     try {
-      await sessionMgr.answerQuestion(toolId, answers);
+      await sessionMgr.answerQuestion(identity, answers);
       if (!isChatTargetCurrent(targetEpoch)) throw new RemoteControlTargetChangedError();
     } catch (err) {
       reportRemoteSessionError(err, setError);
@@ -3225,9 +3240,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                   isLastItem={turnIsActive}
                 />
               )}
-              {taskTools.map(t => (
+              {taskTools.map((t, index) => (
                 <TaskToolCard
-                  key={t.id}
+                  key={remoteToolRenderKey(t, index)}
                   tool={t}
                   now={now}
                   subItems={t.status === 'running' ? subItemsForTask : undefined}
@@ -3237,9 +3252,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
               {!hasRunningSubagent && regularTools.length > 0 && (
                 <ToolList tools={regularTools} now={now} onCancelTool={onCancel} />
               )}
-              {turnIsActive && askTools.map(at => (
+              {turnIsActive && askTools.map((at, index) => (
                 <AskQuestionCard
-                  key={at.id}
+                  key={remoteToolRenderKey(at, index)}
                   tool={at}
                   onAnswer={handleAnswerQuestion}
                 />

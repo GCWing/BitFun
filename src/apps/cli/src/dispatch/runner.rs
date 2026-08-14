@@ -127,33 +127,51 @@ pub(crate) fn terminate_worker(pid: u32, job_id: &str) -> Result<bool> {
         if wait_for_process_group_exit(pid) {
             return Ok(true);
         }
-
-        // Escalation requires a fresh, exact leader identity. The group may
-        // have emptied and its numeric PGID may have been reused during the
-        // TERM grace period, so an absent leader can no longer authenticate
-        // any remaining group even though it was verified before TERM.
-        if !process_alive(pid as u32) {
-            bail!(
-                "dispatch worker leader pid {pid} exited after SIGTERM; refusing to signal \
-                 unverified process group {pid} because its PGID may have been reused"
-            );
-        }
-        if !process_matches_job(pid as u32, job_id) {
-            bail!("dispatch worker pid {pid} changed identity before SIGKILL");
-        }
-        if !signal_process_group(pid, libc::SIGKILL)? {
-            return Ok(true);
-        }
-        if !wait_for_process_group_exit(pid) {
-            bail!("dispatch worker process group {pid} remained alive after SIGKILL");
-        }
-        Ok(true)
+        escalate_after_term(
+            pid,
+            job_id,
+            process_alive,
+            process_matches_job,
+            |pid| signal_process_group(pid, libc::SIGKILL),
+            wait_for_process_group_exit,
+        )
     }
     #[cfg(not(unix))]
     {
         let _ = (pid, job_id);
         bail!("dispatch worker cancellation is unsupported on this platform")
     }
+}
+
+#[cfg(unix)]
+fn escalate_after_term(
+    pid: i32,
+    job_id: &str,
+    leader_is_alive: impl FnOnce(u32) -> bool,
+    leader_matches_job: impl FnOnce(u32, &str) -> bool,
+    send_sigkill: impl FnOnce(i32) -> Result<bool>,
+    wait_for_exit: impl FnOnce(i32) -> bool,
+) -> Result<bool> {
+    // Escalation requires a fresh, exact leader identity. The group may have
+    // emptied and its numeric PGID may have been reused during the TERM grace
+    // period, so an absent leader can no longer authenticate any remaining
+    // group even though it was verified before TERM.
+    if !leader_is_alive(pid as u32) {
+        bail!(
+            "dispatch worker leader pid {pid} exited after SIGTERM; refusing to signal \
+             unverified process group {pid} because its PGID may have been reused"
+        );
+    }
+    if !leader_matches_job(pid as u32, job_id) {
+        bail!("dispatch worker pid {pid} changed identity before SIGKILL");
+    }
+    if !send_sigkill(pid)? {
+        return Ok(true);
+    }
+    if !wait_for_exit(pid) {
+        bail!("dispatch worker process group {pid} remained alive after SIGKILL");
+    }
+    Ok(true)
 }
 
 fn configure_detached_process(command: &mut Command) {
@@ -430,63 +448,22 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn cancellation_does_not_escalate_after_term_exits_the_verified_leader() {
-        struct ProcessGroupGuard(i32);
-        impl Drop for ProcessGroupGuard {
-            fn drop(&mut self) {
-                // SAFETY: this test created the isolated process group.
-                unsafe {
-                    libc::kill(-self.0, libc::SIGKILL);
-                }
-            }
-        }
-
         let job_id = "leader-exits-after-term";
-        let ready_dir = tempfile::tempdir().expect("ready directory");
-        let ready_path = ready_dir.path().join("term-resistant-child-ready");
-        let mut command = Command::new("/bin/sh");
-        command
-            .arg("-c")
-            .arg(
-                "trap 'exit 0' TERM; trap '' HUP; \
-                 sh -c 'trap \"\" TERM HUP; printf ready > \"$BITFUN_DISPATCH_TERM_TEST_READY\"; \
-                 while :; do sleep 30; done' & \
-                 while :; do sleep 30; done",
-            )
-            // These trailing arguments make the real process identity match
-            // the hidden worker contract without launching BitFun Runtime.
-            .args(["dispatch", "__run", "--job", job_id])
-            .env("BITFUN_DISPATCH_TERM_TEST_READY", &ready_path)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        configure_detached_process(&mut command);
-        let mut leader = command.spawn().expect("spawn process-group leader");
-        let process_group = i32::try_from(leader.id()).expect("safe pid");
-        let _guard = ProcessGroupGuard(process_group);
-        assert!(worker_process_alive(process_group as u32, job_id));
-        for _ in 0..100 {
-            if ready_path.is_file() {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        assert!(
-            ready_path.is_file(),
-            "TERM-resistant child must be ready before cancellation"
-        );
-        let reaper = std::thread::spawn(move || leader.wait());
-
-        let error = terminate_worker(process_group as u32, job_id)
-            .expect_err("SIGKILL must not follow a vanished leader");
+        let sigkill_sent = std::cell::Cell::new(false);
+        let error = escalate_after_term(
+            42,
+            job_id,
+            |_| false,
+            |_, _| panic!("an absent leader must not be matched"),
+            |_| {
+                sigkill_sent.set(true);
+                Ok(true)
+            },
+            |_| panic!("an absent leader must not be awaited after SIGKILL"),
+        )
+        .expect_err("SIGKILL must not follow a vanished leader");
         assert!(error.to_string().contains("exited after SIGTERM"));
         assert!(error.to_string().contains("refusing to signal"));
-        assert!(
-            process_group_alive(process_group),
-            "the TERM-resistant child proves SIGKILL was not sent"
-        );
-        reaper
-            .join()
-            .expect("join leader reaper")
-            .expect("reap process-group leader");
+        assert!(!sigkill_sent.get(), "SIGKILL must not be sent");
     }
 }

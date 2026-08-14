@@ -282,6 +282,8 @@ export class ChatTimelineProjector {
       parts.push([
         `${index}`,
         tool.id || '',
+        tool.user_input_identity ?
+          `${tool.user_input_identity.session_id}:${tool.user_input_identity.turn_id}:${tool.user_input_identity.tool_id}:${tool.user_input_identity.registration_sequence}` : '',
         tool.name || '',
         tool.status || '',
         `${tool.duration_ms || 0}`,

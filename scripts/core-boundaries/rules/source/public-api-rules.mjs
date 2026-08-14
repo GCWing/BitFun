@@ -1126,6 +1126,15 @@ export const externalSourceCorePublicApiEntries = [
       'BitFun CLI and desktop host APIs',
     ),
   ),
+  ...['ExternalSourceReviewAction', 'review_external_source'].map((symbol) => ({
+    ...externalSourceEntry(
+      symbol,
+      'bitfun-core external source review use-case owner',
+      'BitFun CLI management provider',
+    ),
+    verification:
+      'core external source mutation tests plus CLI management provider tests',
+  })),
   externalReferenceEntry(
     'workspace_reference_snapshot',
     'bitfun-core workspace Reference composition facade',

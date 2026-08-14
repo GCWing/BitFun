@@ -110,6 +110,14 @@ pub struct AgentInfo {
     pub supports_follow_up: bool,
 }
 
+/// Scoped registry projection for management and task-selection surfaces.
+#[derive(Debug, Clone)]
+pub struct SubagentCatalog {
+    pub subagents: Vec<AgentInfo>,
+    /// Whether supported external candidates exist before management filtering.
+    pub has_external: bool,
+}
+
 fn default_true() -> bool {
     true
 }

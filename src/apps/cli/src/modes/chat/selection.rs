@@ -231,11 +231,10 @@ impl ChatMode {
         }
 
         let session_id = chat_state.core_session_id.clone();
-        let workspace_path = chat_state
-            .workspace
-            .clone()
-            .or_else(|| self.workspace.clone())
-            .or_else(|| Some(self.agent.workspace_path_string()));
+        let workspace_path = session_usage_workspace_path(
+            chat_state,
+            Some(self.agent.project_workspace_path_string()),
+        );
         let agent = self.agent.clone();
 
         /*
@@ -249,7 +248,7 @@ impl ChatMode {
          * never persisted, never in model context. In a terminal the scrollback
          * is the record, so nothing here needs to replace what is being removed.
          */
-        let report_result: Result<bitfun_core::service::session_usage::SessionUsageReport> =
+        let report_result: Result<bitfun_core_types::SessionUsageReport> =
             tokio::task::block_in_place(|| {
                 let session_id = session_id.clone();
                 let workspace_path = workspace_path.clone();

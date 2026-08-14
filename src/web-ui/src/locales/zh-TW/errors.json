@@ -163,6 +163,11 @@
   "core": {
     "initializationFailed": "Core system initialization failed"
   },
+  "sessionOwnerRefresh": {
+    "title": "需要重新載入",
+    "message": "目前頁面已無法確認 App Server 狀態或某項操作是否完成。請先重新載入頁面，再繼續操作。",
+    "reload": "重新載入頁面"
+  },
   "boundary": {
     "title": "Application Error",
     "reload": "Reload",

@@ -1,13 +1,13 @@
 # App Server 架构设计
 
-> 状态：Embedded direct-runtime 已确定为下一步实现方向；Shared App Server 仍是待评审提案。
+> 状态：Embedded TUI direct-runtime Phase 5 实现切换已交付；统一跨部署 fixture、性能与升级兼容证据仍是后续门槛；Shared App Server 仍是待评审提案。
 >
-> 基线日期：2026-08-13。
+> 基线日期：2026-08-14。
 >
 > 本文记录 Embedded direct-runtime 决策，以及需要连接边界时的 App Server 约束和 Shared transport 提案。具体 TUI 迁移阶段、接口盘点和当前缺口见
 > [`tui-app-server-decoupling-refactor-plan.md`](../plans/tui-app-server-decoupling-refactor-plan.md)；Agent Runtime 的进程、所有权和实例隔离见
 > [`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)；产品 owner 与分层依赖见
-> [`product-architecture.md`](product-architecture.md)。迁移完成前，当前调用路径仍以已接线代码为准；Shared transport 未通过独立评审前继续使用 v17。
+> [`product-architecture.md`](product-architecture.md)。当前调用路径以已接线代码为准；Shared transport 未通过独立评审前继续使用 v18。
 
 ## 1. Decision and remaining proposal
 
@@ -19,20 +19,21 @@ wire。
 - Embedded Host 直接持有产品组装得到的 `AgentRuntime` 和必要的 owner/provider
   facade，通过 Rust 类型调用 Runtime 方法；不创建 `BitfunAppServer`、
   `AppServerClient` 或 in-memory transport。
-- Embedded TUI 仍只依赖 app-local backend composition。TUI 不直接依赖 Runtime、Core
-  singleton、具体 Service 实现或私有 IPC operation；composition 内部由窄的
-  `TuiRuntimePort` 承载跨 Embedded/Shared 的 Runtime 行为，并由
-  `DirectRuntimeTuiRuntime` 完成 direct request/result/event/error 映射。
+- Embedded TUI 只依赖 app-local `CliAgentRuntimeClient`。TUI view/controller 不直接依赖
+  Runtime、Core singleton、具体 Service 实现或私有 IPC operation；client 内部私有的
+  `TuiRuntimePort` 以 `Embedded(AgentRuntime)` / `Shared(RuntimeIpcClient)` 隐藏部署差异。
 - Model、Skill、Subagent、MCP、Account、Settings Sync、Worktree、External Source 和
   Hook 等管理面不进入 `TuiRuntimePort`，也不定义总括性的 `TuiManagementPort`。它们由
-  backend composition 按 domain 直接注入 owner-owned 的稳定 service/provider trait；只有
-  原始接口暴露内部类型，或需要 TUI DTO、权限/上下文和 capability 裁剪时，才增加最薄的
-  owner/provider facade。`AppManagementService` 继续是 App Server wiring，不原样迁移到 CLI。
+  `TuiManagementOwners` 按 domain 组合具体的 Model、Registry、MCP、Account、Settings Sync、
+  Worktree、Hook、External Source/Command provider。App Server 不保留无生产消费者的管理
+  service；当前通用 Server Host 未注入 management owner，因而已注册的管理方法返回 structured
+  unsupported，不能宣称 Web 管理已接线。未来只有真实 Host 消费者具备 Host-bound scope/auth
+  contract 后，才可增加按 owner 注入的窄 adapter。
 - Web UI / WebSocket Host 继续使用 App Server，因为它们需要连接、transport、
   认证、作用域和事件转发边界。
-- Shared TUI 继续使用 private Runtime IPC v17，直到 Shared App Server 通过
+- Shared TUI 继续使用 private Runtime IPC v18，直到 Shared App Server 通过
   独立的鉴权、controller/lease、恢复、取消、背压、限制、性能和回滚门槛；本次
-  Embedded 重构不自动替换或删除 v17。
+  Embedded 重构不自动替换或删除 v18。
 - Headless CLI/CI、ACP、Peer Host 和公开 Agent SDK 继续使用各自经评审的
   adapter，不因 Rich Client 的 App Server 合同被强制改用 App Server。
 - App Server 仍是协议适配层，不接管 Agent Runtime、Service 或 Product Domain
@@ -48,47 +49,47 @@ Runtime owner、错误语义、事件语义和持久化规则。
 | --- | --- | --- | --- | --- |
 | A. App Server-first Rich Clients | Desktop、Web、Embedded/Shared TUI 复用一个 wire 与 typed client | 跨 Rich Client 合同和 fixture 最集中 | Embedded 编解码与 runtime/thread 成本；Shared 必须重新交付连接治理 | 仅适用于确实需要进程/网络边界的 Host；不再作为 Embedded 默认方案 |
 | B. Deployment-specific product adapters（Embedded 采用） | Embedded 直接调用 Runtime API；Web/Remote/Shared 按部署选择 transport adapter，共享 owner ports | 消除同进程编解码和 server task，保持 Host 生命周期简单 | DTO、错误、恢复和行为 fixture 可能分叉；需要统一行为合同 | Direct adapter 无 owner 复制，且通过跨入口行为等价测试 |
-| C. Shared Runtime use cases with separate wires（保留） | 提取稳定用例/结果，Embedded 使用 Rust adapter，Shared 保留 v17 或后继 wire，Web 使用 App Server | 业务语义集中，同时允许 deployment-specific framing、安全和性能 | 需要清晰区分 use-case DTO 与 wire DTO；client 不能假装同一协议 | Shared transport 只有通过独立门槛后才可替换 v17 |
+| C. Shared Runtime use cases with separate wires（保留） | 提取稳定用例/结果，Embedded 使用 Rust adapter，Shared 保留 v18 或后继 wire，Web 使用 App Server | 业务语义集中，同时允许 deployment-specific framing、安全和性能 | 需要清晰区分 use-case DTO 与 wire DTO；client 不能假装同一协议 | Shared transport 只有通过独立门槛后才可替换 v18 |
 
-Embedded 已选择 B/C 的受限组合，A 不再是 Embedded 默认方案。Shared 仍可选择经门槛验证的 App Server transport，或把 private v17/后继协议保留为部署专用 wire；已有 DTO 或 adapter 不能替代该评审。
+Embedded 已选择 B/C 的受限组合，A 不再是 Embedded 默认方案。Shared 仍可选择经门槛验证的 App Server transport，或把 private v18/后继协议保留为部署专用 wire；已有 DTO 或 adapter 不能替代该评审。
 
 ### 1.2 Costs of the preferred candidate
 
 - Embedded direct adapter 需要维护 Runtime typed API 与 TUI-facing contract 的映射；必须以行为 fixture 证明它没有复制 Session、Permission、Config 或 capability 状态。
-- 迁移前继续使用现有 Embedded App Server 作为行为基线；Phase 5 切换到 direct-runtime 后删除旧路径，不保留回滚 adapter，也不能在 direct adapter 返回 unsupported 后静默回退。
-- Shared App Server 需要重新交付 v17 已有的 framing、方向性 limits、鉴权、实例身份、controller/lease、断连取消、未知结果和空闲退出，不能只复用 method/DTO。
+- Phase 5 已删除旧 Embedded App Server 路径且不保留回滚 adapter；direct path 返回 unsupported 后也不得静默回退。
+- Shared App Server 需要重新交付 v18 已有的 framing、方向性 limits、鉴权、实例身份、controller/lease、断连取消、未知结果和空闲退出，不能只复用 method/DTO。
 - Desktop 迁移必须划清 controller-local capability、Tauri 生命周期和工作区 Host capability；Web/Remote 扩展还需要独立的认证、授权和多租户资源治理。
 
 ### 1.3 当前实现状态
 
-目标架构与已交付能力必须分开描述：
+当前交付与后续目标必须分开描述：
 
 | 范围 | 当前状态 | 目标 |
 | --- | --- | --- |
-| Embedded TUI | 当前仍通过私有 `BitfunAppServer`、in-memory transport 和 `AppServerClient` 运行 | 切换为 backend composition，由 `TuiRuntimePort`、同进程 `AgentRuntime` 和 owner service/provider 直接提供用例 |
-| Shared TUI | 仍通过私有 Runtime IPC v17 连接独立 Runtime Host | 保留 v17；是否迁入 Shared App Server 由可靠性、安全、性能和回滚证据决定 |
+| Embedded TUI | `CliAgentRuntimeClient -> TuiRuntimePort::Embedded(AgentRuntime)` 直接调用同进程 Runtime；管理面由 `TuiManagementOwners` 组合具体 owner provider | 保持 direct-runtime，不恢复 CLI App Server 或总管理接口 |
+| Shared TUI | 仍通过私有 Runtime IPC v18 连接独立 Runtime Host | 保留 v18；是否迁入 Shared App Server 由可靠性、安全、性能和回滚证据决定 |
 | Desktop GUI | 主要仍使用 Tauri command 和桌面事件投影 | Embedded 时使用 direct Runtime adapter；需要连接边界时使用 App Server，Tauri 保留平台能力 |
 | Web Host | 当前 Server 已组装 Embedded Runtime，WebSocket 直接承载 `BitfunAppServer`；仅适用于 loopback 单用户模式 | 补齐连接身份、作用域绑定和 Host allowlist 后才能扩展部署范围 |
 | App Server protocol/client | 已拆为 behavior-light crate，已有版本、能力、限制、错误和部分事件恢复类型 | 补齐 Host 注入能力、可靠性语义及跨 transport 合同测试 |
 | App Server server | 已注册 app、agent、session、permission、TUI/workspace、git、config 和 i18n handler | 按真实 owner 和 Host 装配收窄能力，不以已存在 DTO 代替可用性证据 |
 
 Shared TUI 继续使用 Runtime IPC 是当前 compatibility boundary。Embedded direct-runtime
-迁移不改变该边界。只有 Shared App Server 通过替换门槛后，才评审迁移或删除 v17；候选
-B/C 允许将 private v17 或后继协议保留为受控的长期物理 wire。
+迁移不改变该边界。只有 Shared App Server 通过替换门槛后，才评审迁移或删除 v18；候选
+B/C 允许将 private v18 或后继协议保留为受控的长期物理 wire。
 
-### 1.4 Migration and replacement gates
+### 1.4 Delivered invariants and replacement gates
 
-Embedded direct-runtime 完成迁移前必须满足：
+Embedded direct-runtime 当前必须持续满足：
 
 | 门槛 | 必需证据 |
 | --- | --- |
 | Typed facade 与 owner | direct adapter 只调用稳定 Runtime/owner-provider facade；不暴露内部类型，不复制 Session、Permission、Config、capability 或事件状态 |
 | 上下文与能力 | workspace、execution domain、permission、remote facts 和 capability 来自真实 Host/Runtime 组装；不从 UI 猜测，不静默本机回退 |
 | 行为与事件 | 请求结果、事件顺序、pending Permission、取消、`unsupported`、lag/closed 和 `outcome_unknown` 与既有行为合同等价 |
-| 生命周期与性能 | 不创建 App Server client/server、in-memory transport 或额外 Runtime；订阅和任务可回收，并记录启动、延迟和内存对比 |
-| 迁移与删除 | 同一 TUI fixture 覆盖 direct 与旧 App Server；升级/降级读取兼容，旧路径仅作为迁移基线并在切换后删除 |
+| 生命周期与性能 | 不创建 App Server client/server、in-memory transport 或额外 Runtime；订阅和任务可回收。启动、延迟和内存对比仍需独立测量，不能从依赖闭包推断 wall-clock 收益 |
+| 迁移与删除 | direct 与 Shared v18 的 deployment-specific focused tests 覆盖关键合同；统一跨部署 fixture 与升级/降级读取验证仍是后续证据门槛，旧路径仅留在历史基线且已删除 |
 
-Shared App Server 只有满足以下连接治理门槛后才可替换 v17：
+Shared App Server 只有满足以下连接治理门槛后才可替换 v18：
 
 | 门槛 | 必需证据 |
 | --- | --- |
@@ -99,7 +100,7 @@ Shared App Server 只有满足以下连接治理门槛后才可替换 v17：
 | 取消与未知结果 | disconnect/shutdown 取消、迟到响应、operation identity、`outcome_unknown` 查询/恢复和禁止盲重试 |
 | Host capability | Desktop local effect 与工作区 capability 边界、provider 注入、Remote unsupported 和 Web/Remote auth 已定稿 |
 | 生命周期与性能 | discovery、startup、idle exit、crash cleanup、延迟、吞吐和内存有预算与测量 |
-| 迁移与回滚 | 同一第一方 consumer 完成 opt-in 双栈 parity；升级/降级和 v17 rollback 可重复验证；删除条件有明确 owner 批准 |
+| 迁移与回滚 | 同一第一方 consumer 完成 opt-in 双栈 parity；升级/降级和 v18 rollback 可重复验证；删除条件有明确 owner 批准 |
 
 ## 2. 问题与目标
 
@@ -141,7 +142,7 @@ BitFun 的目标是让 direct adapter 与连接型 App Server adapter 共享可�
 | Rich Client | 需要持续会话、交互事件和产品管理面的第一方 GUI/Web/TUI | Headless automation、ACP、公开 SDK |
 | Host | 组装 direct Runtime adapter 或 App Server、选择 transport、注入能力并管理生命周期的产品入口 | 新业务层、普通用户必须管理的 Server 产品 |
 | Embedded direct Runtime | 与 Rich Client Host 同进程、由 `AgentRuntime` typed API 和 owner/provider facade 提供用例的部署方式 | 第二套 Runtime、App Server wire、跨进程后台服务 |
-| Embedded App Server | 迁移前 TUI 使用的同进程私有 App Server 实例和 in-memory transport | Embedded 的目标默认路径、网络 Server、共享后台进程；Phase 5 完成后删除 |
+| Embedded App Server | Phase 5 前 TUI 使用、现已删除的同进程私有 App Server 实例和 in-memory transport | 当前 Embedded 路径、网络 Server、共享后台进程 |
 | Shared App Server | 由独立本机 Host 承载、允许多个已认证第一方 client 使用的 App Server 实例 | 公网 API、Agent SDK Host、每个 client 一个 Runtime |
 | Runtime owner | 持有 Session、Turn、Permission、Tool/MCP、Hook、事件和持久化事实的既有模块 | App Server handler 或 UI read model |
 | Host capability | 当前 Host 确实组装并允许调用的产品能力 | schema 中存在的方法全集 |
@@ -161,7 +162,7 @@ flowchart LR
   Web --> Host
   TUI --> Host
   Host --> Route{"Deployment route"}
-  Route -->|"Embedded direct · approved target"| Direct["Direct Runtime adapter"]
+  Route -->|"Embedded direct · current TUI"| Direct["CliAgentRuntimeClient"]
   Route -->|"Web / candidate Shared · Phase 6"| Client["App Server Client"]
   Client --> Transport["Host-selected transport"]
   Transport --> Server["App Server"]
@@ -177,8 +178,8 @@ capability/allowlist 和平台能力。App Server handler 负责 method 合同�
 持久化和权威状态仍由对应 owner 提交。
 
 图中的 Web 分支是当前 loopback WebSocket App Server 路径；Shared 分支仅表示 Phase 6
-candidate，不是当前或已批准的必经链路。当前 Shared TUI 仍只使用 private Runtime IPC v17，
-Web 也不经过 TUI backend composition。
+candidate，不是当前或已批准的必经链路。当前 Shared TUI 仍只使用 private Runtime IPC v18，
+Web 也不经过 CLI Runtime/management composition。
 
 ### 5.1 四层合同
 
@@ -189,24 +190,24 @@ Web 也不经过 TUI backend composition。
 | Host 合同 | transport、可用能力、限制、身份、作用域、生命周期和 controller-local provider | 复制业务规则或权威状态 |
 | Owner 合同 | Runtime/Service/Product Domain 的业务事实、校验和提交 | JSON-RPC、Tauri、WebSocket、Ratatui |
 
-行为合同是 Embedded direct-runtime 与 Shared wire 等价的核心；迁移前的 Embedded App Server
-仅作为 direct-runtime 切换前的行为基线，不构成迁移后的第三条运行路径。其中，Phase 5 将引入的
-`TuiRuntimePort` 是 Shared IPC operation 集合在 TUI 侧的窄语义边界；管理 service/provider
+行为合同是 Embedded direct-runtime 与 Shared wire 等价的核心；已删除的 Embedded App Server
+仅是 direct-runtime 切换前的行为基线，不构成第三条运行路径。其中，Phase 5 已交付的
+`TuiRuntimePort` 是 `CliAgentRuntimeClient` 内部基于 Shared IPC operation 集合形成的窄语义边界；管理 service/provider
 不是 Shared Runtime wire 的组成部分。行为合同不要求三者共享 JSON；只要 Runtime port
 在断连、超时、事件落后、权限、取消和 unknown outcome 上保持明确且可验证的语义，
 即可共享同一 Runtime 用例合同。管理面按各自 service/provider 的可用性单独验证。
 
-## 6. Phase 5 Embedded interactive TUI target
+## 6. Phase 5 Embedded interactive TUI（实现切换已交付）
 
-本节只定义交互式 TUI 的 Phase 5 目标路径。它不描述 Desktop 或 Web 的迁移完成状态；
+本节定义交互式 TUI 的 Phase 5 当前路径。它不描述 Desktop 或 Web 的迁移完成状态；
 Desktop direct Runtime 是独立的已批准迁移步骤，尚未实施。
 
 ```text
 Embedded interactive TUI
   -> Host adapter
-  -> TuiBackend composition
-  -> TuiRuntimePort -> DirectRuntimeTuiRuntime -> AgentRuntime typed API
-  -> owner-owned service/provider interfaces (management only)
+  -> CliAgentRuntimeClient
+  -> TuiRuntimePort::Embedded(AgentRuntime) -> AgentRuntime typed API
+  -> TuiManagementOwners -> concrete owner providers (management only)
   -> Runtime API / owners
 ```
 
@@ -220,20 +221,20 @@ Embedded Host 必须：
     不创建第二个 Core `EventQueue` 订阅或第二份 read model 权威状态。
 4. 将 Runtime/domain error 映射为 Runtime port 或对应 owner service 的 TUI error，保留 `unsupported`、取消、
    `outcome_unknown` 等可观察语义。
-5. 在 Host 退出时取消并回收由 direct adapter 创建的订阅和任务，并使用与 Shared
-   和 Web 路径相同的行为 fixture。
+5. 在 Host 退出时取消并回收由 direct adapter 创建的订阅和任务。当前 direct 与 Shared
+   分别使用 focused behavior tests；统一跨部署 fixture 仍是后续验证门槛，不能用源码形状断言替代。
 
 Embedded 可以省略只对跨进程多客户端有意义的机制：endpoint discovery、进程 token、
 外部实例锁、多客户端 controller lease、frame 编解码和空闲后台退出。省略这些机制
 不能改变请求结果、事件顺序、取消结果、权限边界或 capability 语义。
 
-迁移窗口内可以用现有 Embedded App Server 与 direct adapter 做行为对照，但不保留可选的
-rollback adapter，也不得在 direct adapter 返回 unsupported 后静默回退。完成 direct-runtime
-行为、性能和升级兼容验证后，Phase 5 必须删除旧路径。
+Phase 5 已删除旧 Embedded App Server 和可选 rollback adapter；direct path 返回 unsupported
+后不得静默回退。后续统一行为 fixture、性能测量和升级兼容验证只覆盖 current direct path 与
+Shared v18，不恢复第三条运行路径；这些证据尚未全部完成，不得写成当前交付结果。
 
 ## 7. Shared deployment
 
-当前 Shared deployment 由独立 Runtime Host 通过 private Runtime IPC v17 服务交互式 TUI，不运行 App Server。若后续采用 Shared App Server，则目标拓扑为一个本机 App Server Host 承载一个 Runtime owner，多个第一方 Rich Client 通过受控 Pipe、UDS 或等价私有 transport 连接：
+当前 Shared deployment 由独立 Runtime Host 通过 private Runtime IPC v18 服务交互式 TUI，不运行 App Server。若后续采用 Shared App Server，则目标拓扑为一个本机 App Server Host 承载一个 Runtime owner，多个第一方 Rich Client 通过受控 Pipe、UDS 或等价私有 transport 连接：
 
 ```mermaid
 flowchart LR
@@ -257,7 +258,7 @@ flowchart LR
 - 无客户端且无活动任务时的受控空闲退出。
 - 副作用请求在超时或断连后的 `outcome_unknown` 结果。
 
-当前 Runtime IPC v17 已具有 128 KiB request、8 MiB response/event、token、实例身份、controller/lease、断连取消、有界事件流、`outcome_unknown` 和空闲退出等合同。在 App Server Shared transport 逐项获得等价测试前，该 IPC 可以作为 Shared TUI 的兼容 adapter 保留；不得先切换 transport 再以功能回退换取表面统一。
+当前 Runtime IPC v18 已具有 128 KiB request、8 MiB response/event、token、实例身份、controller/lease、断连取消、有界事件流、`outcome_unknown` 和空闲退出等合同。在 App Server Shared transport 逐项获得等价测试前，该 IPC 可以作为 Shared TUI 的兼容 adapter 保留；不得先切换 transport 再以功能回退换取表面统一。
 
 ## 8. Desktop GUI 与 Tauri
 
@@ -322,7 +323,9 @@ WebSocket 是 App Server 的一种 transport，不是另一套业务 API。Web H
 4. transport limits 必须反映当前连接的真实限制；不能把 server 内部默认值宣传为所有 transport 的通用事实。
 5. method 级 allowlist 必须是 capability 声明的子集，fallback handler 不能扩大可调用面。
 
-当前实现中通用 App Server 初始化声明 16 MiB frame，而 WebSocket Host 接收上限为 256 KiB，Shared Runtime IPC 又区分 128 KiB request 与 8 MiB response/event。目标合同需要表达方向和 transport 的真实限制；在扩展 schema 前，Host 至少必须返回不超过底层 transport 的有效上限。
+当前 App Server 的 Permission capability 由注入 Runtime 是否实际持有 Permission request manager 决定；缺少 owner 时初始化返回 `Unavailable`，Permission snapshot 与 command 均 fail closed，不用空结果伪装可用。
+
+当前通用 App Server 默认声明 16 MiB frame；WebSocket Host 会覆盖为其实际 256 KiB 接收上限，避免客户端信任超过底层 transport 的数值。Shared Runtime IPC 仍区分 128 KiB request 与 8 MiB response/event；若后续协议需要分别表达请求/响应方向，应扩展稳定 schema，而不是再次在入口硬编码不一致上限。
 
 ## 11. 事件、恢复与取消
 
@@ -335,6 +338,8 @@ WebSocket 是 App Server 的一种 transport，不是另一套业务 API。Web H
 - 与 Session、Turn、request 和 execution domain 的关联身份。
 - `closed`、`lagged`、`invalidated` 和 `recoverable` 的明确区分。
 - snapshot/sync 或要求重新装载 Session 的恢复指令。
+
+当前 Permission sync 是连接内的 at-least-once 合同。Runtime owner 先把 request 放入 pending，再完成 audit 并发布 `Asked`；因此 sync snapshot 已包含某个 `request_id` 时，同一请求仍可能在返回 watermark 之后作为事件到达。App Server 必须保留这种重复并保证请求不会落入 snapshot/event 空窗，client 按 `request_id` 幂等合并。该合同不表示跨连接持久 replay 或 exactly-once delivery。
 
 client 落后、frame 超限或连接中断时不能假装事件完整。可恢复流从 server 确认的 cursor/snapshot 继续；不可恢复流进入 invalidated，UI 必须停止基于旧 read model 提交依赖状态的新操作，直到 resync 完成。
 
@@ -388,6 +393,16 @@ Embedded direct invocation 可以依赖同进程构造身份，但仍必须传�
 - server wiring 可以依赖生产 handler 所需的明确 owner feature，但禁止选择 `bitfun-core/product-full`。
 - 新 domain 只能增加真实 handler 所需的最窄 owner feature，并通过边界检查证明依赖方向。
 - protocol DTO 不复制 Runtime 内部对象；只暴露 Rich Client 需要的稳定字段和 read model。
+- App Server protocol v4 将 post-registration `UserInputRequested` 与 exact-registration
+  `UserInputResolved` 纳入稳定 Agent event wire，
+  并在 ready event 与 `agent/submitUserAnswers` 中传递 Runtime owner 分配的
+  `session_id + turn_id + registration_sequence + tool_id` 完整身份，使所有首方 Rich Client 只在
+  Runtime 注册回答 channel 后开放提交，并仅在完整身份匹配时撤销授权；身份不匹配不会消费当前 channel，
+  迟到的旧终态不会关闭同 tool id 的较新问题。该 event/request 增量会破坏旧
+  client 的严格反序列化，因此 `PROTOCOL_VERSION` 与 `MIN_PROTOCOL_VERSION` 同步升至 4；
+  connection 在成功 `app/initialize` 前不转发业务请求或事件，v2/v3 client 必须在协商阶段
+  fail closed。v4 `session/sync` 使用同一次权威 restore snapshot 返回 transcript 与 pending
+  UserInput，使 late attach/reconnect 的 Rich Client 不依赖已经错过的 ready 事件。
 - `app-server-protocol` 是 TypeScript wire schema 的唯一导出 owner；`app-server/ts`
   仅保留为兼容转发。owner 对象到 wire read model 的转换留在 server adapter，不能为了
   生成类型把 Core、Agent Runtime 或 Service 实现依赖下沉到 protocol。
@@ -398,34 +413,33 @@ Embedded direct invocation 可以依赖同进程构造身份，但仍必须传�
 - transport 实现留在 Host/adapter 边界，generic role/transport helper 保持 schema-free。
 - App Server 不持有第二份 Session、Permission、Config 或 capability 权威状态。
 
-## 15. 迁移顺序
+## 15. 已交付迁移与后续顺序
 
 迁移按行为闭环推进，不按 method 数量推进：
 
- 1. **锁定 Runtime 行为合同**：按当前 Shared IPC v17 operation 集合冻结窄
-   `TuiRuntimePort`，稳定 Runtime request/response/event 类型、错误、能力、取消和事件语义；
-   为 direct Embedded 和 Shared 增加同一 Runtime 行为 fixture，迁移前可用旧 App Server 建立行为基线。
- 2. **拆分 TUI backend composition**：将当前单体 `TuiBackend` 拆为 `TuiRuntimePort` 与按
-   domain 注入的 owner service/provider 接口；不定义总括性的 `TuiManagementPort`。管理 service
-   能直接复用稳定 owner trait 的直接注入；只有需要 TUI DTO、权限/上下文或 capability 裁剪时
-   才增加薄 facade。
- 3. **迁移 Embedded TUI**：实现 `DirectRuntimeTuiRuntime`，将 Runtime 调用从
-   `AppServerTuiBackend` 移出；再移除 in-memory transport、Embedded `BitfunAppServer`、
-   server thread 和 TUI-facing App Server client 依赖。管理面使用 owner-owned service/provider，
-   不把具体 `AppManagementService` 原样搬入 CLI/TUI。
+1. **已交付 Runtime seam**：`CliAgentRuntimeClient` 内部以私有 `TuiRuntimePort` 组合
+   `Embedded(AgentRuntime)` 与 `Shared(RuntimeIpcClient)`，统一 Runtime request/result/event、
+   错误、取消和事件语义；Shared 分支继续使用 private Runtime IPC v18。
+2. **已交付管理 owner 组合**：CLI 通过 `TuiManagementOwners` 显式组合具体 domain provider；
+   不定义总括性的 `TuiManagementPort`，也不把总括性的 App Server management service 搬入 CLI。
+3. **已交付 Embedded TUI direct-runtime**：已移除 CLI in-memory transport、Embedded
+   `BitfunAppServer`、server thread、TUI-facing App Server client 和旧 `TuiBackend` family；
+   不保留 rollback adapter。
 4. **迁移 Desktop GUI**：Embedded 时使用 direct Runtime adapter；Web/Shared 或需要连接治理
    的场景保留 App Server。Tauri 继续承载平台能力与生命周期。
 5. **补齐 Shared 语义**：把 authentication、instance identity、controller/lease、framing、
    背压、断连取消、idle exit、event recovery 和 `outcome_unknown` 纳入 App Server Host/transport。
 6. **评审 Shared TUI 迁移**：Shared App Server 只有通过 1.4 节门槛后才可替换 Runtime IPC
-   compatibility adapter；v17 是否删除由独立评审和验证证据决定。若选择 B/C，
-   记录 v17 的长期 owner、版本和删除条件。
+   compatibility adapter；v18 是否删除由独立评审和验证证据决定。若选择 B/C，
+   记录 v18 的长期 owner、版本和删除条件。
 7. **收紧 Web Host**：由 Host 注入 allowlist、作用域和真实 limits；完成安全绑定前保持 loopback
    单用户限制。
-8. **删除旁路**：移除 Rich Client 的重复 Runtime 事件投影、旧 Embedded App Server route 和
-   无生产消费方的兼容代码。
+8. **继续删除旁路**：不恢复 Rich Client 的重复 Runtime 事件投影、旧 Embedded App Server
+   route 或无生产消费方的兼容代码。
 
-迁移期间不得在 App Server 返回 unsupported 后静默调用旧 Tauri/Core/IPC 路径。需要暂存旧路径时，必须由 Host 在启动时明确选择完整 adapter，且 UI 只看到一个 `TuiBackend` 或 frontend infrastructure 接口。
+任何入口不得在 App Server 或 direct owner provider 返回 unsupported 后静默调用旧
+Tauri/Core/IPC 路径。Host 必须在启动时明确选择完整 adapter；CLI UI 只看到
+`CliAgentRuntimeClient` 和具体 management provider 投影。
 
 ## 16. 验证与完成标准
 
@@ -433,8 +447,8 @@ Embedded direct invocation 可以依赖同进程构造身份，但仍必须传�
 
 - protocol serialization、版本上下界、未知字段和类型化错误合同测试。
 - 同一用例在 Embedded direct-runtime、Shared process transport 和 WebSocket App Server（适用时）
-  的行为等价测试；迁移前旧 Embedded App Server 仅用于建立基线，不作为持续测试路径。
-- `TuiRuntimePort` coverage：当前 Shared IPC v17 的每个 Runtime operation 都有对应的
+  的行为等价测试；旧 Embedded App Server 仅存在于历史基线，不作为持续测试路径。
+- `TuiRuntimePort` coverage：当前 Shared IPC v18 的每个 Runtime operation 都有对应的
   port 行为测试；管理 service/provider 则单独验证 capability、权限、unsupported 和 Remote
   fail-closed，不以 Runtime port parity 代替管理面验证。
 - Host capability/provider/allowlist 组合测试，以及真实 transport limit 测试。
@@ -450,21 +464,21 @@ Embedded direct invocation 可以依赖同进程构造身份，但仍必须传�
 只有交互式 TUI 同时满足以下条件，TUI/App Server 解耦才算完成；这一定义不涵盖
 Desktop 的独立 direct Runtime 迁移：
 
-1. Embedded TUI 的产品请求和订阅经过 `TuiAgentClient` 的 backend composition；Runtime
-   行为经过 `TuiRuntimePort -> DirectRuntimeTuiRuntime`，管理能力经过对应 owner service/provider，
+1. Embedded TUI 的产品请求和订阅经过 `CliAgentRuntimeClient`；Runtime
+   行为经过 `TuiRuntimePort::Embedded(AgentRuntime)`，管理能力经过 `TuiManagementOwners` 的具体 owner provider，
    TUI view/reducer 不执行 backend I/O。
 2. direct adapter 只调用既有 Runtime API、owner-owned service/provider 和必要的薄 facade，
    不复制 Session、Permission、Config、capability 或事件权威状态，也不定义 `TuiManagementPort`。
-3. Embedded direct-runtime 与 Shared v17 的行为合同覆盖请求结果、事件顺序、
+3. Embedded direct-runtime 与 Shared v18 的行为合同覆盖请求结果、事件顺序、
    取消、权限、unsupported、断连和 unknown outcome。
 4. capability、作用域和 remote facts 来自真实 Host/Runtime 组装；Remote workspace 不存在
    controller-local fallback。
 5. Embedded 不创建 App Server client/server、in-memory transport 或额外 Runtime 进程；
    direct adapter 的任务和订阅在 Host 退出时可回收。
 6. App Server 仍可被 Web/Shared Host 使用，且 handler 不持有业务权威状态或复制 owner 策略。
-7. 旧 Embedded App Server 路径已删除且不再作为 rollback adapter；70 方法单体 `TuiBackend`
-   不再作为稳定接口边界。
-8. Shared transport 若要替换 v17，仍需单独满足鉴权、lease、取消、背压、限制、失效和生命周期
+7. 旧 Embedded App Server 路径已删除且不再作为 rollback adapter；旧单体 `TuiBackend`
+   family 不再作为稳定接口边界。
+8. Shared transport 若要替换 v18，仍需单独满足鉴权、lease、取消、背压、限制、失效和生命周期
    等价门槛。
 9. 上述合同、行为、安全、依赖、升级兼容和跨入口测试全部通过。
 
@@ -492,5 +506,5 @@ Desktop 的独立 direct Runtime 迁移：
 
 这些待决项会影响 Shared transport 的选择，不能被实现默认值或迁移进度替代。Shared 评审结论必须记录
 所选 transport、拒绝其他方案的理由、门槛 owner、验证证据和回滚/删除条件。Embedded direct-runtime
-迁移完成后，旧 Embedded App Server 必须删除且不保留回滚路径；WebSocket App Server 与 Shared v17
+迁移完成后，旧 Embedded App Server 必须删除且不保留回滚路径；WebSocket App Server 与 Shared v18
 按各自部署合同继续有效。

@@ -1,5 +1,6 @@
-use bitfun_app_server_protocol::model::{ListModelsResponse, ModelSummary};
 use bitfun_core::service::config::AIConfig;
+
+use crate::tui_management::{ModelCatalog, ModelSummary};
 
 fn resolve_model_selector(ai_config: &AIConfig, selector: &str) -> Option<String> {
     match selector.trim() {
@@ -29,7 +30,7 @@ pub(crate) fn resolve_session_model_display_id(
 }
 
 pub(crate) fn resolve_tui_model_id(
-    catalog: &ListModelsResponse,
+    catalog: &ModelCatalog,
     session_selector: Option<&str>,
 ) -> Option<String> {
     let selector = session_selector

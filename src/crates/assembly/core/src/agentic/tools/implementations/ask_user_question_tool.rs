@@ -6,16 +6,56 @@ use async_trait::async_trait;
 use bitfun_agent_runtime::user_questions::{
     ask_user_question_available_in_context, build_answered_user_question_result,
     build_cancelled_user_question_result, validate_ask_user_question_input, AskUserQuestionInput,
-    USER_INPUT_AVAILABLE_CONTEXT_KEY,
+    PendingUserInput, USER_INPUT_AVAILABLE_CONTEXT_KEY,
 };
 use log::{debug, warn};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
+use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::agentic::tools::user_input_manager::get_user_input_manager;
 use crate::infrastructure::events::event_system::{get_global_event_system, BackendEvent};
 use crate::util::errors::BitFunResult;
+
+struct PendingUserInputSettlement {
+    pending: PendingUserInput,
+    coordinator: Option<std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>>,
+    settled: bool,
+}
+
+impl PendingUserInputSettlement {
+    fn new(
+        pending: PendingUserInput,
+        coordinator: Option<std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>>,
+    ) -> Self {
+        Self {
+            pending,
+            coordinator,
+            settled: false,
+        }
+    }
+
+    async fn settle(mut self) {
+        get_user_input_manager().cancel_registration(&self.pending);
+        if let Some(coordinator) = self.coordinator.as_ref() {
+            coordinator.resolve_pending_user_input(&self.pending).await;
+        }
+        self.settled = true;
+    }
+}
+
+impl Drop for PendingUserInputSettlement {
+    fn drop(&mut self) {
+        if self.settled {
+            return;
+        }
+        get_user_input_manager().cancel_registration(&self.pending);
+        if let Some(coordinator) = self.coordinator.as_ref() {
+            coordinator.resolve_pending_user_input_now(&self.pending);
+        }
+    }
+}
 
 /// AskUserQuestion tool
 pub struct AskUserQuestionTool;
@@ -210,15 +250,36 @@ Usage notes:
         let (tx, rx) = tokio::sync::oneshot::channel();
 
         // 5. Register to global manager
-        let manager = get_user_input_manager();
-        manager.register_channel(tool_id.clone(), tx);
-
-        // 6. Send backend event to notify frontend to display question card
-        let event_system = get_global_event_system();
         let session_id = context
             .session_id
             .clone()
             .unwrap_or_else(|| "unknown".to_string());
+        let turn_id = context
+            .dialog_turn_id
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
+        let pending = PendingUserInput {
+            tool_id: tool_id.clone(),
+            session_id: session_id.clone(),
+            turn_id: turn_id.clone(),
+            source_session_id: session_id.clone(),
+            source_turn_id: turn_id,
+            registration_sequence: 0,
+            input: serde_json::to_value(&tool_input)
+                .expect("validated AskUserQuestion input must serialize"),
+        };
+        let coordinator = get_global_coordinator();
+        let pending = if let Some(coordinator) = coordinator.as_ref() {
+            coordinator.register_pending_user_input(pending, tx).await
+        } else {
+            let mut pending = pending;
+            pending.registration_sequence = get_user_input_manager().register(pending.clone(), tx);
+            pending
+        };
+        let settlement = PendingUserInputSettlement::new(pending, coordinator.clone());
+
+        // 6. Send backend event to notify frontend to display question card
+        let event_system = get_global_event_system();
 
         // Send complete questions array to frontend
         let event = BackendEvent::ToolAwaitingUserInput {
@@ -234,7 +295,9 @@ Usage notes:
         );
 
         // 7. Wait for user answer until the user responds, cancels, or the turn is cancelled.
-        match rx.await {
+        let response = rx.await;
+        settlement.settle().await;
+        match response {
             Ok(response) => {
                 debug!(
                     "AskUserQuestion tool received user response, tool_id: {}",
@@ -342,6 +405,108 @@ mod tests {
         .expect_err("non-interactive question must fail");
 
         assert!(error.to_string().contains("cannot accept interactive"));
+    }
+
+    #[tokio::test]
+    async fn ask_user_question_registers_authoritative_restore_facts_until_answered() {
+        let tool_id = format!("question-{}", uuid::Uuid::new_v4());
+        let mut context = context_with_custom_data(HashMap::new());
+        context.tool_call_id = Some(tool_id.clone());
+        context.session_id = Some("child-session".to_string());
+        context.dialog_turn_id = Some("child-turn".to_string());
+        let input = serde_json::json!({
+            "questions": [{
+                "question": "Continue?",
+                "header": "Continue",
+                "options": [
+                    { "label": "Yes", "description": "Continue" },
+                    { "label": "No", "description": "Stop" }
+                ]
+            }]
+        });
+        let task_tool_id = tool_id.clone();
+        let task =
+            tokio::spawn(async move { AskUserQuestionTool::new().call(&input, &context).await });
+        let manager = crate::agentic::tools::user_input_manager::get_user_input_manager();
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while !manager.has_pending(&tool_id) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("question registration deadline");
+
+        let pending = manager
+            .pending_inputs()
+            .into_iter()
+            .find(|pending| pending.tool_id == tool_id)
+            .expect("pending restore fact");
+        assert_eq!(pending.session_id, "child-session");
+        assert_eq!(pending.turn_id, "child-turn");
+        assert_eq!(pending.source_session_id, "child-session");
+        assert_eq!(pending.source_turn_id, "child-turn");
+        assert_eq!(pending.input["questions"][0]["header"], "Continue");
+
+        manager
+            .send_answer(bitfun_runtime_ports::AgentUserAnswersRequest {
+                session_id: pending.session_id,
+                turn_id: pending.turn_id,
+                tool_id: pending.tool_id,
+                registration_sequence: pending.registration_sequence,
+                answers: serde_json::json!({ "0": "Yes" }),
+            })
+            .expect("deliver answer");
+        task.await
+            .expect("question task")
+            .expect("answered question result");
+        assert!(!manager.has_pending(&task_tool_id));
+    }
+
+    #[tokio::test]
+    async fn cancelling_ask_user_question_settles_the_exact_pending_registration() {
+        let tool_id = format!("question-cancel-{}", uuid::Uuid::new_v4());
+        let cancellation = tokio_util::sync::CancellationToken::new();
+        let mut context = context_with_custom_data(HashMap::new());
+        context.tool_call_id = Some(tool_id.clone());
+        context.session_id = Some("cancel-session".to_string());
+        context.dialog_turn_id = Some("cancel-turn".to_string());
+        context.runtime_handles =
+            bitfun_runtime_ports::ToolRuntimeHandles::new(None, Some(cancellation.clone()));
+        let input = serde_json::json!({
+            "questions": [{
+                "question": "Continue?",
+                "header": "Continue",
+                "options": [
+                    { "label": "Yes", "description": "Continue" },
+                    { "label": "No", "description": "Stop" }
+                ]
+            }]
+        });
+        let task =
+            tokio::spawn(async move { AskUserQuestionTool::new().call(&input, &context).await });
+        let manager = crate::agentic::tools::user_input_manager::get_user_input_manager();
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while !manager.has_pending(&tool_id) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("question registration deadline");
+
+        cancellation.cancel();
+        let error = task
+            .await
+            .expect("question task")
+            .expect_err("cancelled question must stop the tool call");
+
+        assert!(matches!(
+            error,
+            crate::util::errors::BitFunError::Cancelled(_)
+        ));
+        assert!(!manager
+            .pending_inputs()
+            .iter()
+            .any(|pending| pending.tool_id == tool_id));
     }
 
     #[test]

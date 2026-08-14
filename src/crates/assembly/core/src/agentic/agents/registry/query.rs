@@ -7,7 +7,7 @@ use super::AgentRegistry;
 use crate::agentic::agents::registry::types::{is_review_agent_entry, AgentEntry, AgentSource};
 use crate::agentic::agents::{
     mode_presentation_rank, resolve_mode_config_profile_id, AgentCategory, AgentInfo,
-    AgentToolPolicy, SubagentListScope, SubagentQueryContext,
+    AgentToolPolicy, SubAgentSource, SubagentCatalog, SubagentListScope, SubagentQueryContext,
 };
 use crate::agentic::deep_review_policy::canonical_review_worker_agent_type;
 use crate::agentic::tools::get_all_registered_tool_names;
@@ -388,6 +388,38 @@ impl AgentRegistry {
             }
         }
         Self::sort_subagents_for_presentation(result)
+    }
+
+    /// Builds the registry-owned projection for management and task surfaces.
+    pub async fn get_subagent_catalog_for_scope(
+        &self,
+        parent_agent_type: Option<&str>,
+        workspace_root: Option<&Path>,
+        list_scope: SubagentListScope,
+        external_sources_supported: bool,
+    ) -> SubagentCatalog {
+        let mut subagents = self
+            .get_subagents_for_query(&SubagentQueryContext {
+                parent_agent_type,
+                workspace_root,
+                list_scope,
+                include_disabled: list_scope == SubagentListScope::RegistryManagement,
+                external_sources_supported,
+            })
+            .await;
+        if !external_sources_supported {
+            subagents.retain(|info| info.subagent_source != Some(SubAgentSource::External));
+        }
+        let has_external = subagents
+            .iter()
+            .any(|info| info.subagent_source == Some(SubAgentSource::External));
+        if list_scope == SubagentListScope::RegistryManagement {
+            subagents.retain(|info| info.subagent_source != Some(SubAgentSource::External));
+        }
+        SubagentCatalog {
+            subagents,
+            has_external,
+        }
     }
 
     pub async fn can_parent_access_subagent(

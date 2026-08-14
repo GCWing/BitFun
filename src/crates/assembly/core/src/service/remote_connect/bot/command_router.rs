@@ -14,6 +14,7 @@
 //!     `complete_im_bot_pairing`, `current_bot_language`,
 //!     `execute_forwarded_turn`, `apply_interactive_request`.
 
+use bitfun_services_integrations::remote_connect::RemoteUserInputIdentity;
 use log::{error, info};
 use serde_json::Value;
 use std::sync::{Arc, OnceLock};
@@ -2237,7 +2238,7 @@ async fn route_pending(
             }
         }
         PendingAction::AskUserQuestion {
-            tool_id,
+            identity,
             questions,
             current_index,
             answers,
@@ -2246,7 +2247,7 @@ async fn route_pending(
         } => {
             handle_question_reply(
                 state,
-                tool_id,
+                identity,
                 questions,
                 current_index,
                 answers,
@@ -2484,7 +2485,7 @@ fn parse_question_numbers(input: &str) -> Option<Vec<usize>> {
 #[allow(clippy::too_many_arguments)]
 async fn handle_question_reply(
     state: &mut BotChatState,
-    tool_id: String,
+    identity: RemoteUserInputIdentity,
     questions: Vec<BotQuestion>,
     current_index: usize,
     mut answers: Vec<Value>,
@@ -2501,7 +2502,7 @@ async fn handle_question_reply(
         let custom_text = message.trim();
         if custom_text.is_empty() {
             state.set_pending(PendingAction::AskUserQuestion {
-                tool_id,
+                identity,
                 questions,
                 current_index,
                 answers,
@@ -2527,7 +2528,7 @@ async fn handle_question_reply(
             Some(values) => values,
             None => {
                 state.set_pending(PendingAction::AskUserQuestion {
-                    tool_id,
+                    identity,
                     questions,
                     current_index,
                     answers,
@@ -2539,7 +2540,7 @@ async fn handle_question_reply(
         };
         if !question.multi_select && selections.len() != 1 {
             state.set_pending(PendingAction::AskUserQuestion {
-                tool_id,
+                identity,
                 questions,
                 current_index,
                 answers,
@@ -2559,7 +2560,7 @@ async fn handle_question_reply(
                 labels.push(Value::String(question.options[selection - 1].label.clone()));
             } else {
                 state.set_pending(PendingAction::AskUserQuestion {
-                    tool_id,
+                    identity,
                     questions,
                     current_index,
                     answers,
@@ -2577,7 +2578,7 @@ async fn handle_question_reply(
         };
         if includes_other {
             state.set_pending(PendingAction::AskUserQuestion {
-                tool_id,
+                identity,
                 questions,
                 current_index,
                 answers,
@@ -2596,7 +2597,7 @@ async fn handle_question_reply(
     if current_index + 1 < questions.len() {
         let view = build_question_view(s, &questions, current_index + 1, false);
         state.set_pending(PendingAction::AskUserQuestion {
-            tool_id,
+            identity,
             questions,
             current_index: current_index + 1,
             answers,
@@ -2607,11 +2608,11 @@ async fn handle_question_reply(
     }
 
     state.clear_pending();
-    submit_question_answers(&tool_id, &answers, s).await
+    submit_question_answers(&identity, &answers, s).await
 }
 
 async fn submit_question_answers(
-    tool_id: &str,
+    identity: &RemoteUserInputIdentity,
     answers: &[Value],
     s: &'static BotStrings,
 ) -> HandleResult {
@@ -2622,7 +2623,16 @@ async fn submit_question_answers(
         payload.insert(idx.to_string(), value.clone());
     }
     let manager = get_user_input_manager();
-    match manager.send_answer(tool_id, Value::Object(payload)) {
+    let result = manager
+        .send_answer(bitfun_runtime_ports::AgentUserAnswersRequest {
+            session_id: identity.session_id.clone(),
+            turn_id: identity.turn_id.clone(),
+            tool_id: identity.tool_id.clone(),
+            registration_sequence: identity.registration_sequence,
+            answers: Value::Object(payload),
+        })
+        .map_err(|error| error.to_string());
+    match result {
         Ok(_) => HandleResult {
             reply: s.answers_submitted.to_string(),
             actions: vec![],
@@ -2840,44 +2850,33 @@ pub async fn execute_forwarded_turn(
                         }
                         response.push_str(&t);
                     }
-                    TrackerEvent::ToolStarted {
-                        tool_id,
-                        tool_name,
-                        params,
-                    } => {
+                    TrackerEvent::ToolStarted { .. } => {}
+                    TrackerEvent::UserInputRequested { identity, params } => {
                         if !streams_our_turn() {
                             continue;
                         }
-                        // Only AskUserQuestion needs an IM-side prompt; every
-                        // other tool call is internal and not surfaced to the
-                        // user (verbose mode keeps thinking summaries only —
-                        // see ToolCompleted handler below).
-                        if tool_name == "AskUserQuestion" {
-                            if let Some(questions_value) =
-                                params.and_then(|p| p.get("questions").cloned())
+                        if let Some(questions_value) = params.get("questions").cloned() {
+                            if let Ok(questions) =
+                                serde_json::from_value::<Vec<BotQuestion>>(questions_value)
                             {
-                                if let Ok(questions) =
-                                    serde_json::from_value::<Vec<BotQuestion>>(questions_value)
-                                {
-                                    let view = build_question_view(s, &questions, 0, false);
-                                    let actions: Vec<BotAction> =
-                                        view.items.iter().cloned().map(BotAction::from).collect();
-                                    let request = BotInteractiveRequest {
-                                        reply: view.render_text_block(),
-                                        actions,
-                                        menu: view,
-                                        pending_action: PendingAction::AskUserQuestion {
-                                            tool_id,
-                                            questions,
-                                            current_index: 0,
-                                            answers: Vec::new(),
-                                            awaiting_custom_text: false,
-                                            pending_answer: None,
-                                        },
-                                    };
-                                    if let Some(handler) = interaction_handler.as_ref() {
-                                        handler(request).await;
-                                    }
+                                let view = build_question_view(s, &questions, 0, false);
+                                let actions: Vec<BotAction> =
+                                    view.items.iter().cloned().map(BotAction::from).collect();
+                                let request = BotInteractiveRequest {
+                                    reply: view.render_text_block(),
+                                    actions,
+                                    menu: view,
+                                    pending_action: PendingAction::AskUserQuestion {
+                                        identity,
+                                        questions,
+                                        current_index: 0,
+                                        answers: Vec::new(),
+                                        awaiting_custom_text: false,
+                                        pending_answer: None,
+                                    },
+                                };
+                                if let Some(handler) = interaction_handler.as_ref() {
+                                    handler(request).await;
                                 }
                             }
                         }
@@ -3388,6 +3387,66 @@ mod handle_chat_tests {
             !result.reply.contains(s.item_cancel_task),
             "cancel-task button must not be sent: {}",
             result.reply
+        );
+    }
+}
+
+#[cfg(test)]
+mod question_identity_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn stale_bot_question_identity_cannot_answer_a_reused_tool_id() {
+        let tool_id = format!("bot-question-{}", uuid::Uuid::new_v4());
+        let manager = crate::agentic::tools::user_input_manager::get_user_input_manager();
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let registration_sequence = manager.register(
+            bitfun_runtime_ports::PendingUserInput {
+                tool_id: tool_id.clone(),
+                session_id: "session-b".to_string(),
+                turn_id: "turn-b".to_string(),
+                source_session_id: "session-b".to_string(),
+                source_turn_id: "turn-b".to_string(),
+                registration_sequence: 0,
+                input: serde_json::json!({ "questions": [] }),
+            },
+            sender,
+        );
+        let stale = RemoteUserInputIdentity {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-a".to_string(),
+            tool_id: tool_id.clone(),
+            registration_sequence: registration_sequence.saturating_sub(1),
+        };
+        let current = RemoteUserInputIdentity {
+            session_id: "session-b".to_string(),
+            turn_id: "turn-b".to_string(),
+            tool_id: tool_id.clone(),
+            registration_sequence,
+        };
+        let strings = strings_for(BotLanguage::EnUS);
+
+        let stale_result = submit_question_answers(
+            &stale,
+            &[serde_json::Value::String("stale".to_string())],
+            strings,
+        )
+        .await;
+        assert!(stale_result
+            .reply
+            .contains(strings.answers_submit_failed_prefix));
+        assert!(manager.has_pending(&tool_id));
+
+        let accepted = submit_question_answers(
+            &current,
+            &[serde_json::Value::String("current".to_string())],
+            strings,
+        )
+        .await;
+        assert_eq!(accepted.reply, strings.answers_submitted);
+        assert_eq!(
+            receiver.await.expect("answer delivered").answers,
+            serde_json::json!({ "0": "current" })
         );
     }
 }

@@ -1,6 +1,7 @@
 import {
   RemoteQuestionAnswerPayload,
   RemoteSession,
+  RemoteUserInputIdentity,
   SelectedImageAttachment,
   SessionSummary
 } from '../../model/RemoteModels';
@@ -171,8 +172,11 @@ export class ConversationController {
   }
   async rejectRemoteTool(toolId: string): Promise<void> { await this.transcript.rejectRemoteTool(toolId); }
   async cancelRemoteTool(toolId: string): Promise<void> { await this.transcript.cancelRemoteTool(toolId); }
-  async answerRemoteQuestion(toolId: string, answers: RemoteQuestionAnswerPayload): Promise<void> {
-    await this.transcript.answerRemoteQuestion(toolId, answers);
+  async answerRemoteQuestion(
+    identity: RemoteUserInputIdentity,
+    answers: RemoteQuestionAnswerPayload
+  ): Promise<void> {
+    await this.transcript.answerRemoteQuestion(identity, answers);
   }
   resetRemoteTimeline(sessionId: string): void { this.transcript.resetRemoteTimeline(sessionId); }
   syncRemoteTimeline(): void { this.transcript.syncRemoteTimeline(); }

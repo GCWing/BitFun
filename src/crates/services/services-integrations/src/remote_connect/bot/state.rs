@@ -1,3 +1,4 @@
+use crate::remote_connect::RemoteUserInputIdentity;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::future::Future;
@@ -351,7 +352,7 @@ pub enum PendingAction {
         options: Vec<(String, String)>,
     },
     AskUserQuestion {
-        tool_id: String,
+        identity: RemoteUserInputIdentity,
         questions: Vec<BotQuestion>,
         current_index: usize,
         answers: Vec<Value>,

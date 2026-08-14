@@ -167,6 +167,7 @@ export const __test_only__ = {
   handleModelRoundStart,
   handleTokenUsageUpdate,
   handleCompressionCompleted,
+  handleToolEvent,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -1893,6 +1894,42 @@ function handleToolEvent(
     log.debug('Tool event missing turnId', { sessionId, toolId: toolEvent.tool_id, eventType: toolEvent.event_type });
     return;
   }
+
+  if (isSessionTurnRetired(sessionId, turnId)) {
+    logDroppedDataEvent('ToolEvent', sessionId, turnId, { reason: 'retired_turn' });
+    return;
+  }
+
+  if (toolEvent.tool_name === 'AskUserQuestion') {
+    const store = FlowChatStore.getInstance();
+    if (toolEvent.event_type === 'UserInputRequested') {
+      store.recordPendingUserInputReady({
+        sessionId,
+        turnId,
+        toolId: toolEvent.tool_id,
+        registrationSequence: toolEvent.registration_sequence,
+      }, 'live');
+    } else if (toolEvent.event_type === 'UserInputResolved') {
+      store.recordPendingUserInputTerminal(
+        sessionId,
+        turnId,
+        toolEvent.tool_id,
+        toolEvent.registration_sequence,
+      );
+      return;
+    } else if (
+      toolEvent.event_type === 'Completed'
+      || toolEvent.event_type === 'Failed'
+      || toolEvent.event_type === 'Cancelled'
+      || toolEvent.event_type === 'Rejected'
+    ) {
+      const current = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
+      if (current?.type === 'tool' && (current as FlowToolItem).userInputReady) {
+        return;
+      }
+    }
+  }
+
   if (!roundId) {
     log.error('Tool event missing roundId (backend bug)', {
       sessionId,

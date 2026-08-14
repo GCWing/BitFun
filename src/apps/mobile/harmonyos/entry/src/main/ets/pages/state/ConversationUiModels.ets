@@ -8,6 +8,7 @@ import {
   RemoteModelConfig,
   RemoteReasoningCatalogProjection,
   RemoteQuestionAnswerPayload,
+  RemoteUserInputIdentity,
   SelectedImageAttachment,
   SessionSummary,
   RemoteToolStatusResponse
@@ -60,6 +61,14 @@ export interface ConversationUiToolStatus {
   result_preview?: string;
   error_preview?: string;
   exit_code?: number;
+  user_input_identity?: ConversationUiUserInputIdentity;
+}
+
+export interface ConversationUiUserInputIdentity {
+  session_id: string;
+  turn_id: string;
+  tool_id: string;
+  registration_sequence: number;
 }
 
 export interface ConversationUiMessageItem {
@@ -172,7 +181,22 @@ export function toConversationUiToolStatus(source: RemoteToolStatusResponse): Co
     tool_output: source.tool_output,
     result_preview: source.result_preview,
     error_preview: source.error_preview,
-    exit_code: source.exit_code
+    exit_code: source.exit_code,
+    user_input_identity: source.user_input_identity ? {
+      session_id: source.user_input_identity.session_id,
+      turn_id: source.user_input_identity.turn_id,
+      tool_id: source.user_input_identity.tool_id,
+      registration_sequence: source.user_input_identity.registration_sequence
+    } : undefined
+  };
+}
+
+export function toRemoteUserInputIdentity(source: ConversationUiUserInputIdentity): RemoteUserInputIdentity {
+  return {
+    session_id: source.session_id,
+    turn_id: source.turn_id,
+    tool_id: source.tool_id,
+    registration_sequence: source.registration_sequence
   };
 }
 

@@ -29,6 +29,7 @@ import {
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
 import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
+import { useSessionOwnerRefreshNotice } from './hooks/useSessionOwnerRefreshNotice';
 
 const log = createLogger('App');
 
@@ -79,6 +80,7 @@ const DEFERRED_TRAY_INIT_DELAY_MS = 1500;
 
 function App() {
   const { t } = useI18n('settings/basics');
+  useSessionOwnerRefreshNotice();
 
   // Workspace loading state — drives splash exit timing
   const { loading: workspaceLoading } = useWorkspaceContext();

@@ -1,78 +1,44 @@
-use std::sync::Arc;
-
 use agent_client_protocol::{Builder, HandleDispatchFrom};
 use bitfun_app_server_protocol::model::*;
 
-use super::capability::management_handler;
-use crate::management::{AppManagementService, MODELS_CAPABILITY};
+use super::capability::unsupported_management_handler;
+use crate::management::MODELS_CAPABILITY;
 use crate::role::{AppClient, AppServer};
 
-pub(in crate::server) fn builder(
-    management: Option<Arc<AppManagementService>>,
-) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
+pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
         .name("model handlers")
         .on_receive_request(
-            management_handler!(
-                management,
-                MODELS_CAPABILITY,
-                ProjectReasoningCatalogRequest,
-                project_reasoning_catalog
-            ),
+            unsupported_management_handler!(MODELS_CAPABILITY, ProjectReasoningCatalogRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MODELS_CAPABILITY,
-                TuiModelCatalogRequest,
-                tui_model_catalog
-            ),
+            unsupported_management_handler!(MODELS_CAPABILITY, TuiModelCatalogRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MODELS_CAPABILITY,
-                ListModelsRequest,
-                list_models
-            ),
+            unsupported_management_handler!(MODELS_CAPABILITY, ListModelsRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(management, MODELS_CAPABILITY, GetModelRequest, get_model),
+            unsupported_management_handler!(MODELS_CAPABILITY, GetModelRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(management, MODELS_CAPABILITY, AddModelRequest, add_model),
+            unsupported_management_handler!(MODELS_CAPABILITY, AddModelRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MODELS_CAPABILITY,
-                UpdateModelRequest,
-                update_model
-            ),
+            unsupported_management_handler!(MODELS_CAPABILITY, UpdateModelRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MODELS_CAPABILITY,
-                DeleteModelRequest,
-                delete_model
-            ),
+            unsupported_management_handler!(MODELS_CAPABILITY, DeleteModelRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MODELS_CAPABILITY,
-                SetModelDefaultRequest,
-                set_model_default
-            ),
+            unsupported_management_handler!(MODELS_CAPABILITY, SetModelDefaultRequest),
             agent_client_protocol::on_receive_request!(),
         )
 }

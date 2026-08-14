@@ -143,7 +143,7 @@ pub(crate) fn shared_tui_image_attachment_error() -> String {
     format!("Image attachments are unavailable in Shared TUI. {SHARED_TUI_EMBEDDED_HANDOFF}.")
 }
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` and `/connect` to manage models, `/skills` to manage skills, `/mcp` to manage MCP servers, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Extensions, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/usage` to inspect authoritative Session usage, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` and `/connect` to manage models, `/skills` to manage skills, and `/reload [skills|instructions]` to refresh declarative context for the next message. MCP management is unavailable in Shared TUI because MCP processes belong to the Shared Runtime Host; exit Shared clients, manage MCP in Embedded mode, then restart Shared Runtime. Remote workspace Sessions fail closed instead of falling back to controller-local management. Extensions, account-sync, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, _context: ActionContext) -> bool {
@@ -168,6 +168,7 @@ impl ActionHandler {
                 | Self::Status
                 | Self::WorkspaceDiff
                 | Self::CompactSession
+                | Self::Usage
                 | Self::Editor
                 | Self::PromptStash
                 | Self::PromptStashPop
@@ -2136,13 +2137,13 @@ mod tests {
             ActionHandler::NativeHooks,
             ActionHandler::ExternalHooks,
             ActionHandler::Login,
-            ActionHandler::Usage,
         ] {
             assert!(
                 !action.available_in_shared_tui(ActionContext::Chat),
                 "{action:?}"
             );
         }
+        assert!(ActionHandler::Usage.available_in_shared_tui(ActionContext::Chat));
         assert!(ActionHandler::SelectModel.available_in_shared_tui(ActionContext::Startup));
         assert!(ActionHandler::AddModel.available_in_shared_tui(ActionContext::Startup));
         assert!(ActionHandler::Skills.available_in_shared_tui(ActionContext::Startup));
@@ -2159,10 +2160,10 @@ mod tests {
         assert!(SHARED_TUI_HELP_NOTE.contains("`/reload [skills|instructions]`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("Ctrl+D"));
         assert!(SHARED_TUI_HELP_NOTE.contains("idle, non-current Session"));
-        assert!(SHARED_TUI_HELP_NOTE.contains("local compatibility owner"));
-        assert!(SHARED_TUI_HELP_NOTE
-            .contains("do not reconfigure an already-running Shared Runtime Host"));
-        assert!(SHARED_TUI_HELP_NOTE.contains("remain Embedded"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("MCP management is unavailable"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("Remote workspace Sessions fail closed"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("restart Shared Runtime"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`/usage`"));
     }
 
     #[test]
@@ -2320,7 +2321,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_tui_projections_expose_compatibility_management_actions() {
+    fn shared_tui_projections_expose_supported_and_recoverable_management_actions() {
         let state = ActionState::chat(false, false).for_shared_tui();
         let slash_ids = slash_actions(state)
             .into_iter()
@@ -2331,10 +2332,12 @@ mod tests {
             .map(|action| action.id)
             .collect::<Vec<_>>();
 
-        for unavailable in ["tools", "extensions", "hooks", "usage"] {
+        for unavailable in ["tools", "extensions", "hooks"] {
             assert!(!slash_ids.contains(&unavailable), "{unavailable}");
             assert!(!palette_ids.contains(&unavailable), "{unavailable}");
         }
+        assert!(slash_ids.contains(&"usage"));
+        assert!(palette_ids.contains(&"usage"));
         for available in [
             "new_session",
             "sessions",

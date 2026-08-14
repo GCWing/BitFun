@@ -167,6 +167,15 @@ let questionAnswered = false;
 let selectedModelId = 'model-primary-preview';
 const deletedSessions = new Set();
 
+function questionIdentity(toolId) {
+  return {
+    session_id: createdSession.id,
+    turn_id: 'turn-preview-1',
+    tool_id: toolId,
+    registration_sequence: 1,
+  };
+}
+
 const assistants = [
   {
     path: '/workspace/.bitfun/assistants/daily',
@@ -454,6 +463,7 @@ function currentMessages() {
             id: 'tool-question-1',
             name: 'AskUserQuestion',
             status: questionAnswered ? 'completed' : 'pending',
+            user_input_identity: questionIdentity('tool-question-1'),
             input_preview: JSON.stringify({
               questions: [
                 {
@@ -494,6 +504,7 @@ function activeTurnPayload(status = 'active') {
         id: 'tool-active-2',
         name: 'AskUserQuestion',
         status: questionAnswered ? 'completed' : 'pending',
+        user_input_identity: questionIdentity('tool-active-2'),
         input_preview: JSON.stringify({
           questions: [
             {
@@ -792,6 +803,14 @@ function responseFor(command) {
       toolCancelled = true;
       return { resp: 'ok', action: 'cancel_tool', target_id: command.tool_id };
     case 'answer_question':
+      if (
+        command.session_id !== createdSession.id ||
+        command.turn_id !== 'turn-preview-1' ||
+        !['tool-question-1', 'tool-active-2'].includes(command.tool_id) ||
+        command.registration_sequence !== 1
+      ) {
+        return { resp: 'error', error: 'Question identity mismatch.' };
+      }
       questionAnswered = true;
       return { resp: 'ok' };
     case 'get_file_info':

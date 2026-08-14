@@ -289,7 +289,10 @@ export class CloudAccountClient {
     );
     const parsed = Encoding.parseJsonObject<T>(Encoding.bytesToUtf8(plain));
     if (parsed.resp === 'error') {
-      throw new Error(parsed.message || 'Remote device command failed.');
+      const message = parsed.message || 'Remote device command failed.';
+      const recovery = parsed.code === 'upgrade_required' && parsed.recovery ?
+        ` ${parsed.recovery}` : '';
+      throw new Error(`${message}${recovery}`);
     }
     return parsed;
   }

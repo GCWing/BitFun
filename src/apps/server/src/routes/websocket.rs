@@ -36,7 +36,7 @@ use bitfun_app_server::BitfunAppServer;
 use crate::AppState;
 
 /// Maximum accepted WS frame size (256 KiB), matching the prior envelope handler.
-const MAX_WS_TEXT_BYTES: usize = 256 * 1024;
+pub(crate) const MAX_WS_TEXT_BYTES: usize = 256 * 1024;
 
 /// WebSocket connection handler.
 ///

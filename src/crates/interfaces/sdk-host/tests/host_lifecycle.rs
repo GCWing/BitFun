@@ -819,7 +819,7 @@ async fn query_on_created_transient_session_preserves_connection_lifetime() {
 }
 
 #[tokio::test]
-async fn dialog_session_identity_mismatch_releases_the_requested_session_reservation() {
+async fn dialog_session_identity_mismatch_is_outcome_unknown_and_releases_the_reservation() {
     let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
     let owner = Arc::new(FakeOwner::mismatched_dialog(queue.clone()));
     let runtime = AgentRuntimeBuilder::new()
@@ -861,7 +861,9 @@ async fn dialog_session_identity_mismatch_releases_the_requested_session_reserva
     .await;
     let rejected = output.recv().await.unwrap();
     assert_eq!(rejected["id"], "query-mismatch");
-    assert_eq!(rejected["error"]["data"]["code"], "internal");
+    assert_eq!(rejected["error"]["data"]["code"], "action_required");
+    assert_eq!(rejected["error"]["data"]["retryable"], false);
+    assert!(rejected["error"]["data"]["recovery"].is_null());
 
     host.handle_request(request(serde_json::json!({
         "jsonrpc": "2.0",

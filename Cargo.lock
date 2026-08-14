@@ -905,20 +905,16 @@ name = "bitfun-app-server"
 version = "0.2.18"
 dependencies = [
  "agent-client-protocol",
- "anyhow",
  "async-trait",
  "bitfun-agent-runtime",
  "bitfun-app-server-client",
  "bitfun-app-server-protocol",
  "bitfun-core",
- "bitfun-product-domains",
  "bitfun-runtime-ports",
  "log",
  "serde",
  "serde_json",
  "tokio",
- "tracing",
- "url",
 ]
 
 [[package]]
@@ -977,9 +973,6 @@ dependencies = [
  "bitfun-agent-runtime",
  "bitfun-agent-runtime-ipc",
  "bitfun-agent-tools",
- "bitfun-app-server",
- "bitfun-app-server-client",
- "bitfun-app-server-protocol",
  "bitfun-core",
  "bitfun-core-types",
  "bitfun-events",

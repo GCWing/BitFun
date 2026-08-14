@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 6;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -51,6 +51,7 @@ pub use crate::runtime::{
     SessionSelector,
 };
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
+pub use crate::user_questions::{AskUserQuestionInput, PendingUserInput};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 pub use bitfun_core_types::SessionUsageReport;
 // Event envelope types re-exported so protocol surfaces (e.g. `bitfun-app-server`)
@@ -63,8 +64,9 @@ pub use bitfun_harness::{
     HarnessRegistry, HarnessWorkflow,
 };
 pub use bitfun_runtime_ports::{
-    AgentBackgroundResultRequest, AgentContextReloadPort, AgentDialogSteerRequest,
-    AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment,
+    AgentBackgroundResultRequest, AgentContextReloadPort, AgentContextReloadRequest,
+    AgentContextReloadTarget, AgentDialogSteerRequest, AgentDialogTurnExecution,
+    AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment,
     AgentInteractionResponsePort, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
     AgentLocalCommandTurnRecordRequest, AgentLocalCommandTurnRecordResult,
     AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
@@ -149,6 +151,11 @@ impl AgentRuntimeBuilder {
 
     pub fn with_session_lineage_port(mut self, port: Arc<dyn AgentSessionLineagePort>) -> Self {
         self.inner = self.inner.with_session_lineage_port(port);
+        self
+    }
+
+    pub fn with_context_reload_port(mut self, port: Arc<dyn AgentContextReloadPort>) -> Self {
+        self.inner = self.inner.with_context_reload_port(port);
         self
     }
 
@@ -315,6 +322,13 @@ impl AgentRuntimeBuilder {
 }
 
 impl AgentRuntime {
+    pub async fn reload_context(
+        &self,
+        request: AgentContextReloadRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.reload_context(request).await
+    }
+
     pub fn subscribe_events(&self) -> Result<AgentEventReceiver, RuntimeError> {
         self.inner.subscribe_events()
     }

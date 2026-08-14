@@ -18,7 +18,7 @@ use bitfun_core::runtime_ownership::CoreRuntimeOwnership;
 use bitfun_events::{AgenticEvent, ToolEventData};
 use bitfun_runtime_ports::{AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest};
 use bitfun_services_core::runtime_ownership::RuntimeDeployment;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -32,6 +32,7 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 const SERVER_OPERATION_TIMEOUT: Duration = Duration::from_secs(120);
 const CLIENT_REQUEST_TIMEOUT: Duration = Duration::from_secs(125);
 const EVENT_BUFFER: usize = 256;
+const USER_QUESTION_RESOLVED_LIMIT: usize = 2048;
 const SUBAGENT_ROUTE_TIMEOUT: Duration = Duration::from_secs(2);
 type SessionEventSenders = Mutex<HashMap<String, broadcast::Sender<RuntimeIpcEvent>>>;
 
@@ -45,12 +46,50 @@ struct SubagentRoute {
 
 type SubagentRoutes = Mutex<HashMap<String, SubagentRoute>>;
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct UserQuestionAuthorization {
+    session_id: String,
+    turn_id: String,
+    tool_id: String,
+    registration_sequence: u64,
+}
+
+impl UserQuestionAuthorization {
+    fn from_pending(pending: &bitfun_agent_runtime::sdk::PendingUserInput) -> Self {
+        Self {
+            session_id: pending.session_id.clone(),
+            turn_id: pending.turn_id.clone(),
+            tool_id: pending.tool_id.clone(),
+            registration_sequence: pending.registration_sequence,
+        }
+    }
+
+    fn matches_request(
+        &self,
+        request: &bitfun_agent_runtime_ipc::RuntimeUserAnswersRequest,
+    ) -> bool {
+        self.session_id == request.session_id
+            && self.turn_id == request.turn_id
+            && self.tool_id == request.tool_id
+            && self.registration_sequence == request.registration_sequence
+    }
+}
+
+#[derive(Default)]
+struct UserQuestionAuthorizationState {
+    ready: HashSet<UserQuestionAuthorization>,
+    resolved: HashSet<UserQuestionAuthorization>,
+    resolved_order: VecDeque<UserQuestionAuthorization>,
+}
+
+type UserQuestionAuthorizations = Mutex<UserQuestionAuthorizationState>;
+
 pub(crate) struct SharedRuntimeHandler {
     runtime: AgentRuntime,
     compatibility: CoreAgentRuntimeCompatibility,
     workspace: PathBuf,
     events: Arc<SessionEventSenders>,
-    question_sessions: Arc<Mutex<HashMap<String, String>>>,
+    question_sessions: Arc<UserQuestionAuthorizations>,
     subagent_routes: Arc<SubagentRoutes>,
     event_stream_available: watch::Sender<bool>,
 }
@@ -71,7 +110,7 @@ impl SharedRuntimeHandler {
             .context("subscribe Shared Runtime permission events")?;
         let events = Arc::new(Mutex::new(HashMap::new()));
         let permission_sessions = Arc::new(Mutex::new(HashMap::new()));
-        let question_sessions = Arc::new(Mutex::new(HashMap::new()));
+        let question_sessions = Arc::new(Mutex::new(UserQuestionAuthorizationState::default()));
         let subagent_routes = Arc::new(SubagentRoutes::new(HashMap::new()));
         let route_updates = Arc::new(Notify::new());
         let (event_stream_available, _) = watch::channel(true);
@@ -284,14 +323,6 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     })
                     .await
                     .map_err(runtime_ipc_error)?;
-                let transcript = self
-                    .runtime
-                    .read_session_transcript(SessionTranscriptRequest {
-                        session_id: restored.session.session_id.clone(),
-                        turn_id: None,
-                    })
-                    .await
-                    .map_err(runtime_ipc_error)?;
                 let pending_permissions = self
                     .runtime
                     .pending_permission_requests()
@@ -308,12 +339,18 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 let workspace_binding = self
                     .session_workspace_binding(&restored.session.session_id)
                     .await?;
+                reconcile_restored_user_questions(
+                    &restored.session.session_id,
+                    &restored.pending_user_inputs,
+                    &self.question_sessions,
+                );
                 Ok(RuntimeIpcOperationResult::SessionRestored {
                     session: restored.session,
                     state: runtime_session_state(restored.state),
                     workspace_binding,
-                    transcript,
+                    transcript: restored.transcript,
                     pending_permissions,
+                    pending_user_inputs: restored.pending_user_inputs,
                 })
             }
             RuntimeIpcOperation::ForkSession { request } => {
@@ -352,7 +389,8 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                         remote_ssh_host: None,
                     })
                     .await
-                    .map_err(runtime_ipc_error)?;
+                    .map_err(runtime_ipc_error)
+                    .map_err(|error| completed_session_fork_followup_error("restore", error))?;
                 let transcript = self
                     .runtime
                     .read_session_transcript(SessionTranscriptRequest {
@@ -360,10 +398,14 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                         turn_id: None,
                     })
                     .await
-                    .map_err(runtime_ipc_error)?;
+                    .map_err(runtime_ipc_error)
+                    .map_err(|error| completed_session_fork_followup_error("transcript", error))?;
                 let workspace_binding = self
                     .session_workspace_binding(&restored.session.session_id)
-                    .await?;
+                    .await
+                    .map_err(|error| {
+                        completed_session_fork_followup_error("workspace binding", error)
+                    })?;
                 Ok(RuntimeIpcOperationResult::SessionForked {
                     session: restored.session,
                     workspace_binding,
@@ -567,30 +609,8 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 Ok(RuntimeIpcOperationResult::Unit)
             }
             RuntimeIpcOperation::SubmitUserAnswers { request } => {
-                let permitted = self
-                    .question_sessions
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .get(&request.tool_id)
-                    .is_some_and(|session_id| session_id == &request.session_id);
-                if !permitted {
-                    return Err(RuntimeIpcError {
-                        code: RuntimeIpcErrorCode::SessionMismatch,
-                        message: "user-input request does not belong to the controlled session"
-                            .to_string(),
-                    });
-                }
-                self.runtime
-                    .submit_user_answers(AgentUserAnswersRequest {
-                        tool_id: request.tool_id.clone(),
-                        answers: request.answers,
-                    })
-                    .await
-                    .map_err(runtime_ipc_error)?;
-                self.question_sessions
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .remove(&request.tool_id);
+                submit_authorized_user_answers(&self.runtime, &self.question_sessions, request)
+                    .await?;
                 Ok(RuntimeIpcOperationResult::Unit)
             }
         }
@@ -601,6 +621,19 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
         session_id: &str,
     ) -> std::result::Result<broadcast::Receiver<RuntimeIpcEvent>, RuntimeIpcError> {
         subscribe_session_events(&self.events, &self.event_stream_available, session_id)
+    }
+}
+
+fn completed_session_fork_followup_error(
+    followup: &str,
+    error: RuntimeIpcError,
+) -> RuntimeIpcError {
+    RuntimeIpcError {
+        code: RuntimeIpcErrorCode::OutcomeUnknown,
+        message: format!(
+            "Session fork completed, but its {followup} could not be returned: {}. Reconnect and inspect the Session list before retrying",
+            error.message
+        ),
     }
 }
 
@@ -709,7 +742,7 @@ fn invalidate_event_stream(
     events: &SessionEventSenders,
     reason: RuntimeIpcStreamInvalidationReason,
 ) {
-    if available.send_replace(false) {
+    if *available.borrow() {
         for sender in events
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -717,6 +750,7 @@ fn invalidate_event_stream(
         {
             let _ = sender.send(RuntimeIpcEvent::StreamInvalidated { reason });
         }
+        available.send_replace(false);
     }
 }
 
@@ -965,28 +999,131 @@ fn project_user_question_route(
 fn index_user_question(
     event: &AgenticEvent,
     routed_session_id: &str,
-    questions: &Mutex<HashMap<String, String>>,
+    questions: &UserQuestionAuthorizations,
 ) {
-    let AgenticEvent::ToolEvent { tool_event, .. } = event else {
+    let AgenticEvent::ToolEvent {
+        turn_id,
+        tool_event,
+        ..
+    } = event
+    else {
         return;
     };
     let mut questions = questions
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     match tool_event {
-        ToolEventData::Started { .. } if tool_event.effective_tool_name() == "AskUserQuestion" => {
-            questions.insert(
-                tool_event.tool_id().to_string(),
-                routed_session_id.to_string(),
-            );
+        ToolEventData::UserInputRequested {
+            registration_sequence,
+            ..
+        } if tool_event.effective_tool_name() == "AskUserQuestion" => {
+            let authorization = UserQuestionAuthorization {
+                session_id: routed_session_id.to_string(),
+                turn_id: turn_id.clone(),
+                tool_id: tool_event.tool_id().to_string(),
+                registration_sequence: *registration_sequence,
+            };
+            merge_user_question_authorization(&mut questions, authorization);
         }
-        ToolEventData::Completed { .. }
-        | ToolEventData::Failed { .. }
-        | ToolEventData::Cancelled { .. } => {
-            questions.remove(tool_event.tool_id());
+        ToolEventData::UserInputResolved {
+            registration_sequence,
+            ..
+        } if tool_event.effective_tool_name() == "AskUserQuestion" => {
+            let authorization = UserQuestionAuthorization {
+                session_id: routed_session_id.to_string(),
+                turn_id: turn_id.clone(),
+                tool_id: tool_event.tool_id().to_string(),
+                registration_sequence: *registration_sequence,
+            };
+            record_user_question_resolved(&mut questions, authorization);
         }
         _ => {}
     }
+}
+
+fn reconcile_restored_user_questions(
+    session_id: &str,
+    pending_user_inputs: &[bitfun_agent_runtime::sdk::PendingUserInput],
+    questions: &UserQuestionAuthorizations,
+) {
+    let mut questions = questions
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    for pending in pending_user_inputs {
+        if pending.session_id == session_id {
+            merge_user_question_authorization(
+                &mut questions,
+                UserQuestionAuthorization::from_pending(pending),
+            );
+        }
+    }
+}
+
+fn merge_user_question_authorization(
+    questions: &mut UserQuestionAuthorizationState,
+    candidate: UserQuestionAuthorization,
+) {
+    if !questions.resolved.contains(&candidate) {
+        questions.ready.insert(candidate);
+    }
+}
+
+fn record_user_question_resolved(
+    questions: &mut UserQuestionAuthorizationState,
+    authorization: UserQuestionAuthorization,
+) {
+    questions.ready.remove(&authorization);
+    if questions.resolved.insert(authorization.clone()) {
+        questions.resolved_order.push_back(authorization);
+    }
+    while questions.resolved.len() > USER_QUESTION_RESOLVED_LIMIT {
+        if let Some(expired) = questions.resolved_order.pop_front() {
+            questions.resolved.remove(&expired);
+        }
+    }
+}
+
+async fn submit_authorized_user_answers(
+    runtime: &AgentRuntime,
+    questions: &UserQuestionAuthorizations,
+    request: bitfun_agent_runtime_ipc::RuntimeUserAnswersRequest,
+) -> std::result::Result<(), RuntimeIpcError> {
+    let permitted = questions
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .ready
+        .iter()
+        .any(|authorization| authorization.matches_request(&request));
+    if !permitted {
+        return Err(RuntimeIpcError {
+            code: RuntimeIpcErrorCode::SessionMismatch,
+            message: "user-input request identity does not match the registered question"
+                .to_string(),
+        });
+    }
+
+    let submitted_authorization = UserQuestionAuthorization {
+        session_id: request.session_id.clone(),
+        turn_id: request.turn_id.clone(),
+        tool_id: request.tool_id.clone(),
+        registration_sequence: request.registration_sequence,
+    };
+    runtime
+        .submit_user_answers(AgentUserAnswersRequest {
+            session_id: request.session_id,
+            turn_id: request.turn_id,
+            tool_id: request.tool_id.clone(),
+            registration_sequence: request.registration_sequence,
+            answers: request.answers,
+        })
+        .await
+        .map_err(runtime_ipc_error)?;
+
+    let mut questions = questions
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    record_user_question_resolved(&mut questions, submitted_authorization);
+    Ok(())
 }
 
 pub(crate) async fn run_service(workspace: PathBuf, expected_identity: String) -> Result<()> {
@@ -1026,7 +1163,6 @@ pub(crate) async fn run_service(workspace: PathBuf, expected_identity: String) -
     .await
     .context("bind Shared Runtime IPC")?;
     let result = server.serve().await.context("serve Shared Runtime IPC");
-    crate::shutdown_mcp_servers().await;
     result
 }
 
@@ -1333,25 +1469,32 @@ fn core_ipc_error(error: bitfun_core::util::errors::BitFunError) -> RuntimeIpcEr
 #[cfg(test)]
 mod tests {
     use super::{
-        await_permission_route, connect_existing, delete_owned_session, index_user_question,
-        invalidate_event_stream, owned_session_rename_request, permission_event_session,
+        await_permission_route, completed_session_fork_followup_error, connect_existing,
+        delete_owned_session, index_user_question, invalidate_event_stream,
+        merge_user_question_authorization, owned_session_rename_request, permission_event_session,
         permission_targets_session, project_subagent_link_route, project_user_question_route,
-        publish_event, reject_remote_lineage_scope, rename_owned_session, route_agent_event,
-        runtime_ipc_error, subscribe_session_events, SessionEventSenders, SubagentRoute,
-        SubagentRoutes, EVENT_BUFFER,
+        publish_event, reconcile_restored_user_questions, record_user_question_resolved,
+        reject_remote_lineage_scope, rename_owned_session, route_agent_event, runtime_ipc_error,
+        submit_authorized_user_answers, subscribe_session_events, SessionEventSenders,
+        SubagentRoute, SubagentRoutes, UserQuestionAuthorization, UserQuestionAuthorizationState,
+        EVENT_BUFFER, USER_QUESTION_RESOLVED_LIMIT,
     };
     use bitfun_agent_runtime::sdk::{
-        AgentRuntimeBuilder, AgentSessionCreateRequest, AgentSessionCreateResult,
-        AgentSessionDeleteRequest, AgentSessionListRequest, AgentSessionManagementPort,
-        AgentSessionRenameRequest, AgentSessionSummary, AgentSessionWorkspaceBinding,
-        AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
-        AgentSubmissionResult, PermissionDelegationContext, PermissionReplySource,
-        PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
-        PermissionRequestSourceKind, PortError, PortErrorKind, PortResult, RuntimeError,
+        AgentInteractionResponsePort, AgentRuntimeBuilder, AgentSessionCreateRequest,
+        AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
+        AgentSessionManagementPort, AgentSessionRenameRequest, AgentSessionSummary,
+        AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
+        AgentSubmissionRequest, AgentSubmissionResult, AgentUserAnswersRequest, PendingUserInput,
+        PermissionDelegationContext, PermissionReplySource, PermissionRequest,
+        PermissionRequestEvent, PermissionRequestSource, PermissionRequestSourceKind, PortError,
+        PortErrorKind, PortResult, RuntimeError,
     };
-    use bitfun_agent_runtime_ipc::{RuntimeIpcErrorCode, RuntimeSessionRenameRequest};
+    use bitfun_agent_runtime_ipc::{
+        RuntimeIpcError, RuntimeIpcErrorCode, RuntimeSessionRenameRequest,
+        RuntimeUserAnswersRequest,
+    };
     use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::{watch, Notify};
@@ -1365,6 +1508,21 @@ mod tests {
         let error = reject_remote_lineage_scope(None, Some("host-1"))
             .expect_err("Shared Runtime must stay workspace-local");
         assert_eq!(error.code, RuntimeIpcErrorCode::SessionMismatch);
+    }
+
+    #[test]
+    fn completed_fork_followup_failures_require_authoritative_recovery() {
+        let error = completed_session_fork_followup_error(
+            "transcript",
+            RuntimeIpcError {
+                code: RuntimeIpcErrorCode::NotFound,
+                message: "transcript unavailable".to_string(),
+            },
+        );
+
+        assert_eq!(error.code, RuntimeIpcErrorCode::OutcomeUnknown);
+        assert!(error.message.contains("Session fork completed"));
+        assert!(error.message.contains("inspect the Session list"));
     }
 
     #[test]
@@ -1388,6 +1546,19 @@ mod tests {
     struct RecordingSessionPort {
         delete_requests: Mutex<Vec<AgentSessionDeleteRequest>>,
         rename_requests: Mutex<Vec<AgentSessionRenameRequest>>,
+    }
+
+    struct RealUserInputPort {
+        manager: Arc<bitfun_agent_runtime::user_questions::UserInputManager>,
+    }
+
+    #[async_trait::async_trait]
+    impl AgentInteractionResponsePort for RealUserInputPort {
+        async fn submit_user_answers(&self, request: AgentUserAnswersRequest) -> PortResult<()> {
+            self.manager
+                .send_answer(request)
+                .map_err(|error| PortError::new(PortErrorKind::InvalidRequest, error.to_string()))
+        }
     }
 
     #[async_trait::async_trait]
@@ -1900,8 +2071,8 @@ mod tests {
     }
 
     #[test]
-    fn user_question_answers_remain_scoped_to_the_routed_parent_session() {
-        let questions = Mutex::new(HashMap::new());
+    fn user_question_answers_require_the_post_registration_ready_event() {
+        let questions = Mutex::new(UserQuestionAuthorizationState::default());
         let mut started = AgenticEvent::ToolEvent {
             session_id: "child-session".to_string(),
             turn_id: "child-turn".to_string(),
@@ -1921,13 +2092,358 @@ mod tests {
                 if session_id == "parent-session" && turn_id == "parent-turn"
         ));
         index_user_question(&started, "parent-session", &questions);
+        assert!(questions.lock().expect("question index").ready.is_empty());
+
+        let ready = AgenticEvent::ToolEvent {
+            session_id: "parent-session".to_string(),
+            turn_id: "parent-turn".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            tool_event: ToolEventData::UserInputRequested {
+                identity: ToolEventIdentity::direct("question-1", "AskUserQuestion"),
+                registration_sequence: 1,
+                params: serde_json::json!({}),
+            },
+        };
+        index_user_question(&ready, "parent-session", &questions);
+        assert!(questions.lock().expect("question index").ready.contains(
+            &UserQuestionAuthorization {
+                session_id: "parent-session".to_string(),
+                turn_id: "parent-turn".to_string(),
+                tool_id: "question-1".to_string(),
+                registration_sequence: 1,
+            }
+        ));
+    }
+
+    #[test]
+    fn user_question_settlement_revokes_only_the_exact_registration() {
+        let current = UserQuestionAuthorization {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            tool_id: "question-1".to_string(),
+            registration_sequence: 2,
+        };
+        let questions = Mutex::new(UserQuestionAuthorizationState {
+            ready: HashSet::from([current.clone()]),
+            ..UserQuestionAuthorizationState::default()
+        });
+        let settled = |registration_sequence| AgenticEvent::ToolEvent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "pending-user-input:question-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            tool_event: ToolEventData::UserInputResolved {
+                identity: ToolEventIdentity::direct("question-1", "AskUserQuestion"),
+                registration_sequence,
+            },
+        };
+
+        index_user_question(&settled(1), "session-1", &questions);
+        assert!(questions
+            .lock()
+            .expect("question index")
+            .ready
+            .contains(&current));
+
+        index_user_question(&settled(2), "session-1", &questions);
+        assert!(questions.lock().expect("question index").ready.is_empty());
+    }
+
+    #[test]
+    fn user_question_resolved_tombstones_are_bounded_and_keep_recent_registrations() {
+        let mut questions = UserQuestionAuthorizationState::default();
+        for registration_sequence in 1..=(USER_QUESTION_RESOLVED_LIMIT as u64 + 1) {
+            record_user_question_resolved(
+                &mut questions,
+                UserQuestionAuthorization {
+                    session_id: "session-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    tool_id: "question-1".to_string(),
+                    registration_sequence,
+                },
+            );
+        }
+
+        let oldest = UserQuestionAuthorization {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            tool_id: "question-1".to_string(),
+            registration_sequence: 1,
+        };
+        let newest = UserQuestionAuthorization {
+            registration_sequence: USER_QUESTION_RESOLVED_LIMIT as u64 + 1,
+            ..oldest.clone()
+        };
+        assert_eq!(questions.resolved.len(), USER_QUESTION_RESOLVED_LIMIT);
+        assert!(!questions.resolved.contains(&oldest));
+        assert!(questions.resolved.contains(&newest));
+
+        merge_user_question_authorization(&mut questions, newest.clone());
+        assert!(!questions.ready.contains(&newest));
+    }
+
+    #[test]
+    fn restored_snapshot_cannot_revive_a_registration_resolved_before_reconcile() {
+        let pending = PendingUserInput {
+            tool_id: "question-1".to_string(),
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            source_session_id: "session-1".to_string(),
+            source_turn_id: "turn-1".to_string(),
+            registration_sequence: 7,
+            input: serde_json::json!({ "questions": [] }),
+        };
+        let authorization = UserQuestionAuthorization::from_pending(&pending);
+        let questions = Mutex::new(UserQuestionAuthorizationState::default());
+
+        index_user_question(
+            &AgenticEvent::ToolEvent {
+                session_id: pending.session_id.clone(),
+                turn_id: pending.turn_id.clone(),
+                round_id: "pending-user-input:question-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
+                tool_event: ToolEventData::UserInputResolved {
+                    identity: ToolEventIdentity::direct("question-1", "AskUserQuestion"),
+                    registration_sequence: pending.registration_sequence,
+                },
+            },
+            &pending.session_id,
+            &questions,
+        );
+        let session_id = pending.session_id.clone();
+        reconcile_restored_user_questions(&session_id, &[pending], &questions);
+
+        let questions = questions.lock().expect("question index");
+        assert!(!questions.ready.contains(&authorization));
+        assert!(questions.resolved.contains(&authorization));
+    }
+
+    #[test]
+    fn restored_pending_questions_merge_without_making_the_cache_authoritative() {
+        let questions = Mutex::new(UserQuestionAuthorizationState {
+            ready: HashSet::from([
+                UserQuestionAuthorization {
+                    session_id: "parent-session".to_string(),
+                    turn_id: "stale-turn".to_string(),
+                    tool_id: "stale-question".to_string(),
+                    registration_sequence: 1,
+                },
+                UserQuestionAuthorization {
+                    session_id: "other-session".to_string(),
+                    turn_id: "other-turn".to_string(),
+                    tool_id: "other-question".to_string(),
+                    registration_sequence: 1,
+                },
+            ]),
+            ..UserQuestionAuthorizationState::default()
+        });
+        let pending = vec![PendingUserInput {
+            tool_id: "question-1".to_string(),
+            session_id: "parent-session".to_string(),
+            turn_id: "parent-turn".to_string(),
+            source_session_id: "child-session".to_string(),
+            source_turn_id: "child-turn".to_string(),
+            registration_sequence: 1,
+            input: serde_json::json!({ "questions": [] }),
+        }];
+
+        reconcile_restored_user_questions("parent-session", &pending, &questions);
+
+        let questions = questions.lock().expect("question index");
+        assert!(questions
+            .ready
+            .contains(&UserQuestionAuthorization::from_pending(&pending[0])));
         assert_eq!(
             questions
-                .lock()
-                .expect("question index")
-                .get("question-1")
-                .map(String::as_str),
-            Some("parent-session")
+                .ready
+                .iter()
+                .find(|authorization| authorization.tool_id == "stale-question")
+                .map(|authorization| authorization.session_id.as_str()),
+            Some("parent-session"),
+        );
+        assert_eq!(
+            questions
+                .ready
+                .iter()
+                .find(|authorization| authorization.tool_id == "other-question")
+                .map(|authorization| authorization.session_id.as_str()),
+            Some("other-session"),
+        );
+        drop(questions);
+
+        // Merge-only reconciliation may retain a stale local authorization,
+        // but the Runtime-owned response channel remains authoritative and
+        // rejects an answer after that channel has gone away.
+        let runtime_owner = bitfun_agent_runtime::user_questions::UserInputManager::new();
+        assert!(matches!(
+            runtime_owner.send_answer(AgentUserAnswersRequest {
+                session_id: "parent-session".to_string(),
+                turn_id: "stale-turn".to_string(),
+                tool_id: "stale-question".to_string(),
+                registration_sequence: 1,
+                answers: serde_json::json!({}),
+            }),
+            Err(
+                bitfun_agent_runtime::user_questions::UserInputSendError::MissingChannel {
+                    tool_id
+                }
+            ) if tool_id == "stale-question"
+        ));
+    }
+
+    #[test]
+    fn restored_pending_questions_preserve_ready_authorization_after_snapshot() {
+        let questions = Mutex::new(UserQuestionAuthorizationState {
+            ready: HashSet::from([UserQuestionAuthorization {
+                session_id: "parent-session".to_string(),
+                turn_id: "ready-turn".to_string(),
+                tool_id: "ready-after-snapshot".to_string(),
+                registration_sequence: 2,
+            }]),
+            ..UserQuestionAuthorizationState::default()
+        });
+        let older_snapshot = vec![PendingUserInput {
+            tool_id: "snapshot-question".to_string(),
+            session_id: "parent-session".to_string(),
+            turn_id: "parent-turn".to_string(),
+            source_session_id: "parent-session".to_string(),
+            source_turn_id: "parent-turn".to_string(),
+            registration_sequence: 1,
+            input: serde_json::json!({ "questions": [] }),
+        }];
+
+        reconcile_restored_user_questions("parent-session", &older_snapshot, &questions);
+
+        let questions = questions.lock().expect("question index");
+        assert_eq!(
+            questions
+                .ready
+                .iter()
+                .find(|authorization| authorization.tool_id == "ready-after-snapshot")
+                .map(|authorization| authorization.session_id.as_str()),
+            Some("parent-session"),
+        );
+        assert_eq!(
+            questions
+                .ready
+                .iter()
+                .find(|authorization| authorization.tool_id == "snapshot-question")
+                .map(|authorization| authorization.session_id.as_str()),
+            Some("parent-session"),
+        );
+    }
+
+    #[tokio::test]
+    async fn restored_old_identity_cannot_overwrite_or_answer_a_live_reused_tool_id() {
+        let owner = Arc::new(bitfun_agent_runtime::user_questions::UserInputManager::new());
+        let (sender_a, receiver_a) = tokio::sync::oneshot::channel();
+        let mut pending_a = PendingUserInput {
+            tool_id: "reused-tool".to_string(),
+            session_id: "session-a".to_string(),
+            turn_id: "turn-a".to_string(),
+            source_session_id: "session-a".to_string(),
+            source_turn_id: "turn-a".to_string(),
+            registration_sequence: 0,
+            input: serde_json::json!({ "questions": [] }),
+        };
+        pending_a.registration_sequence = owner.register(pending_a.clone(), sender_a);
+        let old_a_snapshot = vec![pending_a.clone()];
+        owner
+            .send_answer(AgentUserAnswersRequest {
+                session_id: pending_a.session_id.clone(),
+                turn_id: pending_a.turn_id.clone(),
+                tool_id: pending_a.tool_id.clone(),
+                registration_sequence: pending_a.registration_sequence,
+                answers: serde_json::json!({ "0": "answered-a" }),
+            })
+            .expect("consume the old A channel before its snapshot is reconciled");
+        assert_eq!(
+            receiver_a.await.expect("A receiver").answers,
+            serde_json::json!({ "0": "answered-a" })
+        );
+
+        let (sender_b, receiver_b) = tokio::sync::oneshot::channel();
+        let mut pending_b = PendingUserInput {
+            tool_id: "reused-tool".to_string(),
+            session_id: "session-b".to_string(),
+            turn_id: "turn-b".to_string(),
+            source_session_id: "session-b".to_string(),
+            source_turn_id: "turn-b".to_string(),
+            registration_sequence: 0,
+            input: serde_json::json!({ "questions": [] }),
+        };
+        pending_b.registration_sequence = owner.register(pending_b.clone(), sender_b);
+
+        let authorizations = Mutex::new(UserQuestionAuthorizationState::default());
+        let ready_b = AgenticEvent::ToolEvent {
+            session_id: pending_b.session_id.clone(),
+            turn_id: pending_b.turn_id.clone(),
+            round_id: "round-b".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            tool_event: ToolEventData::UserInputRequested {
+                identity: ToolEventIdentity::direct(&pending_b.tool_id, "AskUserQuestion"),
+                registration_sequence: pending_b.registration_sequence,
+                params: pending_b.input.clone(),
+            },
+        };
+        index_user_question(&ready_b, &pending_b.session_id, &authorizations);
+        reconcile_restored_user_questions("session-a", &old_a_snapshot, &authorizations);
+        let authorizations_guard = authorizations.lock().expect("question authorizations");
+        assert!(authorizations_guard
+            .ready
+            .contains(&UserQuestionAuthorization::from_pending(&pending_a)));
+        assert!(authorizations_guard
+            .ready
+            .contains(&UserQuestionAuthorization::from_pending(&pending_b)));
+        drop(authorizations_guard);
+
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(RecordingSessionPort::default()))
+            .with_interaction_response_port(Arc::new(RealUserInputPort {
+                manager: owner.clone(),
+            }))
+            .build()
+            .expect("runtime");
+        let stale_error = submit_authorized_user_answers(
+            &runtime,
+            &authorizations,
+            RuntimeUserAnswersRequest {
+                session_id: pending_a.session_id.clone(),
+                turn_id: pending_a.turn_id.clone(),
+                tool_id: pending_a.tool_id.clone(),
+                registration_sequence: pending_a.registration_sequence,
+                answers: serde_json::json!({ "0": "stale" }),
+            },
+        )
+        .await
+        .expect_err("old A authorization must fail closed");
+        assert_eq!(stale_error.code, RuntimeIpcErrorCode::InvalidRequest);
+        assert!(owner.has_pending("reused-tool"));
+
+        submit_authorized_user_answers(
+            &runtime,
+            &authorizations,
+            RuntimeUserAnswersRequest {
+                session_id: pending_b.session_id,
+                turn_id: pending_b.turn_id,
+                tool_id: pending_b.tool_id,
+                registration_sequence: pending_b.registration_sequence,
+                answers: serde_json::json!({ "0": "current" }),
+            },
+        )
+        .await
+        .expect("live B authorization should succeed");
+        assert_eq!(
+            receiver_b
+                .await
+                .expect("B receiver should remain live")
+                .answers,
+            serde_json::json!({ "0": "current" })
         );
     }
 }

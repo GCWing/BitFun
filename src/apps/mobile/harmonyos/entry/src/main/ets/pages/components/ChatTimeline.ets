@@ -1,4 +1,4 @@
-import { ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, toConversationUiMessage } from '../state/ConversationUiModels';
+import { ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiUserInputIdentity, toConversationUiMessage } from '../state/ConversationUiModels';
 import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ChatTimelineItem, ChatTimelineRevisionTracker } from '../../services/ChatTimelineProjector';
@@ -33,8 +33,8 @@ export struct ChatTimeline {
     (_toolId: string, _updatedInput?: Object) => {};
   @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
   @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
-  @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
-    (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
+  @Event onAnswerQuestion: (identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer) => void =
+    (_identity: ConversationUiUserInputIdentity, _answers: ConversationUiQuestionAnswer) => {};
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
   @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
@@ -233,8 +233,8 @@ export struct ChatTimeline {
       onCancelTool: (toolId: string) => {
         this.onCancelTool(toolId);
       },
-      onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => {
-        this.onAnswerQuestion(toolId, answers);
+      onAnswerQuestion: (identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer) => {
+        this.onAnswerQuestion(identity, answers);
       },
       onCopyMessage: (text: string) => {
         this.onCopyMessage(text);

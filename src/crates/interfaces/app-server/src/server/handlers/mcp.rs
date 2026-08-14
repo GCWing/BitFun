@@ -1,70 +1,36 @@
-use std::sync::Arc;
-
 use agent_client_protocol::{Builder, HandleDispatchFrom};
 use bitfun_app_server_protocol::mcp::*;
 
-use super::capability::management_handler;
-use crate::management::{AppManagementService, MCP_CAPABILITY};
+use super::capability::unsupported_management_handler;
+use crate::management::MCP_CAPABILITY;
 use crate::role::{AppClient, AppServer};
 
-pub(in crate::server) fn builder(
-    management: Option<Arc<AppManagementService>>,
-) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
+pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
         .name("mcp handlers")
         .on_receive_request(
-            management_handler!(
-                management,
-                MCP_CAPABILITY,
-                ListMcpServersRequest,
-                list_mcp_servers
-            ),
+            unsupported_management_handler!(MCP_CAPABILITY, ListMcpServersRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MCP_CAPABILITY,
-                ToggleMcpServerRequest,
-                toggle_mcp_server
-            ),
+            unsupported_management_handler!(MCP_CAPABILITY, ToggleMcpServerRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MCP_CAPABILITY,
-                AddMcpServerRequest,
-                add_mcp_server
-            ),
+            unsupported_management_handler!(MCP_CAPABILITY, AddMcpServerRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MCP_CAPABILITY,
-                DeleteMcpServerRequest,
-                delete_mcp_server
-            ),
+            unsupported_management_handler!(MCP_CAPABILITY, DeleteMcpServerRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MCP_CAPABILITY,
-                ExternalMcpDecisionRequest,
-                external_mcp_decision
-            ),
+            unsupported_management_handler!(MCP_CAPABILITY, ExternalMcpDecisionRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                MCP_CAPABILITY,
-                McpConflictChoiceRequest,
-                mcp_conflict_choice
-            ),
+            unsupported_management_handler!(MCP_CAPABILITY, McpConflictChoiceRequest),
             agent_client_protocol::on_receive_request!(),
         )
 }

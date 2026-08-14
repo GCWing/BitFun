@@ -13,7 +13,8 @@ import {
   ConversationUiModelCatalog,
   ConversationUiQuestionAnswer,
   ConversationUiSelectedImage,
-  ConversationUiSession
+  ConversationUiSession,
+  ConversationUiUserInputIdentity
 } from '../state/ConversationUiModels';
 import { ComposerBar, ComposerPresentation } from './ComposerBar';
 import { ConversationHeader } from './ConversationHeader';
@@ -77,8 +78,8 @@ export struct ConversationView {
     (_toolId: string, _updatedInput?: Object) => {};
   @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
   @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
-  @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
-    (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
+  @Event onAnswerQuestion: (identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer) => void =
+    (_identity: ConversationUiUserInputIdentity, _answers: ConversationUiQuestionAnswer) => {};
   @Event onRenameSession: (title: string) => void = (_title: string) => {};
   @Event onCopyMessage: (text: string) => void = (_text: string) => {};
   @Event onRetryMessage: (text: string) => void = (_text: string) => {};
@@ -261,8 +262,8 @@ export struct ConversationView {
       onCancelTool: (toolId: string) => {
         this.onCancelTool(toolId);
       },
-      onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => {
-        this.onAnswerQuestion(toolId, answers);
+      onAnswerQuestion: (identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer) => {
+        this.onAnswerQuestion(identity, answers);
       },
       onCopyMessage: (text: string) => {
         this.onCopyMessage(text);

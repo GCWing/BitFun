@@ -10,19 +10,20 @@ use std::sync::{Arc, Mutex};
 use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
-    AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnPort,
-    AgentDialogTurnRequest, AgentInputAttachment, AgentInteractionResponsePort,
-    AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
-    AgentLocalCommandTurnRecordResult, AgentMessageWorkspaceReferencesRequest,
-    AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
-    AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
-    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
-    AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
-    AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
-    AgentSessionModelPort, AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentBackgroundResultRequest, AgentContextReloadPort, AgentContextReloadRequest,
+    AgentDialogSteerRequest, AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment,
+    AgentInteractionResponsePort, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
+    AgentLocalCommandTurnRecordRequest, AgentLocalCommandTurnRecordResult,
+    AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
+    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
+    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
+    AgentSessionForkResult, AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
+    AgentSessionLineagePort, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionManagementPort,
+    AgentSessionModePort, AgentSessionModeUpdateRequest, AgentSessionModelPort,
+    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
     AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
     AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
     AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
@@ -45,6 +46,7 @@ use bitfun_runtime_services::RuntimeServices;
 use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 use crate::permission::{PermissionRequestEventReceiver, PermissionRequestManager};
 use crate::post_call_hooks::RuntimeHookRegistry;
+use crate::user_questions::PendingUserInput;
 use bitfun_runtime_ports::{PermissionReply, PermissionReplySource, PermissionRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -69,6 +71,8 @@ pub enum RuntimeError {
     MissingSessionManagementPort,
     #[error("agent session lineage port is not registered")]
     MissingSessionLineagePort,
+    #[error("agent context reload port is not registered")]
+    MissingContextReloadPort,
     #[error("agent workspace reference port is not registered")]
     MissingWorkspaceReferencePort,
     #[error("agent session restore port is not registered")]
@@ -121,6 +125,8 @@ pub struct AgentSessionRestoreRequest {
 pub struct AgentSessionRestoreResult {
     pub session: AgentSessionSummary,
     pub state: crate::session_state::SessionState,
+    pub transcript: SessionTranscript,
+    pub pending_user_inputs: Vec<PendingUserInput>,
 }
 
 #[async_trait::async_trait]
@@ -184,6 +190,7 @@ pub struct AgentRuntime {
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
     session_lineage: Option<Arc<dyn AgentSessionLineagePort>>,
+    context_reload: Option<Arc<dyn AgentContextReloadPort>>,
     workspace_references: Option<Arc<dyn AgentWorkspaceReferencePort>>,
     session_close: Option<Arc<dyn AgentSessionClosePort>>,
     session_mode: Option<Arc<dyn AgentSessionModePort>>,
@@ -211,6 +218,122 @@ pub struct AgentRuntime {
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
     plugin_runtime: PluginRuntimeBinding,
+}
+
+fn ensure_provider_identity(
+    operation: &str,
+    field: &str,
+    expected: &str,
+    actual: &str,
+) -> Result<(), RuntimeError> {
+    if expected == actual {
+        return Ok(());
+    }
+    Err(PortError::new(
+        PortErrorKind::OutcomeUnknown,
+        format!(
+            "{operation} provider returned {field} '{actual}' for requested {field} '{expected}'"
+        ),
+    )
+    .into())
+}
+
+fn ensure_optional_provider_identity(
+    operation: &str,
+    field: &str,
+    expected: Option<&str>,
+    actual: Option<&str>,
+) -> Result<(), RuntimeError> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    let Some(actual) = actual else {
+        return Err(PortError::new(
+            PortErrorKind::OutcomeUnknown,
+            format!("{operation} provider omitted {field} for requested {field} '{expected}'"),
+        )
+        .into());
+    };
+    ensure_provider_identity(operation, field, expected, actual)
+}
+
+fn validate_restored_pending_user_inputs(
+    requested_session_id: &str,
+    state: &crate::session_state::SessionState,
+    pending_user_inputs: &[PendingUserInput],
+) -> Result<(), RuntimeError> {
+    let active_turn_id = match state {
+        crate::session_state::SessionState::Processing {
+            current_turn_id, ..
+        } => Some(current_turn_id.as_str()),
+        crate::session_state::SessionState::Idle
+        | crate::session_state::SessionState::Error { .. } => None,
+    };
+
+    if active_turn_id.is_none() && !pending_user_inputs.is_empty() {
+        return Err(PortError::new(
+            PortErrorKind::OutcomeUnknown,
+            "restore session provider returned pending user input without an active turn",
+        )
+        .into());
+    }
+
+    for pending in pending_user_inputs {
+        ensure_provider_identity(
+            "restore session pending user input",
+            "session_id",
+            requested_session_id,
+            &pending.session_id,
+        )?;
+        if let Some(active_turn_id) = active_turn_id {
+            ensure_provider_identity(
+                "restore session pending user input",
+                "turn_id",
+                active_turn_id,
+                &pending.turn_id,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_revert_identity(
+    operation: &str,
+    requested_session_id: &str,
+    result: &AgentSessionRevertResult,
+) -> Result<(), RuntimeError> {
+    ensure_provider_identity(
+        operation,
+        "session_id",
+        requested_session_id,
+        &result.session_id,
+    )?;
+    ensure_provider_identity(
+        operation,
+        "transcript.session_id",
+        requested_session_id,
+        &result.transcript.session_id,
+    )
+}
+
+fn validate_cancellation_identity(
+    operation: &str,
+    requested_session_id: &str,
+    requested_turn_id: Option<&str>,
+    result: &AgentTurnCancellationResult,
+) -> Result<(), RuntimeError> {
+    ensure_provider_identity(
+        operation,
+        "session_id",
+        requested_session_id,
+        &result.session_id,
+    )?;
+    ensure_optional_provider_identity(
+        operation,
+        "turn_id",
+        requested_turn_id,
+        result.turn_id.as_deref(),
+    )
 }
 
 impl std::fmt::Debug for AgentRuntime {
@@ -408,6 +531,7 @@ pub struct AgentRuntimeBuilder {
     submission: Option<Arc<dyn AgentSubmissionPort>>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
     session_lineage: Option<Arc<dyn AgentSessionLineagePort>>,
+    context_reload: Option<Arc<dyn AgentContextReloadPort>>,
     workspace_references: Option<Arc<dyn AgentWorkspaceReferencePort>>,
     session_close: Option<Arc<dyn AgentSessionClosePort>>,
     session_mode: Option<Arc<dyn AgentSessionModePort>>,
@@ -457,6 +581,11 @@ impl AgentRuntimeBuilder {
 
     pub fn with_session_lineage_port(mut self, port: Arc<dyn AgentSessionLineagePort>) -> Self {
         self.session_lineage = Some(port);
+        self
+    }
+
+    pub fn with_context_reload_port(mut self, port: Arc<dyn AgentContextReloadPort>) -> Self {
+        self.context_reload = Some(port);
         self
     }
 
@@ -627,6 +756,7 @@ impl AgentRuntimeBuilder {
             submission,
             session_management,
             session_lineage,
+            context_reload,
             workspace_references,
             session_close,
             session_mode,
@@ -664,6 +794,7 @@ impl AgentRuntimeBuilder {
             submission: submission.ok_or(RuntimeBuildError::MissingSubmissionPort)?,
             session_management,
             session_lineage,
+            context_reload,
             workspace_references,
             session_close,
             session_mode,
@@ -792,6 +923,18 @@ pub struct AgentRunHandle {
 }
 
 impl AgentRuntime {
+    pub async fn reload_context(
+        &self,
+        request: AgentContextReloadRequest,
+    ) -> Result<(), RuntimeError> {
+        self.context_reload
+            .as_ref()
+            .ok_or(RuntimeError::MissingContextReloadPort)?
+            .reload_session_context(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
     pub fn subscribe_events(&self) -> Result<AgentEventReceiver, RuntimeError> {
         self.event_source
             .as_ref()
@@ -996,7 +1139,7 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)?;
         if result.session_id != session_id {
             return Err(PortError::new(
-                PortErrorKind::Backend,
+                PortErrorKind::OutcomeUnknown,
                 format!(
                     "agent submission provider returned session_id '{}' for requested session_id '{}'",
                     result.session_id, session_id
@@ -1019,7 +1162,7 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)?;
         if result.session_id != session_id {
             return Err(PortError::new(
-                PortErrorKind::Backend,
+                PortErrorKind::OutcomeUnknown,
                 format!(
                     "agent submission provider returned session_id '{}' for requested transient session_id '{}'",
                     result.session_id, session_id
@@ -1125,9 +1268,18 @@ impl AgentRuntime {
             .local_command_turn
             .as_ref()
             .ok_or(RuntimeError::MissingLocalCommandTurnPort)?;
-        port.record_completed_local_command_turn(request)
+        let requested_turn_id = request.turn_id.clone();
+        let result = port
+            .record_completed_local_command_turn(request)
             .await
-            .map_err(RuntimeError::from)
+            .map_err(RuntimeError::from)?;
+        ensure_optional_provider_identity(
+            "agent local command turn",
+            "turn_id",
+            requested_turn_id.as_deref(),
+            Some(result.turn_id.as_str()),
+        )?;
+        Ok(result)
     }
 
     pub async fn run_user_shell_command(
@@ -1148,7 +1300,7 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)?;
         if result.session_id != requested_session_id || result.turn_id != requested_turn_id {
             return Err(PortError::new(
-                PortErrorKind::Backend,
+                PortErrorKind::OutcomeUnknown,
                 format!(
                     "agent user shell provider returned identity '{}/{}' for requested identity '{}/{}'",
                     result.session_id, result.turn_id, requested_session_id, requested_turn_id
@@ -1217,9 +1369,25 @@ impl AgentRuntime {
                 "agent session compaction port is not registered",
             ))
         })?;
-        port.start_session_compaction(request)
+        let requested_session_id = request.session_id.clone();
+        let requested_turn_id = request.turn_id.clone();
+        let result = port
+            .start_session_compaction(request)
             .await
-            .map_err(RuntimeError::from)
+            .map_err(RuntimeError::from)?;
+        ensure_provider_identity(
+            "agent session compaction",
+            "session_id",
+            &requested_session_id,
+            &result.session_id,
+        )?;
+        ensure_provider_identity(
+            "agent session compaction",
+            "turn_id",
+            &requested_turn_id,
+            &result.turn_id,
+        )?;
+        Ok(result)
     }
 
     pub async fn undo_session(
@@ -1232,7 +1400,13 @@ impl AgentRuntime {
                 "agent session revert port is not registered",
             ))
         })?;
-        port.undo_session(request).await.map_err(RuntimeError::from)
+        let requested_session_id = request.session_id.clone();
+        let result = port
+            .undo_session(request)
+            .await
+            .map_err(RuntimeError::from)?;
+        validate_revert_identity("agent session undo", &requested_session_id, &result)?;
+        Ok(result)
     }
 
     pub async fn redo_session(
@@ -1245,7 +1419,13 @@ impl AgentRuntime {
                 "agent session revert port is not registered",
             ))
         })?;
-        port.redo_session(request).await.map_err(RuntimeError::from)
+        let requested_session_id = request.session_id.clone();
+        let result = port
+            .redo_session(request)
+            .await
+            .map_err(RuntimeError::from)?;
+        validate_revert_identity("agent session redo", &requested_session_id, &result)?;
+        Ok(result)
     }
 
     pub async fn rollback_session_to_turn(
@@ -1340,14 +1520,33 @@ impl AgentRuntime {
         &self,
         request: AgentSessionRestoreRequest,
     ) -> Result<AgentSessionRestoreResult, RuntimeError> {
+        let requested_session_id = request.session_id.clone();
         let session_restore = self
             .session_restore
             .as_ref()
             .ok_or(RuntimeError::MissingSessionRestorePort)?;
-        session_restore
+        let result = session_restore
             .restore_session(request)
             .await
-            .map_err(RuntimeError::from)
+            .map_err(RuntimeError::from)?;
+        ensure_provider_identity(
+            "restore session",
+            "session_id",
+            &requested_session_id,
+            &result.session.session_id,
+        )?;
+        ensure_provider_identity(
+            "restore session",
+            "transcript.session_id",
+            &requested_session_id,
+            &result.transcript.session_id,
+        )?;
+        validate_restored_pending_user_inputs(
+            &requested_session_id,
+            &result.state,
+            &result.pending_user_inputs,
+        )?;
+        Ok(result)
     }
 
     pub async fn read_session_transcript(
@@ -1434,10 +1633,19 @@ impl AgentRuntime {
         &self,
         request: AgentSubmissionRequest,
     ) -> Result<AgentSubmissionResult, RuntimeError> {
-        self.submission
+        let requested_turn_id = request.turn_id.clone();
+        let result = self
+            .submission
             .submit_message(request)
             .await
-            .map_err(RuntimeError::from)
+            .map_err(RuntimeError::from)?;
+        ensure_optional_provider_identity(
+            "agent submission",
+            "turn_id",
+            requested_turn_id.as_deref(),
+            Some(result.turn_id.as_str()),
+        )?;
+        Ok(result)
     }
 
     pub async fn submit_dialog_turn(
@@ -1445,6 +1653,7 @@ impl AgentRuntime {
         request: AgentDialogTurnRequest,
     ) -> Result<DialogSubmitOutcome, RuntimeError> {
         let requested_session_id = request.session_id.clone();
+        let requested_turn_id = request.turn_id.clone();
         let dialog_turn = self
             .dialog_turn
             .as_ref()
@@ -1453,13 +1662,19 @@ impl AgentRuntime {
             .submit_dialog_turn(request)
             .await
             .map_err(RuntimeError::from)?;
-        let returned_session_id = match &outcome {
-            DialogSubmitOutcome::Started { session_id, .. }
-            | DialogSubmitOutcome::Queued { session_id, .. } => session_id,
+        let (returned_session_id, returned_turn_id) = match &outcome {
+            DialogSubmitOutcome::Started {
+                session_id,
+                turn_id,
+            }
+            | DialogSubmitOutcome::Queued {
+                session_id,
+                turn_id,
+            } => (session_id, turn_id),
         };
         if returned_session_id != &requested_session_id {
             return Err(PortError::new(
-                PortErrorKind::Backend,
+                PortErrorKind::OutcomeUnknown,
                 format!(
                     "agent dialog provider returned session_id '{}' for requested session_id '{}'",
                     returned_session_id, requested_session_id
@@ -1467,6 +1682,12 @@ impl AgentRuntime {
             )
             .into());
         }
+        ensure_optional_provider_identity(
+            "agent dialog",
+            "turn_id",
+            requested_turn_id.as_deref(),
+            Some(returned_turn_id.as_str()),
+        )?;
         Ok(outcome)
     }
 
@@ -1491,7 +1712,7 @@ impl AgentRuntime {
         } = &outcome;
         if session_id != &requested_session_id || turn_id != &requested_turn_id {
             return Err(PortError::new(
-                PortErrorKind::Backend,
+                PortErrorKind::OutcomeUnknown,
                 format!(
                     "agent dialog provider returned session_id '{}' and turn_id '{}' for requested session_id '{}' and turn_id '{}'",
                     session_id, turn_id, requested_session_id, requested_turn_id
@@ -1586,14 +1807,23 @@ impl AgentRuntime {
         &self,
         request: AgentTurnCancellationRequest,
     ) -> Result<AgentTurnCancellationResult, RuntimeError> {
+        let requested_session_id = request.session_id.clone();
+        let requested_turn_id = request.turn_id.clone();
         let cancellation = self
             .cancellation
             .as_ref()
             .ok_or(RuntimeError::MissingCancellationPort)?;
-        cancellation
+        let result = cancellation
             .cancel_turn(request)
             .await
-            .map_err(RuntimeError::from)
+            .map_err(RuntimeError::from)?;
+        validate_cancellation_identity(
+            "agent turn cancellation",
+            &requested_session_id,
+            requested_turn_id.as_deref(),
+            &result,
+        )?;
+        Ok(result)
     }
 
     /// Cancels one inspected descendant through the authoritative lineage
@@ -1603,14 +1833,23 @@ impl AgentRuntime {
         &self,
         request: AgentSessionLineageCancellationRequest,
     ) -> Result<AgentTurnCancellationResult, RuntimeError> {
+        let requested_session_id = request.session_id.clone();
+        let requested_turn_id = request.expected_active_turn_id.clone();
         let lineage = self
             .session_lineage
             .as_ref()
             .ok_or(RuntimeError::MissingSessionLineagePort)?;
-        lineage
+        let result = lineage
             .cancel_lineage_session(request)
             .await
-            .map_err(RuntimeError::from)
+            .map_err(RuntimeError::from)?;
+        validate_cancellation_identity(
+            "agent lineage cancellation",
+            &requested_session_id,
+            requested_turn_id.as_deref(),
+            &result,
+        )?;
+        Ok(result)
     }
 
     pub async fn publish_event(&self, event: RuntimeEventEnvelope) -> Result<(), RuntimeError> {
@@ -1688,24 +1927,25 @@ mod tests {
     use super::*;
     use crate::session_state::SessionState;
     use bitfun_runtime_ports::{
-        AgentBackgroundResultRequest, AgentDialogTurnRequest, AgentLifecycleDeliveryPort,
-        AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
-        AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionLifecycleStatus,
-        AgentSessionLineageCancellationRequest, AgentSessionLineageEntry, AgentSessionLineagePort,
-        AgentSessionLineageRequest, AgentSessionLineageSnapshot,
-        AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionManagementPort,
-        AgentSessionModePort, AgentSessionModeUpdateRequest, AgentSessionRevertPort,
-        AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
-        AgentSessionWorkspaceRequest, AgentSubmissionResult, AgentThreadGoalDeliveryKind,
-        AgentThreadGoalDeliveryRequest, AgentThreadGoalManagementPort, AgentTurnCancellationResult,
-        AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
-        ClockPort, DialogQueuePriority, DialogSubmissionPolicy, DialogSubmitOutcome,
-        FileSystemPort, PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
-        PluginRuntimeClient, PluginRuntimeUnavailableReason, PortErrorKind, PortResult,
-        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort,
-        SessionStorageKind, SessionStoragePathRequest, SessionStoragePathResolution,
-        SessionStorePort, SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest,
-        ThreadGoal, ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
+        AgentBackgroundResultRequest, AgentContextReloadTarget, AgentDialogTurnRequest,
+        AgentLifecycleDeliveryPort, AgentSessionCompactionPort, AgentSessionCompactionRequest,
+        AgentSessionCompactionResult, AgentSessionCreateResult, AgentSessionDeleteRequest,
+        AgentSessionLifecycleStatus, AgentSessionLineageCancellationRequest,
+        AgentSessionLineageEntry, AgentSessionLineagePort, AgentSessionLineageRequest,
+        AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
+        AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
+        AgentSessionRevertPort, AgentSessionRevertRequest, AgentSessionRevertResult,
+        AgentSessionSummary, AgentSessionWorkspaceRequest, AgentSubmissionResult,
+        AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest, AgentThreadGoalManagementPort,
+        AgentTurnCancellationResult, AgentUserShellCommandPort, AgentUserShellCommandRequest,
+        AgentUserShellCommandResult, ClockPort, DialogQueuePriority, DialogSubmissionPolicy,
+        DialogSubmitOutcome, FileSystemPort, PluginDispatchEnvelope, PluginResponseEnvelope,
+        PluginRuntimeAvailability, PluginRuntimeClient, PluginRuntimeUnavailableReason,
+        PortErrorKind, PortResult, RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability,
+        RuntimeServicePort, SessionStorageKind, SessionStoragePathRequest,
+        SessionStoragePathResolution, SessionStorePort, SessionTranscript, SessionTranscriptReader,
+        SessionTranscriptRequest, ThreadGoal, ThreadGoalStatus, TranscriptContent,
+        TranscriptMessage, WorkspacePort,
     };
     use bitfun_runtime_services::RuntimeServicesBuilder;
 
@@ -1758,6 +1998,7 @@ mod tests {
         submitted_messages: Mutex<Vec<AgentSubmissionRequest>>,
         cancelled_turns: Mutex<Vec<AgentTurnCancellationRequest>>,
         compaction_requests: Mutex<Vec<AgentSessionCompactionRequest>>,
+        compaction_result_identity: Mutex<Option<(String, String)>>,
         before_turn_fork_requests: Mutex<Vec<AgentSessionForkBeforeTurnRequest>>,
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
         deleted_sessions: Mutex<Vec<AgentSessionDeleteRequest>>,
@@ -1765,10 +2006,18 @@ mod tests {
         archived_sessions: Mutex<Vec<AgentSessionArchiveRequest>>,
         archive_state_updates: Mutex<Vec<AgentSessionArchiveStateRequest>>,
         local_command_turns: Mutex<Vec<AgentLocalCommandTurnRecordRequest>>,
+        local_command_result_turn_id: Mutex<Option<String>>,
         user_shell_commands: Mutex<Vec<AgentUserShellCommandRequest>>,
         restored_sessions: Mutex<Vec<AgentSessionRestoreRequest>>,
+        restore_result_identity: Mutex<Option<(String, String)>>,
+        restore_state: Mutex<Option<SessionState>>,
+        restore_pending_user_inputs: Mutex<Vec<PendingUserInput>>,
+        context_reloads: Mutex<Vec<AgentContextReloadRequest>>,
         mode_updates: Mutex<Vec<AgentSessionModeUpdateRequest>>,
         undo_requests: Mutex<Vec<AgentSessionRevertRequest>>,
+        revert_result_identity: Mutex<Option<(String, String)>>,
+        submission_result_turn_id: Mutex<Option<String>>,
+        cancellation_result_identity: Mutex<Option<(String, Option<String>)>>,
         transcript_requests: Mutex<Vec<SessionTranscriptRequest>>,
         lineage_requests: Mutex<Vec<AgentSessionLineageRequest>>,
         lineage_transcript_requests: Mutex<Vec<AgentSessionLineageTranscriptRequest>>,
@@ -1927,9 +2176,16 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(request.clone());
+            let identity = self.compaction_result_identity.lock().unwrap().clone();
             Ok(AgentSessionCompactionResult {
-                session_id: request.session_id,
-                turn_id: request.turn_id,
+                session_id: identity
+                    .as_ref()
+                    .map(|identity| identity.0.clone())
+                    .unwrap_or_else(|| request.session_id.clone()),
+                turn_id: identity
+                    .as_ref()
+                    .map(|identity| identity.1.clone())
+                    .unwrap_or(request.turn_id),
             })
         }
     }
@@ -1967,10 +2223,16 @@ mod tests {
             request: AgentSessionRevertRequest,
         ) -> PortResult<AgentSessionRevertResult> {
             self.undo_requests.lock().unwrap().push(request.clone());
+            let identity = self.revert_result_identity.lock().unwrap().clone();
             Ok(AgentSessionRevertResult {
-                session_id: request.session_id.clone(),
+                session_id: identity
+                    .as_ref()
+                    .map(|identity| identity.0.clone())
+                    .unwrap_or_else(|| request.session_id.clone()),
                 transcript: SessionTranscript {
-                    session_id: request.session_id,
+                    session_id: identity
+                        .map(|identity| identity.1)
+                        .unwrap_or(request.session_id),
                     messages: Vec::new(),
                 },
                 composer: bitfun_runtime_ports::AgentSessionComposerUpdate::Preserve,
@@ -2001,9 +2263,12 @@ mod tests {
         ) -> PortResult<AgentLocalCommandTurnRecordResult> {
             let mut turns = self.local_command_turns.lock().unwrap();
             let storage_turn_index = turns.len();
-            let turn_id = request
-                .turn_id
+            let turn_id = self
+                .local_command_result_turn_id
+                .lock()
+                .unwrap()
                 .clone()
+                .or_else(|| request.turn_id.clone())
                 .unwrap_or_else(|| format!("local-command-{storage_turn_index}"));
             turns.push(request);
             Ok(AgentLocalCommandTurnRecordResult {
@@ -2036,10 +2301,17 @@ mod tests {
             &self,
             request: AgentSessionRestoreRequest,
         ) -> PortResult<AgentSessionRestoreResult> {
+            let requested_session_id = request.session_id.clone();
             self.restored_sessions.lock().unwrap().push(request);
+            let (session_id, transcript_session_id) = self
+                .restore_result_identity
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| (requested_session_id.clone(), requested_session_id.clone()));
             Ok(AgentSessionRestoreResult {
                 session: AgentSessionSummary {
-                    session_id: "session_1".to_string(),
+                    session_id,
                     session_name: "Main".to_string(),
                     agent_type: "agentic".to_string(),
                     model_id: Some("provider/model".to_string()),
@@ -2050,7 +2322,17 @@ mod tests {
                     created_at_ms: 1000,
                     last_active_at_ms: 2000,
                 },
-                state: SessionState::Idle,
+                state: self
+                    .restore_state
+                    .lock()
+                    .unwrap()
+                    .clone()
+                    .unwrap_or(SessionState::Idle),
+                transcript: SessionTranscript {
+                    session_id: transcript_session_id,
+                    messages: Vec::new(),
+                },
+                pending_user_inputs: self.restore_pending_user_inputs.lock().unwrap().clone(),
             })
         }
     }
@@ -2218,6 +2500,14 @@ mod tests {
             ))
         }
 
+        async fn create_transient_session_with_id(
+            &self,
+            session_id: String,
+            request: AgentSessionCreateRequest,
+        ) -> PortResult<AgentSessionCreateResult> {
+            self.create_session_with_id(session_id, request).await
+        }
+
         async fn submit_message(
             &self,
             request: AgentSubmissionRequest,
@@ -2227,8 +2517,12 @@ mod tests {
                 .unwrap()
                 .push(request.clone());
             Ok(AgentSubmissionResult {
-                turn_id: request
-                    .turn_id
+                turn_id: self
+                    .submission_result_turn_id
+                    .lock()
+                    .unwrap()
+                    .clone()
+                    .or(request.turn_id)
                     .unwrap_or_else(|| "generated_turn".to_string()),
                 accepted: true,
             })
@@ -2277,11 +2571,28 @@ mod tests {
             request: AgentTurnCancellationRequest,
         ) -> PortResult<AgentTurnCancellationResult> {
             self.cancelled_turns.lock().unwrap().push(request.clone());
+            let identity = self.cancellation_result_identity.lock().unwrap().clone();
             Ok(AgentTurnCancellationResult {
-                session_id: request.session_id,
-                turn_id: request.turn_id,
+                session_id: identity
+                    .as_ref()
+                    .map(|identity| identity.0.clone())
+                    .unwrap_or(request.session_id),
+                turn_id: identity
+                    .map(|identity| identity.1)
+                    .unwrap_or(request.turn_id),
                 requested: true,
             })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AgentContextReloadPort for FakeAgentRuntimePorts {
+        async fn reload_session_context(
+            &self,
+            request: AgentContextReloadRequest,
+        ) -> PortResult<()> {
+            self.context_reloads.lock().unwrap().push(request);
+            Ok(())
         }
     }
 
@@ -2328,6 +2639,34 @@ mod tests {
     async fn builder_requires_submission_port() {
         let err = AgentRuntimeBuilder::new().build().unwrap_err();
         assert_eq!(err, RuntimeBuildError::MissingSubmissionPort);
+    }
+
+    #[tokio::test]
+    async fn context_reload_is_optional_and_delegates_to_the_registered_owner() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let request = AgentContextReloadRequest {
+            session_id: "session-reload".to_string(),
+            target: AgentContextReloadTarget::Skills,
+        };
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .build()
+            .expect("runtime");
+        assert_eq!(
+            runtime.reload_context(request.clone()).await.unwrap_err(),
+            RuntimeError::MissingContextReloadPort
+        );
+
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_context_reload_port(ports.clone())
+            .build()
+            .expect("runtime with context owner");
+        runtime
+            .reload_context(request.clone())
+            .await
+            .expect("reload delegates");
+        assert_eq!(*ports.context_reloads.lock().unwrap(), vec![request]);
     }
 
     #[tokio::test]
@@ -2387,6 +2726,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn session_compaction_identity_mismatch_is_outcome_unknown() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.compaction_result_identity.lock().unwrap() =
+            Some(("other-session".to_string(), "other-turn".to_string()));
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_session_compaction_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .start_session_compaction(AgentSessionCompactionRequest {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+            })
+            .await
+            .expect_err("provider identity mismatch must fail closed");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::OutcomeUnknown,
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
     async fn session_fork_before_turn_forwards_exact_boundary_identity() {
         let ports = Arc::new(FakeAgentRuntimePorts::default());
         let runtime = AgentRuntimeBuilder::new()
@@ -2436,6 +2803,37 @@ mod tests {
 
         assert_eq!(result.hidden_turn_count, 1);
         assert_eq!(ports.undo_requests.lock().unwrap().as_slice(), &[request]);
+    }
+
+    #[tokio::test]
+    async fn session_revert_identity_mismatch_is_outcome_unknown() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.revert_result_identity.lock().unwrap() =
+            Some(("other-session".to_string(), "other-transcript".to_string()));
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_session_revert_port(ports)
+            .build()
+            .expect("runtime");
+        let request = AgentSessionRevertRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session-1".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        for result in [
+            runtime.undo_session(request.clone()).await,
+            runtime.redo_session(request.clone()).await,
+        ] {
+            assert!(matches!(
+                result.expect_err("provider identity mismatch must fail closed"),
+                RuntimeError::Port(PortError {
+                    kind: PortErrorKind::OutcomeUnknown,
+                    ..
+                })
+            ));
+        }
     }
 
     #[tokio::test]
@@ -2537,7 +2935,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_session_with_id_rejects_provider_identity_mismatch() {
+    async fn create_session_with_id_identity_mismatch_is_outcome_unknown() {
         let ports = Arc::new(FakeAgentRuntimePorts::default());
         *ports.exact_session_result_id.lock().unwrap() = Some("other-session-id".to_string());
         let runtime = AgentRuntimeBuilder::new()
@@ -2567,7 +2965,44 @@ mod tests {
         assert!(matches!(
             error,
             RuntimeError::Port(PortError {
-                kind: PortErrorKind::Backend,
+                kind: PortErrorKind::OutcomeUnknown,
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn create_transient_session_with_id_identity_mismatch_is_outcome_unknown() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.exact_session_result_id.lock().unwrap() = Some("other-session-id".to_string());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .create_transient_session_with_id(
+                "fixed-session-id".to_string(),
+                AgentSessionCreateRequest {
+                    session_name: "Transient session".to_string(),
+                    agent_type: "agentic".to_string(),
+                    workspace_path: Some("/workspace/project".to_string()),
+                    project_workspace_path: None,
+                    execution_target: None,
+                    workspace_id: None,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    model_id: None,
+                    metadata: serde_json::Map::new(),
+                },
+            )
+            .await
+            .expect_err("runtime must reject a transient provider identity mismatch");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::OutcomeUnknown,
                 ..
             })
         ));
@@ -2642,6 +3077,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn submit_turn_identity_mismatch_is_outcome_unknown() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.submission_result_turn_id.lock().unwrap() = Some("other-turn".to_string());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .submit_turn(AgentSubmissionRequest {
+                session_id: "session-1".to_string(),
+                message: "hello".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                source: Some(AgentSubmissionSource::Cli),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("provider identity mismatch must fail closed");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::OutcomeUnknown,
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
     async fn cancel_turn_requires_registered_cancellation_port() {
         let ports = Arc::new(FakeAgentRuntimePorts::default());
         let runtime = AgentRuntimeBuilder::new()
@@ -2696,6 +3161,39 @@ mod tests {
                 .as_deref(),
             Some("requester_session")
         );
+    }
+
+    #[tokio::test]
+    async fn cancellation_identity_mismatch_is_outcome_unknown() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.cancellation_result_identity.lock().unwrap() =
+            Some(("other-session".to_string(), Some("other-turn".to_string())));
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_cancellation_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .cancel_turn(AgentTurnCancellationRequest {
+                session_id: "session-1".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                source: None,
+                requester_session_id: None,
+                reason: None,
+                wait_timeout_ms: None,
+                cancel_descendants: true,
+            })
+            .await
+            .expect_err("provider identity mismatch must fail closed");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::OutcomeUnknown,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]
@@ -2853,6 +3351,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn local_command_turn_identity_mismatch_is_outcome_unknown() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.local_command_result_turn_id.lock().unwrap() = Some("other-turn".to_string());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_local_command_turn_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .record_completed_local_command_turn(AgentLocalCommandTurnRecordRequest {
+                session_id: "session-1".to_string(),
+                content: "report".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                timestamp_ms: None,
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("provider identity mismatch must fail closed");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::OutcomeUnknown,
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
     async fn user_shell_command_requires_registered_port() {
         let ports = Arc::new(FakeAgentRuntimePorts::default());
         let runtime = AgentRuntimeBuilder::new()
@@ -2908,6 +3436,48 @@ mod tests {
             ports.user_shell_commands.lock().unwrap().as_slice(),
             [request]
         );
+    }
+
+    #[tokio::test]
+    async fn user_shell_command_identity_mismatch_is_outcome_unknown() {
+        #[derive(Debug)]
+        struct MismatchedUserShellCommandPort;
+
+        #[async_trait::async_trait]
+        impl AgentUserShellCommandPort for MismatchedUserShellCommandPort {
+            async fn run_user_shell_command(
+                &self,
+                request: AgentUserShellCommandRequest,
+            ) -> PortResult<AgentUserShellCommandResult> {
+                Ok(AgentUserShellCommandResult {
+                    session_id: request.session_id,
+                    turn_id: "different-turn".to_string(),
+                })
+            }
+        }
+
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(FakeAgentRuntimePorts::default()))
+            .with_user_shell_command_port(Arc::new(MismatchedUserShellCommandPort))
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .run_user_shell_command(AgentUserShellCommandRequest {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                command: "git status --short".to_string(),
+            })
+            .await
+            .expect_err("provider identity mismatch must remain outcome unknown");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::OutcomeUnknown,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]
@@ -3118,6 +3688,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lineage_cancellation_identity_mismatch_is_outcome_unknown() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.cancellation_result_identity.lock().unwrap() =
+            Some(("child_1".to_string(), Some("other-turn".to_string())));
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_session_lineage_port(ports)
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .cancel_lineage_session(AgentSessionLineageCancellationRequest {
+                workspace_path: "/workspace/project".to_string(),
+                root_session_id: "root_1".to_string(),
+                session_id: "child_1".to_string(),
+                expected_active_turn_id: Some("child_turn".to_string()),
+                source: Some(AgentSubmissionSource::Cli),
+                reason: None,
+                wait_timeout_ms: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect_err("provider identity mismatch must fail closed");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::OutcomeUnknown,
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
     async fn session_mode_update_delegates_to_registered_port() {
         let ports = Arc::new(FakeAgentRuntimePorts::default());
         let runtime = AgentRuntimeBuilder::new()
@@ -3194,6 +3799,11 @@ mod tests {
                 error: "recoverable failure".to_string(),
                 recoverable: true,
             },
+            transcript: SessionTranscript {
+                session_id: "session_1".to_string(),
+                messages: Vec::new(),
+            },
+            pending_user_inputs: Vec::new(),
         };
 
         let request_json = serde_json::to_value(request).expect("serialize restore request");
@@ -3225,6 +3835,156 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(error, RuntimeError::MissingSessionRestorePort);
+    }
+
+    #[tokio::test]
+    async fn session_restore_identity_mismatch_is_outcome_unknown() {
+        for returned_identity in [
+            ("wrong-session", "session_1"),
+            ("session_1", "wrong-transcript-session"),
+        ] {
+            let ports = Arc::new(FakeAgentRuntimePorts::default());
+            *ports.restore_result_identity.lock().unwrap() = Some((
+                returned_identity.0.to_string(),
+                returned_identity.1.to_string(),
+            ));
+            let runtime = AgentRuntimeBuilder::new()
+                .with_submission_port(ports.clone())
+                .with_session_restore_port(ports)
+                .build()
+                .expect("runtime");
+
+            let error = runtime
+                .restore_session(AgentSessionRestoreRequest {
+                    workspace_path: "/workspace/project".to_string(),
+                    session_id: "session_1".to_string(),
+                    include_internal: false,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                })
+                .await
+                .unwrap_err();
+
+            assert!(matches!(
+                error,
+                RuntimeError::Port(PortError {
+                    kind: PortErrorKind::OutcomeUnknown,
+                    ..
+                })
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn session_restore_rejects_pending_input_outside_the_active_turn() {
+        let cases = [
+            (SessionState::Idle, "session_1", "turn-1"),
+            (
+                SessionState::Error {
+                    error: "failed".to_string(),
+                    recoverable: true,
+                },
+                "session_1",
+                "turn-1",
+            ),
+            (
+                SessionState::Processing {
+                    current_turn_id: "turn-1".to_string(),
+                    phase: crate::session_state::ProcessingPhase::ToolCalling,
+                },
+                "wrong-session",
+                "turn-1",
+            ),
+            (
+                SessionState::Processing {
+                    current_turn_id: "turn-1".to_string(),
+                    phase: crate::session_state::ProcessingPhase::ToolCalling,
+                },
+                "session_1",
+                "wrong-turn",
+            ),
+        ];
+
+        for (state, pending_session_id, pending_turn_id) in cases {
+            let ports = Arc::new(FakeAgentRuntimePorts::default());
+            *ports.restore_state.lock().unwrap() = Some(state);
+            ports
+                .restore_pending_user_inputs
+                .lock()
+                .unwrap()
+                .push(PendingUserInput {
+                    tool_id: "question-1".to_string(),
+                    session_id: pending_session_id.to_string(),
+                    turn_id: pending_turn_id.to_string(),
+                    source_session_id: "child-session".to_string(),
+                    source_turn_id: "child-turn".to_string(),
+                    registration_sequence: 1,
+                    input: serde_json::json!({ "questions": [] }),
+                });
+            let runtime = AgentRuntimeBuilder::new()
+                .with_submission_port(ports.clone())
+                .with_session_restore_port(ports)
+                .build()
+                .expect("runtime");
+
+            let error = runtime
+                .restore_session(AgentSessionRestoreRequest {
+                    workspace_path: "/workspace/project".to_string(),
+                    session_id: "session_1".to_string(),
+                    include_internal: false,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                })
+                .await
+                .unwrap_err();
+
+            assert!(matches!(
+                error,
+                RuntimeError::Port(PortError {
+                    kind: PortErrorKind::OutcomeUnknown,
+                    ..
+                })
+            ));
+        }
+
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        *ports.restore_state.lock().unwrap() = Some(SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: crate::session_state::ProcessingPhase::ToolCalling,
+        });
+        ports
+            .restore_pending_user_inputs
+            .lock()
+            .unwrap()
+            .push(PendingUserInput {
+                tool_id: "question-1".to_string(),
+                session_id: "session_1".to_string(),
+                turn_id: "turn-1".to_string(),
+                source_session_id: "child-session".to_string(),
+                source_turn_id: "child-turn".to_string(),
+                registration_sequence: 1,
+                input: serde_json::json!({ "questions": [] }),
+            });
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_session_restore_port(ports)
+            .build()
+            .expect("runtime");
+        assert_eq!(
+            runtime
+                .restore_session(AgentSessionRestoreRequest {
+                    workspace_path: "/workspace/project".to_string(),
+                    session_id: "session_1".to_string(),
+                    include_internal: false,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                })
+                .await
+                .expect("matching active input")
+                .pending_user_inputs
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -3427,11 +4187,64 @@ mod tests {
         assert!(matches!(
             error,
             RuntimeError::Port(PortError {
-                kind: PortErrorKind::Backend,
+                kind: PortErrorKind::OutcomeUnknown,
                 ..
             })
         ));
         assert!(error.into_message().contains("requested-session"));
+    }
+
+    #[tokio::test]
+    async fn submit_dialog_turn_rejects_provider_turn_identity_mismatch() {
+        #[derive(Debug)]
+        struct MismatchedDialogTurnPort;
+
+        #[async_trait::async_trait]
+        impl bitfun_runtime_ports::AgentDialogTurnPort for MismatchedDialogTurnPort {
+            async fn submit_dialog_turn(
+                &self,
+                request: AgentDialogTurnRequest,
+            ) -> PortResult<DialogSubmitOutcome> {
+                Ok(DialogSubmitOutcome::Started {
+                    session_id: request.session_id,
+                    turn_id: "different-turn".to_string(),
+                })
+            }
+        }
+
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(FakeAgentRuntimePorts::default()))
+            .with_dialog_turn_port(Arc::new(MismatchedDialogTurnPort))
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: "session-1".to_string(),
+                message: "hello".to_string(),
+                original_message: None,
+                turn_id: Some("turn-1".to_string()),
+                execution: Default::default(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("provider turn mismatch must fail closed");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::OutcomeUnknown,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]
@@ -3569,7 +4382,7 @@ mod tests {
         assert!(matches!(
             error,
             RuntimeError::Port(PortError {
-                kind: PortErrorKind::Backend,
+                kind: PortErrorKind::OutcomeUnknown,
                 ..
             })
         ));

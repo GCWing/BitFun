@@ -247,7 +247,12 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
       );
       setAuthenticatedUserLabel(userIdValue);
 
-      const sessionMgr = new RemoteSessionManager(client);
+      const sessionMgr = new RemoteSessionManager(
+        client,
+        Array.isArray(initialSync.capabilities)
+          ? initialSync.capabilities
+          : [],
+      );
       const store = useMobileStore.getState();
       if (initialSync.has_workspace) {
         if (initialSync.workspace_kind === 'assistant' && initialSync.path) {

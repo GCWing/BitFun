@@ -29,4 +29,5 @@ use bitfun_app_server::{BitfunAppRuntime, BitfunAppServer};
 pub(crate) fn build(runtime: AgentRuntime, event_source: AgentEventSource) -> BitfunAppServer {
     let app_runtime = BitfunAppRuntime::new(runtime, event_source);
     BitfunAppServer::new(app_runtime)
+        .with_max_frame_bytes(crate::routes::websocket::MAX_WS_TEXT_BYTES as u64)
 }

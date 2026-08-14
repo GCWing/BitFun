@@ -11351,6 +11351,9 @@ fn user_input_port_error(
         bitfun_agent_runtime::user_questions::UserInputSendError::MissingChannel { .. } => {
             bitfun_runtime_ports::PortErrorKind::NotFound
         }
+        bitfun_agent_runtime::user_questions::UserInputSendError::IdentityMismatch { .. } => {
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+        }
         bitfun_agent_runtime::user_questions::UserInputSendError::ChannelClosed { .. } => {
             bitfun_runtime_ports::PortErrorKind::Cancelled
         }
@@ -11813,12 +11816,13 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
                 message,
             )
         })?;
+        let requested_session_id = request.session_id.clone();
         let storage_request = SessionStoragePathRequest {
             workspace_path: PathBuf::from(request.workspace_path),
             remote_connection_id: request.remote_connection_id,
             remote_ssh_host: request.remote_ssh_host,
         };
-        let session = if request.include_internal {
+        if request.include_internal {
             self.restore_internal_session_for_workspace(storage_request, &request.session_id)
                 .await
         } else {
@@ -11826,6 +11830,28 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
                 .await
         }
         .map_err(runtime_port_error_preserving_message)?;
+
+        let _mutation = self
+            .session_manager
+            .acquire_session_mutation(&requested_session_id)
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
+        let session = self
+            .session_manager
+            .get_session(&requested_session_id)
+            .ok_or_else(|| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::OutcomeUnknown,
+                    "Session disappeared while its restore snapshot was being captured",
+                )
+            })?;
+        let transcript = self
+            .read_session_transcript_locked(bitfun_runtime_ports::SessionTranscriptRequest {
+                session_id: requested_session_id.clone(),
+                turn_id: None,
+            })
+            .await?;
+        let pending_user_inputs = self.pending_user_inputs_for_session(&requested_session_id);
 
         Ok(bitfun_agent_runtime::sdk::AgentSessionRestoreResult {
             session: bitfun_runtime_ports::AgentSessionSummary {
@@ -11841,6 +11867,8 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
                 last_active_at_ms: runtime_session_time_ms(session.last_activity_at),
             },
             state: session.state,
+            transcript,
+            pending_user_inputs,
         })
     }
 }
@@ -12345,7 +12373,7 @@ impl bitfun_agent_runtime::sdk::AgentInteractionResponsePort for ConversationCoo
         request: bitfun_agent_runtime::sdk::AgentUserAnswersRequest,
     ) -> bitfun_runtime_ports::PortResult<()> {
         crate::agentic::tools::user_input_manager::get_user_input_manager()
-            .send_answer(&request.tool_id, request.answers)
+            .send_answer(request)
             .map_err(user_input_port_error)
     }
 }
@@ -12552,6 +12580,105 @@ impl bitfun_runtime_ports::RemoteControlStatePort for ConversationCoordinator {
 }
 
 impl ConversationCoordinator {
+    fn project_pending_user_input_to_root(
+        &self,
+        pending: &mut bitfun_agent_runtime::sdk::PendingUserInput,
+    ) {
+        let mut visited = HashSet::new();
+        while visited.insert(pending.session_id.clone()) {
+            let Some((parent_session_id, parent_turn_id)) = self
+                .active_subagent_executions
+                .get(&pending.session_id)
+                .map(|route| {
+                    (
+                        route.parent_session_id.clone(),
+                        route.parent_dialog_turn_id.clone(),
+                    )
+                })
+            else {
+                break;
+            };
+            pending.session_id = parent_session_id;
+            pending.turn_id = parent_turn_id;
+        }
+    }
+
+    pub(crate) async fn register_pending_user_input(
+        &self,
+        mut pending: bitfun_agent_runtime::sdk::PendingUserInput,
+        sender: tokio::sync::oneshot::Sender<
+            bitfun_agent_runtime::user_questions::UserInputResponse,
+        >,
+    ) -> bitfun_agent_runtime::sdk::PendingUserInput {
+        self.project_pending_user_input_to_root(&mut pending);
+        pending.registration_sequence =
+            crate::agentic::tools::user_input_manager::get_user_input_manager()
+                .register(pending.clone(), sender);
+        self.emit_event(AgenticEvent::ToolEvent {
+            session_id: pending.session_id.clone(),
+            turn_id: pending.turn_id.clone(),
+            round_id: format!("pending-user-input:{}", pending.tool_id),
+            attempt_id: None,
+            attempt_index: None,
+            tool_event: ToolEventData::UserInputRequested {
+                identity: ToolEventIdentity::direct(&pending.tool_id, "AskUserQuestion"),
+                registration_sequence: pending.registration_sequence,
+                params: pending.input.clone(),
+            },
+        })
+        .await;
+        pending
+    }
+
+    pub(crate) async fn resolve_pending_user_input(
+        &self,
+        pending: &bitfun_agent_runtime::sdk::PendingUserInput,
+    ) {
+        let _ = self
+            .event_queue
+            .enqueue(Self::pending_user_input_resolved_event(pending), None)
+            .await;
+    }
+
+    pub(crate) fn resolve_pending_user_input_now(
+        &self,
+        pending: &bitfun_agent_runtime::sdk::PendingUserInput,
+    ) {
+        self.event_queue
+            .enqueue_now(Self::pending_user_input_resolved_event(pending), None);
+    }
+
+    fn pending_user_input_resolved_event(
+        pending: &bitfun_agent_runtime::sdk::PendingUserInput,
+    ) -> AgenticEvent {
+        AgenticEvent::ToolEvent {
+            session_id: pending.session_id.clone(),
+            turn_id: pending.turn_id.clone(),
+            round_id: format!("pending-user-input:{}", pending.tool_id),
+            attempt_id: None,
+            attempt_index: None,
+            tool_event: ToolEventData::UserInputResolved {
+                identity: ToolEventIdentity::direct(&pending.tool_id, "AskUserQuestion"),
+                registration_sequence: pending.registration_sequence,
+            },
+        }
+    }
+
+    pub(crate) fn pending_user_inputs_for_session(
+        &self,
+        session_id: &str,
+    ) -> Vec<bitfun_agent_runtime::sdk::PendingUserInput> {
+        crate::agentic::tools::user_input_manager::get_user_input_manager()
+            .pending_inputs()
+            .into_iter()
+            .map(|mut pending| {
+                self.project_pending_user_input_to_root(&mut pending);
+                pending
+            })
+            .filter(|pending| pending.session_id == session_id)
+            .collect()
+    }
+
     async fn read_session_transcript_with_turn_status_locked(
         &self,
         request: bitfun_runtime_ports::SessionTranscriptRequest,
@@ -13926,13 +14053,27 @@ mod tests {
         let (sender, receiver) = tokio::sync::oneshot::channel::<
             bitfun_agent_runtime::user_questions::UserInputResponse,
         >();
-        crate::agentic::tools::user_input_manager::get_user_input_manager()
-            .register_channel(answer_tool_id.clone(), sender);
+        let registration_sequence =
+            crate::agentic::tools::user_input_manager::get_user_input_manager().register(
+                bitfun_agent_runtime::sdk::PendingUserInput {
+                    tool_id: answer_tool_id.clone(),
+                    session_id: "session-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    source_session_id: "session-1".to_string(),
+                    source_turn_id: "turn-1".to_string(),
+                    registration_sequence: 0,
+                    input: serde_json::json!({ "questions": [] }),
+                },
+                sender,
+            );
 
         AgentInteractionResponsePort::submit_user_answers(
             &coordinator,
             AgentUserAnswersRequest {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
                 tool_id: answer_tool_id.clone(),
+                registration_sequence,
                 answers: serde_json::json!({ "0": "continue" }),
             },
         )
@@ -13946,7 +14087,10 @@ mod tests {
         let stale_answer = AgentInteractionResponsePort::submit_user_answers(
             &coordinator,
             AgentUserAnswersRequest {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
                 tool_id: answer_tool_id.clone(),
+                registration_sequence,
                 answers: serde_json::json!({ "0": "continue" }),
             },
         )

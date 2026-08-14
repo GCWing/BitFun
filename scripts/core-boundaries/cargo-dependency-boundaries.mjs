@@ -914,10 +914,9 @@ export function findProductEntrypointCoreFeatureViolations(
     ]],
     ['bitfun-acp', [...new Set([...acpClientCoreFeatures, ...acpServerCoreFeatures])]],
     ['bitfun-app-server', [
-      'external-sources',
+      'agent-runtime',
       'git',
       'i18n-runtime',
-      'remote-connect',
     ]],
     ['bitfun-sdk-host-app', coreCompatibilityReviewedFeatures],
   ]);

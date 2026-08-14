@@ -22,6 +22,10 @@ use crate::actions::{
     SHARED_TUI_HELP_NOTE,
 };
 use crate::config::CliConfig;
+use crate::tui_management::{
+    AddModelRequest, ModelDefaultSlot, SetModelDefaultRequest, SkillSummary, SubagentSummary,
+    UpdateModelRequest,
+};
 /// Startup page module
 ///
 /// Full-featured startup page with:
@@ -30,11 +34,6 @@ use crate::config::CliConfig;
 /// - Model/Agent/Session/Skill/Subagent selector popups
 /// - Random tips
 use anyhow::Result;
-use bitfun_app_server_protocol::model::{
-    AddModelRequest, ModelDefaultSlot, SetModelDefaultRequest, UpdateModelRequest,
-};
-use bitfun_app_server_protocol::skill::SkillSummary;
-use bitfun_app_server_protocol::subagent::SubagentSummary;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     backend::Backend,
@@ -1373,10 +1372,7 @@ impl StartupPage {
         }
     }
 
-    fn open_account_panel(
-        &mut self,
-        snapshot: bitfun_app_server_protocol::account::AccountSnapshotResponse,
-    ) {
+    fn open_account_panel(&mut self, snapshot: crate::tui_management::AccountSnapshotResponse) {
         let Some(info) = snapshot.info else {
             self.login_form.show();
             return;
@@ -1398,8 +1394,8 @@ impl StartupPage {
         // Refresh devices occasionally while syncing / after done.
         let devices = if matches!(
             progress.status,
-            bitfun_app_server_protocol::account::SettingsSyncStatus::Syncing
-                | bitfun_app_server_protocol::account::SettingsSyncStatus::Done
+            crate::tui_management::SettingsSyncStatus::Syncing
+                | crate::tui_management::SettingsSyncStatus::Done
         ) {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current()
@@ -1461,9 +1457,11 @@ impl StartupPage {
             }
             LoginFormAction::SyncUseLocal => {
                 let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(self.agent.account_finalize_login(
-                        bitfun_app_server_protocol::account::AccountSyncChoice::Local,
-                    ))
+                    tokio::runtime::Handle::current().block_on(
+                        self.agent.account_finalize_login(
+                            crate::tui_management::AccountSyncChoice::Local,
+                        ),
+                    )
                 });
                 match result {
                     Ok(snapshot) => {
@@ -1483,9 +1481,11 @@ impl StartupPage {
             }
             LoginFormAction::SyncUseCloud => {
                 let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(self.agent.account_finalize_login(
-                        bitfun_app_server_protocol::account::AccountSyncChoice::Cloud,
-                    ))
+                    tokio::runtime::Handle::current().block_on(
+                        self.agent.account_finalize_login(
+                            crate::tui_management::AccountSyncChoice::Cloud,
+                        ),
+                    )
                 });
                 match result {
                     Ok(snapshot) => {
@@ -1746,7 +1746,7 @@ impl StartupPage {
 
         match result {
             Ok(response) => {
-                let form_data = ModelFormResult::from_projection(response.model);
+                let form_data = ModelFormResult::from_projection(response);
                 self.model_config_form.show_for_edit(&model_id, &form_data);
             }
             Err(error) => {

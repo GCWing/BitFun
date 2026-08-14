@@ -3,6 +3,8 @@
 //! Provides comprehensive configuration management functionality.
 
 use super::manager::{ConfigManager, ConfigManagerSettings, ConfigStatistics};
+#[cfg(test)]
+use super::model_management::*;
 use super::types::*;
 use crate::util::errors::*;
 use log::{info, warn};
@@ -661,6 +663,77 @@ mod tests {
             .unwrap();
         assert!(current["mcpServers"].get("first").is_some());
         assert!(current["mcpServers"].get("stale").is_none());
+    }
+
+    #[tokio::test]
+    async fn model_management_update_preserves_write_only_values_and_returns_safe_projection() {
+        let (service, _dir) = test_service("model-management-secrets").await;
+        service
+            .add_ai_model(AIModelConfig {
+                id: "model-1".to_string(),
+                name: "Original".to_string(),
+                provider: "openai".to_string(),
+                model_name: "gpt-original".to_string(),
+                base_url: "https://example.com/v1".to_string(),
+                api_key: "existing-key".to_string(),
+                custom_headers: Some(HashMap::from([
+                    ("Z-Header".to_string(), "secret-z".to_string()),
+                    ("A-Header".to_string(), "secret-a".to_string()),
+                ])),
+                custom_request_body: Some("existing-body".to_string()),
+                enabled: true,
+                ..Default::default()
+            })
+            .await
+            .expect("seed model");
+
+        service
+            .update_ai_model_for_management(
+                "model-1",
+                AIModelManagementMutation {
+                    id: "model-1".to_string(),
+                    name: "Updated".to_string(),
+                    provider: "openai".to_string(),
+                    model_name: "gpt-updated".to_string(),
+                    base_url: "https://example.com/v2".to_string(),
+                    api_key: None,
+                    custom_headers: None,
+                    custom_request_body: Some(SecretUpdate::Clear),
+                    context_window: Some(128_000),
+                    max_tokens: Some(8_192),
+                    enabled: true,
+                    reasoning: None,
+                    inline_think_in_text: true,
+                    skip_ssl_verify: false,
+                    custom_headers_mode: Some("replace".to_string()),
+                },
+            )
+            .await
+            .expect("update model through owner API");
+
+        let projection = service
+            .get_ai_model_for_management("model-1")
+            .await
+            .expect("safe model projection");
+        assert_eq!(projection.summary.name, "Updated");
+        assert!(projection.summary.api_key_configured);
+        assert_eq!(
+            projection.summary.custom_header_names,
+            ["A-Header", "Z-Header"]
+        );
+        assert!(!projection.summary.custom_request_body_configured);
+        assert_eq!(projection.custom_headers_mode, "replace");
+
+        let stored = service
+            .get_ai_models()
+            .await
+            .expect("stored models")
+            .into_iter()
+            .find(|model| model.id == "model-1")
+            .expect("updated model");
+        assert_eq!(stored.api_key, "existing-key");
+        assert_eq!(stored.custom_headers.unwrap()["A-Header"], "secret-a");
+        assert!(stored.custom_request_body.is_none());
     }
 
     #[tokio::test]

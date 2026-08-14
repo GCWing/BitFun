@@ -1,4 +1,4 @@
-import { ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
+import { ConversationUiQuestionAnswer, ConversationUiToolStatus, ConversationUiUserInputIdentity } from '../state/ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ToolFileReference, ToolFileReferenceResolver } from '../../services/ToolFileReferenceResolver';
 import { ToolCollapseGroup, ToolCollapsePolicy } from '../policy/ToolCollapsePolicy';
@@ -60,8 +60,8 @@ export struct ToolStatusList {
     (_toolId: string, _updatedInput?: Object) => {};
   @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
   @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
-  @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
-    (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
+  @Event onAnswerQuestion: (identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer) => void =
+    (_identity: ConversationUiUserInputIdentity, _answers: ConversationUiQuestionAnswer) => {};
   @Event onOpenFilePreview: (path: string, label: string) => void =
     (_path: string, _label: string) => {};
   @Local expanded: boolean = false;
@@ -146,7 +146,7 @@ export struct ToolStatusList {
       }
       if (this.isQuestionTool(tool)) {
         ToolQuestionAnswerPanel({
-          toolId: tool.id || '',
+          userInputIdentity: tool.user_input_identity!,
           questionsJson: this.questionInputJson(tool),
           isBusy: this.isBusy,
           onAnswerQuestion: this.onAnswerQuestion
@@ -944,6 +944,7 @@ export struct ToolStatusList {
     const status = (tool.status || '').toLowerCase();
     const name = this.normalizedToolName(tool);
     return (name === 'askuserquestion' || name === 'ask_user_question') &&
+      tool.user_input_identity !== undefined &&
       status !== 'completed' &&
       status !== 'done' &&
       status !== 'failed' &&
@@ -1000,6 +1001,10 @@ export struct ToolStatusList {
 
   private toolKey(tool: ConversationUiToolStatus, index: number): string {
     const signature = this.toolSignature(tool);
+    const identity = tool.user_input_identity;
+    if (identity) {
+      return `${identity.session_id}-${identity.turn_id}-${identity.tool_id}-${identity.registration_sequence}-${signature}`;
+    }
     if (tool.id && tool.id.length > 0) {
       return `${index}-${tool.id}-${signature}`;
     }

@@ -63,7 +63,10 @@ async fn sdk_forwards_typed_user_answers_without_losing_payloads() {
         .expect("runtime with interaction response port");
 
     let answers = AgentUserAnswersRequest {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
         tool_id: "tool-3".to_string(),
+        registration_sequence: 7,
         answers: json!({ "choice": "continue", "notes": ["keep history"] }),
     };
 
@@ -87,7 +90,10 @@ async fn sdk_reports_a_missing_interaction_response_port() {
 
     let error = runtime
         .submit_user_answers(AgentUserAnswersRequest {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
             tool_id: "tool-3".to_string(),
+            registration_sequence: 7,
             answers: json!({ "choice": "continue" }),
         })
         .await
@@ -100,12 +106,18 @@ async fn sdk_reports_a_missing_interaction_response_port() {
 fn interaction_response_requests_keep_camel_case_wire_fields() {
     assert_eq!(
         serde_json::to_value(AgentUserAnswersRequest {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
             tool_id: "tool-3".to_string(),
+            registration_sequence: 7,
             answers: json!({ "choice": "continue" }),
         })
         .expect("serialize user answers request"),
         json!({
+            "sessionId": "session-1",
+            "turnId": "turn-1",
             "toolId": "tool-3",
+            "registrationSequence": 7,
             "answers": { "choice": "continue" },
         })
     );

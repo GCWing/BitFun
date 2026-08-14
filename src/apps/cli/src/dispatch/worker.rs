@@ -12,7 +12,7 @@ use bitfun_agent_runtime::sdk::{
 use bitfun_events::{project_agentic_frontend_event, AgenticEvent};
 use bitfun_runtime_ports::{AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget};
 
-use crate::{shutdown_mcp_servers, BootstrapProfile};
+use crate::BootstrapProfile;
 
 use super::permissions::{self, REJECT_AND_REPORT_REASON};
 use super::protocol::{DispatchApprovalPolicy, DispatchEvent, DispatchJobState, DispatchTurnKind};
@@ -42,7 +42,6 @@ pub(crate) async fn run(job_id: String) -> Result<()> {
     store.clear_pending_permissions(&job_id);
     store.clear_preparing(&job_id);
     store.remove_pid_if_matches(&job_id, worker_pid);
-    shutdown_mcp_servers().await;
     result
 }
 

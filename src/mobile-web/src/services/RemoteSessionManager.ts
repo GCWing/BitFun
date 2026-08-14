@@ -39,6 +39,13 @@ const RETRYABLE_REMOTE_READ_COMMANDS = new Set([
   'read_file_chunk',
 ]);
 
+export const ANSWER_QUESTION_IDENTITY_CAPABILITY =
+  'answer_question_identity_v1';
+
+const ANSWER_QUESTION_UPGRADE_MESSAGE =
+  'This Desktop version cannot safely answer interactive questions. ' +
+  'Upgrade Desktop, reconnect, and answer the question again.';
+
 export interface WorkspaceInfo {
   has_workspace: boolean;
   path?: string;
@@ -172,6 +179,14 @@ export interface RemoteToolStatus {
   start_ms?: number;
   input_preview?: string;
   tool_input?: any;
+  user_input_identity?: RemoteUserInputIdentity;
+}
+
+export interface RemoteUserInputIdentity {
+  session_id: string;
+  turn_id: string;
+  tool_id: string;
+  registration_sequence: number;
 }
 
 export interface PollResponse {
@@ -198,13 +213,18 @@ export interface InitialSyncData {
   sessions: SessionInfo[];
   has_more_sessions: boolean;
   authenticated_user_id?: string;
+  capabilities?: string[];
 }
 
 export class RemoteSessionManager {
   private client: RelayHttpClient;
+  private capabilities: ReadonlySet<string>;
+  private capabilityTargetEpoch: number;
 
-  constructor(client: RelayHttpClient) {
+  constructor(client: RelayHttpClient, capabilities: readonly string[] = []) {
     this.client = client;
+    this.capabilities = new Set(capabilities);
+    this.capabilityTargetEpoch = client.controlTargetEpoch;
   }
 
   get controlTargetEpoch(): number {
@@ -219,6 +239,18 @@ export class RemoteSessionManager {
     if (!this.client.isControlTargetCurrent(snapshot)) {
       throw new RemoteControlTargetChangedError();
     }
+  }
+
+  private acceptCapabilities(
+    capabilities: unknown,
+    target: ControlTargetSnapshot,
+  ): void {
+    this.capabilities = new Set(
+      Array.isArray(capabilities)
+        ? capabilities.filter((value): value is string => typeof value === 'string')
+        : [],
+    );
+    this.capabilityTargetEpoch = target.epoch;
   }
 
   private async request<T>(
@@ -254,6 +286,21 @@ export class RemoteSessionManager {
       }
       this.ensureControlTargetCurrent(target);
       const respAny = resp as any;
+      if (
+        respAny.resp === 'upgrade_required'
+        || (respAny.resp === 'error' && respAny.code === 'upgrade_required')
+      ) {
+        const message = typeof respAny.message === 'string'
+          ? respAny.message.trim()
+          : '';
+        const recovery = typeof respAny.recovery === 'string'
+          ? respAny.recovery.trim()
+          : '';
+        throw new Error(
+          [message, recovery].filter(Boolean).join(' ')
+            || ANSWER_QUESTION_UPGRADE_MESSAGE,
+        );
+      }
       if (respAny.resp === 'error') {
         throw new Error(respAny.message || 'Unknown error');
       }
@@ -268,9 +315,12 @@ export class RemoteSessionManager {
   }
 
   async getWorkspaceInfo(): Promise<WorkspaceInfo> {
-    const resp = await this.request<{ resp: string } & WorkspaceInfo>({
-      cmd: 'get_workspace_info',
-    });
+    const target = this.client.getControlTargetSnapshot();
+    const resp = await this.request<{
+      resp: string;
+      capabilities?: string[];
+    } & WorkspaceInfo>({ cmd: 'get_workspace_info' }, target);
+    this.acceptCapabilities(resp.capabilities, target);
     return {
       has_workspace: resp.has_workspace,
       path: resp.path,
@@ -492,8 +542,14 @@ export class RemoteSessionManager {
     });
   }
 
-  async answerQuestion(toolId: string, answers: any): Promise<void> {
-    await this.request({ cmd: 'answer_question', tool_id: toolId, answers });
+  async answerQuestion(identity: RemoteUserInputIdentity, answers: any): Promise<void> {
+    if (
+      this.client.controlTargetEpoch !== this.capabilityTargetEpoch
+      || !this.capabilities.has(ANSWER_QUESTION_IDENTITY_CAPABILITY)
+    ) {
+      throw new Error(ANSWER_QUESTION_UPGRADE_MESSAGE);
+    }
+    await this.request({ cmd: 'answer_question', ...identity, answers });
   }
 
   async pollSession(

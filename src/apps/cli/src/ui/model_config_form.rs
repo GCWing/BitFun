@@ -1,4 +1,4 @@
-use bitfun_app_server_protocol::model::{ModelEditProjection, ModelMutation, SecretUpdate};
+use crate::tui_management::{ModelEditProjection, ModelMutation, ModelSecretUpdate};
 /// Model configuration form dialog
 ///
 /// A multi-field input form for adding a new AI model configuration.
@@ -87,20 +87,20 @@ impl ModelFormResult {
         let editing = self.editing_model_id.is_some();
         let required_secret = |value: &str| {
             if editing && value.is_empty() {
-                SecretUpdate::Preserve
+                ModelSecretUpdate::Preserve
             } else {
-                SecretUpdate::Replace(value.to_string())
+                ModelSecretUpdate::Replace(value.to_string())
             }
         };
         let optional_secret = |value: &str| {
             if value.is_empty() {
                 if editing {
-                    SecretUpdate::Preserve
+                    ModelSecretUpdate::Preserve
                 } else {
-                    SecretUpdate::Clear
+                    ModelSecretUpdate::Clear
                 }
             } else {
-                SecretUpdate::Replace(value.to_string())
+                ModelSecretUpdate::Replace(value.to_string())
             }
         };
         ModelMutation {

@@ -163,6 +163,11 @@
   "core": {
     "initializationFailed": "Core system initialization failed"
   },
+  "sessionOwnerRefresh": {
+    "title": "需要重新加载",
+    "message": "当前页面已无法确认 App Server 状态或某项操作是否完成。请先重新加载页面，再继续操作。",
+    "reload": "重新加载页面"
+  },
   "boundary": {
     "title": "Application Error",
     "reload": "Reload",

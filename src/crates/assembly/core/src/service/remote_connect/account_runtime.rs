@@ -104,6 +104,99 @@ pub struct AccountLoginResult {
     pub routing_error: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccountManagementErrorKind {
+    InvalidRequest,
+    Internal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountManagementError {
+    pub kind: AccountManagementErrorKind,
+    pub message: String,
+}
+
+impl AccountManagementError {
+    fn invalid_request(message: impl Into<String>) -> Self {
+        Self {
+            kind: AccountManagementErrorKind::InvalidRequest,
+            message: message.into(),
+        }
+    }
+
+    fn internal(error: impl std::fmt::Display) -> Self {
+        Self {
+            kind: AccountManagementErrorKind::Internal,
+            message: bounded_management_text(error.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for AccountManagementError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for AccountManagementError {}
+
+pub fn validate_management_operation_id(
+    operation_id: &str,
+) -> std::result::Result<(), AccountManagementError> {
+    let valid = !operation_id.trim().is_empty()
+        && operation_id.len() <= 128
+        && operation_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
+    valid
+        .then_some(())
+        .ok_or_else(|| AccountManagementError::invalid_request("Account operation ID is invalid"))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AccountLoginNextStep {
+    ChooseSettingsSource,
+    Ready,
+    RoutingUnavailable(String),
+}
+
+impl AccountLoginResult {
+    pub fn next_step(&self) -> AccountLoginNextStep {
+        if self.has_cloud_settings {
+            AccountLoginNextStep::ChooseSettingsSource
+        } else if self.routing_connected {
+            AccountLoginNextStep::Ready
+        } else if let Some(error) = &self.routing_error {
+            AccountLoginNextStep::RoutingUnavailable(bounded_management_text(error.clone()))
+        } else {
+            AccountLoginNextStep::Ready
+        }
+    }
+}
+
+fn bounded_management_text(message: String) -> String {
+    message
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(500)
+        .collect()
+}
+
+fn redact_management_login_error(
+    error: anyhow::Error,
+    relay_url: &str,
+    username: &str,
+    password: &str,
+) -> AccountManagementError {
+    let mut message = error.to_string();
+    for secret in [relay_url, username, password] {
+        if !secret.is_empty() {
+            message = message.replace(secret, "<redacted>");
+        }
+    }
+    AccountManagementError::internal(message)
+}
+
 #[derive(Debug, Clone)]
 pub struct AccountInfo {
     pub user_id: String,
@@ -514,6 +607,19 @@ impl AccountRuntime {
         })
     }
 
+    pub async fn login_for_management(
+        self: &Arc<Self>,
+        operation_id: &str,
+        relay_url: &str,
+        username: &str,
+        password: &str,
+    ) -> std::result::Result<AccountLoginResult, AccountManagementError> {
+        validate_management_operation_id(operation_id)?;
+        self.login_with_credentials(relay_url, username, password)
+            .await
+            .map_err(|error| redact_management_login_error(error, relay_url, username, password))
+    }
+
     pub async fn finalize_login_after_sync_choice(self: &Arc<Self>) -> Result<()> {
         let generation = self.account_context_generation();
         let sync_guard = self.lock_account_sync(generation).await?;
@@ -655,6 +761,80 @@ impl AccountRuntime {
             devices,
             sync: self.current_sync_progress().await,
         }
+    }
+
+    pub async fn finalize_login_for_management(
+        self: &Arc<Self>,
+        operation_id: String,
+        use_local_settings: bool,
+        workspace_path: PathBuf,
+    ) -> std::result::Result<AccountSnapshot, AccountManagementError> {
+        validate_management_operation_id(&operation_id)?;
+        self.finalize_login_after_sync_choice()
+            .await
+            .map_err(AccountManagementError::internal)?;
+        if !self
+            .start_auto_sync_background(operation_id, use_local_settings, workspace_path)
+            .await
+        {
+            return Err(AccountManagementError::invalid_request(
+                "Account settings sync is already in progress",
+            ));
+        }
+        Ok(self.snapshot().await)
+    }
+
+    pub async fn logout_for_management(
+        &self,
+        operation_id: String,
+    ) -> std::result::Result<AccountSnapshot, AccountManagementError> {
+        validate_management_operation_id(&operation_id)?;
+        self.cancel_sync(operation_id)
+            .await
+            .map_err(AccountManagementError::internal)?;
+        Ok(self.snapshot().await)
+    }
+
+    pub async fn start_settings_sync_for_management(
+        self: &Arc<Self>,
+        operation_id: String,
+        is_first_login: bool,
+        workspace_path: PathBuf,
+    ) -> std::result::Result<AccountSyncProgress, AccountManagementError> {
+        validate_management_operation_id(&operation_id)?;
+        if !self.is_logged_in().await {
+            return Err(AccountManagementError::invalid_request(
+                "Account login must be finalized before settings sync starts",
+            ));
+        }
+        if !self
+            .start_auto_sync_background(operation_id, is_first_login, workspace_path)
+            .await
+        {
+            return Err(AccountManagementError::invalid_request(
+                "Account settings sync is already in progress",
+            ));
+        }
+        Ok(self.current_sync_progress().await)
+    }
+
+    pub async fn cancel_settings_sync_for_management(
+        &self,
+        operation_id: String,
+    ) -> std::result::Result<AccountSyncProgress, AccountManagementError> {
+        validate_management_operation_id(&operation_id)?;
+        self.cancel_sync(operation_id)
+            .await
+            .map_err(AccountManagementError::internal)
+    }
+
+    pub async fn notify_local_settings_changed_for_management(
+        &self,
+        operation_id: &str,
+    ) -> std::result::Result<AccountSyncProgress, AccountManagementError> {
+        validate_management_operation_id(operation_id)?;
+        self.notify_local_settings_changed();
+        Ok(self.current_sync_progress().await)
     }
 
     pub fn start_settings_sync_loop(self: &Arc<Self>) {
@@ -1260,6 +1440,47 @@ mod tests {
     fn partial_session_backup_is_not_reported_as_success() {
         assert!(ensure_session_backup_complete(4, 4, &[]).is_ok());
         assert!(ensure_session_backup_complete(4, 1, &["quota full".to_string()]).is_err());
+    }
+
+    #[test]
+    fn management_operation_ids_are_validated_once_by_the_account_owner() {
+        assert!(validate_management_operation_id("account-op.1").is_ok());
+        let error =
+            validate_management_operation_id("bad operation").expect_err("spaces must be rejected");
+        assert_eq!(error.kind, AccountManagementErrorKind::InvalidRequest);
+        assert_eq!(error.message, "Account operation ID is invalid");
+    }
+
+    #[test]
+    fn login_outcome_exposes_typed_next_step_without_surface_copy() {
+        let result = AccountLoginResult {
+            user_id: "user-1".to_string(),
+            relay_url: "https://relay.example".to_string(),
+            has_cloud_settings: true,
+            routing_owner_replaced: false,
+            routing_connected: false,
+            routing_error: None,
+        };
+
+        assert_eq!(
+            result.next_step(),
+            AccountLoginNextStep::ChooseSettingsSource
+        );
+    }
+
+    #[test]
+    fn management_login_errors_redact_credentials_before_crossing_adapters() {
+        let error = redact_management_login_error(
+            anyhow!("relay=https://relay.example username=user@example.test password=secret-value"),
+            "https://relay.example",
+            "user@example.test",
+            "secret-value",
+        );
+
+        assert_eq!(error.kind, AccountManagementErrorKind::Internal);
+        assert!(!error.message.contains("user@example.test"));
+        assert!(!error.message.contains("secret-value"));
+        assert!(error.message.contains("<redacted>"));
     }
 
     #[tokio::test]

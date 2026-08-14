@@ -20,15 +20,12 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
-use bitfun_app_server_protocol::model::{AddModelRequest, UpdateModelRequest};
-use bitfun_app_server_protocol::skill::SkillSummary;
-use bitfun_app_server_protocol::subagent::SubagentSummary;
-use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
+use crate::tui_management::{AddModelRequest, SkillSummary, SubagentSummary, UpdateModelRequest};
+use bitfun_events::{AgenticEvent, AgenticEventEnvelope, ToolEventData, ToolEventIdentity};
 use bitfun_runtime_ports::{
-    AgentSessionComposerUpdate, AgentSessionLineageEntry,
-    AgentSessionLineageInspection, AgentSessionLineageSnapshot, AgentSessionUsageRequest,
-    AgentTurnCancellationResult, AgentWorkspaceReferenceSearchResult, SessionTranscript,
-    WorkspaceDiffSnapshot,
+    AgentSessionComposerUpdate, AgentSessionLineageEntry, AgentSessionLineageInspection,
+    AgentSessionLineageSnapshot, AgentSessionUsageRequest, AgentTurnCancellationResult,
+    AgentWorkspaceReferenceSearchResult, SessionTranscript, WorkspaceDiffSnapshot,
 };
 use resize::ResizeRedrawState;
 
@@ -38,9 +35,17 @@ use crate::actions::{
     ActionState, ResolvedKeymap, IMAGE_ATTACHMENTS_REQUIRE_MESSAGE, SHARED_TUI_EMBEDDED_HANDOFF,
     SHARED_TUI_HELP_NOTE,
 };
-use crate::agent::tui_client::{SessionOperationError, TuiAgentClient, TuiAgentMode};
+use crate::agent::tui_client::{
+    CliSessionRestoreSnapshot, SessionMigrationNotice, SessionOperationError, TuiAgentClient,
+    TuiAgentMode,
+};
 use crate::chat_state::{ChatState, ModelTokenUsageSnapshot};
 use crate::config::CliConfig;
+use crate::management::render_usage_report_markdown;
+use crate::tui_management::{
+    ExternalSourceReviewAction, NativeHookOverviewView as NativeHookOverview,
+    NativeHookRuleSummary as NativeHookRuleView,
+};
 use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
 use crate::ui::chat::{session_status_text, ChatView, MouseGestureOutcome};
 use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
@@ -67,11 +72,6 @@ use crate::ui::theme::{
 };
 use crate::ui::theme_selector::ThemeItem;
 use crate::ui::{init_terminal, restore_terminal, TerminalGuard};
-use bitfun_app_server_protocol::external_source::ExternalSourceReviewAction;
-use bitfun_app_server_protocol::hook::{
-    NativeHookOverview, NativeHookRuleSummary as NativeHookRuleView,
-};
-use bitfun_core::service::session_usage::render_usage_report_markdown;
 use bitfun_product_domains::external_hook_catalog::{
     ExternalHookCatalogSnapshotV1, ExternalHookMatcherSummary, ExternalHookNativeActivation,
     ExternalHookProjectionStatus,
@@ -122,6 +122,45 @@ fn agent_event_stream_failure(error: TryRecvError) -> Option<String> {
     }
 }
 
+#[derive(Debug)]
+struct AgentEventBatch {
+    events: Vec<AgenticEventEnvelope>,
+    failure: Option<String>,
+}
+
+fn drain_agent_event_batch(
+    receiver: &mut tokio::sync::broadcast::Receiver<AgenticEventEnvelope>,
+    limit: usize,
+) -> AgentEventBatch {
+    let mut events = Vec::with_capacity(limit);
+    let mut failure = None;
+    for _ in 0..limit {
+        match receiver.try_recv() {
+            Ok(envelope) => events.push(envelope),
+            Err(error) => {
+                failure = agent_event_stream_failure(error);
+                break;
+            }
+        }
+    }
+    AgentEventBatch { events, failure }
+}
+
+fn agent_event_connection_failure(event: &AgenticEvent) -> Option<&str> {
+    match event {
+        AgenticEvent::SystemError {
+            session_id: None,
+            error,
+            recoverable: false,
+        } => Some(error.as_str()),
+        _ => None,
+    }
+}
+
+fn agent_event_is_relevant_to_session(event: &AgenticEvent, session_id: &str) -> bool {
+    event.session_id() == Some(session_id) || agent_event_connection_failure(event).is_some()
+}
+
 fn mark_active_turn_failed(chat_state: &mut ChatState, error: &str) -> bool {
     if chat_state.current_turn_id().is_none() {
         return false;
@@ -129,6 +168,71 @@ fn mark_active_turn_failed(chat_state: &mut ChatState, error: &str) -> bool {
 
     chat_state.handle_turn_failed(error);
     true
+}
+
+#[derive(Debug)]
+enum SideEffectUiOutcome<T> {
+    Applied(T),
+    Retryable(anyhow::Error),
+    ExitAfterUnknownOutcome(String),
+}
+
+fn classify_side_effect_result<T>(
+    operation: &str,
+    result: anyhow::Result<T>,
+) -> SideEffectUiOutcome<T> {
+    match result {
+        Ok(value) => SideEffectUiOutcome::Applied(value),
+        Err(error)
+            if error
+                .downcast_ref::<SessionOperationError>()
+                .is_some_and(SessionOperationError::outcome_unknown)
+                || crate::agent::runtime_client::side_effect_error_outcome_is_unknown(&error) =>
+        {
+            SideEffectUiOutcome::ExitAfterUnknownOutcome(format!(
+                "The {operation} outcome is unknown: {error}. This TUI is closing; reopen it, restore the Session, and inspect authoritative state before retrying."
+            ))
+        }
+        Err(error) => SideEffectUiOutcome::Retryable(error),
+    }
+}
+
+fn project_restored_session(
+    restored: CliSessionRestoreSnapshot,
+) -> (ChatState, Vec<SessionMigrationNotice>) {
+    let active_turn_id = restored.active_turn_id;
+    let mut state = ChatState::from_session_transcript(
+        restored.summary.session_id,
+        restored.summary.session_name,
+        restored.summary.agent_type,
+        Some(restored.workspace_binding.workspace_path.clone()),
+        &restored.transcript,
+    );
+    state.current_model_id = restored.summary.model_id;
+    state.current_reasoning_preset = restored.summary.reasoning_preset;
+    state.apply_workspace_binding(restored.workspace_binding);
+    state.reconcile_transcript_turn_events(active_turn_id.as_deref());
+    if let Some(turn_id) = active_turn_id.as_deref() {
+        state.resume_transcript_turn(turn_id);
+        let restored_session_id = state.core_session_id.clone();
+        for pending in restored.pending_user_inputs.iter().filter(|pending| {
+            pending.session_id == restored_session_id && pending.turn_id == turn_id
+        }) {
+            state.restore_pending_user_input(pending);
+        }
+    }
+    (state, restored.migration_notices)
+}
+
+fn session_usage_workspace_path(
+    chat_state: &ChatState,
+    fallback_project_workspace: Option<String>,
+) -> Option<String> {
+    chat_state
+        .project_workspace_path()
+        .map(str::to_string)
+        .or(fallback_project_workspace)
+        .filter(|path| !path.trim().is_empty())
 }
 
 #[derive(Debug, Default)]
@@ -192,7 +296,7 @@ fn project_transcript_event(
             chat_state.handle_tool_event(tool_event);
             outcome.requested_input = !question_pending && chat_state.question_prompt.is_some();
             if !interactive {
-                chat_state.question_prompt = None;
+                chat_state.clear_question_prompts();
                 chat_state.permission_prompt = None;
             }
             outcome.changed = true;
@@ -439,18 +543,12 @@ enum PendingLocalEffect {
     },
 }
 
-impl crate::tui_backend::TuiEffect for PendingLocalEffect {
-    fn route(&self) -> crate::tui_backend::TuiEffectRoute {
-        crate::tui_backend::TuiEffectRoute::Local
-    }
-}
-
 fn terminal_event_allowed_while_local_effect_pending(event: &Event) -> bool {
     matches!(event, Event::Resize(_, _))
 }
 
 const SESSION_OPERATION_SLOW_NOTICE: Duration = Duration::from_secs(15);
-const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, and declarative context via /reload [skills|instructions]. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Local extension, account-sync, usage, and other management remain Embedded.";
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, usage reports, and declarative context via /reload [skills|instructions]. MCP management is unavailable because MCP processes belong to the Shared Runtime Host; exit Shared clients, manage MCP in Embedded mode, then restart Shared Runtime. Remote workspace Sessions fail closed instead of falling back to controller-local management. Local extension, account-sync, and other management remain Embedded.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {
@@ -518,6 +616,9 @@ pub(crate) struct ChatMode {
     pending_session_operation: Option<PendingSessionOperation>,
     pending_workspace_diff: Option<PendingWorkspaceDiff>,
     pending_local_effect: Option<PendingLocalEffect>,
+    /// A side-effecting Runtime operation returned OutcomeUnknown. The TUI
+    /// exits before another input can accidentally repeat the operation.
+    pending_runtime_failure: Option<String>,
     pending_workspace_reference_search: Option<PendingWorkspaceReferenceSearch>,
     /// One lineage read in flight. Runtime I/O never blocks the TUI
     /// event loop, and refresh requests cannot overlap.
@@ -601,6 +702,7 @@ impl ChatMode {
             pending_session_operation: None,
             pending_workspace_diff: None,
             pending_local_effect: None,
+            pending_runtime_failure: None,
             pending_workspace_reference_search: None,
             pending_lineage_operation: None,
             pending_lineage_cancellation: None,
@@ -632,6 +734,11 @@ impl ChatMode {
             hook_management_snapshot: None,
             pending_hook_plan: None,
         }
+    }
+
+    pub(crate) fn with_auto_approve_ask_default(mut self, enabled: bool) -> Self {
+        self.auto_approve_ask_default = enabled;
+        self
     }
 
     /// Set a session ID to restore (for "Continue Last Session")

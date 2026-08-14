@@ -522,6 +522,32 @@ async fn run_initialized_connection(
                             continue;
                         }
                     };
+                // Restore is a snapshot-plus-stream handoff. Attach the
+                // receiver before the owner captures its coherent snapshot so
+                // events emitted during that capture are buffered for this
+                // connection instead of falling into a response/subscription
+                // gap.
+                let mut preattached_restore_events =
+                    if let RuntimeIpcOperation::RestoreSession { request } = &operation {
+                        match handler.subscribe_events(&request.session_id) {
+                            Ok(receiver) => Some(receiver),
+                            Err(error) => {
+                                config
+                                    .leases
+                                    .rollback(connection_id, lease_transition.clone());
+                                send_runtime_error(
+                                    stream,
+                                    config.request_timeout,
+                                    Some(request_id),
+                                    error,
+                                )
+                                .await?;
+                                continue;
+                            }
+                        }
+                    } else {
+                        None
+                    };
                 if operation.is_interruptible_lineage_read() {
                     let handler = handler.clone();
                     let request_timeout = config.request_timeout;
@@ -639,6 +665,13 @@ async fn run_initialized_connection(
                         ..
                     }
                 );
+                let fork_response = matches!(
+                    &response,
+                    RuntimeIpcFrame::Response {
+                        result: RuntimeIpcOperationResult::SessionForked { .. },
+                        ..
+                    }
+                );
                 let response_bytes = match serialize_frame_with_limit(
                     &response,
                     MAX_RESPONSE_FRAME_BYTES,
@@ -653,6 +686,18 @@ async fn run_initialized_connection(
                                 "session revert completed but its authoritative transcript exceeds the Shared TUI response limit; reconnect and restore the Session",
                             )
                             .await?;
+                        return Err(RuntimeIpcServerError::Disconnected);
+                    }
+                    Err(_) if fork_response => {
+                        config.leases.rollback(connection_id, lease_transition);
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::OutcomeUnknown,
+                            "runtime operation completed but its response could not be encoded within the Shared TUI limit; reconnect and inspect authoritative state before retrying",
+                        )
+                        .await?;
                         return Err(RuntimeIpcServerError::Disconnected);
                     }
                     Err(RuntimeIpcIoError::FrameTooLarge { .. }) => {
@@ -673,6 +718,17 @@ async fn run_initialized_connection(
 
                 let RuntimeIpcFrame::Response { result, .. } = &response else {
                     unreachable!("response frame was just constructed")
+                };
+                let restored_active_turn_id = match result {
+                    RuntimeIpcOperationResult::SessionRestored {
+                        state:
+                            crate::RuntimeSessionState::Processing {
+                                current_turn_id, ..
+                            },
+                        ..
+                    } => Some(Some(current_turn_id.clone())),
+                    RuntimeIpcOperationResult::SessionRestored { .. } => Some(None),
+                    _ => None,
                 };
                 let created_session_id = match result {
                     RuntimeIpcOperationResult::SessionCreated { session } => {
@@ -712,9 +768,17 @@ async fn run_initialized_connection(
                     }
                     _ => None,
                 } {
-                    match handler.subscribe_events(session_id) {
-                        Ok(receiver) => *events = Some(receiver),
-                        Err(_) => event_stream_unavailable = true,
+                    if matches!(result, RuntimeIpcOperationResult::SessionRestored { .. }) {
+                        if let Some(receiver) = preattached_restore_events.take() {
+                            *events = Some(receiver);
+                        } else {
+                            event_stream_unavailable = true;
+                        }
+                    } else {
+                        match handler.subscribe_events(session_id) {
+                            Ok(receiver) => *events = Some(receiver),
+                            Err(_) => event_stream_unavailable = true,
+                        }
                     }
                 }
                 if let RuntimeIpcOperationResult::TurnAccepted { turn_id, .. } = result {
@@ -756,6 +820,9 @@ async fn run_initialized_connection(
                 {
                     config.leases.rollback(connection_id, lease_transition);
                     return Err(error);
+                }
+                if let Some(restored_active_turn_id) = restored_active_turn_id {
+                    *active_turn_id = restored_active_turn_id;
                 }
                 if event_stream_unavailable {
                     return Err(RuntimeIpcServerError::EventStreamUnavailable);
@@ -802,6 +869,7 @@ async fn next_connection_input(
     interruptible_lineage_reads: &mut JoinSet<InterruptibleLineageReadResult>,
 ) -> Result<ConnectionInput, RuntimeIpcServerError> {
     tokio::select! {
+        biased;
         frame = read_connected(timeout, stream, frames, frame_deadline) => frame.map(ConnectionInput::Frame),
         completed = receive_interruptible_lineage_read(interruptible_lineage_reads) => {
             Ok(ConnectionInput::InterruptibleLineageReadCompleted(completed))

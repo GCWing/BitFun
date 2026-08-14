@@ -7,27 +7,21 @@ use bitfun_app_server_protocol::agent::{
     SteerTurnRequest, SteerTurnResponse, SubmitUserAnswersRequest, SubmitUserAnswersResponse,
 };
 
-use super::capability::management_handler;
+use super::capability::unsupported_management_handler;
 use crate::agent::{runtime_call, BitfunAppRuntime};
-use crate::management::{AppManagementService, MODES_CAPABILITY};
+use crate::management::MODES_CAPABILITY;
 use crate::role::{AppClient, AppServer};
 use crate::schema::*;
 use crate::server::wire;
 
 pub(in crate::server) fn builder(
     runtime: Arc<BitfunAppRuntime>,
-    management: Option<Arc<AppManagementService>>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
         .name("agent handlers")
         .on_receive_request(
-            management_handler!(
-                management,
-                MODES_CAPABILITY,
-                ListAgentModesRequest,
-                list_agent_modes
-            ),
+            unsupported_management_handler!(MODES_CAPABILITY, ListAgentModesRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
@@ -177,7 +171,10 @@ pub(in crate::server) fn builder(
                     runtime
                         .runtime()
                         .submit_user_answers(AgentUserAnswersRequest {
+                            session_id: request.session_id,
+                            turn_id: request.turn_id,
                             tool_id: request.tool_id,
+                            registration_sequence: request.registration_sequence,
                             answers: request.answers,
                         })
                         .await,

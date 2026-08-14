@@ -1,4 +1,4 @@
-import { CreateSessionOptions, RemoteCommand, RemoteImageContext, RemotePermissionMode, RemoteQuestionAnswerPayload } from '../model/RemoteModels';
+import { CreateSessionOptions, RemoteCommand, RemoteImageContext, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteUserInputIdentity } from '../model/RemoteModels';
 
 export class RemoteCommandFactory {
   static getWorkspaceInfo(): RemoteCommand {
@@ -162,10 +162,13 @@ export class RemoteCommandFactory {
     return { cmd: 'set_permission_mode', mode };
   }
 
-  static answerQuestion(toolId: string, answers: RemoteQuestionAnswerPayload): RemoteCommand {
+  static answerQuestion(identity: RemoteUserInputIdentity, answers: RemoteQuestionAnswerPayload): RemoteCommand {
     return {
       cmd: 'answer_question',
-      tool_id: toolId,
+      session_id: identity.session_id,
+      turn_id: identity.turn_id,
+      tool_id: identity.tool_id,
+      registration_sequence: identity.registration_sequence,
       answers
     };
   }

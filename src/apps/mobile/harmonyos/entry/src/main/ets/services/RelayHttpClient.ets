@@ -215,7 +215,10 @@ export class RelayHttpClient {
       if (response.resp === 'error') {
         RemoteLogger.error(`command remote error cmd=${commandName} request=${requestId} message=${response.message || 'unknown'}`);
         if (throwOnRemoteError) {
-          throw new Error(response.message || 'Remote command failed.');
+          const message = response.message || 'Remote command failed.';
+          const recovery = response.code === 'upgrade_required' && response.recovery ?
+            ` ${response.recovery}` : '';
+          throw new Error(`${message}${recovery}`);
         }
         return response;
       }

@@ -4,6 +4,7 @@ import {
   RemotePermissionMode,
   RemoteQuestionAnswerPayload,
   RemoteSession,
+  RemoteUserInputIdentity,
   SelectedImageAttachment,
   SessionSummary,
   WorkspaceInfo
@@ -763,8 +764,8 @@ export abstract class AppRootRuntimeComposition {
       },
       reject: async (id: string): Promise<void> => { await this.conversationController.rejectRemoteTool(id); },
       cancel: async (id: string): Promise<void> => { await this.conversationController.cancelRemoteTool(id); },
-      answer: async (id: string, answers: RemoteQuestionAnswerPayload): Promise<void> => {
-        await this.conversationController.answerRemoteQuestion(id, answers);
+      answer: async (identity: RemoteUserInputIdentity, answers: RemoteQuestionAnswerPayload): Promise<void> => {
+        await this.conversationController.answerRemoteQuestion(identity, answers);
       },
       rename: async (title: string): Promise<void> => {
         await this.conversationController.renameVisibleSession(title);

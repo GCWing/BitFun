@@ -15,7 +15,10 @@
 //! recursion limit when this test instantiates the connection. The lifted
 //! limit keeps the chain compiling as more host-service groups land.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use std::time::Duration;
 
 use agent_client_protocol::{ConnectionTo, ErrorCode, SentRequest};
@@ -32,7 +35,9 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionRestoreResult, AgentSessionSummary, AgentSessionWorkspaceBinding,
     AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
     AgentSubmissionResult, AgentSubmissionSource, AgentTurnCancellationRequest, AgenticEvent,
-    PortResult, ProcessingPhase, SessionState,
+    PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestManager,
+    PermissionRequestSource, PermissionRequestSourceKind, PortResult, ProcessingPhase,
+    SessionState,
 };
 use bitfun_app_server::schema::{
     CancelTurnMessage, CreateSessionMessage, CreateSessionResponse, DeleteSessionMessage,
@@ -45,12 +50,18 @@ use bitfun_app_server::schema::{
 };
 use bitfun_app_server::{transport, AppClient, AppServer, BitfunAppRuntime, BitfunAppServer};
 use bitfun_app_server_protocol::agent as protocol_agent;
-use bitfun_app_server_protocol::app::{ClientInfo, HealthStatus, InitializeRequest};
-use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
-use bitfun_app_server_protocol::event::{AgentEventNotification, EventStream, SyncEventsRequest};
+use bitfun_app_server_protocol::app::{
+    CapabilityAvailability, ClientInfo, HealthRequest, HealthStatus, InitializeRequest,
+};
+use bitfun_app_server_protocol::error::{
+    AppServerErrorData, AppServerErrorKind, OUTCOME_UNKNOWN_CODE,
+};
+use bitfun_app_server_protocol::event::{
+    AgentEventNotification, EventStream, PermissionEventNotification, SyncEventsRequest,
+};
 use bitfun_app_server_protocol::session as protocol_session;
 use bitfun_app_server_protocol::workspace as protocol_workspace;
-use bitfun_app_server_protocol::PROTOCOL_VERSION;
+use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 use bitfun_runtime_ports as ports;
 use tokio::task::LocalSet;
 
@@ -142,6 +153,123 @@ fn build_app_runtime_with_queue() -> (BitfunAppRuntime, Arc<EventQueue>) {
         BitfunAppRuntime::new(build_runtime(), event_source),
         event_queue,
     )
+}
+
+#[derive(Debug, Default)]
+struct PermissionAuditGate {
+    started: tokio::sync::Notify,
+    release: tokio::sync::Notify,
+}
+
+#[derive(Debug, Default)]
+struct TestPermissionStore {
+    audit_gate: Option<Arc<PermissionAuditGate>>,
+}
+
+impl ports::RuntimeServicePort for TestPermissionStore {
+    fn capability(&self) -> ports::RuntimeServiceCapability {
+        ports::RuntimeServiceCapability::Permission
+    }
+}
+
+#[async_trait]
+impl ports::PermissionAuditStorePort for TestPermissionStore {
+    async fn append_permission_audit(
+        &self,
+        _record: ports::PermissionAuditRecord,
+    ) -> PortResult<()> {
+        if let Some(gate) = &self.audit_gate {
+            gate.started.notify_one();
+            gate.release.notified().await;
+        }
+        Ok(())
+    }
+
+    async fn list_project_permission_audit(
+        &self,
+        _project_id: &str,
+    ) -> PortResult<Vec<ports::PermissionAuditRecord>> {
+        Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl ports::PermissionReplyStorePort for TestPermissionStore {
+    async fn commit_permission_reply(
+        &self,
+        _grants: Vec<ports::PermissionGrant>,
+        _audit: Vec<ports::PermissionAuditRecord>,
+    ) -> PortResult<()> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct TestPermissionClock;
+
+impl ports::RuntimeServicePort for TestPermissionClock {
+    fn capability(&self) -> ports::RuntimeServiceCapability {
+        ports::RuntimeServiceCapability::Clock
+    }
+}
+
+impl ports::ClockPort for TestPermissionClock {
+    fn now_unix_millis(&self) -> i64 {
+        1_778_347_200_000
+    }
+}
+
+fn build_app_runtime_with_permissions() -> (BitfunAppRuntime, Arc<PermissionRequestManager>) {
+    build_app_runtime_with_permission_store(Arc::new(TestPermissionStore::default()))
+}
+
+fn build_app_runtime_with_permission_store(
+    store: Arc<TestPermissionStore>,
+) -> (BitfunAppRuntime, Arc<PermissionRequestManager>) {
+    let provider = Arc::new(ExampleAgentProvider::default());
+    let permissions = test_permission_manager(store);
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(provider.clone())
+        .with_dialog_turn_port(provider)
+        .with_permission_request_manager(permissions.clone())
+        .with_event_stream(AgentEventStream::new())
+        .build()
+        .expect("runtime should build with a permission request manager");
+    let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+    (
+        BitfunAppRuntime::new(runtime, AgentEventSource::new(event_queue)),
+        permissions,
+    )
+}
+
+fn test_permission_manager(store: Arc<TestPermissionStore>) -> Arc<PermissionRequestManager> {
+    Arc::new(PermissionRequestManager::new(
+        store.clone(),
+        store,
+        Arc::new(TestPermissionClock),
+    ))
+}
+
+fn permission_request(request_id: &str) -> PermissionRequest {
+    PermissionRequest {
+        request_id: request_id.to_string(),
+        round_id: "permission-round".to_string(),
+        order: 0,
+        tool_call_id: Some("permission-tool".to_string()),
+        project_path: Some("D:/workspace/project".to_string()),
+        project_id: "project".to_string(),
+        session_id: "session".to_string(),
+        agent_id: "agentic".to_string(),
+        action: "edit".to_string(),
+        resources: vec!["src/lib.rs".to_string()],
+        save_resources: Vec::new(),
+        source: PermissionRequestSource {
+            kind: PermissionRequestSourceKind::ToolCall,
+            identity: "write_file".to_string(),
+        },
+        delegation: None,
+        display_metadata: serde_json::Map::new(),
+    }
 }
 
 #[derive(Debug, Default)]
@@ -271,6 +399,11 @@ impl AgentSessionRestorePort for SessionControlProvider {
                 current_turn_id: "turn-active".to_string(),
                 phase: ProcessingPhase::Thinking,
             },
+            transcript: bitfun_runtime_ports::SessionTranscript {
+                session_id: "session-1".to_string(),
+                messages: Vec::new(),
+            },
+            pending_user_inputs: Vec::new(),
         })
     }
 }
@@ -304,6 +437,8 @@ struct Phase2Provider {
     compactions: Mutex<Vec<ports::AgentSessionCompactionRequest>>,
     settlements: Mutex<Vec<ports::AgentTurnSettlementRequest>>,
     reloads: Mutex<Vec<ports::AgentContextReloadRequest>>,
+    undo_outcome_unknown: AtomicBool,
+    reload_outcome_unknown: AtomicBool,
 }
 
 #[async_trait]
@@ -391,6 +526,17 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for Phase2Provider {
                 current_turn_id: "turn-active".to_string(),
                 phase: ProcessingPhase::Streaming,
             },
+            transcript: ports::SessionTranscript {
+                session_id: "session-1".to_string(),
+                messages: vec![ports::TranscriptMessage {
+                    id: Some("message-1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(20),
+                    content: ports::TranscriptContent::Text("ready".to_string()),
+                }],
+            },
+            pending_user_inputs: Vec::new(),
         })
     }
 }
@@ -496,6 +642,12 @@ impl ports::AgentSessionRevertPort for Phase2Provider {
         &self,
         request: ports::AgentSessionRevertRequest,
     ) -> PortResult<ports::AgentSessionRevertResult> {
+        if self.undo_outcome_unknown.load(Ordering::SeqCst) {
+            return Err(ports::PortError::new(
+                ports::PortErrorKind::OutcomeUnknown,
+                "undo may already have been applied",
+            ));
+        }
         Ok(revert_result(request.session_id, "undo restored"))
     }
 
@@ -624,6 +776,12 @@ impl ports::AgentContextReloadPort for Phase2Provider {
         &self,
         request: ports::AgentContextReloadRequest,
     ) -> PortResult<()> {
+        if self.reload_outcome_unknown.load(Ordering::SeqCst) {
+            return Err(ports::PortError::new(
+                ports::PortErrorKind::OutcomeUnknown,
+                "context reload may already have been applied",
+            ));
+        }
         self.reloads.lock().unwrap().push(request);
         Ok(())
     }
@@ -724,6 +882,7 @@ impl ports::RuntimeEventSink for TestRuntimeEventSink {
 
 fn build_phase2_app_runtime() -> (BitfunAppRuntime, Arc<Phase2Provider>) {
     let provider = Arc::new(Phase2Provider::default());
+    let permissions = test_permission_manager(Arc::new(TestPermissionStore::default()));
     let services = bitfun_agent_runtime::sdk::RuntimeServicesBuilder::new()
         .with_filesystem(Arc::new(TestRuntimeService(
             ports::RuntimeServiceCapability::FileSystem,
@@ -758,14 +917,15 @@ fn build_phase2_app_runtime() -> (BitfunAppRuntime, Arc<Phase2Provider>) {
         .with_turn_settlement_port(provider.clone())
         .with_workspace_reference_port(provider.clone())
         .with_session_lineage_port(provider.clone())
+        .with_context_reload_port(provider.clone())
+        .with_permission_request_manager(permissions)
         .with_services(services)
         .with_event_stream(AgentEventStream::new())
         .build()
         .expect("phase 2 runtime");
     let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
     (
-        BitfunAppRuntime::new(runtime, AgentEventSource::new(event_queue))
-            .with_context_reload(provider.clone()),
+        BitfunAppRuntime::new(runtime, AgentEventSource::new(event_queue)),
         provider,
     )
 }
@@ -782,6 +942,7 @@ async fn phase2_sync_aggregates_authoritative_session_state() {
             let client = bitfun_app_server_client::connect(client_transport)
                 .await
                 .expect("connect app server client");
+            initialize_test_client(&client).await;
             let response = client
                 .sync_session(protocol_session::SyncSessionRequest {
                     workspace_path: "/requested/workspace".to_string(),
@@ -829,6 +990,7 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
             let client = bitfun_app_server_client::connect(client_transport)
                 .await
                 .expect("connect app server client");
+            initialize_test_client(&client).await;
             let steer = client
                 .steer_turn(protocol_agent::SteerTurnRequest(
                     ports::AgentDialogSteerRequest {
@@ -858,7 +1020,10 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
 
             client
                 .submit_user_answers(protocol_agent::SubmitUserAnswersRequest {
+                    session_id: "session-1".to_string(),
+                    turn_id: "turn-active".to_string(),
                     tool_id: "ask-1".to_string(),
+                    registration_sequence: 1,
                     answers: serde_json::json!({"answer": "yes"}),
                 })
                 .await
@@ -910,12 +1075,80 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                 provider.shell_commands.lock().unwrap()[0].command,
                 "cargo test"
             );
-            assert_eq!(provider.answers.lock().unwrap().len(), 1);
+            let answers = provider.answers.lock().unwrap();
+            assert_eq!(answers.len(), 1);
+            assert_eq!(answers[0].session_id, "session-1");
+            assert_eq!(answers[0].turn_id, "turn-active");
+            assert_eq!(answers[0].tool_id, "ask-1");
+            assert_eq!(answers[0].registration_sequence, 1);
+            drop(answers);
             assert_eq!(provider.compactions.lock().unwrap().len(), 1);
             assert_eq!(provider.reloads.lock().unwrap().len(), 1);
             client.shutdown().await;
         })
         .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn runtime_outcome_unknown_survives_the_real_session_handlers() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            let (runtime, provider) = build_phase2_app_runtime();
+            provider.undo_outcome_unknown.store(true, Ordering::SeqCst);
+            provider
+                .reload_outcome_unknown
+                .store(true, Ordering::SeqCst);
+            spawn_server(runtime, server_transport);
+
+            let client = bitfun_app_server_client::connect(client_transport)
+                .await
+                .expect("connect app server client");
+            initialize_test_client(&client).await;
+            let error = client
+                .undo_session(protocol_session::UndoSessionRequest(
+                    ports::AgentSessionRevertRequest {
+                        workspace_path: "/workspace".to_string(),
+                        session_id: "session-1".to_string(),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                    },
+                ))
+                .await
+                .expect_err("OutcomeUnknown must remain typed at the App Server boundary");
+            assert_outcome_unknown_protocol_error(error);
+
+            let error = client
+                .reload_context(protocol_session::ReloadContextRequest(
+                    ports::AgentContextReloadRequest {
+                        session_id: "session-1".to_string(),
+                        target: ports::AgentContextReloadTarget::All,
+                    },
+                ))
+                .await
+                .expect_err("reload OutcomeUnknown must remain typed at the App Server boundary");
+            assert_outcome_unknown_protocol_error(error);
+            client.shutdown().await;
+        })
+        .await;
+}
+
+fn assert_outcome_unknown_protocol_error(error: bitfun_app_server_client::ClientError) {
+    let error = match error {
+        bitfun_app_server_client::ClientError::Protocol(error) => error,
+        bitfun_app_server_client::ClientError::Timeout(_) => {
+            panic!("owner OutcomeUnknown must not be replaced by a client timeout")
+        }
+    };
+
+    assert_eq!(error.code, ErrorCode::Other(OUTCOME_UNKNOWN_CODE as i32));
+    let data: AppServerErrorData =
+        serde_json::from_value(error.data.expect("OutcomeUnknown must carry stable data"))
+            .expect("OutcomeUnknown data must match the protocol schema");
+    assert_eq!(data.kind, AppServerErrorKind::OutcomeUnknown);
+    assert!(!data.retryable);
+    assert!(data.outcome_unknown);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -930,6 +1163,7 @@ async fn phase2_read_models_cover_usage_settlement_references_lineage_and_diff()
             let client = bitfun_app_server_client::connect(client_transport)
                 .await
                 .expect("connect app server client");
+            initialize_test_client(&client).await;
             let usage = client
                 .session_usage(protocol_session::SessionUsageRequest(
                     ports::AgentSessionUsageRequest {
@@ -1039,6 +1273,48 @@ where
         .map_err(|_| agent_client_protocol::Error::internal_error())?
 }
 
+async fn initialize_connection(
+    cx: &ConnectionTo<AppServer>,
+) -> Result<(), agent_client_protocol::Error> {
+    let initialized = recv(cx.send_request(InitializeRequest {
+        protocol_version: PROTOCOL_VERSION,
+        client: ClientInfo {
+            name: "bitfun-app-server-test".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+    }))
+    .await?;
+    assert_eq!(initialized.protocol_version, PROTOCOL_VERSION);
+    Ok(())
+}
+
+async fn initialize_test_client(client: &bitfun_app_server_client::AppServerClient) {
+    let initialized = client
+        .initialize(InitializeRequest {
+            protocol_version: PROTOCOL_VERSION,
+            client: ClientInfo {
+                name: "bitfun-app-server-test".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+        })
+        .await
+        .expect("initialize app server client");
+    assert_eq!(initialized.protocol_version, PROTOCOL_VERSION);
+}
+
+fn run_request(message: &str) -> RunMessage {
+    RunMessage {
+        session: RunSessionSpec::Create {
+            session_name: "Example SDK Session".to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: None,
+        },
+        message: message.to_string(),
+        turn_id: None,
+        source: Some(AgentSubmissionSource::Cli),
+    }
+}
+
 fn spawn_server(
     runtime: BitfunAppRuntime,
     transport: impl agent_client_protocol::ConnectTo<AppServer> + 'static,
@@ -1048,13 +1324,34 @@ fn spawn_server(
     });
 }
 
+fn spawn_server_with_frame_limit(
+    runtime: BitfunAppRuntime,
+    transport: impl agent_client_protocol::ConnectTo<AppServer> + 'static,
+    max_frame_bytes: u64,
+) {
+    tokio::task::spawn_local(async move {
+        let _ = BitfunAppServer::new(runtime)
+            .with_max_frame_bytes(max_frame_bytes)
+            .serve(transport)
+            .await;
+    });
+}
+
+fn spawn_server_tracked(
+    runtime: BitfunAppRuntime,
+    transport: impl agent_client_protocol::ConnectTo<AppServer> + 'static,
+) -> tokio::task::JoinHandle<Result<(), agent_client_protocol::Error>> {
+    tokio::task::spawn_local(async move { BitfunAppServer::new(runtime).serve(transport).await })
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn lightweight_client_negotiates_with_the_production_server() {
     let local = LocalSet::new();
     local
         .run_until(async {
             let (server_transport, client_transport) = transport::in_memory_channel_pair();
-            spawn_server(build_app_runtime(), server_transport);
+            let (runtime, _permissions) = build_app_runtime_with_permissions();
+            spawn_server(runtime, server_transport);
 
             let client = bitfun_app_server_client::connect(client_transport)
                 .await
@@ -1123,30 +1420,219 @@ async fn lightweight_client_negotiates_with_the_production_server() {
             );
             assert!(!synchronized.agent_snapshot_available);
 
-            let error = client
+            client.shutdown().await;
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn initialize_reports_the_host_transport_frame_limit() {
+    const HOST_MAX_FRAME_BYTES: u64 = 256 * 1024;
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            let (runtime, _permissions) = build_app_runtime_with_permissions();
+            spawn_server_with_frame_limit(runtime, server_transport, HOST_MAX_FRAME_BYTES);
+
+            let client = bitfun_app_server_client::connect(client_transport)
+                .await
+                .expect("lightweight client should connect");
+            let initialized = client
                 .initialize(InitializeRequest {
-                    protocol_version: PROTOCOL_VERSION + 1,
+                    protocol_version: PROTOCOL_VERSION,
                     client: ClientInfo {
-                        name: "bitfun-tui-test".to_string(),
+                        name: "transport-limit-test".to_string(),
                         version: env!("CARGO_PKG_VERSION").to_string(),
                     },
                 })
                 .await
-                .expect_err("a newer unsupported protocol must be rejected");
-            assert_eq!(error.code, ErrorCode::InvalidParams);
-            let data: AppServerErrorData = serde_json::from_value(
-                error
-                    .data
-                    .expect("protocol rejection should carry stable data"),
-            )
-            .expect("protocol rejection data should match the wire contract");
-            assert_eq!(data.kind, AppServerErrorKind::InvalidRequest);
-            assert!(!data.retryable);
-            assert!(!data.outcome_unknown);
-            assert_eq!(data.capability.as_deref(), Some("app.initialize"));
+                .expect("initialize should report the Host limit");
+            assert_eq!(initialized.limits.max_frame_bytes, HOST_MAX_FRAME_BYTES);
             client.shutdown().await;
         })
         .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn business_requests_require_successful_protocol_initialization() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            spawn_server(build_app_runtime(), server_transport);
+
+            let result = AppClient
+                .builder()
+                .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    let health = recv(cx.send_request(HealthRequest {})).await?;
+                    assert_eq!(health.status, HealthStatus::Ready);
+
+                    let error = recv(cx.send_request(run_request("before initialize")))
+                        .await
+                        .expect_err("business RPC must be rejected before app/initialize");
+                    assert_eq!(error.code, ErrorCode::InvalidParams);
+
+                    initialize_connection(&cx).await?;
+                    let response = recv(cx.send_request(run_request("after initialize"))).await?;
+                    assert_eq!(response.session_id, "example-session");
+                    assert_eq!(response.turn_id, "example-turn");
+                    Ok(())
+                })
+                .await;
+            assert!(result.is_ok(), "{result:?}");
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn accepted_protocol_negotiation_cannot_be_revoked_by_repeated_initialize() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            spawn_server(build_app_runtime(), server_transport);
+
+            let result = AppClient
+                .builder()
+                .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
+
+                    let error = recv(cx.send_request(InitializeRequest {
+                        protocol_version: MIN_PROTOCOL_VERSION - 1,
+                        client: ClientInfo {
+                            name: "duplicate-initialize-client".to_string(),
+                            version: "3".to_string(),
+                        },
+                    }))
+                    .await
+                    .expect_err("a repeated initialize must be rejected");
+                    assert_eq!(error.code, ErrorCode::InvalidParams);
+
+                    let response =
+                        recv(cx.send_request(run_request("after repeated initialize"))).await?;
+                    assert_eq!(response.session_id, "example-session");
+                    assert_eq!(response.turn_id, "example-turn");
+                    Ok(())
+                })
+                .await;
+            assert!(result.is_ok(), "{result:?}");
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn pipelined_supported_initializations_accept_exactly_once() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            spawn_server(build_app_runtime(), server_transport);
+
+            let result = AppClient
+                .builder()
+                .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    let first = cx.send_request(InitializeRequest {
+                        protocol_version: PROTOCOL_VERSION,
+                        client: ClientInfo {
+                            name: "first-v4-client".to_string(),
+                            version: "4".to_string(),
+                        },
+                    });
+                    let duplicate = cx.send_request(InitializeRequest {
+                        protocol_version: PROTOCOL_VERSION,
+                        client: ClientInfo {
+                            name: "duplicate-v4-client".to_string(),
+                            version: "4".to_string(),
+                        },
+                    });
+
+                    let initialized = recv(first).await?;
+                    assert_eq!(initialized.protocol_version, PROTOCOL_VERSION);
+                    let duplicate_error = recv(duplicate)
+                        .await
+                        .expect_err("only the first supported initialize may be accepted");
+                    assert_eq!(duplicate_error.code, ErrorCode::InvalidParams);
+
+                    let response =
+                        recv(cx.send_request(run_request("after pipelined initialize"))).await?;
+                    assert_eq!(response.session_id, "example-session");
+                    Ok(())
+                })
+                .await;
+            assert!(result.is_ok(), "{result:?}");
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn incompatible_protocol_initialization_stays_fail_closed_until_client_disconnects() {
+    for protocol_version in [MIN_PROTOCOL_VERSION - 1, PROTOCOL_VERSION + 1] {
+        let local = LocalSet::new();
+        local
+            .run_until(async {
+                let (server_transport, client_transport) = transport::in_memory_channel_pair();
+                let server_task = spawn_server_tracked(build_app_runtime(), server_transport);
+
+                let connection_result = AppClient
+                    .builder()
+                    .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                        let incompatible = cx.send_request(InitializeRequest {
+                            protocol_version,
+                            client: ClientInfo {
+                                name: "incompatible-client".to_string(),
+                                version: "3".to_string(),
+                            },
+                        });
+                        let pipelined_renegotiation = cx.send_request(InitializeRequest {
+                            protocol_version: PROTOCOL_VERSION,
+                            client: ClientInfo {
+                                name: "pipelined-v4-client".to_string(),
+                                version: "4".to_string(),
+                            },
+                        });
+                        let error = recv(incompatible)
+                            .await
+                            .expect_err("incompatible protocol must be rejected");
+                        assert_eq!(error.code, ErrorCode::InvalidParams);
+                        let data: AppServerErrorData = serde_json::from_value(
+                            error
+                                .data
+                                .expect("protocol rejection should carry stable data"),
+                        )
+                        .expect("protocol rejection data should match the wire contract");
+                        assert_eq!(data.kind, AppServerErrorKind::InvalidRequest);
+                        assert!(!data.retryable);
+                        assert!(!data.outcome_unknown);
+                        assert_eq!(data.capability.as_deref(), Some("app.initialize"));
+
+                        let renegotiation = recv(pipelined_renegotiation)
+                            .await
+                            .expect_err("a rejected connection must not be reopened");
+                        assert_eq!(renegotiation.code, ErrorCode::InvalidParams);
+
+                        let health_after_rejection = recv(cx.send_request(HealthRequest {}))
+                            .await
+                            .expect_err("health must report the terminal negotiation failure");
+                        assert_eq!(health_after_rejection.code, ErrorCode::InvalidParams);
+
+                        let business_after_rejection =
+                            recv(cx.send_request(run_request("after rejected initialize")))
+                                .await
+                                .expect_err("business RPC must remain fail closed");
+                        assert_eq!(business_after_rejection.code, ErrorCode::InvalidParams);
+                        Ok(())
+                    })
+                    .await;
+                assert!(connection_result.is_ok(), "{connection_result:?}");
+                let server_result = tokio::time::timeout(Duration::from_millis(500), server_task)
+                    .await
+                    .expect("server must stop after the rejected peer disconnects")
+                    .expect("server task must not panic");
+                assert!(server_result.is_ok(), "{server_result:?}");
+            })
+            .await;
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -1161,6 +1647,7 @@ async fn session_control_methods_forward_exact_owner_dtos() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let RenameSessionResponse {} = recv(cx.send_request(RenameSessionMessage(
                         AgentSessionRenameRequest {
                             workspace_path: "/repo".to_string(),
@@ -1256,6 +1743,7 @@ async fn run_round_trips_through_create_and_submit() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let response = recv(cx.send_request(RunMessage {
                         session: RunSessionSpec::Create {
                             session_name: "Example SDK Session".to_string(),
@@ -1296,6 +1784,7 @@ async fn submit_dialog_turn_carries_agent_type_and_starts() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let response = recv(cx.send_request(SubmitDialogTurnMessage(
                         SubmitDialogTurnBody {
                             session_id: "example-session".to_string(),
@@ -1348,6 +1837,7 @@ async fn respond_permission_routes_to_the_permission_surface() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let result = recv(cx.send_request(RespondPermissionMessage {
                         request_id: "perm-1".to_string(),
                         reply: bitfun_agent_runtime::sdk::PermissionReply::Once,
@@ -1377,6 +1867,7 @@ async fn create_session_returns_provider_session_id() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let response = recv(cx.send_request(CreateSessionMessage(
                         AgentSessionCreateRequest {
                             session_name: "direct create".to_string(),
@@ -1415,6 +1906,7 @@ async fn submit_turn_surfaces_provider_result() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let response =
                         recv(cx.send_request(SubmitTurnMessage(AgentSubmissionRequest {
                             session_id: "example-session".to_string(),
@@ -1451,6 +1943,7 @@ async fn list_sessions_maps_missing_port_to_internal_error() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let result = recv(cx.send_request(ListSessionsMessage(
                         AgentSessionListRequest {
                             workspace_path: ".".to_string(),
@@ -1483,6 +1976,7 @@ async fn delete_session_maps_missing_port_to_internal_error() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let result = recv(cx.send_request(DeleteSessionMessage(
                         AgentSessionDeleteRequest {
                             workspace_path: ".".to_string(),
@@ -1516,6 +2010,7 @@ async fn cancel_turn_maps_missing_port_to_internal_error() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let result = recv(cx.send_request(CancelTurnMessage(
                         AgentTurnCancellationRequest {
                             session_id: "example-session".to_string(),
@@ -1552,6 +2047,7 @@ async fn unknown_agent_method_returns_method_not_found() {
             let result = AppClient
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    initialize_connection(&cx).await?;
                     let response = recv(cx.send_request(UnknownAgentRequest)).await;
                     assert!(
                         response.is_err(),
@@ -1569,7 +2065,7 @@ async fn unknown_agent_method_returns_method_not_found() {
 /// `AgentEventSource` to the client as `agent/event` notifications, not leave
 /// the client to subscribe to the runtime queue directly.
 #[tokio::test(flavor = "current_thread")]
-async fn runtime_events_are_forwarded_as_agent_event_notifications() {
+async fn successful_initialize_installs_event_receivers_without_replaying_preinit_events() {
     let local = LocalSet::new();
     local
         .run_until(async {
@@ -1577,57 +2073,319 @@ async fn runtime_events_are_forwarded_as_agent_event_notifications() {
             let (runtime, event_queue) = build_app_runtime_with_queue();
             spawn_server(runtime, server_transport);
 
-            let received: Arc<Mutex<Vec<AgentEventNotification>>> =
-                Arc::new(Mutex::new(Vec::new()));
-            let received_for_client = received.clone();
+            let (received_tx, mut received_rx) =
+                tokio::sync::mpsc::unbounded_channel::<AgentEventNotification>();
             let queue_for_client = event_queue.clone();
 
             let result = AppClient
                 .builder()
                 .on_receive_notification(
-                    {
-                        let received = received_for_client.clone();
-                        async move |notification: AgentEventNotification,
-                                    _cx: ConnectionTo<AppServer>| {
-                            received.lock().unwrap().push(notification);
-                            Ok(())
-                        }
+                    async move |notification: AgentEventNotification,
+                                _cx: ConnectionTo<AppServer>| {
+                        received_tx
+                            .send(notification)
+                            .map_err(|_| agent_client_protocol::Error::internal_error())?;
+                        Ok(())
                     },
                     agent_client_protocol::on_receive_notification!(),
                 )
-                .connect_with(client_transport, async |_cx: ConnectionTo<AppServer>| {
-                    // Let the server's forwarder subscribe before publishing.
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                    queue_for_client
-                        .enqueue(
-                            AgenticEvent::SessionStateChanged {
-                                session_id: "s1".to_string(),
-                                new_state: "ready".to_string(),
-                            },
-                            None,
+                .connect_with(
+                    client_transport,
+                    async move |cx: ConnectionTo<AppServer>| {
+                        // This event predates successful negotiation and must never
+                        // be replayed after the connection accepts v4.
+                        queue_for_client
+                            .enqueue(
+                                serde_json::from_value(serde_json::json!({
+                                    "type": "ToolEvent",
+                                    "session_id": "s1",
+                                    "turn_id": "t1",
+                                    "round_id": "r1",
+                                    "tool_event": {
+                                        "event_type": "UserInputRequested",
+                                        "tool_id": "question-1",
+                                        "tool_name": "AskUserQuestion",
+                                        "registration_sequence": 1,
+                                        "params": { "questions": [] }
+                                    }
+                                }))
+                                .expect("user-input event should match the stable event contract"),
+                                None,
+                            )
+                            .await
+                            .expect("pre-initialize event should enqueue");
+
+                        initialize_connection(&cx).await?;
+                        queue_for_client
+                            .enqueue(
+                                AgenticEvent::SessionStateChanged {
+                                    session_id: "s1".to_string(),
+                                    new_state: "ready".to_string(),
+                                },
+                                None,
+                            )
+                            .await
+                            .expect("event should enqueue");
+
+                        let received = tokio::time::timeout(
+                            Duration::from_millis(500),
+                            received_rx.recv(),
                         )
                         .await
-                        .expect("event should enqueue");
-                    // Allow time for the server forwarder + client dispatch.
-                    tokio::time::sleep(Duration::from_millis(200)).await;
+                        .expect("post-initialize event should arrive without a subscription delay")
+                        .expect("notification stream should stay open");
+                        assert_eq!(received.cursor.sequence, 1);
+                        assert!(received.cursor.connection_id.starts_with("app-server-"));
+                        assert!(matches!(
+                            &received.event.event,
+                            AgenticEvent::SessionStateChanged { session_id, new_state }
+                                if session_id == "s1" && new_state == "ready"
+                        ));
+                        assert!(
+                            received_rx.try_recv().is_err(),
+                            "the pre-initialize UserInputRequested event must not be replayed"
+                        );
+                        Ok(())
+                    },
+                )
+                .await;
+            assert!(result.is_ok(), "{result:?}");
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn permission_sync_snapshot_watermark_tracks_forwarded_permission_events() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            let (runtime, permissions) = build_app_runtime_with_permissions();
+            spawn_server(runtime, server_transport);
+
+            let (received_tx, mut received_rx) =
+                tokio::sync::mpsc::unbounded_channel::<PermissionEventNotification>();
+            let permissions_for_client = permissions.clone();
+            let result = AppClient
+                .builder()
+                .on_receive_notification(
+                    async move |notification: PermissionEventNotification,
+                                _cx: ConnectionTo<AppServer>| {
+                        received_tx
+                            .send(notification)
+                            .map_err(|_| agent_client_protocol::Error::internal_error())?;
+                        Ok(())
+                    },
+                    agent_client_protocol::on_receive_notification!(),
+                )
+                .connect_with(
+                    client_transport,
+                    async move |cx: ConnectionTo<AppServer>| {
+                        initialize_connection(&cx).await?;
+                        let request = permission_request("permission-sync");
+                        let _pending = permissions_for_client
+                            .register(request.clone())
+                            .await
+                            .expect("permission should register");
+                        let asked =
+                            tokio::time::timeout(Duration::from_millis(500), received_rx.recv())
+                                .await
+                                .expect("asked event should be forwarded")
+                                .expect("permission notification stream should stay open");
+                        assert!(matches!(
+                            &asked.event,
+                            bitfun_agent_runtime::sdk::PermissionRequestEvent::Asked {
+                                request: asked_request
+                            } if asked_request == &request
+                        ));
+
+                        let synchronized = recv(cx.send_request(SyncEventsRequest {
+                            streams: vec![EventStream::Permission],
+                        }))
+                        .await?;
+                        assert_eq!(synchronized.pending_permissions, vec![request.clone()]);
+                        assert_eq!(synchronized.cursors.len(), 1);
+                        assert_eq!(
+                            synchronized.cursors[0].sequence, asked.cursor.sequence,
+                            "snapshot watermark should include the already-forwarded Asked event"
+                        );
+
+                        permissions_for_client
+                            .reply(
+                                &request.request_id,
+                                PermissionReply::Once,
+                                PermissionReplySource::User,
+                            )
+                            .await
+                            .expect("permission should resolve");
+                        let replied =
+                            tokio::time::timeout(Duration::from_millis(500), received_rx.recv())
+                                .await
+                                .expect("reply event should be forwarded")
+                                .expect("permission notification stream should stay open");
+                        assert!(matches!(
+                            &replied.event,
+                            bitfun_agent_runtime::sdk::PermissionRequestEvent::Replied {
+                                request_id,
+                                ..
+                            } if request_id == &request.request_id
+                        ));
+
+                        let synchronized = recv(cx.send_request(SyncEventsRequest {
+                            streams: vec![EventStream::Permission],
+                        }))
+                        .await?;
+                        assert!(synchronized.pending_permissions.is_empty());
+                        assert_eq!(
+                            synchronized.cursors[0].sequence, replied.cursor.sequence,
+                            "snapshot watermark should include the already-forwarded Replied event"
+                        );
+                        Ok(())
+                    },
+                )
+                .await;
+            assert!(result.is_ok(), "{result:?}");
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn permission_sync_replays_the_same_request_after_a_blocked_audit_snapshot() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            let gate = Arc::new(PermissionAuditGate::default());
+            let store = Arc::new(TestPermissionStore {
+                audit_gate: Some(gate.clone()),
+            });
+            let (runtime, permissions) = build_app_runtime_with_permission_store(store);
+            spawn_server(runtime, server_transport);
+
+            let (received_tx, mut received_rx) =
+                tokio::sync::mpsc::unbounded_channel::<PermissionEventNotification>();
+            let result = AppClient
+                .builder()
+                .on_receive_notification(
+                    async move |notification: PermissionEventNotification,
+                                _cx: ConnectionTo<AppServer>| {
+                        received_tx
+                            .send(notification)
+                            .map_err(|_| agent_client_protocol::Error::internal_error())?;
+                        Ok(())
+                    },
+                    agent_client_protocol::on_receive_notification!(),
+                )
+                .connect_with(
+                    client_transport,
+                    async move |cx: ConnectionTo<AppServer>| {
+                        let initialized = recv(cx.send_request(InitializeRequest {
+                            protocol_version: PROTOCOL_VERSION,
+                            client: ClientInfo {
+                                name: "bitfun-app-server-test".to_string(),
+                                version: env!("CARGO_PKG_VERSION").to_string(),
+                            },
+                        }))
+                        .await?;
+                        let permission = initialized
+                            .capabilities
+                            .iter()
+                            .find(|capability| capability.id == "permission")
+                            .expect("permission capability should be declared");
+                        assert!(matches!(
+                            permission.availability,
+                            CapabilityAvailability::Available
+                        ));
+
+                        let request = permission_request("permission-audit-window");
+                        let permissions_for_registration = permissions.clone();
+                        let request_for_registration = request.clone();
+                        let registration = tokio::task::spawn_local(async move {
+                            permissions_for_registration
+                                .register(request_for_registration)
+                                .await
+                        });
+
+                        gate.started.notified().await;
+                        let synchronized = recv(cx.send_request(SyncEventsRequest {
+                            streams: vec![EventStream::Permission],
+                        }))
+                        .await?;
+                        assert_eq!(synchronized.pending_permissions, vec![request.clone()]);
+                        assert_eq!(synchronized.cursors.len(), 1);
+                        assert_eq!(synchronized.cursors[0].sequence, 0);
+                        assert!(
+                            received_rx.try_recv().is_err(),
+                            "Asked must remain blocked behind the permission audit"
+                        );
+
+                        gate.release.notify_one();
+                        let _pending = registration
+                            .await
+                            .expect("permission registration task should finish")
+                            .expect("permission registration should succeed");
+                        let asked = received_rx
+                            .recv()
+                            .await
+                            .expect("permission notification stream should stay open");
+                        let asked_request = match asked.event {
+                            bitfun_agent_runtime::sdk::PermissionRequestEvent::Asked {
+                                request,
+                            } => request,
+                            other => panic!("expected Asked, got {other:?}"),
+                        };
+                        assert_eq!(asked_request.request_id, request.request_id);
+                        assert!(asked.cursor.sequence > synchronized.cursors[0].sequence);
+                        Ok(())
+                    },
+                )
+                .await;
+            assert!(result.is_ok(), "{result:?}");
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn event_sync_fails_closed_without_permission_snapshot_owner() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            spawn_server(build_app_runtime(), server_transport);
+
+            let result = AppClient
+                .builder()
+                .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
+                    let initialized = recv(cx.send_request(InitializeRequest {
+                        protocol_version: PROTOCOL_VERSION,
+                        client: ClientInfo {
+                            name: "bitfun-app-server-test".to_string(),
+                            version: env!("CARGO_PKG_VERSION").to_string(),
+                        },
+                    }))
+                    .await?;
+                    let permission = initialized
+                        .capabilities
+                        .iter()
+                        .find(|capability| capability.id == "permission")
+                        .expect("permission capability should be declared");
+                    assert!(matches!(
+                        permission.availability,
+                        CapabilityAvailability::Unavailable { .. }
+                    ));
+                    let error = recv(cx.send_request(SyncEventsRequest {
+                        streams: vec![EventStream::Permission],
+                    }))
+                    .await
+                    .expect_err("missing permission owner must not look like an empty snapshot");
+                    assert_eq!(
+                        error.code,
+                        (AppServerErrorKind::Internal.json_rpc_code() as i32).into()
+                    );
                     Ok(())
                 })
                 .await;
             assert!(result.is_ok(), "{result:?}");
-
-            let received = received.lock().unwrap().clone();
-            assert_eq!(
-                received.len(),
-                1,
-                "should receive exactly one authoritative Agent event, got {received:?}"
-            );
-            assert_eq!(received[0].cursor.sequence, 1);
-            assert!(received[0].cursor.connection_id.starts_with("app-server-"));
-            assert!(matches!(
-                &received[0].event.event,
-                AgenticEvent::SessionStateChanged { session_id, new_state }
-                    if session_id == "s1" && new_state == "ready"
-            ));
         })
         .await;
 }

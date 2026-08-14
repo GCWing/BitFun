@@ -21,17 +21,18 @@ pub use schemas::{
 };
 
 /// Current App Server protocol version.
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 
 /// Oldest protocol version this implementation accepts.
-pub const MIN_PROTOCOL_VERSION: u32 = 2;
+pub const MIN_PROTOCOL_VERSION: u32 = 4;
 
 #[cfg(test)]
 mod protocol_version_tests {
-    use super::PROTOCOL_VERSION;
+    use super::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 
     #[test]
-    fn application_protocol_stays_at_version_3() {
-        assert_eq!(PROTOCOL_VERSION, 3);
+    fn application_protocol_stays_at_version_4() {
+        assert_eq!(PROTOCOL_VERSION, 4);
+        assert_eq!(MIN_PROTOCOL_VERSION, 4);
     }
 }

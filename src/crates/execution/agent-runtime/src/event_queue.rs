@@ -8,10 +8,10 @@ use bitfun_events::{
 use log::{debug, trace, warn};
 use std::collections::{BinaryHeap, HashMap};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, RwLock as StdRwLock, Weak,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Mutex as StdMutex, RwLock as StdRwLock, Weak,
 };
-use tokio::sync::{broadcast, Mutex, Notify};
+use tokio::sync::{broadcast, Notify};
 
 const MIN_EVENT_BROADCAST_BUFFER: usize = 1024;
 // Session-scoped protocol consumers can pause while servicing an RPC. Keep a
@@ -25,6 +25,34 @@ struct SessionBroadcast {
 }
 
 type SessionBroadcastMap = HashMap<String, Arc<SessionBroadcast>>;
+
+struct QueuedEvent {
+    sequence: u64,
+    envelope: EventEnvelope,
+}
+
+impl PartialEq for QueuedEvent {
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence == other.sequence
+    }
+}
+
+impl Eq for QueuedEvent {}
+
+impl PartialOrd for QueuedEvent {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for QueuedEvent {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.envelope.priority.cmp(&other.envelope.priority) {
+            std::cmp::Ordering::Equal => self.sequence.cmp(&other.sequence),
+            ordering => ordering,
+        }
+    }
+}
 
 /// Receiver for one session's bounded event stream.
 ///
@@ -115,7 +143,10 @@ pub struct QueueStats {
 /// - Event driven (Notify mechanism)
 pub struct EventQueue {
     /// Priority queue
-    queue: Arc<Mutex<BinaryHeap<std::cmp::Reverse<EventEnvelope>>>>,
+    queue: Arc<StdMutex<BinaryHeap<std::cmp::Reverse<QueuedEvent>>>>,
+
+    /// Stable producer order for events with the same priority.
+    next_sequence: AtomicU64,
 
     /// Notifier (used to wake up waiting consumers)
     notify: Arc<Notify>,
@@ -135,7 +166,7 @@ pub struct EventQueue {
     config: EventQueueConfig,
 
     /// Statistics
-    stats: Arc<Mutex<QueueStats>>,
+    stats: Arc<StdMutex<QueueStats>>,
 }
 
 impl EventQueue {
@@ -146,13 +177,14 @@ impl EventQueue {
         let broadcast_capacity = config.max_queue_size.max(MIN_EVENT_BROADCAST_BUFFER);
         let (broadcast_tx, _) = broadcast::channel(broadcast_capacity);
         Self {
-            queue: Arc::new(Mutex::new(BinaryHeap::new())),
+            queue: Arc::new(StdMutex::new(BinaryHeap::new())),
+            next_sequence: AtomicU64::new(0),
             notify: Arc::new(Notify::new()),
             broadcast_tx,
             session_broadcasts: Arc::new(StdRwLock::new(HashMap::new())),
             has_session_broadcasts: Arc::new(AtomicBool::new(false)),
             config,
-            stats: Arc::new(Mutex::new(QueueStats::default())),
+            stats: Arc::new(StdMutex::new(QueueStats::default())),
         }
     }
 
@@ -162,20 +194,39 @@ impl EventQueue {
         event: AgenticEvent,
         priority: Option<EventPriority>,
     ) -> EventBusResult<String> {
+        Ok(self.enqueue_now(event, priority))
+    }
+
+    /// Enqueue and publish an event without an async suspension point.
+    ///
+    /// Queue and statistics critical sections contain no async work, so the
+    /// synchronous path preserves the same ordering and capacity behavior as
+    /// [`Self::enqueue`]. Drop-time owner settlement uses this path because
+    /// its producer future cannot await after cancellation.
+    pub fn enqueue_now(&self, event: AgenticEvent, priority: Option<EventPriority>) -> String {
         let priority = priority.unwrap_or_else(|| event.default_priority());
         let envelope = EventEnvelope::new(event, priority);
         let event_id = envelope.id.clone();
 
         let (queue_len, queued) = {
-            let mut queue = self.queue.lock().await;
+            let mut queue = self.queue.lock().expect("event queue lock poisoned");
             if queue.len() >= self.config.max_queue_size {
                 warn!(
                     "Event queue full, skipping legacy queue storage: event_id={}",
                     event_id
                 );
+                self.broadcast_envelope(&envelope);
                 (queue.len(), false)
             } else {
-                queue.push(std::cmp::Reverse(envelope.clone()));
+                let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed);
+                queue.push(std::cmp::Reverse(QueuedEvent {
+                    sequence,
+                    envelope: envelope.clone(),
+                }));
+                // Publish while the queue lock still owns the enqueue order so
+                // concurrent producers have one sequence across the legacy
+                // dequeue path and every broadcast subscriber.
+                self.broadcast_envelope(&envelope);
                 (queue.len(), true)
             }
         };
@@ -184,24 +235,8 @@ impl EventQueue {
         // subscribers and must not depend on capacity in the legacy dequeue
         // buffer. Session-scoped subscribers receive only matching traffic so
         // an unrelated session cannot consume their bounded backlog.
-        let session_channel = if self.has_session_broadcasts.load(Ordering::Acquire) {
-            envelope.event.session_id().and_then(|session_id| {
-                self.session_broadcasts
-                    .read()
-                    .expect("session event channels lock poisoned")
-                    .get(session_id)
-                    .cloned()
-            })
-        } else {
-            None
-        };
-        if let Some(channel) = session_channel {
-            let _ = channel.sender.send(envelope.clone());
-        }
-        let _ = self.broadcast_tx.send(envelope);
-
         {
-            let mut stats = self.stats.lock().await;
+            let mut stats = self.stats.lock().expect("event queue stats lock poisoned");
             stats.total_enqueued += 1;
             stats.pending_events = queue_len;
         }
@@ -216,19 +251,37 @@ impl EventQueue {
             priority
         );
 
-        Ok(event_id)
+        event_id
+    }
+
+    fn broadcast_envelope(&self, envelope: &EventEnvelope) {
+        let session_channel = if self.has_session_broadcasts.load(Ordering::Acquire) {
+            envelope.event.session_id().and_then(|session_id| {
+                self.session_broadcasts
+                    .read()
+                    .expect("session event channels lock poisoned")
+                    .get(session_id)
+                    .cloned()
+            })
+        } else {
+            None
+        };
+        if let Some(channel) = session_channel {
+            let _ = channel.sender.send(envelope.clone());
+        }
+        let _ = self.broadcast_tx.send(envelope.clone());
     }
 
     /// Dequeue batch of events
     pub async fn dequeue_batch(&self, max_size: usize) -> Vec<EventEnvelope> {
         let mut batch = Vec::new();
-        let mut queue = self.queue.lock().await;
+        let mut queue = self.queue.lock().expect("event queue lock poisoned");
 
         let take_count = max_size.min(queue.len());
 
         for _ in 0..take_count {
-            if let Some(std::cmp::Reverse(envelope)) = queue.pop() {
-                batch.push(envelope);
+            if let Some(std::cmp::Reverse(queued)) = queue.pop() {
+                batch.push(queued.envelope);
             }
         }
         let remaining_queue_len = queue.len();
@@ -259,7 +312,7 @@ impl EventQueue {
 
         // Update statistics
         if !batch.is_empty() {
-            let mut stats = self.stats.lock().await;
+            let mut stats = self.stats.lock().expect("event queue stats lock poisoned");
             stats.total_processed += batch.len() as u64;
             stats.pending_events = remaining_queue_len;
         }
@@ -336,12 +389,12 @@ impl EventQueue {
     pub async fn clear_session(&self, session_id: &str) -> EventBusResult<()> {
         // Remove all events for this session from the queue
         let queue_len = {
-            let mut queue = self.queue.lock().await;
+            let mut queue = self.queue.lock().expect("event queue lock poisoned");
             let mut new_queue = BinaryHeap::new();
 
-            while let Some(std::cmp::Reverse(envelope)) = queue.pop() {
-                if envelope.event.session_id() != Some(session_id) {
-                    new_queue.push(std::cmp::Reverse(envelope));
+            while let Some(std::cmp::Reverse(queued)) = queue.pop() {
+                if queued.envelope.event.session_id() != Some(session_id) {
+                    new_queue.push(std::cmp::Reverse(queued));
                 }
             }
 
@@ -351,7 +404,7 @@ impl EventQueue {
 
         // Update statistics: use the size obtained earlier
         {
-            let mut stats = self.stats.lock().await;
+            let mut stats = self.stats.lock().expect("event queue stats lock poisoned");
             stats.pending_events = queue_len;
         }
 
@@ -362,7 +415,10 @@ impl EventQueue {
 
     /// Get queue statistics
     pub async fn stats(&self) -> QueueStats {
-        self.stats.lock().await.clone()
+        self.stats
+            .lock()
+            .expect("event queue stats lock poisoned")
+            .clone()
     }
 
     /// Wait for events (used for consumers)
@@ -372,12 +428,15 @@ impl EventQueue {
 
     /// Get queue size
     pub async fn len(&self) -> usize {
-        self.queue.lock().await.len()
+        self.queue.lock().expect("event queue lock poisoned").len()
     }
 
     /// Check if the queue is empty
     pub async fn is_empty(&self) -> bool {
-        self.queue.lock().await.is_empty()
+        self.queue
+            .lock()
+            .expect("event queue lock poisoned")
+            .is_empty()
     }
 }
 
@@ -391,7 +450,7 @@ impl StreamEventSink for EventQueue {
 #[cfg(test)]
 mod tests {
     use super::{EventQueue, EventQueueConfig};
-    use bitfun_events::AgenticEvent;
+    use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
     use std::sync::{Arc, Barrier};
 
     #[tokio::test]
@@ -434,6 +493,124 @@ mod tests {
                 .session_id(),
             Some("second")
         );
+    }
+
+    #[tokio::test]
+    async fn immediate_broadcast_reaches_global_and_session_subscribers() {
+        let queue = EventQueue::new(EventQueueConfig::default());
+        let mut global = queue.subscribe();
+        let mut session = queue.subscribe_session("session");
+
+        queue.enqueue_now(
+            AgenticEvent::SessionStateChanged {
+                session_id: "session".to_string(),
+                new_state: "cancelled".to_string(),
+            },
+            None,
+        );
+
+        assert_eq!(
+            global
+                .recv()
+                .await
+                .expect("global broadcast")
+                .event
+                .session_id(),
+            Some("session")
+        );
+        assert_eq!(
+            session
+                .recv()
+                .await
+                .expect("session broadcast")
+                .event
+                .session_id(),
+            Some("session")
+        );
+        assert_eq!(queue.len().await, 1);
+    }
+
+    #[tokio::test]
+    async fn pending_user_input_resolution_precedes_tool_and_turn_terminal_events() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 3,
+            batch_size: 3,
+        });
+        let mut broadcast = queue.subscribe();
+        let identity = ToolEventIdentity::direct("question-1", "AskUserQuestion");
+
+        queue.enqueue_now(
+            AgenticEvent::ToolEvent {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                round_id: "round-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
+                tool_event: ToolEventData::UserInputResolved {
+                    identity: identity.clone(),
+                    registration_sequence: 1,
+                },
+            },
+            None,
+        );
+        queue.enqueue_now(
+            AgenticEvent::ToolEvent {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                round_id: "round-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
+                tool_event: ToolEventData::Cancelled {
+                    identity,
+                    reason: "turn cancelled".to_string(),
+                    duration_ms: None,
+                    queue_wait_ms: None,
+                    preflight_ms: None,
+                    confirmation_wait_ms: None,
+                    execution_ms: None,
+                },
+            },
+            None,
+        );
+        queue.enqueue_now(
+            AgenticEvent::DialogTurnCancelled {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+            },
+            None,
+        );
+
+        let mut broadcast_events = Vec::new();
+        for _ in 0..3 {
+            broadcast_events.push(broadcast.recv().await.expect("broadcast event"));
+        }
+        assert!(matches!(
+            broadcast_events[0].event,
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::UserInputResolved { .. },
+                ..
+            }
+        ));
+
+        let batch = queue.dequeue_configured_batch().await;
+        assert!(matches!(
+            batch[0].event,
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::UserInputResolved { .. },
+                ..
+            }
+        ));
+        assert!(matches!(
+            batch[1].event,
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::Cancelled { .. },
+                ..
+            }
+        ));
+        assert!(matches!(
+            batch[2].event,
+            AgenticEvent::DialogTurnCancelled { .. }
+        ));
     }
 
     #[tokio::test]
@@ -513,6 +690,13 @@ mod tests {
                     second_ids.push(second.recv().await.expect("second broadcast").id);
                 }
                 assert_eq!(first_ids, second_ids);
+                let queued_ids = queue
+                    .dequeue_batch(EVENT_COUNT)
+                    .await
+                    .into_iter()
+                    .map(|event| event.id)
+                    .collect::<Vec<_>>();
+                assert_eq!(first_ids, queued_ids);
             });
     }
 

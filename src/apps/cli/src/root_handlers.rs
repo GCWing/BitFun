@@ -225,8 +225,6 @@ pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs
     );
     let run_result = exec_mode.run().await;
 
-    crate::shutdown_mcp_servers().await;
-
     run_result
 }
 

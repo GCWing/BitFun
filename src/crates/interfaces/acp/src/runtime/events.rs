@@ -256,6 +256,22 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
                 .locations(tool_locations(effective_input))
                 .raw_input(sanitize_tool_input(tool_name, effective_input.clone()))
         }
+        ToolEventData::UserInputRequested {
+            identity, params, ..
+        } => {
+            let (tool_name, effective_input) =
+                bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params);
+            ToolCallUpdateFields::new()
+                .title(tool_title(tool_name))
+                .kind(tool_kind(tool_name))
+                .status(ToolCallStatus::InProgress)
+                .locations(tool_locations(effective_input))
+                .raw_input(sanitize_tool_input(tool_name, effective_input.clone()))
+                .content(vec![text_content("Waiting for user input.")])
+        }
+        ToolEventData::UserInputResolved { .. } => ToolCallUpdateFields::new()
+            .status(ToolCallStatus::InProgress)
+            .content(vec![text_content("User input received.")]),
         ToolEventData::Progress {
             message,
             percentage,
@@ -612,6 +628,30 @@ mod tests {
                 "payload": "+++ src/lib.rs\nhello\n",
             }))
         );
+    }
+
+    #[test]
+    fn user_input_requested_updates_the_existing_tool_call() {
+        let mut seen = HashSet::new();
+        let started = ToolEventData::Started {
+            identity: identity("AskUserQuestion"),
+            params: serde_json::json!({ "questions": [{ "question": "Continue?" }] }),
+            timeout_seconds: None,
+        };
+        assert_eq!(tool_event_updates(&started, &mut seen).len(), 2);
+
+        let waiting = ToolEventData::UserInputRequested {
+            identity: identity("AskUserQuestion"),
+            registration_sequence: 1,
+            params: serde_json::json!({ "questions": [{ "question": "Continue?" }] }),
+        };
+        let updates = tool_event_updates(&waiting, &mut seen);
+
+        assert_eq!(updates.len(), 1, "must not announce a second tool call");
+        let SessionUpdate::ToolCallUpdate(update) = &updates[0] else {
+            panic!("expected tool call update");
+        };
+        assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
     }
 
     #[test]

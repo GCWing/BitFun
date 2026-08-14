@@ -12,10 +12,15 @@
 pub mod adapter;
 pub mod auth;
 pub mod config;
+#[cfg(feature = "external-sources")]
+mod management;
 pub mod protocol;
 pub mod server;
 mod tool_info;
 mod tool_name;
+
+#[cfg(all(test, feature = "external-sources"))]
+mod management_tests;
 
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -36,6 +41,11 @@ pub use adapter::{
 };
 
 pub use config::{ConfigLocation, MCPConfigService};
+#[cfg(feature = "external-sources")]
+pub use management::{
+    McpManagementAction, McpManagementError, McpManagementErrorKind, McpManagementList,
+    McpManagementMutation, McpManagementServer, McpManagementService, McpManagementTransport,
+};
 pub use tool_info::McpToolInfo;
 pub use tool_name::{
     build_mcp_tool_name, normalize_name_for_mcp, MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,

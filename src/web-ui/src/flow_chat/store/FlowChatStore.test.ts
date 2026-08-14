@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flowChatStore, mergeModelRoundAttemptDiagnostics } from './FlowChatStore';
-import type { FlowChatState, Session } from '../types/flow-chat';
+import type { FlowChatState, FlowToolItem, Session } from '../types/flow-chat';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
@@ -137,6 +137,7 @@ const resetStore = () => {
   ((flowChatStore as any).sessionTurnWindowRequests as Map<string, unknown> | undefined)?.clear();
   ((flowChatStore as any).unsupportedRestoreCommands as Set<string> | undefined)?.clear();
   ((flowChatStore as any).pendingRemoveSessionOptions as Map<string, unknown> | undefined)?.clear();
+  ((flowChatStore as any).pendingUserInputLifecycle as Map<string, unknown> | undefined)?.clear();
   flowChatStore.setState((): FlowChatState => ({
     sessions: new Map(),
     activeSessionId: null,
@@ -162,6 +163,40 @@ const createSession = (overrides: Partial<Session> = {}): Session => ({
   isTransient: false,
   ...overrides,
 });
+
+function createQuestionSession(toolId = 'question-1'): Session {
+  return createSession({
+    dialogTurns: [{
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: { id: 'user-1', content: 'ask me', timestamp: 1 },
+      modelRounds: [{
+        id: 'round-1',
+        turnId: 'turn-1',
+        roundIndex: 0,
+        items: [],
+        status: 'streaming',
+        isStreaming: true,
+        timestamp: 1,
+        startTime: 1,
+      }],
+      status: 'processing',
+      startTime: 1,
+    }],
+  });
+}
+
+function questionItem(toolId = 'question-1'): FlowToolItem {
+  return {
+    id: toolId,
+    type: 'tool',
+    toolName: 'AskUserQuestion',
+    toolCall: { id: toolId, input: { questions: [{ question: 'Continue?' }] } },
+    timestamp: 2,
+    startTime: 2,
+    status: 'running',
+  };
+}
 
 const createPersistedTurn = (index: number, sessionId = 'history-1') => ({
   turnId: `turn-${index}`,
@@ -227,6 +262,137 @@ function resetStartupTraceEventsForTest(): void {
   trace.phaseEvents = 0;
   trace.phaseRecords.length = 0;
 }
+
+describe('FlowChatStore pending user-input lifecycle buffering', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('applies an orphan ready identity after the Ask item attaches', () => {
+    flowChatStore.recordPendingUserInputReady({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolId: 'question-1',
+      registrationSequence: 7,
+    }, 'live');
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', createQuestionSession()]]),
+      activeSessionId: 'session-1',
+    }));
+
+    flowChatStore.addModelRoundItem(
+      'session-1',
+      'turn-1',
+      questionItem(),
+      'round-1',
+    );
+
+    expect(flowChatStore.findToolItem('session-1', 'turn-1', 'question-1')).toMatchObject({
+      userInputReady: true,
+      userInputIdentity: {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        toolId: 'question-1',
+        registrationSequence: 7,
+      },
+    });
+    expect((flowChatStore as any).pendingUserInputLifecycle.size).toBe(0);
+  });
+
+  it('keeps a terminal tombstone authoritative over an older restore snapshot', () => {
+    flowChatStore.recordPendingUserInputReady({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolId: 'question-1',
+      registrationSequence: 7,
+    }, 'live');
+    flowChatStore.recordPendingUserInputTerminal('session-1', 'turn-1', 'question-1', 7);
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', createQuestionSession()]]),
+      activeSessionId: 'session-1',
+    }));
+    flowChatStore.addModelRoundItem('session-1', 'turn-1', questionItem(), 'round-1');
+
+    (flowChatStore as any).hydratePendingUserInputReadiness('session-1', [{
+      toolId: 'question-1',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      sourceSessionId: 'session-1',
+      sourceTurnId: 'turn-1',
+      registrationSequence: 7,
+      input: { questions: [{ question: 'Continue?' }] },
+    }]);
+
+    expect(flowChatStore.findToolItem('session-1', 'turn-1', 'question-1')).toMatchObject({
+      userInputReady: false,
+    });
+    expect((flowChatStore.findToolItem(
+      'session-1',
+      'turn-1',
+      'question-1',
+    ) as FlowToolItem).userInputIdentity).toBeUndefined();
+  });
+
+  it('does not let an older settlement revoke a newer ready registration', () => {
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', createQuestionSession()]]),
+      activeSessionId: 'session-1',
+    }));
+    flowChatStore.addModelRoundItem('session-1', 'turn-1', questionItem(), 'round-1');
+    flowChatStore.recordPendingUserInputReady({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolId: 'question-1',
+      registrationSequence: 8,
+    }, 'live');
+
+    (flowChatStore.recordPendingUserInputTerminal as any)(
+      'session-1',
+      'turn-1',
+      'question-1',
+      7,
+    );
+    expect(flowChatStore.findToolItem('session-1', 'turn-1', 'question-1')).toMatchObject({
+      userInputReady: true,
+      userInputIdentity: { registrationSequence: 8 },
+    });
+
+    (flowChatStore.recordPendingUserInputTerminal as any)(
+      'session-1',
+      'turn-1',
+      'question-1',
+      8,
+    );
+    expect(flowChatStore.findToolItem('session-1', 'turn-1', 'question-1')).toMatchObject({
+      userInputReady: false,
+    });
+  });
+
+  it('isolates lifecycle state by Session and consumes it only on the exact item', () => {
+    flowChatStore.recordPendingUserInputReady({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolId: 'question-1',
+      registrationSequence: 9,
+    }, 'live');
+    const other = createQuestionSession();
+    other.sessionId = 'session-2';
+    other.dialogTurns[0].sessionId = 'session-2';
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-2', other]]),
+      activeSessionId: 'session-2',
+    }));
+    flowChatStore.addModelRoundItem('session-2', 'turn-1', questionItem(), 'round-1');
+
+    expect(flowChatStore.findToolItem('session-2', 'turn-1', 'question-1'))
+      .not.toHaveProperty('userInputReady', true);
+    expect((flowChatStore as any).pendingUserInputLifecycle.size).toBe(1);
+  });
+});
 
 describe('FlowChatStore lazy worktree preference', () => {
   afterEach(() => {
@@ -1552,6 +1718,74 @@ describe('FlowChatStore historical session hydration state', () => {
     expect(apiMocks.accountFetchSessionTurns).not.toHaveBeenCalled();
     expect(apiMocks.restoreSessionView).toHaveBeenCalled();
     expect(flowChatStore.getState().sessions.get('history-1')?.historyState).not.toBe('failed');
+  });
+
+  it('hydrates a restored Ask card from the authoritative pending-input snapshot', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Processing { current_turn_id: "turn-live", phase: ToolCalling }',
+        turnCount: 1,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 0,
+        sessionId: 'history-1',
+        timestamp: 1,
+        userMessage: { id: 'user-live', content: 'ask me', timestamp: 1 },
+        modelRounds: [{
+          id: 'round-live',
+          turnId: 'turn-live',
+          roundIndex: 0,
+          timestamp: 1,
+          textItems: [],
+          toolItems: [{
+            id: 'question-1',
+            toolName: 'AskUserQuestion',
+            toolCall: { id: 'question-1', input: {} },
+            startTime: 2,
+            status: 'running',
+          }],
+          thinkingItems: [],
+          startTime: 1,
+          status: 'streaming',
+        }],
+        startTime: 1,
+        status: 'inprogress',
+      }],
+      pendingUserInputs: [{
+        toolId: 'question-1',
+        sessionId: 'history-1',
+        turnId: 'turn-live',
+        sourceSessionId: 'history-1',
+        sourceTurnId: 'turn-live',
+        registrationSequence: 7,
+        input: { questions: [{ question: 'Continue?' }] },
+      }],
+      contextRestoreState: 'pending',
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        'history-1',
+        createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        }),
+      ]]),
+      activeSessionId: 'history-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('history-1', '/Users/host/project');
+
+    const items = flowChatStore.getState().sessions
+      .get('history-1')?.dialogTurns[0]?.modelRounds[0]?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect((items[0] as FlowToolItem).userInputReady).toBe(true);
   });
 
   it('keeps an in-memory Peer Host turn live when opening mid-execution', async () => {

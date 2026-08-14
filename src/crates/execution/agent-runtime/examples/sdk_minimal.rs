@@ -49,7 +49,7 @@ impl AgentSubmissionPort for ExampleAgentProvider {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let compatibility = AgentRuntimeSdkCompatibility::current();
-    assert_eq!(compatibility.api_version, 6);
+    assert_eq!(compatibility.api_version, 7);
 
     let provider = Arc::new(ExampleAgentProvider::default());
     let events = AgentEventStream::new();

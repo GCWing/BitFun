@@ -53,7 +53,7 @@ import { ModelProviderSseParser } from '../main/ets/services/general-chat/ModelP
 import { MockGeneralChatAdapter } from '../main/ets/services/general-chat/MockGeneralChatAdapter';
 import { MarkdownParser } from '../main/ets/services/MarkdownParser';
 import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory';
-import { toRemoteQuestionAnswer } from '../main/ets/pages/state/ConversationUiModels';
+import { toConversationUiToolStatus, toRemoteQuestionAnswer } from '../main/ets/pages/state/ConversationUiModels';
 import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
 import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
 import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
@@ -113,6 +113,7 @@ import {
   CreateSessionOptions,
   RemoteImageContext,
   RemoteQuestionAnswerPayload,
+  RemoteUserInputIdentity,
   RemoteModelCatalog,
   ReadFileResult,
   RemoteSession,
@@ -1340,23 +1341,174 @@ export default function transportAndGeneralChatUnitTest() {
     it('builds tool and file commands', 0, () => {
       const answers: RemoteQuestionAnswerPayload = { answer: 'yes', '0': 'yes' };
       const multipleAnswers: RemoteQuestionAnswerPayload = { '0': 'yes', '1': ['tests', 'docs'] };
+      const identity: RemoteUserInputIdentity = {
+        session_id: 'session-1',
+        turn_id: 'turn-1',
+        tool_id: 'tool-2',
+        registration_sequence: 7
+      };
+      const secondIdentity: RemoteUserInputIdentity = {
+        session_id: 'session-1',
+        turn_id: 'turn-1',
+        tool_id: 'tool-3',
+        registration_sequence: 7
+      };
 
       expectCommandJson(RemoteCommandFactory.confirmTool('tool-1'), '{"cmd":"confirm_tool","tool_id":"tool-1"}');
       expectCommandJson(RemoteCommandFactory.rejectTool('tool-1', 'no'), '{"cmd":"reject_tool","tool_id":"tool-1","reason":"no"}');
       expectCommandJson(RemoteCommandFactory.cancelTool('tool-1', 'stop'), '{"cmd":"cancel_tool","tool_id":"tool-1","reason":"stop"}');
-      expectCommandJson(RemoteCommandFactory.answerQuestion('tool-2', answers), '{"cmd":"answer_question","tool_id":"tool-2","answers":{"0":"yes","answer":"yes"}}');
-      expectCommandJson(RemoteCommandFactory.answerQuestion('tool-3', multipleAnswers), '{"cmd":"answer_question","tool_id":"tool-3","answers":{"0":"yes","1":["tests","docs"]}}');
+      expectCommandJson(RemoteCommandFactory.answerQuestion(identity, answers), '{"cmd":"answer_question","session_id":"session-1","turn_id":"turn-1","tool_id":"tool-2","registration_sequence":7,"answers":{"0":"yes","answer":"yes"}}');
+      expectCommandJson(RemoteCommandFactory.answerQuestion(secondIdentity, multipleAnswers), '{"cmd":"answer_question","session_id":"session-1","turn_id":"turn-1","tool_id":"tool-3","registration_sequence":7,"answers":{"0":"yes","1":["tests","docs"]}}');
       expectCommandJson(RemoteCommandFactory.getFileInfo('/tmp/a.txt', 's1'), '{"cmd":"get_file_info","path":"/tmp/a.txt","session_id":"s1"}');
       expectCommandJson(RemoteCommandFactory.readFileChunk('/tmp/a.txt', 12, 64, 's1'), '{"cmd":"read_file_chunk","path":"/tmp/a.txt","offset":12,"limit":64,"session_id":"s1"}');
     });
 
     it('preserves indexed question answers when dispatching from the UI', 0, () => {
       const answers = toRemoteQuestionAnswer({ '0': 'tests', '1': ['docs', 'src'] });
+      const identity: RemoteUserInputIdentity = {
+        session_id: 'session-2',
+        turn_id: 'turn-4',
+        tool_id: 'tool-4',
+        registration_sequence: 9
+      };
 
       expectCommandJson(
-        RemoteCommandFactory.answerQuestion('tool-4', answers),
-        '{"cmd":"answer_question","tool_id":"tool-4","answers":{"0":"tests","1":["docs","src"]}}'
+        RemoteCommandFactory.answerQuestion(identity, answers),
+        '{"cmd":"answer_question","session_id":"session-2","turn_id":"turn-4","tool_id":"tool-4","registration_sequence":9,"answers":{"0":"tests","1":["docs","src"]}}'
       );
+    });
+
+    it('preserves the authoritative question identity in the UI projection', 0, () => {
+      const projected = toConversationUiToolStatus({
+        id: 'tool-5',
+        name: 'AskUserQuestion',
+        status: 'waiting_for_user',
+        user_input_identity: {
+          session_id: 'session-5',
+          turn_id: 'turn-5',
+          tool_id: 'tool-5',
+          registration_sequence: 11
+        }
+      });
+
+      expect(projected.user_input_identity?.session_id).assertEqual('session-5');
+      expect(projected.user_input_identity?.turn_id).assertEqual('turn-5');
+      expect(projected.user_input_identity?.tool_id).assertEqual('tool-5');
+      expect(projected.user_input_identity?.registration_sequence).assertEqual(11);
+    });
+
+    it('blocks question answers locally without negotiated identity capability', 0, async () => {
+      const manager = new RemoteSessionManager();
+      const identity: RemoteUserInputIdentity = {
+        session_id: 'session-1',
+        turn_id: 'turn-1',
+        tool_id: 'tool-1',
+        registration_sequence: 7
+      };
+      let message = '';
+
+      try {
+        await manager.answerQuestion(identity, { '0': 'yes' });
+      } catch (err) {
+        message = err instanceof Error ? err.message : `${err}`;
+      }
+
+      expect(message).assertEqual(
+        'This Desktop version cannot safely answer interactive questions. ' +
+          'Upgrade Desktop, reconnect, and answer the question again.'
+      );
+    });
+
+    it('keeps same-tool question registrations distinct in live timeline events', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-1');
+      [7, 8].forEach((sequence: number) => {
+        store.applyEvent({
+          type: 'tool_started',
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          tool: {
+            id: 'tool-1',
+            name: 'AskUserQuestion',
+            status: 'waiting_for_user',
+            user_input_identity: {
+              session_id: 'session-1',
+              turn_id: 'turn-1',
+              tool_id: 'tool-1',
+              registration_sequence: sequence
+            }
+          }
+        });
+      });
+
+      const tools = store.snapshot().activeTurn?.tools || [];
+      expect(tools.length).assertEqual(2);
+      expect(tools[0].user_input_identity?.registration_sequence).assertEqual(7);
+      expect(tools[1].user_input_identity?.registration_sequence).assertEqual(8);
+    });
+
+    it('merges a settled question by registration identity before adding the next one', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-1');
+      store.setActiveTurn({
+        id: 'active-turn-1',
+        role: 'assistant',
+        text: '',
+        status: 'waiting_for_user',
+        turnId: 'turn-1',
+        tools: [{
+          id: 'tool-1',
+          name: 'AskUserQuestion',
+          status: 'waiting_for_user',
+          user_input_identity: {
+            session_id: 'session-1',
+            turn_id: 'turn-1',
+            tool_id: 'tool-1',
+            registration_sequence: 7
+          }
+        }]
+      });
+      store.setActiveTurn({
+        id: 'active-turn-1',
+        role: 'assistant',
+        text: '',
+        status: 'running',
+        turnId: 'turn-1',
+        tools: [{
+          id: 'tool-1',
+          name: 'AskUserQuestion',
+          status: 'completed',
+          user_input_identity: {
+            session_id: 'session-1',
+            turn_id: 'turn-1',
+            tool_id: 'tool-1',
+            registration_sequence: 7
+          }
+        }]
+      });
+      store.applyEvent({
+        type: 'tool_started',
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        tool: {
+          id: 'tool-1',
+          name: 'AskUserQuestion',
+          status: 'waiting_for_user',
+          user_input_identity: {
+            session_id: 'session-1',
+            turn_id: 'turn-1',
+            tool_id: 'tool-1',
+            registration_sequence: 8
+          }
+        }
+      });
+
+      const tools = store.snapshot().activeTurn?.tools || [];
+      expect(tools.length).assertEqual(2);
+      expect(tools[0].status).assertEqual('completed');
+      expect(tools[0].user_input_identity?.registration_sequence).assertEqual(7);
+      expect(tools[1].status).assertEqual('waiting_for_user');
+      expect(tools[1].user_input_identity?.registration_sequence).assertEqual(8);
     });
   });
 

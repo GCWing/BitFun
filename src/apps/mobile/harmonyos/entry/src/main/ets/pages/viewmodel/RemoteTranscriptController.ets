@@ -1,6 +1,7 @@
 import {
   RemoteImageContext,
-  RemoteQuestionAnswerPayload
+  RemoteQuestionAnswerPayload,
+  RemoteUserInputIdentity
 } from '../../model/RemoteModels';
 import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
 import { ChatTimelineState, ChatTimelineStore } from '../../services/ChatTimelineStore';
@@ -209,10 +210,13 @@ export class RemoteTranscriptController {
     );
   }
 
-  async answerRemoteQuestion(toolId: string, answers: RemoteQuestionAnswerPayload): Promise<void> {
+  async answerRemoteQuestion(
+    identity: RemoteUserInputIdentity,
+    answers: RemoteQuestionAnswerPayload
+  ): Promise<void> {
     const runtime = requireRemoteRuntime(this.remoteRuntime);
     await runtime.tools.answer(
-      toolId, this.remote.activeSession.sessionId || '', runtime.connection.ensureAvailable(), answers
+      identity, this.remote.activeSession.sessionId || '', runtime.connection.ensureAvailable(), answers
     );
   }
 

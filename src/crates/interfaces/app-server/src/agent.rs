@@ -11,8 +11,10 @@ use std::sync::Arc;
 
 use agent_client_protocol::{Error, Result};
 use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime, PortErrorKind, RuntimeError};
+use bitfun_app_server_protocol::error::{
+    AppServerErrorData, AppServerErrorKind, OUTCOME_UNKNOWN_CODE,
+};
 use bitfun_core::service::git::GitError;
-use bitfun_runtime_ports::AgentContextReloadPort;
 
 /// Host-injected BitFun agent runtime exposed over the app-server surface.
 ///
@@ -24,7 +26,6 @@ use bitfun_runtime_ports::AgentContextReloadPort;
 pub struct BitfunAppRuntime {
     runtime: Arc<AgentRuntime>,
     event_source: AgentEventSource,
-    context_reload: Option<Arc<dyn AgentContextReloadPort>>,
 }
 
 impl std::fmt::Debug for BitfunAppRuntime {
@@ -43,13 +44,7 @@ impl BitfunAppRuntime {
         Self {
             runtime: Arc::new(runtime),
             event_source,
-            context_reload: None,
         }
-    }
-
-    pub fn with_context_reload(mut self, context_reload: Arc<dyn AgentContextReloadPort>) -> Self {
-        self.context_reload = Some(context_reload);
-        self
     }
 
     /// Shared reference to the underlying agent runtime, for handlers that
@@ -67,19 +62,17 @@ impl BitfunAppRuntime {
         self.event_source.clone()
     }
 
-    pub fn context_reload(&self) -> Option<&Arc<dyn AgentContextReloadPort>> {
-        self.context_reload.as_ref()
-    }
-
     /// Map a `RuntimeError` to a JSON-RPC `Error`, mirroring the ACP runtime
     /// boundary: `PortErrorKind::NotFound` becomes `resource_not_found`,
-    /// `InvalidRequest` becomes `invalid_params`, everything else stays
+    /// `InvalidRequest` becomes `invalid_params`, `OutcomeUnknown` keeps the
+    /// stable non-retryable protocol contract, and everything else stays
     /// `internal_error` with the message surfaced as data.
     pub fn runtime_error(error: RuntimeError) -> Error {
         match error {
             RuntimeError::Port(error) => match error.kind {
                 PortErrorKind::InvalidRequest => Error::invalid_params().data(error.message),
                 PortErrorKind::NotFound => Error::resource_not_found(None),
+                PortErrorKind::OutcomeUnknown => Self::outcome_unknown(error.message),
                 _ => Self::internal_error(error.message),
             },
             other => Self::internal_error(other.into_message()),
@@ -99,6 +92,19 @@ impl BitfunAppRuntime {
 
     fn internal_error(message: impl std::fmt::Display) -> Error {
         Error::internal_error().data(serde_json::json!(message.to_string()))
+    }
+
+    fn outcome_unknown(message: String) -> Error {
+        Error::new(OUTCOME_UNKNOWN_CODE as i32, message).data(
+            serde_json::to_value(AppServerErrorData {
+                kind: AppServerErrorKind::OutcomeUnknown,
+                retryable: false,
+                outcome_unknown: true,
+                capability: None,
+                request_id: None,
+            })
+            .expect("AppServerErrorData must serialize"),
+        )
     }
 }
 

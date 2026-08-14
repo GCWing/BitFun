@@ -28,6 +28,7 @@ Mobile web is the browser-based remote control client for BitFun desktop session
 Run the focused mobile-web checks after changes:
 
 ```bash
+pnpm --dir src/mobile-web test
 pnpm --dir src/mobile-web run type-check
 pnpm run build:mobile-web
 ```

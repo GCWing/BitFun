@@ -67,7 +67,7 @@ impl ChatMode {
 
         match outcome {
             Ok(response) => {
-                let form_data = ModelFormResult::from_projection(response.model);
+                let form_data = ModelFormResult::from_projection(response);
                 chat_view.show_model_config_form_for_edit(&model_id, &form_data);
             }
             Err(error) => {

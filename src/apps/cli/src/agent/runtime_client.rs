@@ -14,30 +14,31 @@ use tokio::sync::{broadcast, Mutex};
 use bitfun_agent_runtime::sdk::{
     AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest, AgentEventReceiver,
     AgentInputAttachment, AgentMessageWorkspaceReferencesRequest, AgentRuntime,
-    AgentSessionCompactionRequest,
-    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
-    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
-    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRestoreRequest,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionUsageRequest,
-    AgentTurnCancellationRequest, AgentTurnSettlementRequest, AgentUserAnswersRequest,
-    AgentUserShellCommandRequest, AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, PermissionReply, PermissionRequest,
-    PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
-    SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
+    AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
+    AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
+    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
+    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentSessionRenameRequest, AgentSessionRestoreRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionUsageRequest, AgentTurnCancellationRequest,
+    AgentTurnSettlementRequest, AgentUserAnswersRequest, AgentUserShellCommandRequest,
+    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, DialogSubmitOutcome, PendingUserInput,
+    PermissionReply, PermissionRequest, PermissionRequestEventReceiver, PortError, PortErrorKind,
+    RuntimeError, SessionState, SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
+    WorkspaceDiffSnapshot,
 };
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
     RuntimeIpcEvent, RuntimeIpcOperation, RuntimeIpcOperationResult,
     RuntimeIpcStreamInvalidationReason, RuntimeSessionForkRequest, RuntimeSessionRenameRequest,
-    RuntimeSessionRestoreRequest, RuntimeUserAnswersRequest,
+    RuntimeSessionRestoreRequest, RuntimeSessionState, RuntimeUserAnswersRequest,
 };
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope};
 use bitfun_runtime_ports::{
-    put_agent_workspace_references, AgentSessionSummary, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, AgentSubmissionSource, DialogSubmissionPolicy,
-    SessionExecutionTarget,
+    put_agent_workspace_references, AgentContextReloadRequest, AgentSessionSummary,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionSource,
+    DialogSubmissionPolicy, SessionExecutionTarget,
 };
 
 use crate::actions::SHARED_TUI_EMBEDDED_HANDOFF;
@@ -55,6 +56,60 @@ fn shared_restore_error(error: RuntimeIpcClientError) -> anyhow::Error {
         anyhow::Error::new(error)
     };
     with_session_conflict_help(error)
+}
+
+fn shared_runtime_error(error: RuntimeIpcClientError) -> RuntimeError {
+    let kind = match &error {
+        RuntimeIpcClientError::Remote(remote) => match remote.code {
+            RuntimeIpcErrorCode::SessionInUse => PortErrorKind::SessionInUse,
+            RuntimeIpcErrorCode::InvalidRequest => PortErrorKind::InvalidRequest,
+            RuntimeIpcErrorCode::OutcomeUnknown => PortErrorKind::OutcomeUnknown,
+            RuntimeIpcErrorCode::NotFound => PortErrorKind::NotFound,
+            _ => PortErrorKind::NotAvailable,
+        },
+        RuntimeIpcClientError::Timeout => PortErrorKind::Timeout,
+        RuntimeIpcClientError::RequestEncoding(_) | RuntimeIpcClientError::InvalidTimeout => {
+            PortErrorKind::InvalidRequest
+        }
+        _ => PortErrorKind::NotAvailable,
+    };
+    RuntimeError::Port(PortError::new(kind, error.to_string()))
+}
+
+fn merge_authoritative_remote_fact(
+    label: &str,
+    requested: &mut Option<String>,
+    authoritative: Option<String>,
+) -> Result<()> {
+    match (requested.as_deref(), authoritative.as_deref()) {
+        (Some(requested), Some(authoritative)) if requested != authoritative => {
+            Err(anyhow::anyhow!(
+                "Session usage {label} conflicts with the authoritative Session workspace binding"
+            ))
+        }
+        (None, Some(authoritative)) => {
+            *requested = Some(authoritative.to_string());
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn merge_session_usage_remote_scope(
+    mut request: AgentSessionUsageRequest,
+    authoritative: (Option<String>, Option<String>),
+) -> Result<AgentSessionUsageRequest> {
+    merge_authoritative_remote_fact(
+        "remote connection",
+        &mut request.remote_connection_id,
+        authoritative.0,
+    )?;
+    merge_authoritative_remote_fact(
+        "remote SSH host",
+        &mut request.remote_ssh_host,
+        authoritative.1,
+    )?;
+    Ok(request)
 }
 
 fn validated_session_summary(
@@ -84,6 +139,16 @@ pub(crate) enum SessionMigrationNotice {
         previous_id: String,
         restored_id: String,
     },
+}
+
+#[derive(Debug)]
+pub(crate) struct CliSessionRestoreSnapshot {
+    pub(crate) summary: AgentSessionSummary,
+    pub(crate) workspace_binding: AgentSessionWorkspaceBinding,
+    pub(crate) migration_notices: Vec<SessionMigrationNotice>,
+    pub(crate) transcript: SessionTranscript,
+    pub(crate) active_turn_id: Option<String>,
+    pub(crate) pending_user_inputs: Vec<PendingUserInput>,
 }
 
 impl SessionMigrationNotice {
@@ -143,7 +208,7 @@ impl fmt::Display for SessionOperationError {
 impl std::error::Error for SessionOperationError {}
 
 impl SessionOperationError {
-    fn runtime(error: RuntimeError) -> Self {
+    pub(crate) fn runtime(error: RuntimeError) -> Self {
         let outcome_unknown = matches!(
             &error,
             RuntimeError::Port(port_error)
@@ -156,17 +221,7 @@ impl SessionOperationError {
     }
 
     fn shared(error: RuntimeIpcClientError) -> Self {
-        let outcome_unknown = matches!(
-            &error,
-            RuntimeIpcClientError::Remote(remote)
-                if remote.code == RuntimeIpcErrorCode::OutcomeUnknown
-        ) || matches!(
-            &error,
-            RuntimeIpcClientError::Timeout
-                | RuntimeIpcClientError::Disconnected
-                | RuntimeIpcClientError::UnexpectedResponse
-                | RuntimeIpcClientError::Io(_)
-        );
+        let outcome_unknown = shared_side_effect_outcome_is_unknown(&error);
         Self {
             message: error.to_string(),
             outcome_unknown,
@@ -204,12 +259,60 @@ impl SessionOperationError {
     }
 }
 
+fn shared_side_effect_outcome_is_unknown(error: &RuntimeIpcClientError) -> bool {
+    matches!(
+        error,
+        RuntimeIpcClientError::Remote(remote)
+            if remote.code == RuntimeIpcErrorCode::OutcomeUnknown
+    ) || matches!(
+        error,
+        RuntimeIpcClientError::Timeout
+            | RuntimeIpcClientError::Disconnected
+            | RuntimeIpcClientError::UnexpectedResponse
+            | RuntimeIpcClientError::Io(_)
+    )
+}
+
+pub(crate) fn side_effect_error_outcome_is_unknown(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<RuntimeIpcClientError>()
+        .is_some_and(shared_side_effect_outcome_is_unknown)
+}
+
+fn should_clear_turn_after_submission_error(error: &anyhow::Error) -> bool {
+    !error
+        .downcast_ref::<SessionOperationError>()
+        .is_some_and(SessionOperationError::outcome_unknown)
+}
+
+fn runtime_side_effect_error(error: RuntimeError) -> anyhow::Error {
+    anyhow::Error::new(SessionOperationError::runtime(error))
+}
+
+fn validated_accepted_turn(
+    operation: &str,
+    expected_session_id: &str,
+    expected_turn_id: &str,
+    accepted_session_id: String,
+    accepted_turn_id: String,
+) -> Result<String> {
+    if accepted_session_id == expected_session_id && accepted_turn_id == expected_turn_id {
+        return Ok(accepted_turn_id);
+    }
+    Err(anyhow::Error::new(SessionOperationError::unexpected(
+        anyhow::anyhow!(
+            "Runtime returned an unexpected identity for {operation}: expected session={expected_session_id}, turn={expected_turn_id}; received session={accepted_session_id}, turn={accepted_turn_id}"
+        ),
+    )))
+}
+
 #[derive(Clone, Debug)]
 struct CliWorkspacePaths {
     project: Option<PathBuf>,
     execution: Option<PathBuf>,
     execution_target: Option<SessionExecutionTarget>,
-    remote: bool,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
 }
 
 impl CliWorkspacePaths {
@@ -218,7 +321,8 @@ impl CliWorkspacePaths {
             project: workspace_path.clone(),
             execution: workspace_path,
             execution_target: None,
-            remote: false,
+            remote_connection_id: None,
+            remote_ssh_host: None,
         }
     }
 
@@ -249,7 +353,8 @@ impl CliWorkspacePaths {
         self.execution = Some(execution);
         self.project = Some(project);
         self.execution_target = binding.execution_target.clone();
-        self.remote = binding.remote_connection_id.is_some() || binding.remote_ssh_host.is_some();
+        self.remote_connection_id = binding.remote_connection_id.clone();
+        self.remote_ssh_host = binding.remote_ssh_host.clone();
     }
 
     fn reset_execution_to_project(&mut self) -> PathBuf {
@@ -258,12 +363,20 @@ impl CliWorkspacePaths {
         self.execution_target = Some(SessionExecutionTarget::local(
             project.to_string_lossy().to_string(),
         ));
-        self.remote = false;
+        self.remote_connection_id = None;
+        self.remote_ssh_host = None;
         project
     }
 
+    pub(crate) fn remote_scope(&self) -> (Option<String>, Option<String>) {
+        (
+            self.remote_connection_id.clone(),
+            self.remote_ssh_host.clone(),
+        )
+    }
+
     fn workspace_diff_unavailable_reason(&self) -> Option<&'static str> {
-        if self.remote {
+        if self.remote_connection_id.is_some() || self.remote_ssh_host.is_some() {
             return Some("Workspace diff is unavailable for remote Sessions");
         }
         let execution = self.execution();
@@ -285,10 +398,12 @@ fn same_workspace_location(left: &Path, right: &Path) -> bool {
             .is_some_and(|(left, right)| left == right)
 }
 
-/// CLI-owned client for the portable Agent Runtime SDK.
-/// Stateless regarding agent_type; callers pass it per call.
-pub(crate) struct ExecAgentRuntimeClient {
-    backend: CliAgentRuntimeBackend,
+/// CLI-owned stateful client for the portable Agent Runtime SDK.
+///
+/// Interactive and non-interactive surfaces share this owner; presentation
+/// clients delegate Runtime behavior instead of rebuilding session state.
+pub(crate) struct CliAgentRuntimeClient {
+    backend: TuiRuntimePort,
     approval_policy: Arc<RwLock<CliApprovalPolicy>>,
     workspace_paths: Arc<RwLock<CliWorkspacePaths>>,
     /// Session ID — uses Mutex for interior mutability
@@ -299,12 +414,15 @@ pub(crate) struct ExecAgentRuntimeClient {
     shared_permission_events:
         Option<SharedBroadcast<bitfun_agent_runtime::sdk::PermissionRequestEvent>>,
     shared_pending_permissions: Arc<RwLock<HashMap<String, PermissionRequest>>>,
+    shared_event_bridge: Option<tokio::task::JoinHandle<()>>,
 }
 
-enum CliAgentRuntimeBackend {
+enum TuiRuntimePort {
     Embedded(AgentRuntime),
     Shared(RuntimeIpcClient),
 }
+
+pub(crate) type ExecAgentRuntimeClient = CliAgentRuntimeClient;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CliAgentMode {
@@ -319,7 +437,7 @@ type SharedBroadcast<T> = Arc<RwLock<Option<broadcast::Sender<T>>>>;
 impl ExecAgentRuntimeClient {
     pub(crate) fn new(runtime: &CliRuntimeContext, workspace_path: Option<PathBuf>) -> Self {
         Self {
-            backend: CliAgentRuntimeBackend::Embedded(runtime.agent_runtime().clone()),
+            backend: TuiRuntimePort::Embedded(runtime.agent_runtime().clone()),
             approval_policy: Arc::new(RwLock::new(runtime.approval_policy())),
             workspace_paths: Arc::new(RwLock::new(CliWorkspacePaths::new(workspace_path))),
             session_id: Arc::new(Mutex::new(None)),
@@ -327,7 +445,12 @@ impl ExecAgentRuntimeClient {
             shared_agent_events: None,
             shared_permission_events: None,
             shared_pending_permissions: Arc::new(RwLock::new(HashMap::new())),
+            shared_event_bridge: None,
         }
+    }
+
+    pub(crate) fn new_direct(runtime: &CliRuntimeContext, workspace_path: Option<PathBuf>) -> Self {
+        Self::new(runtime, workspace_path)
     }
 
     pub(crate) fn new_shared(client: RuntimeIpcClient, workspace_path: Option<PathBuf>) -> Self {
@@ -337,7 +460,7 @@ impl ExecAgentRuntimeClient {
         let shared_permission_events = Arc::new(RwLock::new(Some(permission_sender.clone())));
         let shared_pending_permissions = Arc::new(RwLock::new(HashMap::new()));
         let session_id = Arc::new(Mutex::new(None));
-        spawn_shared_event_bridge(
+        let shared_event_bridge = spawn_shared_event_bridge(
             client.subscribe_events(),
             agent_sender,
             permission_sender,
@@ -346,7 +469,7 @@ impl ExecAgentRuntimeClient {
             shared_pending_permissions.clone(),
         );
         Self {
-            backend: CliAgentRuntimeBackend::Shared(client),
+            backend: TuiRuntimePort::Shared(client),
             approval_policy: Arc::new(RwLock::new(CliApprovalPolicy::Ask)),
             workspace_paths: Arc::new(RwLock::new(CliWorkspacePaths::new(workspace_path))),
             session_id,
@@ -354,11 +477,12 @@ impl ExecAgentRuntimeClient {
             shared_agent_events: Some(shared_agent_events),
             shared_permission_events: Some(shared_permission_events),
             shared_pending_permissions,
+            shared_event_bridge: Some(shared_event_bridge),
         }
     }
 
     pub(crate) fn is_shared(&self) -> bool {
-        matches!(self.backend, CliAgentRuntimeBackend::Shared(_))
+        matches!(self.backend, TuiRuntimePort::Shared(_))
     }
 
     /// Read the main-agent catalog from the execution owner. Embedded and
@@ -366,7 +490,7 @@ impl ExecAgentRuntimeClient {
     /// consults the controller process's local registry.
     pub(crate) async fn available_agent_modes(&self) -> Result<Vec<CliAgentMode>> {
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(_) => {
+            TuiRuntimePort::Embedded(_) => {
                 let workspace = self.workspace_path_buf();
                 if let Err(error) =
                     bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
@@ -390,7 +514,7 @@ impl ExecAgentRuntimeClient {
                     })
                     .collect())
             }
-            CliAgentRuntimeBackend::Shared(client) => {
+            TuiRuntimePort::Shared(client) => {
                 let session_id = self.session_id.lock().await.clone();
                 match client
                     .request(RuntimeIpcOperation::ListAgentModes { session_id })
@@ -415,8 +539,8 @@ impl ExecAgentRuntimeClient {
 
     fn embedded_runtime(&self, operation: &str) -> Result<&AgentRuntime> {
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => Ok(runtime),
-            CliAgentRuntimeBackend::Shared(_) => Err(anyhow::anyhow!(
+            TuiRuntimePort::Embedded(runtime) => Ok(runtime),
+            TuiRuntimePort::Shared(_) => Err(anyhow::anyhow!(
                 "{operation} is not available in the first Shared TUI slice; use default Embedded `bitfun chat`"
             )),
         }
@@ -424,8 +548,8 @@ impl ExecAgentRuntimeClient {
 
     pub(crate) fn subscribe_events(&self) -> std::result::Result<AgentEventReceiver, RuntimeError> {
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime.subscribe_events(),
-            CliAgentRuntimeBackend::Shared(_) => shared_receiver(
+            TuiRuntimePort::Embedded(runtime) => runtime.subscribe_events(),
+            TuiRuntimePort::Shared(_) => shared_receiver(
                 self.shared_agent_events.as_ref(),
                 "Shared Runtime agent event stream is unavailable",
             ),
@@ -436,8 +560,8 @@ impl ExecAgentRuntimeClient {
         &self,
     ) -> std::result::Result<PermissionRequestEventReceiver, RuntimeError> {
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime.subscribe_permission_requests(),
-            CliAgentRuntimeBackend::Shared(_) => shared_receiver(
+            TuiRuntimePort::Embedded(runtime) => runtime.subscribe_permission_requests(),
+            TuiRuntimePort::Shared(_) => shared_receiver(
                 self.shared_permission_events.as_ref(),
                 "Shared Runtime permission event stream is unavailable",
             ),
@@ -448,8 +572,8 @@ impl ExecAgentRuntimeClient {
         &self,
     ) -> std::result::Result<Vec<PermissionRequest>, RuntimeError> {
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime.pending_permission_requests(),
-            CliAgentRuntimeBackend::Shared(_) => Ok(self
+            TuiRuntimePort::Embedded(runtime) => runtime.pending_permission_requests(),
+            TuiRuntimePort::Shared(_) => Ok(self
                 .shared_pending_permissions
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -465,20 +589,23 @@ impl ExecAgentRuntimeClient {
         reply: PermissionReply,
     ) -> Result<()> {
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .respond_permission(request_id, reply)
                 .await
-                .map_err(|error| anyhow::anyhow!(error.into_message())),
-            CliAgentRuntimeBackend::Shared(client) => {
+                .map_err(SessionOperationError::runtime)
+                .map_err(anyhow::Error::new),
+            TuiRuntimePort::Shared(client) => {
                 let session_id = self.require_session_id().await?;
-                expect_unit(
+                expect_side_effect_unit(
                     client
                         .request(RuntimeIpcOperation::RespondPermission {
                             session_id,
                             request_id: request_id.to_string(),
                             reply,
                         })
-                        .await?,
+                        .await
+                        .map_err(SessionOperationError::shared)
+                        .map_err(anyhow::Error::new)?,
                     "respond_permission",
                 )
             }
@@ -538,6 +665,18 @@ impl ExecAgentRuntimeClient {
             .clone()
     }
 
+    fn remote_scope(&self) -> (Option<String>, Option<String>) {
+        self.workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remote_scope()
+    }
+
+    pub(crate) fn is_remote_workspace(&self) -> bool {
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
+        remote_connection_id.is_some() || remote_ssh_host.is_some()
+    }
+
     fn reset_execution_to_project_workspace(&self) -> PathBuf {
         self.workspace_paths
             .write()
@@ -553,17 +692,18 @@ impl ExecAgentRuntimeClient {
         &self,
         workspace_path: &Path,
     ) -> Result<Vec<AgentSessionSummary>> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         let request = AgentSessionListRequest {
             workspace_path: workspace_path.to_string_lossy().to_string(),
-            remote_connection_id: None,
-            remote_ssh_host: None,
+            remote_connection_id,
+            remote_ssh_host,
         };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .list_sessions(request)
                 .await
                 .map_err(|error| anyhow::anyhow!(error.into_message())),
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::ListSessions { request })
                 .await?
             {
@@ -582,18 +722,19 @@ impl ExecAgentRuntimeClient {
         &self,
         root_session_id: &str,
     ) -> Result<Option<AgentSessionLineageSnapshot>> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         let request = AgentSessionLineageRequest {
             workspace_path: self.current_workspace_path().to_string_lossy().into_owned(),
             anchor_session_id: root_session_id.to_string(),
-            remote_connection_id: None,
-            remote_ssh_host: None,
+            remote_connection_id,
+            remote_ssh_host,
         };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .get_session_lineage(request)
                 .await
                 .map_err(|error| anyhow::anyhow!(error.into_message())),
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::GetSessionLineage { request })
                 .await?
             {
@@ -609,20 +750,21 @@ impl ExecAgentRuntimeClient {
         session_id: &str,
         required_settled_turn_ids: &[String],
     ) -> std::result::Result<AgentSessionLineageInspection, SessionOperationError> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         let request = AgentSessionLineageTranscriptRequest {
             workspace_path: self.current_workspace_path().to_string_lossy().into_owned(),
             root_session_id: root_session_id.to_string(),
             session_id: session_id.to_string(),
             required_settled_turn_ids: required_settled_turn_ids.to_vec(),
-            remote_connection_id: None,
-            remote_ssh_host: None,
+            remote_connection_id,
+            remote_ssh_host,
         };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .read_lineage_session_transcript(request)
                 .await
                 .map_err(SessionOperationError::runtime),
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::InspectLineageSession { request })
                 .await
                 .map_err(SessionOperationError::read_only_shared)?
@@ -643,6 +785,7 @@ impl ExecAgentRuntimeClient {
         session_id: &str,
         expected_active_turn_id: &str,
     ) -> Result<bitfun_agent_runtime::sdk::AgentTurnCancellationResult> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         let request = AgentSessionLineageCancellationRequest {
             workspace_path: self.current_workspace_path().to_string_lossy().into_owned(),
             root_session_id: root_session_id.to_string(),
@@ -651,15 +794,15 @@ impl ExecAgentRuntimeClient {
             source: Some(AgentSubmissionSource::Cli),
             reason: Some("user_cancelled".to_string()),
             wait_timeout_ms: Some(5_000),
-            remote_connection_id: None,
-            remote_ssh_host: None,
+            remote_connection_id,
+            remote_ssh_host,
         };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .cancel_lineage_session(request)
                 .await
                 .map_err(|error| anyhow::anyhow!(error.into_message())),
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::CancelLineageSession { request })
                 .await?
             {
@@ -672,52 +815,51 @@ impl ExecAgentRuntimeClient {
     pub(crate) async fn restore_session_in_current_workspace(
         &self,
         session_id: &str,
-    ) -> Result<(
-        AgentSessionSummary,
-        AgentSessionWorkspaceBinding,
-        Vec<SessionMigrationNotice>,
-        SessionTranscript,
-    )> {
+    ) -> Result<CliSessionRestoreSnapshot> {
         tracing::info!("Restoring session: {}", session_id);
 
         let project_workspace = self.current_workspace_path();
         let sessions = self.list_sessions_in_workspace(&project_workspace).await?;
         let previous_summary =
             validated_session_summary(&sessions, session_id, &project_workspace)?;
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
 
-        let (restored, transcript, shared_pending, shared_workspace_binding) = match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => {
+        let (
+            restored,
+            restored_turn_id,
+            transcript,
+            pending_user_inputs,
+            shared_pending,
+            shared_workspace_binding,
+        ) = match &self.backend {
+            TuiRuntimePort::Embedded(runtime) => {
                 let restored = runtime
                     .restore_session(AgentSessionRestoreRequest {
                         workspace_path: project_workspace.to_string_lossy().to_string(),
                         session_id: session_id.to_string(),
                         include_internal: false,
-                        remote_connection_id: None,
-                        remote_ssh_host: None,
+                        remote_connection_id,
+                        remote_ssh_host,
                     })
                     .await
-                    .map(|restored| restored.session)
                     .map_err(anyhow::Error::new)
                     .map_err(with_session_conflict_help)?;
-                let transcript = runtime
-                    .read_session_transcript(SessionTranscriptRequest {
-                        session_id: session_id.to_string(),
-                        turn_id: None,
-                    })
-                    .await
-                    .unwrap_or_else(|error| {
-                        tracing::warn!(
-                            "Failed to read Embedded session transcript: {}",
-                            error.into_message()
-                        );
-                        SessionTranscript {
-                            session_id: session_id.to_string(),
-                            messages: Vec::new(),
-                        }
-                    });
-                (restored, transcript, None, None)
+                let restored_turn_id = match &restored.state {
+                    SessionState::Processing {
+                        current_turn_id, ..
+                    } => Some(current_turn_id.clone()),
+                    SessionState::Idle | SessionState::Error { .. } => None,
+                };
+                (
+                    restored.session,
+                    restored_turn_id,
+                    restored.transcript,
+                    restored.pending_user_inputs,
+                    None,
+                    None,
+                )
             }
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::RestoreSession {
                     request: RuntimeSessionRestoreRequest {
                         workspace_path: project_workspace.to_string_lossy().to_string(),
@@ -729,19 +871,36 @@ impl ExecAgentRuntimeClient {
             {
                 RuntimeIpcOperationResult::SessionRestored {
                     session,
+                    state,
                     workspace_binding,
                     transcript,
                     pending_permissions,
-                    ..
-                } => (
-                    session,
-                    transcript,
-                    Some(pending_permissions),
-                    Some(workspace_binding),
-                ),
+                    pending_user_inputs,
+                } => {
+                    let restored_turn_id = match state {
+                        RuntimeSessionState::Processing {
+                            current_turn_id, ..
+                        } => Some(current_turn_id),
+                        RuntimeSessionState::Idle | RuntimeSessionState::Error { .. } => None,
+                    };
+                    (
+                        session,
+                        restored_turn_id,
+                        transcript,
+                        pending_user_inputs,
+                        Some(pending_permissions),
+                        Some(workspace_binding),
+                    )
+                }
                 _ => return Err(unexpected_shared_result("restore_session")),
             },
         };
+
+        if restored.session_id != session_id || transcript.session_id != session_id {
+            return Err(anyhow::anyhow!(
+                "Runtime restored an unexpected Session identity"
+            ));
+        }
 
         let binding = if let Some(binding) = shared_workspace_binding {
             self.set_workspace_binding(&binding);
@@ -753,7 +912,7 @@ impl ExecAgentRuntimeClient {
         let mut session_id_guard = self.session_id.lock().await;
         let mut turn_id_guard = self.current_turn_id.lock().await;
         *session_id_guard = Some(session_id.to_string());
-        *turn_id_guard = None;
+        *turn_id_guard = restored_turn_id.clone();
         drop(session_id_guard);
         drop(turn_id_guard);
         if let Some(requests) = shared_pending {
@@ -770,7 +929,14 @@ impl ExecAgentRuntimeClient {
         }
 
         let migration_notices = session_migration_notices(&previous_summary, &restored);
-        Ok((restored, binding, migration_notices, transcript))
+        Ok(CliSessionRestoreSnapshot {
+            summary: restored,
+            workspace_binding: binding,
+            migration_notices,
+            transcript,
+            active_turn_id: restored_turn_id,
+            pending_user_inputs,
+        })
     }
 
     async fn resolve_session_workspace_binding(
@@ -780,14 +946,22 @@ impl ExecAgentRuntimeClient {
     ) -> Result<AgentSessionWorkspaceBinding> {
         let fallback_project = fallback_project_workspace.to_string_lossy().to_string();
         let resolved = match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
                     session_id: session_id.to_string(),
                 })
                 .await
                 .map_err(|error| anyhow::anyhow!(error.into_message()))?,
-            CliAgentRuntimeBackend::Shared(_) => None,
+            TuiRuntimePort::Shared(_) => None,
         };
+        if resolved.is_none() {
+            let (remote_connection_id, remote_ssh_host) = self.remote_scope();
+            if remote_connection_id.is_some() || remote_ssh_host.is_some() {
+                return Err(anyhow::anyhow!(
+                    "Runtime did not return an authoritative workspace binding for remote Session {session_id}"
+                ));
+            }
+        }
         let binding = resolved.unwrap_or_else(|| AgentSessionWorkspaceBinding {
             workspace_id: None,
             workspace_path: fallback_project.clone(),
@@ -810,21 +984,35 @@ impl ExecAgentRuntimeClient {
             .await
     }
 
+    async fn workspace_binding_after_session_creation(
+        &self,
+        session_id: &str,
+    ) -> Result<AgentSessionWorkspaceBinding> {
+        self.session_workspace_binding(session_id)
+            .await
+            .map_err(|error| {
+                anyhow::Error::new(SessionOperationError::unexpected(anyhow::anyhow!(
+                    "Session creation completed, but resolving its workspace binding failed: {error}. Inspect authoritative Session state before retrying"
+                )))
+            })
+    }
+
     pub(crate) async fn delete_session(
         &self,
         session_id: &str,
     ) -> std::result::Result<(), SessionOperationError> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .delete_session(AgentSessionDeleteRequest {
                     workspace_path: self.project_workspace_path_string(),
                     session_id: session_id.to_string(),
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
+                    remote_connection_id,
+                    remote_ssh_host,
                 })
                 .await
                 .map_err(SessionOperationError::runtime),
-            CliAgentRuntimeBackend::Shared(client) => {
+            TuiRuntimePort::Shared(client) => {
                 let result = client
                     .request(RuntimeIpcOperation::DeleteSession {
                         session_id: session_id.to_string(),
@@ -846,11 +1034,11 @@ impl ExecAgentRuntimeClient {
             model_id: model_id.to_string(),
         };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .update_session_model(request)
                 .await
                 .map_err(SessionOperationError::runtime),
-            CliAgentRuntimeBackend::Shared(client) => {
+            TuiRuntimePort::Shared(client) => {
                 let result = client
                     .request(RuntimeIpcOperation::UpdateSessionModel { request })
                     .await
@@ -866,21 +1054,22 @@ impl ExecAgentRuntimeClient {
         session_id: &str,
         session_name: &str,
     ) -> std::result::Result<(), SessionOperationError> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => {
+            TuiRuntimePort::Embedded(runtime) => {
                 let request = AgentSessionRenameRequest {
                     workspace_path: self.project_workspace_path_string(),
                     session_id: session_id.to_string(),
                     session_name: session_name.to_string(),
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
+                    remote_connection_id,
+                    remote_ssh_host,
                 };
                 runtime
                     .rename_session(request)
                     .await
                     .map_err(SessionOperationError::runtime)
             }
-            CliAgentRuntimeBackend::Shared(client) => {
+            TuiRuntimePort::Shared(client) => {
                 let result = client
                     .request(RuntimeIpcOperation::RenameSession {
                         request: RuntimeSessionRenameRequest {
@@ -905,11 +1094,11 @@ impl ExecAgentRuntimeClient {
             mode_id: mode_id.to_string(),
         };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .update_session_mode(request)
                 .await
                 .map_err(SessionOperationError::runtime),
-            CliAgentRuntimeBackend::Shared(client) => {
+            TuiRuntimePort::Shared(client) => {
                 let result = client
                     .request(RuntimeIpcOperation::UpdateSessionMode { request })
                     .await
@@ -924,15 +1113,16 @@ impl ExecAgentRuntimeClient {
         &self,
         source_session_id: &str,
     ) -> Result<AgentSessionForkResult> {
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         self.embedded_runtime("forking sessions")?
             .fork_session(AgentSessionForkRequest {
                 workspace_path: self.project_workspace_path_string(),
                 source_session_id: source_session_id.to_string(),
-                remote_connection_id: None,
-                remote_ssh_host: None,
+                remote_connection_id,
+                remote_ssh_host,
             })
             .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))
+            .map_err(runtime_side_effect_error)
     }
 
     pub(crate) async fn fork_current_session(
@@ -945,8 +1135,9 @@ impl ExecAgentRuntimeClient {
     )> {
         let source_session_id = self.require_session_id().await?;
         let workspace_path = self.project_workspace_path_string();
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         let (session, transcript, shared_workspace_binding) = match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => {
+            TuiRuntimePort::Embedded(runtime) => {
                 let forked = match before_turn_id {
                     Some(source_turn_id) => {
                         runtime
@@ -954,8 +1145,8 @@ impl ExecAgentRuntimeClient {
                                 workspace_path: workspace_path.clone(),
                                 source_session_id,
                                 source_turn_id: source_turn_id.to_string(),
-                                remote_connection_id: None,
-                                remote_ssh_host: None,
+                                remote_connection_id: remote_connection_id.clone(),
+                                remote_ssh_host: remote_ssh_host.clone(),
                             })
                             .await
                     }
@@ -964,47 +1155,63 @@ impl ExecAgentRuntimeClient {
                             .fork_session(AgentSessionForkRequest {
                                 workspace_path: workspace_path.clone(),
                                 source_session_id,
-                                remote_connection_id: None,
-                                remote_ssh_host: None,
+                                remote_connection_id: remote_connection_id.clone(),
+                                remote_ssh_host: remote_ssh_host.clone(),
                             })
                             .await
                     }
                 }
-                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+                .map_err(runtime_side_effect_error)?;
                 let restored = runtime
                     .restore_session(AgentSessionRestoreRequest {
                         workspace_path: workspace_path.clone(),
                         session_id: forked.session_id.clone(),
                         include_internal: false,
-                        remote_connection_id: None,
-                        remote_ssh_host: None,
+                        remote_connection_id,
+                        remote_ssh_host,
                     })
                     .await
-                    .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+                    .map_err(|error| {
+                        anyhow::Error::new(SessionOperationError::unexpected(anyhow::anyhow!(
+                            "Session fork completed, but restoring the new Session failed: {}",
+                            error.into_message()
+                        )))
+                    })?;
                 let transcript = runtime
                     .read_session_transcript(SessionTranscriptRequest {
                         session_id: forked.session_id,
                         turn_id: None,
                     })
                     .await
-                    .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+                    .map_err(|error| {
+                        anyhow::Error::new(SessionOperationError::unexpected(anyhow::anyhow!(
+                            "Session fork completed, but reading the new transcript failed: {}",
+                            error.into_message()
+                        )))
+                    })?;
                 (restored.session, transcript, None)
             }
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::ForkSession {
                     request: RuntimeSessionForkRequest {
                         session_id: source_session_id,
                         before_turn_id: before_turn_id.map(str::to_string),
                     },
                 })
-                .await?
+                .await
+                .map_err(SessionOperationError::shared)
+                .map_err(anyhow::Error::new)?
             {
                 RuntimeIpcOperationResult::SessionForked {
                     session,
                     workspace_binding,
                     transcript,
                 } => (session, transcript, Some(workspace_binding)),
-                _ => return Err(unexpected_shared_result("fork_session")),
+                _ => {
+                    return Err(anyhow::Error::new(SessionOperationError::unexpected(
+                        unexpected_shared_result("fork_session"),
+                    )))
+                }
             },
         };
 
@@ -1013,7 +1220,12 @@ impl ExecAgentRuntimeClient {
             binding
         } else {
             self.resolve_session_workspace_binding(&session.session_id, Path::new(&workspace_path))
-                .await?
+                .await
+                .map_err(|error| {
+                    anyhow::Error::new(SessionOperationError::unexpected(anyhow::anyhow!(
+                        "Session fork completed, but resolving its workspace binding failed: {error}"
+                    )))
+                })?
         };
         *self.session_id.lock().await = Some(session.session_id.clone());
         *self.current_turn_id.lock().await = None;
@@ -1029,40 +1241,49 @@ impl ExecAgentRuntimeClient {
         undo: bool,
     ) -> Result<AgentSessionRevertResult> {
         let session_id = self.require_session_id().await?;
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         let request = AgentSessionRevertRequest {
             workspace_path: self.project_workspace_path_string(),
             session_id: session_id.clone(),
-            remote_connection_id: None,
-            remote_ssh_host: None,
+            remote_connection_id,
+            remote_ssh_host,
         };
         let locally_active_turn_id = self.current_turn_id.lock().await.clone();
         let mut reverted = match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => if undo {
+            TuiRuntimePort::Embedded(runtime) => if undo {
                 runtime.undo_session(request).await
             } else {
                 runtime.redo_session(request).await
             }
-            .map_err(|error| anyhow::anyhow!(error.into_message()))?,
-            CliAgentRuntimeBackend::Shared(client) => {
+            .map_err(runtime_side_effect_error)?,
+            TuiRuntimePort::Shared(client) => {
                 let operation = if undo {
                     RuntimeIpcOperation::UndoSession { request }
                 } else {
                     RuntimeIpcOperation::RedoSession { request }
                 };
-                match client.request(operation).await? {
+                match client
+                    .request(operation)
+                    .await
+                    .map_err(|error| anyhow::Error::new(SessionOperationError::shared(error)))?
+                {
                     RuntimeIpcOperationResult::SessionReverted { revert }
                         if revert.session_id == session_id =>
                     {
                         revert
                     }
-                    _ => return Err(unexpected_shared_result("revert_session")),
+                    _ => {
+                        return Err(anyhow::Error::new(SessionOperationError::unexpected(
+                            unexpected_shared_result("revert_session"),
+                        )))
+                    }
                 }
             }
         };
         if reverted.session_id != session_id {
-            return Err(anyhow::anyhow!(
-                "Runtime reverted an unexpected session identity"
-            ));
+            return Err(anyhow::Error::new(SessionOperationError::unexpected(
+                anyhow::anyhow!("Runtime reverted an unexpected session identity"),
+            )));
         }
         if let Some(turn_id) = locally_active_turn_id {
             if !reverted.retired_turn_ids.contains(&turn_id) {
@@ -1083,11 +1304,11 @@ impl ExecAgentRuntimeClient {
             return Err(anyhow::anyhow!(reason));
         }
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .workspace_diff()
                 .await
                 .map_err(|error| anyhow::anyhow!(error.into_message())),
-            CliAgentRuntimeBackend::Shared(client) => {
+            TuiRuntimePort::Shared(client) => {
                 match client.request(RuntimeIpcOperation::WorkspaceDiff).await? {
                     RuntimeIpcOperationResult::WorkspaceDiff { snapshot } => Ok(snapshot),
                     _ => Err(unexpected_shared_result("workspace_diff")),
@@ -1096,14 +1317,41 @@ impl ExecAgentRuntimeClient {
         }
     }
 
+    pub(crate) async fn reload_context(&self, request: AgentContextReloadRequest) -> Result<()> {
+        match &self.backend {
+            TuiRuntimePort::Embedded(runtime) => runtime
+                .reload_context(request)
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message())),
+            TuiRuntimePort::Shared(client) => expect_unit(
+                client
+                    .request(RuntimeIpcOperation::ReloadSessionContext { request })
+                    .await?,
+                "reload_session_context",
+            ),
+        }
+    }
+
     pub(crate) async fn generate_session_usage_report(
         &self,
         request: AgentSessionUsageRequest,
     ) -> Result<SessionUsageReport> {
-        self.embedded_runtime("generating session usage")?
-            .generate_session_usage(request)
-            .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))
+        let request = merge_session_usage_remote_scope(request, self.remote_scope())?;
+        match &self.backend {
+            TuiRuntimePort::Embedded(runtime) => runtime
+                .generate_session_usage(request)
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message())),
+            TuiRuntimePort::Shared(client) => {
+                match client
+                    .request(RuntimeIpcOperation::SessionUsage { request })
+                    .await?
+                {
+                    RuntimeIpcOperationResult::SessionUsage { usage } => Ok(usage),
+                    _ => Err(unexpected_shared_result("session_usage")),
+                }
+            }
+        }
     }
 
     pub(crate) async fn wait_for_turn_settlement(
@@ -1112,20 +1360,24 @@ impl ExecAgentRuntimeClient {
         turn_id: &str,
         wait_timeout_ms: u64,
     ) -> std::result::Result<(), RuntimeError> {
+        let request = AgentTurnSettlementRequest {
+            session_id: session_id.to_string(),
+            turn_id: turn_id.to_string(),
+            wait_timeout_ms,
+        };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => {
-                runtime
-                    .wait_for_turn_settlement(AgentTurnSettlementRequest {
-                        session_id: session_id.to_string(),
-                        turn_id: turn_id.to_string(),
-                        wait_timeout_ms,
-                    })
-                    .await
-            }
-            CliAgentRuntimeBackend::Shared(_) => Err(RuntimeError::Port(PortError::new(
-                PortErrorKind::NotAvailable,
-                "turn settlement waiting is not available in the first Shared TUI slice",
-            ))),
+            TuiRuntimePort::Embedded(runtime) => runtime.wait_for_turn_settlement(request).await,
+            TuiRuntimePort::Shared(client) => match client
+                .request(RuntimeIpcOperation::WaitForSettlement { request })
+                .await
+                .map_err(shared_runtime_error)?
+            {
+                RuntimeIpcOperationResult::Unit => Ok(()),
+                _ => Err(RuntimeError::Port(PortError::new(
+                    PortErrorKind::Backend,
+                    "Shared Runtime returned an unexpected result for wait_for_settlement",
+                ))),
+            },
         }
     }
 
@@ -1147,14 +1399,15 @@ impl ExecAgentRuntimeClient {
         let runtime = self.embedded_runtime("recreating sessions with fixed identifiers")?;
         let mut session_name = Self::build_default_session_name();
         let mut effective_agent_type = agent_type.to_string();
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
 
         let workspace = self.workspace_path_buf();
         let project_workspace = self.project_workspace_path_buf();
         if let Ok(sessions) = runtime
             .list_sessions(AgentSessionListRequest {
                 workspace_path: project_workspace.to_string_lossy().to_string(),
-                remote_connection_id: None,
-                remote_ssh_host: None,
+                remote_connection_id: remote_connection_id.clone(),
+                remote_ssh_host: remote_ssh_host.clone(),
             })
             .await
         {
@@ -1174,8 +1427,8 @@ impl ExecAgentRuntimeClient {
                     project_workspace_path: Some(project_workspace.to_string_lossy().to_string()),
                     execution_target: self.execution_target(),
                     workspace_id: None,
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
+                    remote_connection_id,
+                    remote_ssh_host,
                     model_id: None,
                     metadata: serde_json::Map::new(),
                 },
@@ -1191,13 +1444,14 @@ impl ExecAgentRuntimeClient {
     async fn ensure_backend_session_alive(&self, session_id: &str, agent_type: &str) -> Result<()> {
         let runtime = self.embedded_runtime("recovering Embedded sessions")?;
         let project_workspace = self.project_workspace_path_buf();
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         match runtime
             .restore_session(AgentSessionRestoreRequest {
                 workspace_path: project_workspace.to_string_lossy().to_string(),
                 session_id: session_id.to_string(),
                 include_internal: false,
-                remote_connection_id: None,
-                remote_ssh_host: None,
+                remote_connection_id,
+                remote_ssh_host,
             })
             .await
         {
@@ -1231,6 +1485,7 @@ impl ExecAgentRuntimeClient {
         let mut session_id_guard = self.session_id.lock().await;
         let workspace_path = self.workspace_path_string();
         let project_workspace_path = self.project_workspace_path_string();
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
 
         let session = runtime
             .create_session_with_id(
@@ -1242,8 +1497,8 @@ impl ExecAgentRuntimeClient {
                     project_workspace_path: Some(project_workspace_path),
                     execution_target: self.execution_target(),
                     workspace_id: None,
-                    remote_connection_id: None,
-                    remote_ssh_host: None,
+                    remote_connection_id,
+                    remote_ssh_host,
                     model_id: None,
                     metadata: serde_json::Map::new(),
                 },
@@ -1265,6 +1520,17 @@ impl ExecAgentRuntimeClient {
         self.ensure_session_with_model(agent_type, None).await
     }
 
+    pub(crate) async fn ensure_session_with_workspace_binding(
+        &self,
+        agent_type: &str,
+    ) -> Result<(String, AgentSessionWorkspaceBinding)> {
+        let session_id = self.ensure_session(agent_type).await?;
+        let binding = self
+            .workspace_binding_after_session_creation(&session_id)
+            .await?;
+        Ok((session_id, binding))
+    }
+
     /// Ensure the startup Session exists, preserving an explicit user model
     /// selection in the authoritative creation request.
     pub(crate) async fn ensure_session_with_model(
@@ -1278,6 +1544,7 @@ impl ExecAgentRuntimeClient {
             return Ok(id.clone());
         }
 
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         let request = AgentSessionCreateRequest {
             session_name: Self::build_default_session_name(),
             agent_type: agent_type.to_string(),
@@ -1285,22 +1552,28 @@ impl ExecAgentRuntimeClient {
             project_workspace_path: None,
             execution_target: None,
             workspace_id: None,
-            remote_connection_id: None,
-            remote_ssh_host: None,
+            remote_connection_id,
+            remote_ssh_host,
             model_id,
             metadata: serde_json::Map::new(),
         };
         let session = match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .create_session(request)
                 .await
-                .map_err(|error| anyhow::anyhow!(error.into_message()))?,
-            CliAgentRuntimeBackend::Shared(client) => match client
+                .map_err(runtime_side_effect_error)?,
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::CreateSession { request })
-                .await?
+                .await
+                .map_err(SessionOperationError::shared)
+                .map_err(anyhow::Error::new)?
             {
                 RuntimeIpcOperationResult::SessionCreated { session } => session,
-                _ => return Err(unexpected_shared_result("create_session")),
+                _ => {
+                    return Err(anyhow::Error::new(SessionOperationError::unexpected(
+                        unexpected_shared_result("create_session"),
+                    )))
+                }
             },
         };
 
@@ -1324,34 +1597,47 @@ impl ExecAgentRuntimeClient {
 
         let submission: Result<String> = async {
             match &self.backend {
-                CliAgentRuntimeBackend::Embedded(runtime) => {
+                TuiRuntimePort::Embedded(runtime) => {
                     let accepted = runtime
                         .start_session_compaction(request)
                         .await
-                        .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+                        .map_err(SessionOperationError::runtime)
+                        .map_err(anyhow::Error::new)?;
                     if accepted.session_id != session_id || accepted.turn_id != turn_id {
-                        return Err(anyhow::anyhow!(
-                            "Runtime accepted manual compaction with an unexpected identity"
-                        ));
+                        return Err(anyhow::Error::new(SessionOperationError::unexpected(
+                            anyhow::anyhow!(
+                                "Runtime accepted manual compaction with an unexpected identity"
+                            ),
+                        )));
                     }
                     Ok(accepted.turn_id)
                 }
-                CliAgentRuntimeBackend::Shared(client) => match client
-                    .request(RuntimeIpcOperation::CompactSession { request })
-                    .await?
-                {
-                    RuntimeIpcOperationResult::TurnAccepted {
-                        session_id: accepted_session,
-                        turn_id: accepted_turn,
-                    } if accepted_session == session_id && accepted_turn == turn_id => {
-                        Ok(accepted_turn)
+                TuiRuntimePort::Shared(client) => {
+                    match client
+                        .request(RuntimeIpcOperation::CompactSession { request })
+                        .await
+                        .map_err(SessionOperationError::shared)
+                        .map_err(anyhow::Error::new)?
+                    {
+                        RuntimeIpcOperationResult::TurnAccepted {
+                            session_id: accepted_session,
+                            turn_id: accepted_turn,
+                        } if accepted_session == session_id && accepted_turn == turn_id => {
+                            Ok(accepted_turn)
+                        }
+                        _ => Err(anyhow::Error::new(SessionOperationError::unexpected(
+                            unexpected_shared_result("compact_session"),
+                        ))),
                     }
-                    _ => return Err(unexpected_shared_result("compact_session")),
-                },
+                }
             }
         }
         .await;
-        if submission.is_err() {
+        if submission
+            .as_ref()
+            .err()
+            .is_some_and(should_clear_turn_after_submission_error)
+        {
             *self.current_turn_id.lock().await = None;
         }
         submission
@@ -1442,6 +1728,7 @@ impl ExecAgentRuntimeClient {
         let mut metadata = approval_metadata(self.approval_policy());
         put_agent_workspace_references(&mut metadata, &workspace_references)
             .map_err(|error| anyhow::anyhow!(error.message))?;
+        let (remote_connection_id, remote_ssh_host) = self.remote_scope();
         let request = AgentDialogTurnRequest {
             session_id: session_id.clone(),
             message: message.clone(),
@@ -1452,8 +1739,8 @@ impl ExecAgentRuntimeClient {
             // Dialog submission uses this path to locate persisted session
             // state. Execution still comes from the session's resolved binding.
             workspace_path: Some(self.project_workspace_path_string()),
-            remote_connection_id: None,
-            remote_ssh_host: None,
+            remote_connection_id,
+            remote_ssh_host,
             policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
             reply_route: None,
             prepended_reminders: Vec::new(),
@@ -1462,12 +1749,11 @@ impl ExecAgentRuntimeClient {
         };
         let submission: Result<String> = async {
             match &self.backend {
-                CliAgentRuntimeBackend::Embedded(runtime) => {
-                    let start_result = runtime.submit_dialog_turn(request.clone()).await;
-                    if let Err(err) = start_result {
-                        let session_not_found = Self::is_session_not_found_error(&err);
-                        let error_message = err.into_message();
-                        if session_not_found {
+                TuiRuntimePort::Embedded(runtime) => {
+                    let outcome = match runtime.submit_dialog_turn(request.clone()).await {
+                        Ok(outcome) => outcome,
+                        Err(error) if Self::is_session_not_found_error(&error) => {
+                            let error_message = error.into_message();
                             tracing::warn!(
                                 "Session missing when starting turn, attempting recovery and retry: session_id={}, error={}",
                                 session_id,
@@ -1478,30 +1764,58 @@ impl ExecAgentRuntimeClient {
                             runtime
                                 .submit_dialog_turn(request)
                                 .await
-                                .map_err(|error| anyhow::anyhow!(error.into_message()))?;
-                        } else {
-                            return Err(anyhow::anyhow!(error_message));
+                                .map_err(runtime_side_effect_error)?
                         }
-                    }
-                    Ok(turn_id)
+                        Err(error) => {
+                            return Err(anyhow::Error::new(SessionOperationError::runtime(error)))
+                        }
+                    };
+                    let (accepted_session_id, accepted_turn_id) = match outcome {
+                        DialogSubmitOutcome::Started {
+                            session_id,
+                            turn_id,
+                        }
+                        | DialogSubmitOutcome::Queued {
+                            session_id,
+                            turn_id,
+                        } => (session_id, turn_id),
+                    };
+                    validated_accepted_turn(
+                        "submit_dialog_turn",
+                        &session_id,
+                        &turn_id,
+                        accepted_session_id,
+                        accepted_turn_id,
+                    )
                 }
-                CliAgentRuntimeBackend::Shared(client) => match client
+                TuiRuntimePort::Shared(client) => match client
                     .request(RuntimeIpcOperation::SubmitTurn { request })
-                    .await?
+                    .await
+                    .map_err(|error| anyhow::Error::new(SessionOperationError::shared(error)))?
                 {
                     RuntimeIpcOperationResult::TurnAccepted {
                         session_id: accepted_session,
                         turn_id: accepted_turn,
-                    } if accepted_session == session_id => {
-                        *self.current_turn_id.lock().await = Some(accepted_turn.clone());
-                        Ok(accepted_turn)
-                    }
-                    _ => Err(unexpected_shared_result("submit_turn")),
+                    } => validated_accepted_turn(
+                        "submit_turn",
+                        &session_id,
+                        &turn_id,
+                        accepted_session,
+                        accepted_turn,
+                    ),
+                    _ => Err(anyhow::Error::new(SessionOperationError::unexpected(
+                        unexpected_shared_result("submit_turn"),
+                    ))),
                 },
             }
         }
         .await;
-        if submission.is_err() {
+        let outcome_unknown = submission
+            .as_ref()
+            .err()
+            .and_then(|error| error.downcast_ref::<SessionOperationError>())
+            .is_some_and(SessionOperationError::outcome_unknown);
+        if submission.is_err() && !outcome_unknown {
             *self.current_turn_id.lock().await = None;
         }
         submission
@@ -1538,23 +1852,26 @@ impl ExecAgentRuntimeClient {
         };
 
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => match runtime
+            TuiRuntimePort::Embedded(runtime) => match runtime
                 .steer_dialog_turn(request)
                 .await
-                .map_err(|error| anyhow::anyhow!(error.into_message()))?
+                .map_err(runtime_side_effect_error)?
             {
                 DialogSteerOutcome::Buffered { steering_id, .. } => Ok(steering_id),
             },
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::SteerTurn { request })
-                .await?
+                .await
+                .map_err(|error| anyhow::Error::new(SessionOperationError::shared(error)))?
             {
                 RuntimeIpcOperationResult::TurnSteered {
                     session_id: steered_session,
                     turn_id: steered_turn,
                     steering_id,
                 } if steered_session == session_id && steered_turn == turn_id => Ok(steering_id),
-                _ => Err(unexpected_shared_result("steer_turn")),
+                _ => Err(anyhow::Error::new(SessionOperationError::unexpected(
+                    unexpected_shared_result("steer_turn"),
+                ))),
             },
         }
     }
@@ -1575,7 +1892,7 @@ impl ExecAgentRuntimeClient {
 
         let submission: Result<String> = async {
             match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => {
+            TuiRuntimePort::Embedded(runtime) => {
                 let accepted = match runtime.run_user_shell_command(request.clone()).await {
                     Ok(accepted) => accepted,
                     Err(error) if Self::is_session_not_found_error(&error) => {
@@ -1588,19 +1905,23 @@ impl ExecAgentRuntimeClient {
                         runtime
                             .run_user_shell_command(request)
                             .await
-                            .map_err(|error| anyhow::anyhow!(error.into_message()))?
+                            .map_err(runtime_side_effect_error)?
                     }
-                    Err(error) => return Err(anyhow::anyhow!(error.into_message())),
+                    Err(error) => {
+                        return Err(anyhow::Error::new(SessionOperationError::runtime(error)))
+                    }
                 };
                 if accepted.session_id == session_id && accepted.turn_id == turn_id {
                     Ok(accepted.turn_id)
                 } else {
-                    Err(anyhow::anyhow!(
-                        "Runtime accepted a Shell command with an unexpected identity"
-                    ))
+                    Err(anyhow::Error::new(SessionOperationError::unexpected(
+                        anyhow::anyhow!(
+                            "Runtime accepted a Shell command with an unexpected identity"
+                        ),
+                    )))
                 }
             }
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::RunUserShellCommand { request })
                 .await
             {
@@ -1610,13 +1931,19 @@ impl ExecAgentRuntimeClient {
                 }) if accepted_session == session_id && accepted_turn == turn_id => {
                     Ok(accepted_turn)
                 }
-                Ok(_) => Err(unexpected_shared_result("run_user_shell_command")),
-                Err(error) => Err(anyhow::Error::new(error)),
+                Ok(_) => Err(anyhow::Error::new(SessionOperationError::unexpected(
+                    unexpected_shared_result("run_user_shell_command"),
+                ))),
+                Err(error) => Err(anyhow::Error::new(SessionOperationError::shared(error))),
             },
             }
         }
         .await;
-        if submission.is_err() {
+        if submission
+            .as_ref()
+            .err()
+            .is_some_and(should_clear_turn_after_submission_error)
+        {
             *self.current_turn_id.lock().await = None;
         }
         submission
@@ -1638,11 +1965,11 @@ impl ExecAgentRuntimeClient {
             limit: 20,
         };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .search_workspace_references(request)
                 .await
                 .map_err(|error| anyhow::anyhow!(error.into_message())),
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::SearchWorkspaceReferences { request })
                 .await?
             {
@@ -1662,11 +1989,11 @@ impl ExecAgentRuntimeClient {
             message_id,
         };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .workspace_references_for_message(request)
                 .await
                 .map_err(|error| anyhow::anyhow!(error.into_message())),
-            CliAgentRuntimeBackend::Shared(client) => match client
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::WorkspaceReferencesForMessage { request })
                 .await?
             {
@@ -1692,13 +2019,13 @@ impl ExecAgentRuntimeClient {
                 cancel_descendants: true,
             };
             match &self.backend {
-                CliAgentRuntimeBackend::Embedded(runtime) => {
+                TuiRuntimePort::Embedded(runtime) => {
                     runtime
                         .cancel_turn(request)
                         .await
                         .map_err(|error| anyhow::anyhow!(error.into_message()))?;
                 }
-                CliAgentRuntimeBackend::Shared(client) => match client
+                TuiRuntimePort::Shared(client) => match client
                     .request(RuntimeIpcOperation::CancelTurn { request })
                     .await?
                 {
@@ -1732,16 +2059,22 @@ impl ExecAgentRuntimeClient {
             metadata: serde_json::Map::new(),
         };
         let session = match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+            TuiRuntimePort::Embedded(runtime) => runtime
                 .create_session(request)
                 .await
-                .map_err(|error| anyhow::anyhow!(error.into_message()))?,
-            CliAgentRuntimeBackend::Shared(client) => match client
+                .map_err(runtime_side_effect_error)?,
+            TuiRuntimePort::Shared(client) => match client
                 .request(RuntimeIpcOperation::CreateSession { request })
-                .await?
+                .await
+                .map_err(SessionOperationError::shared)
+                .map_err(anyhow::Error::new)?
             {
                 RuntimeIpcOperationResult::SessionCreated { session } => session,
-                _ => return Err(unexpected_shared_result("create_session")),
+                _ => {
+                    return Err(anyhow::Error::new(SessionOperationError::unexpected(
+                        unexpected_shared_result("create_session"),
+                    )))
+                }
             },
         };
 
@@ -1758,6 +2091,17 @@ impl ExecAgentRuntimeClient {
         Ok(id)
     }
 
+    pub(crate) async fn create_new_session_with_workspace_binding(
+        &self,
+        agent_type: &str,
+    ) -> Result<(String, AgentSessionWorkspaceBinding)> {
+        let session_id = self.create_new_session(agent_type).await?;
+        let binding = self
+            .workspace_binding_after_session_creation(&session_id)
+            .await?;
+        Ok((session_id, binding))
+    }
+
     pub(crate) async fn restore_session(&self, session_id: &str) -> Result<()> {
         self.restore_session_in_current_workspace(session_id)
             .await?;
@@ -1766,33 +2110,42 @@ impl ExecAgentRuntimeClient {
 
     pub(crate) async fn submit_user_answers(
         &self,
-        tool_id: &str,
+        session_id: String,
+        turn_id: String,
+        tool_id: String,
+        registration_sequence: u64,
         answers: serde_json::Value,
     ) -> Result<()> {
         tracing::info!("Submitting user answers for tool: {}", tool_id);
+        let request = AgentUserAnswersRequest {
+            session_id,
+            turn_id,
+            tool_id,
+            registration_sequence,
+            answers,
+        };
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
-                .submit_user_answers(AgentUserAnswersRequest {
-                    tool_id: tool_id.to_string(),
-                    answers,
-                })
+            TuiRuntimePort::Embedded(runtime) => runtime
+                .submit_user_answers(request)
                 .await
-                .map_err(|e| anyhow::anyhow!("Submit user answers failed: {}", e.into_message())),
-            CliAgentRuntimeBackend::Shared(client) => {
-                let session_id = self.require_session_id().await?;
-                expect_unit(
-                    client
-                        .request(RuntimeIpcOperation::SubmitUserAnswers {
-                            request: RuntimeUserAnswersRequest {
-                                session_id,
-                                tool_id: tool_id.to_string(),
-                                answers,
-                            },
-                        })
-                        .await?,
-                    "submit_user_answers",
-                )
-            }
+                .map_err(SessionOperationError::runtime)
+                .map_err(anyhow::Error::new),
+            TuiRuntimePort::Shared(client) => expect_side_effect_unit(
+                client
+                    .request(RuntimeIpcOperation::SubmitUserAnswers {
+                        request: RuntimeUserAnswersRequest {
+                            session_id: request.session_id,
+                            turn_id: request.turn_id,
+                            tool_id: request.tool_id,
+                            registration_sequence: request.registration_sequence,
+                            answers: request.answers,
+                        },
+                    })
+                    .await
+                    .map_err(SessionOperationError::shared)
+                    .map_err(anyhow::Error::new)?,
+                "submit_user_answers",
+            ),
         }
     }
 
@@ -1805,7 +2158,7 @@ impl ExecAgentRuntimeClient {
     }
 
     async fn refresh_shared_pending_permissions(&self) -> Result<()> {
-        let CliAgentRuntimeBackend::Shared(client) = &self.backend else {
+        let TuiRuntimePort::Shared(client) = &self.backend else {
             return Ok(());
         };
         let session_id = self.require_session_id().await?;
@@ -1851,7 +2204,7 @@ fn spawn_shared_event_bridge(
     agent_owner: SharedBroadcast<AgenticEventEnvelope>,
     permission_owner: SharedBroadcast<bitfun_agent_runtime::sdk::PermissionRequestEvent>,
     pending: Arc<RwLock<HashMap<String, PermissionRequest>>>,
-) {
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
             match source.recv().await {
@@ -1922,7 +2275,15 @@ fn spawn_shared_event_bridge(
         *permission_owner
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
-    });
+    })
+}
+
+impl Drop for CliAgentRuntimeClient {
+    fn drop(&mut self) {
+        if let Some(bridge) = self.shared_event_bridge.take() {
+            bridge.abort();
+        }
+    }
 }
 
 fn shared_disconnect_message(reason: Option<RuntimeIpcStreamInvalidationReason>) -> String {
@@ -1957,6 +2318,15 @@ pub(super) fn expect_unit(result: RuntimeIpcOperationResult, operation: &str) ->
     }
 }
 
+fn expect_side_effect_unit(result: RuntimeIpcOperationResult, operation: &str) -> Result<()> {
+    match result {
+        RuntimeIpcOperationResult::Unit => Ok(()),
+        _ => Err(anyhow::Error::new(SessionOperationError::unexpected(
+            unexpected_shared_result(operation),
+        ))),
+    }
+}
+
 fn unexpected_shared_result(operation: &str) -> anyhow::Error {
     anyhow::anyhow!("Shared Runtime returned an unexpected result for {operation}")
 }
@@ -1985,26 +2355,147 @@ mod recovery_tests {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::path::Path;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, RwLock,
+    };
 
     use bitfun_runtime_ports::{
-        AgentSessionSummary, AgentSessionWorkspaceBinding, SessionExecutionTarget,
-        SessionExecutionTargetKind, WorktreeLifecycle,
+        AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
+        AgentSessionListRequest, AgentSessionManagementPort, AgentSessionRenameRequest,
+        AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+        AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, PortResult,
+        SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
     };
 
     use bitfun_agent_runtime::sdk::{
-        PermissionDelegationContext, PermissionRequest, PermissionRequestEvent,
-        PermissionRequestSource, PermissionRequestSourceKind, PortError, PortErrorKind,
-        RuntimeError,
+        AgentRuntime, AgentRuntimeBuilder, AgentSessionUsageRequest, PermissionDelegationContext,
+        PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
+        PermissionRequestSourceKind, PortError, PortErrorKind, RuntimeError,
     };
     use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode};
 
     use super::{
-        project_routed_permission_event, session_migration_notices, shared_disconnect_message,
-        shared_restore_error, validated_session_summary, CliWorkspacePaths, SessionMigrationNotice,
-        SessionOperationError,
+        merge_session_usage_remote_scope, project_routed_permission_event,
+        runtime_side_effect_error, session_migration_notices, shared_disconnect_message,
+        shared_restore_error, should_clear_turn_after_submission_error,
+        side_effect_error_outcome_is_unknown, validated_accepted_turn, validated_session_summary,
+        CliAgentRuntimeClient, CliWorkspacePaths, SessionMigrationNotice, SessionOperationError,
+        TuiRuntimePort,
     };
     use bitfun_agent_runtime_ipc::RuntimeIpcStreamInvalidationReason;
+    use tokio::sync::Mutex;
+
+    struct CreateThenBindingFailsPort {
+        create_calls: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl AgentSubmissionPort for CreateThenBindingFailsPort {
+        async fn create_session(
+            &self,
+            request: AgentSessionCreateRequest,
+        ) -> PortResult<AgentSessionCreateResult> {
+            self.create_calls.fetch_add(1, Ordering::SeqCst);
+            let mut session = AgentSessionCreateResult::new(
+                "created-session",
+                request.session_name,
+                request.agent_type,
+            );
+            session.workspace_path = request.workspace_path;
+            session.project_workspace_path = request.project_workspace_path;
+            session.execution_target = request.execution_target;
+            Ok(session)
+        }
+
+        async fn submit_message(
+            &self,
+            request: AgentSubmissionRequest,
+        ) -> PortResult<AgentSubmissionResult> {
+            Ok(AgentSubmissionResult {
+                turn_id: request.turn_id.unwrap_or_else(|| "turn-1".to_string()),
+                accepted: true,
+            })
+        }
+
+        async fn resolve_session_agent_type(
+            &self,
+            _session_id: &str,
+        ) -> PortResult<Option<String>> {
+            Ok(Some("agentic".to_string()))
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AgentSessionManagementPort for CreateThenBindingFailsPort {
+        async fn list_sessions(
+            &self,
+            _request: AgentSessionListRequest,
+        ) -> PortResult<Vec<AgentSessionSummary>> {
+            Ok(Vec::new())
+        }
+
+        async fn delete_session(&self, _request: AgentSessionDeleteRequest) -> PortResult<()> {
+            Ok(())
+        }
+
+        async fn rename_session(&self, _request: AgentSessionRenameRequest) -> PortResult<()> {
+            Ok(())
+        }
+
+        async fn resolve_session_workspace_binding(
+            &self,
+            _request: AgentSessionWorkspaceRequest,
+        ) -> PortResult<Option<AgentSessionWorkspaceBinding>> {
+            Err(PortError::new(
+                PortErrorKind::NotAvailable,
+                "workspace binding store unavailable",
+            ))
+        }
+    }
+
+    fn embedded_client_for_test(runtime: AgentRuntime, workspace: &Path) -> CliAgentRuntimeClient {
+        CliAgentRuntimeClient {
+            backend: TuiRuntimePort::Embedded(runtime),
+            approval_policy: Arc::new(RwLock::new(super::CliApprovalPolicy::Ask)),
+            workspace_paths: Arc::new(RwLock::new(CliWorkspacePaths::new(Some(
+                workspace.to_path_buf(),
+            )))),
+            session_id: Arc::new(Mutex::new(None)),
+            current_turn_id: Arc::new(Mutex::new(None)),
+            shared_agent_events: None,
+            shared_permission_events: None,
+            shared_pending_permissions: Arc::new(RwLock::new(HashMap::new())),
+            shared_event_bridge: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn direct_create_binding_failure_is_outcome_unknown_without_recreating() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let port = Arc::new(CreateThenBindingFailsPort {
+            create_calls: AtomicUsize::new(0),
+        });
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(port.clone())
+            .with_session_management_port(port.clone())
+            .build()
+            .expect("runtime");
+        let client = embedded_client_for_test(runtime, workspace.path());
+
+        let result = client
+            .create_new_session_with_workspace_binding("agentic")
+            .await;
+
+        let error = result.expect_err("binding failure after create must fail closed");
+        assert!(error
+            .downcast_ref::<SessionOperationError>()
+            .is_some_and(SessionOperationError::outcome_unknown));
+        assert!(error.to_string().contains("Session creation completed"));
+        assert_eq!(port.create_calls.load(Ordering::SeqCst), 1);
+    }
 
     #[test]
     fn oversized_shared_restore_explains_the_embedded_handoff() {
@@ -2034,6 +2525,9 @@ mod tests {
         ] {
             assert!(SessionOperationError::shared(transport_error).outcome_unknown());
         }
+        assert!(side_effect_error_outcome_is_unknown(&anyhow::Error::new(
+            RuntimeIpcClientError::Timeout,
+        )));
         assert!(
             SessionOperationError::unexpected(anyhow::anyhow!("unexpected response shape"))
                 .outcome_unknown()
@@ -2146,6 +2640,112 @@ mod tests {
     }
 
     #[test]
+    fn workspace_binding_retains_remote_request_scope_without_local_fallback() {
+        let mut paths = CliWorkspacePaths::new(Some(Path::new("D:/project").to_path_buf()));
+        paths.apply_binding(&AgentSessionWorkspaceBinding {
+            workspace_id: Some("workspace-remote".to_string()),
+            workspace_path: "/srv/worktree".to_string(),
+            project_workspace_path: Some("D:/project".to_string()),
+            execution_target: Some(SessionExecutionTarget::local("/srv/worktree")),
+            remote_connection_id: Some("connection-remote".to_string()),
+            remote_ssh_host: Some("build-host".to_string()),
+        });
+
+        assert_eq!(
+            paths.remote_scope(),
+            (
+                Some("connection-remote".to_string()),
+                Some("build-host".to_string())
+            )
+        );
+
+        paths.reset_execution_to_project();
+        assert_eq!(paths.remote_scope(), (None, None));
+    }
+
+    #[test]
+    fn session_usage_inherits_authoritative_remote_scope_and_rejects_conflicts() {
+        let request = AgentSessionUsageRequest {
+            session_id: "session-remote".to_string(),
+            workspace_path: Some("/srv/project".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            include_hidden_subagents: true,
+        };
+
+        let merged = merge_session_usage_remote_scope(
+            request.clone(),
+            (
+                Some("connection-remote".to_string()),
+                Some("build-host".to_string()),
+            ),
+        )
+        .expect("authoritative remote scope should fill omitted request facts");
+        assert_eq!(
+            merged.remote_connection_id.as_deref(),
+            Some("connection-remote")
+        );
+        assert_eq!(merged.remote_ssh_host.as_deref(), Some("build-host"));
+
+        let mut conflicting = request;
+        conflicting.remote_connection_id = Some("another-connection".to_string());
+        let error = merge_session_usage_remote_scope(
+            conflicting,
+            (Some("connection-remote".to_string()), None),
+        )
+        .expect_err("conflicting remote identity must fail closed");
+        assert!(error.to_string().contains("remote connection"));
+    }
+
+    #[test]
+    fn side_effecting_turns_keep_identity_when_the_outcome_is_unknown() {
+        let unknown = anyhow::Error::new(SessionOperationError::shared(
+            RuntimeIpcClientError::Timeout,
+        ));
+        let rejected = anyhow::Error::new(SessionOperationError::shared(
+            RuntimeIpcClientError::Remote(RuntimeIpcError {
+                code: RuntimeIpcErrorCode::NotFound,
+                message: "session missing".to_string(),
+            }),
+        ));
+
+        assert!(!should_clear_turn_after_submission_error(&unknown));
+        assert!(should_clear_turn_after_submission_error(&rejected));
+    }
+
+    #[test]
+    fn embedded_retry_preserves_a_typed_unknown_outcome() {
+        let error = runtime_side_effect_error(RuntimeError::Port(PortError::new(
+            PortErrorKind::OutcomeUnknown,
+            "the retry may have been accepted",
+        )));
+
+        assert!(error
+            .downcast_ref::<SessionOperationError>()
+            .is_some_and(SessionOperationError::outcome_unknown));
+        assert!(!should_clear_turn_after_submission_error(&error));
+    }
+
+    #[test]
+    fn accepted_turn_identity_mismatch_is_outcome_unknown() {
+        for (accepted_session, accepted_turn) in
+            [("other-session", "turn"), ("session", "other-turn")]
+        {
+            let error = validated_accepted_turn(
+                "submit_turn",
+                "session",
+                "turn",
+                accepted_session.to_string(),
+                accepted_turn.to_string(),
+            )
+            .expect_err("mismatched accepted identity must fail closed");
+            assert!(error
+                .downcast_ref::<SessionOperationError>()
+                .is_some_and(SessionOperationError::outcome_unknown));
+        }
+    }
+
+    #[test]
     fn workspace_diff_fails_closed_for_other_worktrees_and_remote_sessions() {
         let mut paths = CliWorkspacePaths::new(Some("/project".into()));
         assert_eq!(paths.workspace_diff_unavailable_reason(), None);
@@ -2189,9 +2789,9 @@ mod tests {
         let compatibility_update =
             ["self.compatibility", "\n            .update_session_model"].concat();
 
-        assert!(source.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(source.contains("TuiRuntimePort::Embedded(runtime)"));
         assert!(source.contains("runtime.update_session_model(request)"));
-        assert!(source.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(source.contains("TuiRuntimePort::Shared(client)"));
         assert!(source.contains("RuntimeIpcOperation::UpdateSessionModel { request }"));
         assert!(!source.contains(&compatibility_update));
     }
@@ -2225,7 +2825,7 @@ mod tests {
             .0;
 
         assert!(source.contains("pub(crate) async fn rename_session("));
-        assert!(rename.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(rename.contains("TuiRuntimePort::Embedded(runtime)"));
         assert!(rename.contains(".rename_session(request)"));
         assert!(rename.contains("RuntimeIpcOperation::RenameSession"));
         assert!(!rename.contains("serde_json::to_value"));
@@ -2243,7 +2843,7 @@ mod tests {
             .expect("compaction method boundary")
             .0;
 
-        assert!(compact.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(compact.contains("TuiRuntimePort::Embedded(runtime)"));
         assert!(compact.contains(".start_session_compaction(request)"));
         assert!(compact.contains("RuntimeIpcOperation::CompactSession { request }"));
         assert!(compact.contains("RuntimeIpcOperationResult::TurnAccepted"));
@@ -2263,9 +2863,9 @@ mod tests {
             .0;
 
         assert!(steering.contains("AgentDialogSteerRequest"));
-        assert!(steering.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(steering.contains("TuiRuntimePort::Embedded(runtime)"));
         assert!(steering.contains(".steer_dialog_turn(request)"));
-        assert!(steering.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(steering.contains("TuiRuntimePort::Shared(client)"));
         assert!(steering.contains("RuntimeIpcOperation::SteerTurn { request }"));
         assert!(steering.contains("RuntimeIpcOperationResult::TurnSteered"));
         assert!(!steering.contains("RuntimeIpcOperation::SubmitTurn"));
@@ -2327,10 +2927,10 @@ mod tests {
             .expect("interactive fork method boundary")
             .0;
 
-        assert!(fork.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(fork.contains("TuiRuntimePort::Embedded(runtime)"));
         assert!(fork.contains(".fork_session_before_turn("));
         assert!(fork.contains(".fork_session(AgentSessionForkRequest"));
-        assert!(fork.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(fork.contains("TuiRuntimePort::Shared(client)"));
         assert!(fork.contains("RuntimeIpcOperation::ForkSession"));
         assert!(fork.contains("RuntimeIpcOperationResult::SessionForked"));
     }
@@ -2347,11 +2947,50 @@ mod tests {
             .0;
 
         assert!(workspace_diff.contains("workspace_diff_unavailable_reason"));
-        assert!(workspace_diff.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(workspace_diff.contains("TuiRuntimePort::Embedded(runtime)"));
         assert!(workspace_diff.contains(".workspace_diff()"));
-        assert!(workspace_diff.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(workspace_diff.contains("TuiRuntimePort::Shared(client)"));
         assert!(workspace_diff.contains("RuntimeIpcOperation::WorkspaceDiff"));
         assert!(workspace_diff.contains("RuntimeIpcOperationResult::WorkspaceDiff"));
+    }
+
+    #[test]
+    fn session_usage_uses_the_same_runtime_boundary_in_both_deployments() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let usage = source
+            .split_once("pub(crate) async fn generate_session_usage_report(")
+            .expect("session usage method")
+            .1
+            .split_once("pub(crate) async fn wait_for_turn_settlement(")
+            .expect("session usage method boundary")
+            .0;
+
+        assert!(usage.contains("TuiRuntimePort::Embedded(runtime)"));
+        assert!(usage.contains(".generate_session_usage(request)"));
+        assert!(usage.contains("TuiRuntimePort::Shared(client)"));
+        assert!(usage.contains("RuntimeIpcOperation::SessionUsage { request }"));
+        assert!(usage.contains("RuntimeIpcOperationResult::SessionUsage { usage }"));
+        assert!(usage.contains("merge_session_usage_remote_scope"));
+        assert!(!usage.contains("embedded_runtime"));
+    }
+
+    #[test]
+    fn turn_settlement_uses_the_same_runtime_boundary_in_both_deployments() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let settlement = source
+            .split_once("pub(crate) async fn wait_for_turn_settlement(")
+            .expect("settlement method")
+            .1
+            .split_once("fn build_default_session_name()")
+            .expect("settlement method boundary")
+            .0;
+
+        assert!(settlement.contains("TuiRuntimePort::Embedded(runtime)"));
+        assert!(settlement.contains(".wait_for_turn_settlement(request)"));
+        assert!(settlement.contains("TuiRuntimePort::Shared(client)"));
+        assert!(settlement.contains("RuntimeIpcOperation::WaitForSettlement { request }"));
+        assert!(settlement.contains("RuntimeIpcOperationResult::Unit"));
+        assert!(!settlement.contains("NotAvailable"));
     }
 
     #[test]
@@ -2365,7 +3004,7 @@ mod tests {
             .expect("session revert method boundary")
             .0;
 
-        assert!(revert.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(revert.contains("TuiRuntimePort::Embedded(runtime)"));
         assert!(revert.contains("runtime.undo_session(request)"));
         assert!(revert.contains("runtime.redo_session(request)"));
         assert!(revert.contains("RuntimeIpcOperation::UndoSession"));
@@ -2384,9 +3023,9 @@ mod tests {
             .expect("delete method boundary")
             .0;
 
-        assert!(delete.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(delete.contains("TuiRuntimePort::Embedded(runtime)"));
         assert!(delete.contains(".delete_session(AgentSessionDeleteRequest {"));
-        assert!(delete.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(delete.contains("TuiRuntimePort::Shared(client)"));
         assert!(delete.contains("RuntimeIpcOperation::DeleteSession"));
         assert!(!delete.contains("embedded_runtime"));
         assert!(!delete.contains("serde_json::to_value"));
@@ -2402,9 +3041,9 @@ mod tests {
         ]
         .concat();
 
-        assert!(source.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(source.contains("TuiRuntimePort::Embedded(runtime)"));
         assert!(source.contains("runtime.update_session_mode(request)"));
-        assert!(source.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(source.contains("TuiRuntimePort::Shared(client)"));
         assert!(source.contains("RuntimeIpcOperation::UpdateSessionMode { request }"));
         assert!(!source.contains(&compatibility_update));
     }

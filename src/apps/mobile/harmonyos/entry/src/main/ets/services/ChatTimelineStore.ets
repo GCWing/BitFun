@@ -471,8 +471,13 @@ export class ChatTimelineStore {
     if (!active) {
       return;
     }
-    const tools = (active.tools || []).filter((item: RemoteToolStatusResponse) => item.id !== tool.id);
-    tools.push(tool);
+    const tools = (active.tools || []).slice();
+    const matchIndex = ChatTimelineStore.matchToolIndex(tools, tool);
+    if (matchIndex >= 0) {
+      tools[matchIndex] = ChatTimelineStore.mergeTool(tools[matchIndex], tool) || tool;
+    } else {
+      tools.push(tool);
+    }
     this.setActiveTurn({
       id: active.id,
       turnId: active.turnId,
@@ -641,7 +646,7 @@ export class ChatTimelineStore {
       if (incomingToolId.length > 0) {
         matchIndex = previousItems.findIndex((previous: ChatMessageItemResponse, index: number) => {
           return !matched.has(index) && previous.tool !== undefined &&
-            (previous.tool.id || '') === incomingToolId;
+            ChatTimelineStore.sameToolIdentity(previous.tool, incoming.tool);
         });
       } else if (incomingIndex < previousItems.length &&
         !matched.has(incomingIndex) &&
@@ -687,7 +692,7 @@ export class ChatTimelineStore {
     const previousToolId = previous.tool ? (previous.tool.id || '') : '';
     const incomingToolId = incoming.tool ? (incoming.tool.id || '') : '';
     if (previousToolId.length > 0 || incomingToolId.length > 0) {
-      return previousToolId === incomingToolId;
+      return ChatTimelineStore.sameToolIdentity(previous.tool, incoming.tool);
     }
     return true;
   }
@@ -746,6 +751,44 @@ export class ChatTimelineStore {
     };
     // A delayed poll must not move a completed tool back to running/pending.
     return rank(incomingStatus) < rank(previousStatus) ? previous : incoming;
+  }
+
+  private static matchToolIndex(
+    tools: RemoteToolStatusResponse[],
+    incoming: RemoteToolStatusResponse
+  ): number {
+    const exactIndex = tools.findIndex((tool: RemoteToolStatusResponse) => {
+      return ChatTimelineStore.sameToolIdentity(tool, incoming);
+    });
+    if (exactIndex >= 0 || incoming.user_input_identity) {
+      return exactIndex;
+    }
+    const sameId: number[] = [];
+    tools.forEach((tool: RemoteToolStatusResponse, index: number) => {
+      if ((tool.id || '') === (incoming.id || '')) {
+        sameId.push(index);
+      }
+    });
+    return sameId.length === 1 ? sameId[0] : -1;
+  }
+
+  private static sameToolIdentity(
+    left: RemoteToolStatusResponse | undefined,
+    right: RemoteToolStatusResponse | undefined
+  ): boolean {
+    if (!left || !right) {
+      return false;
+    }
+    const leftIdentity = left.user_input_identity;
+    const rightIdentity = right.user_input_identity;
+    if (leftIdentity || rightIdentity) {
+      return !!leftIdentity && !!rightIdentity &&
+        leftIdentity.session_id === rightIdentity.session_id &&
+        leftIdentity.turn_id === rightIdentity.turn_id &&
+        leftIdentity.tool_id === rightIdentity.tool_id &&
+        leftIdentity.registration_sequence === rightIdentity.registration_sequence;
+    }
+    return (left.id || '') === (right.id || '');
   }
 
   private static isActiveTurnId(id: string): boolean {

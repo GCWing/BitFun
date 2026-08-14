@@ -1,5 +1,5 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ConversationUiQuestionAnswer } from '../state/ConversationUiModels';
+import { ConversationUiQuestionAnswer, ConversationUiUserInputIdentity } from '../state/ConversationUiModels';
 import { ACCENT, CARD, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 
 interface QuestionOption {
@@ -131,11 +131,16 @@ export struct ToolConfirmationPanel {
 
 @ComponentV2
 export struct ToolQuestionAnswerPanel {
-  @Param toolId: string = '';
+  @Param userInputIdentity: ConversationUiUserInputIdentity = {
+    session_id: '',
+    turn_id: '',
+    tool_id: '',
+    registration_sequence: 0
+  };
   @Param questionsJson: string = '';
   @Param isBusy: boolean = false;
-  @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
-    (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
+  @Event onAnswerQuestion: (identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer) => void =
+    (_identity: ConversationUiUserInputIdentity, _answers: ConversationUiQuestionAnswer) => {};
   @Local questions: QuestionInput[] = [];
   @Local selectedAnswers: Map<number, string[]> = new Map<number, string[]>();
   @Local customAnswers: Map<number, string> = new Map<number, string>();
@@ -234,7 +239,11 @@ export struct ToolQuestionAnswerPanel {
   }
 
   private canSubmit(): boolean {
-    if (this.isBusy || this.toolId.length === 0 || this.questions.length === 0) {
+    if (this.isBusy ||
+      this.userInputIdentity.session_id.length === 0 ||
+      this.userInputIdentity.turn_id.length === 0 ||
+      this.userInputIdentity.tool_id.length === 0 ||
+      this.questions.length === 0) {
       return false;
     }
     return this.questions.every((_question: QuestionInput, index: number) => {
@@ -279,7 +288,7 @@ export struct ToolQuestionAnswerPanel {
       const value: string | string[] = question.multiSelect === true ? selected : selected[0];
       (answers as Record<string, Object>)[`${index}`] = value as Object;
     });
-    this.onAnswerQuestion(this.toolId, answers);
+    this.onAnswerQuestion(this.userInputIdentity, answers);
   }
 
   private parseQuestions(value: string): QuestionInput[] {

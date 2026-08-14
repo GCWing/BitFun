@@ -6462,6 +6462,149 @@ pub async fn external_source_conflict_choices() -> Result<
     ))
 }
 
+/// Owner-level mutation requested by an interactive external-source review
+/// surface. Hosts translate their wire or presentation DTO into this enum;
+/// the mutation dispatch itself remains single-sourced in Product Assembly.
+#[derive(Debug, Clone)]
+pub enum ExternalSourceReviewAction {
+    Refresh,
+    SetPromptCommandConflictChoice {
+        conflict_key: String,
+        candidate_id: String,
+        expected_preference_revision: u64,
+    },
+    SetToolTargetDecision {
+        approval_key: String,
+        decision_key: String,
+        approved: bool,
+        expected_preference_revision: u64,
+    },
+    SetToolConflictChoice {
+        conflict_key: String,
+        candidate_id: String,
+        expected_preference_revision: u64,
+    },
+    SetSubagentActivation {
+        candidate_id: String,
+        approved: bool,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+        decision_key: String,
+    },
+    SetSubagentModelBinding {
+        binding_key: String,
+        target: Option<ExternalSubagentModelBindingTarget>,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+    },
+    ChooseSubagentConflict {
+        conflict_key: String,
+        candidate_id: String,
+        approve_external: bool,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+    },
+}
+
+pub async fn review_external_source(
+    workspace_root: Option<&Path>,
+    action: ExternalSourceReviewAction,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    match action {
+        ExternalSourceReviewAction::Refresh => external_source_snapshot(workspace_root, true).await,
+        ExternalSourceReviewAction::SetPromptCommandConflictChoice {
+            conflict_key,
+            candidate_id,
+            expected_preference_revision,
+        } => {
+            set_external_prompt_command_conflict_choice(
+                workspace_root,
+                &conflict_key,
+                &candidate_id,
+                expected_preference_revision,
+            )
+            .await
+        }
+        ExternalSourceReviewAction::SetToolTargetDecision {
+            approval_key,
+            decision_key,
+            approved,
+            expected_preference_revision,
+        } => {
+            set_external_tool_target_decision(
+                workspace_root,
+                &approval_key,
+                &decision_key,
+                approved,
+                expected_preference_revision,
+            )
+            .await
+        }
+        ExternalSourceReviewAction::SetToolConflictChoice {
+            conflict_key,
+            candidate_id,
+            expected_preference_revision,
+        } => {
+            set_external_tool_conflict_choice(
+                workspace_root,
+                &conflict_key,
+                &candidate_id,
+                expected_preference_revision,
+            )
+            .await
+        }
+        ExternalSourceReviewAction::SetSubagentActivation {
+            candidate_id,
+            approved,
+            expected_subagent_generation,
+            expected_preference_revision,
+            decision_key,
+        } => {
+            set_external_subagent_activation(
+                workspace_root,
+                &candidate_id,
+                approved,
+                expected_subagent_generation,
+                expected_preference_revision,
+                &decision_key,
+            )
+            .await
+        }
+        ExternalSourceReviewAction::SetSubagentModelBinding {
+            binding_key,
+            target,
+            expected_subagent_generation,
+            expected_preference_revision,
+        } => {
+            set_external_subagent_model_binding(
+                workspace_root,
+                &binding_key,
+                target,
+                expected_subagent_generation,
+                expected_preference_revision,
+            )
+            .await
+        }
+        ExternalSourceReviewAction::ChooseSubagentConflict {
+            conflict_key,
+            candidate_id,
+            approve_external,
+            expected_subagent_generation,
+            expected_preference_revision,
+        } => {
+            choose_external_subagent_conflict(
+                workspace_root,
+                &conflict_key,
+                &candidate_id,
+                approve_external,
+                expected_subagent_generation,
+                expected_preference_revision,
+            )
+            .await
+        }
+    }
+}
+
 async fn remember_native_prompt_command_conflict_choice(
     conflict_key: &str,
     candidate_id: &str,

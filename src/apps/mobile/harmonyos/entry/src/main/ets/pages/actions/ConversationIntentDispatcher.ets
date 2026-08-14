@@ -1,7 +1,7 @@
-import { RemoteQuestionAnswerPayload, RemoteSession } from '../../model/RemoteModels';
+import { RemoteQuestionAnswerPayload, RemoteSession, RemoteUserInputIdentity } from '../../model/RemoteModels';
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
 import { ConversationIntent, ConversationIntentType } from './ConversationIntent';
-import { toRemoteQuestionAnswer } from '../state/ConversationUiModels';
+import { toRemoteQuestionAnswer, toRemoteUserInputIdentity } from '../state/ConversationUiModels';
 import { FilePreviewRequest } from '../../model/FilePreviewTarget';
 
 export interface ConversationIntentDispatcherHooks {
@@ -23,7 +23,7 @@ export interface ConversationIntentDispatcherHooks {
   readonly approve: (toolId: string, input?: Object) => Promise<void>;
   readonly reject: (toolId: string) => Promise<void>;
   readonly cancel: (toolId: string) => Promise<void>;
-  readonly answer: (toolId: string, answers: RemoteQuestionAnswerPayload) => Promise<void>;
+  readonly answer: (identity: RemoteUserInputIdentity, answers: RemoteQuestionAnswerPayload) => Promise<void>;
   readonly rename: (title: string) => Promise<void>;
   readonly copy: (text: string) => Promise<void>;
   readonly retry: (text: string) => Promise<void>;
@@ -71,7 +71,13 @@ export class ConversationIntentDispatcher {
       case ConversationIntentType.RejectTool: void this.hooks.reject(intent.toolId); return;
       case ConversationIntentType.CancelTool: void this.hooks.cancel(intent.toolId); return;
       case ConversationIntentType.AnswerQuestion:
-        if (intent.answers) void this.hooks.answer(intent.toolId, toRemoteQuestionAnswer(intent.answers)); return;
+        if (intent.answers && intent.userInputIdentity) {
+          void this.hooks.answer(
+            toRemoteUserInputIdentity(intent.userInputIdentity),
+            toRemoteQuestionAnswer(intent.answers)
+          );
+        }
+        return;
       case ConversationIntentType.RenameSession: void this.hooks.rename(intent.value); return;
       case ConversationIntentType.CopyMessage: void this.hooks.copy(intent.value); return;
       case ConversationIntentType.RetryMessage: void this.hooks.retry(intent.value); return;

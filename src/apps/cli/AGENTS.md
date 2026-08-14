@@ -19,7 +19,7 @@ CLI owns only surface concerns:
 - TUI state, rendering, popups, local draft history, and local effects such as
   clipboard or external-editor integration
 - projection of Runtime events into text, JSON, JSONL, and user diagnostics
-- Shared Runtime client/server adaptation and Peer Device host presentation
+- Direct/Shared Runtime adaptation and Peer Device host presentation
 
 Session, turn, model round, tool execution, permissions, cancellation,
 persistence, context, workspace binding, MCP, Subagent, and other product facts
@@ -35,18 +35,37 @@ runtime owner moved.
 Normal interactive submissions follow:
 
 ```text
-ChatView -> TuiAgentClient -> TuiBackend -> App Server client
-         -> App Server handler -> Agent Runtime owner -> ToolPipeline
+ChatView -> CliAgentRuntimeClient -> TuiRuntimePort
+         -> Embedded(AgentRuntime) -> Agent Runtime owner -> ToolPipeline
+         -> Shared(RuntimeIpcClient) -> private Runtime IPC v18
+                                     -> Agent Runtime owner -> ToolPipeline
 ```
 
-Embedded TUI uses an in-memory App Server connection. During the migration,
-Shared TUI uses a CLI Host compatibility adapter that implements `TuiBackend`
-over the private versioned Runtime IPC; the TUI client and controllers must not
-reference that IPC. Embedded direct-runtime migration belongs to Phase 5;
-replacing the physical Shared transport with App Server Pipe/UDS framing belongs
-to the separately reviewed Phase 6. Side-effecting operations need stable
-identities, controller/idle rules, bounded frames, and outcome-unknown handling
-before a connection can retry.
+Phase 5 is delivered: the default interactive TUI calls the in-process
+`AgentRuntime` directly, while explicit `--shared` uses the private versioned
+Runtime IPC. `TuiRuntimePort` is private to `CliAgentRuntimeClient`; views and
+controllers must not depend on Runtime, Core, or IPC deployment details. The
+retired CLI path must not reintroduce `TuiBackend`, `AppServerTuiBackend`,
+`SharedTuiBackend`, an embedded App Server, or an in-memory App Server transport.
+
+Management operations use a separate composition path:
+
+```text
+TUI controller -> TuiManagementOwners
+               -> concrete Model / Registry / MCP / Account / Settings Sync /
+                  Worktree / Native Hook / External Hook / External Source /
+                  External Command providers
+               -> owning domain service
+```
+
+This composition is intentionally not a total `TuiManagementPort` and does not
+route management through Runtime IPC or create CLI-local business owners or
+authoritative management state.
+Providers retain capability and Remote-workspace guards. Web/App Server remains
+a sibling product adapter. Replacing the physical Shared transport belongs to a
+separately reviewed phase. Side-effecting operations need stable identities,
+controller/idle rules, bounded frames, and outcome-unknown handling before a
+connection can retry.
 
 Explicit Shell input follows:
 

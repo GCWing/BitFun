@@ -39,7 +39,10 @@ struct QuestionData {
 /// Interactive question prompt state
 #[derive(Debug, Clone)]
 pub(crate) struct QuestionPrompt {
+    pub(crate) session_id: String,
+    pub(crate) turn_id: String,
     pub(crate) tool_id: String,
+    pub(crate) registration_sequence: u64,
     questions: Vec<QuestionData>,
     /// Current active question tab (0-based); equals questions.len() when on confirm page
     current_tab: usize,
@@ -66,7 +69,13 @@ pub(crate) enum QuestionAction {
 
 impl QuestionPrompt {
     /// Create from parsed AskUserQuestion params
-    pub(crate) fn from_params(tool_id: String, params: &serde_json::Value) -> Option<Self> {
+    pub(crate) fn from_params(
+        session_id: String,
+        turn_id: String,
+        tool_id: String,
+        registration_sequence: u64,
+        params: &serde_json::Value,
+    ) -> Option<Self> {
         let questions_val = params.get("questions")?.as_array()?;
         let mut questions = Vec::new();
 
@@ -118,7 +127,10 @@ impl QuestionPrompt {
 
         let q_count = questions.len();
         Some(Self {
+            session_id,
+            turn_id,
             tool_id,
+            registration_sequence,
             questions,
             current_tab: 0,
             answers: vec![Vec::new(); q_count],

@@ -18,7 +18,6 @@ mod config;
 mod daemon;
 mod diagnostics;
 mod dispatch;
-mod embedded_app_server;
 mod hook_import;
 mod logging;
 mod management;
@@ -34,17 +33,22 @@ mod root_handlers;
 mod runtime;
 mod self_update;
 mod shared_runtime;
-mod shared_tui_backend;
 mod terminal_attention;
-mod tui_backend;
+mod tui_management;
+#[cfg(test)]
+mod tui_management_tests;
 mod ui;
 
 use anyhow::{anyhow, Result};
 use bitfun_core::service::remote_connect::DeviceIdentity;
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
-use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, OnceLock};
+use futures_util::FutureExt;
+use std::future::Future;
+use std::panic::AssertUnwindSafe;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 
+use agent::runtime_client::CliAgentRuntimeClient;
 use agent::tui_client::TuiAgentClient;
 use config::CliConfig;
 use hook_import::HookAction;
@@ -59,6 +63,47 @@ static MCP_SERVICE: OnceLock<std::sync::Arc<bitfun_core::service::mcp::MCPServic
 
 /// MCP initialization status: 0=not started, 1=in progress, 2=completed, 3=failed
 static MCP_INIT_STATUS: OnceLock<AtomicU8> = OnceLock::new();
+static MCP_LIFECYCLE: OnceLock<CliMcpLifecycle> = OnceLock::new();
+
+#[derive(Default)]
+struct CliMcpLifecycle {
+    initialization: StdMutex<Option<tokio::task::JoinHandle<()>>>,
+    shutting_down: AtomicBool,
+}
+
+impl CliMcpLifecycle {
+    fn track_initialization(&self, task: tokio::task::JoinHandle<()>) {
+        if self.shutting_down.load(Ordering::Acquire) {
+            task.abort();
+            return;
+        }
+        if let Some(previous) = self
+            .initialization
+            .lock()
+            .expect("CLI MCP lifecycle lock poisoned")
+            .replace(task)
+        {
+            previous.abort();
+        }
+    }
+
+    async fn stop_initialization(&self) {
+        self.shutting_down.store(true, Ordering::Release);
+        let task = self
+            .initialization
+            .lock()
+            .expect("CLI MCP lifecycle lock poisoned")
+            .take();
+        if let Some(task) = task {
+            task.abort();
+            let _ = task.await;
+        }
+    }
+}
+
+fn cli_mcp_lifecycle() -> &'static CliMcpLifecycle {
+    MCP_LIFECYCLE.get_or_init(CliMcpLifecycle::default)
+}
 
 /// Get the MCP init status atomic
 fn get_mcp_init_status() -> &'static AtomicU8 {
@@ -111,11 +156,10 @@ fn ensure_cli_mcp_service(
     bitfun_core::service::mcp::set_global_mcp_service(service.clone());
     get_mcp_init_status().store(1, Ordering::Relaxed);
 
-    // Shared TUI keeps the pre-migration CLI-local MCP compatibility path. It
-    // is intentionally separate from the MCP manager inside Shared Runtime;
-    // this process must not be mistaken for that Runtime's owner.
+    // This runs only in the process that owns the Runtime: the Embedded CLI or
+    // the Shared Runtime Host. Shared TUI controller processes must not call it.
     let initializing = service.clone();
-    tokio::spawn(async move {
+    let initialization = tokio::spawn(async move {
         match initializing.server_manager().initialize_all().await {
             Ok(_) => {
                 tracing::info!("MCP servers initialized successfully");
@@ -127,6 +171,7 @@ fn ensure_cli_mcp_service(
             }
         }
     });
+    cli_mcp_lifecycle().track_initialization(initialization);
 
     Some(service)
 }
@@ -889,6 +934,7 @@ async fn initialize_core_services_for_deployment(
 
 /// Shutdown MCP servers gracefully
 async fn shutdown_mcp_servers() {
+    cli_mcp_lifecycle().stop_initialization().await;
     if let Some(mcp_service) = get_mcp_service() {
         if let Err(e) = mcp_service.server_manager().shutdown().await {
             tracing::warn!("Failed to shutdown MCP servers: {}", e);
@@ -896,6 +942,30 @@ async fn shutdown_mcp_servers() {
             tracing::info!("MCP servers shut down successfully");
         }
     }
+}
+
+async fn run_with_cleanup<Run, Cleanup, Output>(run: Run, cleanup: Cleanup) -> Output
+where
+    Run: Future<Output = Output>,
+    Cleanup: Future<Output = ()>,
+{
+    let outcome = AssertUnwindSafe(run).catch_unwind().await;
+    cleanup.await;
+    match outcome {
+        Ok(output) => output,
+        Err(payload) => std::panic::resume_unwind(payload),
+    }
+}
+
+async fn load_auto_approve_ask_default() -> bool {
+    let Ok(service) = bitfun_core::service::config::get_global_config_service().await else {
+        return false;
+    };
+    service
+        .get_config::<bitfun_core::service::config::types::GlobalConfig>(None)
+        .await
+        .map(|config| config.tool_permissions.interaction.auto_approve_ask)
+        .unwrap_or(false)
 }
 
 // ======================== Interactive TUI Flow ========================
@@ -936,52 +1006,29 @@ async fn run_interactive(
             .await?,
         )
     };
-    let embedded_app_server = if let Some(runtime) = &runtime {
-        Some(embedded_app_server::EmbeddedAppServerHost::start(runtime).await?)
-    } else {
-        None
-    };
     let agent = if let Some(runtime) = &runtime {
-        let backend = embedded_app_server
-            .as_ref()
-            .expect("Embedded App Server should be started with the Runtime")
-            .backend();
-        Arc::new(TuiAgentClient::new(
-            backend,
+        let runtime_client = Arc::new(CliAgentRuntimeClient::new_direct(
+            runtime,
             Some(workspace_path.clone()),
-            false,
-            runtime.approval_policy(),
-        ))
+        ));
+        let management = Arc::new(
+            tui_management::TuiManagementOwners::load(
+                Some(runtime.account_runtime().clone()),
+                true,
+            )
+            .await?,
+        );
+        Arc::new(TuiAgentClient::new(runtime_client, management))
     } else {
         let client = shared_runtime::connect_or_start(&workspace_path).await?;
-        let config_service = bitfun_core::service::config::get_global_config_service()
-            .await
-            .map_err(|error| anyhow!("Failed to load Shared TUI management config: {error}"))?;
-        ensure_cli_mcp_service(config_service);
-        let management = Arc::new(bitfun_app_server::AppManagementService::load().await?);
-        let backend: Arc<dyn tui_backend::TuiBackend> = Arc::new(
-            shared_tui_backend::SharedTuiBackend::new(client, management),
-        );
-        let backend_initialized = backend
-            .initialize(bitfun_app_server_protocol::app::InitializeRequest {
-                protocol_version: bitfun_app_server_protocol::PROTOCOL_VERSION,
-                client: bitfun_app_server_protocol::app::ClientInfo {
-                    name: "bitfun-tui".to_string(),
-                    version: env!("CARGO_PKG_VERSION").to_string(),
-                },
-            })
-            .await?;
-        if backend_initialized.protocol_version != bitfun_app_server_protocol::PROTOCOL_VERSION {
-            anyhow::bail!("Shared TUI Host negotiated an incompatible protocol");
-        }
-        backend.health().await?;
-        Arc::new(TuiAgentClient::new(
-            backend,
+        let runtime_client = Arc::new(CliAgentRuntimeClient::new_shared(
+            client,
             Some(workspace_path.clone()),
-            true,
-            runtime::approval::CliApprovalPolicy::Ask,
-        ))
+        ));
+        let management = Arc::new(tui_management::TuiManagementOwners::load(None, false).await?);
+        Arc::new(TuiAgentClient::new(runtime_client, management))
     };
+    let auto_approve_ask_default = load_auto_approve_ask_default().await;
     // 3.5 Restore persisted account session (if any)
     if !shared {
         let runtime = runtime
@@ -1036,15 +1083,13 @@ async fn run_interactive(
         let restore_session_id = resolve_startup_session_override(&agent, session_spec).await?;
 
         let mut chat_mode = ChatMode::new(config, effective_agent, workspace, agent)
+            .with_auto_approve_ask_default(auto_approve_ask_default)
             .with_restore_session(restore_session_id);
         if let Some(mid) = model_id {
             chat_mode = chat_mode.with_model(mid);
         }
         let chat_result = chat_mode.run(Some(terminal));
 
-        if !shared {
-            shutdown_mcp_servers().await;
-        }
         let _exit_reason = chat_result?;
         println!("Goodbye!");
         return Ok(());
@@ -1061,7 +1106,6 @@ async fn run_interactive(
     let startup_result = startup_page.run(&mut terminal)?;
 
     if let StartupResult::Exit = startup_result {
-        shutdown_mcp_servers().await;
         ui::restore_terminal(terminal)?;
         println!("Goodbye!");
         return Ok(());
@@ -1085,7 +1129,8 @@ async fn run_interactive(
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent);
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent)
+        .with_auto_approve_ask_default(auto_approve_ask_default);
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);
     }
@@ -1098,7 +1143,6 @@ async fn run_interactive(
     let chat_result = chat_mode.run(Some(terminal));
 
     // 6. Cleanup, including fatal event-stream exits.
-    shutdown_mcp_servers().await;
     let _exit_reason = chat_result?;
     println!("Goodbye!");
 
@@ -1566,13 +1610,15 @@ async fn run_interactive_with_session(
 
     let workspace_path = runtime.workspace_root().to_path_buf();
     let workspace = Some(workspace_path.to_string_lossy().to_string());
-    let embedded_app_server = embedded_app_server::EmbeddedAppServerHost::start(&runtime).await?;
-    let agent = Arc::new(TuiAgentClient::new(
-        embedded_app_server.backend(),
+    let runtime_client = Arc::new(CliAgentRuntimeClient::new_direct(
+        &runtime,
         Some(workspace_path),
-        false,
-        runtime.approval_policy(),
     ));
+    let management = Arc::new(
+        tui_management::TuiManagementOwners::load(Some(runtime.account_runtime().clone()), true)
+            .await?,
+    );
+    let agent = Arc::new(TuiAgentClient::new(runtime_client, management));
     let sessions = agent.list_sessions().await?;
     let agent_type = sessions
         .iter()
@@ -1585,11 +1631,12 @@ async fn run_interactive_with_session(
             )
         })?;
 
-    let mut chat_mode =
-        ChatMode::new(config, agent_type, workspace, agent).with_restore_session(session_id);
+    let auto_approve_ask_default = load_auto_approve_ask_default().await;
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent)
+        .with_auto_approve_ask_default(auto_approve_ask_default)
+        .with_restore_session(session_id);
     let run_result = chat_mode.run(Some(terminal));
 
-    shutdown_mcp_servers().await;
     println!("Goodbye!");
 
     run_result?;
@@ -1609,7 +1656,7 @@ fn main() {
                 .enable_all()
                 .build()
                 .expect("failed to build tokio runtime");
-            runtime.block_on(run_cli())
+            runtime.block_on(async { run_with_cleanup(run_cli(), shutdown_mcp_servers()).await })
         })
         .expect("failed to spawn bitfun worker thread");
 
@@ -1795,7 +1842,22 @@ mod external_config_command_tests {
 
 #[cfg(test)]
 mod bootstrap_profile_tests {
-    use super::{exec_requests_json_output, BootstrapProfile, SessionAction};
+    use super::{
+        exec_requests_json_output, run_with_cleanup, BootstrapProfile, CliMcpLifecycle,
+        SessionAction,
+    };
+    use futures_util::FutureExt;
+    use std::panic::AssertUnwindSafe;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    struct InitializationDropSignal(Arc<AtomicBool>);
+
+    impl Drop for InitializationDropSignal {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Release);
+        }
+    }
 
     #[test]
     fn profiles_start_only_their_requested_background_services() {
@@ -1814,6 +1876,46 @@ mod bootstrap_profile_tests {
             );
             assert_eq!(profile.starts_mcp(), starts_mcp);
         }
+    }
+
+    #[tokio::test]
+    async fn mcp_shutdown_stops_and_joins_initialization_before_service_cleanup() {
+        let lifecycle = CliMcpLifecycle::default();
+        let dropped = Arc::new(AtomicBool::new(false));
+        let task_dropped = dropped.clone();
+        lifecycle.track_initialization(tokio::spawn(async move {
+            let _drop_signal = InitializationDropSignal(task_dropped);
+            std::future::pending::<()>().await;
+        }));
+        tokio::task::yield_now().await;
+
+        lifecycle.stop_initialization().await;
+
+        assert!(dropped.load(Ordering::Acquire));
+        assert!(lifecycle
+            .initialization
+            .lock()
+            .expect("lifecycle lock")
+            .is_none());
+        assert!(lifecycle.shutting_down.load(Ordering::Acquire));
+    }
+
+    #[tokio::test]
+    async fn top_level_panic_runs_cleanup_before_resuming_unwind() {
+        let cleaned_up = Arc::new(AtomicBool::new(false));
+        let cleanup_signal = cleaned_up.clone();
+
+        let outcome = AssertUnwindSafe(run_with_cleanup(
+            async { panic!("simulated CLI worker panic") },
+            async move {
+                cleanup_signal.store(true, Ordering::Release);
+            },
+        ))
+        .catch_unwind()
+        .await;
+
+        assert!(outcome.is_err());
+        assert!(cleaned_up.load(Ordering::Acquire));
     }
 
     #[test]

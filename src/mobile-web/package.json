@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "vitest run",
     "type-check": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview"
@@ -27,6 +28,7 @@
     "sass": "^1.93.2",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
+    "vitest": "^4.1.0",
     "ws": "^8.19.0"
   }
 }

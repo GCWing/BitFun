@@ -30,7 +30,7 @@ impl ChatMode {
     fn open_account_panel(
         &self,
         chat_view: &mut ChatView,
-        snapshot: bitfun_app_server_protocol::account::AccountSnapshotResponse,
+        snapshot: crate::tui_management::AccountSnapshotResponse,
     ) {
         let Some(info) = snapshot.info else {
             chat_view.show_login_form();
@@ -51,8 +51,8 @@ impl ChatMode {
         let progress = progress.progress;
         let devices = if matches!(
             progress.status,
-            bitfun_app_server_protocol::account::SettingsSyncStatus::Syncing
-                | bitfun_app_server_protocol::account::SettingsSyncStatus::Done
+            crate::tui_management::SettingsSyncStatus::Syncing
+                | crate::tui_management::SettingsSyncStatus::Done
         ) {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current()
@@ -63,8 +63,7 @@ impl ChatMode {
         } else {
             None
         };
-        let syncing =
-            progress.status == bitfun_app_server_protocol::account::SettingsSyncStatus::Syncing;
+        let syncing = progress.status == crate::tui_management::SettingsSyncStatus::Syncing;
         chat_view.update_account_panel_progress(devices, progress);
         syncing
     }
@@ -128,11 +127,12 @@ impl ChatMode {
                 }
             }
             LoginFormAction::SyncUseLocal => {
-                let result = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(self.agent.account_finalize_login(
-                        bitfun_app_server_protocol::account::AccountSyncChoice::Local,
-                    ))
-                });
+                let result =
+                    tokio::task::block_in_place(|| {
+                        rt_handle.block_on(self.agent.account_finalize_login(
+                            crate::tui_management::AccountSyncChoice::Local,
+                        ))
+                    });
                 let snapshot = match result {
                     Ok(snapshot) => snapshot,
                     Err(error) => {
@@ -149,11 +149,12 @@ impl ChatMode {
                     .add_system_message("Sync started (use local / upload settings).".to_string());
             }
             LoginFormAction::SyncUseCloud => {
-                let result = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(self.agent.account_finalize_login(
-                        bitfun_app_server_protocol::account::AccountSyncChoice::Cloud,
-                    ))
-                });
+                let result =
+                    tokio::task::block_in_place(|| {
+                        rt_handle.block_on(self.agent.account_finalize_login(
+                            crate::tui_management::AccountSyncChoice::Cloud,
+                        ))
+                    });
                 let snapshot = match result {
                     Ok(snapshot) => snapshot,
                     Err(error) => {

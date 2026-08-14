@@ -12,7 +12,7 @@ use bitfun_runtime_ports::{
     AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertRequest,
     AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsageRequest,
     AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentTurnCancellationResult,
-    AgentTurnSettlementRequest, SessionTranscript, SessionTranscriptRequest,
+    AgentTurnSettlementRequest, PendingUserInput, SessionTranscript, SessionTranscriptRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +46,8 @@ pub struct SyncSessionResponse {
     pub workspace_binding: AgentSessionWorkspaceBinding,
     #[serde(default)]
     pub pending_permissions: Vec<PermissionRequest>,
+    #[serde(default)]
+    pub pending_user_inputs: Vec<PendingUserInput>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -222,3 +224,49 @@ unit_response!(SetSessionArchivedResponse);
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[request(method = "session/forkAtTurn", response = ForkSessionResponse)]
 pub struct ForkSessionAtTurnMessage(pub AgentSessionForkAtTurnRequest);
+
+#[cfg(test)]
+mod tests {
+    use super::SyncSessionResponse;
+
+    #[test]
+    fn sync_session_round_trip_preserves_authoritative_pending_user_inputs() {
+        let response: SyncSessionResponse = serde_json::from_value(serde_json::json!({
+            "session": {
+                "sessionId": "session-1",
+                "sessionName": "Session",
+                "agentType": "agentic",
+                "turnCount": 1,
+                "createdAtMs": 10,
+                "lastActiveAtMs": 20
+            },
+            "state": {
+                "kind": "processing",
+                "currentTurnId": "turn-1",
+                "phase": "toolCalling"
+            },
+            "transcript": {
+                "sessionId": "session-1",
+                "messages": []
+            },
+            "workspaceBinding": {
+                "workspacePath": "/workspace"
+            },
+            "pendingPermissions": [],
+            "pendingUserInputs": [{
+                "toolId": "question-1",
+                "sessionId": "session-1",
+                "turnId": "turn-1",
+                "sourceSessionId": "child-session",
+                "sourceTurnId": "child-turn",
+                "registrationSequence": 7,
+                "input": { "questions": [{ "question": "Continue?" }] }
+            }]
+        }))
+        .expect("sync response fixture");
+
+        let encoded = serde_json::to_value(response).expect("serialize sync response");
+        assert_eq!(encoded["pendingUserInputs"][0]["toolId"], "question-1");
+        assert_eq!(encoded["pendingUserInputs"][0]["registrationSequence"], 7);
+    }
+}

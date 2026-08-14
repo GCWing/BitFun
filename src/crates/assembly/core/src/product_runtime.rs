@@ -19,7 +19,7 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionLineageEntry, AgentSessionLineageInspection, AgentSessionLineagePort,
     AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
     AgentSessionUsagePort, AgentSessionUsageRequest, AgentTurnCancellationResult,
-    AgentTurnSettlementPort, AgentTurnSettlementRequest, SessionTranscript,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, PendingUserInput, SessionTranscript,
 };
 use bitfun_core_types::{SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
 use bitfun_harness::HarnessRegistry;
@@ -984,6 +984,16 @@ impl CoreAgentRuntimeCompatibility {
             .get_session(session_id))
     }
 
+    /// Return the authoritative pending user-input registrations projected to
+    /// the requested root session by the coordinator that owns execution.
+    pub fn pending_user_inputs_for_session(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Vec<PendingUserInput>> {
+        validate_persisted_session_id(session_id)?;
+        Ok(self.coordinator.pending_user_inputs_for_session(session_id))
+    }
+
     pub async fn update_loaded_session_title(
         &self,
         session_id: &str,
@@ -1327,12 +1337,7 @@ impl AgentContextReloadPort for CoreAgentRuntimeCompatibility {
     ) -> bitfun_runtime_ports::PortResult<()> {
         CoreAgentRuntimeCompatibility::reload_session_context(self, request)
             .await
-            .map_err(|error| {
-                bitfun_runtime_ports::PortError::new(
-                    bitfun_runtime_ports::PortErrorKind::Backend,
-                    error.to_string(),
-                )
-            })
+            .map_err(runtime_port_error)
     }
 }
 
@@ -2427,6 +2432,7 @@ mod tests {
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;
         let _ = CoreAgentRuntimeCompatibility::load_persisted_session_turns;
         let _ = CoreAgentRuntimeCompatibility::loaded_session_snapshot;
+        let _ = CoreAgentRuntimeCompatibility::pending_user_inputs_for_session;
         let _ = CoreAgentRuntimeCompatibility::reload_session_context;
         let _ = CoreAgentRuntimeCompatibility::unload_persisted_session;
     }
@@ -2522,6 +2528,17 @@ mod tests {
             .await
             .expect_err("missing session must be rejected before refreshing skills");
         assert!(error.to_string().contains(missing_id), "{error}");
+
+        let port_error = bitfun_runtime_ports::AgentContextReloadPort::reload_session_context(
+            &compatibility,
+            AgentContextReloadRequest {
+                session_id: missing_id.to_string(),
+                target: AgentContextReloadTarget::Skills,
+            },
+        )
+        .await
+        .expect_err("runtime port must preserve the missing-session classification");
+        assert_eq!(port_error.kind, PortErrorKind::NotFound);
     }
 
     #[test]

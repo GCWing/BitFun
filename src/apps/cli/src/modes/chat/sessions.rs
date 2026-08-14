@@ -96,21 +96,9 @@ impl ChatMode {
         let (new_state, restored_agent_type, migration_notices) =
             tokio::task::block_in_place(|| {
                 rt_handle.block_on(async {
-                    let (session_summary, workspace_binding, migration_notices, transcript) =
-                        agent.restore_session_in_current_workspace(&sid).await?;
-                    let restored_agent_type = session_summary.agent_type.clone();
-                    let effective_workspace = Some(workspace_binding.workspace_path.clone());
-
-                    let mut state = ChatState::from_session_transcript(
-                        sid.clone(),
-                        session_summary.session_name,
-                        restored_agent_type.clone(),
-                        effective_workspace,
-                        &transcript,
-                    );
-                    state.current_model_id = session_summary.model_id;
-                    state.current_reasoning_preset = session_summary.reasoning_preset;
-                    state.apply_workspace_binding(workspace_binding);
+                    let restored = agent.restore_session_in_current_workspace(&sid).await?;
+                    let restored_agent_type = restored.summary.agent_type.clone();
+                    let (state, migration_notices) = project_restored_session(restored);
 
                     Ok::<_, anyhow::Error>((state, restored_agent_type, migration_notices))
                 })
@@ -158,9 +146,9 @@ impl ChatMode {
 
         let (new_session_id, workspace_binding) = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
-                let session_id = agent.create_new_session(&agent_type).await?;
-                let binding = agent.session_workspace_binding(&session_id).await?;
-                Ok::<_, anyhow::Error>((session_id, binding))
+                agent
+                    .create_new_session_with_workspace_binding(&agent_type)
+                    .await
             })
         })?;
 
@@ -330,22 +318,28 @@ impl ChatMode {
         let agent = self.agent.clone();
         let agent_type = self.agent_type.clone();
         let attachments = draft.runtime_attachments();
-        match tokio::task::block_in_place(|| {
+        let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(agent.send_message_with_context(
                 draft.text.clone(),
                 draft.workspace_references.clone(),
                 attachments,
                 &agent_type,
             ))
-        }) {
-            Ok(turn_id) => {
+        });
+        match classify_side_effect_result("prompt submission", result) {
+            SideEffectUiOutcome::Applied(turn_id) => {
                 tracing::info!("Started turn: {}", turn_id);
                 chat_view.remember_submitted_draft(&chat_state.core_session_id, &draft);
             }
-            Err(e) => {
-                tracing::error!("Failed to send message: {}", e);
-                chat_view.set_status(Some(format!("Error: {}", e)));
+            SideEffectUiOutcome::Retryable(error) => {
+                tracing::error!("Failed to send message: {}", error);
+                chat_view.set_status(Some(format!("Error: {}", error)));
                 chat_view.set_draft(draft);
+            }
+            SideEffectUiOutcome::ExitAfterUnknownOutcome(message) => {
+                tracing::error!("Prompt submission outcome is unknown: {message}");
+                chat_view.set_status(Some(message.clone()));
+                self.pending_runtime_failure = Some(message);
             }
         }
     }

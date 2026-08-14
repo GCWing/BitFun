@@ -68,7 +68,7 @@ Agent Runtime API 的逻辑归属与物理部署分离：相同归属模块可�
 私有 SDK Host 或目标机器 Runtime 中。任何 Rust 部署都只管理自己进程树内的服务与 Node/Bun Plugin Host；不能因为多个
 GUI/TUI/Remote Client 连接就复制 Runtime 状态模块，或按 Client/Workspace 创建 Plugin Host。
 
-Rust Runtime SDK 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前接口版本为 v6 preview：
+Rust Runtime SDK 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前接口版本为 v7 preview：
 小版本更新允许增加可选 builder hook、有默认实现的端口方法或注册表查询能力，但不得向外部可用
 Rust 结构体字面量（struct literal）构造的 DTO 直接增加字段，也不得改变既有端口语义、错误分类、session / turn 标识含义或
 默认 feature 依赖。任何需要调用方改写现有嵌入代码的变更，必须提升接口版本并提供兼容迁移路径。
@@ -88,6 +88,27 @@ v6 将完整 Rust Runtime SDK 从空默认编译面移入 `agent-runtime` owner 
 公开路径和运行时行为保持不变。只消费 DeepResearch 编号或 Hook 设置的调用方应分别选择
 `deep-research` 或 `native-hook-settings`，不需要继承完整 Runtime。仓库内最小 SDK example 通过
 `required-features = ["agent-runtime"]` 明确记录这一版本边界。
+
+v7 将声明式上下文刷新纳入可选的 `AgentContextReloadPort`。builder 未注入该端口时仍返回
+`MissingContextReloadPort`，已有 Runtime owner 的 session/turn/permission/error 语义不变；第一方
+Embedded TUI 通过这一稳定端口刷新 skills 或 instructions，不再反向依赖 Core 兼容 facade。
+同一版本还在 `AgentSessionRestoreResult` 增加 Runtime 权威的 `pending_user_inputs`，从 SDK
+re-export `PendingUserInput`，并在稳定 `ToolEventData` 中增加 post-registration
+`UserInputRequested` 与 exact-registration `UserInputResolved`。现有 Rust embedder 迁移时必须处理
+新增 restore 字段，并为 exhaustive event match 增加这两个 variant；前者只表示响应 channel 已注册，
+不得在更早的 `Started` 事件上开放回答，后者只撤销完整注册身份匹配的授权，不能让迟到的旧终态
+关闭同一 tool id 的较新问题。
+`AgentUserAnswersRequest` 同时改为携带 Runtime owner 分配的
+`session_id + turn_id + registration_sequence + tool_id` 完整身份；`register` 返回的 sequence 必须先写入
+pending fact，随后才能发布 ready 事件。v6 embedder 不能只按 `tool_id` 提交答案，迁移到 v7 时必须保存
+ready/restore 返回的完整身份；身份不匹配会 fail closed，且不会消费当前回答 channel。
+App Server v4 的 `session/sync` 也从同一次 restore snapshot 投影 pending UserInput，供 Rich Client
+在 late attach 或重连后恢复回答就绪状态；旧的 `session/restore` method 不承担这一同步合同。
+Remote Connect 的 Desktop tracker、Mobile Web、HarmonyOS 和 IM Bot 同样只把
+`UserInputRequested` 或 poll snapshot 中的完整身份视为可回答授权；`Started` 只负责展示工具调用。
+`answer_question` 命令因此携带同一组 `session_id + turn_id + registration_sequence + tool_id` 字段，
+旧的仅 `tool_id` 命令会 fail closed。Remote Connect 目前没有独立版本协商，第一方移动端必须与
+Desktop 同步更新；过期客户端需要刷新或升级后才能回答，服务端不得回退到按 tool id 查找最新 channel。
 
 只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有具体服务管理器、读取产品命令
 注册表、理解 ACP/内部端口或依赖全局可变状态，公开 SDK 发布边界就不成立。公开 SDK 的完整
@@ -432,7 +453,7 @@ impl AgentRuntime {
 该 Rust 接口是内部产品入口复用的当前形态，不是公开 Python/TypeScript SDK 的目标 API。它必须只接收
 已组装的类型化部件，不负责创建
 文件系统、终端、MCP、AI 客户端、Remote 提供方或产品命令。
-当前 v6 preview 接口以 message / attachment / metadata、默认标准执行目标和活动 Turn 文本 steer 作为最小输入形态；若把
+当前 v7 preview 接口以 message / attachment / metadata、默认标准执行目标、活动 Turn 文本 steer 和可选声明式上下文刷新作为最小输入形态；若把
 model-round cancellation token、结构化 AgentInput 或更复杂的事件游标纳入公开 SDK，
 必须分别评审 Rust Runtime SDK、SDK Host protocol 和公开 SDK API 的版本，并保留旧路径兼容。
 

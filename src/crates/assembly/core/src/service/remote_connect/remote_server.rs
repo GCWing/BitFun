@@ -421,14 +421,28 @@ mod tests {
     #[tokio::test]
     async fn remote_answer_question_preserves_user_input_manager_path() {
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        crate::agentic::tools::user_input_manager::get_user_input_manager()
-            .register_channel("question-tool".to_string(), sender);
+        let registration_sequence =
+            crate::agentic::tools::user_input_manager::get_user_input_manager().register(
+                bitfun_runtime_ports::PendingUserInput {
+                    tool_id: "question-tool".to_string(),
+                    session_id: "session-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    source_session_id: "session-1".to_string(),
+                    source_turn_id: "turn-1".to_string(),
+                    registration_sequence: 0,
+                    input: serde_json::json!({ "questions": [] }),
+                },
+                sender,
+            );
         let bridge = RemoteServer::new([7; 32]);
         let answers = serde_json::json!({ "choice": "yes" });
 
         let response = bridge
             .dispatch(&RemoteCommand::AnswerQuestion {
+                session_id: Some("session-1".to_string()),
+                turn_id: Some("turn-1".to_string()),
                 tool_id: "question-tool".to_string(),
+                registration_sequence: Some(registration_sequence),
                 answers: answers.clone(),
             })
             .await;
@@ -621,6 +635,7 @@ mod tests {
                 start_ms: Some(42),
                 input_preview: Some("{\"path\":\"README.md\"}".to_string()),
                 tool_input: None,
+                user_input_identity: None,
             }],
             round_index: 2,
             items: Some(vec![ChatMessageItem {

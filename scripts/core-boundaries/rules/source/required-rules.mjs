@@ -3055,8 +3055,12 @@ export const requiredContentRules = [
         message: 'missing user input manager answer regression',
       },
       {
-        regex: /\buser_input_manager_cancel_closes_receiver\b/,
-        message: 'missing user input manager cancel regression',
+        regex: /\bpub fn cancel_registration\b/,
+        message: 'missing exact user input registration cancellation API',
+      },
+      {
+        regex: /\buser_input_manager_cancel_closes_only_the_exact_registration\b/,
+        message: 'missing exact user input registration cancellation regression',
       },
     ],
   },
@@ -8219,64 +8223,92 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/interfaces/app-server/src/management/service.rs',
+    path: 'src/apps/cli/src/agent/runtime_client.rs',
     reason:
-      'App Server owns the concrete management adapter while Hosts retain explicit service injection and capability scope',
+      'The CLI Agent Runtime client owns the Direct/Shared deployment choice behind one app-local Runtime seam',
     patterns: [
       {
-        regex: /\bpub struct AppManagementService\b/,
-        message: 'missing concrete App Server management service',
+        regex: /\bpub\(crate\) struct CliAgentRuntimeClient\b/,
+        message: 'missing CLI Agent Runtime client',
       },
       {
-        regex: /\bimpl AppManagementService\b/,
-        message: 'missing concrete App Server management implementation',
+        regex: /\benum TuiRuntimePort\b/,
+        message: 'missing private CLI TUI Runtime deployment port',
       },
       {
-        regex: /\bAppManagementCapabilities::available\(\)/,
-        message: 'missing App Server management capability projection',
+        regex: /\bEmbedded\(AgentRuntime\)/,
+        message: 'missing direct Embedded Runtime deployment',
+      },
+      {
+        regex: /\bShared\(RuntimeIpcClient\)/,
+        message: 'missing Shared Runtime IPC deployment',
+      },
+      {
+        regex: /\bfn new_direct\b/,
+        message: 'missing direct Runtime client constructor',
+      },
+      {
+        regex: /\bfn new_shared\b/,
+        message: 'missing Shared Runtime client constructor',
       },
     ],
   },
   {
-    path: 'src/apps/cli/src/shared_tui_backend.rs',
+    path: 'src/apps/cli/src/tui_management.rs',
     reason:
-      'Shared TUI must retain local Model, Skill, Subagent, and MCP compatibility management without expanding Runtime IPC or leaking owners into controllers',
+      'CLI management composes concrete domain owner providers instead of an App Server service or a total management port',
     patterns: [
       {
-        regex: /management: Arc<AppManagementService>/,
-        message: 'missing injected Shared TUI App Server management service',
+        regex: /\bpub\(crate\) struct TuiManagementOwners\b/,
+        message: 'missing CLI TUI management owner composition',
       },
       {
-        regex: /\bfn management_service\b/,
-        message: 'missing Shared TUI management capability gate',
+        regex: /\bpub model: ModelProvider\b/,
+        message: 'missing CLI model owner provider',
       },
       {
-        regex: /\bfn set_management_scope_from_binding\b/,
-        message: 'missing Shared TUI Remote workspace compatibility guard',
+        regex: /\bpub registry: RegistryProvider\b/,
+        message: 'missing CLI skill and subagent registry owner provider',
       },
       {
-        regex: /\.list_models\(ListModelsRequest \{\}\)/,
-        message: 'missing Shared TUI model compatibility delegation',
+        regex: /\bpub mcp: McpProvider\b/,
+        message: 'missing CLI MCP owner provider',
       },
       {
-        regex: /\.list_skills\(request\)/,
-        message: 'missing Shared TUI skill compatibility delegation',
+        regex: /\bpub account: AccountProvider\b/,
+        message: 'missing CLI account owner provider',
       },
       {
-        regex: /\.list_subagents\(request\)/,
-        message: 'missing Shared TUI subagent compatibility delegation',
+        regex: /\bpub settings_sync: SettingsSyncProvider\b/,
+        message: 'missing CLI settings sync owner provider',
       },
       {
-        regex: /\.list_mcp_servers\(request\)/,
-        message: 'missing Shared TUI MCP compatibility delegation',
+        regex: /\bpub worktree: WorktreeProvider\b/,
+        message: 'missing CLI worktree owner provider',
       },
       {
-        regex: /\bshared_management_capabilities_follow_the_local_management_service\b/,
-        message: 'missing Shared TUI management capability regression',
+        regex: /\bpub native_hook: NativeHookProvider\b/,
+        message: 'missing CLI native hook owner provider',
       },
       {
-        regex: /\bremote_workspace_cannot_use_the_local_management_service\b/,
-        message: 'missing Shared TUI Remote management scope regression',
+        regex: /\bpub external_hook: ExternalHookProvider\b/,
+        message: 'missing CLI external hook owner provider',
+      },
+      {
+        regex: /\bpub external_source: ExternalSourceProvider\b/,
+        message: 'missing CLI external source owner provider',
+      },
+      {
+        regex: /\bpub external_command: ExternalCommandProvider\b/,
+        message: 'missing CLI external command owner provider',
+      },
+      {
+        regex: /\bimpl TuiManagementOwners\b/,
+        message: 'missing CLI TUI management owner composition implementation',
+      },
+      {
+        regex: /\bpub\(crate\) async fn load\b/,
+        message: 'missing CLI TUI management owner composition loader',
       },
     ],
   },

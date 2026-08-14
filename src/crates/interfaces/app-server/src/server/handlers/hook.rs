@@ -1,61 +1,32 @@
-use std::sync::Arc;
-
 use agent_client_protocol::{Builder, HandleDispatchFrom};
 use bitfun_app_server_protocol::hook::*;
 
-use super::capability::management_handler;
-use crate::management::{AppManagementService, EXTERNAL_HOOKS_CAPABILITY, NATIVE_HOOKS_CAPABILITY};
+use super::capability::unsupported_management_handler;
+use crate::management::{EXTERNAL_HOOKS_CAPABILITY, NATIVE_HOOKS_CAPABILITY};
 use crate::role::{AppClient, AppServer};
 
-pub(in crate::server) fn builder(
-    management: Option<Arc<AppManagementService>>,
-) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
+pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
         .name("hook handlers")
         .on_receive_request(
-            management_handler!(
-                management,
-                NATIVE_HOOKS_CAPABILITY,
-                NativeHookOverviewRequest,
-                native_hook_overview
-            ),
+            unsupported_management_handler!(NATIVE_HOOKS_CAPABILITY, NativeHookOverviewRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                EXTERNAL_HOOKS_CAPABILITY,
-                ExternalHookSnapshotRequest,
-                external_hook_snapshot
-            ),
+            unsupported_management_handler!(EXTERNAL_HOOKS_CAPABILITY, ExternalHookSnapshotRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                EXTERNAL_HOOKS_CAPABILITY,
-                ExternalHookPlanRequest,
-                external_hook_plan
-            ),
+            unsupported_management_handler!(EXTERNAL_HOOKS_CAPABILITY, ExternalHookPlanRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                EXTERNAL_HOOKS_CAPABILITY,
-                ExternalHookApplyRequest,
-                external_hook_apply
-            ),
+            unsupported_management_handler!(EXTERNAL_HOOKS_CAPABILITY, ExternalHookApplyRequest),
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            management_handler!(
-                management,
-                EXTERNAL_HOOKS_CAPABILITY,
-                ExternalHookMutationRequest,
-                external_hook_mutate
-            ),
+            unsupported_management_handler!(EXTERNAL_HOOKS_CAPABILITY, ExternalHookMutationRequest),
             agent_client_protocol::on_receive_request!(),
         )
 }

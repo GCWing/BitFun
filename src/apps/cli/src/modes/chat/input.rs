@@ -81,14 +81,18 @@ impl ChatMode {
                     let result = tokio::task::block_in_place(|| {
                         rt_handle.block_on(agent.respond_permission(&request_id, reply))
                     });
-                    match result {
-                        Ok(()) => {
+                    match classify_side_effect_result("permission response", result) {
+                        SideEffectUiOutcome::Applied(()) => {
                             chat_state.resolve_permission_request(&request_id);
                             chat_view.set_status(Some("Permission response sent".to_string()));
                         }
-                        Err(error) => {
+                        SideEffectUiOutcome::Retryable(error) => {
                             tracing::error!("Failed to respond to permission request: {error}");
                             chat_view.set_status(Some(format!("Error: {error}")));
+                        }
+                        SideEffectUiOutcome::ExitAfterUnknownOutcome(message) => {
+                            chat_view.set_status(Some(message.clone()));
+                            self.pending_runtime_failure = Some(message);
                         }
                     }
                 }
@@ -105,22 +109,33 @@ impl ChatMode {
                     let tool_id = prompt.tool_id.clone();
                     let agent = self.agent.clone();
                     tracing::info!("User submitted answers for tool: {}", tool_id);
-                    match tokio::task::block_in_place(|| {
-                        rt_handle.block_on(agent.submit_user_answers(&tool_id, answers))
-                    }) {
-                        Ok(()) => {
-                            chat_state.question_prompt = None;
+                    let result = tokio::task::block_in_place(|| {
+                        rt_handle.block_on(agent.submit_user_answers(
+                            prompt.session_id.clone(),
+                            prompt.turn_id.clone(),
+                            tool_id.clone(),
+                            prompt.registration_sequence,
+                            answers,
+                        ))
+                    });
+                    match classify_side_effect_result("user-input response", result) {
+                        SideEffectUiOutcome::Applied(()) => {
+                            chat_state.resolve_question_prompt(&tool_id);
                             chat_view.set_status(Some("Answers submitted".to_string()));
                         }
-                        Err(error) => {
+                        SideEffectUiOutcome::Retryable(error) => {
                             tracing::error!("Failed to submit answers: {error}");
                             chat_view.set_status(Some(format!("Error: {error}")));
+                        }
+                        SideEffectUiOutcome::ExitAfterUnknownOutcome(message) => {
+                            chat_view.set_status(Some(message.clone()));
+                            self.pending_runtime_failure = Some(message);
                         }
                     }
                 }
                 QuestionAction::Reject => {
                     let tool_id = prompt.tool_id.clone();
-                    chat_state.question_prompt = None;
+                    chat_state.resolve_question_prompt(&tool_id);
                     tracing::info!("User dismissed question prompt: {}", tool_id);
                     chat_view.set_status(Some("Question dismissed".to_string()));
                 }
@@ -684,21 +699,39 @@ impl ChatMode {
                 if let Some(pending) = this.pending_session_operation.as_mut() {
                     pending.exit_warning_shown = false;
                 }
-                match this.create_new_session(session_id, chat_state, chat_view, rt_handle) {
-                    Ok(()) => tracing::info!("Created new session: {}", session_id),
-                    Err(e) => {
+                match classify_side_effect_result(
+                    "Session creation",
+                    this.create_new_session(session_id, chat_state, chat_view, rt_handle),
+                ) {
+                    SideEffectUiOutcome::Applied(()) => {
+                        tracing::info!("Created new session: {}", session_id)
+                    }
+                    SideEffectUiOutcome::Retryable(e) => {
                         chat_state
                             .add_system_message(format!("Failed to create new session: {}", e));
                         tracing::error!("Failed to create new session: {}", e);
                     }
+                    SideEffectUiOutcome::ExitAfterUnknownOutcome(message) => {
+                        chat_state.add_system_message(message.clone());
+                        this.pending_runtime_failure = Some(message);
+                    }
                 }
             }
             ChatExitReason::ForkSession(target) => {
-                match this.fork_session(target, session_id, chat_state, chat_view, rt_handle) {
-                    Ok(()) => tracing::info!("Forked current session: {}", session_id),
-                    Err(error) => {
+                match classify_side_effect_result(
+                    "Session fork",
+                    this.fork_session(target, session_id, chat_state, chat_view, rt_handle),
+                ) {
+                    SideEffectUiOutcome::Applied(()) => {
+                        tracing::info!("Forked current session: {}", session_id)
+                    }
+                    SideEffectUiOutcome::Retryable(error) => {
                         chat_view.set_status(Some(format!("Failed to fork session: {error}")));
                         tracing::error!("Failed to fork session: {error}");
+                    }
+                    SideEffectUiOutcome::ExitAfterUnknownOutcome(message) => {
+                        chat_state.add_system_message(message.clone());
+                        this.pending_runtime_failure = Some(message);
                     }
                 }
             }

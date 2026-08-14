@@ -163,6 +163,11 @@
   "core": {
     "initializationFailed": "Core system initialization failed"
   },
+  "sessionOwnerRefresh": {
+    "title": "Reload required",
+    "message": "This page can no longer verify App Server state or whether an operation completed. Reload before continuing.",
+    "reload": "Reload page"
+  },
   "boundary": {
     "title": "Application Error",
     "reload": "Reload",

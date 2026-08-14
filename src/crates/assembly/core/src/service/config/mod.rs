@@ -10,6 +10,7 @@ pub mod global;
 pub mod manager;
 #[cfg(feature = "agent-runtime")]
 pub mod mode_config_canonicalizer;
+pub mod model_management;
 pub mod normalization;
 pub mod project_permission_store;
 pub mod providers;
@@ -30,6 +31,7 @@ pub use mode_config_canonicalizer::{
     canonicalize_agent_profile_configs, AgentProfileConfigCanonicalizationReport,
     AgentProfileConfigUpdateInfo,
 };
+pub use model_management::*;
 pub use normalization::{
     isolate_invalid_ai_models, normalize_config_value, normalize_typed_config,
     reconcile_model_references, reject_unsupported_schema, ConfigNormalizationResult,

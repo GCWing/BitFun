@@ -69,6 +69,15 @@ export interface FlowToolItem extends FlowItem {
   };
   requiresConfirmation?: boolean;
   userConfirmed?: boolean;
+  /** Runtime owner has registered the pending AskUserQuestion response channel. */
+  userInputReady?: boolean;
+  /** Exact Runtime-owned identity required to answer this question. */
+  userInputIdentity?: {
+    sessionId: string;
+    turnId: string;
+    toolId: string;
+    registrationSequence: number;
+  };
   acpPermission?: {
     permissionId: string;
     sessionId?: string;

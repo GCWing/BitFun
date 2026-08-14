@@ -1461,10 +1461,9 @@ const CLI_REVIEWED_CORE_FEATURES = [
 ];
 
 const APP_SERVER_REVIEWED_CORE_FEATURES = [
-  'external-sources',
+  'agent-runtime',
   'git',
   'i18n-runtime',
-  'remote-connect',
 ];
 
 test('SDK Host Core capability closure keeps every reviewed owner', () => {
@@ -1606,6 +1605,30 @@ test('App Server Core capability closure keeps its production Git owner', () => 
 
   assert.deepEqual(violations.map((violation) => violation.message), [
     'bitfun-app-server Core capability closure must include git',
+  ]);
+});
+
+test('App Server Core capability closure keeps its Agent configuration owner', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const appServer = packageAt(
+    'bitfun-app-server',
+    'src/crates/interfaces/app-server/Cargo.toml',
+    [pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: APP_SERVER_REVIEWED_CORE_FEATURES.filter(
+        (feature) => feature !== 'agent-runtime',
+      ),
+    })],
+  );
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [appServer, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.deepEqual(violations.map((violation) => violation.message), [
+    'bitfun-app-server Core capability closure must include agent-runtime',
   ]);
 });
 

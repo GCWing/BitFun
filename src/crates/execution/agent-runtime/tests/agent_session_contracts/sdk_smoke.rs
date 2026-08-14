@@ -3,7 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    build_descriptor_harness_registry, AgentEventStream, AgentRunRequest, AgentRuntimeBuilder,
+    build_descriptor_harness_registry, AgentContextReloadPort, AgentContextReloadRequest,
+    AgentContextReloadTarget, AgentEventStream, AgentRunRequest, AgentRuntimeBuilder,
     AgentRuntimeSdkCompatibility, AgentRuntimeSdkStability, AgentSessionClosePort,
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
@@ -49,11 +50,16 @@ struct FakeSessionClosePort {
     requests: Mutex<Vec<AgentTransientSessionDiscardRequest>>,
 }
 
+#[derive(Debug, Default)]
+struct FakeContextReloadPort {
+    requests: Mutex<Vec<AgentContextReloadRequest>>,
+}
+
 #[test]
 fn sdk_facade_exposes_versioned_preview_compatibility_contract() {
     let compatibility = AgentRuntimeSdkCompatibility::current();
 
-    assert_eq!(compatibility.api_version, 6);
+    assert_eq!(compatibility.api_version, 7);
     assert_eq!(compatibility.crate_version, env!("CARGO_PKG_VERSION"));
     assert_eq!(compatibility.stability, AgentRuntimeSdkStability::Preview);
 }
@@ -119,6 +125,14 @@ impl AgentSessionClosePort for FakeSessionClosePort {
     ) -> PortResult<bool> {
         self.requests.lock().unwrap().push(request.clone());
         Ok(true)
+    }
+}
+
+#[async_trait]
+impl AgentContextReloadPort for FakeContextReloadPort {
+    async fn reload_session_context(&self, request: AgentContextReloadRequest) -> PortResult<()> {
+        self.requests.lock().unwrap().push(request);
+        Ok(())
     }
 }
 
@@ -419,4 +433,33 @@ async fn sdk_facade_reports_missing_session_close_capability() {
         error.into_message(),
         "agent session close port is not registered"
     );
+}
+
+#[tokio::test]
+async fn sdk_facade_exports_and_delegates_context_reload_contract() {
+    let request = AgentContextReloadRequest {
+        session_id: "sdk-session-1".to_string(),
+        target: AgentContextReloadTarget::Skills,
+    };
+    let without_owner = AgentRuntimeBuilder::new()
+        .with_submission_port(Arc::new(FakeSdkAgentProvider::default()))
+        .build()
+        .expect("sdk runtime without context owner");
+    assert!(matches!(
+        without_owner.reload_context(request.clone()).await,
+        Err(RuntimeError::MissingContextReloadPort)
+    ));
+
+    let owner = Arc::new(FakeContextReloadPort::default());
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(Arc::new(FakeSdkAgentProvider::default()))
+        .with_context_reload_port(owner.clone())
+        .build()
+        .expect("sdk runtime with context owner");
+    runtime
+        .reload_context(request.clone())
+        .await
+        .expect("delegate context reload through SDK facade");
+
+    assert_eq!(owner.requests.lock().unwrap().as_slice(), &[request]);
 }

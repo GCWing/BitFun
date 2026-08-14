@@ -1,27 +1,42 @@
 use crate::agent::BitfunAppRuntime;
-use crate::management::AppManagementService;
 use crate::role::AppClient;
 use crate::schema::{
     ConfigEventNotification, EventStream, EventStreamState, EventStreamStateNotification,
     PermissionEventNotification, ResyncDirective, SessionEventNotification,
 };
 use agent_client_protocol::{ConnectionTo, Result};
-use bitfun_agent_runtime::sdk::PermissionRequestEvent;
-use bitfun_app_server_protocol::external_source::ExternalSourceEventNotification;
+use bitfun_agent_runtime::sdk::{
+    AgentEventReceiver, PermissionRequestEvent, PermissionRequestEventReceiver,
+};
 use std::sync::Arc;
 
+pub(super) struct EventSubscriptions {
+    agent: AgentEventReceiver,
+    permission: Option<PermissionRequestEventReceiver>,
+    config:
+        Option<tokio::sync::broadcast::Receiver<bitfun_core::service::config::ConfigUpdateEvent>>,
+}
+
+impl EventSubscriptions {
+    pub(super) fn subscribe(runtime: &BitfunAppRuntime) -> Self {
+        Self {
+            agent: runtime.event_source().subscribe(),
+            permission: runtime.runtime().subscribe_permission_requests().ok(),
+            config: bitfun_core::service::config::subscribe_config_updates(),
+        }
+    }
+}
+
 pub(super) async fn run(
-    runtime: Arc<BitfunAppRuntime>,
-    management: Option<Arc<AppManagementService>>,
+    subscriptions: EventSubscriptions,
     cx: ConnectionTo<AppClient>,
     event_state: Arc<crate::server::ConnectionEventState>,
 ) -> Result<()> {
-    let mut rx = runtime.event_source().subscribe();
-    let mut permission_rx = runtime.runtime().subscribe_permission_requests().ok();
-    let mut config_rx = bitfun_core::service::config::subscribe_config_updates();
-    let mut external_source_rx = management
-        .as_ref()
-        .map(|management| management.subscribe_external_source_updates());
+    let EventSubscriptions {
+        agent: mut rx,
+        permission: mut permission_rx,
+        config: mut config_rx,
+    } = subscriptions;
     loop {
         let permission_recv = async {
             match &mut permission_rx {
@@ -55,18 +70,6 @@ pub(super) async fn run(
                 }
             }
         };
-        let external_source_recv = async {
-            match &mut external_source_rx {
-                Some(receiver) => Some(receiver.recv().await),
-                None => {
-                    std::future::pending::<Option<Result<
-                        (String, bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot),
-                        tokio::sync::broadcast::error::RecvError,
-                    >>>()
-                    .await
-                }
-            }
-        };
         tokio::select! {
             recv = rx.recv() => match recv {
                 Ok(envelope) => {
@@ -89,11 +92,10 @@ pub(super) async fn run(
             },
             recv = permission_recv => match recv {
                 Some(Ok(event)) => {
-                    let notification = PermissionEventNotification {
-                        cursor: event_state.next_cursor(EventStream::Permission),
-                        event,
-                    };
-                    if let Err(error) = cx.send_notification(notification) {
+                    let result = event_state.forward_permission(|cursor| {
+                        cx.send_notification(PermissionEventNotification { cursor, event })
+                    });
+                    if let Err(error) = result {
                         log::warn!("App-server permission event forwarder failed to send a notification: {:?} -- skipping this event", error);
                     }
                 }
@@ -124,25 +126,6 @@ pub(super) async fn run(
                 }
                 None => {}
             },
-            recv = external_source_recv => match recv {
-                Some(Ok((workspace_path, snapshot))) => {
-                    if let Err(error) = cx.send_notification(ExternalSourceEventNotification {
-                        cursor: event_state.next_cursor(EventStream::ExternalSource),
-                        workspace_path,
-                        snapshot,
-                    }) {
-                        log::warn!("App-server external source event forwarder failed to send a notification: {:?} -- skipping this event", error);
-                    }
-                }
-                Some(Err(tokio::sync::broadcast::error::RecvError::Lagged(missed))) => {
-                    send_stream_state(&cx, &event_state, EventStream::ExternalSource, EventStreamState::Lagged, Some(missed), "externalSource/snapshot", true);
-                }
-                Some(Err(tokio::sync::broadcast::error::RecvError::Closed)) => {
-                    send_stream_state(&cx, &event_state, EventStream::ExternalSource, EventStreamState::Closed, None, "externalSource/snapshot", true);
-                    external_source_rx = None;
-                }
-                None => {}
-            }
         }
     }
     Ok(())

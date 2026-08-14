@@ -821,6 +821,11 @@ mod tests {
                 last_active_at_ms: 20_000,
             },
             state: SessionState::Idle,
+            transcript: bitfun_runtime_ports::SessionTranscript {
+                session_id: "session_1".to_string(),
+                messages: Vec::new(),
+            },
+            pending_user_inputs: Vec::new(),
         });
 
         assert_eq!(value["sessionId"], "session_1");

@@ -14,17 +14,13 @@ bitfun-app-server-protocol = { path = "../app-server-protocol" }
 # Host-service handlers use the reviewed Agent Runtime owner closure. Add a
 # narrower Core owner feature when a newly registered domain needs it; the
 # protocol surface must not inherit the broad bitfun-core/product-full union.
-bitfun-core = { path = "../../assembly/core", features = ["external-sources", "git", "i18n-runtime", "remote-connect"] }
+bitfun-core = { path = "../../assembly/core", features = ["agent-runtime", "git", "i18n-runtime"] }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api"] }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-anyhow = { workspace = true }
 log = { workspace = true }
-tracing = { workspace = true }
-url = { workspace = true }
 
 [features]
 default = []

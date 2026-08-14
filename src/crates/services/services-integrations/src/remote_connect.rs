@@ -65,11 +65,13 @@ pub use relay_client::{
     ensure_rustls_crypto_provider, ConnectionState, RelayClient, RelayEvent, RelayMessage,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+pub const REMOTE_CAPABILITY_ANSWER_QUESTION_IDENTITY_V1: &str = "answer_question_identity_v1";
 
 fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
 where
@@ -899,6 +901,7 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
             assistant_id: workspace.assistant_id,
             remote_connection_id: workspace.remote_connection_id,
             remote_ssh_host: workspace.remote_ssh_host,
+            capabilities: vec![REMOTE_CAPABILITY_ANSWER_QUESTION_IDENTITY_V1.to_string()],
         },
         None => RemoteResponse::WorkspaceInfo {
             has_workspace: false,
@@ -909,6 +912,7 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
             assistant_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
+            capabilities: vec![REMOTE_CAPABILITY_ANSWER_QUESTION_IDENTITY_V1.to_string()],
         },
     }
 }
@@ -1072,6 +1076,7 @@ pub fn remote_initial_sync_response(
         sessions,
         has_more_sessions,
         authenticated_user_id,
+        capabilities: vec![REMOTE_CAPABILITY_ANSWER_QUESTION_IDENTITY_V1.to_string()],
     }
 }
 
@@ -1526,7 +1531,11 @@ pub trait RemoteInteractionRuntimeHost: Send + Sync {
         &self,
         mode: RemotePermissionMode,
     ) -> Result<RemotePermissionMode, String>;
-    fn answer_question(&self, tool_id: &str, answers: serde_json::Value) -> Result<(), String>;
+    fn answer_question(
+        &self,
+        identity: &RemoteUserInputIdentity,
+        answers: serde_json::Value,
+    ) -> Result<(), String>;
 }
 
 pub async fn handle_remote_interaction_command<H>(
@@ -1571,8 +1580,32 @@ where
                 host.cancel_tool(tool_id, cancel_reason).await,
             )
         }
-        RemoteCommand::AnswerQuestion { tool_id, answers } => {
-            remote_answer_question_response(host.answer_question(tool_id, answers.clone()))
+        RemoteCommand::AnswerQuestion {
+            session_id,
+            turn_id,
+            tool_id,
+            registration_sequence,
+            answers,
+        } => {
+            let (Some(session_id), Some(turn_id), Some(registration_sequence)) =
+                (session_id, turn_id, registration_sequence)
+            else {
+                return RemoteResponse::UpgradeRequired {
+                    code: "upgrade_required".to_string(),
+                    capability: REMOTE_CAPABILITY_ANSWER_QUESTION_IDENTITY_V1.to_string(),
+                    message: "This version cannot safely answer the question because it did not send the full registration identity.".to_string(),
+                    recovery: "Upgrade the mobile client, reconnect to Desktop, and answer the question again.".to_string(),
+                };
+            };
+            remote_answer_question_response(host.answer_question(
+                &RemoteUserInputIdentity {
+                    session_id: session_id.clone(),
+                    turn_id: turn_id.clone(),
+                    tool_id: tool_id.clone(),
+                    registration_sequence: *registration_sequence,
+                },
+                answers.clone(),
+            ))
         }
         _ => RemoteResponse::Error {
             message: "Unknown execution command".into(),
@@ -2027,6 +2060,7 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
                     } else {
                         None
                     },
+                    user_input_identity: None,
                 };
                 tools_flat.push(tool_status.clone());
                 ordered.push(OrderedEntry {
@@ -2128,6 +2162,18 @@ pub struct RemoteToolStatus {
     pub input_preview: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_input: Option<serde_json::Value>,
+    /// Authoritative identity required to answer an interactive tool call.
+    /// `Started` alone never populates this field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_input_identity: Option<RemoteUserInputIdentity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RemoteUserInputIdentity {
+    pub session_id: String,
+    pub turn_id: String,
+    pub tool_id: String,
+    pub registration_sequence: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -2222,7 +2268,13 @@ pub enum RemoteCommand {
         mode: RemotePermissionMode,
     },
     AnswerQuestion {
+        #[serde(default)]
+        session_id: Option<String>,
+        #[serde(default)]
+        turn_id: Option<String>,
         tool_id: String,
+        #[serde(default)]
+        registration_sequence: Option<u64>,
         answers: serde_json::Value,
     },
     PollSession {
@@ -2335,6 +2387,8 @@ pub enum RemoteResponse {
         remote_connection_id: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         remote_ssh_host: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        capabilities: Vec<String>,
     },
     RecentWorkspaces {
         workspaces: Vec<RecentWorkspaceEntry>,
@@ -2412,6 +2466,8 @@ pub enum RemoteResponse {
         has_more_sessions: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         authenticated_user_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        capabilities: Vec<String>,
     },
     SessionPoll {
         version: u64,
@@ -2430,6 +2486,13 @@ pub enum RemoteResponse {
         model_catalog: Box<Option<RemoteModelCatalog>>,
     },
     AnswerAccepted,
+    #[serde(rename = "error", skip_deserializing)]
+    UpgradeRequired {
+        code: String,
+        capability: String,
+        message: String,
+        recovery: String,
+    },
     InteractionAccepted {
         action: String,
         target_id: String,
@@ -2686,6 +2749,7 @@ struct TrackerState {
     active_tools: Vec<RemoteToolStatus>,
     round_index: usize,
     active_items: Vec<ChatMessageItem>,
+    settled_user_inputs: HashSet<RemoteUserInputIdentity>,
     persistence_dirty: bool,
     linked_subagent_sessions: HashMap<String, String>,
 }
@@ -2700,6 +2764,10 @@ pub enum TrackerEvent {
         tool_id: String,
         tool_name: String,
         params: Option<serde_json::Value>,
+    },
+    UserInputRequested {
+        identity: RemoteUserInputIdentity,
+        params: serde_json::Value,
     },
     ToolCompleted {
         tool_id: String,
@@ -2743,6 +2811,7 @@ impl RemoteSessionStateTracker {
                 active_tools: Vec::new(),
                 round_index: 0,
                 active_items: Vec::new(),
+                settled_user_inputs: HashSet::new(),
                 persistence_dirty: true,
                 linked_subagent_sessions: HashMap::new(),
             }),
@@ -2828,6 +2897,39 @@ impl RemoteSessionStateTracker {
         self.bump_version();
     }
 
+    pub fn hydrate_active_turn(&self, seed: RemoteActiveTurnSeed) {
+        let mut state = self.state.write().unwrap();
+        let mut changed = false;
+        if state
+            .turn_id
+            .as_ref()
+            .is_some_and(|turn_id| turn_id != &seed.turn_id)
+        {
+            return;
+        }
+        if state.turn_id.is_none() {
+            state.turn_id = Some(seed.turn_id.clone());
+            state.turn_status = "active".to_string();
+            state.session_state = "running".to_string();
+            changed = true;
+        }
+
+        for pending in seed.pending_user_inputs {
+            if pending.identity.session_id != self.target_session_id
+                || pending.identity.turn_id != seed.turn_id
+                || state.settled_user_inputs.contains(&pending.identity)
+            {
+                continue;
+            }
+            Self::upsert_pending_user_input(&mut state, pending.identity, pending.params, false);
+            changed = true;
+        }
+        drop(state);
+        if changed {
+            self.bump_version();
+        }
+    }
+
     pub fn sync_pending_permission(
         &self,
         tool_id: String,
@@ -2872,6 +2974,7 @@ impl RemoteSessionStateTracker {
             state.accumulated_thinking.clear();
             state.active_tools.clear();
             state.active_items.clear();
+            state.settled_user_inputs.clear();
         }
     }
 
@@ -2891,6 +2994,7 @@ impl RemoteSessionStateTracker {
         state.accumulated_thinking.clear();
         state.active_tools.clear();
         state.active_items.clear();
+        state.settled_user_inputs.clear();
         state.session_state = "idle".to_string();
         state.persistence_dirty = true;
         drop(state);
@@ -2931,11 +3035,10 @@ impl RemoteSessionStateTracker {
         let allow_name_fallback = tool_id.is_empty() && !tool_name.is_empty();
         let subagent_marker = if is_subagent { Some(true) } else { None };
 
-        if let Some(tool) =
-            state.active_tools.iter_mut().rev().find(|tool| {
-                tool.id == resolved_id || (allow_name_fallback && tool.name == tool_name)
-            })
-        {
+        if let Some(tool) = state.active_tools.iter_mut().rev().find(|tool| {
+            tool.user_input_identity.is_none()
+                && (tool.id == resolved_id || (allow_name_fallback && tool.name == tool_name))
+        }) {
             tool.status = status.to_string();
             if input_preview.is_some() {
                 tool.input_preview = input_preview.clone();
@@ -2957,6 +3060,7 @@ impl RemoteSessionStateTracker {
                 ),
                 input_preview,
                 tool_input,
+                user_input_identity: None,
             };
             state.active_tools.push(tool_status.clone());
             state.active_items.push(ChatMessageItem {
@@ -2971,7 +3075,9 @@ impl RemoteSessionStateTracker {
         if let Some(item) = state.active_items.iter_mut().rev().find(|item| {
             item.item_type == "tool"
                 && item.tool.as_ref().is_some_and(|tool| {
-                    tool.id == resolved_id || (allow_name_fallback && tool.name == tool_name)
+                    tool.user_input_identity.is_none()
+                        && (tool.id == resolved_id
+                            || (allow_name_fallback && tool.name == tool_name))
                 })
         }) {
             if let Some(tool) = item.tool.as_mut() {
@@ -2983,6 +3089,86 @@ impl RemoteSessionStateTracker {
                     tool.tool_input = tool_input;
                 }
             }
+        }
+    }
+
+    fn upsert_pending_user_input(
+        state: &mut TrackerState,
+        identity: RemoteUserInputIdentity,
+        params: serde_json::Value,
+        is_subagent: bool,
+    ) {
+        let input_preview = make_slim_tool_params(&params);
+        let subagent_marker = if is_subagent { Some(true) } else { None };
+        let tool_index = state
+            .active_tools
+            .iter()
+            .rposition(|tool| tool.user_input_identity.as_ref() == Some(&identity))
+            .or_else(|| {
+                state.active_tools.iter().rposition(|tool| {
+                    tool.id == identity.tool_id && tool.user_input_identity.is_none()
+                })
+            });
+
+        if let Some(index) = tool_index {
+            let tool = &mut state.active_tools[index];
+            tool.name = "AskUserQuestion".to_string();
+            tool.status = "waiting_for_user".to_string();
+            tool.input_preview = input_preview.clone();
+            tool.tool_input = Some(params.clone());
+            tool.user_input_identity = Some(identity.clone());
+        } else {
+            state.active_tools.push(RemoteToolStatus {
+                id: identity.tool_id.clone(),
+                name: "AskUserQuestion".to_string(),
+                status: "waiting_for_user".to_string(),
+                duration_ms: None,
+                start_ms: Some(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64,
+                ),
+                input_preview: input_preview.clone(),
+                tool_input: Some(params.clone()),
+                user_input_identity: Some(identity.clone()),
+            });
+        }
+
+        let item_index = state
+            .active_items
+            .iter()
+            .rposition(|item| {
+                item.tool
+                    .as_ref()
+                    .is_some_and(|tool| tool.user_input_identity.as_ref() == Some(&identity))
+            })
+            .or_else(|| {
+                state.active_items.iter().rposition(|item| {
+                    item.tool.as_ref().is_some_and(|tool| {
+                        tool.id == identity.tool_id && tool.user_input_identity.is_none()
+                    })
+                })
+            });
+        if let Some(tool) = item_index.and_then(|index| state.active_items[index].tool.as_mut()) {
+            tool.name = "AskUserQuestion".to_string();
+            tool.status = "waiting_for_user".to_string();
+            tool.input_preview = input_preview;
+            tool.tool_input = Some(params);
+            tool.user_input_identity = Some(identity);
+        } else {
+            let projected_tool = state
+                .active_tools
+                .iter()
+                .rev()
+                .find(|tool| tool.user_input_identity.as_ref() == Some(&identity))
+                .cloned();
+            state.active_items.push(ChatMessageItem {
+                item_type: "tool".to_string(),
+                content: None,
+                tool: projected_tool,
+                is_subagent: subagent_marker,
+            });
         }
     }
 
@@ -3088,7 +3274,12 @@ impl RemoteSessionStateTracker {
                         .send(TrackerEvent::ThinkingChunk(content.clone()));
                 }
             }
-            AE::ToolEvent { tool_event, .. } => {
+            AE::ToolEvent {
+                session_id,
+                turn_id,
+                tool_event,
+                ..
+            } => {
                 let tool_id = tool_event.tool_id().to_string();
                 let tool_name = tool_event.effective_tool_name().to_string();
                 let effective_params = match tool_event {
@@ -3162,6 +3353,72 @@ impl RemoteSessionStateTracker {
                                 tool_name: tool_name.clone(),
                                 params,
                             });
+                        }
+                        "UserInputRequested" => {
+                            if let bitfun_events::ToolEventData::UserInputRequested {
+                                registration_sequence,
+                                params,
+                                ..
+                            } = tool_event
+                            {
+                                let identity = RemoteUserInputIdentity {
+                                    session_id: session_id.clone(),
+                                    turn_id: turn_id.clone(),
+                                    tool_id: tool_id.clone(),
+                                    registration_sequence: *registration_sequence,
+                                };
+                                if state.settled_user_inputs.contains(&identity) {
+                                    drop(state);
+                                    return;
+                                }
+                                Self::upsert_pending_user_input(
+                                    &mut state,
+                                    identity.clone(),
+                                    params.clone(),
+                                    is_subagent,
+                                );
+                                pending_tool_event = Some(TrackerEvent::UserInputRequested {
+                                    identity,
+                                    params: params.clone(),
+                                });
+                            }
+                        }
+                        "UserInputResolved" => {
+                            if let bitfun_events::ToolEventData::UserInputResolved {
+                                registration_sequence,
+                                ..
+                            } = tool_event
+                            {
+                                let identity = RemoteUserInputIdentity {
+                                    session_id: session_id.clone(),
+                                    turn_id: turn_id.clone(),
+                                    tool_id: tool_id.clone(),
+                                    registration_sequence: *registration_sequence,
+                                };
+                                state.settled_user_inputs.insert(identity.clone());
+                                if let Some(tool) =
+                                    state.active_tools.iter_mut().rev().find(|tool| {
+                                        tool.id == tool_id
+                                            && tool.status == "waiting_for_user"
+                                            && tool.user_input_identity.as_ref() == Some(&identity)
+                                    })
+                                {
+                                    tool.status = "completed".to_string();
+                                }
+                                if let Some(tool) = state
+                                    .active_items
+                                    .iter_mut()
+                                    .rev()
+                                    .filter_map(|item| item.tool.as_mut())
+                                    .find(|tool| {
+                                        tool.id == tool_id
+                                            && tool.status == "waiting_for_user"
+                                            && tool.user_input_identity.as_ref() == Some(&identity)
+                                    })
+                                {
+                                    tool.status = "completed".to_string();
+                                }
+                            }
                         }
                         "Confirmed" => {
                             Self::upsert_active_tool(
@@ -3287,6 +3544,7 @@ impl RemoteSessionStateTracker {
                 state.accumulated_thinking.clear();
                 state.active_tools.clear();
                 state.active_items.clear();
+                state.settled_user_inputs.clear();
                 state.round_index = 0;
                 state.session_state = "running".to_string();
                 state.persistence_dirty = true;
@@ -3361,12 +3619,43 @@ impl RemoteSessionStateTracker {
 pub trait RemoteSessionTrackerHost {
     fn subscribe_tracker(&self, session_id: &str, tracker: Arc<RemoteSessionStateTracker>);
     fn unsubscribe_tracker(&self, session_id: &str);
-    fn active_turn_id(&self, session_id: &str) -> Option<String>;
+    fn active_turn_seed(&self, session_id: &str) -> Option<RemoteActiveTurnSeed>;
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RemotePendingUserInputSeed {
+    pub identity: RemoteUserInputIdentity,
+    pub params: serde_json::Value,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RemoteActiveTurnSeed {
+    pub turn_id: String,
+    pub pending_user_inputs: Vec<RemotePendingUserInputSeed>,
 }
 
 #[derive(Default)]
 pub struct RemoteSessionTrackerRegistry {
-    state_trackers: RwLock<HashMap<String, Arc<RemoteSessionStateTracker>>>,
+    state_trackers: RwLock<HashMap<String, Arc<RemoteSessionTrackerEntry>>>,
+}
+
+enum RemoteSessionTrackerEntryState {
+    Initializing,
+    Ready(Arc<RemoteSessionStateTracker>),
+    Removing,
+    Removed,
+}
+
+struct RemoteSessionTrackerEntry {
+    state: Mutex<RemoteSessionTrackerEntryState>,
+}
+
+impl RemoteSessionTrackerEntry {
+    fn initializing() -> Self {
+        Self {
+            state: Mutex::new(RemoteSessionTrackerEntryState::Initializing),
+        }
+    }
 }
 
 impl RemoteSessionTrackerRegistry {
@@ -3379,30 +3668,66 @@ impl RemoteSessionTrackerRegistry {
         session_id: &str,
         host: &H,
     ) -> Arc<RemoteSessionStateTracker> {
-        if let Some(tracker) = self.get_tracker(session_id) {
+        loop {
+            let candidate = Arc::new(RemoteSessionTrackerEntry::initializing());
+            let mut candidate_state = candidate
+                .state
+                .lock()
+                .expect("remote tracker entry lock poisoned");
+            let mut trackers = self.state_trackers.write().unwrap();
+            if let Some(existing) = trackers.get(session_id).cloned() {
+                drop(trackers);
+                drop(candidate_state);
+                let state = existing
+                    .state
+                    .lock()
+                    .expect("remote tracker entry lock poisoned");
+                match &*state {
+                    RemoteSessionTrackerEntryState::Ready(tracker) => return tracker.clone(),
+                    RemoteSessionTrackerEntryState::Removed => continue,
+                    RemoteSessionTrackerEntryState::Removing => {
+                        unreachable!("remover holds the entry lock until unsubscribe finishes")
+                    }
+                    RemoteSessionTrackerEntryState::Initializing => {
+                        unreachable!("initializer holds the entry lock until ready")
+                    }
+                }
+            }
+
+            trackers.insert(session_id.to_string(), candidate.clone());
+            drop(trackers);
+            let tracker = Arc::new(RemoteSessionStateTracker::new(session_id.to_string()));
+            host.subscribe_tracker(session_id, tracker.clone());
+            if let Some(seed) = host.active_turn_seed(session_id) {
+                tracker.hydrate_active_turn(seed);
+            }
+            *candidate_state = RemoteSessionTrackerEntryState::Ready(tracker.clone());
+
             return tracker;
         }
-
-        let tracker = {
-            let mut trackers = self.state_trackers.write().unwrap();
-            if let Some(tracker) = trackers.get(session_id) {
-                return tracker.clone();
-            }
-            let tracker = Arc::new(RemoteSessionStateTracker::new(session_id.to_string()));
-            trackers.insert(session_id.to_string(), tracker.clone());
-            tracker
-        };
-
-        host.subscribe_tracker(session_id, tracker.clone());
-        if let Some(active_turn_id) = host.active_turn_id(session_id) {
-            tracker.initialize_active_turn(active_turn_id);
-        }
-
-        tracker
     }
 
     pub fn get_tracker(&self, session_id: &str) -> Option<Arc<RemoteSessionStateTracker>> {
-        self.state_trackers.read().unwrap().get(session_id).cloned()
+        let entry = self
+            .state_trackers
+            .read()
+            .unwrap()
+            .get(session_id)
+            .cloned()?;
+        let state = entry
+            .state
+            .lock()
+            .expect("remote tracker entry lock poisoned");
+        match &*state {
+            RemoteSessionTrackerEntryState::Ready(tracker) => Some(tracker.clone()),
+            RemoteSessionTrackerEntryState::Removed => None,
+            RemoteSessionTrackerEntryState::Removing => {
+                unreachable!("remover holds the entry lock until unsubscribe finishes")
+            }
+            RemoteSessionTrackerEntryState::Initializing => {
+                unreachable!("initializer holds the entry lock until ready")
+            }
+        }
     }
 
     pub fn remove_tracker_with_host<H: RemoteSessionTrackerHost>(
@@ -3410,11 +3735,43 @@ impl RemoteSessionTrackerRegistry {
         session_id: &str,
         host: &H,
     ) -> Option<Arc<RemoteSessionStateTracker>> {
-        let removed = self.state_trackers.write().unwrap().remove(session_id);
-        if removed.is_some() {
-            host.unsubscribe_tracker(session_id);
+        let entry = self
+            .state_trackers
+            .read()
+            .unwrap()
+            .get(session_id)
+            .cloned()?;
+        let mut state = entry
+            .state
+            .lock()
+            .expect("remote tracker entry lock poisoned");
+        let removed = match &*state {
+            RemoteSessionTrackerEntryState::Ready(tracker) => tracker.clone(),
+            RemoteSessionTrackerEntryState::Removed => return None,
+            RemoteSessionTrackerEntryState::Removing => {
+                unreachable!("remover holds the entry lock until unsubscribe finishes")
+            }
+            RemoteSessionTrackerEntryState::Initializing => {
+                unreachable!("initializer holds the entry lock until ready")
+            }
+        };
+        *state = RemoteSessionTrackerEntryState::Removing;
+
+        // Keep this generation published and hold its entry lock until the Host
+        // finishes unsubscribing. A concurrent ensure can then observe only the
+        // old generation (and wait), never insert a replacement whose fixed
+        // Host subscription key could be removed by this delayed unsubscribe.
+        host.unsubscribe_tracker(session_id);
+        let mut trackers = self.state_trackers.write().unwrap();
+        if trackers
+            .get(session_id)
+            .is_some_and(|current| Arc::ptr_eq(current, &entry))
+        {
+            trackers.remove(session_id);
         }
-        removed
+        drop(trackers);
+        *state = RemoteSessionTrackerEntryState::Removed;
+        Some(removed)
     }
 }
 
@@ -3616,6 +3973,7 @@ mod tests {
                 assistant_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                capabilities: vec![REMOTE_CAPABILITY_ANSWER_QUESTION_IDENTITY_V1.to_string()],
             }
         );
 
@@ -4090,7 +4448,7 @@ mod tests {
 
         fn answer_question(
             &self,
-            _tool_id: &str,
+            _identity: &RemoteUserInputIdentity,
             _answers: serde_json::Value,
         ) -> Result<(), String> {
             Ok(())

@@ -2207,6 +2207,7 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
         | RuntimeError::MissingSessionLineagePort
         | RuntimeError::MissingSessionManagementPort
         | RuntimeError::MissingSessionRestorePort
+        | RuntimeError::MissingContextReloadPort
         | RuntimeError::MissingLocalCommandTurnPort
         | RuntimeError::MissingWorkspaceReferencePort
         | RuntimeError::MissingSessionTranscriptReader
@@ -2256,6 +2257,17 @@ mod runtime_error_tests {
     #[test]
     fn missing_workspace_reference_port_uses_capability_unavailable_contract() {
         let error = RuntimeError::MissingWorkspaceReferencePort;
+
+        assert_eq!(
+            runtime_error_facts(&error),
+            (ErrorCode::CapabilityUnavailable, false, None)
+        );
+        assert_eq!(runtime_error_kind(&error), "capability_unavailable");
+    }
+
+    #[test]
+    fn missing_context_reload_port_uses_capability_unavailable_contract() {
+        let error = RuntimeError::MissingContextReloadPort;
 
         assert_eq!(
             runtime_error_facts(&error),

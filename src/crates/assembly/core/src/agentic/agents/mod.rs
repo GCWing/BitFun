@@ -46,7 +46,7 @@ pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
 pub(crate) use registry::external_subagent_runtime_key;
 pub use registry::types::{
     subagent_source_from_custom_kind, AgentCategory, AgentInfo, AgentSource, AgentToolPolicy,
-    CustomSubagentConfig, SubAgentSource, SubagentListScope, SubagentQueryContext,
+    CustomSubagentConfig, SubAgentSource, SubagentCatalog, SubagentListScope, SubagentQueryContext,
     SubagentStateReason,
 };
 pub use registry::visibility::{

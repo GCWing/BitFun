@@ -42,7 +42,9 @@ pub struct RuntimeSessionForkRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RuntimeUserAnswersRequest {
     pub session_id: String,
+    pub turn_id: String,
     pub tool_id: String,
+    pub registration_sequence: u64,
     pub answers: serde_json::Value,
 }
 
@@ -354,6 +356,7 @@ pub enum RuntimeIpcOperationResult {
         workspace_binding: AgentSessionWorkspaceBinding,
         transcript: SessionTranscript,
         pending_permissions: Vec<PermissionRequest>,
+        pending_user_inputs: Vec<bitfun_runtime_ports::PendingUserInput>,
     },
     SessionForked {
         session: AgentSessionSummary,

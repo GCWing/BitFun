@@ -282,7 +282,10 @@ pub trait AgentContextReloadPort: Send + Sync {
 #[serde(rename_all = "camelCase")]
 /// Delivers answers to a pending user-question tool call.
 pub struct AgentUserAnswersRequest {
+    pub session_id: String,
+    pub turn_id: String,
     pub tool_id: String,
+    pub registration_sequence: u64,
     pub answers: serde_json::Value,
 }
 
@@ -1819,6 +1822,21 @@ pub struct SessionTranscript {
     pub session_id: String,
     #[serde(default)]
     pub messages: Vec<TranscriptMessage>,
+}
+
+/// Authoritative interactive-input fact retained while an Agent Turn waits for
+/// the user. The controlling Session/Turn can differ from the source when a
+/// subagent question is routed to its root TUI.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingUserInput {
+    pub tool_id: String,
+    pub session_id: String,
+    pub turn_id: String,
+    pub source_session_id: String,
+    pub source_turn_id: String,
+    pub registration_sequence: u64,
+    pub input: serde_json::Value,
 }
 
 /// Read-only transcript content shared by runtime consumers.

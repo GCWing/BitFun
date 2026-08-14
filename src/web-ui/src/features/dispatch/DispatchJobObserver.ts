@@ -1,5 +1,6 @@
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { createLogger } from '@/shared/utils/logger';
+import { projectAgenticEventEnvelope } from '@/shared/utils/agenticEventProjection';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { i18nService } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
@@ -60,55 +61,6 @@ export function requestDispatchJobRefresh(jobId?: string): void {
     ?.requestRefresh(jobId);
 }
 
-const RAW_EVENT_NAMES: Record<string, string> = {
-  SessionCreated: 'agentic://session-created',
-  SessionDeleted: 'agentic://session-deleted',
-  SessionStateChanged: 'agentic://session-state-changed',
-  SessionTitleGenerated: 'session_title_generated',
-  ImageAnalysisStarted: 'agentic://image-analysis-started',
-  ImageAnalysisCompleted: 'agentic://image-analysis-completed',
-  DialogTurnStarted: 'agentic://dialog-turn-started',
-  // v4: the target admits linked subagent sessions into the job event log,
-  // and the driver resolver treats child sessions of a projection as
-  // observer-only through the parent chain.
-  SubagentSessionLinked: 'agentic://subagent-session-linked',
-  ModelRoundStarted: 'agentic://model-round-started',
-  ModelRoundCompleted: 'agentic://model-round-completed',
-  ModelRoundAttemptSuperseded: 'agentic://model-round-attempt-superseded',
-  TextChunk: 'agentic://text-chunk',
-  ThinkingChunk: 'agentic://text-chunk',
-  ToolEvent: 'agentic://tool-event',
-  DialogTurnCompleted: 'agentic://dialog-turn-completed',
-  DialogTurnFailed: 'agentic://dialog-turn-failed',
-  DialogTurnCancelled: 'agentic://dialog-turn-cancelled',
-  TokenUsageUpdated: 'agentic://token-usage-updated',
-  ContextCompressionStarted: 'agentic://context-compression-started',
-  ContextCompressionCompleted: 'agentic://context-compression-completed',
-  ContextCompressionFailed: 'agentic://context-compression-failed',
-  ThreadGoalUpdated: 'agentic://thread-goal-updated',
-  DeepReviewQueueStateChanged: 'agentic://deep-review-queue-state-changed',
-  SessionModelAutoMigrated: 'agentic://session-model-auto-migrated',
-  SessionReasoningPresetAutoCleared: 'agentic://session-reasoning-preset-auto-cleared',
-  UserSteeringInjected: 'agentic://user-steering-injected',
-};
-
-function camelKey(key: string): string {
-  return key.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
-}
-
-function camelize(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(camelize);
-  }
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .map(([key, nested]) => [camelKey(key), camelize(nested)]),
-  );
-}
-
 export function projectDispatchAgentEvent(
   dispatchEvent: Extract<DispatchEvent, { type: 'agentEvent' }>,
 ): { eventName: string; payload: Record<string, unknown>; envelopeId?: string } | null {
@@ -138,28 +90,17 @@ export function projectDispatchAgentEvent(
   if (!eventRecord || typeof eventRecord !== 'object') {
     return null;
   }
-  const raw = eventRecord as Record<string, unknown>;
-  const rawType = typeof raw.type === 'string' ? raw.type : '';
-  const eventName = RAW_EVENT_NAMES[rawType];
-  if (!eventName) {
+  const projected = projectAgenticEventEnvelope({
+    id: envelope?.id,
+    event: eventRecord,
+  });
+  if (!projected) {
     return null;
   }
-  const payload = camelize(raw) as Record<string, unknown>;
-  delete payload.type;
-  if (rawType === 'ThinkingChunk') {
-    payload.text = payload.content;
-    payload.contentType = 'thinking';
-    payload.isThinkingEnd = payload.isEnd;
-    delete payload.content;
-    delete payload.isEnd;
-  }
-  if (rawType === 'SessionTitleGenerated' && payload.timestamp === undefined) {
-    payload.timestamp = Date.now();
-  }
   return {
-    eventName,
-    payload,
-    envelopeId: typeof envelope?.id === 'string' ? envelope.id : undefined,
+    eventName: projected.eventName,
+    payload: projected.payload,
+    envelopeId: projected.envelopeId,
   };
 }
 

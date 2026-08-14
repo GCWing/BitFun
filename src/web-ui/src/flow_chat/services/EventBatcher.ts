@@ -293,6 +293,8 @@ export type ToolEventType =
   | 'Queued'
   | 'Waiting'
   | 'Started'
+  | 'UserInputRequested'
+  | 'UserInputResolved'
   | 'Progress'
   | 'Streaming'
   | 'StreamChunk'
@@ -333,6 +335,15 @@ export interface WaitingToolEvent extends BaseToolEvent<'Waiting'> {
 export interface StartedToolEvent extends BaseToolEvent<'Started'> {
   params: unknown;
   timeout_seconds?: number;
+}
+
+export interface UserInputRequestedToolEvent extends BaseToolEvent<'UserInputRequested'> {
+  registration_sequence: number;
+  params: unknown;
+}
+
+export interface UserInputResolvedToolEvent extends BaseToolEvent<'UserInputResolved'> {
+  registration_sequence: number;
 }
 
 export interface ProgressToolEvent extends BaseToolEvent<'Progress'> {
@@ -395,6 +406,8 @@ export type FlowToolEvent =
   | QueuedToolEvent
   | WaitingToolEvent
   | StartedToolEvent
+  | UserInputRequestedToolEvent
+  | UserInputResolvedToolEvent
   | ProgressToolEvent
   | StreamingToolEvent
   | StreamChunkToolEvent

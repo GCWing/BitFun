@@ -60,9 +60,6 @@ bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
 bitfun-services-core = { path = "../../crates/services/services-core", features = ["dispatch-workspace", "local-storage", "process-runtime", "runtime-ownership"] }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-product-domains = { path = "../../crates/contracts/product-domains", features = ["external-sources"] }
-bitfun-app-server = { path = "../../crates/interfaces/app-server" }
-bitfun-app-server-client = { path = "../../crates/interfaces/app-server-client" }
-bitfun-app-server-protocol = { path = "../../crates/interfaces/app-server-protocol" }
 
 # CLI framework
 clap = { workspace = true }

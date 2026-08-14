@@ -11,7 +11,7 @@ use bitfun_agent_runtime::sdk::{
     PermissionRequest, SessionTranscript, TranscriptContent, TranscriptMessage,
 };
 use bitfun_agent_tools::effective_tool_invocation;
-use bitfun_events::ToolEventData;
+use bitfun_events::{ToolEventData, ToolEventIdentity};
 use bitfun_runtime_ports::{AgentSessionWorkspaceBinding, SessionExecutionTarget};
 
 use crate::ui::permission::PermissionPrompt;
@@ -415,6 +415,8 @@ pub(crate) struct ChatState {
     // -- Question state --
     /// Current pending question prompt (if AskUserQuestion tool is waiting for answers)
     pub question_prompt: Option<QuestionPrompt>,
+    /// Additional routed questions, ordered by the Runtime registration facts.
+    question_queue: VecDeque<QuestionPrompt>,
 }
 
 impl ChatState {
@@ -461,6 +463,7 @@ impl ChatState {
             permission_prompt: None,
             permission_queue: VecDeque::new(),
             question_prompt: None,
+            question_queue: VecDeque::new(),
         }
     }
 
@@ -815,6 +818,8 @@ impl ChatState {
         self.is_processing = true;
         self.current_flow_items.clear();
         self.tool_index.clear();
+        self.question_prompt = None;
+        self.question_queue.clear();
 
         if let Some(message) = self.messages.iter_mut().rev().find(|message| {
             message.role == MessageRole::Assistant && message.turn_id.as_deref() == Some(turn_id)
@@ -826,9 +831,101 @@ impl ChatState {
                     self.tool_index.insert(tool_state.tool_id.clone(), index);
                 }
             }
+            self.rebuild_streaming_message();
         } else {
             self.push_streaming_assistant_message(turn_id);
         }
+    }
+
+    /// Restore one authoritative pending AskUserQuestion fact. Active Turn
+    /// transcripts are not a reliable source for questions that were emitted
+    /// before persistence or by a routed subagent.
+    pub(crate) fn restore_pending_user_input(
+        &mut self,
+        pending: &bitfun_agent_runtime::sdk::PendingUserInput,
+    ) -> bool {
+        let before = self.pending_question_count();
+        self.handle_tool_event(&ToolEventData::UserInputRequested {
+            identity: ToolEventIdentity::direct(&pending.tool_id, "AskUserQuestion"),
+            registration_sequence: pending.registration_sequence,
+            params: pending.input.clone(),
+        });
+        self.pending_question_count() > before
+    }
+
+    fn enqueue_question_prompt(&mut self, prompt: QuestionPrompt) -> bool {
+        if self
+            .question_prompt
+            .iter()
+            .chain(self.question_queue.iter())
+            .any(|queued| {
+                queued.session_id == prompt.session_id
+                    && queued.turn_id == prompt.turn_id
+                    && queued.tool_id == prompt.tool_id
+                    && queued.registration_sequence == prompt.registration_sequence
+            })
+        {
+            return false;
+        }
+        if self.question_prompt.is_none() {
+            self.question_prompt = Some(prompt);
+        } else {
+            self.question_queue.push_back(prompt);
+        }
+        true
+    }
+
+    pub(crate) fn resolve_question_prompt(&mut self, tool_id: &str) -> bool {
+        if self
+            .question_prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.tool_id == tool_id)
+        {
+            self.question_prompt = self.question_queue.pop_front();
+            return true;
+        }
+        let Some(index) = self
+            .question_queue
+            .iter()
+            .position(|prompt| prompt.tool_id == tool_id)
+        else {
+            return false;
+        };
+        self.question_queue.remove(index);
+        true
+    }
+
+    fn resolve_question_prompt_registration(
+        &mut self,
+        session_id: &str,
+        turn_id: &str,
+        tool_id: &str,
+        registration_sequence: u64,
+    ) -> bool {
+        let matches = |prompt: &QuestionPrompt| {
+            prompt.session_id == session_id
+                && prompt.turn_id == turn_id
+                && prompt.tool_id == tool_id
+                && prompt.registration_sequence == registration_sequence
+        };
+        if self.question_prompt.as_ref().is_some_and(matches) {
+            self.question_prompt = self.question_queue.pop_front();
+            return true;
+        }
+        let Some(index) = self.question_queue.iter().position(matches) else {
+            return false;
+        };
+        self.question_queue.remove(index);
+        true
+    }
+
+    pub(crate) fn clear_question_prompts(&mut self) {
+        self.question_prompt = None;
+        self.question_queue.clear();
+    }
+
+    pub(crate) fn pending_question_count(&self) -> usize {
+        usize::from(self.question_prompt.is_some()) + self.question_queue.len()
     }
 
     /// Ignore delayed lifecycle events for turns already represented by an
@@ -874,7 +971,7 @@ impl ChatState {
         self.is_processing = false;
         self.permission_prompt = None;
         self.permission_queue.clear();
-        self.question_prompt = None;
+        self.clear_question_prompts();
     }
 
     // ============ Event Handlers ============
@@ -1074,10 +1171,18 @@ impl ChatState {
             }
 
             ToolEventData::Started {
-                identity,
-                params,
-                timeout_seconds: _,
+                identity, params, ..
+            }
+            | ToolEventData::UserInputRequested {
+                identity, params, ..
             } => {
+                let registration_sequence = match tool_event {
+                    ToolEventData::UserInputRequested {
+                        registration_sequence,
+                        ..
+                    } => Some(*registration_sequence),
+                    _ => None,
+                };
                 let (tool_name, effective_params) =
                     effective_tool_invocation(&identity.tool_name, params);
                 debug_assert_eq!(identity.effective_name(), tool_name);
@@ -1085,7 +1190,7 @@ impl ChatState {
                 let params_for_create = effective_params.clone();
                 let tool_name_for_update = tool_name.to_string();
                 let tool_name_for_create = tool_name.to_string();
-                self.insert_or_update_tool(
+                let inserted = self.insert_or_update_tool(
                     &identity.tool_id,
                     |tool| {
                         tool.status = ToolDisplayStatus::Running;
@@ -1104,14 +1209,26 @@ impl ChatState {
                         subagent_progress: None,
                     },
                 );
-                self.metadata.tool_calls += 1;
+                if inserted {
+                    self.metadata.tool_calls += 1;
+                }
 
-                // Auto-create question prompt for AskUserQuestion tool
-                if tool_name == "AskUserQuestion" {
-                    if let Some(prompt) =
-                        QuestionPrompt::from_params(identity.tool_id.clone(), effective_params)
-                    {
-                        self.question_prompt = Some(prompt);
+                // A Started event precedes channel registration. Only expose
+                // an answerable prompt after the Runtime owner confirms that
+                // the pending input channel exists.
+                if let Some(registration_sequence) = registration_sequence {
+                    if tool_name == "AskUserQuestion" {
+                        if let Some(turn_id) = self.current_turn_id.clone() {
+                            if let Some(prompt) = QuestionPrompt::from_params(
+                                self.core_session_id.clone(),
+                                turn_id,
+                                identity.tool_id.clone(),
+                                registration_sequence,
+                                effective_params,
+                            ) {
+                                self.enqueue_question_prompt(prompt);
+                            }
+                        }
                     }
                 }
 
@@ -1125,6 +1242,21 @@ impl ChatState {
                     tool.progress_message = Some(message.clone());
                 });
                 self.rebuild_streaming_message();
+            }
+
+            ToolEventData::UserInputResolved {
+                identity,
+                registration_sequence,
+            } => {
+                let session_id = self.core_session_id.clone();
+                if let Some(turn_id) = self.current_turn_id.clone() {
+                    self.resolve_question_prompt_registration(
+                        &session_id,
+                        &turn_id,
+                        &identity.tool_id,
+                        *registration_sequence,
+                    );
+                }
             }
 
             ToolEventData::Streaming {
@@ -1195,10 +1327,6 @@ impl ChatState {
                     tool.metadata = Some(metadata);
                     tool.duration_ms = Some(dur);
                 });
-                // Clear question prompt if this tool completed
-                if self.question_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
-                    self.question_prompt = None;
-                }
                 self.rebuild_streaming_message();
             }
 
@@ -1211,10 +1339,6 @@ impl ChatState {
                     tool.status = ToolDisplayStatus::Failed;
                     tool.result = Some(err);
                 });
-                // Clear question prompt if this tool failed
-                if self.question_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
-                    self.question_prompt = None;
-                }
                 self.rebuild_streaming_message();
             }
 
@@ -1227,10 +1351,6 @@ impl ChatState {
                     tool.status = ToolDisplayStatus::Cancelled;
                     tool.result = Some(rsn);
                 });
-                // Clear question prompt if this tool was cancelled
-                if self.question_prompt.as_ref().map(|p| &p.tool_id) == Some(&identity.tool_id) {
-                    self.question_prompt = None;
-                }
                 self.rebuild_streaming_message();
             }
 
@@ -1339,7 +1459,7 @@ impl ChatState {
         self.current_flow_items.clear();
         self.tool_index.clear();
         self.is_processing = false;
-        self.question_prompt = None;
+        self.clear_question_prompts();
     }
 
     /// Handle dialog turn failure
@@ -1360,7 +1480,7 @@ impl ChatState {
         self.current_flow_items.clear();
         self.tool_index.clear();
         self.is_processing = false;
-        self.question_prompt = None;
+        self.clear_question_prompts();
     }
 
     /// Handle dialog turn cancellation
@@ -1380,7 +1500,7 @@ impl ChatState {
         self.current_flow_items.clear();
         self.tool_index.clear();
         self.is_processing = false;
-        self.question_prompt = None;
+        self.clear_question_prompts();
     }
 
     pub(crate) fn should_apply_turn_cancelled(&mut self, turn_id: &str) -> bool {
@@ -1458,12 +1578,13 @@ impl ChatState {
         tool_id: &str,
         update_fn: impl FnOnce(&mut ToolDisplayState),
         create_fn: impl FnOnce() -> ToolDisplayState,
-    ) {
+    ) -> bool {
         if let Some(&idx) = self.tool_index.get(tool_id) {
             // Tool already exists — update in-place
             if let Some(FlowItem::Tool { tool_state }) = self.current_flow_items.get_mut(idx) {
                 update_fn(tool_state);
             }
+            false
         } else {
             // New tool — append to flow items in chronological order
             let new_state = create_fn();
@@ -1472,6 +1593,7 @@ impl ChatState {
                 tool_state: new_state,
             });
             self.tool_index.insert(tool_id.to_string(), idx);
+            true
         }
     }
 
@@ -1944,6 +2066,103 @@ mod tests {
         });
 
         assert_create_plan_item(&state.current_flow_items[0]);
+    }
+
+    #[test]
+    fn ask_user_question_becomes_answerable_only_after_runtime_registration() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+        );
+        state.handle_turn_started("turn-1", "Ask before continuing");
+        let identity = ToolEventIdentity::direct("tool-1", "AskUserQuestion");
+        let params = json!({
+            "questions": [{
+                "question": "Continue?",
+                "header": "Decision",
+                "options": [
+                    { "label": "Yes", "description": "Continue" },
+                    { "label": "No", "description": "Stop" }
+                ],
+                "multiSelect": false
+            }]
+        });
+
+        state.handle_tool_event(&ToolEventData::Started {
+            identity: identity.clone(),
+            params: params.clone(),
+            timeout_seconds: None,
+        });
+        assert_eq!(state.pending_question_count(), 0);
+
+        state.handle_tool_event(&ToolEventData::UserInputRequested {
+            identity: identity.clone(),
+            registration_sequence: 1,
+            params: params.clone(),
+        });
+        assert_eq!(state.pending_question_count(), 1);
+        assert_eq!(state.metadata.tool_calls, 1);
+
+        state.handle_tool_event(&ToolEventData::UserInputRequested {
+            identity,
+            registration_sequence: 1,
+            params,
+        });
+        assert_eq!(state.pending_question_count(), 1);
+        assert_eq!(state.metadata.tool_calls, 1);
+    }
+
+    #[test]
+    fn reused_tool_id_prompts_are_settled_by_exact_registration() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+        );
+        state.handle_turn_started("turn-1", "Ask before continuing");
+        let identity = ToolEventIdentity::direct("tool-1", "AskUserQuestion");
+        let params = json!({
+            "questions": [{
+                "question": "Continue?",
+                "header": "Decision",
+                "options": [
+                    { "label": "Yes", "description": "Continue" },
+                    { "label": "No", "description": "Stop" }
+                ]
+            }]
+        });
+
+        for registration_sequence in [1, 2] {
+            state.handle_tool_event(&ToolEventData::UserInputRequested {
+                identity: identity.clone(),
+                registration_sequence,
+                params: params.clone(),
+            });
+        }
+        assert_eq!(state.pending_question_count(), 2);
+
+        state.handle_tool_event(&ToolEventData::UserInputResolved {
+            identity: identity.clone(),
+            registration_sequence: 1,
+        });
+        assert_eq!(state.pending_question_count(), 1);
+        assert_eq!(
+            state
+                .question_prompt
+                .as_ref()
+                .expect("new registration remains")
+                .registration_sequence,
+            2
+        );
+
+        state.handle_tool_event(&ToolEventData::UserInputResolved {
+            identity,
+            registration_sequence: 1,
+        });
+        assert_eq!(state.pending_question_count(), 1);
     }
 
     #[test]

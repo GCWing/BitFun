@@ -1,4 +1,4 @@
-import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
+import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, RemoteUserInputIdentity, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
 import { PairIdentity, PeerDeviceProvisionOutcome, RelayHttpClient } from './RelayHttpClient';
 import { CloudAccountClient, CloudAccountSession } from './CloudAccountClient';
@@ -28,6 +28,11 @@ export interface ProvisionedPeerDevice {
   deviceId: string;
 }
 
+const ANSWER_QUESTION_IDENTITY_CAPABILITY: string = 'answer_question_identity_v1';
+const ANSWER_QUESTION_UPGRADE_MESSAGE: string =
+  'This Desktop version cannot safely answer interactive questions. ' +
+  'Upgrade Desktop, reconnect, and answer the question again.';
+
 export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFileDownloadClient, RemoteModelClient, RemoteSessionClient, RemoteToolActionClient {
   private readonly roomClient: RelayHttpClient = new RelayHttpClient();
   private transport?: RemoteCommandTransport;
@@ -35,12 +40,14 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
   private crypto?: RemoteCrypto;
   private workspace?: WorkspaceInfo;
   private roomRelayUrl: string = '';
+  private remoteCapabilities: string[] = [];
 
   reset(): void {
     this.transportGeneration += 1;
     this.crypto = undefined;
     this.workspace = undefined;
     this.roomRelayUrl = '';
+    this.remoteCapabilities = [];
     this.transport?.reset();
     this.transport = undefined;
     this.roomClient.reset();
@@ -54,6 +61,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     this.transport?.reset();
     this.transport = new RoomRemoteCommandTransport(this.roomClient);
     const initialSync = await this.roomClient.pair(deviceId, identity);
+    this.remoteCapabilities = initialSync.capabilities || [];
     // Account inheritance is optional for room pairing. A desktop without an
     // account, or an older desktop build, must not make normal QR control fail.
     await this.roomClient.requestDelegatedIdentity();
@@ -119,9 +127,11 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     targetDeviceId: string
   ): Promise<InitialSyncResult> {
     this.transportGeneration += 1;
+    this.remoteCapabilities = [];
     this.transport?.reset();
     this.transport = new AccountDeviceCommandTransport(accountClient, relayUrl, session, targetDeviceId);
     const workspaceResponse = await this.send<WorkspaceInfoResponse>(RemoteCommandFactory.getWorkspaceInfo());
+    this.remoteCapabilities = workspaceResponse.capabilities || [];
     this.workspace = RemoteResponseMapper.workspaceFromResponse(workspaceResponse);
     const sessions = await this.listSessions(50, 0, '', '');
     return {
@@ -134,6 +144,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
 
   async getWorkspaceInfo(): Promise<WorkspaceInfo> {
     const response = await this.send<WorkspaceInfoResponse>(RemoteCommandFactory.getWorkspaceInfo());
+    this.remoteCapabilities = response.capabilities || [];
     return RemoteResponseMapper.workspaceFromResponse(response);
   }
 
@@ -355,8 +366,11 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     return response.mode || mode;
   }
 
-  async answerQuestion(toolId: string, answers: RemoteQuestionAnswerPayload): Promise<void> {
-    await this.send<CommandStatusResponse>(RemoteCommandFactory.answerQuestion(toolId, answers));
+  async answerQuestion(identity: RemoteUserInputIdentity, answers: RemoteQuestionAnswerPayload): Promise<void> {
+    if (this.remoteCapabilities.indexOf(ANSWER_QUESTION_IDENTITY_CAPABILITY) < 0) {
+      throw new Error(ANSWER_QUESTION_UPGRADE_MESSAGE);
+    }
+    await this.send<CommandStatusResponse>(RemoteCommandFactory.answerQuestion(identity, answers));
   }
 
   async getFileInfo(path: string, sessionId?: string): Promise<FileInfo> {
@@ -432,6 +446,12 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     const response = await transport.send<T>(command, readTimeoutMs);
     if (generation !== this.transportGeneration || transport !== this.transport) {
       throw new Error('Remote target changed while the request was in flight.');
+    }
+    if (response.resp === 'upgrade_required') {
+      const message = response.message ? response.message.trim() : '';
+      const recovery = response.recovery ? response.recovery.trim() : '';
+      const detail = [message, recovery].filter((item: string) => item.length > 0).join(' ');
+      throw new Error(detail.length > 0 ? detail : ANSWER_QUESTION_UPGRADE_MESSAGE);
     }
     return response;
   }

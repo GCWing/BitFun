@@ -3,16 +3,17 @@ mod tests {
     use tokio::sync::broadcast::error::TryRecvError;
 
     use super::{
-        action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
+        action_opens_extension_management, agent_event_connection_failure,
+        agent_event_is_relevant_to_session, agent_event_stream_failure, apply_agent_mode_feedback,
         apply_model_selection_feedback, apply_session_model_migration,
         apply_session_rename_feedback, begin_slash_menu_selection, builtin_arguments_error,
-        builtin_arguments_route, builtin_command_reconfirmation,
+        builtin_arguments_route, builtin_command_reconfirmation, classify_side_effect_result,
         clear_selected_native_command_prefill, cli_native_prompt_command_descriptors,
         command_route, consume_selected_native_command_once, context_compression_tool_event,
-        extension_command_help_request, external_agent_attention, external_agent_diagnostic_lines,
-        external_agent_pending_notice_key, external_agent_result_is_stale,
-        external_agent_review_text, external_command_projections, external_control_status_text,
-        external_hook_help_text, external_integration_policy_lines,
+        drain_agent_event_batch, extension_command_help_request, external_agent_attention,
+        external_agent_diagnostic_lines, external_agent_pending_notice_key,
+        external_agent_result_is_stale, external_agent_review_text, external_command_projections,
+        external_control_status_text, external_hook_help_text, external_integration_policy_lines,
         external_operation_error_status, external_tool_mutation_result_label,
         external_tool_pending_notice_key, external_tool_result_is_stale, external_tool_review_text,
         external_tool_run_location_label, mark_active_turn_failed,
@@ -22,30 +23,33 @@ mod tests {
         parse_external_tool_review_action, parse_hook_management_action, parse_reload_invocation,
         parse_reload_target, pending_session_operation_blocks_runtime_action,
         previous_session_update_status, primary_model_usage_for_active_turn,
-        render_external_hook_catalog, render_native_hook_overview, requested_session_name,
+        project_restored_session, project_transcript_event, render_external_hook_catalog,
+        render_native_hook_overview, requested_session_name,
         retain_selected_native_command_for_input, selected_command_prefill,
         session_command_help_note, session_delete_allowed, session_delete_feedback,
         session_switch_targets_pending_delete, session_update_allowed,
         session_update_blocks_typed_submission, session_update_completion_should_exit,
-        shared_session_change_is_blocked, steering_unsupported_reason,
-        terminal_event_allowed_while_local_effect_pending, CommandRoute, ExternalAgentReviewAction,
-        ExternalControlUiAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
-        HookManagementAction, PendingSessionOperationKind, SessionUpdateApplyOutcome,
-        SHARED_TUI_CHAT_STATUS,
+        session_usage_workspace_path, shared_session_change_is_blocked,
+        steering_unsupported_reason, terminal_event_allowed_while_local_effect_pending,
+        CommandRoute, ExternalAgentReviewAction, ExternalControlUiAction,
+        ExternalSourceConflictPreferences, ExternalToolReviewAction, HookManagementAction,
+        PendingSessionOperationKind, SessionOperationError, SessionUpdateApplyOutcome,
+        SideEffectUiOutcome, TranscriptTerminalOutcome, SHARED_TUI_CHAT_STATUS,
     };
     use crate::actions::{
         action_conflict_behavior_version, ActionHandler, ActionState, ResolvedKeymap,
     };
+    use crate::agent::tui_client::CliSessionRestoreSnapshot;
     use crate::chat_state::ChatState;
     use crate::config::ShortcutsConfig;
+    use crate::tui_management::{
+        NativeHookFileSummary as NativeHookFileView,
+        NativeHookHandlerSummary as NativeHookHandlerView,
+        NativeHookOverviewView as NativeHookOverview, NativeHookRuleSummary as NativeHookRuleView,
+    };
     use crate::ui::chat::ChatView;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
     use crate::ui::theme::Theme;
-    use bitfun_app_server_protocol::hook::{
-        NativeHookFileSummary as NativeHookFileView,
-        NativeHookHandlerSummary as NativeHookHandlerView, NativeHookOverview,
-        NativeHookRuleSummary as NativeHookRuleView,
-    };
     use bitfun_events::{AgenticEvent, ToolEventData};
     use bitfun_product_domains::external_hook_catalog::{
         ExternalHookCatalogEntry, ExternalHookCatalogSnapshotV1, ExternalHookHandlerKind,
@@ -63,7 +67,10 @@ mod tests {
     use bitfun_product_domains::external_subagents::{
         ExternalSubagentActivationState, ExternalSubagentModelBindingTarget,
     };
-    use bitfun_runtime_ports::AgentContextReloadTarget;
+    use bitfun_runtime_ports::{
+        AgentContextReloadTarget, AgentSessionSummary, AgentSessionWorkspaceBinding,
+        PendingUserInput, SessionExecutionTarget, SessionTranscript,
+    };
     use crossterm::event::Event;
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -935,7 +942,6 @@ mod tests {
                 scope: "user".to_string(),
                 handlers: vec![NativeHookHandlerView {
                     command_summary: "jq -r '.tool_input.command' >> ~/log".to_string(),
-                    command_truncated: false,
                     timeout_seconds: 600,
                     status_message: None,
                 }],
@@ -1436,6 +1442,246 @@ mod tests {
         ));
         assert_eq!(state.current_turn_id(), None);
         assert!(!state.is_processing);
+    }
+
+    #[test]
+    fn closed_agent_stream_keeps_buffered_terminal_events_ahead_of_failure() {
+        let (sender, mut receiver) = tokio::sync::broadcast::channel(4);
+        sender
+            .send(bitfun_events::AgenticEventEnvelope::new(
+                AgenticEvent::DialogTurnCompleted {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    total_rounds: 1,
+                    total_tools: 0,
+                    duration_ms: 1,
+                    partial_recovery_reason: None,
+                    success: Some(true),
+                    finish_reason: None,
+                    has_final_response: Some(true),
+                },
+                bitfun_events::AgenticEventPriority::Critical,
+            ))
+            .expect("buffer terminal event");
+        drop(sender);
+
+        let batch = drain_agent_event_batch(&mut receiver, 20);
+        assert_eq!(batch.events.len(), 1);
+        assert!(batch
+            .failure
+            .as_deref()
+            .is_some_and(|message| message.contains("closed")));
+
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "hello");
+        let projection = project_transcript_event(&mut state, &batch.events[0].event, true);
+        assert!(matches!(
+            projection.terminal,
+            Some(TranscriptTerminalOutcome::Completed)
+        ));
+        assert_eq!(state.current_turn_id(), None);
+    }
+
+    #[test]
+    fn sessionless_shared_invalidation_survives_root_filter_and_closed_stream() {
+        let detailed_failure =
+            "Shared Runtime rejected an oversized event frame; reconnect in Embedded mode";
+        let (sender, mut receiver) = tokio::sync::broadcast::channel(4);
+        sender
+            .send(bitfun_events::AgenticEventEnvelope::new(
+                AgenticEvent::SystemError {
+                    session_id: None,
+                    error: detailed_failure.to_string(),
+                    recoverable: false,
+                },
+                bitfun_events::AgenticEventPriority::Critical,
+            ))
+            .expect("buffer connection failure");
+        drop(sender);
+
+        let batch = drain_agent_event_batch(&mut receiver, 20);
+        let event = &batch.events[0].event;
+        assert!(agent_event_is_relevant_to_session(event, "session"));
+        let connection_failure = agent_event_connection_failure(event).map(str::to_string);
+
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "hello");
+        let projection = project_transcript_event(&mut state, event, true);
+        assert!(matches!(
+            projection.terminal,
+            Some(TranscriptTerminalOutcome::SystemError(ref error)) if error == detailed_failure
+        ));
+        assert_eq!(
+            connection_failure.or(batch.failure),
+            Some(detailed_failure.to_string())
+        );
+    }
+
+    #[test]
+    fn session_usage_uses_the_project_storage_root_instead_of_the_execution_worktree() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/project".to_string()),
+        );
+        state.apply_workspace_binding(AgentSessionWorkspaceBinding {
+            workspace_id: Some("workspace".to_string()),
+            workspace_path: "D:/managed-worktree".to_string(),
+            project_workspace_path: Some("D:/project".to_string()),
+            execution_target: Some(SessionExecutionTarget::local("D:/managed-worktree")),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        });
+
+        assert_eq!(
+            session_usage_workspace_path(&state, Some("D:/fallback".to_string())).as_deref(),
+            Some("D:/project")
+        );
+    }
+
+    #[test]
+    fn unknown_side_effects_exit_before_the_ui_can_offer_a_retry() {
+        let unknown = anyhow::Error::new(SessionOperationError::runtime(
+            bitfun_agent_runtime::sdk::RuntimeError::Port(
+                bitfun_agent_runtime::sdk::PortError::new(
+                    bitfun_agent_runtime::sdk::PortErrorKind::OutcomeUnknown,
+                    "the operation may have been accepted",
+                ),
+            ),
+        ));
+        let rejected = anyhow::anyhow!("request rejected before execution");
+
+        assert!(matches!(
+            classify_side_effect_result::<()>("Shell command", Err(unknown)),
+            SideEffectUiOutcome::ExitAfterUnknownOutcome(message)
+                if message.contains("inspect authoritative state before retrying")
+        ));
+        assert!(matches!(
+            classify_side_effect_result::<()>("Shell command", Err(rejected)),
+            SideEffectUiOutcome::Retryable(_)
+        ));
+    }
+
+    #[test]
+    fn root_restore_resumes_authoritative_processing_turn() {
+        let restored = CliSessionRestoreSnapshot {
+            summary: AgentSessionSummary {
+                session_id: "session".to_string(),
+                session_name: "Restored".to_string(),
+                agent_type: "agentic".to_string(),
+                model_id: Some("model".to_string()),
+                reasoning_preset: Some("high".to_string()),
+                last_user_dialog_agent_type: None,
+                last_submitted_agent_type: None,
+                turn_count: 1,
+                created_at_ms: 1,
+                last_active_at_ms: 2,
+            },
+            workspace_binding: AgentSessionWorkspaceBinding {
+                workspace_id: Some("workspace".to_string()),
+                workspace_path: "D:/project".to_string(),
+                project_workspace_path: Some("D:/project".to_string()),
+                execution_target: Some(SessionExecutionTarget::local("D:/project")),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+            migration_notices: Vec::new(),
+            transcript: SessionTranscript {
+                session_id: "session".to_string(),
+                messages: Vec::new(),
+            },
+            active_turn_id: Some("turn".to_string()),
+            pending_user_inputs: [
+                ("question-tool", "child-session", "child-turn", 1),
+                ("question-tool-2", "child-session-2", "child-turn-2", 2),
+            ]
+            .into_iter()
+            .map(
+                |(tool_id, source_session_id, source_turn_id, registration_sequence)| {
+                    PendingUserInput {
+                        tool_id: tool_id.to_string(),
+                        session_id: "session".to_string(),
+                        turn_id: "turn".to_string(),
+                        source_session_id: source_session_id.to_string(),
+                        source_turn_id: source_turn_id.to_string(),
+                        registration_sequence,
+                        input: serde_json::json!({
+                            "questions": [{
+                                "question": "Choose a path",
+                                "header": "Path",
+                                "options": [{
+                                    "label": "Safe",
+                                    "description": "Use the safe path"
+                                }],
+                                "multiSelect": false
+                            }]
+                        }),
+                    }
+                },
+            )
+            .collect(),
+        };
+
+        let (mut state, notices) = project_restored_session(restored);
+        assert!(notices.is_empty());
+        assert!(state.is_processing);
+        assert_eq!(state.current_turn_id(), Some("turn"));
+        assert_eq!(state.current_reasoning_preset.as_deref(), Some("high"));
+        assert_eq!(
+            state
+                .question_prompt
+                .as_ref()
+                .map(|prompt| prompt.tool_id.as_str()),
+            Some("question-tool")
+        );
+        assert_eq!(state.pending_question_count(), 2);
+        assert!(state.resolve_question_prompt("question-tool"));
+        assert_eq!(
+            state
+                .question_prompt
+                .as_ref()
+                .map(|prompt| prompt.tool_id.as_str()),
+            Some("question-tool-2")
+        );
+
+        let chunk = AgenticEvent::TextChunk {
+            session_id: "session".to_string(),
+            turn_id: "turn".to_string(),
+            round_id: "round".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: "tail".to_string(),
+        };
+        assert!(project_transcript_event(&mut state, &chunk, true).changed);
+        let completed = AgenticEvent::DialogTurnCompleted {
+            session_id: "session".to_string(),
+            turn_id: "turn".to_string(),
+            total_rounds: 1,
+            total_tools: 0,
+            duration_ms: 1,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: None,
+            has_final_response: Some(true),
+        };
+        let projection = project_transcript_event(&mut state, &completed, true);
+        assert!(matches!(
+            projection.terminal,
+            Some(TranscriptTerminalOutcome::Completed)
+        ));
+        assert!(!state.is_processing);
+        assert_eq!(state.current_turn_id(), None);
     }
 
     #[test]
@@ -2217,15 +2463,14 @@ mod tests {
     }
 
     #[test]
-    fn shared_chat_status_describes_local_compatibility_management() {
+    fn shared_chat_status_describes_owner_scoped_management() {
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session Agent mode"));
         assert!(!SHARED_TUI_CHAT_STATUS.contains("current Session model"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session name"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("/reload [skills|instructions]"));
-        assert!(SHARED_TUI_CHAT_STATUS.contains("Model, Skill, Subagent, and MCP management"));
-        assert!(SHARED_TUI_CHAT_STATUS.contains("local compatibility owner"));
-        assert!(SHARED_TUI_CHAT_STATUS
-            .contains("do not reconfigure an already-running Shared Runtime Host"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("MCP management is unavailable"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("restart Shared Runtime"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("Remote workspace Sessions fail closed"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("other management remain Embedded"));
     }
 

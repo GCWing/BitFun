@@ -64,6 +64,17 @@ Host subscription:
 - Connection-local sequence/cursor and sync behavior must remain explicit.
   Do not describe it as persisted cross-connection replay or resume unless
   such an owner and contract are implemented.
+- Permission synchronization is connection-local and at-least-once. The
+  Runtime owner inserts a pending request before its audit completes and
+  publishes `Asked`; therefore one `request_id` may appear in the sync
+  snapshot and then arrive again as an event after the returned watermark.
+  Clients must merge Permission facts idempotently by `request_id`. The server
+  must preserve this possible duplicate instead of creating a snapshot/event
+  window that can lose the request.
+- Advertise the Permission capability as available only when the injected
+  Runtime has a Permission request manager. Missing owners remain explicit
+  `Unavailable` capabilities and Permission snapshot/command calls fail
+  closed.
 
 ## Error Mapping
 

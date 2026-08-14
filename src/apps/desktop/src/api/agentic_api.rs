@@ -20,8 +20,8 @@ use bitfun_agent_runtime::sdk::{
     AgentInputAttachment, AgentSessionCreateResult, AgentSessionModeUpdateRequest,
     AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
     AgentSessionModelUpdateRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
-    DialogSteerOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
-    PermissionReply, PermissionRequest,
+    DialogSteerOutcome, PendingUserInput, PermissionAuditRecord, PermissionGrant,
+    PermissionGrantKey, PermissionReply, PermissionRequest,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -551,6 +551,7 @@ pub struct RestoreSessionWithTurnsResponse {
 pub struct RestoreSessionViewResponse {
     pub session: SessionResponse,
     pub turns: Vec<DialogTurnData>,
+    pub pending_user_inputs: Vec<PendingUserInput>,
     pub current_context_usage: Option<SessionContextUsage>,
     pub turn_catalog: SessionTurnCatalog,
     pub context_restore_state: String,
@@ -3330,6 +3331,7 @@ pub async fn restore_session_view(
             .map_err(|error| format!("Failed to restore session view: {error}"))?;
         let session = restored.session;
         let mut turns = restored.turns;
+        let pending_user_inputs = restored.pending_user_inputs;
         let current_context_usage = restored.current_context_usage;
         let total_turn_count = restored.total_turn_count;
         let turn_catalog = restored.turn_catalog;
@@ -3383,6 +3385,7 @@ pub async fn restore_session_view(
         Ok(RestoreSessionViewResponse {
             session: session_to_response_with_turn_count(session, total_turn_count),
             turns,
+            pending_user_inputs,
             current_context_usage,
             turn_catalog,
             context_restore_state: "pending".to_string(),

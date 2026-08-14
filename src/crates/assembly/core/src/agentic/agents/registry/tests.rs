@@ -138,6 +138,54 @@ fn insert_project_subagent(registry: &AgentRegistry, workspace: &Path, id: &str,
         .insert(workspace.to_path_buf(), entries);
 }
 
+#[tokio::test]
+async fn scoped_subagent_catalog_keeps_external_presence_outside_management_entries() {
+    let registry = AgentRegistry::new();
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "ExternalScout".to_string(),
+        }),
+        AgentCategory::SubAgent,
+        AgentSource::External,
+        Some(SubAgentSource::External),
+        None,
+    );
+
+    let management = registry
+        .get_subagent_catalog_for_scope(
+            Some("agentic"),
+            None,
+            SubagentListScope::RegistryManagement,
+            true,
+        )
+        .await;
+    assert!(management.has_external);
+    assert!(management
+        .subagents
+        .iter()
+        .all(|info| info.subagent_source != Some(SubAgentSource::External)));
+
+    let task = registry
+        .get_subagent_catalog_for_scope(Some("agentic"), None, SubagentListScope::TaskVisible, true)
+        .await;
+    assert!(task.has_external);
+    assert!(task.subagents.iter().any(|info| info.id == "ExternalScout"));
+
+    let remote_safe = registry
+        .get_subagent_catalog_for_scope(
+            Some("agentic"),
+            None,
+            SubagentListScope::TaskVisible,
+            false,
+        )
+        .await;
+    assert!(!remote_safe.has_external);
+    assert!(remote_safe
+        .subagents
+        .iter()
+        .all(|info| info.subagent_source != Some(SubAgentSource::External)));
+}
+
 #[test]
 fn source_qualified_key_resolves_the_matching_custom_subagent() {
     let registry = AgentRegistry::new();

@@ -181,6 +181,20 @@ pub async fn save_project_mode_skills_document_local(
     save_project_agent_profiles_document_local(workspace_root, document).await
 }
 
+/// Updates one project-scoped mode Skill and persists the owning document.
+pub async fn set_project_mode_skill_state_local(
+    workspace_root: &Path,
+    mode_id: &str,
+    skill_key: &str,
+    enabled: bool,
+) -> BitFunResult<Vec<String>> {
+    let mut document = load_project_agent_profiles_document_local(workspace_root).await?;
+    let disabled =
+        set_mode_skill_disabled_in_document(&mut document, mode_id, skill_key, !enabled)?;
+    save_project_agent_profiles_document_local(workspace_root, &document).await?;
+    Ok(disabled)
+}
+
 pub async fn load_disabled_mode_skills_local(
     workspace_root: &Path,
     mode_id: &str,
@@ -214,4 +228,44 @@ pub async fn load_disabled_mode_skills_remote(
         &document,
         &resolve_profile_id(mode_id),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn project_mode_skill_state_is_mutated_and_persisted_by_the_owner() {
+        let workspace = tempfile::tempdir().expect("workspace");
+
+        let disabled = set_project_mode_skill_state_local(
+            workspace.path(),
+            "code",
+            "skill/project-review",
+            false,
+        )
+        .await
+        .expect("disable project skill");
+        assert_eq!(disabled, ["skill/project-review"]);
+        assert_eq!(
+            load_disabled_mode_skills_local(workspace.path(), "code")
+                .await
+                .expect("reload disabled skills"),
+            ["skill/project-review"]
+        );
+
+        let disabled = set_project_mode_skill_state_local(
+            workspace.path(),
+            "code",
+            "skill/project-review",
+            true,
+        )
+        .await
+        .expect("enable project skill");
+        assert!(disabled.is_empty());
+        assert!(load_disabled_mode_skills_local(workspace.path(), "code")
+            .await
+            .expect("reload enabled skill")
+            .is_empty());
+    }
 }

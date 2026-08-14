@@ -39,6 +39,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   onOpenInPanel,
   onExpand,
   sessionId,
+  turnId,
   className = '',
   displayContext = 'default',
   isLastItem,
@@ -98,6 +99,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
           onOpenInPanel={onOpenInPanel}
           onExpand={handleExpand}
           sessionId={sessionId}
+          turnId={turnId}
           displayContext={displayContext}
           isLastItem={isLastItem}
         />

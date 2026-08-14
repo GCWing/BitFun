@@ -409,13 +409,19 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
 #[tauri::command]
 pub async fn submit_user_answers(
     runtime: State<'_, DesktopRuntimeContext>,
+    session_id: String,
+    turn_id: String,
     tool_id: String,
+    registration_sequence: u64,
     answers: serde_json::Value,
 ) -> Result<(), String> {
     runtime
         .agent_runtime()
         .submit_user_answers(AgentUserAnswersRequest {
+            session_id,
+            turn_id,
             tool_id: tool_id.clone(),
+            registration_sequence,
             answers,
         })
         .await

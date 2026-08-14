@@ -5,7 +5,7 @@ import {
   ConversationIntents,
   ConversationIntentType
 } from '../actions/ConversationIntent';
-import { ConversationUiQuestionAnswer } from '../state/ConversationUiModels';
+import { ConversationUiQuestionAnswer, ConversationUiUserInputIdentity } from '../state/ConversationUiModels';
 import { ComposerPresentation } from './ComposerBar';
 
 @ComponentV2
@@ -67,8 +67,8 @@ export struct ConversationViewHost {
       onApproveTool: (id: string, input?: Object) => this.dispatch(ConversationIntents.approveTool(id, input)),
       onRejectTool: (id: string) => this.dispatch(ConversationIntents.tool(ConversationIntentType.RejectTool, id)),
       onCancelTool: (id: string) => this.dispatch(ConversationIntents.tool(ConversationIntentType.CancelTool, id)),
-      onAnswerQuestion: (id: string, answers: ConversationUiQuestionAnswer) =>
-        this.dispatch(ConversationIntents.answerQuestion(id, answers)),
+      onAnswerQuestion: (identity: ConversationUiUserInputIdentity, answers: ConversationUiQuestionAnswer) =>
+        this.dispatch(ConversationIntents.answerQuestion(identity, answers)),
       onRenameSession: (title: string) => this.dispatch(ConversationIntents.value(ConversationIntentType.RenameSession, title)),
       onCopyMessage: (text: string) => this.dispatch(ConversationIntents.value(ConversationIntentType.CopyMessage, text)),
       onRetryMessage: (text: string) => this.dispatch(ConversationIntents.value(ConversationIntentType.RetryMessage, text)),

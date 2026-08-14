@@ -12,10 +12,8 @@ use ratatui::{
     Frame,
 };
 
+use crate::tui_management::{AccountDevice, AccountInfo, SettingsSyncProgress, SettingsSyncStatus};
 use crate::ui::theme::{StyleKind, Theme};
-use bitfun_app_server_protocol::account::{
-    AccountDevice, AccountInfo, SettingsSyncProgress, SettingsSyncStatus,
-};
 
 /// Credentials collected by the login form.
 #[derive(Debug, Clone)]
