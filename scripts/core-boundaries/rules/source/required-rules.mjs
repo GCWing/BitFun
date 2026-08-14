@@ -3,6 +3,18 @@
 import { agentRuntimeRootPublicModules } from './public-api-rules.mjs';
 
 export const requiredContentRules = [
+  {
+    path: 'src/crates/adapters/agent-runtime-ipc/Cargo.toml',
+    reason:
+      'agent-runtime-ipc must keep the exact feature-free bitfun-transport dependency',
+    patterns: [
+      {
+        regex: /^bitfun-transport = \{ path = "\.\.\/transport" \}$/m,
+        message:
+          'bitfun-transport must stay feature-free and use the reviewed sibling path',
+      },
+    ],
+  },
   ...[
     'src/apps/cli/Cargo.toml',
     'src/apps/desktop/Cargo.toml',

@@ -1,4 +1,5 @@
 packages:
+  - "sdk/typescript"
   - "src/web-ui"
   - "src/mobile-web"
   - "src/miniapp-market-web"

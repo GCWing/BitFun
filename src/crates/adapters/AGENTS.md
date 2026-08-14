@@ -18,7 +18,7 @@ services.
 | `claude-code-adapter` | Runtime-free Claude Code user Instructions, Command, Subagent, MCP, and Hook source semantics with redacted projection | [AGENTS.md](claude-code-adapter/AGENTS.md) |
 | `codex-adapter` | Runtime-free Codex user Instructions, Subagent, MCP, and Hook source semantics with redacted projection | [AGENTS.md](codex-adapter/AGENTS.md) |
 | `static-hook-support` | Shared bounded/redacting static-source utilities plus the JSON/TOML Hook parser used by sibling ecosystem adapters; no ecosystem policy or runtime | inherited |
-| `transport` | Event transport emitters and host transport adapters | [AGENTS.md](transport/AGENTS.md) |
+| `transport` | Event transport adapters plus protocol-neutral bounded JSON encoding and TypeScript message/JSON-RPC mechanics shared by current hosts | [AGENTS.md](transport/AGENTS.md) |
 | `webdriver` | Embedded WebDriver protocol and browser automation adapter | [AGENTS.md](webdriver/AGENTS.md) |
 
 ## Placement Rules

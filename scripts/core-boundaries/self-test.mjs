@@ -5554,7 +5554,6 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
     'bitfun-sdk-host',
     'bitfun-services-core',
     'bitfun-services-integrations',
-    'bitfun-transport',
     'terminal-core',
     'tool-runtime',
     'tauri',
@@ -5566,13 +5565,14 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
       throw new Error(`agent-runtime-ipc lightweight boundary must forbid ${dependency}`);
     }
   }
-  for (const sharedContract of [
+  for (const allowedDependency of [
     'bitfun-events',
     'bitfun-product-domains',
     'bitfun-runtime-ports',
+    'bitfun-transport',
   ]) {
-    if (runtimeIpcBoundary?.forbiddenDeps.includes(sharedContract)) {
-      throw new Error(`agent-runtime-ipc must be allowed to reuse ${sharedContract}`);
+    if (runtimeIpcBoundary?.forbiddenDeps.includes(allowedDependency)) {
+      throw new Error(`agent-runtime-ipc must be allowed to reuse ${allowedDependency}`);
     }
   }
   const runtimeIpcProfile = dependencyProfileRules.find(
@@ -5656,6 +5656,54 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
   ) {
     throw new Error(
       'agent-runtime-ipc local-only guard must cover network transports in new private modules',
+    );
+  }
+  const runtimeIpcSharedTransportPattern = runtimeIpcTransportRule?.patterns.find(
+    (pattern) => pattern.message.includes('bounded JSON API'),
+  )?.regex;
+  if (
+    !runtimeIpcSharedTransportPattern ||
+    !runtimeIpcSharedTransportPattern.test('use bitfun_transport::TransportAdapter;') ||
+    !runtimeIpcSharedTransportPattern.test('use bitfun_transport as transport;') ||
+    runtimeIpcSharedTransportPattern.test('use bitfun_transport::encode_json_with_limit;') ||
+    runtimeIpcSharedTransportPattern.test('use bitfun_transport::JsonCodecError;')
+  ) {
+    throw new Error(
+      'agent-runtime-ipc may consume only the reviewed bitfun-transport bounded JSON API',
+    );
+  }
+  const runtimeIpcTransportFeatureRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/Cargo.toml' &&
+      rule.reason.includes('bitfun-transport features'),
+  );
+  const runtimeIpcTransportFeaturePattern =
+    runtimeIpcTransportFeatureRule?.patterns[0]?.regex;
+  if (
+    !runtimeIpcTransportFeaturePattern?.test(
+      'bitfun-transport = { path = "../transport", features = ["tauri-adapter"] }',
+    ) ||
+    runtimeIpcTransportFeaturePattern.test(
+      'bitfun-transport = { path = "../transport" }',
+    )
+  ) {
+    throw new Error('agent-runtime-ipc must not enable bitfun-transport features');
+  }
+  const runtimeIpcTransportDependencyRule = requiredContentRules.find(
+    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/Cargo.toml' &&
+      rule.reason.includes('exact feature-free bitfun-transport dependency'),
+  );
+  const runtimeIpcTransportDependencyPattern =
+    runtimeIpcTransportDependencyRule?.patterns[0]?.regex;
+  if (
+    !runtimeIpcTransportDependencyPattern?.test(
+      'bitfun-transport = { path = "../transport" }',
+    ) ||
+    runtimeIpcTransportDependencyPattern.test(
+      'bitfun-transport = {\n  path = "../transport",\n  features = ["tauri-adapter"]\n}',
+    )
+  ) {
+    throw new Error(
+      'agent-runtime-ipc must keep the exact feature-free bitfun-transport dependency',
     );
   }
 }

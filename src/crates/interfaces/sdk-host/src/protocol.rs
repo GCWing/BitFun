@@ -105,6 +105,9 @@ impl JsonRpcErrorResponse {
                     stage: ErrorStage::Protocol,
                     retryable: false,
                     correlation_id: correlation_id.into(),
+                    operation_id: None,
+                    causation_id: None,
+                    outcome_certainty: OutcomeCertainty::NotStarted,
                     recovery: None,
                 },
             },
@@ -127,6 +130,9 @@ impl JsonRpcErrorResponse {
                     stage: ErrorStage::Protocol,
                     retryable: false,
                     correlation_id: correlation_id.into(),
+                    operation_id: None,
+                    causation_id: None,
+                    outcome_certainty: OutcomeCertainty::NotStarted,
                     recovery: None,
                 },
             },
@@ -159,6 +165,7 @@ impl<T> JsonRpcNotification<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InitializeParams {
     pub protocol_version: u32,
@@ -167,6 +174,7 @@ pub struct InitializeParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields)]
 pub struct ClientInfo {
     pub name: String,
@@ -174,12 +182,14 @@ pub struct ClientInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ClientCapabilities {
     pub server_notifications: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeResult {
     pub protocol_version: u32,
@@ -200,6 +210,7 @@ impl InitializeResult {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum Stability {
     /// Internal implementation candidate. It is not a supported SDK surface.
@@ -207,6 +218,7 @@ pub enum Stability {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct HostCapabilities {
     pub session_create: bool,
@@ -246,6 +258,7 @@ impl HostCapabilities {
 
 /// Persistence boundary of a Session visible through the internal Host candidate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum SessionLifetime {
     /// Created and deleted by this Host connection.
@@ -260,6 +273,7 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     InvalidRequest,
@@ -286,6 +300,7 @@ pub enum ErrorCode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorStage {
     Protocol,
@@ -296,6 +311,7 @@ pub enum ErrorStage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum RecoveryAction {
     Initialize,
@@ -305,42 +321,70 @@ pub enum RecoveryAction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorData {
     pub code: ErrorCode,
     pub stage: ErrorStage,
     pub retryable: bool,
     pub correlation_id: String,
+    #[cfg_attr(feature = "ts", ts(optional))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub causation_id: Option<String>,
+    pub outcome_certainty: OutcomeCertainty,
+    #[cfg_attr(feature = "ts", ts(optional))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recovery: Option<RecoveryAction>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum OutcomeCertainty {
+    NotStarted,
+    Committed,
+    Unknown,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SessionCreateParams {
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub session_name: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub agent: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub cwd: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct SessionCreateResult {
     pub session_id: String,
     pub session_name: String,
     pub agent: String,
     pub lifetime: SessionLifetime,
+    #[cfg_attr(feature = "ts", ts(optional))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_workspace_path: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_target: Option<SessionExecutionTarget>,
 }
@@ -361,56 +405,73 @@ impl SessionCreateResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct QueryStartParams {
     pub prompt: String,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub session_id: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub session_name: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub agent: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub cwd: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct QueryStartResult {
     pub query_id: String,
     pub session_id: String,
     pub turn_id: String,
+    pub operation_id: String,
     pub accepted: bool,
     pub created_session: bool,
     pub session_lifetime: SessionLifetime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct QueryCancelParams {
     pub query_id: String,
+    pub session_id: String,
+    pub turn_id: String,
+    pub operation_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct QueryCancelResult {
     pub query_id: String,
     pub session_id: String,
     pub turn_id: String,
+    pub operation_id: String,
     pub requested: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SessionCloseParams {
     pub session_id: String,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     #[serde(default)]
     pub wait_timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct SessionCloseResult {
     pub session_id: String,
@@ -418,32 +479,38 @@ pub struct SessionCloseResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields)]
 pub struct ShutdownParams {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ShutdownResult {
     pub accepted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct QueryEventParams {
     pub query_id: String,
     pub session_id: String,
     pub turn_id: String,
+    pub operation_id: String,
     pub sequence: u64,
     pub event: QueryEvent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum QueryEvent {
     AssistantTextDelta { text: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum QueryTerminalStatus {
     Completed,
@@ -452,17 +519,28 @@ pub enum QueryTerminalStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultParams {
     pub query_id: String,
     pub session_id: String,
     pub turn_id: String,
+    pub operation_id: String,
     pub status: QueryTerminalStatus,
+    pub output: QueryOutput,
+    #[cfg_attr(feature = "ts", ts(optional))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<QueryResultError>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+pub struct QueryOutput {
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct QueryResultError {
     pub message: String,
     pub data: ErrorData,
@@ -483,6 +561,14 @@ impl QueryResultError {
                 stage: ErrorStage::Query,
                 retryable,
                 correlation_id: format!("query:{query_id}"),
+                operation_id: None,
+                causation_id: None,
+                outcome_certainty: match code {
+                    ErrorCode::CleanupRequired | ErrorCode::ProcessLost => {
+                        OutcomeCertainty::Unknown
+                    }
+                    _ => OutcomeCertainty::Committed,
+                },
                 recovery,
             },
         }

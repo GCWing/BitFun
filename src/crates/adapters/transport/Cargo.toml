@@ -14,9 +14,11 @@ bitfun-events = { path = "../../contracts/events" }
 
 # Inherited from workspace
 async-trait = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
+thiserror = { workspace = true }
 
 # Tauri adapter dependency (optional, enable only when needed)
 tauri = { workspace = true, optional = true }

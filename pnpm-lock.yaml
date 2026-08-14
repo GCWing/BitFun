@@ -97,6 +97,15 @@ importers:
         specifier: ^7.0.4
         version: 7.3.1(@types/node@22.19.7)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  sdk/typescript:
+    devDependencies:
+      '@types/node':
+        specifier: 22.19.7
+        version: 22.19.7
+      typescript:
+        specifier: ~5.8.3
+        version: 5.8.3
+
   src/miniapp-market-web:
     dependencies:
       '@phosphor-icons/react':

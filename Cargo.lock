@@ -818,6 +818,7 @@ dependencies = [
  "bitfun-events",
  "bitfun-product-domains",
  "bitfun-runtime-ports",
+ "bitfun-transport",
  "dunce",
  "fs2",
  "serde",
@@ -1461,6 +1462,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "ts-rs",
  "uuid",
 ]
 
@@ -1473,6 +1475,8 @@ dependencies = [
  "bitfun-agent-runtime",
  "bitfun-core",
  "bitfun-sdk-host",
+ "bitfun-services-core",
+ "bitfun-transport",
  "futures-util",
  "rustls",
  "serde_json",
@@ -1694,8 +1698,10 @@ dependencies = [
  "async-trait",
  "bitfun-events",
  "log",
+ "serde",
  "serde_json",
  "tauri",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

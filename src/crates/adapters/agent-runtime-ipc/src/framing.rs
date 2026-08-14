@@ -1,5 +1,6 @@
 use crate::RuntimeIpcFrame;
-use std::io::Write;
+use bitfun_transport::encode_json_with_limit;
+use bitfun_transport::JsonCodecError;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub(crate) const MAX_REQUEST_FRAME_BYTES: usize = 128 * 1024;
@@ -155,55 +156,6 @@ fn parse_strict_frame(bytes: &[u8]) -> Result<RuntimeIpcFrame, RuntimeIpcIoError
     Ok(frame)
 }
 
-pub(crate) fn serialize_frame_with_limit(
-    frame: &RuntimeIpcFrame,
-    max_bytes: usize,
-) -> Result<Vec<u8>, RuntimeIpcIoError> {
-    let mut writer = CappedWriter::new(max_bytes);
-    let result = serde_json::to_writer(&mut writer, frame);
-    if writer.overflowed {
-        return Err(RuntimeIpcIoError::FrameTooLarge {
-            size: max_bytes.saturating_add(1),
-            max_bytes,
-        });
-    }
-    result.map_err(RuntimeIpcIoError::Serialize)?;
-    Ok(writer.bytes)
-}
-
-struct CappedWriter {
-    bytes: Vec<u8>,
-    max_bytes: usize,
-    overflowed: bool,
-}
-
-impl CappedWriter {
-    fn new(max_bytes: usize) -> Self {
-        Self {
-            bytes: Vec::with_capacity(max_bytes.min(16 * 1024)),
-            max_bytes,
-            overflowed: false,
-        }
-    }
-}
-
-impl Write for CappedWriter {
-    fn write(&mut self, input: &[u8]) -> std::io::Result<usize> {
-        let remaining = self.max_bytes.saturating_sub(self.bytes.len());
-        if input.len() > remaining {
-            self.bytes.extend_from_slice(&input[..remaining]);
-            self.overflowed = true;
-            return Err(std::io::Error::other("runtime IPC frame is too large"));
-        }
-        self.bytes.extend_from_slice(input);
-        Ok(input.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
 fn first_unknown_field(
     original: &serde_json::Value,
     canonical: &serde_json::Value,
@@ -230,6 +182,26 @@ fn first_unknown_field(
                 first_unknown_field(original, canonical, format!("{path}[{index}]"))
             }),
         _ => None,
+    }
+}
+
+pub(crate) fn serialize_frame_with_limit(
+    frame: &RuntimeIpcFrame,
+    max_bytes: usize,
+) -> Result<Vec<u8>, RuntimeIpcIoError> {
+    encode_json_with_limit(frame, max_bytes).map_err(map_json_error)
+}
+
+fn map_json_error(error: JsonCodecError) -> RuntimeIpcIoError {
+    match error {
+        JsonCodecError::PayloadTooLarge {
+            minimum_size,
+            max_bytes,
+        } => RuntimeIpcIoError::FrameTooLarge {
+            size: minimum_size,
+            max_bytes,
+        },
+        JsonCodecError::Encode(error) => RuntimeIpcIoError::Serialize(error),
     }
 }
 

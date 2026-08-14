@@ -54,6 +54,19 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/adapters/agent-runtime-ipc/Cargo.toml',
+    reason:
+      'agent-runtime-ipc may reuse bounded JSON encoding without enabling bitfun-transport features',
+    patterns: [
+      {
+        regex:
+          /bitfun-transport\s*=\s*\{[^}\r\n]*(?:features|default-features)\s*=/,
+        message:
+          'agent-runtime-ipc must not enable event-host or Tauri transport features',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/plugin-runtime-client/src/adapter.rs',
     reason: 'plugin-runtime-client adapter trait method surface must stay narrow',
     patterns: [
@@ -4060,6 +4073,12 @@ export const forbiddenContentUnderRules = [
         regex:
           /\b(?:(?:Tcp|Udp)[A-Za-z0-9_]*|tokio_tungstenite|reqwest|hyper|WebSocket)\b/,
         message: 'agent-runtime-ipc must not add network or remote transports',
+      },
+      {
+        regex:
+          /\bbitfun_transport\b(?!::(?:encode_json_with_limit|JsonCodecError)\b)/,
+        message:
+          'agent-runtime-ipc may consume only the reviewed bounded JSON API from bitfun-transport',
       },
     ],
   },

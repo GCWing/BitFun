@@ -1,0 +1,1016 @@
+import assert from "node:assert/strict";
+import { PassThrough } from "node:stream";
+import { createInterface } from "node:readline";
+import test from "node:test";
+
+import { AgentClient, SdkError } from "../src/index.js";
+import { createAgentClient } from "../src/internal/client.js";
+
+test("a Query streams ordered events and returns the Host terminal Result", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  const host = runFixtureHost(clientToHost, hostToClient);
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        clientToHost.end();
+        await host;
+      },
+    },
+    { cwd: "D:/workspace/project" },
+  );
+
+  assert.ok(client instanceof AgentClient);
+  const query = await client.query({ prompt: "hello" });
+  assert.equal(query.id, "query-1");
+  assert.equal(query.operationId, "operation-1");
+  assert.deepEqual(query.turn, { id: "turn-1", sessionId: "session-1" });
+  const items = [];
+  for await (const item of query) {
+    items.push(item);
+  }
+
+  assert.deepEqual(items, [
+    {
+      type: "assistant_text_delta",
+      queryId: "query-1",
+      sessionId: "session-1",
+      turnId: "turn-1",
+      operationId: "operation-1",
+      sequence: 1,
+      text: "fixture result",
+    },
+    {
+      type: "result",
+      queryId: "query-1",
+      sessionId: "session-1",
+      turnId: "turn-1",
+      operationId: "operation-1",
+      status: "completed",
+      outputText: "fixture result",
+    },
+  ]);
+  assert.equal((await query.result()).outputText, "fixture result");
+  assert.equal(typeof query[Symbol.asyncDispose], "function");
+
+  await client.close();
+  assert.equal(typeof client[Symbol.asyncDispose], "function");
+});
+
+test("an explicit Session starts Turns on the existing client connection", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  const methods: string[] = [];
+  const host = runSessionFixtureHost(clientToHost, hostToClient, methods);
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        clientToHost.end();
+        await host;
+      },
+    },
+    { cwd: "D:/workspace/project" },
+  );
+
+  const session = await client.sessions.create({ agent: "agentic" });
+  assert.equal(session.id, "session-explicit");
+  assert.equal(session.agent, "agentic");
+
+  const query = await session.startTurn({ prompt: "continue" });
+  assert.equal((await query.result()).outputText, "continued");
+  await session.close();
+  assert.equal(typeof session[Symbol.asyncDispose], "function");
+  await client.close();
+
+  assert.deepEqual(methods, [
+    "initialize",
+    "session/create",
+    "query/start",
+    "session/close",
+    "shutdown",
+  ]);
+});
+
+test("Query cancel and close are idempotent and the Host Result remains authoritative", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  let cancelRequests = 0;
+  const host = runCancelFixtureHost(clientToHost, hostToClient, () => {
+    cancelRequests += 1;
+  });
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        clientToHost.end();
+        await host;
+      },
+    },
+    { cwd: "D:/workspace/project" },
+  );
+
+  const query = await client.query({ prompt: "wait" });
+  await Promise.all([query.cancel(), query.cancel()]);
+  const result = await query.result();
+  assert.equal(result.status, "cancelled");
+  assert.equal(result.error?.code, "cancelled");
+  await query.close();
+  assert.equal(cancelRequests, 1);
+
+  await client.close();
+});
+
+test("leaving Query iteration early cancels and settles the Turn", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  let cancelRequests = 0;
+  const host = runCancelFixtureHost(
+    clientToHost,
+    hostToClient,
+    () => {
+      cancelRequests += 1;
+    },
+    true,
+  );
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        clientToHost.end();
+        await host;
+      },
+    },
+    { cwd: "D:/workspace/project" },
+  );
+
+  const query = await client.query({ prompt: "stream" });
+  for await (const item of query) {
+    assert.equal(item.type, "assistant_text_delta");
+    break;
+  }
+  assert.equal(cancelRequests, 1);
+  assert.equal((await query.result()).status, "cancelled");
+
+  await client.close();
+});
+
+test("Host loss rejects an accepted Query with unknown outcome instead of fabricating a Result", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  let transportClosed = false;
+  const host = runProcessLossFixtureHost(clientToHost, hostToClient);
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        transportClosed = true;
+        clientToHost.end();
+        await host;
+      },
+    },
+    { cwd: "D:/workspace/project" },
+  );
+
+  const query = await client.query({ prompt: "may have side effects" });
+  await assert.rejects(query.result(), (error: unknown) => {
+    assert.ok(error instanceof SdkError);
+    assert.equal(error.code, "process_lost");
+    assert.equal(error.stage, "protocol");
+    assert.equal(error.outcomeCertainty, "unknown");
+    return true;
+  });
+  await assert.rejects(query[Symbol.asyncIterator]().next(), SdkError);
+
+  await client.close();
+  assert.equal(transportClosed, true);
+});
+
+test("AgentClient.close settles owned Queries before shutting down its connection", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  const methods: string[] = [];
+  const host = runClientCloseFixtureHost(clientToHost, hostToClient, methods);
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        clientToHost.end();
+        await host;
+      },
+    },
+    { cwd: "D:/workspace/project" },
+  );
+
+  const query = await client.query({ prompt: "still running" });
+  await client.close();
+  assert.equal((await query.result()).status, "cancelled");
+  assert.deepEqual(methods, [
+    "initialize",
+    "query/start",
+    "query/cancel",
+    "session/close",
+    "shutdown",
+  ]);
+});
+
+test("Host operation errors preserve stable SDK error facts", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  const host = runOperationErrorFixtureHost(clientToHost, hostToClient);
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        clientToHost.end();
+        await host;
+      },
+    },
+    { cwd: "D:/workspace/project" },
+  );
+
+  await assert.rejects(client.query({ prompt: "requires auth" }), (error: unknown) => {
+    assert.ok(error instanceof SdkError);
+    assert.equal(error.code, "action_required");
+    assert.equal(error.stage, "query");
+    assert.equal(error.retryable, false);
+    assert.equal(error.correlationId, "request:query-start");
+    assert.equal(error.outcomeCertainty, "not_started");
+    assert.equal(error.recovery, "initialize");
+    return true;
+  });
+
+  await client.close();
+});
+
+test("unknown Host error facts fail the protocol closed", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  const host = runInvalidErrorFixtureHost(clientToHost, hostToClient);
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        clientToHost.end();
+        await host;
+      },
+    },
+    { cwd: "D:/workspace/project" },
+  );
+
+  await assert.rejects(client.query({ prompt: "invalid error" }), (error: unknown) => {
+    assert.ok(error instanceof SdkError);
+    assert.equal(error.code, "process_lost");
+    assert.equal(error.outcomeCertainty, "unknown");
+    return true;
+  });
+  await client.close();
+});
+
+test("ambiguous JSON-RPC response envelopes fail the protocol closed", async () => {
+  const clientToHost = new PassThrough();
+  const hostToClient = new PassThrough();
+  const host = runAmbiguousResponseFixtureHost(clientToHost, hostToClient);
+  const client = await createAgentClient(
+    {
+      readable: hostToClient,
+      writable: clientToHost,
+      close: async () => {
+        clientToHost.end();
+        await host;
+      },
+    },
+    { cwd: "D:/workspace/project" },
+  );
+
+  await assert.rejects(client.query({ prompt: "reject ambiguous response" }), (error: unknown) => {
+    assert.ok(error instanceof SdkError);
+    assert.equal(error.code, "process_lost");
+    assert.equal(error.outcomeCertainty, "unknown");
+    return true;
+  });
+  await client.close();
+});
+
+test("unknown Query event and Result status fail the protocol closed", async (context) => {
+  const cases = [
+    {
+      name: "unknown event",
+      notification: {
+        jsonrpc: "2.0",
+        method: "query/event",
+        params: {
+          queryId: "query-invalid",
+          sessionId: "session-invalid",
+          turnId: "turn-invalid",
+          operationId: "operation-invalid",
+          sequence: 1,
+          event: { type: "permission_request", text: "must not be dropped" },
+        },
+      },
+      appendValidResult: true,
+    },
+    {
+      name: "unknown Result status",
+      notification: {
+        jsonrpc: "2.0",
+        method: "query/result",
+        params: {
+          queryId: "query-invalid",
+          sessionId: "session-invalid",
+          turnId: "turn-invalid",
+          operationId: "operation-invalid",
+          status: "partially_completed",
+          output: { text: "invalid" },
+        },
+      },
+      appendValidResult: false,
+    },
+  ] as const;
+
+  for (const fixture of cases) {
+    await context.test(fixture.name, async () => {
+      const clientToHost = new PassThrough();
+      const hostToClient = new PassThrough();
+      const host = runInvalidNotificationFixtureHost(
+        clientToHost,
+        hostToClient,
+        fixture.notification,
+        fixture.appendValidResult,
+      );
+      const client = await createAgentClient(
+        {
+          readable: hostToClient,
+          writable: clientToHost,
+          close: async () => {
+            clientToHost.end();
+            await host;
+          },
+        },
+        { cwd: "D:/workspace/project" },
+      );
+
+      try {
+        const query = await client.query({ prompt: "reject protocol drift" });
+        await assert.rejects(query.result(), (error: unknown) => {
+          assert.ok(error instanceof SdkError);
+          assert.equal(error.code, "process_lost");
+          assert.equal(error.outcomeCertainty, "unknown");
+          return true;
+        });
+      } finally {
+        await client.close();
+      }
+    });
+  }
+});
+
+async function runFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as {
+      id: number;
+      method: string;
+      params: Record<string, unknown>;
+    };
+    if (request.method === "initialize") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          runtimeVersion: "0.2.17",
+          stability: "not_delivered",
+          capabilities: {
+            sessionCreate: true,
+            sessionCreateLifetime: "connection",
+            query: true,
+            queryCancel: true,
+            sessionClose: true,
+            eventStream: true,
+            structuredOutput: false,
+            usage: false,
+            customTools: false,
+            permissionCallbacks: false,
+            hooks: false,
+            mcpConfiguration: false,
+            prestartedTransport: false,
+          },
+        },
+      });
+      continue;
+    }
+    if (request.method === "query/start") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          queryId: "query-1",
+          sessionId: "session-1",
+          turnId: "turn-1",
+          operationId: "operation-1",
+          accepted: true,
+          createdSession: true,
+          sessionLifetime: "connection",
+        },
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        method: "query/event",
+        params: {
+          queryId: "query-1",
+          sessionId: "session-1",
+          turnId: "turn-1",
+          operationId: "operation-1",
+          sequence: 1,
+          event: { type: "assistant_text_delta", text: "fixture result" },
+        },
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        method: "query/result",
+        params: {
+          queryId: "query-1",
+          sessionId: "session-1",
+          turnId: "turn-1",
+          operationId: "operation-1",
+          status: "completed",
+          output: { text: "fixture result" },
+        },
+      });
+      continue;
+    }
+    if (request.method === "session/close") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { sessionId: "session-1", unloaded: true },
+      });
+      continue;
+    }
+    if (request.method === "shutdown") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { accepted: true },
+      });
+      responses.end();
+      return;
+    }
+    throw new Error(`Unexpected fixture method: ${request.method}`);
+  }
+}
+
+async function runSessionFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+  methods: string[],
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as {
+      id: number;
+      method: string;
+      params: Record<string, unknown>;
+    };
+    methods.push(request.method);
+    if (request.method === "initialize") {
+      write(responses, initializeResponse(request.id));
+      continue;
+    }
+    if (request.method === "session/create") {
+      assert.deepEqual(request.params, {
+        sessionName: null,
+        agent: "agentic",
+        cwd: "D:/workspace/project",
+        model: null,
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "session-explicit",
+          sessionName: "Explicit",
+          agent: "agentic",
+          lifetime: "connection",
+        },
+      });
+      continue;
+    }
+    if (request.method === "query/start") {
+      assert.deepEqual(request.params, {
+        prompt: "continue",
+        sessionId: "session-explicit",
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          queryId: "query-explicit",
+          sessionId: "session-explicit",
+          turnId: "turn-explicit",
+          operationId: "operation-explicit",
+          accepted: true,
+          createdSession: false,
+          sessionLifetime: "connection",
+        },
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        method: "query/result",
+        params: {
+          queryId: "query-explicit",
+          sessionId: "session-explicit",
+          turnId: "turn-explicit",
+          operationId: "operation-explicit",
+          status: "completed",
+          output: { text: "continued" },
+        },
+      });
+      continue;
+    }
+    if (request.method === "session/close") {
+      assert.deepEqual(request.params, {
+        sessionId: "session-explicit",
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { sessionId: "session-explicit", unloaded: true },
+      });
+      continue;
+    }
+    if (request.method === "shutdown") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { accepted: true },
+      });
+      responses.end();
+      return;
+    }
+    throw new Error(`Unexpected fixture method: ${request.method}`);
+  }
+}
+
+async function runCancelFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+  onCancel: () => void,
+  emitEventAfterStart = false,
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as {
+      id: number;
+      method: string;
+      params: Record<string, unknown>;
+    };
+    if (request.method === "initialize") {
+      write(responses, initializeResponse(request.id));
+      continue;
+    }
+    if (request.method === "query/start") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          queryId: "query-cancel",
+          sessionId: "session-cancel",
+          turnId: "turn-cancel",
+          operationId: "operation-cancel",
+          accepted: true,
+          createdSession: true,
+          sessionLifetime: "connection",
+        },
+      });
+      if (emitEventAfterStart) {
+        write(responses, {
+          jsonrpc: "2.0",
+          method: "query/event",
+          params: {
+            queryId: "query-cancel",
+            sessionId: "session-cancel",
+            turnId: "turn-cancel",
+            operationId: "operation-cancel",
+            sequence: 1,
+            event: { type: "assistant_text_delta", text: "partial" },
+          },
+        });
+      }
+      continue;
+    }
+    if (request.method === "query/cancel") {
+      onCancel();
+      assert.deepEqual(request.params, {
+        queryId: "query-cancel",
+        sessionId: "session-cancel",
+        turnId: "turn-cancel",
+        operationId: "operation-cancel",
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          queryId: "query-cancel",
+          sessionId: "session-cancel",
+          turnId: "turn-cancel",
+          operationId: "operation-cancel",
+          requested: true,
+        },
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        method: "query/result",
+        params: {
+          queryId: "query-cancel",
+          sessionId: "session-cancel",
+          turnId: "turn-cancel",
+          operationId: "operation-cancel",
+          status: "cancelled",
+          output: { text: "" },
+          error: {
+            message: "cancelled by caller",
+            data: {
+              code: "cancelled",
+              stage: "query",
+              retryable: false,
+              correlationId: "operation-cancel",
+              operationId: "operation-cancel",
+              outcomeCertainty: "committed",
+            },
+          },
+        },
+      });
+      continue;
+    }
+    if (request.method === "session/close") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { sessionId: "session-cancel", unloaded: true },
+      });
+      continue;
+    }
+    if (request.method === "shutdown") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { accepted: true },
+      });
+      responses.end();
+      return;
+    }
+    throw new Error(`Unexpected fixture method: ${request.method}`);
+  }
+}
+
+async function runProcessLossFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as { id: number; method: string };
+    if (request.method === "initialize") {
+      write(responses, initializeResponse(request.id));
+      continue;
+    }
+    if (request.method === "query/start") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          queryId: "query-lost",
+          sessionId: "session-lost",
+          turnId: "turn-lost",
+          operationId: "operation-lost",
+          accepted: true,
+          createdSession: true,
+          sessionLifetime: "connection",
+        },
+      });
+      responses.end();
+      return;
+    }
+    throw new Error(`Unexpected fixture method: ${request.method}`);
+  }
+}
+
+async function runClientCloseFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+  methods: string[],
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as {
+      id: number;
+      method: string;
+      params: Record<string, unknown>;
+    };
+    methods.push(request.method);
+    if (request.method === "initialize") {
+      write(responses, initializeResponse(request.id));
+      continue;
+    }
+    if (request.method === "query/start") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          queryId: "query-client-close",
+          sessionId: "session-client-close",
+          turnId: "turn-client-close",
+          operationId: "operation-client-close",
+          accepted: true,
+          createdSession: true,
+          sessionLifetime: "connection",
+        },
+      });
+      continue;
+    }
+    if (request.method === "query/cancel") {
+      assert.deepEqual(request.params, {
+        queryId: "query-client-close",
+        sessionId: "session-client-close",
+        turnId: "turn-client-close",
+        operationId: "operation-client-close",
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          queryId: "query-client-close",
+          sessionId: "session-client-close",
+          turnId: "turn-client-close",
+          operationId: "operation-client-close",
+          requested: true,
+        },
+      });
+      write(responses, {
+        jsonrpc: "2.0",
+        method: "query/result",
+        params: {
+          queryId: "query-client-close",
+          sessionId: "session-client-close",
+          turnId: "turn-client-close",
+          operationId: "operation-client-close",
+          status: "cancelled",
+          output: { text: "" },
+          error: {
+            message: "cancelled during client close",
+            data: {
+              code: "cancelled",
+              stage: "query",
+              retryable: false,
+              correlationId: "operation-client-close",
+              operationId: "operation-client-close",
+              outcomeCertainty: "committed",
+            },
+          },
+        },
+      });
+      continue;
+    }
+    if (request.method === "session/close") {
+      assert.deepEqual(request.params, { sessionId: "session-client-close" });
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { sessionId: "session-client-close", unloaded: true },
+      });
+      continue;
+    }
+    if (request.method === "shutdown") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { accepted: true },
+      });
+      responses.end();
+      return;
+    }
+    throw new Error(`Unexpected fixture method: ${request.method}`);
+  }
+}
+
+async function runOperationErrorFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as { id: number; method: string };
+    if (request.method === "initialize") {
+      write(responses, initializeResponse(request.id));
+      continue;
+    }
+    if (request.method === "query/start") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: {
+          code: -32000,
+          message: "authentication is required",
+          data: {
+            code: "action_required",
+            stage: "query",
+            retryable: false,
+            correlationId: "request:query-start",
+            outcomeCertainty: "not_started",
+            recovery: "initialize",
+          },
+        },
+      });
+      continue;
+    }
+    if (request.method === "shutdown") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { accepted: true },
+      });
+      responses.end();
+      return;
+    }
+    throw new Error(`Unexpected fixture method: ${request.method}`);
+  }
+}
+
+async function runInvalidErrorFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as { id: number; method: string };
+    if (request.method === "initialize") {
+      write(responses, initializeResponse(request.id));
+      continue;
+    }
+    if (request.method === "query/start") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: {
+          code: -32000,
+          message: "unknown error contract",
+          data: {
+            code: "invented_error",
+            stage: "query",
+            retryable: false,
+            correlationId: "request:invalid",
+            outcomeCertainty: "not_started",
+          },
+        },
+      });
+      responses.end();
+      return;
+    }
+    throw new Error(`Unexpected fixture method: ${request.method}`);
+  }
+}
+
+async function runAmbiguousResponseFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as { id: number; method: string };
+    if (request.method === "initialize") {
+      write(responses, initializeResponse(request.id));
+      continue;
+    }
+    if (request.method === "query/start") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          queryId: "query-ambiguous",
+          sessionId: "session-ambiguous",
+          turnId: "turn-ambiguous",
+          operationId: "operation-ambiguous",
+          accepted: true,
+          createdSession: true,
+          sessionLifetime: "connection",
+        },
+        error: {
+          code: -32000,
+          message: "must not coexist with result",
+          data: {
+            code: "internal",
+            stage: "query",
+            retryable: false,
+            correlationId: "request:ambiguous",
+            outcomeCertainty: "not_started",
+          },
+        },
+      });
+      responses.end();
+      return;
+    }
+    throw new Error(`Unexpected fixture method: ${request.method}`);
+  }
+}
+
+async function runInvalidNotificationFixtureHost(
+  requests: PassThrough,
+  responses: PassThrough,
+  notification: unknown,
+  appendValidResult: boolean,
+): Promise<void> {
+  const lines = createInterface({ input: requests, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const request = JSON.parse(line) as { id: number; method: string };
+    if (request.method === "initialize") {
+      write(responses, initializeResponse(request.id));
+      continue;
+    }
+    if (request.method === "query/start") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          queryId: "query-invalid",
+          sessionId: "session-invalid",
+          turnId: "turn-invalid",
+          operationId: "operation-invalid",
+          accepted: true,
+          createdSession: true,
+          sessionLifetime: "connection",
+        },
+      });
+      write(responses, notification);
+      if (appendValidResult) {
+        write(responses, {
+          jsonrpc: "2.0",
+          method: "query/result",
+          params: {
+            queryId: "query-invalid",
+            sessionId: "session-invalid",
+            turnId: "turn-invalid",
+            operationId: "operation-invalid",
+            status: "completed",
+            output: { text: "must not become authoritative" },
+          },
+        });
+      }
+      continue;
+    }
+    if (request.method === "shutdown") {
+      write(responses, {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { accepted: true },
+      });
+      responses.end();
+      return;
+    }
+  }
+  responses.end();
+}
+
+function initializeResponse(id: number): unknown {
+  return {
+    jsonrpc: "2.0",
+    id,
+    result: {
+      protocolVersion: 1,
+      runtimeVersion: "0.2.17",
+      stability: "not_delivered",
+      capabilities: {
+        sessionCreate: true,
+        sessionCreateLifetime: "connection",
+        query: true,
+        queryCancel: true,
+        sessionClose: true,
+        eventStream: true,
+        structuredOutput: false,
+        usage: false,
+        customTools: false,
+        permissionCallbacks: false,
+        hooks: false,
+        mcpConfiguration: false,
+        prestartedTransport: false,
+      },
+    },
+  };
+}
+
+function write(stream: PassThrough, value: unknown): void {
+  stream.write(`${JSON.stringify(value)}\n`);
+}

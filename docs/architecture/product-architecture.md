@@ -484,6 +484,13 @@ handler，不构成生产消费完整流程。
 client 或未来 CLI/HarmonyOS 计划，不能证明同名 Rust transport adapter 已接入；未接入实现应删除，待端到端
 调用链确定后再按宿主边界实现。
 
+多个已接入载体重复使用的协议无关机械能力是例外：有界 JSON 编码与消息大小校验、消息级背压和 JSON-RPC request
+correlation 可以由 `adapters/transport` 统一持有。仅 private Runtime IPC 使用的 length-prefix framing 仍留在该协议 owner，
+待第二个当前消费者共享相同语义后再评估抽取。该基础层只接受 bytes/message 与调用方提供的
+限额，不得知道 App Server、private Runtime IPC、SDK Host 的 method/DTO，也不得决定认证、controller/lease、重连、
+自动重试或业务生命周期。stdio、Named Pipe/UDS、WebSocket 仍由各 Host 选择具体 framing 和安全策略；复用机械层
+不能被解释成这些入口共享同一 wire 或同一 Runtime 进程。
+
 ### 3.2 宿主通信契约与 Tauri 薄适配
 
 前后端契约按能力语义归属，不按 Tauri command 名称归属。稳定的请求、响应、状态事实和类型化错误放在对应

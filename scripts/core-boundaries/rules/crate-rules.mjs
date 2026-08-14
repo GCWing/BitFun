@@ -25,7 +25,6 @@ const agentRuntimeIpcForbiddenDeps = [
   'bitfun-static-hook-support',
   'bitfun-tool-call-jsonrepair',
   'bitfun-tool-packs',
-  'bitfun-transport',
   'bitfun-webdriver',
   'terminal-core',
   'tool-runtime',
@@ -477,7 +476,7 @@ export const dependencyProfileRules = [
     crateName: 'agent-runtime-ipc',
     profileName: 'private Shared TUI local IPC profile',
     reason:
-      'agent-runtime-ipc may share stable event and Runtime DTO contracts but must not acquire Runtime owners, SDK Host, services, remote transports, or product implementations',
+      'agent-runtime-ipc may share stable DTO contracts and protocol-neutral bitfun-transport mechanics but must not acquire Runtime owners, SDK Host, services, remote transports, or product implementations',
     forbiddenNonOptionalDeps: agentRuntimeIpcForbiddenDeps,
   },
   {
