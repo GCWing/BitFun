@@ -1204,6 +1204,7 @@ pub async fn run() {
             api::agentic_api::update_session_mode,
             api::agentic_api::update_session_model,
             api::agentic_api::update_session_permission_mode,
+            api::agentic_api::update_active_turn_permission_mode,
             api::agentic_api::get_session_permission_mode,
             api::agentic_api::reload_session_context,
             api::agentic_api::update_session_title,

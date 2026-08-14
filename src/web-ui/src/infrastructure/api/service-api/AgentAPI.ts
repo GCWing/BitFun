@@ -379,6 +379,8 @@ export interface SessionPermissionModeRequest {
   sessionId: string;
   /** Omit or pass null to clear the override and follow the global default. */
   mode?: SessionPermissionMode | null;
+  /** Exact active turn whose temporary override should be read or cleared. */
+  turnId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -387,6 +389,12 @@ export interface SessionPermissionModeRequest {
 
 export interface SessionPermissionModeResponse {
   mode: SessionPermissionMode | null;
+  turnMode?: SessionPermissionMode | null;
+  activeTurnId?: string | null;
+}
+
+export interface ActiveTurnPermissionModeRequest extends SessionPermissionModeRequest {
+  turnId: string;
 }
 
 export interface UpdateSessionModeRequest {
@@ -1086,6 +1094,20 @@ export class AgentAPI {
       );
     } catch (error) {
       throw createTauriCommandError('update_session_permission_mode', error, request);
+    }
+  }
+
+  /** Updates the temporary mode for one exact active turn. */
+  async updateActiveTurnPermissionMode(
+    request: ActiveTurnPermissionModeRequest,
+  ): Promise<SessionPermissionModeResponse> {
+    try {
+      return await api.invoke<SessionPermissionModeResponse>(
+        'update_active_turn_permission_mode',
+        { request },
+      );
+    } catch (error) {
+      throw createTauriCommandError('update_active_turn_permission_mode', error, request);
     }
   }
 

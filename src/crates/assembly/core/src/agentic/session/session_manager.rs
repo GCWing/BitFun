@@ -234,6 +234,12 @@ pub struct SessionManager {
     /// Active sessions in memory
     sessions: Arc<DashMap<String, Session>>,
 
+    /// Ephemeral permission override for the currently executing turn.
+    ///
+    /// This state is intentionally separate from `SessionConfig`: it may change
+    /// between model rounds, and it must disappear when the owning turn ends.
+    active_turn_permission_modes: Arc<DashMap<String, ActiveTurnPermissionMode>>,
+
     /// Process-local durability classification owned by the Session lifecycle.
     /// Entries are installed before a transient Session becomes visible and are
     /// removed with that Session; they are never serialized into public config.
@@ -281,6 +287,12 @@ pub struct SessionManager {
 
     /// Configuration
     config: SessionManagerConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActiveTurnPermissionMode {
+    pub turn_id: String,
+    pub mode: PermissionMode,
 }
 
 fn clear_session_runtime_stores(
@@ -1873,6 +1885,7 @@ impl SessionManager {
 
         let manager = Self {
             sessions: Arc::new(DashMap::new()),
+            active_turn_permission_modes: Arc::new(DashMap::new()),
             transient_session_ids: Arc::new(DashMap::new()),
             active_session_capacity: Arc::new(Semaphore::new(config.max_active_sessions)),
             active_session_permits: Arc::new(DashMap::new()),
@@ -2204,6 +2217,7 @@ impl SessionManager {
 
     fn spawn_model_reconciliation_listener(&self) {
         let sessions = self.sessions.clone();
+        let active_turn_permission_modes = self.active_turn_permission_modes.clone();
         let transient_session_ids = self.transient_session_ids.clone();
         let active_session_capacity = self.active_session_capacity.clone();
         let active_session_permits = self.active_session_permits.clone();
@@ -2237,6 +2251,7 @@ impl SessionManager {
             // surface area we need from the cloned shared fields above.
             let manager = Self {
                 sessions,
+                active_turn_permission_modes,
                 transient_session_ids,
                 active_session_capacity,
                 active_session_permits,
@@ -4021,8 +4036,8 @@ impl SessionManager {
     ///
     /// `None` clears the override so the session follows the user-level default
     /// again, including later changes to that default. The value only takes
-    /// effect from the next submission: a running turn already resolved its
-    /// mode and must not change permissions halfway through.
+    /// effect from the next model round. A running round keeps the policy it
+    /// resolved at its boundary, while later rounds read the updated session.
     pub async fn update_session_permission_mode(
         &self,
         session_id: &str,
@@ -4112,6 +4127,69 @@ impl SessionManager {
         self.sessions
             .get(session_id)
             .and_then(|session| session.config.permission_mode)
+    }
+
+    /// Installs or replaces the ephemeral permission mode for one exact active
+    /// turn. A stale update can never leak into a newer turn in the session.
+    pub fn set_active_turn_permission_mode(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        permission_mode: PermissionMode,
+    ) -> bool {
+        let Some(session) = self.sessions.get(session_id) else {
+            return false;
+        };
+        if !matches!(
+            &session.state,
+            SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
+        ) {
+            return false;
+        }
+
+        // Keep the session shard read-locked through the write. A concurrent
+        // turn-completion state update must happen after this insert, so its
+        // cleanup cannot run just before a stale override is published.
+        self.active_turn_permission_modes.insert(
+            session_id.to_string(),
+            ActiveTurnPermissionMode {
+                turn_id: turn_id.to_string(),
+                mode: permission_mode,
+            },
+        );
+        true
+    }
+
+    pub fn active_turn_permission_mode(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Option<PermissionMode> {
+        let session = self.sessions.get(session_id)?;
+        if !matches!(
+            &session.state,
+            SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
+        ) {
+            return None;
+        }
+        self.active_turn_permission_modes
+            .get(session_id)
+            .filter(|entry| entry.turn_id == turn_id)
+            .map(|entry| entry.mode)
+    }
+
+    /// Clears an ephemeral override only when it belongs to the expected turn.
+    pub fn clear_active_turn_permission_mode(&self, session_id: &str, turn_id: &str) -> bool {
+        match self
+            .active_turn_permission_modes
+            .entry(session_id.to_string())
+        {
+            dashmap::mapref::entry::Entry::Occupied(entry) if entry.get().turn_id == turn_id => {
+                entry.remove();
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Rebind where a session executes (in-memory + persistence).
@@ -4583,6 +4661,7 @@ impl SessionManager {
             return Ok(false);
         }
         self.release_active_session_reservation(session_id);
+        self.active_turn_permission_modes.remove(session_id);
         clear_session_runtime_stores(
             session_id,
             self.context_store.as_ref(),
@@ -4625,6 +4704,7 @@ impl SessionManager {
             }
         }
 
+        self.active_turn_permission_modes.remove(session_id);
         clear_session_runtime_stores(
             session_id,
             self.context_store.as_ref(),
@@ -8049,6 +8129,7 @@ impl SessionManager {
     /// Start cleanup task for expired sessions
     fn spawn_cleanup_task(&self) {
         let sessions = self.sessions.clone();
+        let active_turn_permission_modes = self.active_turn_permission_modes.clone();
         let transient_session_ids = self.transient_session_ids.clone();
         let active_session_permits = self.active_session_permits.clone();
         let timeout = self.config.session_idle_timeout;
@@ -8152,6 +8233,7 @@ impl SessionManager {
                     {
                         active_session_permits.remove(&candidate.session_id);
                         session_write_locks.remove(&candidate.session_id);
+                        active_turn_permission_modes.remove(&candidate.session_id);
                         clear_session_runtime_stores(
                             &candidate.session_id,
                             context_store.as_ref(),
@@ -9196,6 +9278,71 @@ mod tests {
             error,
             crate::util::errors::BitFunError::NotFound(_)
         ));
+    }
+
+    #[tokio::test]
+    async fn active_turn_permission_mode_is_exact_mutable_and_stale_safe() {
+        let manager = in_memory_test_manager();
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Active permission session".to_string(),
+            "agentic".to_string(),
+            SessionConfig::default(),
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        manager.sessions.insert(session_id.clone(), session);
+
+        assert!(manager.set_active_turn_permission_mode(
+            &session_id,
+            "turn-1",
+            PermissionMode::Ask,
+        ));
+        assert!(manager.set_active_turn_permission_mode(
+            &session_id,
+            "turn-1",
+            PermissionMode::FullAccess,
+        ));
+        assert_eq!(
+            manager.active_turn_permission_mode(&session_id, "turn-1"),
+            Some(PermissionMode::FullAccess),
+        );
+        assert!(!manager.set_active_turn_permission_mode(
+            &session_id,
+            "stale-turn",
+            PermissionMode::AutoApprove,
+        ));
+
+        manager
+            .sessions
+            .get_mut(&session_id)
+            .expect("active session")
+            .state = SessionState::Processing {
+            current_turn_id: "turn-2".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        assert_eq!(
+            manager.active_turn_permission_mode(&session_id, "turn-1"),
+            None,
+        );
+        assert!(manager.set_active_turn_permission_mode(
+            &session_id,
+            "turn-2",
+            PermissionMode::AutoApprove,
+        ));
+        assert!(!manager.clear_active_turn_permission_mode(&session_id, "turn-1"));
+        assert_eq!(
+            manager.active_turn_permission_mode(&session_id, "turn-2"),
+            Some(PermissionMode::AutoApprove),
+        );
+        assert!(manager.clear_active_turn_permission_mode(&session_id, "turn-2"));
+        assert_eq!(
+            manager.active_turn_permission_mode(&session_id, "turn-2"),
+            None,
+        );
     }
 
     #[tokio::test]

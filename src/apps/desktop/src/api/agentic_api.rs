@@ -252,6 +252,27 @@ pub struct UpdateSessionPermissionModeRequest {
     #[serde(default)]
     pub mode: Option<String>,
     #[serde(default)]
+    pub turn_id: Option<String>,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_internal: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateActiveTurnPermissionModeRequest {
+    pub session_id: String,
+    pub turn_id: String,
+    /// `None` clears the one-off override and returns the active turn to its
+    /// session mode at the next model-round boundary.
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
     pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -266,6 +287,9 @@ pub struct UpdateSessionPermissionModeRequest {
 pub struct SessionPermissionModeResponse {
     /// The session's own selection, or `null` when it follows the default.
     pub mode: Option<PermissionMode>,
+    /// Ephemeral override for the requested active turn, when one exists.
+    pub turn_mode: Option<PermissionMode>,
+    pub active_turn_id: Option<String>,
 }
 
 fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -1864,14 +1888,110 @@ pub async fn update_session_permission_mode(
         request.include_internal,
     )
     .await?;
+    let session_manager = coordinator.get_session_manager();
+    let requested_turn_id = request
+        .turn_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
 
-    coordinator
-        .get_session_manager()
+    session_manager
         .update_session_permission_mode(&session_id, mode)
         .await
         .map_err(|error| format!("Failed to update session permission mode: {error}"))?;
+    if let Some(turn_id) = requested_turn_id {
+        session_manager.clear_active_turn_permission_mode(&session_id, turn_id);
+    }
 
-    Ok(SessionPermissionModeResponse { mode })
+    let active_turn_id = requested_turn_id.and_then(|turn_id| {
+        session_manager
+            .get_session(&session_id)
+            .filter(|session| {
+                matches!(
+                    &session.state,
+                    SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
+                )
+            })
+            .map(|_| turn_id.to_string())
+    });
+    Ok(SessionPermissionModeResponse {
+        mode: session_manager.session_permission_mode(&session_id),
+        turn_mode: active_turn_id
+            .as_deref()
+            .and_then(|turn_id| session_manager.active_turn_permission_mode(&session_id, turn_id)),
+        active_turn_id,
+    })
+}
+
+/// Replaces or clears the temporary mode for one exact active turn.
+///
+/// This is intentionally a distinct command from the session setter: a new
+/// frontend talking to an older backend must fail loudly instead of having an
+/// unknown scope field ignored and accidentally persisting a one-off choice.
+#[tauri::command]
+pub async fn update_active_turn_permission_mode(
+    runtime: State<'_, DesktopRuntimeContext>,
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    request: UpdateActiveTurnPermissionModeRequest,
+) -> Result<SessionPermissionModeResponse, String> {
+    let session_id = request.session_id.trim().to_string();
+    let turn_id = request.turn_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    if turn_id.is_empty() {
+        return Err("turn_id is required".to_string());
+    }
+    let mode = match request.mode.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(value) => Some(
+            PermissionMode::parse(value)
+                .ok_or_else(|| format!("unsupported permission mode: {value}"))?,
+        ),
+    };
+
+    ensure_session_loaded_for_selector_update(
+        runtime.inner(),
+        &session_id,
+        request.workspace_path,
+        request.remote_connection_id,
+        request.remote_ssh_host,
+        request.include_internal,
+    )
+    .await?;
+
+    let session_manager = coordinator.get_session_manager();
+    let is_active = match mode {
+        Some(turn_mode) => {
+            session_manager.set_active_turn_permission_mode(&session_id, &turn_id, turn_mode)
+        }
+        None => {
+            let is_active = session_manager
+                .get_session(&session_id)
+                .is_some_and(|session| {
+                    matches!(
+                        &session.state,
+                        SessionState::Processing { current_turn_id, .. }
+                            if current_turn_id == &turn_id
+                    )
+                });
+            if is_active {
+                session_manager.clear_active_turn_permission_mode(&session_id, &turn_id);
+            }
+            is_active
+        }
+    };
+    if !is_active {
+        return Err(format!(
+            "Turn is no longer active for this session: session_id={session_id}, turn_id={turn_id}"
+        ));
+    }
+
+    Ok(SessionPermissionModeResponse {
+        mode: session_manager.session_permission_mode(&session_id),
+        turn_mode: session_manager.active_turn_permission_mode(&session_id, &turn_id),
+        active_turn_id: Some(turn_id),
+    })
 }
 
 /// Reads the session's own permission mode selection.
@@ -1897,10 +2017,29 @@ pub async fn get_session_permission_mode(
     )
     .await?;
 
+    let session_manager = coordinator.get_session_manager();
+    let requested_turn_id = request
+        .turn_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let active_turn_id = requested_turn_id.and_then(|turn_id| {
+        session_manager
+            .get_session(&session_id)
+            .filter(|session| {
+                matches!(
+                    &session.state,
+                    SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
+                )
+            })
+            .map(|_| turn_id.to_string())
+    });
     Ok(SessionPermissionModeResponse {
-        mode: coordinator
-            .get_session_manager()
-            .session_permission_mode(&session_id),
+        mode: session_manager.session_permission_mode(&session_id),
+        turn_mode: active_turn_id
+            .as_deref()
+            .and_then(|turn_id| session_manager.active_turn_permission_mode(&session_id, turn_id)),
+        active_turn_id,
     })
 }
 

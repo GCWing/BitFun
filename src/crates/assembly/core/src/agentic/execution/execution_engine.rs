@@ -58,10 +58,12 @@ use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
+use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use bitfun_core_types::SessionModelBindingPolicy;
+use bitfun_runtime_ports::{resolve_permission_mode, PermissionMode, PermissionModeLayers};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -75,6 +77,20 @@ fn ensure_primary_session_goal_tools(allowed_tools: &mut Vec<String>, is_subagen
     if !is_subagent {
         ensure_thread_goal_tools(allowed_tools);
     }
+}
+
+fn resolve_round_permission_mode(
+    active_turn_mode: Option<PermissionMode>,
+    fixed_context_mode: Option<PermissionMode>,
+    session_mode: Option<PermissionMode>,
+    global_default: PermissionMode,
+) -> PermissionMode {
+    resolve_permission_mode(
+        PermissionModeLayers::new(global_default)
+            .with_session(session_mode)
+            .with_turn(active_turn_mode.or(fixed_context_mode)),
+    )
+    .mode
 }
 
 /// Execution engine configuration
@@ -478,6 +494,42 @@ impl ExecutionEngine {
         "Tool use is disabled for finalize. Respond with plain text only.";
     const FINALIZE_USER_FOLLOWUP: &'static str =
         "Provide a final answer. You MUST not call any tools.";
+
+    async fn context_vars_for_round(
+        &self,
+        base: &HashMap<String, String>,
+        session_id: &str,
+        turn_id: &str,
+    ) -> HashMap<String, String> {
+        let mut context_vars = base.clone();
+        let fixed_context_mode = base
+            .get(PERMISSION_MODE_CONTEXT_KEY)
+            .map(|value| PermissionMode::parse(value).unwrap_or(PermissionMode::Ask));
+        let active_turn_mode = self
+            .session_manager
+            .active_turn_permission_mode(session_id, turn_id);
+        let global_default = match get_global_config_service().await {
+            Ok(service) => service
+                .get_config(None)
+                .await
+                .map(|config: crate::service::config::types::GlobalConfig| {
+                    PermissionMode::from_config(&config.tool_permissions)
+                })
+                .unwrap_or(PermissionMode::Ask),
+            Err(_) => PermissionMode::Ask,
+        };
+        let resolved = resolve_round_permission_mode(
+            active_turn_mode,
+            fixed_context_mode,
+            self.session_manager.session_permission_mode(session_id),
+            global_default,
+        );
+        context_vars.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            resolved.as_str().to_string(),
+        );
+        context_vars
+    }
 
     pub fn new(
         round_executor: Arc<RoundExecutor>,
@@ -1636,6 +1688,13 @@ impl ExecutionEngine {
             .session_manager
             .persistent_model_exchange_trace_dir(&input.context.session_id)
             .await;
+        let round_context_vars = self
+            .context_vars_for_round(
+                input.execution_context_vars,
+                &input.context.session_id,
+                &input.context.dialog_turn_id,
+            )
+            .await;
         let round_context = RoundContext {
             session_id: input.context.session_id.clone(),
             subagent_parent_info: input.context.subagent_parent_info.clone(),
@@ -1653,7 +1712,7 @@ impl ExecutionEngine {
             effective_model_name: input.ai_client.config.model.clone(),
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
-            context_vars: input.execution_context_vars.clone(),
+            context_vars: round_context_vars,
             permission_constraints: input.permission_constraints,
             permission_runtime_ceiling: input.context.permission_runtime_ceiling.clone(),
             delegation_policy: input.context.delegation_policy,
@@ -3665,7 +3724,13 @@ impl ExecutionEngine {
             );
 
             // Create round context
-            let round_context_vars = execution_context_vars.clone();
+            let round_context_vars = self
+                .context_vars_for_round(
+                    &execution_context_vars,
+                    &context.session_id,
+                    &context.dialog_turn_id,
+                )
+                .await;
             let loaded_deferred_tool_specs =
                 collect_product_loaded_deferred_tool_specs(&messages, &deferred_tools);
 
@@ -4676,8 +4741,8 @@ impl ExecutionEngine {
 mod tests {
     use super::{
         activate_conditional_instructions_after_round, ensure_primary_session_goal_tools,
-        manual_compaction_terminal_error, ContextHealthSnapshot, ExecutionEngine, RoundResult,
-        TurnPromptScaffold,
+        manual_compaction_terminal_error, resolve_round_permission_mode, ContextHealthSnapshot,
+        ExecutionEngine, RoundResult, TurnPromptScaffold,
     };
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, UserContextPolicy,
@@ -4698,7 +4763,9 @@ mod tests {
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use crate::util::types::ToolDefinition;
     use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
-    use bitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind};
+    use bitfun_runtime_ports::{
+        PermissionMode, WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind,
+    };
     use serde_json::json;
     use sha2::{Digest, Sha256};
     use std::collections::HashMap;
@@ -4718,6 +4785,37 @@ mod tests {
         let mut subagent_tools = vec!["Read".to_string()];
         ensure_primary_session_goal_tools(&mut subagent_tools, true);
         assert_eq!(subagent_tools, vec!["Read".to_string()]);
+    }
+
+    #[test]
+    fn round_permission_mode_prefers_mutable_turn_then_fixed_child_then_session() {
+        assert_eq!(
+            resolve_round_permission_mode(
+                Some(PermissionMode::Ask),
+                Some(PermissionMode::FullAccess),
+                Some(PermissionMode::AutoApprove),
+                PermissionMode::FullAccess,
+            ),
+            PermissionMode::Ask,
+        );
+        assert_eq!(
+            resolve_round_permission_mode(
+                None,
+                Some(PermissionMode::FullAccess),
+                Some(PermissionMode::Ask),
+                PermissionMode::AutoApprove,
+            ),
+            PermissionMode::FullAccess,
+        );
+        assert_eq!(
+            resolve_round_permission_mode(
+                None,
+                None,
+                Some(PermissionMode::AutoApprove),
+                PermissionMode::Ask,
+            ),
+            PermissionMode::AutoApprove,
+        );
     }
 
     #[test]

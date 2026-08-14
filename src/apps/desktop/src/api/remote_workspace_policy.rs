@@ -1971,6 +1971,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "update_app_status",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
+    (
+        "update_active_turn_permission_mode",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
     ("update_cron_job", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "update_custom_agent",
