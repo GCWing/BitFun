@@ -36,6 +36,7 @@ describe('startup preload shell', () => {
 
     const controls = dom.window.document.querySelector<HTMLElement>('[data-startup-window-controls]');
     expect(controls?.hidden).toBe(false);
+    expect(dom.window.document.querySelector('.splash-screen')?.hasAttribute('aria-hidden')).toBe(false);
 
     const closeButton = dom.window.document.querySelector<HTMLButtonElement>('[data-startup-window-action="close"]');
     expect(closeButton?.getAttribute('aria-label')).toBe('关闭');
