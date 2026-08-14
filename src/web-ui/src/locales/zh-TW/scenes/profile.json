@@ -36,6 +36,15 @@
     "avatarPickerHint": "選擇一個標識，或輸入自訂符號",
     "avatarPickerClose": "關閉頭像選擇",
     "avatarPresets": "頭像選項",
+    "avatarOfficialPresets": "BitFun 內建風格",
+    "avatarEmojiPresets": "表情符號",
+    "avatarUseOfficialPreset": "使用{{name}}風格",
+    "avatarFamilies": {
+      "signal": "訊號",
+      "orbit": "星軌",
+      "mosaic": "模組",
+      "companion": "夥伴"
+    },
     "avatarUsePreset": "使用 {{emoji}} 作為頭像",
     "avatarCustom": "自訂頭像符號",
     "avatarCustomPlaceholder": "輸入一個符號",

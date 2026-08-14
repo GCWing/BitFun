@@ -45,6 +45,7 @@ describe('identityDocument frontmatter helpers', () => {
       name: 'Demo',
       creature: 'Cat',
       vibe: 'Calm',
+      avatar: 'signal-pulse',
       emoji: '🙂',
       body: '# Body\n\nHello',
     });
@@ -54,6 +55,7 @@ describe('identityDocument frontmatter helpers', () => {
       'name: Demo',
       'creature: Cat',
       'vibe: Calm',
+      'avatar: signal-pulse',
       'emoji: 🙂',
       '---',
       '',
@@ -70,6 +72,7 @@ describe('identityDocument frontmatter helpers', () => {
       'name: Demo',
       'creature: Cat',
       'vibe: Calm',
+      'avatar: orbit-nova',
       'emoji: 🙂',
       '---',
       '',
@@ -82,6 +85,7 @@ describe('identityDocument frontmatter helpers', () => {
       name: 'Demo',
       creature: 'Cat',
       vibe: 'Calm',
+      avatar: 'orbit-nova',
       emoji: '🙂',
       body: '# Body\n\nHello',
     });

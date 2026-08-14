@@ -1,0 +1,121 @@
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.assistant-avatar {
+  --assistant-avatar-size: 32px;
+
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 var(--assistant-avatar-size);
+  width: var(--assistant-avatar-size);
+  height: var(--assistant-avatar-size);
+  place-items: center;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 38%, var(--bf-appearance-token-border-subtle));
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 24%, transparent), transparent 44%),
+    color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 13%, var(--bf-appearance-token-element-bg-base));
+  color: var(--bf-appearance-token-color-accent-500);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 30%, transparent);
+  isolation: isolate;
+
+  &[data-bf-palette='violet'] {
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 38%, var(--bf-appearance-token-border-subtle));
+    background:
+      radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent), transparent 44%),
+      color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 13%, var(--bf-appearance-token-element-bg-base));
+    color: var(--bf-appearance-token-color-purple-500);
+  }
+
+  &__secondary-fill {
+    fill: var(--bf-appearance-token-color-purple-500);
+  }
+
+  &__secondary-stroke {
+    stroke: var(--bf-appearance-token-color-purple-500);
+  }
+
+  &[data-bf-palette='violet'] &__secondary-fill {
+    fill: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &[data-bf-palette='violet'] &__secondary-stroke {
+    stroke: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &__art {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    overflow: hidden;
+    border-radius: inherit;
+
+    svg {
+      display: block;
+      width: 78%;
+      height: 78%;
+    }
+  }
+
+  &__emoji {
+    display: block;
+    font-size: calc(var(--assistant-avatar-size) * 0.5);
+    line-height: 1;
+    transform: translateY(-1%);
+  }
+
+  &.is-emoji {
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &.is-active {
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 72%, var(--bf-appearance-token-border-medium));
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent),
+      inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 36%, transparent);
+  }
+
+  &.is-running::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    z-index: 2;
+    border: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent);
+    border-top-color: var(--bf-appearance-token-color-accent-500);
+    border-radius: 50%;
+    animation: assistant-avatar-running 900ms linear infinite;
+  }
+
+  &__status-dot {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    z-index: 3;
+    width: max(6px, calc(var(--assistant-avatar-size) * 0.24));
+    height: max(6px, calc(var(--assistant-avatar-size) * 0.24));
+    border: 1.5px solid var(--bf-appearance-token-color-bg-primary);
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &.is-attention &__status-dot {
+    background: var(--bf-appearance-token-color-warning);
+  }
+
+  &.is-error &__status-dot {
+    background: var(--bf-appearance-token-color-error);
+  }
+}
+
+@keyframes assistant-avatar-running {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-avatar.is-running::after {
+    animation: none;
+    border-color: var(--bf-appearance-token-color-accent-500);
+  }
+}

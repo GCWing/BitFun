@@ -1,24 +1,36 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bot, Check, Pencil, X } from 'lucide-react';
+import { Check, Pencil, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, IconButton, Input } from '@/component-library';
+import {
+  AssistantAvatar,
+  ASSISTANT_AVATAR_PRESETS,
+} from '@/app/components/AssistantAvatar';
 import type { IdentitySaveStatus } from '@/app/scenes/my-agent/useAgentIdentityDocument';
-import { ASSISTANT_AVATAR_PRESETS, firstAvatarGrapheme } from './assistantAvatar';
+import { ASSISTANT_EMOJI_PRESETS, firstAvatarGrapheme } from './assistantAvatar';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 
 interface AssistantAvatarPickerProps {
+  presetValue?: string;
   value: string;
+  stableKey?: string;
+  assistantName?: string;
   saveStatus: IdentitySaveStatus;
   saveError?: string | null;
+  onPresetChange?: (value: string) => void;
   onChange: (value: string) => void;
 }
 
 const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
+  presetValue = '',
   value,
+  stableKey,
+  assistantName,
   saveStatus,
   saveError,
+  onPresetChange,
   onChange,
 }) => {
   const { t } = useTranslation('scenes/profile');
@@ -66,16 +78,21 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
     };
   }, [isOpen]);
 
-  const chooseAvatar = (nextValue: string) => {
+  const chooseEmojiAvatar = (nextValue: string) => {
     setCustomValue(nextValue);
+    onPresetChange?.('');
     onChange(nextValue);
+  };
+
+  const choosePresetAvatar = (nextValue: string) => {
+    onPresetChange?.(nextValue);
   };
 
   const handleCustomSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextValue = firstAvatarGrapheme(customValue);
     if (!nextValue) return;
-    chooseAvatar(nextValue);
+    chooseEmojiAvatar(nextValue);
   };
 
   const normalizedCustomValue = firstAvatarGrapheme(customValue);
@@ -98,9 +115,13 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
         aria-controls={pickerId}
         onClick={() => setIsOpen((open) => !open)}
       >
-        <span className="acp-avatar-picker__value" aria-hidden="true">
-          {displayedValue || <Bot size={26} strokeWidth={1.6} />}
-        </span>
+        <AssistantAvatar
+          presetId={presetValue}
+          emoji={displayedValue}
+          stableKey={stableKey}
+          name={assistantName}
+          size={58}
+        />
         <span className="acp-avatar-picker__edit-cue" aria-hidden="true">
           <Pencil size={11} strokeWidth={1.9} />
         </span>
@@ -139,15 +160,34 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
             </IconButton>
           </div>
 
-          <div className="acp-avatar-picker__grid" role="group" aria-label={t('identity.avatarPresets')}>
+          <div className="acp-avatar-picker__section-label">{t('identity.avatarOfficialPresets')}</div>
+          <div className="acp-avatar-picker__grid" role="group" aria-label={t('identity.avatarOfficialPresets')}>
             {ASSISTANT_AVATAR_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={`acp-avatar-picker__option is-official${presetValue === preset.id ? ' is-selected' : ''}`}
+                aria-label={t('identity.avatarUseOfficialPreset', {
+                  name: t(`identity.avatarFamilies.${preset.family}`),
+                })}
+                aria-pressed={presetValue === preset.id}
+                onClick={() => choosePresetAvatar(preset.id)}
+              >
+                <AssistantAvatar presetId={preset.id} size={30} />
+              </button>
+            ))}
+          </div>
+
+          <div className="acp-avatar-picker__section-label is-secondary">{t('identity.avatarEmojiPresets')}</div>
+          <div className="acp-avatar-picker__grid" role="group" aria-label={t('identity.avatarEmojiPresets')}>
+            {ASSISTANT_EMOJI_PRESETS.map((preset) => (
               <button
                 key={preset}
                 type="button"
-                className={`acp-avatar-picker__option${displayedValue === preset ? ' is-selected' : ''}`}
+                className={`acp-avatar-picker__option${!presetValue && displayedValue === preset ? ' is-selected' : ''}`}
                 aria-label={t('identity.avatarUsePreset', { emoji: preset })}
-                aria-pressed={displayedValue === preset}
-                onClick={() => chooseAvatar(preset)}
+                aria-pressed={!presetValue && displayedValue === preset}
+                onClick={() => chooseEmojiAvatar(preset)}
               >
                 <span aria-hidden="true">{preset}</span>
               </button>

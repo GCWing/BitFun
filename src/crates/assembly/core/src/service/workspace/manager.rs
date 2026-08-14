@@ -102,6 +102,8 @@ pub struct WorkspaceIdentity {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vibe: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emoji: Option<String>,
 }
 
@@ -122,6 +124,7 @@ struct WorkspaceIdentityFrontmatter {
     name: Option<String>,
     creature: Option<String>,
     vibe: Option<String>,
+    avatar: Option<String>,
     emoji: Option<String>,
 }
 
@@ -159,6 +162,7 @@ impl WorkspaceIdentity {
             name: normalize_identity_field(frontmatter.name),
             creature: normalize_identity_field(frontmatter.creature),
             vibe: normalize_identity_field(frontmatter.vibe),
+            avatar: normalize_identity_field(frontmatter.avatar),
             emoji: normalize_identity_field(frontmatter.emoji),
         })
     }
@@ -167,6 +171,7 @@ impl WorkspaceIdentity {
         self.name.is_none()
             && self.creature.is_none()
             && self.vibe.is_none()
+            && self.avatar.is_none()
             && self.emoji.is_none()
     }
 
@@ -180,6 +185,8 @@ impl WorkspaceIdentity {
         let current_creature = current.and_then(|identity| identity.creature.as_deref());
         let previous_vibe = previous.and_then(|identity| identity.vibe.as_deref());
         let current_vibe = current.and_then(|identity| identity.vibe.as_deref());
+        let previous_avatar = previous.and_then(|identity| identity.avatar.as_deref());
+        let current_avatar = current.and_then(|identity| identity.avatar.as_deref());
         let previous_emoji = previous.and_then(|identity| identity.emoji.as_deref());
         let current_emoji = current.and_then(|identity| identity.emoji.as_deref());
 
@@ -192,6 +199,9 @@ impl WorkspaceIdentity {
         }
         if previous_vibe != current_vibe {
             changed_fields.push("vibe".to_string());
+        }
+        if previous_avatar != current_avatar {
+            changed_fields.push("avatar".to_string());
         }
         if previous_emoji != current_emoji {
             changed_fields.push("emoji".to_string());
@@ -1663,4 +1673,42 @@ pub struct WorkspaceManagerStatistics {
     pub total_files: usize,
     pub total_size_bytes: u64,
     pub workspaces_by_type: HashMap<WorkspaceType, usize>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WorkspaceIdentity;
+
+    #[test]
+    fn workspace_identity_reads_optional_avatar_without_requiring_it() {
+        let with_avatar = WorkspaceIdentity::from_markdown(
+            "---\nname: Mira\navatar: orbit-nova\nemoji: 🧭\n---\n",
+        )
+        .expect("identity with avatar should parse");
+        assert_eq!(with_avatar.avatar.as_deref(), Some("orbit-nova"));
+        assert_eq!(with_avatar.emoji.as_deref(), Some("🧭"));
+
+        let legacy = WorkspaceIdentity::from_markdown("---\nname: Mira\nemoji: 🧭\n---\n")
+            .expect("legacy identity should still parse");
+        assert_eq!(legacy.avatar, None);
+        assert_eq!(legacy.emoji.as_deref(), Some("🧭"));
+    }
+
+    #[test]
+    fn workspace_identity_reports_avatar_changes_independently() {
+        let previous = WorkspaceIdentity {
+            name: Some("Mira".to_string()),
+            emoji: Some("🧭".to_string()),
+            ..WorkspaceIdentity::default()
+        };
+        let current = WorkspaceIdentity {
+            avatar: Some("signal-pulse".to_string()),
+            ..previous.clone()
+        };
+
+        assert_eq!(
+            WorkspaceIdentity::collect_changed_fields(Some(&previous), Some(&current)),
+            vec!["avatar".to_string()]
+        );
+    }
 }

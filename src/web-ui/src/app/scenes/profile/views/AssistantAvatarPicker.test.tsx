@@ -105,4 +105,29 @@ describe('AssistantAvatarPicker', () => {
     expect(document.querySelector('.acp-avatar-picker__status')?.textContent)
       .toContain('identity.avatarSaved');
   });
+
+  it('selects an official preset without overwriting the legacy emoji fallback', () => {
+    const onChange = vi.fn();
+    const onPresetChange = vi.fn();
+
+    act(() => {
+      root.render(
+        <AssistantAvatarPicker
+          value="🧭"
+          presetValue=""
+          saveStatus="idle"
+          onChange={onChange}
+          onPresetChange={onPresetChange}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector('.acp-avatar-picker__trigger') as HTMLButtonElement;
+    act(() => trigger.click());
+    const officialOption = document.querySelector<HTMLButtonElement>('.acp-avatar-picker__option.is-official');
+    act(() => officialOption?.click());
+
+    expect(onPresetChange).toHaveBeenCalledWith('signal-pulse');
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

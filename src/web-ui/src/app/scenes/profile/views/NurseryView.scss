@@ -2834,10 +2834,10 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     align-items: center;
     justify-content: center;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--bf-appearance-token-element-bg-medium);
+    border-radius: 50%;
+    background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition:
@@ -2848,7 +2848,7 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     &:hover,
     &.is-open {
       border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 46%, var(--bf-appearance-token-border-subtle));
-      background: var(--bf-appearance-token-element-bg-base);
+      background: transparent;
     }
 
     &:focus-visible {
@@ -2866,6 +2866,19 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     font-size: 31px;
     line-height: 1;
     white-space: nowrap;
+  }
+
+  &__section-label {
+    margin-bottom: $size-gap-1;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-weight: $font-weight-medium;
+
+    &.is-secondary {
+      margin-top: $size-gap-3;
+      padding-top: $size-gap-3;
+      border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    }
   }
 
   &__edit-cue {
@@ -2965,6 +2978,11 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     &.is-selected {
       border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 48%, var(--bf-appearance-token-border-subtle));
       background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+    }
+
+    &.is-official {
+      overflow: visible;
+      border-radius: 50%;
     }
   }
 

@@ -4,6 +4,7 @@ export interface IdentityDocument {
   name: string;
   creature: string;
   vibe: string;
+  avatar: string;
   emoji: string;
   body: string;
 }
@@ -12,6 +13,7 @@ export const EMPTY_IDENTITY_DOCUMENT: IdentityDocument = {
   name: '',
   creature: '',
   vibe: '',
+  avatar: '',
   emoji: '',
   body: '',
 };
@@ -20,6 +22,7 @@ const FRONTMATTER_FIELDS: Array<keyof Omit<IdentityDocument, 'body'>> = [
   'name',
   'creature',
   'vibe',
+  'avatar',
   'emoji',
 ];
 
@@ -98,6 +101,7 @@ export function parseIdentityDocument(content: string): IdentityDocument {
     name: normalizeShortField(parsed.name),
     creature: normalizeShortField(parsed.creature),
     vibe: normalizeShortField(parsed.vibe),
+    avatar: normalizeShortField(parsed.avatar),
     emoji: normalizeShortField(parsed.emoji),
     body: sections.body,
   };
@@ -108,6 +112,7 @@ export function serializeIdentityDocument(document: IdentityDocument): string {
     name: normalizeShortField(document.name),
     creature: normalizeShortField(document.creature),
     vibe: normalizeShortField(document.vibe),
+    avatar: normalizeShortField(document.avatar),
     emoji: normalizeShortField(document.emoji),
     body: normalizeLineEndings(document.body || '').replace(/^\n+/, '').trimEnd(),
   };
