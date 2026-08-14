@@ -385,13 +385,11 @@ export const capabilityContractDependencyRules = [
         capabilityEdge(['agent-api', 'git-port']),
       ])],
       ['bitfun-agent-tools', capabilityConsumer([capabilityEdge()])],
-      ['bitfun-app-server', capabilityConsumer(
-        [capabilityEdge(['agent-api'])],
+      ['bitfun-app-server', capabilityConsumer([capabilityEdge(['agent-api'])])],
+      ['bitfun-app-server-protocol', capabilityConsumer(
+        [capabilityEdge(['agent-api', 'git-port'])],
         [capabilityForwarder('ts', 'ts')],
       )],
-      ['bitfun-app-server-protocol', capabilityConsumer([
-        capabilityEdge(['agent-api', 'git-port']),
-      ])],
       ['bitfun-cli', capabilityConsumer([
         capabilityEdge(['agent-api', 'git-port', 'permission', 'plugin-runtime', 'workspace-ports']),
       ])],
@@ -744,6 +742,25 @@ export const acpClosedFeatureProfileRules = [
 ];
 
 export const coreClosedFeatureProfileRules = [
+  {
+    manifestPath: 'src/crates/interfaces/app-server/Cargo.toml',
+    featureName: 'ts',
+    requiredFeatureRefs: ['bitfun-app-server-protocol/ts'],
+    exact: true,
+    reason: 'App Server must delegate TypeScript wire export to the protocol owner',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/app-server-protocol/Cargo.toml',
+    featureName: 'ts',
+    requiredFeatureRefs: [
+      'bitfun-core-types/ts',
+      'bitfun-product-domains/ts',
+      'bitfun-runtime-ports/ts',
+      'dep:ts-rs',
+    ],
+    exact: true,
+    reason: 'App Server Protocol must own the complete behavior-light TypeScript wire surface',
+  },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'default',

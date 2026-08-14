@@ -12,6 +12,7 @@ use crate::agent::{runtime_call, BitfunAppRuntime};
 use crate::management::{AppManagementService, MODES_CAPABILITY};
 use crate::role::{AppClient, AppServer};
 use crate::schema::*;
+use crate::server::wire;
 
 pub(in crate::server) fn builder(
     runtime: Arc<BitfunAppRuntime>,
@@ -91,9 +92,9 @@ pub(in crate::server) fn builder(
                     responder.respond_with_result(
                         runtime
                             .runtime()
-                            .submit_dialog_turn(request.0.to_request())
+                            .submit_dialog_turn(wire::submit_dialog_turn_request(request.0))
                             .await
-                            .map(SubmitDialogTurnResponse::from_outcome)
+                            .map(wire::submit_dialog_turn_response)
                             .map_err(|err| {
                                 BitfunAppRuntime::session_runtime_error(&session_id, err)
                             }),
@@ -107,8 +108,8 @@ pub(in crate::server) fn builder(
                 let runtime = runtime.clone();
                 async move |request: RunMessage, responder, _cx| {
                     let handle =
-                        runtime_call(runtime.runtime().run(request.to_run_request()).await)?;
-                    responder.respond(RunResponse::from_handle(handle))
+                        runtime_call(runtime.runtime().run(wire::run_request(&request)).await)?;
+                    responder.respond(wire::run_response(handle))
                 }
             },
             agent_client_protocol::on_receive_request!(),

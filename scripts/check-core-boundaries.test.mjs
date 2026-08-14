@@ -64,6 +64,29 @@ const MODULES = [
 
 const TEST_ROOT = join('C:', 'repo');
 
+test('App Server TypeScript capability is owned by the protocol crate', () => {
+  const appServerTs = coreClosedFeatureProfileRules.find(
+    (rule) => rule.manifestPath === 'src/crates/interfaces/app-server/Cargo.toml'
+      && rule.featureName === 'ts',
+  );
+  assert.deepEqual(appServerTs?.requiredFeatureRefs, [
+    'bitfun-app-server-protocol/ts',
+  ]);
+  assert.equal(appServerTs?.exact, true);
+
+  const protocolTs = coreClosedFeatureProfileRules.find(
+    (rule) => rule.manifestPath === 'src/crates/interfaces/app-server-protocol/Cargo.toml'
+      && rule.featureName === 'ts',
+  );
+  assert.deepEqual(protocolTs?.requiredFeatureRefs, [
+    'bitfun-core-types/ts',
+    'bitfun-product-domains/ts',
+    'bitfun-runtime-ports/ts',
+    'dep:ts-rs',
+  ]);
+  assert.equal(protocolTs?.exact, true);
+});
+
 test('Agent Runtime leaf capabilities have one managed feature and source contract', async () => {
   const rule = capabilityContractDependencyRules.find(
     (candidate) => candidate.packageName === 'bitfun-agent-runtime',

@@ -388,6 +388,13 @@ Embedded direct invocation 可以依赖同进程构造身份，但仍必须传�
 - server wiring 可以依赖生产 handler 所需的明确 owner feature，但禁止选择 `bitfun-core/product-full`。
 - 新 domain 只能增加真实 handler 所需的最窄 owner feature，并通过边界检查证明依赖方向。
 - protocol DTO 不复制 Runtime 内部对象；只暴露 Rich Client 需要的稳定字段和 read model。
+- `app-server-protocol` 是 TypeScript wire schema 的唯一导出 owner；`app-server/ts`
+  仅保留为兼容转发。owner 对象到 wire read model 的转换留在 server adapter，不能为了
+  生成类型把 Core、Agent Runtime 或 Service 实现依赖下沉到 protocol。
+- `app-server::schema` 只保留对 protocol 类型的兼容 re-export；正式 typed client 由
+  `app-server-client` 单独拥有，server crate 不维护第二套隐藏 client。该 re-export 保证
+  已有平铺类型路径和 wire shape，不承诺保留 server-only 的 inherent/`From` 转换 helper；
+  这些内部调用应迁到 server adapter 或稳定 contract 方法。
 - transport 实现留在 Host/adapter 边界，generic role/transport helper 保持 schema-free。
 - App Server 不持有第二份 Session、Permission、Config 或 capability 权威状态。
 

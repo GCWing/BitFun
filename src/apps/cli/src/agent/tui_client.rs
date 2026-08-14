@@ -34,16 +34,16 @@ use bitfun_runtime_ports::{
     put_agent_workspace_references, AgentContextReloadRequest, AgentDialogSteerRequest,
     AgentDialogTurnExecution, AgentDialogTurnRequest, AgentInputAttachment,
     AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
-    AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
-    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
-    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionSummary, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
-    AgentSubmissionSource, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    AgentTurnSettlementRequest, AgentUserShellCommandRequest, AgentWorkspaceReference,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult,
-    DialogSubmissionPolicy, SessionExecutionTarget, SessionTranscript, WorkspaceDiffSnapshot,
+    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSubmissionSource, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, AgentTurnSettlementRequest, AgentUserShellCommandRequest,
+    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, DialogSubmissionPolicy, SessionExecutionTarget,
+    SessionTranscript, WorkspaceDiffSnapshot,
 };
 use tokio::sync::{broadcast, Mutex};
 
@@ -1358,7 +1358,7 @@ impl TuiAgentClient {
             .map_err(|error| anyhow::anyhow!(error.message))?;
         let result = self
             .backend
-            .submit_dialog_turn(SubmitDialogTurnRequest(AgentDialogTurnRequest {
+            .submit_dialog_turn(SubmitDialogTurnRequest::from(AgentDialogTurnRequest {
                 session_id: session_id.clone(),
                 message,
                 original_message,

@@ -908,17 +908,13 @@ dependencies = [
  "bitfun-app-server-client",
  "bitfun-app-server-protocol",
  "bitfun-core",
- "bitfun-events",
  "bitfun-product-domains",
  "bitfun-runtime-ports",
- "futures",
  "log",
  "serde",
  "serde_json",
  "tokio",
- "tokio-util",
  "tracing",
- "ts-rs",
  "url",
 ]
 

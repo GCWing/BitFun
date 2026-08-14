@@ -27,7 +27,7 @@ const log = createLogger('WebSocketAdapter');
 /**
  * Typed mapping from the frontend's snake_case agent commands to the app-server
  * JSON-RPC method names, carrying the request/response types from the generated
- * schema (`@/generated/api`, source: `bitfun-app-server/src/schema/`).
+ * schema (`@/generated/api`, source: `bitfun-app-server-protocol`).
  *
  * The service layer (`AgentAPI` and friends) speaks Tauri command names
  * (`create_session`, `start_dialog_turn`, ...) because that is the desktop

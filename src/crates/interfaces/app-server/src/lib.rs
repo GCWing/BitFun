@@ -1,4 +1,4 @@
-//! BitFun generic JSON-RPC app-server surface.
+//! BitFun generic JSON-RPC App Server host surface.
 //!
 //! This crate owns a protocol-agnostic JSON-RPC server/client scaffold built on
 //! [`agent_client_protocol`] using custom roles ([`AppServer`]/[`AppClient`]),
@@ -6,12 +6,11 @@
 //! own `JsonRpcRequest` / `JsonRpcNotification` types; the crate binds no
 //! schema method set, unlike [`bitfun_acp`].
 //!
-//! The optional `agent` module is the Phase 2 wiring: [`BitfunAppServer`]
-//! exposes a ready set of agent kernel operations (create / list / delete /
-//! submit / run / cancel) over a host-injected [`AgentRuntime`], using the
-//! generic `AppServer` role and the schema in [`schema`]. Hosts that want a
-//! purely schema-free scaffold can ignore `agent` / `schema` / `server` and
-//! register their own message types directly on `AppServer::builder()`.
+//! [`BitfunAppServer`] exposes the selected Agent Kernel and management
+//! operations over a host-injected runtime. Behavior-light wire contracts are
+//! owned by `bitfun-app-server-protocol`; [`schema`] remains a compatibility
+//! re-export for existing server-side imports. Typed clients are owned by the
+//! separate `bitfun-app-server-client` crate.
 //!
 //! # Example
 //!
@@ -35,15 +34,12 @@
 //!
 //! [`bitfun_acp`]: bitfun_acp
 //!
-//! # Crate boundary (preview)
+//! # Crate boundary
 //!
 //! This crate is an **internal interface crate**, not a versioned public API.
 //! The server-side surface ([`BitfunAppServer`], [`schema`], [`agent`]) is the
-//! production path consumed by the Server Host. The client-side exports
-//! ([`AppServerClient`], [`FrontendEvent`], [`connect`]) are test-only
-//! utilities -- they have no production consumer and are `#[doc(hidden)]` to
-//! avoid implying a stable public SDK. They will be replaced by a proper
-//! versioned event envelope and connection protocol in a follow-up.
+//! production path consumed by the Server Host. This crate does not own a
+//! second client implementation.
 
 // Lifted from the default 128: the `AppServer` builder chains one
 // `ChainedHandler` layer per registered request handler, and with the
@@ -55,7 +51,6 @@
 #![recursion_limit = "256"]
 
 pub mod agent;
-pub mod client;
 pub mod management;
 pub mod role;
 pub mod schema;
@@ -64,12 +59,6 @@ pub mod transport;
 
 pub use agent::BitfunAppRuntime;
 pub use agent_client_protocol as protocol;
-// `connect`, `AppServerClient`, and `FrontendEvent` are test-only utilities
-// with no production consumer. They are `#[doc(hidden)]` to avoid implying a
-// versioned public client SDK; they will be replaced by a proper versioned
-// event envelope in a follow-up.
-#[doc(hidden)]
-pub use client::{connect, AppServerClient, FrontendEvent};
 pub use management::{
     AppManagementCapabilities, AppManagementError, AppManagementErrorKind, AppManagementResult,
     AppManagementService, EXTERNAL_HOOKS_CAPABILITY, EXTERNAL_SOURCES_CAPABILITY,
@@ -81,8 +70,7 @@ pub use server::BitfunAppServer;
 /// Convenience prelude for consumers building an app-server connection.
 pub mod prelude {
     pub use crate::{
-        agent, client, schema, server, transport, AppClient, AppServer, BitfunAppRuntime,
-        BitfunAppServer,
+        agent, schema, server, transport, AppClient, AppServer, BitfunAppRuntime, BitfunAppServer,
     };
     pub use agent_client_protocol::{
         Builder, ConnectionTo, Dispatch, Handled, JsonRpcNotification, JsonRpcRequest,

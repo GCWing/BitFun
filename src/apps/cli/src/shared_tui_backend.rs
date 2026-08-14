@@ -42,7 +42,7 @@ use bitfun_app_server_protocol::worktree::*;
 use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 use bitfun_runtime_ports::{
     AgentSessionCompactionResult, AgentSessionForkResult, AgentSessionWorkspaceBinding,
-    AgentUserShellCommandResult,
+    AgentSubmissionSource, AgentUserShellCommandResult, DialogSubmissionPolicy,
 };
 use tokio::sync::broadcast;
 
@@ -421,7 +421,11 @@ impl TuiBackend for SharedTuiBackend {
         request: SubmitDialogTurnRequest,
     ) -> Result<SubmitDialogTurnResponse, TuiBackendError> {
         match self
-            .request(RuntimeIpcOperation::SubmitTurn { request: request.0 })
+            .request(RuntimeIpcOperation::SubmitTurn {
+                request: request.0.to_request(DialogSubmissionPolicy::for_source(
+                    AgentSubmissionSource::Cli,
+                )),
+            })
             .await?
         {
             RuntimeIpcOperationResult::TurnAccepted {

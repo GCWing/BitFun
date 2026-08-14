@@ -1,8 +1,8 @@
 # BitFun 编译与依赖治理计划
 
-> 最近核实：2026-08-13
+> 最近核实：2026-08-14
 >
-> 实现复核基线：`gcwing/main@a4d944e5b`
+> 实现复核基线：`gcwing/main@76f8b89e2`
 >
 > 性能 A/B 基线：`gcwing/main@1f538b96d`
 >
@@ -312,7 +312,7 @@ Clap、Tracing Subscriber、Notify 等默认即产品契约或缺少独立收益
 |---|---|---|
 | 已稳定 | 根 `Cargo.lock`、Reqwest Rustls 单栈、workspace Tokio 最小基线 | 不重复治理 |
 | 本轮完成 | Core 空默认与 capability-local 工具依赖、ACP client/server 角色、Core Agent Runtime capability、文档转换与订阅认证 modifier、SDK Host 显式 owner closure、Installer/CLI/Desktop/Core/MiniApp Market/Page Function 未使用直接依赖 | 以真实入口 closure 收敛，不建立新的产品 umbrella；根 lock 不增加 package |
-| 当前不动 | App Server / Server | 只为保持现有 handler 编译显式声明其已消费的 Core owner；不在改造稳定前继续拆其生产路径 |
+| 本轮完成 | App Server schema owner | wire DTO 与 TypeScript 导出收敛到 protocol；server 只保留 handler 与 owner-to-wire 转换，正式 client 继续由独立 client crate 持有 |
 | 明确保留 | Desktop screenshots backend | 替换方案必须同时保持三平台坐标/权限/区域捕获语义且不增加根 lock package；当前候选不满足 |
 | 明确保留 | `portable-pty 0.8/0.9` | 非 OHOS 与 OHOS 的平台兼容选择，不为去重破坏 |
 
@@ -353,7 +353,33 @@ consumer 零影响。完整 Rust Runtime SDK 同时将兼容版本提升为 v6�
 这里仍只报告依赖图和 focused-test 输入，不宣称完整产品 wall-clock 提速。根 `Cargo.lock` package
 集合与字节均不变，新增/升级/降级 package 为 0；`.github` 和 `ci.yml` 不变。
 
-### 3.3 CI 与本地验证
+### 3.3 App Server TypeScript schema owner
+
+变更前，Web `gen:types` 先编译 protocol，再编译完整 `bitfun-app-server`，后者会把
+Core、Agent Runtime 和具体 Service handler 闭包带入前端类型生成。最新同代码状态的
+Frontend Build 样本中，`gen:types` 约 430 秒，占 `build:web` 约 484 秒的 88.8%；其中
+protocol 导出约 42.58 秒，App Server 导出约 6 分 26 秒。单次 CI 样本只用于定位热点，
+不能独立证明合入后的 wall-clock 收益。
+
+本轮将 behavior-light wire DTO 和 TS derive 统一到 `bitfun-app-server-protocol`，server 端
+保留 Core/Runtime/Service owner 到 wire read model 的显式转换。既有 `app-server::schema`
+继续兼容 re-export，`bitfun-app-server/ts` 继续兼容转发；隐藏且无生产 consumer 的第二套
+client 删除，正式 client 仍由 `bitfun-app-server-client` 拥有。兼容面是已有平铺类型路径、
+method 和 wire shape；旧 server-only inherent/`From` helper 不是版本化公共 SDK，仓内调用已
+迁入 adapter 或稳定 contract 方法。三平台
+`normal,build,dev` 版本化 package instance 去重结果如下：
+
+| TS 导出闭包 | Windows | macOS | Linux |
+|---|---:|---:|---:|
+| 变更前：完整 App Server | 433 | 429 | 437 |
+| 变更后：App Server Protocol | 153 | 159 | 159 |
+| 收敛 | -280 | -270 | -278 |
+
+Web 实际引用的 19 个直接类型及其递归导入闭包保持生成内容字节一致；不再把 95 个历史
+导出文件全部视为兼容面。根 `Cargo.lock` package 集合和版本不变，只从 App Server package
+记录删除不再直接消费的依赖边；`.github`、CI job 和矩阵均不变。
+
+### 3.4 CI 与本地验证
 
 - 现有 CI 已覆盖 workspace check、Core/Desktop lib、平台敏感 owner 测试和独立 runtime/CLI 验证；本轮不新增 job、矩阵或 changed-path 分类器。
 - CI 不负责穷举所有测试；新增验证只有具备独立 owner、平台矩阵或失败归因价值时才进入既有流水线，否则由最近模块的 focused command 维护。
@@ -393,7 +419,7 @@ consumer 零影响。完整 Rust Runtime SDK 同时将兼容版本提升为 v6�
 |---|---|
 | CI 收敛 | 先积累多次相同 owner 的 step wall-clock、cache hit/miss 和失败历史；只有能证明收益且不会静默缩小覆盖时再独立设计 |
 | Desktop 截图后端 | 新候选同时满足三平台行为等价、区域捕获无性能回退、系统依赖可 feature-gate，且根 lock package 不增加 |
-| App Server / Server | 当前改造合入并稳定后，重新锁定最新生产调用链和可信 owner 边界 |
+| App Server / Server | 观察 protocol 单一 schema owner 合入后的 Frontend Build 样本；没有新的生产 owner 或稳定行为收益前，不继续拆 handler 路径 |
 | 其他产品入口重型 capability | 证明入口不消费该能力，具备 typed unsupported/fallback 行为，并能让一个真实重依赖子图退出 |
 | 重复 native/sys 库版本 | 同一 owner 能升级收敛且三平台打包/ABI 有证据；不因版本数字重复强行 patch |
 

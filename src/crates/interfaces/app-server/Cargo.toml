@@ -16,33 +16,21 @@ bitfun-app-server-protocol = { path = "../app-server-protocol" }
 # protocol surface must not inherit the broad bitfun-core/product-full union.
 bitfun-core = { path = "../../assembly/core", features = ["external-sources", "git", "i18n-runtime", "remote-connect"] }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
-bitfun-events = { path = "../../contracts/events" }
 bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api"] }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
-tokio-util = { workspace = true, features = ["compat"] }
-futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-ts-rs = { workspace = true, optional = true }
 
 [features]
 default = []
-# Schema-first TypeScript binding export. Derives `ts_rs::TS` (via
-# `cfg_attr`) on the wire types under `src/schema/` and propagates the `ts` feature
-# to the upstream contract/service crates so every type the schema references
-# also implements `TS`. Run `cargo test --features ts export_types` (or the
-# frontend `gen:types` script) to emit `.ts` into `TS_RS_EXPORT_DIR`.
-ts = [
-    "dep:ts-rs",
-    "bitfun-app-server-protocol/ts",
-    "bitfun-core/ts",
-    "bitfun-runtime-ports/ts",
-]
+# Compatibility feature for existing callers. TypeScript schemas are owned and
+# exported by `bitfun-app-server-protocol`.
+ts = ["bitfun-app-server-protocol/ts"]
 
 [lints]
 workspace = true
