@@ -734,6 +734,7 @@ export class FlowChatManager {
       preserveTurnOnStartError?: boolean;
       onSessionConflictRetryStart?: () => void;
       onSessionConflictRetrySuccess?: () => void;
+      sessionMutationLeaseId?: string;
     }
   ): Promise<void> {
     const targetSessionId = sessionId || this.context.flowChatStore.getState().activeSessionId;

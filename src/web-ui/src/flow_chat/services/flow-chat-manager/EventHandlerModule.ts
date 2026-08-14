@@ -4,6 +4,7 @@
  */
 
 import { FlowChatStore, mergeModelRoundAttemptDiagnostics } from '../../store/FlowChatStore';
+import { isSessionTurnRetired } from '../../store/sessionMutationStore';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { agenticEventListener, type AgenticEventCallbacks } from '../AgenticEventListener';
@@ -624,6 +625,13 @@ export function shouldProcessEvent(
   eventType: 'data' | 'control' | 'state_sync',
   eventName = 'unknown'
 ): boolean {
+  if (turnId && isSessionTurnRetired(sessionId, turnId)) {
+    if (eventType === 'data') {
+      logDroppedDataEvent(eventName, sessionId, turnId, { reason: 'retired_turn' });
+    }
+    return false;
+  }
+
   if (eventType === 'state_sync') {
     return true;
   }
@@ -1536,6 +1544,11 @@ function handleImageAnalysisCompleted(_context: FlowChatContext, event: ImageAna
 
 function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, turnIndex, userInput, originalUserInput, userMessageMetadata } = event;
+
+  if (isSessionTurnRetired(sessionId, turnId)) {
+    log.debug('Dropped DialogTurnStarted for retired turn', { sessionId, turnId });
+    return;
+  }
 
   finalizePendingTurnCompletionNow(context, sessionId);
   clearPendingTurnCompletion(context, sessionId, turnId);

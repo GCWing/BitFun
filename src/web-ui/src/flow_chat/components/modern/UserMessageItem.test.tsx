@@ -7,14 +7,22 @@ import { FlowChatContext } from './FlowChatContext';
 import { UserMessageItem } from './UserMessageItem';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { useMessageEditStore } from '../../store/messageEditStore';
+import {
+  SessionExecutionEvent,
+  stateMachineManager,
+} from '../../state-machine';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const activeSessionRef: { current: any } = {
   current: null,
 };
-const snapshotApiMock = vi.hoisted(() => ({
-  rollbackToTurn: vi.fn(async () => [] as string[]),
+const rollbackServiceMock = vi.hoisted(() => ({
+  rollbackSessionToTurn: vi.fn(async () => ({
+    restoredFiles: [],
+    fromTurnIndex: 0,
+    composerText: 'restored prompt',
+  })),
 }));
 const componentLibraryMock = vi.hoisted(() => ({
   confirmDanger: vi.fn(async () => true),
@@ -106,8 +114,7 @@ const flowChatStoreMock = vi.hoisted(() => ({
     sessions: new Map(),
     activeSessionId: null,
   })),
-  ensureSessionFullHistory: vi.fn(async () => true),
-  truncateDialogTurnsFrom: vi.fn(),
+  loadSessionHistory: vi.fn(async () => undefined),
 }));
 
 vi.mock('../../store/FlowChatStore', () => ({
@@ -117,9 +124,7 @@ vi.mock('../../store/FlowChatStore', () => ({
   flowChatStore: flowChatStoreMock,
 }));
 
-vi.mock('@/infrastructure/api', () => ({
-  snapshotAPI: snapshotApiMock,
-}));
+vi.mock('../../services/SessionRollbackService', () => rollbackServiceMock);
 
 vi.mock('@/shared/notification-system', () => ({
   notificationService: {
@@ -168,10 +173,15 @@ describe('UserMessageItem steering tag', () => {
       sessions: new Map(),
       activeSessionId: null,
     });
-    flowChatStoreMock.ensureSessionFullHistory.mockResolvedValue(true);
+    flowChatStoreMock.loadSessionHistory.mockResolvedValue(undefined);
     componentLibraryMock.confirmDanger.mockResolvedValue(true);
-    snapshotApiMock.rollbackToTurn.mockResolvedValue([]);
+    rollbackServiceMock.rollbackSessionToTurn.mockResolvedValue({
+      restoredFiles: [],
+      fromTurnIndex: 0,
+      composerText: 'restored prompt',
+    });
     editServiceMock.editAndRerunUserMessage.mockResolvedValue(undefined);
+    stateMachineManager.clear();
     useMessageEditStore.getState().cancelEdit();
     dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
       pretendToBeVisual: true,
@@ -533,7 +543,7 @@ describe('UserMessageItem steering tag', () => {
     expect(container.querySelector<HTMLButtonElement>('.user-message-item__rollback-btn')?.disabled).toBe(false);
   });
 
-  it('hydrates partial history before rollback and uses the global Turn index', async () => {
+  it('rolls back partial history by stable Turn identity without full hydration', async () => {
     activeSessionRef.current = {
       sessionId: 'partial-session',
       sessionKind: 'normal',
@@ -591,12 +601,8 @@ describe('UserMessageItem steering tag', () => {
       await Promise.resolve();
     });
 
-    expect(flowChatStoreMock.ensureSessionFullHistory).toHaveBeenCalledWith(
-      'partial-session',
-      'user-message-rollback',
-    );
-    expect(snapshotApiMock.rollbackToTurn).toHaveBeenCalledWith('partial-session', 19, true);
-    expect(flowChatStoreMock.truncateDialogTurnsFrom).toHaveBeenCalledWith('partial-session', 19);
+    expect(rollbackServiceMock.rollbackSessionToTurn).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'partial-session', targetTurnId: 'turn-20', kind: 'rollback' }));
+    expect(flowChatStoreMock.loadSessionHistory).not.toHaveBeenCalled();
   });
 
   it('keeps edit and rollback available for a rendered Turn outside the canonical tail', () => {
@@ -628,7 +634,33 @@ describe('UserMessageItem steering tag', () => {
     expect(container.querySelector<HTMLButtonElement>('.user-message-item__rollback-btn')?.disabled).toBe(false);
   });
 
-  it('hydrates a cataloged history-window Turn before rollback', async () => {
+  it('disables edit and rollback while the Session is not idle', async () => {
+    activeSessionRef.current = createPartialHistorySession(false);
+    await stateMachineManager.transition('partial-session', SessionExecutionEvent.START);
+
+    await act(async () => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'partial-session',
+            allowUserMessageRollback: true,
+            allowUserMessageEdit: true,
+          }}
+        >
+          <UserMessageItem
+            message={{ id: 'user-partial-5', content: 'older window prompt', timestamp: 1000 }}
+            turnId="turn-5"
+            absoluteTurnIndex={5}
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector<HTMLButtonElement>('.user-message-item__edit-btn')?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('.user-message-item__rollback-btn')?.disabled).toBe(true);
+  });
+
+  it('rolls back a cataloged history-window Turn by stable identity', async () => {
     activeSessionRef.current = createPartialHistorySession(true);
     flowChatStoreMock.getState.mockReturnValue(
       createHydratedHistoryState(activeSessionRef.current),
@@ -657,15 +689,10 @@ describe('UserMessageItem steering tag', () => {
       await Promise.resolve();
     });
 
-    expect(flowChatStoreMock.ensureSessionFullHistory).toHaveBeenCalledWith(
-      'partial-session',
-      'user-message-rollback',
-    );
-    expect(snapshotApiMock.rollbackToTurn).toHaveBeenCalledWith('partial-session', 4, true);
-    expect(flowChatStoreMock.truncateDialogTurnsFrom).toHaveBeenCalledWith('partial-session', 4);
+    expect(rollbackServiceMock.rollbackSessionToTurn).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'partial-session', targetTurnId: 'turn-5', kind: 'rollback' }));
   });
 
-  it('hydrates a cataloged history-window Turn before editing and rerunning', async () => {
+  it('edits and reruns a cataloged history-window Turn without pre-hydration', async () => {
     activeSessionRef.current = createPartialHistorySession(true);
     flowChatStoreMock.getState.mockReturnValue(
       createHydratedHistoryState(activeSessionRef.current),
@@ -702,16 +729,12 @@ describe('UserMessageItem steering tag', () => {
       await Promise.resolve();
     });
 
-    expect(flowChatStoreMock.ensureSessionFullHistory).toHaveBeenCalledWith(
-      'partial-session',
-      'user-message-edit',
-    );
     expect(editServiceMock.editAndRerunUserMessage).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'partial-session',
       turnId: 'turn-5',
-      turnIndex: 4,
       originalContent: 'older window prompt',
       editedContent: 'edited older window prompt',
     }));
+    expect(flowChatStoreMock.loadSessionHistory).not.toHaveBeenCalled();
   });
 });

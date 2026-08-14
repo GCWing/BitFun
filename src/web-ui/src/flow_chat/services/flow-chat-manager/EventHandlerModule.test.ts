@@ -10,6 +10,10 @@ import {
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { FlowChatStore } from '../../store/FlowChatStore';
+import {
+  markSessionTurnsRetired,
+  useSessionMutationStore,
+} from '../../store/sessionMutationStore';
 import { notificationService } from '../../../shared/notification-system/services/NotificationService';
 import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
 import type { FlowChatContext } from './types';
@@ -420,11 +424,13 @@ describe('shouldProcessEvent', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     resetFlowChatStore();
+    useSessionMutationStore.setState({ mutations: new Map(), retiredTurnIds: new Map() });
   });
 
   afterEach(() => {
     resetFlowChatStore();
     stateMachineManager.clear();
+    useSessionMutationStore.setState({ mutations: new Map(), retiredTurnIds: new Map() });
   });
 
   it('returns false for data event when no state machine exists', () => {
@@ -618,6 +624,26 @@ describe('shouldProcessEvent', () => {
     expect(
       shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'TextChunk'),
     ).toBe(true);
+  });
+
+  it('drops data and turn-start events for a retired rollback suffix', () => {
+    const context = createFlowChatContext();
+    stateMachineManager.getOrCreate(mockSessionId);
+    markSessionTurnsRetired(mockSessionId, [mockTurnId]);
+
+    expect(
+      shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'TextChunk'),
+    ).toBe(false);
+
+    __test_only__.handleDialogTurnStarted(context, {
+      sessionId: mockSessionId,
+      turnId: mockTurnId,
+      turnIndex: 7,
+      userInput: 'late rollback event',
+    });
+    expect(
+      FlowChatStore.getInstance().getState().sessions.get(mockSessionId),
+    ).toBeUndefined();
   });
 });
 

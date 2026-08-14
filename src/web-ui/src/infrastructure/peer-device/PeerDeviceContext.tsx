@@ -253,6 +253,7 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const peerCapabilities = parseHostInvokeResult<{
       capabilities?: {
         idempotent_dialog_submit?: boolean;
+        targeted_session_rollback?: boolean;
       };
     }>(
       await remoteConnectAPI.accountDeviceRpc(
@@ -281,6 +282,8 @@ export const PeerDeviceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           onHostInvokeTransportFailure: notePeerTransportFailure,
           supportsIdempotentDialogSubmit:
             peerCapabilities?.capabilities?.idempotent_dialog_submit === true,
+          supportsTargetedSessionRollback:
+            peerCapabilities?.capabilities?.targeted_session_rollback === true,
         },
       );
 

@@ -157,6 +157,7 @@ const HIGH_PRIORITY_COMMANDS = new Set([
   'get_agent_profile_config',
   'start_dialog_turn',
   'cancel_dialog_turn',
+  'rollback_session_to_turn',
   'list_pending_permission_requests',
   'subscribe_permission_requests',
   'respond_permission',
@@ -337,6 +338,8 @@ export interface PeerDeviceTransportHooks {
    * advertises matching execution-side deduplication.
    */
   supportsIdempotentDialogSubmit?: boolean;
+  /** Enables targeted rollback only when the target host owns the transaction. */
+  supportsTargetedSessionRollback?: boolean;
 }
 
 interface HostInvokeResultEnvelope {
@@ -423,6 +426,15 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
 
     if (isPeerLocalOnlyCommand(action)) {
       return this.local.request<T>(action, params, timing);
+    }
+
+    if (
+      action === 'rollback_session_to_turn' &&
+      this.hooks.supportsTargetedSessionRollback !== true
+    ) {
+      throw new PeerProductCommandError(
+        'The connected Peer host does not support targeted Session rollback',
+      );
     }
 
     const priority = peerInvokePriorityFor(action);

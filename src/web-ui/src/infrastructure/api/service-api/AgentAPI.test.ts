@@ -88,6 +88,42 @@ describe('AgentAPI', () => {
     });
   });
 
+  it('normalizes omitted rollback file and retired-turn arrays', async () => {
+    invokeMock.mockResolvedValueOnce({
+      status: 'completed',
+      sessionId: 'session-1',
+      transcript: { sessionId: 'session-1', messages: [] },
+      composer: { kind: 'preserve' },
+      changed: true,
+      hiddenTurnCount: 1,
+    });
+
+    await expect(agentAPI.rollbackSessionToTurn({
+      workspacePath: 'D:/workspace/BitFun',
+      sessionId: 'session-1',
+      targetTurnId: 'turn-7',
+    })).resolves.toMatchObject({
+      status: 'completed',
+      retiredTurnIds: [],
+      restoredFiles: [],
+    });
+
+    invokeMock.mockResolvedValueOnce({
+      status: 'recovery_required',
+      sessionId: 'session-1',
+      mutationId: 'mutation-1',
+      reason: 'reconcile marker',
+    });
+    await expect(agentAPI.rollbackSessionToTurn({
+      workspacePath: 'D:/workspace/BitFun',
+      sessionId: 'session-1',
+      targetTurnId: 'turn-7',
+    })).resolves.toMatchObject({
+      status: 'recovery_required',
+      affectedFiles: [],
+    });
+  });
+
   it('sends subagent timeout controls with the desktop command request shape', async () => {
     await agentAPI.setSubagentTimeout('subagent-session', { type: 'disable' });
 

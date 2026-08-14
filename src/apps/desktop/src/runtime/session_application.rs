@@ -326,6 +326,17 @@ impl DesktopSessionApplication {
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }
 
+    pub(crate) async fn rollback_session_to_turn(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionRollbackToTurnRequest,
+    ) -> DesktopSessionApplicationResult<bitfun_runtime_ports::AgentSessionRollbackToTurnOutcome>
+    {
+        self.agent_runtime
+            .rollback_session_to_turn(request)
+            .await
+            .map_err(|error| DesktopSessionApplicationError::Runtime(error.into_message()))
+    }
+
     async fn resolved_scope(
         &self,
         request: DesktopSessionScopeRequest,

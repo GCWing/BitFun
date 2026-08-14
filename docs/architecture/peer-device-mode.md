@@ -65,6 +65,9 @@ FS) and must not be mixed with Peer Device Mode.
   only when the initial `peer_mode_ping` advertises
   `idempotent_dialog_submit`, so mixed-version peers remain single-shot.
   Other mutations remain single-shot because a timed-out outcome is unknown.
+  Identity-based Session rollback is sent only when `peer_mode_ping` advertises
+  `targeted_session_rollback`; older peers fail explicitly and never fall back
+  to controller-local files, history, or the removed numeric rollback command.
   The desktop `account_device_rpc` command enforces the requested deadline
   around the native HTTP future; the controller's Promise deadline is not
   merely a UI timer. Failed session-list loads leave the spinner and expose an

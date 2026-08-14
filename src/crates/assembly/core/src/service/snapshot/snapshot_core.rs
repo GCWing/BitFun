@@ -810,7 +810,7 @@ impl SnapshotCore {
     }
 
     /// Rollback to the start of `target_turn` (undo target_turn and later turns).
-    pub async fn rollback_to_turn(
+    pub async fn rollback_workspace_files_to_boundary(
         &mut self,
         session_id: &str,
         target_turn: usize,

@@ -37,6 +37,7 @@ describe('peerInvokePriorityFor', () => {
     expect(peerInvokePriorityFor('list_persisted_sessions_page')).toBe('high');
     expect(peerInvokePriorityFor('initialize_workspace_startup_state')).toBe('high');
     expect(peerInvokePriorityFor('start_dialog_turn')).toBe('high');
+    expect(peerInvokePriorityFor('rollback_session_to_turn')).toBe('high');
     expect(peerInvokePriorityFor('reload_config')).toBe('high');
     expect(peerInvokePriorityFor('get_config')).toBe('high');
     expect(peerInvokePriorityFor('get_available_modes')).toBe('high');
@@ -279,6 +280,43 @@ describe('PeerDeviceTransportAdapter queue', () => {
       expect.any(String),
       PEER_MUTATION_REQUEST_TIMEOUT_MS,
     );
+  });
+
+  it('rejects targeted rollback when the Peer host lacks the negotiated capability', async () => {
+    const deviceRpc = vi.fn();
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(adapter.request('rollback_session_to_turn', {
+      request: {
+        workspacePath: '/repo',
+        sessionId: 'session-1',
+        targetTurnId: 'turn-7',
+      },
+    })).rejects.toEqual(expect.objectContaining<Partial<PeerProductCommandError>>({
+      name: 'PeerProductCommandError',
+      message: 'The connected Peer host does not support targeted Session rollback',
+    }));
+    expect(deviceRpc).not.toHaveBeenCalled();
+  });
+
+  it('forwards targeted rollback after capability negotiation', async () => {
+    const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
+      resp: 'host_invoke_result',
+      ok: true,
+      value: { status: 'completed', sessionId: 'session-1' },
+    }));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {
+      supportsTargetedSessionRollback: true,
+    });
+
+    await expect(adapter.request('rollback_session_to_turn', {
+      request: {
+        workspacePath: '/repo',
+        sessionId: 'session-1',
+        targetTurnId: 'turn-7',
+      },
+    })).resolves.toEqual({ status: 'completed', sessionId: 'session-1' });
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
   });
 
   it('preserves a session conflict returned by the Peer Host without replaying it', async () => {

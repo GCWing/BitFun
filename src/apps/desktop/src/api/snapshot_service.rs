@@ -9,15 +9,10 @@ use bitfun_core::service::snapshot::{
     initialize_snapshot_manager_for_workspace, open_snapshot_manager_for_view, FileChangeEntry,
     OperationType, SnapshotConfig, SnapshotManager,
 };
-#[cfg(test)]
-use bitfun_runtime_ports::LocalWorkspaceSnapshotSessionRequest;
-use bitfun_runtime_ports::{
-    LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind,
-    SessionStoragePathRequest,
-};
+use bitfun_runtime_ports::SessionStoragePathRequest;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use std::{path::PathBuf, sync::Arc};
 use tauri::{AppHandle, Emitter, State};
 
@@ -92,20 +87,6 @@ pub struct RollbackSessionRequest {
     #[serde(default)]
     #[serde(alias = "deleteSession")]
     pub delete_session: bool, // Whether to also delete the session (default false)
-    #[serde(alias = "workspacePath")]
-    pub workspace_path: String,
-    #[serde(flatten)]
-    pub remote_scope: SnapshotRemoteScope,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RollbackTurnRequest {
-    #[serde(alias = "sessionId")]
-    pub session_id: String,
-    #[serde(alias = "turnIndex")]
-    pub turn_index: usize,
-    #[serde(default)]
-    pub delete_turns: bool,
     #[serde(alias = "workspacePath")]
     pub workspace_path: String,
     #[serde(flatten)]
@@ -318,86 +299,6 @@ async fn resolve_workspace_dir(workspace_path: &str) -> Result<PathBuf, String> 
     Ok(workspace_dir)
 }
 
-fn local_snapshot_command_error(operation: &str, workspace_path: &str, error: PortError) -> String {
-    if error.kind == PortErrorKind::NotAvailable {
-        format!(
-            "Failed to initialize snapshot system for workspace {}: {}",
-            workspace_path, error.message
-        )
-    } else {
-        format!("Failed to {operation}: {}", error.message)
-    }
-}
-
-async fn rollback_local_workspace_files(
-    port: &dyn LocalWorkspaceSnapshotPort,
-    workspace_path: PathBuf,
-    workspace_display: &str,
-    session_id: String,
-    turn_index: usize,
-) -> Result<Vec<String>, String> {
-    let restored_files = port
-        .rollback_workspace_files_to_turn(LocalWorkspaceSnapshotTurnRequest {
-            workspace_path,
-            session_id,
-            turn_index,
-        })
-        .await
-        .map_err(|error| local_snapshot_command_error("rollback turn", workspace_display, error))?;
-    Ok(restored_files
-        .iter()
-        .map(|path| path.to_string_lossy().to_string())
-        .collect())
-}
-
-#[cfg(test)]
-async fn local_snapshot_session_files(
-    port: &dyn LocalWorkspaceSnapshotPort,
-    workspace_path: PathBuf,
-    workspace_display: &str,
-    session_id: String,
-) -> Result<Vec<String>, String> {
-    let files = port
-        .get_session_files(LocalWorkspaceSnapshotSessionRequest {
-            workspace_path,
-            session_id,
-            max_turn_exclusive: None,
-        })
-        .await
-        .map_err(|error| {
-            local_snapshot_command_error("get session files", workspace_display, error)
-        })?;
-    Ok(files
-        .iter()
-        .map(|path| path.to_string_lossy().to_string())
-        .collect())
-}
-
-#[cfg(test)]
-async fn local_snapshot_session_stats(
-    port: &dyn LocalWorkspaceSnapshotPort,
-    workspace_path: PathBuf,
-    workspace_display: &str,
-    session_id: String,
-) -> Result<serde_json::Value, String> {
-    let stats = port
-        .get_session_stats(LocalWorkspaceSnapshotSessionRequest {
-            workspace_path,
-            session_id,
-            max_turn_exclusive: None,
-        })
-        .await
-        .map_err(|error| {
-            local_snapshot_command_error("get session stats", workspace_display, error)
-        })?;
-    Ok(serde_json::json!({
-        "session_id": stats.session_id,
-        "total_files": stats.total_files,
-        "total_turns": stats.total_turns,
-        "total_changes": stats.total_changes
-    }))
-}
-
 async fn ensure_snapshot_manager_ready_for(
     workspace_path: &str,
     caller: &str,
@@ -496,8 +397,8 @@ async fn snapshot_manager_for_view(
 
 struct SnapshotHistoryMutation {
     _maintenance: CoreSessionMaintenancePermit,
-    mutation: CoreSessionMutationPermit,
-    storage_path: PathBuf,
+    _mutation: CoreSessionMutationPermit,
+    _storage_path: PathBuf,
 }
 
 async fn begin_snapshot_history_read(
@@ -558,8 +459,8 @@ async fn begin_snapshot_history_mutation(
         })?;
     Ok(SnapshotHistoryMutation {
         _maintenance: maintenance,
-        mutation,
-        storage_path,
+        _mutation: mutation,
+        _storage_path: storage_path,
     })
 }
 
@@ -686,104 +587,21 @@ pub async fn rollback_session(
 }
 
 #[tauri::command]
-pub async fn rollback_to_turn(
-    app_handle: AppHandle,
+pub async fn rollback_session_to_turn(
     runtime: State<'_, DesktopRuntimeContext>,
-    request: RollbackTurnRequest,
-) -> Result<Vec<String>, String> {
-    ensure_complete_rollback_supported(&request.workspace_path, &request.remote_scope).await?;
-    ensure_local_runtime_ownership(runtime.inner(), &request.workspace_path).await?;
-    let workspace_path = resolve_workspace_dir(&request.workspace_path).await?;
-    let compatibility = runtime.session_application().compatibility();
-    let history_mutation = begin_snapshot_history_mutation(
-        runtime.inner(),
-        &request.workspace_path,
-        &request.session_id,
-    )
-    .await?;
-
-    let rolled_back_parent_turn_ids = if request.delete_turns {
-        compatibility
-            .validate_persisted_session_context_rollback(
-                &history_mutation.mutation,
-                request.turn_index,
-            )
-            .await
-            .map_err(|error| format!("Failed to validate session rollback: {error}"))?;
-        compatibility
-            .load_persisted_session_turns_for_mutation(&history_mutation.mutation, None)
-            .await
-            .map_err(|error| format!("Failed to load turns before rollback: {error}"))?
-            .into_iter()
-            .filter(|turn| turn.turn_index >= request.turn_index)
-            .map(|turn| turn.turn_id)
-            .collect::<HashSet<_>>()
-    } else {
-        HashSet::new()
+    request: bitfun_runtime_ports::AgentSessionRollbackToTurnRequest,
+) -> Result<bitfun_runtime_ports::AgentSessionRollbackToTurnOutcome, String> {
+    let remote_scope = SnapshotRemoteScope {
+        remote_connection_id: request.remote_connection_id.clone(),
+        remote_ssh_host: request.remote_ssh_host.clone(),
     };
-
-    let restored_files_str = rollback_local_workspace_files(
-        runtime.local_workspace_snapshot(),
-        workspace_path,
-        &request.workspace_path,
-        request.session_id.clone(),
-        request.turn_index,
-    )
-    .await?;
-
-    let deleted_turns_count = rolled_back_parent_turn_ids.len();
-    if request.delete_turns {
-        compatibility
-            .rollback_persisted_session_context_to_turn_start(
-                &history_mutation.mutation,
-                request.turn_index,
-            )
-            .await
-            .map_err(|error| {
-                format!(
-                    "Workspace files were rolled back, but session history rollback failed. Reload the session before retrying: {error}"
-                )
-            })?;
-        if !rolled_back_parent_turn_ids.is_empty() {
-            if let Err(error) = compatibility
-                .delete_hidden_subagent_sessions_for_parent_turns(
-                    &history_mutation.storage_path,
-                    &request.session_id,
-                    &rolled_back_parent_turn_ids,
-                )
-                .await
-            {
-                warn!(
-                    "Failed to delete hidden subagent sessions during rollback: session_id={}, turn_index={}, error={}",
-                    request.session_id, request.turn_index, error
-                );
-            }
-        }
-
-        let _ = app_handle.emit(
-            "conversation_turns_deleted",
-            serde_json::json!({
-                "session_id": request.session_id,
-                "remaining_turns": request.turn_index,
-                "deleted_count": deleted_turns_count,
-            }),
-        );
-    }
-
-    drop(history_mutation);
-
-    let _ = app_handle.emit(
-        "turn_rolled_back",
-        serde_json::json!({
-            "session_id": request.session_id,
-            "turn_index": request.turn_index,
-            "files_count": restored_files_str.len(),
-            "deleted_turns": request.delete_turns,
-            "deleted_turns_count": deleted_turns_count,
-        }),
-    );
-
-    Ok(restored_files_str)
+    ensure_complete_rollback_supported(&request.workspace_path, &remote_scope).await?;
+    ensure_local_runtime_ownership(runtime.inner(), &request.workspace_path).await?;
+    runtime
+        .session_application()
+        .rollback_session_to_turn(request)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1446,41 +1264,36 @@ pub async fn get_baseline_snapshot_diff(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    use bitfun_runtime_ports::{
-        LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest,
-        LocalWorkspaceSnapshotStats, LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind,
-        PortResult,
-    };
-
     use super::{
         ensure_complete_rollback_supported, ensure_local_snapshot_mutation_path,
-        get_snapshot_manager_for_workspace, local_snapshot_command_error,
-        local_snapshot_session_files, local_snapshot_session_stats, rollback_local_workspace_files,
-        snapshot_manager_for_view, RollbackTurnRequest, SnapshotRemoteScope,
+        get_snapshot_manager_for_workspace, snapshot_manager_for_view, SnapshotRemoteScope,
     };
 
     #[test]
-    fn snapshot_mutation_dto_preserves_structured_remote_facts() {
-        let request: RollbackTurnRequest = serde_json::from_value(serde_json::json!({
-            "sessionId": "remote-session",
-            "turnIndex": 2,
-            "workspacePath": "/srv/project",
-            "remoteConnectionId": "ssh:user@example.com:22",
-            "remoteSshHost": "example.com"
-        }))
-        .expect("deserialize snapshot mutation scope");
+    fn targeted_rollback_request_preserves_stable_identity_and_remote_facts() {
+        let request: bitfun_runtime_ports::AgentSessionRollbackToTurnRequest =
+            serde_json::from_value(serde_json::json!({
+                "sessionId": "remote-session",
+                "targetTurnId": "turn-7",
+                "expectedStorageTurnIndex": 7,
+                "expectedCatalogRevision": "catalog-3",
+                "workspacePath": "/srv/project",
+                "remoteConnectionId": "ssh:user@example.com:22",
+                "remoteSshHost": "example.com"
+            }))
+            .expect("deserialize targeted rollback request");
 
+        assert_eq!(request.target_turn_id, "turn-7");
+        assert_eq!(request.expected_storage_turn_index, Some(7));
         assert_eq!(
-            request.remote_scope.remote_connection_id.as_deref(),
+            request.expected_catalog_revision.as_deref(),
+            Some("catalog-3")
+        );
+        assert_eq!(
+            request.remote_connection_id.as_deref(),
             Some("ssh:user@example.com:22")
         );
-        assert_eq!(
-            request.remote_scope.remote_ssh_host.as_deref(),
-            Some("example.com")
-        );
+        assert_eq!(request.remote_ssh_host.as_deref(), Some("example.com"));
     }
 
     #[tokio::test]
@@ -1550,12 +1363,12 @@ mod tests {
             .split_once("pub async fn rollback_session")
             .expect("rollback_session remains present")
             .1
-            .split_once("pub async fn rollback_to_turn")
-            .expect("rollback_to_turn remains present")
+            .split_once("pub async fn rollback_session_to_turn")
+            .expect("targeted rollback remains present")
             .0;
-        let rollback_to_turn = source
-            .split_once("pub async fn rollback_to_turn")
-            .expect("rollback_to_turn remains present")
+        let targeted_rollback = source
+            .split_once("pub async fn rollback_session_to_turn")
+            .expect("targeted rollback remains present")
             .1
             .split_once("pub async fn accept_session")
             .expect("accept_session remains present")
@@ -1573,16 +1386,15 @@ mod tests {
 
         assert_remote_guard_precedes(rollback_session, "ensure_local_runtime_ownership");
         assert_remote_guard_precedes(rollback_session, "ensure_snapshot_manager_ready_for");
-        assert_remote_guard_precedes(rollback_to_turn, "ensure_local_runtime_ownership");
-        assert_remote_guard_precedes(rollback_to_turn, "begin_snapshot_history_mutation");
+        assert_remote_guard_precedes(targeted_rollback, "ensure_local_runtime_ownership");
+        assert_remote_guard_precedes(targeted_rollback, "rollback_session_to_turn");
     }
 
     #[test]
     fn snapshot_mutators_share_session_revert_admission() {
         let source = include_str!("snapshot_service.rs");
         for (command, next_command) in [
-            ("rollback_session", "rollback_to_turn"),
-            ("rollback_to_turn", "accept_session"),
+            ("rollback_session", "rollback_session_to_turn"),
             ("accept_session", "accept_file"),
             ("accept_file", "reject_file"),
             ("reject_file", "get_session_files"),
@@ -1601,6 +1413,22 @@ mod tests {
                 "{command} must commit staged Session undo under the shared mutation owner"
             );
         }
+
+        let targeted_rollback = source
+            .split_once("pub async fn rollback_session_to_turn")
+            .expect("targeted rollback remains present")
+            .1
+            .split_once("pub async fn accept_session")
+            .expect("accept_session remains present")
+            .0;
+        assert!(
+            targeted_rollback.contains(".rollback_session_to_turn(request)"),
+            "targeted rollback must delegate admission to the Agent Session transaction"
+        );
+        assert!(
+            !targeted_rollback.contains("begin_snapshot_history_mutation"),
+            "targeted rollback must not reacquire the Session mutation owned by the Agent Session transaction"
+        );
 
         let record = source
             .split_once("pub async fn record_file_change")
@@ -1643,110 +1471,5 @@ mod tests {
 
         assert!(error.contains("snapshot_remote_workspace_unavailable"));
         assert!(get_snapshot_manager_for_workspace(workspace.path()).is_none());
-    }
-
-    #[derive(Default)]
-    struct RecordingSnapshotPort {
-        file_calls: AtomicUsize,
-        stats_calls: AtomicUsize,
-        rollback_calls: AtomicUsize,
-    }
-
-    #[async_trait::async_trait]
-    impl LocalWorkspaceSnapshotPort for RecordingSnapshotPort {
-        async fn prepare_local_workspace(&self, _workspace_path: PathBuf) -> PortResult<()> {
-            Ok(())
-        }
-
-        async fn get_session_files(
-            &self,
-            _request: LocalWorkspaceSnapshotSessionRequest,
-        ) -> PortResult<Vec<PathBuf>> {
-            self.file_calls.fetch_add(1, Ordering::SeqCst);
-            Ok(vec![PathBuf::from("changed.txt")])
-        }
-
-        async fn get_session_stats(
-            &self,
-            request: LocalWorkspaceSnapshotSessionRequest,
-        ) -> PortResult<LocalWorkspaceSnapshotStats> {
-            self.stats_calls.fetch_add(1, Ordering::SeqCst);
-            Ok(LocalWorkspaceSnapshotStats {
-                session_id: request.session_id,
-                total_files: 1,
-                total_turns: 2,
-                total_changes: 3,
-            })
-        }
-
-        async fn rollback_workspace_files_to_turn(
-            &self,
-            _request: LocalWorkspaceSnapshotTurnRequest,
-        ) -> PortResult<Vec<PathBuf>> {
-            self.rollback_calls.fetch_add(1, Ordering::SeqCst);
-            Ok(vec![PathBuf::from("restored.txt")])
-        }
-    }
-
-    #[test]
-    fn local_snapshot_errors_preserve_desktop_initialization_and_operation_context() {
-        let initialization = local_snapshot_command_error(
-            "get session files",
-            "C:\\workspace",
-            PortError::new(PortErrorKind::NotAvailable, "backend unavailable"),
-        );
-        assert_eq!(
-            initialization,
-            "Failed to initialize snapshot system for workspace C:\\workspace: backend unavailable"
-        );
-
-        let operation = local_snapshot_command_error(
-            "get session stats",
-            "C:\\workspace",
-            PortError::new(PortErrorKind::Backend, "stats failed"),
-        );
-        assert_eq!(operation, "Failed to get session stats: stats failed");
-    }
-
-    #[tokio::test]
-    async fn local_snapshot_adapters_call_each_port_operation_once_and_keep_json_shape() {
-        let port = RecordingSnapshotPort::default();
-        let workspace = PathBuf::from("workspace");
-
-        let files = local_snapshot_session_files(
-            &port,
-            workspace.clone(),
-            "workspace",
-            "session-1".to_string(),
-        )
-        .await
-        .expect("file adapter should succeed");
-        let stats = local_snapshot_session_stats(
-            &port,
-            workspace.clone(),
-            "workspace",
-            "session-1".to_string(),
-        )
-        .await
-        .expect("stats adapter should succeed");
-        let restored = rollback_local_workspace_files(
-            &port,
-            workspace,
-            "workspace",
-            "session-1".to_string(),
-            4,
-        )
-        .await
-        .expect("rollback adapter should succeed");
-
-        assert_eq!(port.file_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(port.stats_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(port.rollback_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(files, vec!["changed.txt"]);
-        assert_eq!(restored, vec!["restored.txt"]);
-        assert_eq!(stats["session_id"], "session-1");
-        assert_eq!(stats["total_files"], 1);
-        assert_eq!(stats["total_turns"], 2);
-        assert_eq!(stats["total_changes"], 3);
     }
 }

@@ -94,7 +94,7 @@ pub(crate) async fn dispatch(
         "save_session_turn" => session::save_session_turn(state, args).await,
 
         // Snapshot / rollback
-        "rollback_to_turn" => snapshot::rollback_to_turn(state, args).await,
+        "rollback_session_to_turn" => snapshot::rollback_session_to_turn(state, args).await,
         "get_session_files" => snapshot::get_session_files(state, args).await,
 
         // Dialog / tools

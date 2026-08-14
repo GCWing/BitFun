@@ -1473,7 +1473,7 @@ pub async fn run() {
             initialize_snapshot,
             record_file_change,
             rollback_session,
-            rollback_to_turn,
+            rollback_session_to_turn,
             accept_session,
             accept_file,
             reject_file,

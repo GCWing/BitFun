@@ -283,6 +283,56 @@ export type LoadSessionTurnWindowResponse =
       catalog: SessionTurnCatalog;
     };
 
+export interface RollbackSessionToTurnRequest {
+  workspacePath: string;
+  sessionId: string;
+  targetTurnId: string;
+  expectedStorageTurnIndex?: number;
+  expectedCatalogRevision?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export type RollbackSessionToTurnOutcome =
+  | {
+      status: 'completed';
+      sessionId: string;
+      transcript: unknown;
+      composer: { kind: 'preserve' } | { kind: 'clear' } | { kind: 'replace'; text: string };
+      retiredTurnIds: string[];
+      changed: boolean;
+      hiddenTurnCount: number;
+      boundaryStorageTurnIndex?: number;
+      targetTurnId?: string;
+      restoredFiles: string[];
+      reloadRequired?: boolean;
+      reloadReason?: string;
+    }
+  | {
+      status: 'recovery_required';
+      sessionId: string;
+      mutationId: string;
+      affectedFiles: string[];
+      reason: string;
+    };
+
+type RollbackSessionToTurnCompletedOutcome = Extract<
+  RollbackSessionToTurnOutcome,
+  { status: 'completed' }
+>;
+type RollbackSessionToTurnRecoveryOutcome = Extract<
+  RollbackSessionToTurnOutcome,
+  { status: 'recovery_required' }
+>;
+type RollbackSessionToTurnWireOutcome =
+  | (Omit<RollbackSessionToTurnCompletedOutcome, 'retiredTurnIds' | 'restoredFiles'> & {
+      retiredTurnIds?: string[];
+      restoredFiles?: string[];
+    })
+  | (Omit<RollbackSessionToTurnRecoveryOutcome, 'affectedFiles'> & {
+      affectedFiles?: string[];
+    });
+
 export interface EnsureAssistantBootstrapRequest {
   sessionId: string;
   workspacePath: string;
@@ -937,6 +987,32 @@ export class AgentAPI {
         sessionId: request.sessionId,
         workspacePath: request.workspacePath,
         targetStorageTurnIndex: request.targetStorageTurnIndex,
+      });
+    }
+  }
+
+  async rollbackSessionToTurn(
+    request: RollbackSessionToTurnRequest,
+  ): Promise<RollbackSessionToTurnOutcome> {
+    try {
+      const outcome = await api.invoke<RollbackSessionToTurnWireOutcome>('rollback_session_to_turn', {
+        request,
+      });
+      if (outcome.status === 'completed') {
+        return {
+          ...outcome,
+          retiredTurnIds: outcome.retiredTurnIds ?? [],
+          restoredFiles: outcome.restoredFiles ?? [],
+        };
+      }
+      return {
+        ...outcome,
+        affectedFiles: outcome.affectedFiles ?? [],
+      };
+    } catch (error) {
+      throw createTauriCommandError('rollback_session_to_turn', error, {
+        sessionId: request.sessionId,
+        targetTurnId: request.targetTurnId,
       });
     }
   }

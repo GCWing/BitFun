@@ -489,7 +489,7 @@ impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
         validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
         ensure_local_snapshot_manager(&request.workspace_path)
             .await?
-            .rollback_to_turn(&request.session_id, request.turn_index)
+            .rollback_workspace_files_to_boundary(&request.session_id, request.turn_index)
             .await
             .map_err(snapshot_port_error)
     }

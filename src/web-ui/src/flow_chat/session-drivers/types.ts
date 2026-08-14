@@ -44,6 +44,8 @@ export interface SendMessageOptions {
   onSessionConflictRetryStart?: () => void;
   onSessionConflictRetrySuccess?: () => void;
   fromSessionConflictRetry?: boolean;
+  /** Identifies the edit-rerun mutation lease allowed to submit this Turn. */
+  sessionMutationLeaseId?: string;
 }
 
 /** The message content of one submission, before flavor routing. */

@@ -1,10 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cancelSessionTask, sendMessage, syncSessionModelSelection } from './MessageModule';
 import { SessionExecutionEvent } from '../../state-machine/types';
 import {
   getRuntimeStatus,
   resetRuntimeStatuses,
 } from '../../store/runtimeStatusStore';
+import {
+  tryBeginSessionMutation,
+  useSessionMutationStore,
+} from '../../store/sessionMutationStore';
 
 const mockTransition = vi.fn();
 const mockGetCurrentState = vi.fn(() => 'processing');
@@ -105,6 +109,36 @@ vi.mock('@/infrastructure/i18n', () => ({
     t: (key: string) => key,
   },
 }));
+
+describe('MessageModule Session mutation admission', () => {
+  beforeEach(() => {
+    useSessionMutationStore.setState({ mutations: new Map(), retiredTurnIds: new Map() });
+  });
+  afterEach(() => {
+    useSessionMutationStore.setState({ mutations: new Map(), retiredTurnIds: new Map() });
+  });
+
+  it('rejects an ordinary submission while Session history is mutating', async () => {
+    const session = {
+      sessionId: 'session-mutating',
+      mode: 'agentic',
+      dialogTurns: [],
+      config: {},
+      titleStatus: 'generated',
+    };
+    const context: any = {
+      flowChatStore: {
+        getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
+      },
+    };
+    tryBeginSessionMutation(session.sessionId, 'rollback', 'turn-7');
+
+    await expect(sendMessage(context, 'interleaving prompt', session.sessionId)).rejects.toThrow(
+      'history mutation',
+    );
+    expect(mockStartDialogTurn).not.toHaveBeenCalled();
+  });
+});
 
 describe('MessageModule session writer conflict', () => {
   function deferred<T>() {

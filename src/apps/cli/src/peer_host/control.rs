@@ -133,6 +133,9 @@ pub(crate) fn peer_mode_ping_value() -> Value {
         "ok": true,
         "peer": true,
         "device_id": device_id,
+        "capabilities": {
+            "targeted_session_rollback": true,
+        },
     })
 }
 

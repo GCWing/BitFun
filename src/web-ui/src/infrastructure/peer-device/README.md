@@ -90,10 +90,11 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     tail; the controller must not follow it with an unconditional full restore.
     `load_session_turn_window` is a high-priority, retryable read and carries
     the same session/workspace scope as restore. Sequential history scrolling
-    and turn-rail navigation request bounded windows. Search, edit, rollback,
-    and an older Host that rejects the window command use the shared explicit
-    full-history ensure fallback. Never include catalog preview text in Peer
-    request/response logs.
+    and turn-rail navigation request bounded windows. Search and older Hosts
+    that reject the window command use the shared explicit full-history ensure
+    fallback. Targeted rollback is separately capability-gated and never falls
+    back to a controller-local or numeric rollback path. Never include catalog
+    preview text in Peer request/response logs.
 
 ## Related account-login guards
 

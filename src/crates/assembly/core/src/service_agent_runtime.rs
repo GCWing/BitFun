@@ -20,9 +20,10 @@ use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentLifecycleDeliveryPort,
     AgentLocalCommandTurnPort, AgentSessionClosePort, AgentSessionManagementPort,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSubmissionPort,
-    AgentThreadGoalManagementPort, AgentTurnCancellationPort, AgentUserShellCommandPort,
-    AgentWorkspaceReferencePort, SessionStoragePathRequest, SessionStorePort,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome,
+    AgentSessionRollbackToTurnRequest, AgentSubmissionPort, AgentThreadGoalManagementPort,
+    AgentTurnCancellationPort, AgentUserShellCommandPort, AgentWorkspaceReferencePort,
+    SessionStoragePathRequest, SessionStorePort,
 };
 #[cfg(feature = "remote-connect")]
 use bitfun_runtime_ports::{
@@ -593,6 +594,11 @@ impl ScheduledSessionManagementPort {
             retired_turn_ids: maintenance.retired_turn_ids().to_vec(),
             changed,
             hidden_turn_count,
+            boundary_storage_turn_index: None,
+            target_turn_id: None,
+            restored_files: Vec::new(),
+            reload_required: false,
+            reload_reason: None,
         })
     }
 }
@@ -611,6 +617,153 @@ impl AgentSessionRevertPort for ScheduledSessionManagementPort {
         request: AgentSessionRevertRequest,
     ) -> bitfun_runtime_ports::PortResult<AgentSessionRevertResult> {
         self.apply_session_revert(request, false).await
+    }
+
+    async fn rollback_session_to_turn(
+        &self,
+        request: AgentSessionRollbackToTurnRequest,
+    ) -> bitfun_runtime_ports::PortResult<AgentSessionRollbackToTurnOutcome> {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        if request.remote_connection_id.is_some() || request.remote_ssh_host.is_some() {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::NotAvailable,
+                "Session rollback is unavailable for remote workspaces",
+            ));
+        }
+        let storage_path = CoreSessionStorePort::default()
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: std::path::PathBuf::from(&request.workspace_path),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map(|resolution| resolution.effective_storage_path)?;
+        let session_manager = self.coordinator.get_session_manager();
+        if !session_manager
+            .is_session_loaded_from_storage_path(&storage_path, &request.session_id)
+            .map_err(map_session_close_error)?
+        {
+            self.coordinator
+                .restore_session_from_storage_path(&storage_path, &request.session_id)
+                .await
+                .map_err(map_session_close_error)?;
+        }
+        self.coordinator
+            .local_revert_workspace(&request.session_id)
+            .map_err(map_session_close_error)?;
+        session_manager
+            .validate_session_storage_path_binding(&request.session_id, &storage_path)
+            .map_err(map_session_close_error)?;
+        let maintenance = self
+            .scheduler
+            .begin_session_maintenance(&request.session_id, &storage_path, Duration::from_secs(30))
+            .await
+            .map_err(map_session_close_error)?;
+        let _mutation = session_manager
+            .acquire_session_mutation(&request.session_id)
+            .await
+            .map_err(map_session_close_error)?;
+        session_manager
+            .validate_session_storage_path_binding(&request.session_id, &storage_path)
+            .map_err(map_session_close_error)?;
+        let marker_before = session_manager
+            .persistence_manager()
+            .load_session_revert_state(&storage_path, &request.session_id)
+            .await
+            .map_err(map_session_close_error)?;
+
+        let applied = self
+            .coordinator
+            .apply_targeted_session_revert_locked(
+                &storage_path,
+                &request.session_id,
+                &request.target_turn_id,
+                request.expected_storage_turn_index,
+                request.expected_catalog_revision.as_deref(),
+            )
+            .await;
+        let (composer, hidden_turn_count, boundary, restored_files, persisted_retired_turn_ids) =
+            match applied {
+                Ok(result) => result,
+                Err(error) => {
+                    let marker = session_manager
+                        .persistence_manager()
+                        .load_session_revert_state(&storage_path, &request.session_id)
+                        .await
+                        .map_err(map_session_close_error)?;
+                    if let Some(marker) = marker {
+                        if marker.phase
+                            == crate::agentic::session::revert::SessionRevertPhase::Staged
+                            && marker_before.as_ref() == Some(&marker)
+                        {
+                            return Err(map_session_close_error(error));
+                        }
+                        let mutation_id = marker.diagnostic_mutation_id(&request.session_id);
+                        let affected_files = marker
+                            .workspace_checkpoint
+                            .into_iter()
+                            .map(|checkpoint| checkpoint.display_path())
+                            .collect();
+                        return Ok(AgentSessionRollbackToTurnOutcome::RecoveryRequired {
+                            session_id: request.session_id,
+                            mutation_id,
+                            affected_files,
+                            reason: error.to_string(),
+                        });
+                    }
+                    return Err(map_session_close_error(error));
+                }
+            };
+        self.coordinator
+            .emit_event(AgenticEvent::SessionHistoryChanged {
+                session_id: request.session_id.clone(),
+            })
+            .await;
+        let mut retired_turn_ids = maintenance.retired_turn_ids().to_vec();
+        for turn_id in persisted_retired_turn_ids {
+            if !retired_turn_ids.contains(&turn_id) {
+                retired_turn_ids.push(turn_id);
+            }
+        }
+        let (transcript, reload_reason) = match self
+            .coordinator
+            .read_session_transcript_locked(bitfun_runtime_ports::SessionTranscriptRequest {
+                session_id: request.session_id.clone(),
+                turn_id: None,
+            })
+            .await
+        {
+            Ok(transcript) => (transcript, None),
+            Err(error) => (
+                bitfun_runtime_ports::SessionTranscript {
+                    session_id: request.session_id.clone(),
+                    messages: Vec::new(),
+                },
+                Some(format!(
+                    "Session rollback completed but the authoritative transcript could not be read: {error}"
+                )),
+            ),
+        };
+        Ok(AgentSessionRollbackToTurnOutcome::Completed {
+            result: AgentSessionRevertResult {
+                session_id: request.session_id,
+                transcript,
+                composer,
+                retired_turn_ids,
+                changed: true,
+                hidden_turn_count,
+                boundary_storage_turn_index: Some(boundary),
+                target_turn_id: Some(request.target_turn_id),
+                restored_files,
+                reload_required: reload_reason.is_some(),
+                reload_reason,
+            },
+        })
     }
 }
 
@@ -2386,6 +2539,32 @@ mod tests {
             error.kind,
             bitfun_runtime_ports::PortErrorKind::SessionInUse
         );
+    }
+
+    #[test]
+    fn targeted_rollback_restores_before_requiring_an_in_memory_session() {
+        let source = include_str!("service_agent_runtime.rs");
+        let body = source
+            .split("async fn rollback_session_to_turn")
+            .nth(1)
+            .and_then(|source| source.split("impl AgentSessionManagementPort").next())
+            .expect("targeted rollback implementation");
+        let resolve_storage = body
+            .find("resolve_session_storage_path")
+            .expect("storage path resolution");
+        let restore_session = body
+            .find("restore_session_from_storage_path")
+            .expect("disk Session restore");
+        let local_workspace = body
+            .find("local_revert_workspace")
+            .expect("local workspace validation");
+        let maintenance = body
+            .find("begin_session_maintenance")
+            .expect("maintenance admission");
+
+        assert!(resolve_storage < restore_session);
+        assert!(restore_session < local_workspace);
+        assert!(local_workspace < maintenance);
     }
 
     #[test]

@@ -260,7 +260,6 @@ import { scrollToLatestBarAppearanceDescriptor } from '@/flow_chat/components/Sc
 import { scrollToTurnHeaderButtonAppearanceDescriptor } from '@/flow_chat/components/ScrollToTurnHeaderButton.appearance';
 import { tokenUsageIndicatorAppearanceDescriptor } from '@/flow_chat/components/TokenUsageIndicator.appearance';
 import { toolApprovalBarAppearanceDescriptor } from '@/flow_chat/components/ToolApprovalBar.appearance';
-import { snapshotRollbackButtonAppearanceDescriptor } from '@/flow_chat/components/SnapshotRollbackButton.appearance';
 import { smartRecommendationsAppearanceDescriptor } from '@/flow_chat/components/smart-recommendations/SmartRecommendations.appearance';
 import { sessionRuntimeStatusEntryAppearanceDescriptor } from '@/flow_chat/components/usage/SessionRuntimeStatusEntry.appearance';
 import { runtimeStatusSlotAppearanceDescriptor } from '@/flow_chat/components/modern/RuntimeStatusSlot.appearance';
@@ -519,7 +518,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(scrollToTurnHeaderButtonAppearanceDescriptor)
     .registerComponent(tokenUsageIndicatorAppearanceDescriptor)
     .registerComponent(toolApprovalBarAppearanceDescriptor)
-    .registerComponent(snapshotRollbackButtonAppearanceDescriptor)
     .registerComponent(smartRecommendationsAppearanceDescriptor)
     .registerComponent(sessionRuntimeStatusEntryAppearanceDescriptor)
     .registerComponent(runtimeStatusSlotAppearanceDescriptor)

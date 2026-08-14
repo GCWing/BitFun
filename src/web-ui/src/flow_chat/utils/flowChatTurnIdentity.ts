@@ -1,9 +1,13 @@
-import type { LocalCommandMetadata } from '@/shared/types/session-history';
+import type {
+  LocalCommandMetadata,
+  SessionTurnCatalog,
+} from '@/shared/types/session-history';
 import type {
   DialogTurn,
   DialogTurnIdentity,
   LocalTurnIndex,
   Session,
+  SessionHistoryViewState,
   StorageTurnIndex,
   TurnOrdinal,
 } from '../types/flow-chat';
@@ -41,6 +45,57 @@ export function validSessionTurnCatalog(session: TurnIdentitySession) {
   return session.turnCatalog?.sessionId === session.sessionId
     ? session.turnCatalog
     : undefined;
+}
+
+export interface MaterializedSessionTurnIdentity {
+  turn?: DialogTurn;
+  catalog?: SessionTurnCatalog;
+  ordinal?: TurnOrdinal;
+  storageTurnIndex?: StorageTurnIndex;
+}
+
+/**
+ * Resolve a stable Turn identity from either the canonical live tail or an
+ * already-materialized history window. A catalog-only result remains valid
+ * if the rendered range was pruned while a confirmation dialog was open.
+ */
+export function resolveMaterializedSessionTurnIdentity(
+  session: TurnIdentitySession,
+  historyView: Pick<SessionHistoryViewState, 'catalog' | 'loadedRanges'> | undefined,
+  turnId: string,
+): MaterializedSessionTurnIdentity | undefined {
+  const canonicalTurn = session.dialogTurns.find(candidate => candidate.id === turnId);
+  const materializedRange = canonicalTurn
+    ? undefined
+    : historyView?.loadedRanges.find(range =>
+      range.turns.some(candidate => candidate.id === turnId));
+  const materializedTurnIndex = materializedRange?.turns.findIndex(
+    candidate => candidate.id === turnId,
+  ) ?? -1;
+  const turn = canonicalTurn
+    ?? (materializedTurnIndex >= 0 ? materializedRange?.turns[materializedTurnIndex] : undefined);
+  const catalogs = [validSessionTurnCatalog(session), historyView?.catalog]
+    .filter((catalog): catalog is SessionTurnCatalog => catalog?.sessionId === session.sessionId);
+  const catalog = catalogs.find(candidate => candidate.entries.some(entry => entry.turnId === turnId));
+  const entry = catalog?.entries.find(candidate => candidate.turnId === turnId);
+  if (!turn && !entry) {
+    return undefined;
+  }
+  const directStorageTurnIndex = turn?.storageTurnIndex ?? turn?.backendTurnIndex;
+  return {
+    turn,
+    catalog,
+    ordinal: entry
+      ? asTurnOrdinal(entry.ordinal)
+      : materializedRange && materializedTurnIndex >= 0
+        ? asTurnOrdinal(materializedRange.startOrdinal + materializedTurnIndex)
+        : undefined,
+    storageTurnIndex: directStorageTurnIndex !== undefined
+      ? asStorageTurnIndex(directStorageTurnIndex)
+      : entry
+        ? asStorageTurnIndex(entry.storageTurnIndex)
+        : undefined,
+  };
 }
 
 export function projectedSessionTurnCount(session: TurnIdentitySession): number {

@@ -38,7 +38,7 @@ use crate::agentic::memories::{start_memory_startup_task, MemoryStartupRequest};
 use crate::agentic::permission_policy::resolve_effective_permission_policy;
 use crate::agentic::round_preempt::DialogRoundInjectionSource;
 use crate::agentic::session::revert::{
-    resolve_redo, resolve_undo, SessionRevertPhase, SessionRevertTransition,
+    resolve_redo, resolve_targeted, resolve_undo, SessionRevertPhase, SessionRevertTransition,
 };
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{SessionManager, SessionReferenceLocator};
@@ -6865,6 +6865,141 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 Ok((AgentSessionComposerUpdate::Clear, true, 0))
             }
         }
+    }
+
+    pub(crate) async fn apply_targeted_session_revert_locked(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        target_turn_id: &str,
+        expected_storage_turn_index: Option<usize>,
+        expected_catalog_revision: Option<&str>,
+    ) -> BitFunResult<(
+        AgentSessionComposerUpdate,
+        usize,
+        usize,
+        Vec<String>,
+        Vec<String>,
+    )> {
+        let workspace_path = self.local_revert_workspace(session_id)?;
+        let persistence = self.session_manager.persistence_manager();
+        let current = persistence
+            .load_session_revert_state(session_storage_path, session_id)
+            .await?;
+        if current
+            .as_ref()
+            .is_some_and(|state| state.phase != SessionRevertPhase::Staged)
+        {
+            return Err(BitFunError::OutcomeUnknown(format!(
+                "Session rollback requires reconciliation of an unfinished revert: session_id={session_id}"
+            )));
+        }
+        let turns = persistence
+            .load_session_turns(session_storage_path, session_id)
+            .await?;
+        let visible_turns = current
+            .as_ref()
+            .map(|state| {
+                turns
+                    .iter()
+                    .filter(|turn| turn.turn_index < state.boundary_turn)
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| turns.clone());
+        let catalog = persistence
+            .load_session_turn_catalog(
+                session_storage_path,
+                session_id,
+                &visible_turns,
+                visible_turns.len(),
+            )
+            .await?;
+        if expected_catalog_revision.is_some_and(|revision| revision != catalog.revision) {
+            return Err(BitFunError::Validation(format!(
+                "Session rollback target is stale: session_id={session_id}"
+            )));
+        }
+        let target = visible_turns
+            .iter()
+            .find(|turn| turn.turn_id == target_turn_id)
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Session rollback target was not found: session_id={session_id} turn_id={target_turn_id}"
+                ))
+            })?;
+        if expected_storage_turn_index.is_some_and(|index| index != target.turn_index) {
+            return Err(BitFunError::Validation(format!(
+                "Session rollback target storage identity is stale: session_id={session_id} turn_id={target_turn_id}"
+            )));
+        }
+        let boundary_turn = target.turn_index;
+        let retired_turn_ids = turns
+            .iter()
+            .filter(|turn| turn.turn_index >= boundary_turn)
+            .map(|turn| turn.turn_id.clone())
+            .collect();
+        let transition = resolve_targeted(&turns, target_turn_id, current.as_ref()).ok_or_else(|| {
+            BitFunError::Validation(format!(
+                "Session rollback target is not a user Turn: session_id={session_id} turn_id={target_turn_id}"
+            ))
+        })?;
+        let SessionRevertTransition::Stage {
+            mut state,
+            replacement_prompt,
+            hidden_turn_count,
+        } = transition
+        else {
+            unreachable!("targeted rollback always stages a boundary")
+        };
+        let snapshot_manager =
+            crate::service::snapshot::get_or_create_snapshot_manager(workspace_path.clone(), None)
+                .await
+                .map_err(|error| BitFunError::service(error.to_string()))?;
+
+        state.phase = SessionRevertPhase::Applying;
+        snapshot_manager
+            .prepare_workspace_revert(session_id, &mut state)
+            .await
+            .map_err(|error| BitFunError::service(error.to_string()))?;
+        persistence
+            .save_session_revert_state(session_storage_path, session_id, &state)
+            .await?;
+        let restored_files = snapshot_manager
+            .apply_workspace_revert(session_id, &state)
+            .await
+            .map_err(|error| {
+                BitFunError::OutcomeUnknown(format!(
+                    "Session rollback was staged but workspace reconciliation failed: session_id={session_id}, error={error}"
+                ))
+            })?;
+        self.session_manager
+            .apply_staged_revert_context_locked(session_storage_path, session_id, boundary_turn)
+            .await
+            .map_err(|error| {
+                BitFunError::OutcomeUnknown(format!(
+                    "Session rollback updated the workspace but runtime context reconciliation failed: session_id={session_id}, error={error}"
+                ))
+            })?;
+        state.phase = SessionRevertPhase::Staged;
+        persistence
+            .save_session_revert_state(session_storage_path, session_id, &state)
+            .await?;
+        self.commit_session_revert_locked(session_storage_path, session_id)
+            .await?;
+
+        Ok((
+            replacement_prompt
+                .map(|text| AgentSessionComposerUpdate::Replace { text })
+                .unwrap_or(AgentSessionComposerUpdate::Preserve),
+            hidden_turn_count,
+            boundary_turn,
+            restored_files
+                .into_iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+            retired_turn_ids,
+        ))
     }
 
     pub(crate) async fn reconcile_session_revert_locked(
@@ -14368,6 +14503,57 @@ mod tests {
             .expect("apply staged context");
         drop(mutation);
         storage_path
+    }
+
+    #[tokio::test]
+    async fn stale_targeted_revert_keeps_an_existing_staged_suffix() {
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let session_id = format!("targeted-stale-{}", uuid::Uuid::new_v4());
+        let storage_path =
+            create_staged_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id)
+                .await;
+        let marker_before = session_manager
+            .persistence_manager()
+            .load_session_revert_state(&storage_path, &session_id)
+            .await
+            .expect("load staged marker")
+            .expect("staged marker");
+
+        let error = coordinator
+            .apply_targeted_session_revert_locked(
+                &storage_path,
+                &session_id,
+                "turn-0",
+                Some(0),
+                Some("stale-catalog-revision"),
+            )
+            .await
+            .expect_err("stale target must fail before mutation");
+        assert!(matches!(
+            error,
+            crate::util::errors::BitFunError::Validation(_)
+        ));
+
+        let marker_after = session_manager
+            .persistence_manager()
+            .load_session_revert_state(&storage_path, &session_id)
+            .await
+            .expect("reload staged marker")
+            .expect("staged marker must remain");
+        assert_eq!(marker_after, marker_before);
+        let turns = session_manager
+            .persistence_manager()
+            .load_session_turns(&storage_path, &session_id)
+            .await
+            .expect("load physical turns");
+        assert_eq!(
+            turns
+                .iter()
+                .map(|turn| turn.turn_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["turn-0", "turn-1"]
+        );
     }
 
     #[tokio::test]

@@ -18,6 +18,7 @@ import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandErr
 import { i18nService } from '@/infrastructure/i18n';
 import { driverForSession } from '../../session-drivers/registry';
 import type { SendMessageOptions, SubmissionDraft, TurnTracker } from '../../session-drivers/types';
+import { assertSessionSubmissionAllowed } from '../../store/sessionMutationStore';
 
 export { syncSessionModelSelection } from '../../utils/modelSync';
 export { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
@@ -87,6 +88,7 @@ export async function sendMessage(
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
   }
+  assertSessionSubmissionAllowed(sessionId, options?.sessionMutationLeaseId);
   const sendAttempt = beginSessionSend(sessionId);
   const draft: SubmissionDraft = {
     message,

@@ -4576,6 +4576,92 @@ describe('FlowChatStore historical session hydration state', () => {
     ).toEqual(['turn-12', 'turn-13', 'turn-14']);
   });
 
+  it('discards cached history windows when an authoritative restore changes the catalog', async () => {
+    const beforeCatalog = createTurnCatalog(8, 'catalog-before');
+    const afterCatalog = createTurnCatalog(6, 'catalog-after');
+    apiMocks.restoreSessionView
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 8,
+          createdAt: 1,
+        },
+        turns: [5, 6, 7].map(index => createPersistedTurn(index)),
+        turnCatalog: beforeCatalog,
+        contextRestoreState: 'pending',
+        isPartial: true,
+        loadedTurnCount: 3,
+        totalTurnCount: 8,
+      })
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 6,
+          createdAt: 1,
+        },
+        turns: [3, 4, 5].map(index => createPersistedTurn(index)),
+        turnCatalog: afterCatalog,
+        contextRestoreState: 'pending',
+        isPartial: true,
+        loadedTurnCount: 3,
+        totalTurnCount: 6,
+      });
+    apiMocks.loadSessionTurnWindow.mockResolvedValueOnce({
+      status: 'ready',
+      catalogRevision: beforeCatalog.revision,
+      totalTurnCount: 8,
+      startOrdinal: 0,
+      endOrdinalExclusive: 8,
+      targetTurnId: 'turn-0',
+      turns: Array.from({ length: 8 }, (_, index) => createPersistedTurn(index)),
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        'history-1',
+        createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        }),
+      ]]),
+      activeSessionId: 'history-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+    const loaded = await flowChatStore.loadSessionTurnWindow('history-1', 0, {
+      source: 'target',
+    });
+    expect(loaded.status).toBe('ready');
+    expect(flowChatStore.activateSessionHistoryWindow(
+      'history-1',
+      0,
+      loaded.navigationGeneration,
+    )?.range).toMatchObject({ startOrdinal: 0, endOrdinalExclusive: 8 });
+
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+
+    expect(flowChatStore.getSessionHistoryViewState('history-1')).toMatchObject({
+      catalog: { revision: 'catalog-after', totalTurnCount: 6 },
+      activeRange: null,
+      pendingTargetOrdinal: null,
+      loadedRanges: [{
+        startOrdinal: 3,
+        endOrdinalExclusive: 6,
+        turns: [
+          expect.objectContaining({ id: 'turn-3' }),
+          expect.objectContaining({ id: 'turn-4' }),
+          expect.objectContaining({ id: 'turn-5' }),
+        ],
+      }],
+    });
+  });
+
   it('activates an adjacent catalog window from the restored tail without hydrating the session', async () => {
     const catalog = createTurnCatalog(15);
     apiMocks.restoreSessionView.mockResolvedValueOnce({

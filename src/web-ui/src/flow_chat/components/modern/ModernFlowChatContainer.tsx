@@ -653,6 +653,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     historyPresentationRef.current = null;
     setHistoryPresentation(null);
     setContinuousProjectionSessionId(null);
+    if (activeSession?.sessionId) {
+      flowChatStore.restoreSessionTailPresentation(activeSession.sessionId);
+    }
     if (
       activeViewportIntent?.kind === 'turn'
       && activeViewportIntent.source === 'history-range'

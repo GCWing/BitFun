@@ -1542,6 +1542,22 @@ pub struct AgentSessionRevertRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionRollbackToTurnRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    pub target_turn_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_storage_turn_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_catalog_revision: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AgentSessionComposerUpdate {
     Preserve,
@@ -1561,6 +1577,39 @@ pub struct AgentSessionRevertResult {
     pub retired_turn_ids: Vec<String>,
     pub changed: bool,
     pub hidden_turn_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boundary_storage_turn_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restored_files: Vec<String>,
+    /// The mutation committed, but the response could not include an
+    /// authoritative transcript. Consumers must reload before using their
+    /// local Session projection.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reload_required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reload_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "status",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentSessionRollbackToTurnOutcome {
+    Completed {
+        #[serde(flatten)]
+        result: AgentSessionRevertResult,
+    },
+    RecoveryRequired {
+        session_id: String,
+        mutation_id: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        affected_files: Vec<String>,
+        reason: String,
+    },
 }
 
 #[async_trait::async_trait]
@@ -1574,6 +1623,17 @@ pub trait AgentSessionRevertPort: Send + Sync {
         &self,
         request: AgentSessionRevertRequest,
     ) -> PortResult<AgentSessionRevertResult>;
+
+    async fn rollback_session_to_turn(
+        &self,
+        request: AgentSessionRollbackToTurnRequest,
+    ) -> PortResult<AgentSessionRollbackToTurnOutcome> {
+        let _ = request;
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "targeted Session rollback is not supported",
+        ))
+    }
 }
 
 #[async_trait::async_trait]
@@ -1838,6 +1898,11 @@ mod tests {
             retired_turn_ids: vec!["turn-2".to_string(), "turn-queued".to_string()],
             changed: true,
             hidden_turn_count: 2,
+            boundary_storage_turn_index: Some(7),
+            target_turn_id: Some("turn-1".to_string()),
+            restored_files: vec!["src/lib.rs".to_string()],
+            reload_required: false,
+            reload_reason: None,
         };
 
         let value = serde_json::to_value(&result).expect("session revert result should serialize");
@@ -1846,11 +1911,73 @@ mod tests {
         assert_eq!(value["composer"]["text"], "restore this prompt");
         assert_eq!(value["hiddenTurnCount"], 2);
         assert_eq!(value["retiredTurnIds"][1], "turn-queued");
+        assert!(value.get("reloadRequired").is_none());
+        assert!(value.get("reloadReason").is_none());
         assert_eq!(
             serde_json::from_value::<AgentSessionRevertResult>(value)
                 .expect("session revert result should deserialize"),
             result
         );
+    }
+
+    #[test]
+    fn targeted_session_rollback_contract_uses_camel_case_and_typed_outcomes() {
+        let request = AgentSessionRollbackToTurnRequest {
+            workspace_path: "E:/workspace".to_string(),
+            session_id: "session-1".to_string(),
+            target_turn_id: "turn-7".to_string(),
+            expected_storage_turn_index: Some(7),
+            expected_catalog_revision: Some("catalog-3".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        let request_json = serde_json::to_value(&request).expect("serialize rollback request");
+        assert_eq!(request_json["workspacePath"], "E:/workspace");
+        assert_eq!(request_json["targetTurnId"], "turn-7");
+        assert_eq!(request_json["expectedStorageTurnIndex"], 7);
+        assert_eq!(request_json["expectedCatalogRevision"], "catalog-3");
+        assert_eq!(
+            serde_json::from_value::<AgentSessionRollbackToTurnRequest>(request_json)
+                .expect("deserialize rollback request"),
+            request
+        );
+
+        let completed = AgentSessionRollbackToTurnOutcome::Completed {
+            result: AgentSessionRevertResult {
+                session_id: "session-1".to_string(),
+                transcript: SessionTranscript {
+                    session_id: "session-1".to_string(),
+                    messages: Vec::new(),
+                },
+                composer: AgentSessionComposerUpdate::Preserve,
+                retired_turn_ids: vec!["turn-7".to_string()],
+                changed: true,
+                hidden_turn_count: 1,
+                boundary_storage_turn_index: Some(7),
+                target_turn_id: Some("turn-7".to_string()),
+                restored_files: vec!["src/lib.rs".to_string()],
+                reload_required: true,
+                reload_reason: Some("transcript read failed".to_string()),
+            },
+        };
+        let completed_json =
+            serde_json::to_value(&completed).expect("serialize completed rollback");
+        assert_eq!(completed_json["status"], "completed");
+        assert_eq!(completed_json["boundaryStorageTurnIndex"], 7);
+        assert_eq!(completed_json["retiredTurnIds"][0], "turn-7");
+        assert_eq!(completed_json["reloadRequired"], true);
+        assert_eq!(completed_json["reloadReason"], "transcript read failed");
+
+        let recovery = AgentSessionRollbackToTurnOutcome::RecoveryRequired {
+            session_id: "session-1".to_string(),
+            mutation_id: "mutation-1".to_string(),
+            affected_files: vec!["src/lib.rs".to_string()],
+            reason: "authoritative reload failed".to_string(),
+        };
+        let recovery_json = serde_json::to_value(&recovery).expect("serialize recovery rollback");
+        assert_eq!(recovery_json["status"], "recovery_required");
+        assert_eq!(recovery_json["mutationId"], "mutation-1");
+        assert_eq!(recovery_json["affectedFiles"][0], "src/lib.rs");
     }
 
     #[test]

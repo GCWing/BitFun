@@ -361,6 +361,7 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
             .unwrap_or_else(|_| "unknown".to_string()),
         "capabilities": {
             "idempotent_dialog_submit": true,
+            "targeted_session_rollback": true,
         },
     }))
 }
@@ -460,11 +461,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn peer_ping_advertises_idempotent_dialog_submission() {
+    async fn peer_ping_advertises_mutation_capabilities() {
         let value = peer_mode_ping().await.expect("peer ping");
         assert_eq!(
             value
                 .pointer("/capabilities/idempotent_dialog_submit")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
+                .pointer("/capabilities/targeted_session_rollback")
                 .and_then(Value::as_bool),
             Some(true)
         );

@@ -24,7 +24,8 @@ use bitfun_runtime_ports::{
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
     AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
+    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
     AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
@@ -1247,6 +1248,21 @@ impl AgentRuntime {
         port.redo_session(request).await.map_err(RuntimeError::from)
     }
 
+    pub async fn rollback_session_to_turn(
+        &self,
+        request: AgentSessionRollbackToTurnRequest,
+    ) -> Result<AgentSessionRollbackToTurnOutcome, RuntimeError> {
+        let port = self.session_revert.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session revert port is not registered",
+            ))
+        })?;
+        port.rollback_session_to_turn(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
     pub async fn fork_session(
         &self,
         request: AgentSessionForkRequest,
@@ -1961,6 +1977,11 @@ mod tests {
                 retired_turn_ids: Vec::new(),
                 changed: true,
                 hidden_turn_count: 1,
+                boundary_storage_turn_index: None,
+                target_turn_id: None,
+                restored_files: Vec::new(),
+                reload_required: false,
+                reload_reason: None,
             })
         }
 
