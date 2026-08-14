@@ -76,10 +76,11 @@
     "items": {
       "sessions": "會話",
       "project": "目錄",
-      "persona": "助理",
-      "todos": "待辦事項",
+      "persona": "智能成員",
+      "longTermTracking": "長期跟蹤",
       "agents": "專業智能體",
       "skills": "技能",
+      "ecosystemCompatibility": "生態兼容",
       "tools": "工具",
       "terminal": "Shell",
       "git": "Git",
@@ -87,17 +88,22 @@
       "insights": "洞察"
     },
     "tooltips": {
-      "persona": "助理 — 建立與管理所有助理實例",
-      "todos": "待辦 — 匯總所有定時任務，列表與日曆兩層檢視",
+      "persona": "智能成員 — 展開查看基於角色和記憶的成員會話",
+      "todos": "待辦 — 開啟全部待辦事項",
+      "longTermTracking": "長期跟蹤 — 持續任務與長期對話",
       "agents": "它能調用哪些 Agent",
       "skills": "它懂什麼專項知識 — 技能知識檔案",
+      "ecosystemCompatibility": "生態兼容 — 管理其他 AI 應用的兼容能力與擴展",
       "tools": "它能用什麼工具 — 內置工具與 MCP 服務",
       "addWorkspace": "新增工作區"
     },
     "sections": {
-      "extensions": "定製",
+      "extensions": "擴展與兼容",
       "shell": "Shell",
       "assistantSessions": "助理會話"
+    },
+    "messages": {
+      "longTermTrackingComingSoon": "長期跟蹤正在開發中"
     },
     "search": {
       "triggerPlaceholder": "搜尋...",
@@ -185,6 +191,60 @@
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "noSessions": "暫無會話",
+      "viewMenu": {
+        "title": "會話檢視",
+        "tooltip": "組織與篩選會話",
+        "grouping": {
+          "label": "分組",
+          "workspace": "$t(shared:features.workspace)",
+          "all": "全部會話"
+        },
+        "ordering": {
+          "label": "排序",
+          "updated": "最近更新",
+          "status": "狀態",
+          "created": "最新建立",
+          "name": "名稱"
+        },
+        "show": {
+          "label": "顯示",
+          "all": "全部會話",
+          "unread": "未讀會話",
+          "attention": "需要處理"
+        },
+        "filters": {
+          "label": "篩選",
+          "reset": "重設"
+        },
+        "status": {
+          "label": "狀態",
+          "running": "$t(shared:statuses.running)",
+          "attention": "需要處理",
+          "error": "錯誤",
+          "completed": "$t(shared:statuses.done)",
+          "idle": "閒置"
+        },
+        "worktree": {
+          "label": "工作樹",
+          "main": "主工作區",
+          "worktree": "工作樹會話"
+        },
+        "environment": {
+          "label": "環境",
+          "local": "本機",
+          "remote": "遠端工作區",
+          "detached": "分離執行"
+        },
+        "source": {
+          "label": "來源",
+          "bitfun": "$t(shared:product.name)",
+          "external": "外部 Agent"
+        },
+        "archived": "封存會話",
+        "collapseAll": "全部摺疊",
+        "markAllRead": "全部標示為已讀",
+        "noMatches": "沒有符合目前篩選條件的會話"
+      },
       "rename": "重新命名",
       "renameOutcomeUnknown": "重新命名結果尚不確定。請重新整理或重新開啟工作階段清單，確認目前名稱後再重試。",
       "copySessionId": "複製 ID",
@@ -221,7 +281,7 @@
       "ariaInputResolvedRemaining": "會話 '{{name}}' 已收到輸入。還有 {{count}} 個會話等待中。",
       "badgeBackgroundSubagents": "後台 {{count}}",
       "backgroundSubagentsRunning": "{{count}} 個背景子 Agent 運行中",
-      "needProjectWorkspaceForSession": "請先開啟或新增項目工作區。編碼與工作（Cowork）會話不能在助理區域建立。",
+      "needProjectWorkspaceForSession": "請先開啟或新增項目工作區，再新增項目會話。",
       "manage": "批量管理會話",
       "batchManageDescription": "選擇此工作區中的會話，然後批量歸檔或刪除。",
       "batchSelectionSummary": "已選擇 {{count}} 個 · 共 {{total}} 個會話",

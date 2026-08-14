@@ -67,4 +67,20 @@ describe('NavPanel layout styles', () => {
       expect(block).toContain('height: 20px;');
     }
   });
+
+  it('keeps category rows flat on hover', () => {
+    const stylesheet = readNavPanelStylesheet();
+
+    expect(stylesheet).toContain(
+      '.bitfun-nav-panel__section-header--interactive:hover,\n' +
+      '  .bitfun-nav-panel__top-action-btn:hover {\n' +
+      '    transform: none;\n' +
+      '    box-shadow: none;\n' +
+      '  }',
+    );
+    expect(stylesheet).not.toContain(
+      '&:not(.bitfun-nav-panel__top-action-btn--sub):hover .bitfun-nav-panel__top-action-icon-slot {\n' +
+      '    transform: scale(1.07);',
+    );
+  });
 });

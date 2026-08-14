@@ -144,6 +144,7 @@ const AssistantConfigPage: React.FC = () => {
       name: identityDocument.name.trim() || api?.name?.trim() || '',
       creature: identityDocument.creature.trim() || api?.creature?.trim() || '',
       vibe: identityDocument.vibe.trim() || api?.vibe?.trim() || '',
+      avatar: identityDocument.avatar.trim() || api?.avatar?.trim() || '',
       emoji: identityDocument.emoji.trim() || api?.emoji?.trim() || '',
     };
   }, [identityDocument, workspace?.identity]);
@@ -530,9 +531,13 @@ const AssistantConfigPage: React.FC = () => {
           {/* Identity header above the input */}
           <div className="acp-left-header" data-bf-component="assistant-config-page" data-bf-part="identity">
             <AssistantAvatarPicker
+              presetValue={displayIdentity.avatar}
               value={displayIdentity.emoji}
+              stableKey={workspace?.assistantId || workspace?.id}
+              assistantName={displayIdentity.name || DEFAULT_AGENT_NAME}
               saveStatus={identitySaveStatus}
               saveError={identitySaveError}
+              onPresetChange={(avatar) => updateIdentityField('avatar', avatar)}
               onChange={(emoji) => updateIdentityField('emoji', emoji)}
             />
             <div className="acp-left-header__info">
@@ -617,9 +622,16 @@ const AssistantConfigPage: React.FC = () => {
             <SessionsSection
               workspaceId={workspace?.id}
               workspacePath={workspacePath}
-              assistantLabel={identityName}
+              presentation={{
+                kind: 'assistant',
+                assistant: {
+                  id: workspace?.assistantId || workspace?.id || workspacePath,
+                  name: identityName,
+                  avatar: displayIdentity.avatar,
+                  emoji: displayIdentity.emoji,
+                },
+              }}
               isActiveWorkspace
-              showSessionModeIcon={false}
             />
           </div>
         </div>

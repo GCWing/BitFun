@@ -98,6 +98,20 @@ describe('WorkspaceListSection layout styles', () => {
     }
   });
 
+  it('keeps workspace and assistant rows flat on hover', () => {
+    const stylesheet = readWorkspaceListStylesheet();
+
+    expect(stylesheet).toContain(
+      '.bitfun-nav-panel__workspace-item:hover,\n' +
+      '  .bitfun-nav-panel__assistant-item:hover,\n' +
+      '  .bitfun-nav-panel__workspace-item-card:hover,\n' +
+      '  .bitfun-nav-panel__assistant-item-card:hover {\n' +
+      '    transform: none;\n' +
+      '    box-shadow: none;\n' +
+      '  }',
+    );
+  });
+
   it('keeps remote connection metadata inside the sidebar with the status dot on the right', () => {
     const stylesheet = readWorkspaceListStylesheet();
     const remoteChip = extractBlock(stylesheet, '&__workspace-item-remote');

@@ -9,9 +9,6 @@
 }
 
 .workspace-session-batch-modal {
-  --private-workspace-batch-cowork-rgb: 15, 143, 116;
-  --private-workspace-batch-claw-rgb: 217, 119, 6;
-
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -216,16 +213,12 @@
     color: var(--bf-appearance-token-color-text-secondary);
     flex-shrink: 0;
 
-    &.is-code {
+    &.is-project {
       color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 76%, var(--bf-appearance-token-color-text-primary));
     }
 
-    &.is-cowork {
-      color: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 80%, var(--bf-appearance-token-color-text-primary));
-    }
-
-    &.is-claw {
-      color: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 80%, var(--bf-appearance-token-color-text-primary));
+    &.is-assistant {
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -279,20 +272,6 @@
     font-weight: 600;
     line-height: 1;
 
-    &.is-code {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
-      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 78%, var(--bf-appearance-token-color-text-primary));
-    }
-
-    &.is-cowork {
-      background: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 11%, transparent);
-      color: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 82%, var(--bf-appearance-token-color-text-primary));
-    }
-
-    &.is-claw {
-      background: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 11%, transparent);
-      color: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 82%, var(--bf-appearance-token-color-text-primary));
-    }
   }
 
   &__footer {

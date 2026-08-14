@@ -2143,8 +2143,66 @@ $_section-header-height: 24px;
 }
 
 .bitfun-nav-panel__brand-search {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.bitfun-nav-panel__utility-row {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-1;
   width: 100%;
   min-width: 0;
+}
+
+.bitfun-nav-panel__todo-entry {
+  flex: 0 0 auto;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: $size-radius-full;
+  background: var(--bf-appearance-token-color-bg-scene);
+  color: var(--bf-appearance-token-color-text-secondary);
+  cursor: pointer;
+  transition: background $motion-fast $easing-standard,
+              border-color $motion-fast $easing-standard,
+              color $motion-fast $easing-standard;
+
+  &:hover,
+  &.is-active {
+    background: var(--bf-appearance-token-element-bg-medium);
+    border-color: var(--bf-appearance-token-border-medium);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--bf-appearance-token-color-accent-500);
+    outline-offset: 1px;
+  }
+}
+
+.bitfun-nav-panel__count-badge {
+  flex: 0 0 auto;
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: $size-radius-full;
+  background: var(--bf-appearance-token-element-bg-soft);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-2xs);
+  font-weight: 600;
+  line-height: 1;
+
 }
 
 // ── Top action strip ─────────────────────────────
@@ -2203,7 +2261,7 @@ $_section-header-height: 24px;
               color $motion-fast $easing-standard;
 
   // Only the label span should grow; icon / chevron wrappers must NOT get flex: 1
-  > span:not(.bitfun-nav-panel__top-action-icon-circle):not(.bitfun-nav-panel__top-action-icon-slot):not(.bitfun-nav-panel__top-action-expand-icons) {
+  > span:not(.bitfun-nav-panel__top-action-icon-circle):not(.bitfun-nav-panel__top-action-icon-slot):not(.bitfun-nav-panel__top-action-expand-icons):not(.bitfun-nav-panel__count-badge) {
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -2221,17 +2279,6 @@ $_section-header-height: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-  }
-
-  // 助理行：前导 icon 悬停微微放大（与 __top-action-icon-circle 一致；排除 --sub 的 Agents / Skills）
-  &:not(.bitfun-nav-panel__top-action-btn--sub) .bitfun-nav-panel__top-action-icon-slot {
-    transform: scale(1);
-    transform-origin: center;
-    transition: transform $motion-fast $easing-standard;
-  }
-
-  &:not(.bitfun-nav-panel__top-action-btn--sub):hover .bitfun-nav-panel__top-action-icon-slot {
-    transform: scale(1.07);
   }
 
   &:hover {
@@ -2311,7 +2358,7 @@ $_section-header-height: 24px;
 
   .bitfun-nav-panel__top-action-btn:hover & {
     @include btn-primary.btn-primary-surface-hover;
-    transform: scale(1.07);
+    transform: none;
   }
 
   .bitfun-nav-panel__top-action-btn:active & {
@@ -2357,6 +2404,164 @@ $_section-header-height: 24px;
   &__top-actions {
     gap: 2px;
     padding: 5px 6px $size-gap-3;
+    margin-bottom: $size-gap-3;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__smart-members-content {
+    margin: 0 0 2px;
+  }
+
+  &__smart-members-toolbar {
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    padding: 0 $size-gap-2 0 38px;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-weight: 500;
+
+    > span:first-child {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__session-filter-menu,
+  &__session-filter-submenu {
+    @include nav-font.nav-panel-font-token-scope;
+
+    position: fixed;
+    z-index: $z-popover;
+    box-sizing: border-box;
+    padding: $size-gap-1;
+    border: 1px solid var(--bf-appearance-token-border-medium);
+    border-radius: $size-radius-lg;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    box-shadow: 0 14px 42px -12px var(--bf-appearance-token-color-overlay-black-30);
+    color: var(--bf-appearance-token-color-text-primary);
+    animation: bitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+
+    > button {
+      display: flex;
+      align-items: center;
+      gap: $size-gap-2;
+      width: 100%;
+      min-height: 34px;
+      padding: 0 $size-gap-2;
+      border: none;
+      border-radius: $size-radius-sm;
+      background: transparent;
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: var(--bf-appearance-token-font-size-sm);
+      text-align: left;
+      cursor: pointer;
+      transition: background $motion-fast $easing-standard,
+                  color $motion-fast $easing-standard;
+
+      > svg:last-child {
+        margin-left: auto;
+        color: var(--bf-appearance-token-color-text-muted);
+      }
+
+      &:hover,
+      &:focus-visible,
+      &.is-open {
+        outline: none;
+        background: var(--bf-appearance-token-element-bg-soft);
+      }
+
+      &.is-selected:not(:hover):not(:focus-visible):not(.is-open) {
+        background: transparent;
+      }
+    }
+  }
+
+  &__session-filter-menu {
+    width: 220px;
+
+    > button {
+      min-height: 34px;
+      font-size: var(--bf-appearance-token-font-size-sm);
+    }
+  }
+
+  &__session-filter-submenu {
+    width: 220px;
+
+    > button {
+      min-height: 34px;
+    }
+
+    > button > span:last-child {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  &__session-filter-menu-value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $size-gap-1;
+    margin-left: auto;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
+  }
+
+  &__session-filter-active-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &__session-filter-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 16px;
+    width: 16px;
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &__session-filter-menu-divider {
+    height: 1px;
+    margin: $size-gap-1 (-$size-gap-1);
+    background: var(--bf-appearance-token-border-subtle);
+  }
+
+  &__session-filter-menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 34px;
+    padding: 0 $size-gap-2;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
+
+    > button {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+
+      &:hover,
+      &:focus-visible {
+        color: var(--bf-appearance-token-color-text-primary);
+        outline: none;
+      }
+    }
+  }
+
+  &__items--smart-members {
+    padding: 0 6px 4px 14px;
   }
 
   &__top-action-expand {
@@ -2520,9 +2725,18 @@ $_section-header-height: 24px;
   }
 
   &__bottom-bar {
+    flex-direction: column;
     gap: $size-gap-1;
     padding: 4px 6px;
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__bottom-extension {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
   }
 
   &__pages-entry,
@@ -2719,6 +2933,12 @@ $_section-header-height: 24px;
   .bitfun-nav-panel__item:hover,
   .bitfun-nav-panel__footer-btn--icon:hover {
     background: var(--bf-appearance-token-element-bg-soft);
+  }
+
+  .bitfun-nav-panel__section-header--interactive:hover,
+  .bitfun-nav-panel__top-action-btn:hover {
+    transform: none;
+    box-shadow: none;
   }
 }
 

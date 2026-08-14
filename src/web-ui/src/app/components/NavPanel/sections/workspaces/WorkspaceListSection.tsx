@@ -1,10 +1,12 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
 import WorkspaceItem from './WorkspaceItem';
-import { isLinkedWorktreeWorkspace } from '@/shared/types';
+import SessionsSection, { type WorkspaceSessionScope } from '../sessions/SessionsSection';
+import { isLinkedWorktreeWorkspace, isRemoteWorkspace } from '@/shared/types';
 import { isSamePath } from '@/shared/utils/pathUtils';
+import { useWorkspaceSessionViewStore } from '../../workspaceSessionView';
 import './WorkspaceListSection.scss';
 
 interface WorkspaceListSectionProps {
@@ -35,6 +37,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     workspaceId: string;
     position: WorkspaceDragPosition;
   } | null>(null);
+  const grouping = useWorkspaceSessionViewStore(state => state.grouping);
 
   // Refs for values that must be read inside event handlers without stale closures
   const draggedWorkspaceIdRef = useRef<string | null>(null);
@@ -43,19 +46,18 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   const sectionWorkspaces = variant === 'assistants'
     ? assistantWorkspacesList
     : normalWorkspacesList;
-  const projectRoots = variant === 'projects'
-    ? sectionWorkspaces
-        .filter(workspace => !isLinkedWorktreeWorkspace(workspace))
-        .map(workspace => workspace.rootPath)
-    : [];
-  const workspaces = variant === 'projects'
-    ? sectionWorkspaces.filter(workspace => (
-        !isLinkedWorktreeWorkspace(workspace)
-        || !projectRoots.some(projectRoot => (
-          isSamePath(projectRoot, workspace.worktree?.mainRepoPath || '')
-        ))
+  const workspaces = useMemo(() => {
+    if (variant !== 'projects') return sectionWorkspaces;
+    const projectRoots = sectionWorkspaces
+      .filter(workspace => !isLinkedWorktreeWorkspace(workspace))
+      .map(workspace => workspace.rootPath);
+    return sectionWorkspaces.filter(workspace => (
+      !isLinkedWorktreeWorkspace(workspace)
+      || !projectRoots.some(projectRoot => (
+        isSamePath(projectRoot, workspace.worktree?.mainRepoPath || '')
       ))
-    : sectionWorkspaces;
+    ));
+  }, [sectionWorkspaces, variant]);
   const activeWorkspace = openedWorkspacesList.find(workspace => workspace.id === activeWorkspaceId);
   const activeProjectPath = activeWorkspace?.worktree && !activeWorkspace.worktree.isMain
     ? activeWorkspace.worktree.mainRepoPath
@@ -63,6 +65,17 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   const emptyLabel = variant === 'assistants'
     ? t('nav.workspaces.emptyAssistants')
     : t('nav.workspaces.emptyProjects');
+  const workspaceScopes = useMemo<WorkspaceSessionScope[]>(() => (
+    variant === 'projects'
+      ? workspaces.map(workspace => ({
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          workspacePath: workspace.rootPath,
+          remoteConnectionId: isRemoteWorkspace(workspace) ? workspace.connectionId : null,
+          remoteSshHost: isRemoteWorkspace(workspace) ? workspace.sshHost : null,
+        }))
+      : []
+  ), [variant, workspaces]);
 
   const handleDragStart = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     const payload: WorkspaceDragPayload = { workspaceId, variant };
@@ -176,7 +189,16 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       data-testid="nav-workspace-list"
       data-workspace-list={variant}
     >
-      {workspaces.length === 0 ? (
+      {variant === 'projects' && grouping === 'all' && workspaces.length > 0 ? (
+        <div className="bitfun-nav-panel__workspace-all-sessions" data-testid="nav-workspace-all-sessions">
+          <SessionsSection
+            workspaceScopes={workspaceScopes}
+            isVisible
+            layout="flat"
+            useWorkspaceViewPreferences
+          />
+        </div>
+      ) : workspaces.length === 0 ? (
         <div
           data-bf-component="workspace-list-section"
           data-bf-part="empty"

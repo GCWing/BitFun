@@ -76,10 +76,11 @@
     "items": {
       "sessions": "Sessions",
       "project": "Directory",
-      "persona": "Assistant",
-      "todos": "Todos",
+      "persona": "Smart Members",
+      "longTermTracking": "Long-term Tracking",
       "agents": "Agents",
       "skills": "Skills",
+      "ecosystemCompatibility": "Ecosystem Compatibility",
       "tools": "Tools",
       "terminal": "Shell",
       "git": "Git",
@@ -87,17 +88,22 @@
       "insights": "Insights"
     },
     "tooltips": {
-      "persona": "Assistant — create and manage all assistant instances",
-      "todos": "Todos — every scheduled task, by list and calendar",
+      "persona": "Smart Members — expand role- and memory-based member sessions",
+      "todos": "Todos — open all Todo items",
+      "longTermTracking": "Long-term Tracking — ongoing tasks and conversations",
       "agents": "Which agents it can call",
       "skills": "What it knows — specialized knowledge files",
+      "ecosystemCompatibility": "Ecosystem Compatibility — manage compatible capabilities and extensions from other AI apps",
       "tools": "What it can use — built-in tools & MCP services",
       "addWorkspace": "Add workspace"
     },
     "sections": {
-      "extensions": "Customize",
+      "extensions": "Extensions & Compatibility",
       "shell": "Shell",
       "assistantSessions": "Assistant Sessions"
+    },
+    "messages": {
+      "longTermTrackingComingSoon": "Long-term Tracking is in development"
     },
     "search": {
       "triggerPlaceholder": "Search",
@@ -185,6 +191,60 @@
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "noSessions": "No sessions",
+      "viewMenu": {
+        "title": "Session view",
+        "tooltip": "Organize and filter sessions",
+        "grouping": {
+          "label": "Grouping",
+          "workspace": "$t(shared:features.workspace)",
+          "all": "All sessions"
+        },
+        "ordering": {
+          "label": "Ordering",
+          "updated": "Recently updated",
+          "status": "Status",
+          "created": "Recently created",
+          "name": "Name"
+        },
+        "show": {
+          "label": "Show",
+          "all": "All sessions",
+          "unread": "Unread sessions",
+          "attention": "Needs attention"
+        },
+        "filters": {
+          "label": "Filters",
+          "reset": "Reset"
+        },
+        "status": {
+          "label": "Status",
+          "running": "$t(shared:statuses.running)",
+          "attention": "Needs attention",
+          "error": "Error",
+          "completed": "$t(shared:statuses.done)",
+          "idle": "Idle"
+        },
+        "worktree": {
+          "label": "Worktree",
+          "main": "Main workspace",
+          "worktree": "Worktree sessions"
+        },
+        "environment": {
+          "label": "Environment",
+          "local": "Local",
+          "remote": "Remote workspace",
+          "detached": "Detached execution"
+        },
+        "source": {
+          "label": "Source",
+          "bitfun": "$t(shared:product.name)",
+          "external": "External Agent"
+        },
+        "archived": "Archived",
+        "collapseAll": "Collapse All",
+        "markAllRead": "Mark All as Read",
+        "noMatches": "No sessions match the current filters"
+      },
       "rename": "Rename",
       "renameOutcomeUnknown": "The rename result is uncertain. Refresh or reopen the session list, then check the current title before retrying.",
       "copySessionId": "Copy ID",
@@ -221,7 +281,7 @@
       "ariaInputResolvedRemaining": "Session '{{name}}' received input. {{count}} still waiting.",
       "badgeBackgroundSubagents": "BG {{count}}",
       "backgroundSubagentsRunning": "Background subagents running: {{count}}",
-      "needProjectWorkspaceForSession": "Open or add a project workspace first. Code and Cowork sessions cannot be created in the assistant area.",
+      "needProjectWorkspaceForSession": "Open or add a project workspace before creating a project session.",
       "manage": "Manage Sessions",
       "batchManageDescription": "Select sessions in this workspace, then archive or delete them in bulk.",
       "batchSelectionSummary": "{{count}} selected · {{total}} sessions",
