@@ -32,7 +32,6 @@ import { pageAPI } from './service-api/PageAPI';
 import { gitAPI } from './service-api/GitAPI';
 import { gitAgentAPI } from './service-api/GitAgentAPI';
 import { gitRepoHistoryAPI, type GitRepoHistory } from './service-api/GitRepoHistoryAPI';
-import { startchatAgentAPI } from './service-api/StartchatAgentAPI';
 import { sessionAPI } from './service-api/SessionAPI';
 import { i18nAPI } from './service-api/I18nAPI';
 import { btwAPI } from './service-api/BtwAPI';
@@ -43,7 +42,7 @@ import { speechAPI } from './service-api/SpeechAPI';
 import { worktreeAPI } from './service-api/WorktreeAPI';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, speechAPI, worktreeAPI };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, speechAPI, worktreeAPI };
 export * from './service-api/ReviewPlatformAPI';
 
 // Export types
@@ -69,7 +68,6 @@ export const bitfunAPI = {
   git: gitAPI,
   gitAgent: gitAgentAPI,
   gitRepoHistory: gitRepoHistoryAPI,
-  startchatAgent: startchatAgentAPI,
   session: sessionAPI,
   i18n: i18nAPI,
   btw: btwAPI,

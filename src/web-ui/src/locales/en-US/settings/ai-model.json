@@ -30,6 +30,7 @@
     "loadFailed": "Failed to load session title settings",
     "model": {
       "label": "Session Title Generation Model",
+      "inherit": "Current session model",
       "primary": "Primary Model",
       "fast": "Fast Model"
     },

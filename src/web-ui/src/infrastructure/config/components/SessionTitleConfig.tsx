@@ -5,14 +5,24 @@ import { useNotification, notificationService } from '@/shared/notification-syst
 import { createLogger } from '@/shared/utils/logger';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import { configManager } from '../services/ConfigManager';
-import type { AIModelConfig } from '../types';
+import type { AIModelConfig, TaskModelSelection, TaskModelsConfig } from '../types';
 import { ConfigPageRow, ConfigPageSection } from './common';
 import { type ModelSelectOption, useModelSelectPresentation } from './ModelSelectPresentation';
 import './AIFeaturesConfig.scss';
 
 const log = createLogger('SessionTitleConfig');
 
-const AGENT_SESSION_TITLE = 'session-title-func-agent';
+const DEFAULT_TASK_MODELS: TaskModelsConfig = {
+  session_title: { kind: 'fixed', model_id: 'fast' },
+  git_commit: { kind: 'fixed', model_id: 'fast' },
+};
+
+function normalizeTaskModels(config?: Partial<TaskModelsConfig> | null): TaskModelsConfig {
+  return {
+    session_title: config?.session_title ?? DEFAULT_TASK_MODELS.session_title,
+    git_commit: config?.git_commit ?? DEFAULT_TASK_MODELS.git_commit,
+  };
+}
 
 function normalizeSelectValue(value: string | number | (string | number)[]): string {
   return String(Array.isArray(value) ? (value[0] ?? '') : value);
@@ -24,20 +34,20 @@ export const SessionTitleConfig: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
   const [models, setModels] = useState<AIModelConfig[]>([]);
-  const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
+  const [taskModels, setTaskModels] = useState<TaskModelsConfig>(DEFAULT_TASK_MODELS);
   const { buildModelOption, renderModelOption, renderModelValue } = useModelSelectPresentation();
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [loadedSettings, allModels, funcAgentModelsData] = await Promise.all([
+      const [loadedSettings, allModels, taskModelsData] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
-        configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {},
+        configManager.getConfig<Partial<TaskModelsConfig>>('ai.task_models'),
       ]);
       setSettings(loadedSettings);
       setModels(allModels ?? []);
-      setFuncAgentModels(funcAgentModelsData ?? {});
+      setTaskModels(normalizeTaskModels(taskModelsData));
     } catch (error) {
       log.error('Failed to load session title config', error);
       notifyError(t('sessionTitle.loadFailed'));
@@ -49,20 +59,24 @@ export const SessionTitleConfig: React.FC = () => {
   useEffect(() => {
     void loadData();
     const unwatchModels = configManager.watch('ai.models', () => void loadData());
-    const unwatchFuncAgentModels = configManager.watch('ai.func_agent_models', () => void loadData());
+    const unwatchTaskModels = configManager.watch('ai.task_models', () => void loadData());
     const unwatchSettings = aiExperienceConfigService.addChangeListener((next) => {
       setSettings(next);
     });
     return () => {
       unwatchModels();
-      unwatchFuncAgentModels();
+      unwatchTaskModels();
       unwatchSettings();
     };
   }, [loadData]);
 
   const enabledModels = models.filter((model) => model.enabled);
-  const sessionTitleModelId = funcAgentModels[AGENT_SESSION_TITLE] || 'fast';
+  const selectionValue = (selection: TaskModelSelection): string => (
+    selection.kind === 'inherit' ? 'inherit' : selection.model_id
+  );
+  const sessionTitleModelId = selectionValue(taskModels.session_title);
   const modelOptions = useMemo<ModelSelectOption[]>(() => [
+    { label: t('sessionTitle.model.inherit'), value: 'inherit' },
     { label: t('sessionTitle.model.fast'), value: 'fast' },
     { label: t('sessionTitle.model.primary'), value: 'primary' },
     ...enabledModels
@@ -94,13 +108,18 @@ export const SessionTitleConfig: React.FC = () => {
 
   const handleModelChange = async (modelId: string) => {
     try {
-      const current = await configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {};
-      const updated = { ...current, [AGENT_SESSION_TITLE]: modelId };
-      await configManager.setConfig('ai.func_agent_models', updated);
-      setFuncAgentModels(updated);
+      const current = await configManager.getConfig<Partial<TaskModelsConfig>>('ai.task_models');
+      const selection: TaskModelSelection = modelId === 'inherit'
+        ? { kind: 'inherit' }
+        : { kind: 'fixed', model_id: modelId };
+      const updated = { ...normalizeTaskModels(current), session_title: selection };
+      await configManager.setConfig('ai.task_models', updated);
+      setTaskModels(updated);
 
       let modelDesc = '';
-      if (modelId === 'primary') {
+      if (modelId === 'inherit') {
+        modelDesc = t('sessionTitle.model.inherit');
+      } else if (modelId === 'primary') {
         modelDesc = t('sessionTitle.model.primary');
       } else if (modelId === 'fast') {
         modelDesc = t('sessionTitle.model.fast');
@@ -122,54 +141,56 @@ export const SessionTitleConfig: React.FC = () => {
   };
 
   return (
-    <ConfigPageSection
-      className="bitfun-func-agent-config"
-      data-bf-component="session-title-config"
-      data-bf-part="root"
-      title={t('sessionTitle.title')}
-      description={t('sessionTitle.subtitle')}
-      extra={(
-        <div
-          className="bitfun-func-agent-config__appearance-host"
-          data-bf-component="session-title-config"
-          data-bf-part="enableControl"
-        >
-          <Switch
-            checked={settings?.enable_session_title_generation ?? false}
-            onChange={(e) => void updateEnabled(e.target.checked)}
-            size="small"
-            disabled={isLoading || !settings}
-            aria-label={t('sessionTitle.title')}
-          />
-        </div>
-      )}
-    >
-      <ConfigPageRow
-        label={t('sessionTitle.model.label')}
-        description={enabledModels.length === 0 ? t('sessionTitle.models.empty') : undefined}
-        align="center"
+    <>
+      <ConfigPageSection
+        className="bitfun-func-agent-config"
+        data-bf-component="session-title-config"
+        data-bf-part="root"
+        title={t('sessionTitle.title')}
+        description={t('sessionTitle.subtitle')}
+        extra={(
+          <div
+            className="bitfun-func-agent-config__appearance-host"
+            data-bf-component="session-title-config"
+            data-bf-part="enableControl"
+          >
+            <Switch
+              checked={settings?.enable_session_title_generation ?? false}
+              onChange={(e) => void updateEnabled(e.target.checked)}
+              size="small"
+              disabled={isLoading || !settings}
+              aria-label={t('sessionTitle.title')}
+            />
+          </div>
+        )}
       >
-        <div
-          className="bitfun-func-agent-config__appearance-host"
-          data-bf-component="session-title-config"
-          data-bf-part="modelControl"
+        <ConfigPageRow
+          label={t('sessionTitle.model.label')}
+          description={enabledModels.length === 0 ? t('sessionTitle.models.empty') : undefined}
+          align="center"
         >
-          <Select
-            size="small"
-            searchable
-            className="model-select-presentation__select"
-            dropdownClassName="model-select-presentation__dropdown"
-            options={modelOptions}
-            value={sessionTitleModelId}
-            onChange={(value) => void handleModelChange(normalizeSelectValue(value))}
-            renderOption={renderModelOption}
-            renderValue={renderModelValue}
-            disabled={isLoading}
-            triggerTestId="settings-session-title-model-select"
-          />
-        </div>
-      </ConfigPageRow>
-    </ConfigPageSection>
+          <div
+            className="bitfun-func-agent-config__appearance-host"
+            data-bf-component="session-title-config"
+            data-bf-part="modelControl"
+          >
+            <Select
+              size="small"
+              searchable
+              className="model-select-presentation__select"
+              dropdownClassName="model-select-presentation__dropdown"
+              options={modelOptions}
+              value={sessionTitleModelId}
+              onChange={(value) => void handleModelChange(normalizeSelectValue(value))}
+              renderOption={renderModelOption}
+              renderValue={renderModelValue}
+              disabled={isLoading}
+              triggerTestId="settings-session-title-model-select"
+            />
+          </div>
+        </ConfigPageRow>
+      </ConfigPageSection>
+    </>
   );
 };
 

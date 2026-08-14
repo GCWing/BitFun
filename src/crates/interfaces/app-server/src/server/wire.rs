@@ -245,12 +245,12 @@ pub(super) fn config_update(
         ConfigUpdateEvent::ModelsReconciled {
             invalidated_model_ids,
             default_models_changed,
-            func_agent_models_changed,
+            task_models_changed,
             agent_model_defaults_changed,
         } => ConfigUpdate::ModelsReconciled {
             invalidated_model_ids,
             default_models_changed,
-            func_agent_models_changed,
+            task_models_changed,
             agent_model_defaults_changed,
         },
     }

@@ -7797,6 +7797,7 @@ impl SessionManager {
 
     async fn try_generate_session_title_with_ai(
         &self,
+        session_id: &str,
         user_message: &str,
         max_length: usize,
     ) -> BitFunResult<Option<String>> {
@@ -7850,15 +7851,80 @@ impl SessionManager {
             },
         ];
 
-        // Dynamically get Agent client to generate title
+        // Resolve the task model. Inherit uses the session's resolved model
+        // identity but deliberately does not carry its reasoning preset.
         let ai_client_factory = get_global_ai_client_factory().await.map_err(|e| {
             BitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
         })?;
-
-        let ai_client = ai_client_factory
-            .get_client_by_func_agent("session-title-func-agent")
+        let ai_config = Self::load_ai_config_for_model_resolution()
             .await
-            .map_err(|e| BitFunError::AIClient(format!("Failed to get AI client: {}", e)))?;
+            .ok_or_else(|| BitFunError::AIClient("Failed to load AI configuration".to_string()))?;
+        let ai_client = match &ai_config.task_models.session_title {
+            crate::service::config::types::TaskModelSelection::Fixed { model_id } => {
+                ai_client_factory.get_client_resolved(model_id).await
+            }
+            crate::service::config::types::TaskModelSelection::Inherit => {
+                let session = self.get_session(session_id).ok_or_else(|| {
+                    BitFunError::NotFound(format!("Session not found: {session_id}"))
+                })?;
+                let explicit_model_id = session
+                    .config
+                    .model_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|model_id| !model_id.is_empty());
+                let fallback_model_id = if explicit_model_id.is_none() {
+                    let workspace = session.config.workspace_path.as_deref().map(Path::new);
+                    Some(
+                        get_agent_registry()
+                            .get_model_id_for_agent(&session.agent_type, workspace)
+                            .await
+                            .map_err(|error| {
+                                BitFunError::AIClient(format!(
+                                    "Failed to resolve session Agent model: {error}"
+                                ))
+                            })?,
+                    )
+                } else {
+                    None
+                };
+                let configured_model_id = explicit_model_id
+                    .or(fallback_model_id.as_deref())
+                    .unwrap_or("auto");
+                let selector = if Self::is_auto_model_selector(configured_model_id) {
+                    "primary"
+                } else {
+                    configured_model_id
+                };
+                let resolved_model_id =
+                    ai_config.resolve_model_selection(selector).ok_or_else(|| {
+                        BitFunError::AIClient(format!(
+                            "Failed to resolve inherited session model: {selector}"
+                        ))
+                    })?;
+                if matches!(
+                    session.config.model_binding_policy,
+                    SessionModelBindingPolicy::ApprovedImmutable
+                ) {
+                    let fingerprint = session
+                        .config
+                        .model_binding_fingerprint
+                        .as_deref()
+                        .ok_or_else(|| {
+                            BitFunError::AIClient(
+                                "Inherited immutable session model has no approved fingerprint"
+                                    .to_string(),
+                            )
+                        })?;
+                    ai_client_factory
+                        .get_client_by_approved_binding(&resolved_model_id, fingerprint)
+                        .await
+                } else {
+                    ai_client_factory.get_client_by_id(&resolved_model_id).await
+                }
+            }
+        }
+        .map_err(|e| BitFunError::AIClient(format!("Failed to get AI client: {}", e)))?;
 
         let response = ai_client
             .send_message(messages, None)
@@ -7883,6 +7949,7 @@ impl SessionManager {
     /// Generate a concise session title, using AI first and falling back to a local heuristic.
     pub async fn resolve_session_title(
         &self,
+        session_id: &str,
         user_message: &str,
         max_length: Option<usize>,
         allow_ai: bool,
@@ -7891,7 +7958,7 @@ impl SessionManager {
 
         if allow_ai {
             match self
-                .try_generate_session_title_with_ai(user_message, max_length)
+                .try_generate_session_title_with_ai(session_id, user_message, max_length)
                 .await
             {
                 Ok(Some(title)) => {
@@ -7920,11 +7987,12 @@ impl SessionManager {
     /// Generate a concise and accurate session title based on user message content.
     pub async fn generate_session_title(
         &self,
+        session_id: &str,
         user_message: &str,
         max_length: Option<usize>,
     ) -> BitFunResult<String> {
         Ok(self
-            .resolve_session_title(user_message, max_length, true)
+            .resolve_session_title(session_id, user_message, max_length, true)
             .await
             .title)
     }

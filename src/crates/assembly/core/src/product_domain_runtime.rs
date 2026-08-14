@@ -16,8 +16,6 @@ use bitfun_product_domains::function_agents::ports::{
 #[cfg(feature = "tools-miniapp")]
 use bitfun_product_domains::miniapp::ports::{MiniAppRuntimeFacade, MiniAppStoragePort};
 #[cfg(feature = "function-agents")]
-use chrono::{Local, Timelike};
-#[cfg(feature = "function-agents")]
 use log::info;
 
 #[cfg(feature = "function-agents")]
@@ -27,9 +25,7 @@ use crate::function_agents::port_adapters::{
     CoreFunctionAgentAiAdapter, CoreFunctionAgentGitAdapter,
 };
 #[cfg(feature = "function-agents")]
-use crate::function_agents::{
-    CommitMessage, CommitMessageOptions, WorkStateAnalysis, WorkStateOptions,
-};
+use crate::function_agents::{CommitMessage, CommitMessageOptions};
 #[cfg(feature = "function-agents")]
 use crate::infrastructure::ai::AIClientFactory;
 
@@ -80,31 +76,5 @@ impl CoreProductDomainRuntime {
         facade
             .generate_commit_message(repo_path.to_path_buf(), options)
             .await
-    }
-
-    #[cfg(feature = "function-agents")]
-    pub(crate) async fn analyze_function_agent_work_state(
-        factory: Arc<AIClientFactory>,
-        repo_path: &Path,
-        options: WorkStateOptions,
-    ) -> AgentResult<WorkStateAnalysis> {
-        info!("Analyzing work state: repo_path={:?}", repo_path);
-
-        let now = Local::now();
-        let git_adapter = Self::function_agent_git_adapter();
-        let ai_adapter = Self::function_agent_ai_adapter(factory);
-        let facade = Self::function_agent_runtime_facade(&git_adapter, &ai_adapter);
-        // Keep the legacy analyzed_at timing in core: assign it after AI analysis completes.
-        let mut analysis = facade
-            .analyze_work_state(
-                repo_path.to_path_buf(),
-                options,
-                now.timestamp(),
-                now.hour(),
-                String::new(),
-            )
-            .await?;
-        analysis.analyzed_at = Local::now().to_rfc3339();
-        Ok(analysis)
     }
 }

@@ -81,7 +81,6 @@ use api::session_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
 use api::speech_api::*;
-use api::startchat_agent_api::*;
 use api::storage_commands::*;
 use api::subagent_api::*;
 use api::system_api::*;
@@ -1463,10 +1462,6 @@ pub async fn run() {
             save_git_repo_history,
             load_git_repo_history,
             preview_commit_message,
-            analyze_work_state,
-            quick_analyze_work_state,
-            generate_greeting_only,
-            get_work_state_summary,
             compute_diff,
             apply_patch,
             save_merged_diff_content,
@@ -2100,10 +2095,6 @@ async fn init_agentic_system() -> anyhow::Result<(
 
 async fn init_function_agents(ai_client_factory: Arc<AIClientFactory>) -> anyhow::Result<()> {
     let _ = bitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
-        ai_client_factory.clone(),
-    );
-
-    let _ = bitfun_core::function_agents::startchat_func_agent::StartchatFunctionAgent::new(
         ai_client_factory.clone(),
     );
 

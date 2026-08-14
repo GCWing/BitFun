@@ -141,7 +141,7 @@ pub enum ConfigUpdate {
     ModelsReconciled {
         invalidated_model_ids: Vec<String>,
         default_models_changed: bool,
-        func_agent_models_changed: bool,
+        task_models_changed: bool,
         agent_model_defaults_changed: bool,
     },
 }

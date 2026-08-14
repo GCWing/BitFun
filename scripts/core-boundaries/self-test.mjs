@@ -5012,14 +5012,11 @@ export function runManifestParserSelfTest({
       contracts: [
         'prepare_commit_ai_prompt',
         'parse_commit_ai_response',
-        'build_work_state_analysis_prompt',
-        'parse_work_state_analysis_response',
         'send_message',
         'AgentError::internal_error',
         'CoreCommitAiAnalysisService',
-        'CoreWorkStateAiAnalysisService',
+        'CoreCommitAiAnalysisService::new_with_task_config',
         'parse_commit_response_preserves_product_domain_response_policy',
-        'parse_complete_analysis_preserves_product_domain_response_policy',
       ],
     },
     {
@@ -5027,20 +5024,12 @@ export function runManifestParserSelfTest({
       contracts: [
         'FunctionAgentGitService',
         'git_commit_snapshot',
-        'startchat_git_snapshot',
-        'startchat_time_snapshot',
-        'process_manager::create_command("git")',
-        'git_unpushed_commits',
-        'git_ahead_behind',
-        'git_last_commit_timestamp',
       ],
     },
     {
       path: 'src/crates/services/services-integrations/tests/function_agent_contracts.rs',
       contracts: [
         'git_service_builds_commit_snapshot_from_staged_diff_without_unstaged_content',
-        'git_service_startchat_snapshot_preserves_no_head_and_non_git_fallback',
-        'git_service_time_snapshot_uses_last_commit_timestamp',
       ],
     },
     {
@@ -5048,42 +5037,19 @@ export function runManifestParserSelfTest({
       contracts: ['CoreCommitAiAnalysisService as AIAnalysisService'],
     },
     {
-      path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/ai_service.rs',
-      contracts: ['CoreWorkStateAiAnalysisService as AIWorkStateService'],
-    },
-    {
       path: 'src/crates/assembly/core/src/function_agents/git-func-agent/commit_generator.rs',
       contracts: ['CoreProductDomainRuntime', 'generate_function_agent_commit_message'],
-    },
-    {
-      path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
-      contracts: ['CoreProductDomainRuntime', 'analyze_function_agent_work_state'],
     },
     {
       path: 'src/crates/contracts/product-domains/src/function_agents/ports.rs',
       contracts: [
         'FunctionAgentRuntimeFacade',
         'generate_commit_message',
-        'analyze_work_state',
-        'git_work_state_from_snapshot',
-        'StartchatTimeSnapshot',
-        'startchat_time_snapshot',
       ],
     },
     {
       path: 'src/crates/contracts/product-domains/src/function_agents/common.rs',
       contracts: ['extract_json_from_ai_response', 'try_repair_json'],
-    },
-    {
-      path: 'src/crates/contracts/product-domains/src/function_agents/startchat_func_agent/utils.rs',
-      contracts: [
-        'WORK_STATE_ANALYSIS_PROMPT',
-        'build_work_state_analysis_prompt',
-        'ParsedCompleteAnalysis',
-        'parse_complete_analysis_value',
-        'parse_complete_analysis_json',
-        'parse_work_state_analysis_response',
-      ],
     },
     {
       path: 'src/crates/contracts/product-domains/src/function_agents/git_func_agent/utils.rs',

@@ -9741,7 +9741,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/function_agents/port_adapters.rs',
     reason:
-      'core function-agent port adapters must continue owning AI concrete calls while product-domains owns prompt, parser, and facade policy',
+      'core function-agent port adapters must continue owning AI concrete calls while product-domains owns Git prompt, parser, and facade policy',
     patterns: [
       {
         regex: /\bprepare_commit_ai_prompt\b/,
@@ -9750,14 +9750,6 @@ export const requiredContentRules = [
       {
         regex: /\bparse_commit_ai_response\b/,
         message: 'missing product-domain Git function-agent response policy use',
-      },
-      {
-        regex: /\bbuild_work_state_analysis_prompt\b/,
-        message: 'missing product-domain Startchat prompt policy use',
-      },
-      {
-        regex: /\bparse_work_state_analysis_response\b/,
-        message: 'missing product-domain Startchat response policy use',
       },
       {
         regex: /\bai_client\s*\.\s*send_message\b/,
@@ -9772,16 +9764,8 @@ export const requiredContentRules = [
         message: 'missing core-owned commit AI concrete service',
       },
       {
-        regex: /\bCoreWorkStateAiAnalysisService\b/,
-        message: 'missing core-owned Startchat AI concrete service',
-      },
-      {
         regex: /\bparse_commit_response_preserves_product_domain_response_policy\b/,
         message: 'missing Git function-agent AI response boundary regression test',
-      },
-      {
-        regex: /\bparse_complete_analysis_preserves_product_domain_response_policy\b/,
-        message: 'missing Startchat AI response boundary regression test',
       },
     ],
   },
@@ -9799,14 +9783,6 @@ export const requiredContentRules = [
         message: 'missing commit snapshot service method',
       },
       {
-        regex: /\bstartchat_git_snapshot\b/,
-        message: 'missing Startchat Git snapshot service method',
-      },
-      {
-        regex: /\bstartchat_time_snapshot\b/,
-        message: 'missing Startchat time snapshot service method',
-      },
-      {
         regex: /\bGitService::get_status\b/,
         message: 'missing shared GitService status lookup',
       },
@@ -9818,40 +9794,16 @@ export const requiredContentRules = [
         regex: /\bContextAnalyzer::analyze_project_context\b/,
         message: 'missing product-domain project context analysis',
       },
-      {
-        regex: /\bprocess_manager::create_command\("git"\)/,
-        message: 'missing process-manager backed lenient Git command fallback',
-      },
-      {
-        regex: /\bgit_unpushed_commits\b/,
-        message: 'missing unpushed-commit fallback helper',
-      },
-      {
-        regex: /\bgit_ahead_behind\b/,
-        message: 'missing ahead/behind fallback helper',
-      },
-      {
-        regex: /\bgit_last_commit_timestamp\b/,
-        message: 'missing last-commit timestamp helper',
-      },
     ],
   },
   {
     path: 'src/crates/services/services-integrations/tests/function_agent_contracts.rs',
     reason:
-      'services-integrations function-agent Git service must preserve legacy Git snapshot behavior',
+      'services-integrations function-agent Git service must preserve commit snapshot behavior',
     patterns: [
       {
         regex: /\bgit_service_builds_commit_snapshot_from_staged_diff_without_unstaged_content\b/,
         message: 'missing staged/unstaged boundary regression test',
-      },
-      {
-        regex: /\bgit_service_startchat_snapshot_preserves_no_head_and_non_git_fallback\b/,
-        message: 'missing Startchat no-HEAD and non-Git fallback regression test',
-      },
-      {
-        regex: /\bgit_service_time_snapshot_uses_last_commit_timestamp\b/,
-        message: 'missing time snapshot regression test',
       },
     ],
   },
@@ -9863,17 +9815,6 @@ export const requiredContentRules = [
       {
         regex: /\bCoreCommitAiAnalysisService as AIAnalysisService\b/,
         message: 'missing Git function-agent AI service compatibility re-export',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/ai_service.rs',
-    reason:
-      'legacy Startchat AI service path must remain a compatibility re-export only',
-    patterns: [
-      {
-        regex: /\bCoreWorkStateAiAnalysisService as AIWorkStateService\b/,
-        message: 'missing Startchat AI service compatibility re-export',
       },
     ],
   },
@@ -9988,21 +9929,6 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
-    reason:
-      'legacy Startchat work-state analyzer must delegate to the core product-domain runtime owner',
-    patterns: [
-      {
-        regex: /\bCoreProductDomainRuntime\b/,
-        message: 'missing core product-domain runtime owner routing',
-      },
-      {
-        regex: /\banalyze_function_agent_work_state\b/,
-        message: 'missing Startchat work-state owner method delegation',
-      },
-    ],
-  },
-  {
     path: 'src/crates/contracts/product-domains/src/function_agents/ports.rs',
     reason:
       'product-domains owns port-backed function-agent facade orchestration while providers/core keep concrete Git/AI runtime calls',
@@ -10014,22 +9940,6 @@ export const requiredContentRules = [
       {
         regex: /\bgenerate_commit_message\b/,
         message: 'missing function-agent commit facade orchestration',
-      },
-      {
-        regex: /\banalyze_work_state\b/,
-        message: 'missing function-agent work-state facade orchestration',
-      },
-      {
-        regex: /\bgit_work_state_from_snapshot\b/,
-        message: 'missing Startchat Git snapshot projection helper',
-      },
-      {
-        regex: /\bStartchatTimeSnapshot\b/,
-        message: 'missing Startchat time snapshot contract',
-      },
-      {
-        regex: /\bstartchat_time_snapshot\b/,
-        message: 'missing Startchat time snapshot port',
       },
     ],
   },
@@ -10045,41 +9955,6 @@ export const requiredContentRules = [
       {
         regex: /\bfn try_repair_json\b/,
         message: 'missing function-agent AI response JSON repair helper',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/contracts/product-domains/src/function_agents/startchat_func_agent/utils.rs',
-    reason:
-      'product-domains owns Startchat function-agent prompt and response policy while core keeps AI calls',
-    patterns: [
-      {
-        regex: /\bpub const WORK_STATE_ANALYSIS_PROMPT\b/,
-        message: 'missing product-domain Startchat prompt template',
-      },
-      {
-        regex: /\bpub fn build_work_state_analysis_prompt\b/,
-        message: 'missing product-domain Startchat prompt builder',
-      },
-      {
-        regex: /\bpub struct ParsedCompleteAnalysis\b/,
-        message: 'missing Startchat complete-analysis parse result contract',
-      },
-      {
-        regex: /\bpub fn parse_complete_analysis_value\b/,
-        message: 'missing Startchat complete-analysis value parser',
-      },
-      {
-        regex: /\bpub fn parse_complete_analysis_json\b/,
-        message: 'missing Startchat complete-analysis JSON parser',
-      },
-      {
-        regex: /\bpub fn parse_work_state_analysis_response\b/,
-        message: 'missing Startchat AI response policy',
-      },
-      {
-        regex: /\bwork_state_ai_response_policy_extracts_json_and_maps_domain_errors\b/,
-        message: 'missing Startchat AI response policy regression test',
       },
     ],
   },
@@ -10267,20 +10142,12 @@ export const requiredContentRules = [
         message: 'missing Git adapter delegation to integration runtime service',
       },
       {
-        regex: /\bCoreCommitAiAnalysisService::new_with_agent_config\b/,
+        regex: /\bCoreCommitAiAnalysisService::new_with_task_config\b/,
         message: 'missing commit AI adapter delegation to concrete runtime service',
-      },
-      {
-        regex: /\bCoreWorkStateAiAnalysisService::new_with_agent_config\b/,
-        message: 'missing Startchat AI adapter delegation to concrete runtime service',
       },
       {
         regex: /\bgit_adapter_commit_snapshot_keeps_staged_diff_and_unstaged_count_separate\b/,
         message: 'missing function-agent Git snapshot boundary regression test',
-      },
-      {
-        regex: /\bgit_adapter_startchat_snapshot_preserves_git_state_when_diff_has_no_head\b/,
-        message: 'missing Startchat Git diff fallback regression test',
       },
     ],
   },
@@ -10312,10 +10179,6 @@ export const requiredContentRules = [
       {
         regex: /\bfn generate_function_agent_commit_message\b/,
         message: 'missing Git function-agent concrete runtime owner entrypoint',
-      },
-      {
-        regex: /\bfn analyze_function_agent_work_state\b/,
-        message: 'missing Startchat concrete runtime owner entrypoint',
       },
       {
         regex: /\bCoreFunctionAgentGitAdapter\b/,

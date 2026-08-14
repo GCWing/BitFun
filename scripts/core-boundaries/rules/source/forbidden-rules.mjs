@@ -3278,7 +3278,7 @@ export const forbiddenContentRules = [
           'Git function-agent commit generator must use CoreProductDomainRuntime for Git adapter wiring',
       },
       {
-        regex: /\bAIAnalysisService::new_with_agent_config\b/,
+        regex: /\bAIAnalysisService::new_with_task_config\b/,
         message:
           'Git function-agent commit generator must use CoreProductDomainRuntime for AI adapter wiring',
       },
@@ -3286,21 +3286,6 @@ export const forbiddenContentRules = [
         regex: /\bto_string_lossy\b/,
         message:
           'Git function-agent commit generator must preserve PathBuf paths when routing through the facade',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
-    patterns: [
-      {
-        regex: /\bAIWorkStateService::new_with_agent_config\b/,
-        message:
-          'Startchat work-state analyzer must use CoreProductDomainRuntime for AI adapter wiring',
-      },
-      {
-        regex: /\bcreate_command\("git"\)/,
-        message:
-          'Startchat work-state analyzer must use CoreProductDomainRuntime for Git adapter wiring',
       },
     ],
   },

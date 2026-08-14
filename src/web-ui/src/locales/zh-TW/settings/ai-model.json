@@ -30,6 +30,7 @@
     "loadFailed": "載入會話標題設定失敗",
     "model": {
       "label": "會話標題生成模型",
+      "inherit": "目前會話模型",
       "primary": "主力模型",
       "fast": "快速模型"
     },
