@@ -19,6 +19,8 @@ import { i18nService } from '@/infrastructure/i18n';
 import { driverForSession } from '../../session-drivers/registry';
 import type { SendMessageOptions, SubmissionDraft, TurnTracker } from '../../session-drivers/types';
 import { assertSessionSubmissionAllowed } from '../../store/sessionMutationStore';
+import { hasInterruptedTurnHoldingQueue } from '../../utils/interruptedTurnRecovery';
+import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
 
 export { syncSessionModelSelection } from '../../utils/modelSync';
 export { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
@@ -88,6 +90,9 @@ export async function sendMessage(
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
   }
+  if (interruptedTurnRecoveryGate.isSessionInFlight(sessionId)) {
+    throw new Error('Interrupted turn recovery is in flight');
+  }
   assertSessionSubmissionAllowed(sessionId, options?.sessionMutationLeaseId);
   const sendAttempt = beginSessionSend(sessionId);
   const draft: SubmissionDraft = {
@@ -100,7 +105,8 @@ export async function sendMessage(
     const machineState = stateMachineManager.getCurrentState(sessionId);
     const sessionBusy =
       machineState === SessionExecutionState.PROCESSING ||
-      machineState === SessionExecutionState.FINISHING;
+      machineState === SessionExecutionState.FINISHING ||
+      context.userCancelledSessionIds?.has(sessionId) === true;
     const hasPendingQueue = pendingQueueManager.list(sessionId).length > 0;
 
     if (sessionBusy || hasPendingQueue) {
@@ -348,9 +354,28 @@ export async function cancelCurrentTask(context: FlowChatContext): Promise<boole
 export async function drainPendingQueue(
   context: FlowChatContext,
   sessionId: string,
+  options?: { allowInterruptedRecoveryAbandon?: boolean },
 ): Promise<void> {
   const machineState = stateMachineManager.getCurrentState(sessionId);
   if (machineState !== SessionExecutionState.IDLE) {
+    return;
+  }
+  if (interruptedTurnRecoveryGate.isSessionInFlight(sessionId)) {
+    log.debug('Pending queue held while interrupted recovery admission is in flight', {
+      sessionId,
+    });
+    return;
+  }
+  if (context.userCancelledSessionIds.has(sessionId)) {
+    log.debug('Pending queue held until cancellation outcome is authoritative', { sessionId });
+    return;
+  }
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (
+    hasInterruptedTurnHoldingQueue(session)
+    && !options?.allowInterruptedRecoveryAbandon
+  ) {
+    log.debug('Pending queue held for interrupted turn recovery decision', { sessionId });
     return;
   }
   // Find the head item *that is still eligible for auto-drain*. Items with

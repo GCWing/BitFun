@@ -5,6 +5,7 @@ import {
   handleSessionStateChanged,
   insertSteeringItemIfAbsent,
   isAppWindowFocused,
+  projectDialogTurnRecovered,
   shouldProcessEvent,
 } from './EventHandlerModule';
 import { stateMachineManager } from '../../state-machine';
@@ -18,6 +19,7 @@ import { notificationService } from '../../../shared/notification-system/service
 import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
 import type { FlowChatContext } from './types';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
+import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
 
 const { handleCompressionCompleted, handleTokenUsageUpdate } = __test_only__;
 
@@ -32,6 +34,339 @@ vi.mock('../../../shared/notification-system/services/NotificationService', () =
 describe('isAppWindowFocused', () => {
   it('returns true when no document is available', () => {
     expect(isAppWindowFocused()).toBe(true);
+  });
+});
+
+describe('interrupted turn lifecycle', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+    interruptedTurnRecoveryGate.resetForTests();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+    interruptedTurnRecoveryGate.resetForTests();
+  });
+
+  it('projects the authoritative recovered fence and releases the shared gate', async () => {
+    const turn: DialogTurn = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      agentType: 'agentic',
+      userMessage: { id: 'user-1', content: 'continue this work', timestamp: 1 },
+      modelRounds: [{
+        id: 'round-0',
+        index: 0,
+        items: [],
+        isStreaming: true,
+        isComplete: false,
+        status: 'streaming',
+        startTime: 1,
+      }],
+      status: 'processing',
+      startTime: 1,
+    };
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([['session-1', {
+        sessionId: 'session-1',
+        dialogTurns: [turn],
+        status: 'active',
+        config: { agentType: 'agentic' },
+        createdAt: 1,
+        lastActiveAt: 1,
+        error: null,
+        sessionKind: 'normal',
+      } as Session]]),
+      activeSessionId: 'session-1',
+    }));
+    await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+      taskId: 'session-1',
+      dialogTurnId: 'turn-1',
+    });
+    const context = createFlowChatContext();
+
+    __test_only__.handleDialogTurnInterrupted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      executionGeneration: 0,
+    });
+    await Promise.resolve();
+
+    let session = FlowChatStore.getInstance().getState().sessions.get('session-1')!;
+    expect(session.dialogTurns).toHaveLength(1);
+    expect(session.dialogTurns[0]).toMatchObject({
+      id: 'turn-1',
+      status: 'cancelled',
+      finishReason: 'interrupted',
+      recovery: { status: 'interrupted', executionGeneration: 0 },
+    });
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
+
+    expect(interruptedTurnRecoveryGate.tryBegin({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      executionGeneration: 0,
+    })).toBe(true);
+
+    __test_only__.handleDialogTurnRecovered(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      executionGeneration: 1,
+    });
+    await Promise.resolve();
+
+    session = FlowChatStore.getInstance().getState().sessions.get('session-1')!;
+    expect(session.dialogTurns).toHaveLength(1);
+    expect(session.dialogTurns[0]).toMatchObject({
+      id: 'turn-1',
+      status: 'processing',
+      recovery: { status: 'recovering', executionGeneration: 1 },
+    });
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(
+      SessionExecutionState.PROCESSING,
+    );
+    expect(interruptedTurnRecoveryGate.isSessionInFlight('session-1')).toBe(false);
+
+    __test_only__.handleDialogTurnInterrupted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      executionGeneration: 0,
+    });
+    await Promise.resolve();
+
+    session = FlowChatStore.getInstance().getState().sessions.get('session-1')!;
+    expect(session.dialogTurns[0]).toMatchObject({
+      status: 'processing',
+      recovery: { status: 'recovering', executionGeneration: 1 },
+    });
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(
+      SessionExecutionState.PROCESSING,
+    );
+  });
+
+  it('does not settle a newer turn when an older interrupted event arrives late', async () => {
+    const oldTurn: DialogTurn = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      agentType: 'agentic',
+      userMessage: { id: 'user-1', content: 'old work', timestamp: 1 },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 1,
+    };
+    createSessionWithTurn(oldTurn);
+    await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+      taskId: 'session-1',
+      dialogTurnId: 'turn-1',
+    });
+    const context = createFlowChatContext();
+
+    await stateMachineManager.transition(
+      'session-1',
+      SessionExecutionEvent.BACKEND_STREAM_COMPLETED,
+    );
+    handleSessionStateChanged(context, {
+      sessionId: 'session-1',
+      newState: 'Idle',
+    });
+    await Promise.resolve();
+
+    const newTurn: DialogTurn = {
+      id: 'turn-2',
+      sessionId: 'session-1',
+      agentType: 'agentic',
+      userMessage: { id: 'user-2', content: 'new work', timestamp: 2 },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 2,
+    };
+    FlowChatStore.getInstance().setState(state => {
+      const sessions = new Map(state.sessions);
+      const session = sessions.get('session-1')!;
+      sessions.set('session-1', {
+        ...session,
+        dialogTurns: [...session.dialogTurns, newTurn],
+      });
+      return { ...state, sessions };
+    });
+    await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+      taskId: 'session-1',
+      dialogTurnId: 'turn-2',
+    });
+
+    __test_only__.handleDialogTurnInterrupted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      executionGeneration: 0,
+    });
+    await Promise.resolve();
+
+    const session = FlowChatStore.getInstance().getState().sessions.get('session-1')!;
+    expect(session.dialogTurns[0]).toMatchObject({
+      id: 'turn-1',
+      status: 'cancelled',
+      recovery: { status: 'interrupted', executionGeneration: 0 },
+    });
+    expect(session.dialogTurns[1]).toMatchObject({ id: 'turn-2', status: 'processing' });
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(
+      SessionExecutionState.PROCESSING,
+    );
+    expect(stateMachineManager.get('session-1')?.getContext().currentDialogTurnId).toBe('turn-2');
+  });
+
+  it('does not revive a recovered generation after it was interrupted again', async () => {
+    const turn: DialogTurn = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      agentType: 'agentic',
+      userMessage: { id: 'user-1', content: 'resume safely', timestamp: 1 },
+      modelRounds: [],
+      status: 'cancelled',
+      finishReason: 'interrupted',
+      recovery: { status: 'interrupted', executionGeneration: 0, resumeCount: 0 },
+      startTime: 1,
+    };
+    createSessionWithTurn(turn);
+    const context = createFlowChatContext();
+
+    projectDialogTurnRecovered(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      executionGeneration: 1,
+    });
+    await Promise.resolve();
+    __test_only__.handleDialogTurnInterrupted(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      executionGeneration: 1,
+    });
+    await Promise.resolve();
+
+    __test_only__.handleDialogTurnRecovered(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      executionGeneration: 1,
+    });
+    await Promise.resolve();
+
+    const current = FlowChatStore.getInstance().getState().sessions
+      .get('session-1')!.dialogTurns[0];
+    expect(current).toMatchObject({
+      status: 'cancelled',
+      finishReason: 'interrupted',
+      recovery: { status: 'interrupted', executionGeneration: 1 },
+    });
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
+  });
+
+  it('accepts durable recovered completion when the recovered event was dropped', async () => {
+    vi.useFakeTimers();
+    const turn: DialogTurn = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      agentType: 'agentic',
+      userMessage: { id: 'user-1', content: 'keep retryable', timestamp: 1 },
+      modelRounds: [],
+      status: 'cancelled',
+      finishReason: 'interrupted',
+      recovery: { status: 'interrupted', executionGeneration: 1, resumeCount: 1 },
+      startTime: 1,
+    };
+    createSessionWithTurn(turn);
+    const context = createFlowChatContext();
+
+    handleDialogTurnComplete(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      success: true,
+      finishReason: 'complete',
+    }, vi.fn());
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(FlowChatStore.getInstance().getState().sessions
+      .get('session-1')!.dialogTurns[0]).toMatchObject({
+      status: 'completed',
+      finishReason: 'complete',
+    });
+    expect(FlowChatStore.getInstance().getState().sessions
+      .get('session-1')!.dialogTurns[0].recovery).toBeUndefined();
+    vi.useRealTimers();
+  });
+
+  it('does not settle a newer turn when an older cancelled event arrives late', async () => {
+    const oldTurn: DialogTurn = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      agentType: 'agentic',
+      userMessage: { id: 'user-1', content: 'old', timestamp: 1 },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 1,
+    };
+    const newTurn: DialogTurn = {
+      id: 'turn-2',
+      sessionId: 'session-1',
+      agentType: 'agentic',
+      userMessage: { id: 'user-2', content: 'new', timestamp: 2 },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 2,
+    };
+    createSessionWithTurn(oldTurn);
+    FlowChatStore.getInstance().setState(state => {
+      const sessions = new Map(state.sessions);
+      sessions.set('session-1', { ...sessions.get('session-1')!, dialogTurns: [oldTurn, newTurn] });
+      return { ...state, sessions };
+    });
+    await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+      taskId: 'session-1',
+      dialogTurnId: 'turn-2',
+    });
+    const context = createFlowChatContext();
+
+    __test_only__.handleDialogTurnCancelled(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+    }, vi.fn());
+    await Promise.resolve();
+
+    expect(FlowChatStore.getInstance().getState().sessions
+      .get('session-1')!.dialogTurns[1]).toMatchObject({ id: 'turn-2', status: 'processing' });
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(
+      SessionExecutionState.PROCESSING,
+    );
+  });
+
+  it('holds finishing when backend idle arrives before the cancellation outcome', async () => {
+    const turn: DialogTurn = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      agentType: 'agentic',
+      userMessage: { id: 'user-1', content: 'stop', timestamp: 1 },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 1,
+    };
+    createSessionWithTurn(turn);
+    await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+      taskId: 'session-1',
+      dialogTurnId: 'turn-1',
+    });
+    await stateMachineManager.transition(
+      'session-1',
+      SessionExecutionEvent.BACKEND_STREAM_COMPLETED,
+    );
+    const context = createFlowChatContext();
+    context.userCancelledSessionIds.add('session-1');
+
+    handleSessionStateChanged(context, { sessionId: 'session-1', newState: 'Idle' });
+    await Promise.resolve();
+
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(
+      SessionExecutionState.FINISHING,
+    );
   });
 });
 
@@ -673,6 +1008,7 @@ describe('handleDialogTurnFailed', () => {
       startTime: 900,
     });
     const context = createFlowChatContext();
+    context.userCancelledSessionIds.add('session-1');
 
     __test_only__.handleDialogTurnFailed(context, {
       sessionId: 'session-1',
@@ -700,6 +1036,7 @@ describe('handleDialogTurnFailed', () => {
     });
     expect(notificationService.error).not.toHaveBeenCalled();
     expect(notificationService.warning).not.toHaveBeenCalled();
+    expect(context.userCancelledSessionIds.has('session-1')).toBe(false);
   });
 });
 
@@ -1154,6 +1491,31 @@ describe('handleDialogTurnComplete', () => {
       ?.dialogTurns[0];
     expect(finalizedTurn?.status).toBe('completed');
     expect(finalizedTurn?.endTime).toBe(eventOwnedEndTime);
+  });
+
+  it('clears the cancellation gate when the same turn completes during cancel', async () => {
+    vi.useFakeTimers();
+    try {
+      putFinishingSessionInStore();
+      const context = createFlowChatContext();
+      context.userCancelledSessionIds.add('session-1');
+      await setFinishingMachine();
+
+      handleDialogTurnComplete(context, {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        success: true,
+        finishReason: 'complete',
+        hasFinalResponse: true,
+      }, vi.fn());
+
+      expect(context.userCancelledSessionIds.has('session-1')).toBe(true);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(context.userCancelledSessionIds.has('session-1')).toBe(false);
+      expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

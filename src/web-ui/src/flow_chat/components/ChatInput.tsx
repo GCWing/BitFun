@@ -7,7 +7,7 @@ import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, u
 import { createPortal } from 'react-dom';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
+import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star, Play } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import {
@@ -87,6 +87,7 @@ import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
+import { interruptedTurnRecoveryGate } from '@/flow_chat/services/interruptedTurnRecoveryGate';
 import {
   getDeepReviewLaunchErrorMessage,
 } from '../services/DeepReviewService';
@@ -181,6 +182,8 @@ import {
 } from '../utils/tokenUsageDisplay';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { SessionPermissionMode } from '@/infrastructure/api/service-api/AgentAPI';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import { selectInterruptedTurnRecovery } from '../utils/interruptedTurnRecovery';
 import {
   chatInputPermissionMode,
   permissionModeFromConfig,
@@ -4236,10 +4239,73 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     publishSessionModeSelection,
     reportModeSelectionFailure,
   );
-  
+
+  const interruptedTurnRecovery = useMemo(
+    () => selectInterruptedTurnRecovery(effectiveTargetSession, {
+      draft: inputState.value,
+      hasComposerAttachments: contexts.length > 0,
+      executionIdle:
+        derivedState?.sendButtonMode === 'send'
+        && !caps.transferInFlight,
+      desktopRuntime: isTauriRuntime(),
+      peerMode: isPeerDeviceModeActive(),
+      acpSession: Boolean(acpSessionForInput || isAcpTargetSession),
+      modeChangePending: isModeChangePending,
+      modelChangePending: isModelSwitching,
+    }),
+    [
+      acpSessionForInput,
+      caps.transferInFlight,
+      contexts.length,
+      derivedState?.sendButtonMode,
+      effectiveTargetSession,
+      inputState.value,
+      isAcpTargetSession,
+      isModeChangePending,
+      isModelSwitching,
+    ],
+  );
+  useSyncExternalStore(
+    interruptedTurnRecoveryGate.subscribe,
+    interruptedTurnRecoveryGate.getSnapshot,
+    interruptedTurnRecoveryGate.getSnapshot,
+  );
+  const isInterruptedTurnRecoveryInFlight =
+    interruptedTurnRecoveryGate.isSessionInFlight(effectiveTargetSessionId);
+
+  const handleRecoverInterruptedTurn = useCallback(async () => {
+    const candidate = interruptedTurnRecovery;
+    if (!candidate || !interruptedTurnRecoveryGate.tryBegin(candidate)) return;
+    try {
+      await agentAPI.recoverInterruptedDialogTurn({
+        sessionId: candidate.sessionId,
+        dialogTurnId: candidate.turnId,
+        executionGeneration: candidate.executionGeneration,
+        workspacePath:
+          effectiveTargetSession?.projectWorkspacePath
+          || effectiveTargetSession?.workspacePath
+          || effectiveTargetSession?.config.projectWorkspacePath
+          || effectiveTargetSession?.config.workspacePath,
+      });
+    } catch (error) {
+      log.error('Failed to recover interrupted dialog turn', {
+        sessionId: candidate.sessionId,
+        turnId: candidate.turnId,
+        error,
+      });
+      notificationService.error(t('input.continueInterruptedFailed'));
+      interruptedTurnRecoveryGate.clearExact(candidate);
+    }
+  }, [
+    effectiveTargetSession,
+    interruptedTurnRecovery,
+    t,
+  ]);
+
   const handleSendOrCancel = useCallback(async (messageOverride?: string) => {
     if (!derivedState) return;
     if (caps.transferInFlight) return;
+    if (isInterruptedTurnRecoveryInFlight) return;
     
     const { sendButtonMode } = derivedState;
     const draftTrimmed = (messageOverride ?? inputState.value).trim();
@@ -4451,6 +4517,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isModelSwitching,
     isModeChangePending,
     caps.transferInFlight,
+    isInterruptedTurnRecoveryInFlight,
     inputState.value,
     derivedState,
     dispatchInput,
@@ -4498,10 +4565,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
   }, [canSwitchModes, selectableCodeModes, slashCommandState.query]);
 
-  publishModeSelectionRef.current = publishModeSelection;
-  requestModeChangeRef.current = requestSessionModeChange;
-
   const requestModeChange = useCallback((modeId: string) => {
+    if (isInterruptedTurnRecoveryInFlight) {
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      return;
+    }
     if (!canSwitchModes) {
       dispatchMode({ type: 'CLOSE_DROPDOWN' });
       return;
@@ -4519,7 +4587,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     requestSessionModeChange(modeId);
     dispatchMode({ type: 'CLOSE_DROPDOWN' });
-  }, [canSwitchModes, currentMode, effectiveTargetSessionId, requestSessionModeChange, switchableModes]);
+  }, [
+    canSwitchModes,
+    currentMode,
+    effectiveTargetSessionId,
+    isInterruptedTurnRecoveryInFlight,
+    requestSessionModeChange,
+    switchableModes,
+  ]);
+
+  publishModeSelectionRef.current = publishModeSelection;
+  requestModeChangeRef.current = requestModeChange;
 
   const toggleDefaultMode = useCallback(async (modeId: string, modeName: string) => {
     const previousDefaultModeId = userDefaultModeId;
@@ -5286,6 +5364,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!derivedState) return <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state="disabled"><IconButton className="bitfun-chat-input__send-button" disabled size="small"><ArrowUp size={11} /></IconButton></span>;
 
     const { sendButtonMode, hasQueuedInput } = derivedState;
+
+    if (interruptedTurnRecovery) {
+      return (
+        <span
+          className="bitfun-chat-input__send-action"
+          data-bf-component="chat-input"
+          data-bf-part="sendButton"
+          data-bf-action="continue-interrupted"
+          data-bf-state={isInterruptedTurnRecoveryInFlight ? 'disabled' : undefined}
+        >
+          <IconButton
+            className="bitfun-chat-input__send-button"
+            onClick={() => void handleRecoverInterruptedTurn()}
+            disabled={isInterruptedTurnRecoveryInFlight}
+            data-testid="chat-input-continue-interrupted-btn"
+            tooltip={t('input.continueInterrupted')}
+            size="small"
+          >
+            {isInterruptedTurnRecoveryInFlight
+              ? <Loader2 size={11} className="bitfun-spin" />
+              : <Play size={11} fill="currentColor" />}
+          </IconButton>
+        </span>
+      );
+    }
     
     if (sendButtonMode === 'cancel') {
       return (
@@ -5374,6 +5477,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <ContextDropZone
         acceptedTypes={['file', 'directory', 'image', 'code-snippet', 'mermaid-diagram']}
         className="bitfun-chat-input-drop-zone"
+        disabled={isInterruptedTurnRecoveryInFlight}
         onContextAdded={(context) => {
           if (context.type === 'image' && currentImageCount >= CHAT_INPUT_CONFIG.image.maxCount) {
             notificationService.warning(t('input.maxImagesWarning', { count: CHAT_INPUT_CONFIG.image.maxCount }), { duration: 3000 });
@@ -5513,7 +5617,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onCompositionStart={handleImeCompositionStart}
                 onCompositionEnd={handleImeCompositionEnd}
                 placeholder=""
-                disabled={caps.transferInFlight}
+                disabled={caps.transferInFlight || isInterruptedTurnRecoveryInFlight}
                 contexts={contexts}
                 onRemoveContext={removeContext}
                 onMentionStateChange={setMentionState}
@@ -5913,8 +6017,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           aria-label={t('chatInput.resetToAgentic')}
                           onClick={e => {
                             e.stopPropagation();
-                            requestSessionModeChange('agentic');
-                            dispatchMode({ type: 'CLOSE_DROPDOWN' });
+                            requestModeChange('agentic');
                           }}
                         >
                           <X size={12} strokeWidth={2.5} />
@@ -6226,11 +6329,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     externalSelection={dispatchModelSelection}
                     modeDefaultModelId={targetModeInfo?.model}
                     persistSharedModeDefault={Boolean(targetModeInfo && targetModeInfo.source !== 'external')}
+                    disabled={isInterruptedTurnRecoveryInFlight}
                   />
                   </div>
                 ) : null}
 
-                {!caps.transferInFlight ? (
+                {!caps.transferInFlight && !isInterruptedTurnRecoveryInFlight ? (
                   <ComposerVoiceInputButton controller={voiceInput} />
                 ) : null}
                 {voiceInput.phase === 'idle' ? renderActionButton() : null}

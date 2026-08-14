@@ -16,12 +16,13 @@ use crate::runtime::{
 use crate::startup_trace::DesktopStartupTrace;
 use bitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
 use bitfun_agent_runtime::sdk::{
-    AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest,
-    AgentInputAttachment, AgentSessionCreateResult, AgentSessionModeUpdateRequest,
-    AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
-    DialogSteerOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
-    PermissionReply, PermissionRequest,
+    AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRecoveryOutcome,
+    AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest, AgentInputAttachment,
+    AgentSessionCreateResult, AgentSessionModeUpdateRequest, AgentSessionModelSelection,
+    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest, AgentSubmissionSource,
+    AgentTurnCancellationRequest, AgentTurnInterruptionRequest, DialogSteerOutcome,
+    PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PermissionReply, PermissionRequest,
+    RuntimeError,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -65,7 +66,7 @@ use bitfun_core_types::{
     WorktreeError, WorktreeErrorCode,
 };
 use bitfun_product_domains::tool_permissions::PermissionRule;
-use bitfun_runtime_ports::{PermissionMode, SessionTurnWindowRequest};
+use bitfun_runtime_ports::{PermissionMode, PortErrorKind, SessionTurnWindowRequest};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -762,6 +763,20 @@ fn omit_assistant_only_tool_results_for_session_view(turns: &mut [DialogTurnData
 pub struct CancelDialogTurnRequest {
     pub session_id: String,
     pub dialog_turn_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoverInterruptedDialogTurnRequest {
+    pub session_id: String,
+    pub dialog_turn_id: String,
+    pub execution_generation: u32,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2886,6 +2901,97 @@ pub async fn cancel_dialog_turn(
         .map(|_| ())
 }
 
+/// Request a recoverable interruption for a native local dialog turn. The
+/// command returns only after the old execution has settled and the
+/// `dialog-turn-interrupted` event is safe to act on.
+#[tauri::command]
+pub async fn interrupt_dialog_turn(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: CancelDialogTurnRequest,
+) -> Result<(), String> {
+    let interruption = runtime
+        .agent_runtime()
+        .interrupt_turn(AgentTurnInterruptionRequest {
+            session_id: request.session_id.clone(),
+            turn_id: request.dialog_turn_id.clone(),
+            source: Some(AgentSubmissionSource::DesktopUi),
+            wait_timeout_ms: Some(30_000),
+        })
+        .await;
+    match interruption {
+        Ok(_) => Ok(()),
+        // Stop remains universally available. Unsupported recovery surfaces
+        // (external routes, Goal, remote, non-standard sessions) degrade to
+        // the existing hard cancellation and emit DialogTurnCancelled.
+        Err(RuntimeError::Port(error))
+            if matches!(error.kind, PortErrorKind::InvalidRequest | PortErrorKind::Timeout) => runtime
+            .agent_runtime()
+            .cancel_turn(AgentTurnCancellationRequest {
+                session_id: request.session_id.clone(),
+                turn_id: Some(request.dialog_turn_id.clone()),
+                source: Some(AgentSubmissionSource::DesktopUi),
+                requester_session_id: None,
+                reason: Some(if error.kind == PortErrorKind::Timeout {
+                    "recoverable interruption timed out".to_string()
+                } else {
+                    "recoverable interruption unavailable".to_string()
+                }),
+                wait_timeout_ms: None,
+                cancel_descendants: true,
+            })
+            .await
+            .map(|_| ())
+            .map_err(|fallback_error| {
+                log::error!(
+                    "Failed to cancel dialog turn after interruption was unavailable: session_id={}, dialog_turn_id={}, error={}",
+                    request.session_id,
+                    request.dialog_turn_id,
+                    fallback_error
+                );
+                format!("Failed to cancel dialog turn: {}", fallback_error.into_message())
+            }),
+        Err(error) => {
+            log::error!(
+                "Failed to interrupt dialog turn: session_id={}, dialog_turn_id={}, error={}",
+                request.session_id,
+                request.dialog_turn_id,
+                error
+            );
+            Err(format!("Failed to interrupt dialog turn: {}", error.into_message()))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn recover_interrupted_dialog_turn(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: RecoverInterruptedDialogTurnRequest,
+) -> Result<AgentDialogTurnRecoveryOutcome, String> {
+    runtime
+        .agent_runtime()
+        .recover_interrupted_turn(AgentDialogTurnRecoveryRequest {
+            session_id: request.session_id.clone(),
+            turn_id: request.dialog_turn_id.clone(),
+            execution_generation: request.execution_generation,
+            workspace_path: request.workspace_path,
+            remote_connection_id: request.remote_connection_id,
+            remote_ssh_host: request.remote_ssh_host,
+        })
+        .await
+        .map_err(|error| {
+            log::error!(
+                "Failed to recover interrupted dialog turn: session_id={}, dialog_turn_id={}, error={}",
+                request.session_id,
+                request.dialog_turn_id,
+                error
+            );
+            format!(
+                "Failed to recover interrupted dialog turn: {}",
+                error.into_message()
+            )
+        })
+}
+
 #[tauri::command]
 pub async fn steer_dialog_turn(
     runtime: State<'_, DesktopRuntimeContext>,
@@ -4281,6 +4387,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            recovery: None,
+            recovery_epoch: None,
             error: None,
             error_detail: None,
             status: TurnStatus::Completed,
@@ -4365,6 +4473,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            recovery: None,
+            recovery_epoch: None,
             error: None,
             error_detail: None,
             status: TurnStatus::Completed,
@@ -4430,6 +4540,8 @@ mod tests {
             token_usage: None,
             finish_reason: None,
             has_final_response: None,
+            recovery: None,
+            recovery_epoch: None,
             error: None,
             error_detail: None,
             status: TurnStatus::Completed,

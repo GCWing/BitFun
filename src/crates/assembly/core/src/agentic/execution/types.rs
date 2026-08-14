@@ -124,4 +124,18 @@ pub struct ExecutionResult {
     pub new_messages: Vec<Message>,
     /// Why the execution finished
     pub finish_reason: FinishReason,
+    pub total_tools: usize,
+    pub duration_ms: u64,
+    pub partial_recovery_reason: Option<String>,
+    pub effective_finish_reason: String,
+    pub has_final_response: bool,
+}
+
+pub(crate) const CANCEL_LIFECYCLE_OWNER_CONTEXT_KEY: &str = "cancel_lifecycle_owner";
+
+pub(crate) fn coordinator_owns_cancel_lifecycle(context: &HashMap<String, String>) -> bool {
+    context
+        .get(CANCEL_LIFECYCLE_OWNER_CONTEXT_KEY)
+        .map(String::as_str)
+        == Some("coordinator")
 }

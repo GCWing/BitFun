@@ -112,8 +112,11 @@ export class FlowChatManager {
   }
 
   /** Public hook used by the queue panel "send now" fallback to drain head item. */
-  async drainPendingQueueForSession(sessionId: string): Promise<void> {
-    return drainPendingQueue(this.context, sessionId);
+  async drainPendingQueueForSession(
+    sessionId: string,
+    options?: { allowInterruptedRecoveryAbandon?: boolean },
+  ): Promise<void> {
+    return drainPendingQueue(this.context, sessionId, options);
   }
 
   public static getInstance(): FlowChatManager {

@@ -247,6 +247,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("cancel_dialog_turn", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("interrupt_dialog_turn", RemoteWorkspacePolicy::LocalOnly),
     (
         "cancel_insights_generation",
         RemoteWorkspacePolicy::LocalOnly,
@@ -1400,6 +1401,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "remove_project_permission_grant",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "recover_interrupted_dialog_turn",
+        RemoteWorkspacePolicy::LocalOnly,
     ),
     (
         "clear_project_permission_grants",

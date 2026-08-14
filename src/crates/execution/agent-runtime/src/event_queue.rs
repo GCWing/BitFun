@@ -11,7 +11,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, RwLock as StdRwLock, Weak,
 };
-use tokio::sync::{broadcast, Mutex, Notify};
+use tokio::sync::{broadcast, oneshot, Mutex, Notify};
 
 const MIN_EVENT_BROADCAST_BUFFER: usize = 1024;
 // Session-scoped protocol consumers can pause while servicing an RPC. Keep a
@@ -107,6 +107,100 @@ pub struct QueueStats {
     pub total_processed: u64,
 }
 
+/// Completion handle for an event that must enter the legacy dequeue stream
+/// before a producer may publish dependent events.
+pub struct LegacyDequeueAck {
+    receiver: oneshot::Receiver<()>,
+}
+
+impl LegacyDequeueAck {
+    pub async fn wait(self) -> EventBusResult<()> {
+        self.receiver
+            .await
+            .map_err(|_| crate::event_bus::EventBusError::subscriber("legacy dequeue fence closed"))
+    }
+}
+
+#[derive(Clone, Copy)]
+enum LegacyQueuePolicy {
+    BestEffort,
+    RequireImmediateAck,
+    AuthoritativeControl,
+}
+
+fn interrupted_control_identity(event: &AgenticEvent) -> Option<(&str, &str, u32)> {
+    match event {
+        AgenticEvent::DialogTurnInterrupted {
+            session_id,
+            turn_id,
+            execution_generation,
+            ..
+        }
+        | AgenticEvent::DialogTurnRecovered {
+            session_id,
+            turn_id,
+            execution_generation,
+        } => Some((session_id, turn_id, *execution_generation)),
+        _ => None,
+    }
+}
+
+fn authoritative_control_supersedes(authoritative: &AgenticEvent, pending: &AgenticEvent) -> bool {
+    let AgenticEvent::DialogTurnInterrupted {
+        session_id,
+        turn_id,
+        execution_generation,
+        ..
+    } = authoritative
+    else {
+        return false;
+    };
+    interrupted_control_identity(pending).is_some_and(
+        |(pending_session_id, pending_turn_id, pending_generation)| {
+            pending_session_id == session_id
+                && (pending_turn_id != turn_id || pending_generation <= *execution_generation)
+        },
+    )
+}
+
+fn authoritative_control_is_stale(authoritative: &AgenticEvent, pending: &AgenticEvent) -> bool {
+    let Some((session_id, turn_id, execution_generation)) =
+        interrupted_control_identity(authoritative)
+    else {
+        return false;
+    };
+    interrupted_control_identity(pending).is_some_and(
+        |(pending_session_id, pending_turn_id, pending_generation)| {
+            pending_session_id == session_id
+                && pending_turn_id == turn_id
+                && pending_generation > execution_generation
+        },
+    )
+}
+
+fn is_reclaimable_stream_data(authoritative: &AgenticEvent, pending: &AgenticEvent) -> bool {
+    let AgenticEvent::DialogTurnInterrupted {
+        session_id,
+        turn_id,
+        ..
+    } = authoritative
+    else {
+        return false;
+    };
+    matches!(
+        pending,
+        AgenticEvent::TextChunk {
+            session_id: pending_session_id,
+            turn_id: pending_turn_id,
+            ..
+        } | AgenticEvent::ThinkingChunk {
+            session_id: pending_session_id,
+            turn_id: pending_turn_id,
+            ..
+        } if pending_session_id == session_id && pending_turn_id == turn_id
+    )
+}
+
 /// Event queue
 ///
 /// Core functionality:
@@ -119,6 +213,10 @@ pub struct EventQueue {
 
     /// Notifier (used to wake up waiting consumers)
     notify: Arc<Notify>,
+
+    /// One-shot acknowledgements completed when a fenced event is removed
+    /// from the legacy priority queue into a concrete delivery batch.
+    legacy_dequeue_acks: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
 
     /// Broadcast stream for non-consuming subscribers.
     broadcast_tx: broadcast::Sender<EventEnvelope>,
@@ -148,6 +246,7 @@ impl EventQueue {
         Self {
             queue: Arc::new(Mutex::new(BinaryHeap::new())),
             notify: Arc::new(Notify::new()),
+            legacy_dequeue_acks: Arc::new(Mutex::new(HashMap::new())),
             broadcast_tx,
             session_broadcasts: Arc::new(StdRwLock::new(HashMap::new())),
             has_session_broadcasts: Arc::new(AtomicBool::new(false)),
@@ -162,22 +261,173 @@ impl EventQueue {
         event: AgenticEvent,
         priority: Option<EventPriority>,
     ) -> EventBusResult<String> {
+        self.enqueue_internal(event, priority, LegacyQueuePolicy::BestEffort)
+            .await
+            .map(|(event_id, _)| event_id)
+    }
+
+    /// Enqueue an ordering fence into the legacy dequeue stream.
+    ///
+    /// Unlike ordinary events, a fence fails closed when the legacy queue is
+    /// full. Awaiting the returned acknowledgement guarantees that the fence
+    /// is already part of the current delivery batch, so later higher-priority
+    /// events cannot overtake it in the priority heap.
+    pub async fn enqueue_with_legacy_dequeue_ack(
+        &self,
+        event: AgenticEvent,
+        priority: Option<EventPriority>,
+    ) -> EventBusResult<(String, LegacyDequeueAck)> {
+        let (event_id, ack) = self
+            .enqueue_internal(event, priority, LegacyQueuePolicy::RequireImmediateAck)
+            .await?;
+        Ok((
+            event_id,
+            ack.expect("legacy dequeue acknowledgement requested"),
+        ))
+    }
+
+    /// Enqueue an authoritative control event without allowing the bounded
+    /// best-effort data budget to discard or block it. The queue first
+    /// coalesces older session recovery controls and reclaims same-turn stream
+    /// chunks. A separate bounded reserve protects unrelated lifecycle events.
+    ///
+    /// Broadcast happens only after legacy storage succeeds, keeping the
+    /// Desktop WebView and non-consuming subscribers on the same lifecycle.
+    pub async fn enqueue_with_guaranteed_legacy_storage(
+        &self,
+        event: AgenticEvent,
+        priority: Option<EventPriority>,
+    ) -> EventBusResult<String> {
+        self.enqueue_internal(event, priority, LegacyQueuePolicy::AuthoritativeControl)
+            .await
+            .map(|(event_id, _)| event_id)
+    }
+
+    async fn enqueue_internal(
+        &self,
+        event: AgenticEvent,
+        priority: Option<EventPriority>,
+        legacy_policy: LegacyQueuePolicy,
+    ) -> EventBusResult<(String, Option<LegacyDequeueAck>)> {
         let priority = priority.unwrap_or_else(|| event.default_priority());
         let envelope = EventEnvelope::new(event, priority);
         let event_id = envelope.id.clone();
+        let require_legacy_ack = matches!(legacy_policy, LegacyQueuePolicy::RequireImmediateAck);
+        let (mut ack_sender, ack) = if require_legacy_ack {
+            let (sender, receiver) = oneshot::channel();
+            (Some(sender), Some(LegacyDequeueAck { receiver }))
+        } else {
+            (None, None)
+        };
 
         let (queue_len, queued) = {
             let mut queue = self.queue.lock().await;
-            if queue.len() >= self.config.max_queue_size {
-                warn!(
-                    "Event queue full, skipping legacy queue storage: event_id={}",
-                    event_id
-                );
-                (queue.len(), false)
-            } else {
-                queue.push(std::cmp::Reverse(envelope.clone()));
-                (queue.len(), true)
+            if matches!(legacy_policy, LegacyQueuePolicy::AuthoritativeControl) {
+                if let Some(pending) = queue
+                    .iter()
+                    .map(|std::cmp::Reverse(pending)| pending)
+                    .find(|pending| authoritative_control_is_stale(&envelope.event, &pending.event))
+                {
+                    return Ok((pending.id.clone(), None));
+                }
+                let mut retained = BinaryHeap::with_capacity(queue.len());
+                let mut removed_ids = Vec::new();
+                while let Some(std::cmp::Reverse(pending)) = queue.pop() {
+                    if authoritative_control_supersedes(&envelope.event, &pending.event) {
+                        removed_ids.push(pending.id);
+                    } else {
+                        retained.push(std::cmp::Reverse(pending));
+                    }
+                }
+                *queue = retained;
+
+                if queue.len() >= self.config.max_queue_size {
+                    let reclaim_id = queue
+                        .iter()
+                        .map(|std::cmp::Reverse(pending)| pending)
+                        .filter(|pending| {
+                            is_reclaimable_stream_data(&envelope.event, &pending.event)
+                        })
+                        .max()
+                        .map(|pending| pending.id.clone());
+                    if let Some(reclaim_id) = reclaim_id {
+                        queue.retain(|std::cmp::Reverse(pending)| pending.id != reclaim_id);
+                        warn!(
+                            "Event queue full, reclaiming same-turn legacy stream data for authoritative control: event_id={}, reclaimed_event_id={}",
+                            event_id, reclaim_id
+                        );
+                        removed_ids.push(reclaim_id);
+                    }
+                }
+
+                let control_reserve = self.config.max_queue_size.max(1);
+                let mut pending_controls = queue
+                    .iter()
+                    .filter(|std::cmp::Reverse(pending)| {
+                        matches!(pending.event, AgenticEvent::DialogTurnInterrupted { .. })
+                    })
+                    .count();
+                while queue.len() >= self.config.max_queue_size
+                    && pending_controls >= control_reserve
+                {
+                    let oldest_control_id = queue
+                        .iter()
+                        .map(|std::cmp::Reverse(pending)| pending)
+                        .filter(|pending| {
+                            matches!(pending.event, AgenticEvent::DialogTurnInterrupted { .. })
+                        })
+                        .min_by_key(|pending| pending.timestamp)
+                        .map(|pending| pending.id.clone());
+                    let Some(oldest_control_id) = oldest_control_id else {
+                        break;
+                    };
+                    queue.retain(|std::cmp::Reverse(pending)| pending.id != oldest_control_id);
+                    removed_ids.push(oldest_control_id);
+                    pending_controls -= 1;
+                }
+
+                if !removed_ids.is_empty() {
+                    let mut acknowledgements = self.legacy_dequeue_acks.lock().await;
+                    for removed_id in removed_ids {
+                        acknowledgements.remove(&removed_id);
+                    }
+                }
             }
+            let queued = if queue.len() >= self.config.max_queue_size {
+                match legacy_policy {
+                    LegacyQueuePolicy::RequireImmediateAck => {
+                        return Err(crate::event_bus::EventBusError::subscriber(
+                            "legacy event queue is full",
+                        ));
+                    }
+                    LegacyQueuePolicy::AuthoritativeControl => {
+                        warn!(
+                            "Event queue data capacity full, using bounded authoritative legacy control reserve: event_id={}, reserve_limit={}",
+                            event_id, self.config.max_queue_size.max(1)
+                        );
+                        true
+                    }
+                    LegacyQueuePolicy::BestEffort => {
+                        warn!(
+                            "Event queue full, skipping legacy queue storage: event_id={}",
+                            event_id
+                        );
+                        false
+                    }
+                }
+            } else {
+                true
+            };
+            if queued {
+                if let Some(sender) = ack_sender.take() {
+                    self.legacy_dequeue_acks
+                        .lock()
+                        .await
+                        .insert(event_id.clone(), sender);
+                }
+                queue.push(std::cmp::Reverse(envelope.clone()));
+            }
+            (queue.len(), queued)
         };
 
         // Broadcast delivery is authoritative for non-consuming runtime
@@ -216,7 +466,7 @@ impl EventQueue {
             priority
         );
 
-        Ok(event_id)
+        Ok((event_id, ack))
     }
 
     /// Dequeue batch of events
@@ -233,6 +483,15 @@ impl EventQueue {
         }
         let remaining_queue_len = queue.len();
         drop(queue);
+
+        if !batch.is_empty() {
+            let mut acknowledgements = self.legacy_dequeue_acks.lock().await;
+            for envelope in &batch {
+                if let Some(sender) = acknowledgements.remove(&envelope.id) {
+                    let _ = sender.send(());
+                }
+            }
+        }
 
         if let Some((max_age_ms, event_id, priority)) = batch
             .iter()
@@ -335,19 +594,29 @@ impl EventQueue {
     /// Clear all events for a session
     pub async fn clear_session(&self, session_id: &str) -> EventBusResult<()> {
         // Remove all events for this session from the queue
-        let queue_len = {
+        let (queue_len, removed_ids) = {
             let mut queue = self.queue.lock().await;
             let mut new_queue = BinaryHeap::new();
+            let mut removed_ids = Vec::new();
 
             while let Some(std::cmp::Reverse(envelope)) = queue.pop() {
                 if envelope.event.session_id() != Some(session_id) {
                     new_queue.push(std::cmp::Reverse(envelope));
+                } else {
+                    removed_ids.push(envelope.id);
                 }
             }
 
             *queue = new_queue;
-            queue.len() // Get size before releasing queue lock
+            (queue.len(), removed_ids)
         };
+
+        if !removed_ids.is_empty() {
+            let mut acknowledgements = self.legacy_dequeue_acks.lock().await;
+            for removed_id in removed_ids {
+                acknowledgements.remove(&removed_id);
+            }
+        }
 
         // Update statistics: use the size obtained earlier
         {
@@ -391,8 +660,372 @@ impl StreamEventSink for EventQueue {
 #[cfg(test)]
 mod tests {
     use super::{EventQueue, EventQueueConfig};
-    use bitfun_events::AgenticEvent;
+    use bitfun_events::{AgenticEvent, AgenticEventPriority};
     use std::sync::{Arc, Barrier};
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn legacy_dequeue_ack_separates_later_high_priority_events() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 8,
+            batch_size: 8,
+        });
+        queue
+            .enqueue(
+                AgenticEvent::SessionStateChanged {
+                    session_id: "session".to_string(),
+                    new_state: "old-data".to_string(),
+                },
+                Some(AgenticEventPriority::Normal),
+            )
+            .await
+            .expect("old event should enqueue");
+        let (_, acknowledgement) = queue
+            .enqueue_with_legacy_dequeue_ack(
+                AgenticEvent::DialogTurnRecovered {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    execution_generation: 1,
+                },
+                Some(AgenticEventPriority::Normal),
+            )
+            .await
+            .expect("fence should enqueue");
+        let mut acknowledgement = Box::pin(acknowledgement.wait());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(1), &mut acknowledgement)
+                .await
+                .is_err(),
+            "fence must not acknowledge before dequeue"
+        );
+
+        let batch = queue.dequeue_configured_batch().await;
+        acknowledgement
+            .await
+            .expect("fence should acknowledge its delivery batch");
+        assert_eq!(batch.len(), 2);
+        assert!(matches!(
+            &batch[0].event,
+            AgenticEvent::SessionStateChanged { new_state, .. } if new_state == "old-data"
+        ));
+        assert!(matches!(
+            &batch[1].event,
+            AgenticEvent::DialogTurnRecovered {
+                execution_generation: 1,
+                ..
+            }
+        ));
+
+        queue
+            .enqueue(
+                AgenticEvent::DialogTurnCancelled {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                },
+                Some(AgenticEventPriority::Critical),
+            )
+            .await
+            .expect("later event should enqueue");
+        let next_batch = queue.dequeue_configured_batch().await;
+        assert!(matches!(
+            &next_batch[0].event,
+            AgenticEvent::DialogTurnCancelled { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn legacy_dequeue_fence_fails_before_broadcast_when_queue_is_full() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 1,
+            batch_size: 1,
+        });
+        let mut events = queue.subscribe();
+        queue
+            .enqueue(
+                AgenticEvent::TextChunk {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    round_id: "round".to_string(),
+                    attempt_id: None,
+                    attempt_index: None,
+                    text: "occupied".to_string(),
+                },
+                None,
+            )
+            .await
+            .expect("first event should enqueue");
+        events.recv().await.expect("first broadcast should arrive");
+
+        let result = queue
+            .enqueue_with_legacy_dequeue_ack(
+                AgenticEvent::DialogTurnRecovered {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    execution_generation: 1,
+                },
+                Some(AgenticEventPriority::Normal),
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(1), events.recv())
+                .await
+                .is_err(),
+            "a rejected fence must not be broadcast as recovered"
+        );
+    }
+
+    #[tokio::test]
+    async fn authoritative_legacy_control_bypasses_data_capacity_without_losing_delivery() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 1,
+            batch_size: 1,
+        });
+        let mut events = queue.subscribe();
+        queue
+            .enqueue(
+                AgenticEvent::TextChunk {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    round_id: "round".to_string(),
+                    attempt_id: None,
+                    attempt_index: None,
+                    text: "occupied".to_string(),
+                },
+                None,
+            )
+            .await
+            .expect("first event should enqueue");
+        events.recv().await.expect("first broadcast should arrive");
+
+        tokio::time::timeout(
+            Duration::from_millis(10),
+            queue.enqueue_with_guaranteed_legacy_storage(
+                AgenticEvent::DialogTurnInterrupted {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    execution_generation: 1,
+                    model_id: Some("model".to_string()),
+                },
+                Some(AgenticEventPriority::Critical),
+            ),
+        )
+        .await
+        .expect("authoritative control event must not wait for data capacity")
+        .expect("authoritative control event should enqueue");
+        assert_eq!(
+            queue.len().await,
+            1,
+            "authoritative control should reclaim lower-priority data capacity"
+        );
+        assert!(matches!(
+            events
+                .recv()
+                .await
+                .expect("authoritative broadcast should arrive")
+                .event,
+            AgenticEvent::DialogTurnInterrupted { .. }
+        ));
+
+        queue
+            .enqueue_with_guaranteed_legacy_storage(
+                AgenticEvent::DialogTurnInterrupted {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    execution_generation: 2,
+                    model_id: Some("model".to_string()),
+                },
+                Some(AgenticEventPriority::Critical),
+            )
+            .await
+            .expect("newer authoritative control event should enqueue");
+        events
+            .recv()
+            .await
+            .expect("newer authoritative broadcast should arrive");
+        assert_eq!(
+            queue.len().await,
+            1,
+            "a newer generation must replace the queued control event for the same turn"
+        );
+
+        queue
+            .enqueue_with_guaranteed_legacy_storage(
+                AgenticEvent::DialogTurnInterrupted {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    execution_generation: 1,
+                    model_id: Some("model".to_string()),
+                },
+                Some(AgenticEventPriority::Critical),
+            )
+            .await
+            .expect("stale authoritative control should be ignored idempotently");
+        assert_eq!(queue.len().await, 1);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(1), events.recv())
+                .await
+                .is_err(),
+            "a stale generation must not be broadcast"
+        );
+
+        let delivered = queue.dequeue_configured_batch().await;
+        assert!(matches!(
+            &delivered[0].event,
+            AgenticEvent::DialogTurnInterrupted {
+                execution_generation: 2,
+                ..
+            }
+        ));
+        assert!(queue.dequeue_configured_batch().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn authoritative_control_preserves_unrelated_lifecycle_events() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 1,
+            batch_size: 1,
+        });
+        queue
+            .enqueue(
+                AgenticEvent::SessionStateChanged {
+                    session_id: "other-session".to_string(),
+                    new_state: "idle".to_string(),
+                },
+                None,
+            )
+            .await
+            .expect("lifecycle event should enqueue");
+        queue
+            .enqueue_with_guaranteed_legacy_storage(
+                AgenticEvent::DialogTurnInterrupted {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    execution_generation: 1,
+                    model_id: Some("model".to_string()),
+                },
+                Some(AgenticEventPriority::Critical),
+            )
+            .await
+            .expect("authoritative control should use its reserve");
+
+        assert_eq!(queue.len().await, 2);
+        assert!(matches!(
+            queue.dequeue_configured_batch().await[0].event,
+            AgenticEvent::DialogTurnInterrupted { .. }
+        ));
+        assert!(matches!(
+            queue.dequeue_configured_batch().await[0].event,
+            AgenticEvent::SessionStateChanged { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn authoritative_control_reserve_is_bounded_across_distinct_turns() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 1,
+            batch_size: 1,
+        });
+        for index in 0..3 {
+            queue
+                .enqueue_with_guaranteed_legacy_storage(
+                    AgenticEvent::DialogTurnInterrupted {
+                        session_id: format!("session-{index}"),
+                        turn_id: format!("turn-{index}"),
+                        execution_generation: 1,
+                        model_id: Some("model".to_string()),
+                    },
+                    Some(AgenticEventPriority::Critical),
+                )
+                .await
+                .expect("authoritative control should remain bounded");
+            assert_eq!(queue.len().await, 1);
+        }
+
+        let delivered = queue.dequeue_configured_batch().await;
+        assert!(matches!(
+            &delivered[0].event,
+            AgenticEvent::DialogTurnInterrupted {
+                session_id,
+                turn_id,
+                ..
+            } if session_id == "session-2" && turn_id == "turn-2"
+        ));
+    }
+
+    #[tokio::test]
+    async fn authoritative_interruption_replaces_the_same_turn_recovery_fence() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 1,
+            batch_size: 1,
+        });
+        let (_, recovery_ack) = queue
+            .enqueue_with_legacy_dequeue_ack(
+                AgenticEvent::DialogTurnRecovered {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    execution_generation: 1,
+                },
+                Some(AgenticEventPriority::Normal),
+            )
+            .await
+            .expect("recovery fence should enqueue");
+
+        queue
+            .enqueue_with_guaranteed_legacy_storage(
+                AgenticEvent::DialogTurnInterrupted {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    execution_generation: 1,
+                    model_id: Some("model".to_string()),
+                },
+                Some(AgenticEventPriority::Critical),
+            )
+            .await
+            .expect("authoritative interruption should replace its recovery fence");
+
+        assert_eq!(queue.len().await, 1);
+        tokio::time::timeout(Duration::from_millis(10), recovery_ack.wait())
+            .await
+            .expect("superseded fence acknowledgement should close promptly")
+            .expect_err("a superseded fence must not acknowledge delivery");
+        let delivered = queue.dequeue_configured_batch().await;
+        assert!(matches!(
+            &delivered[0].event,
+            AgenticEvent::DialogTurnInterrupted { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn clearing_a_session_closes_its_pending_recovery_fence() {
+        let queue = EventQueue::new(EventQueueConfig {
+            max_queue_size: 1,
+            batch_size: 1,
+        });
+        let (_, recovery_ack) = queue
+            .enqueue_with_legacy_dequeue_ack(
+                AgenticEvent::DialogTurnRecovered {
+                    session_id: "session".to_string(),
+                    turn_id: "turn".to_string(),
+                    execution_generation: 1,
+                },
+                Some(AgenticEventPriority::Normal),
+            )
+            .await
+            .expect("recovery fence should enqueue");
+
+        queue
+            .clear_session("session")
+            .await
+            .expect("session events should clear");
+
+        assert!(queue.is_empty().await);
+        tokio::time::timeout(Duration::from_millis(10), recovery_ack.wait())
+            .await
+            .expect("cleared fence acknowledgement should close promptly")
+            .expect_err("a cleared fence must not acknowledge delivery");
+    }
 
     #[tokio::test]
     async fn full_legacy_queue_does_not_drop_broadcast_delivery() {

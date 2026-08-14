@@ -533,6 +533,8 @@
     "sendShortcut": "發送 (⏎)",
     "stop": "停止",
     "stopGeneration": "停止生成 (Esc)",
+    "continueInterrupted": "繼續上次中斷的工作",
+    "continueInterruptedFailed": "無法繼續上次中斷的工作，請重試。",
     "processingCapsule": "正在處理",
     "cancelShortcut": "取消",
     "clear": "清空",

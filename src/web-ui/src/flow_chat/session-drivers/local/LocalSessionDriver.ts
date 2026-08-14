@@ -206,17 +206,28 @@ export const localSessionDriver: SessionDriver = {
 
   async cancel(context: FlowChatContext, sessionId: string): Promise<boolean> {
     const currentState = stateMachineManager.getCurrentState(sessionId);
-    const success = currentState === SessionExecutionState.PROCESSING
-      ? await stateMachineManager.transition(sessionId, SessionExecutionEvent.USER_CANCEL)
-      : false;
+    if (currentState !== SessionExecutionState.PROCESSING) {
+      return false;
+    }
+    // Gate pending-queue auto-drain before the asynchronous interrupt RPC can
+    // race an Idle/terminal event back to the UI.
+    context.userCancelledSessionIds.add(sessionId);
+    const success = await stateMachineManager.transition(
+      sessionId,
+      SessionExecutionEvent.USER_CANCEL,
+    );
+    const settledInFinishing = success
+      && stateMachineManager.getCurrentState(sessionId) === SessionExecutionState.FINISHING;
+    if (!settledInFinishing) {
+      context.userCancelledSessionIds.delete(sessionId);
+    }
 
-    if (success) {
-      context.userCancelledSessionIds.add(sessionId);
+    if (settledInFinishing) {
       markCurrentTurnItemsAsCancelled(context, sessionId);
       cleanupSessionBuffers(context, sessionId);
     }
 
-    return success;
+    return settledInFinishing;
   },
 
   planSubmission(): SubmissionPlan {

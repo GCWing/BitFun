@@ -488,6 +488,8 @@ pub struct PersistenceManager {
     fail_next_session_metadata_write: std::sync::Mutex<Option<String>>,
     #[cfg(test)]
     fail_next_session_metadata_rollback: std::sync::Mutex<Option<String>>,
+    #[cfg(test)]
+    fail_next_dialog_turn_write: std::sync::Mutex<Option<String>>,
 }
 
 impl PersistenceManager {
@@ -501,6 +503,8 @@ impl PersistenceManager {
             fail_next_session_metadata_write: std::sync::Mutex::new(None),
             #[cfg(test)]
             fail_next_session_metadata_rollback: std::sync::Mutex::new(None),
+            #[cfg(test)]
+            fail_next_dialog_turn_write: std::sync::Mutex::new(None),
         })
     }
 
@@ -539,6 +543,14 @@ impl PersistenceManager {
             .fail_next_session_metadata_rollback
             .lock()
             .expect("session metadata rollback fault lock") = Some(session_id.to_string());
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_dialog_turn_write_for_test(&self, session_id: &str) {
+        *self
+            .fail_next_dialog_turn_write
+            .lock()
+            .expect("dialog turn fault lock") = Some(session_id.to_string());
     }
 
     /// Resolve the on-disk sessions directory for `workspace_path`.
@@ -3007,6 +3019,17 @@ impl PersistenceManager {
         turn: &DialogTurnData,
     ) -> BitFunResult<()> {
         Self::validate_session_id(&turn.session_id)?;
+        #[cfg(test)]
+        {
+            let mut fault = self
+                .fail_next_dialog_turn_write
+                .lock()
+                .expect("dialog turn fault lock");
+            if fault.as_deref() == Some(turn.session_id.as_str()) {
+                *fault = None;
+                return Err(BitFunError::io("Injected dialog turn write failure"));
+            }
+        }
         let _session_write = self.lock_session_write_operation(workspace_path, &turn.session_id)?;
         let save_started_at = Instant::now();
         self.ensure_runtime_for_write(workspace_path).await?;

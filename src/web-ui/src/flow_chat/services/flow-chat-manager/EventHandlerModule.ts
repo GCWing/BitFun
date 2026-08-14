@@ -38,12 +38,13 @@ import type {
   SessionModelAutoMigratedEvent,
   SessionReasoningPresetAutoClearedEvent,
   SubagentSessionLinkedEvent,
+  RecoverInterruptedDialogTurnResponse,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
 import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { FlowChatContext, DialogTurn, ModelRound, FlowToolItem } from './types';
-import type { SteeringImage } from '../../types/flow-chat';
+import type { Session, SteeringImage } from '../../types/flow-chat';
 import {
   normalizeAiErrorDetail,
   type AiErrorDetail,
@@ -54,6 +55,7 @@ import { useBackgroundCommandActivityStore } from '../../store/backgroundCommand
 import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
 import { createTab } from '@/shared/utils/tabUtils';
 import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
+import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
 import { 
@@ -167,11 +169,25 @@ export const __test_only__ = {
   handleModelRoundStart,
   handleTokenUsageUpdate,
   handleCompressionCompleted,
+  handleDialogTurnInterrupted,
+  handleDialogTurnRecovered,
+  handleDialogTurnCancelled,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
   const activeSessionId = FlowChatStore.getInstance().getState().activeSessionId;
   return sessionId !== activeSessionId || !isAppWindowFocused();
+}
+
+function eventOwnsLatestSessionTurn(
+  session: Session,
+  sessionId: string,
+  turnId: string,
+): boolean {
+  if (session.dialogTurns.at(-1)?.id !== turnId) return false;
+  const machine = stateMachineManager.get(sessionId);
+  const currentTurnId = machine?.getContext().currentDialogTurnId;
+  return !currentTurnId || currentTurnId === turnId;
 }
 
 function logDroppedDataEvent(
@@ -803,6 +819,12 @@ export async function initializeEventListeners(
     onDialogTurnCancelled: (event) => {
       handleDialogTurnCancelled(context, event, onTodoWriteResult);
     },
+    onDialogTurnInterrupted: (event) => {
+      handleDialogTurnInterrupted(context, event);
+    },
+    onDialogTurnRecovered: (event) => {
+      handleDialogTurnRecovered(context, event);
+    },
     onTokenUsageUpdated: (event) => {
       handleTokenUsageUpdate(context, event);
     },
@@ -1066,6 +1088,9 @@ function finalizeTurnCompletionState(
     clearPendingTurnCompletion(context, sessionId, turnId);
     return;
   }
+  const runtimeOwnsTurnPersistence = Boolean(
+    session.dialogTurns.find(turn => turn.id === turnId)?.recovery,
+  );
 
   completeActiveTextItems(context, sessionId, turnId);
   clearRuntimeStatus(context, sessionId, turnId);
@@ -1096,7 +1121,8 @@ function finalizeTurnCompletionState(
       ...turn,
       modelRounds: updatedModelRounds,
       status: 'completed' as const,
-      endTime: turn.endTime ?? completedAt
+      endTime: turn.endTime ?? completedAt,
+      recovery: undefined,
     };
   });
   reconcileBackgroundSubagentSession(sessionId);
@@ -1113,9 +1139,13 @@ function finalizeTurnCompletionState(
     appendPlanDisplayItemsIfNeeded(context, sessionId, turnId, dialogTurn);
   }
 
-  saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
-    log.warn('Failed to save dialog turn (non-critical)', { sessionId, turnId, error });
-  });
+  if (!runtimeOwnsTurnPersistence) {
+    saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
+      log.warn('Failed to save dialog turn (non-critical)', { sessionId, turnId, error });
+    });
+  }
+
+  context.userCancelledSessionIds.delete(sessionId);
 
   if (shouldMarkUnreadCompletion(sessionId)) {
     const pending = context.pendingTurnCompletions.get(sessionId);
@@ -1388,6 +1418,12 @@ export function handleSessionStateChanged(context: FlowChatContext, event: any):
   machineContext.backendSyncedAt = Date.now();
 
   if (isExpectedFinishingDrift) {
+    if (context.userCancelledSessionIds.has(sessionId)) {
+      log.debug('Holding FINISHING until the cancellation outcome is authoritative', {
+        sessionId,
+      });
+      return;
+    }
     finalizePendingTurnCompletionNow(context, sessionId);
     if (stateMachineManager.getCurrentState(sessionId) === SessionExecutionState.FINISHING) {
       const finishingTurnId = findFinishingTurnForBackendIdle(
@@ -1704,6 +1740,11 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   if (projectedNewTurn) {
     reconcileBackgroundSubagentSession(sessionId);
 
+    // Backend admission of a distinct new Turn supersedes any stale local
+    // cancellation gate for the previous Turn. Late terminal events remain
+    // identity-guarded and cannot settle this new execution.
+    context.userCancelledSessionIds.delete(sessionId);
+
     context.contentBuffers.set(sessionId, new Map());
     context.activeTextItems.set(sessionId, new Map());
 
@@ -1732,7 +1773,10 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
       kind: turn.kind || turnKind,
       userMessage: {
         ...turn.userMessage,
-        metadata: turn.userMessage.metadata || userMessageMetadata,
+        metadata: {
+          ...(turn.userMessage.metadata ?? {}),
+          ...(userMessageMetadata ?? {}),
+        },
       },
       storageTurnIndex: turnIndex,
       backendTurnIndex: turnIndex,
@@ -2417,6 +2461,11 @@ export function handleDialogTurnComplete(
     log.warn('DialogTurnCompleted missing sessionId or turnId', { event });
     return;
   }
+  interruptedTurnRecoveryGate.clearTerminal(sessionId, turnId);
+
+
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
 
   if (success === false) {
     handleDialogTurnFailed(context, {
@@ -2438,23 +2487,36 @@ export function handleDialogTurnComplete(
   }
   context.handledTerminalTurnEvents.add(terminalKey);
 
-  const machine = stateMachineManager.get(sessionId);
-  if (machine) {
-    const ctx = machine.getContext();
-    if (ctx.currentDialogTurnId !== turnId) {
-      ctx.currentDialogTurnId = turnId;
-    }
-  }
-
-  const store = FlowChatStore.getInstance();
-  const session = store.getState().sessions.get(sessionId);
-  
   if (!session) {
     log.debug('Session not found (dialog turn complete)', { sessionId });
     return;
   }
+  const ownsSessionSettlement = eventOwnsLatestSessionTurn(session, sessionId, turnId);
 
   context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => {
+    if (!ownsSessionSettlement) {
+      const completedAt = Date.now();
+      return {
+        ...turn,
+        modelRounds: turn.modelRounds.map(round => round.isStreaming
+          ? {
+              ...round,
+              isStreaming: false,
+              isComplete: true,
+              status: 'completed' as const,
+              endTime: round.endTime ?? completedAt,
+            }
+          : round),
+        status: 'completed' as const,
+        endTime: durationMs === undefined
+          ? turn.endTime ?? completedAt
+          : turn.startTime + Math.max(0, durationMs),
+        success: success ?? undefined,
+        finishReason: finishReason ?? undefined,
+        hasFinalResponse: typeof hasFinalResponse === 'boolean' ? hasFinalResponse : undefined,
+        recovery: undefined,
+      };
+    }
     return {
       ...turn,
       status: 'finishing' as const,
@@ -2469,7 +2531,7 @@ export function handleDialogTurnComplete(
   reconcileBackgroundSubagentSession(sessionId);
 
   const currentState = stateMachineManager.getCurrentState(sessionId);
-  if (currentState === SessionExecutionState.PROCESSING) {
+  if (ownsSessionSettlement && currentState === SessionExecutionState.PROCESSING) {
     void stateMachineManager
       .transition(sessionId, SessionExecutionEvent.BACKEND_STREAM_COMPLETED)
       .catch(error => {
@@ -2479,7 +2541,9 @@ export function handleDialogTurnComplete(
     log.debug('Skipping BACKEND_STREAM_COMPLETED transition', { currentState, sessionId, turnId });
   }
 
-  beginTurnCompletion(context, sessionId, turnId, partialRecoveryReason);
+  if (ownsSessionSettlement) {
+    beginTurnCompletion(context, sessionId, turnId, partialRecoveryReason);
+  }
 }
 
 function normalizeDialogErrorDetail(event: any): AiErrorDetail {
@@ -2494,6 +2558,10 @@ function normalizeDialogErrorDetail(event: any): AiErrorDetail {
 function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, error } = event;
   const errorDetail = normalizeDialogErrorDetail(event);
+
+  if (sessionId && turnId) {
+    interruptedTurnRecoveryGate.clearTerminal(sessionId, turnId);
+  }
 
   // P1-11: Idempotent terminal-event handling.
   if (sessionId && turnId) {
@@ -2516,21 +2584,16 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     log.debug('Session not found (dialog turn failed)', { sessionId });
     return;
   }
+  const ownsSessionSettlement = eventOwnsLatestSessionTurn(session, sessionId, turnId);
   
-  const sessionActiveTextItems = context.activeTextItems.get(sessionId);
-  if (sessionActiveTextItems) {
-    sessionActiveTextItems.clear();
+  if (ownsSessionSettlement) {
+    cleanupSessionBuffers(context, sessionId);
+    context.flowChatStore.markSessionFinished(sessionId);
   }
-  
-  const sessionContentBuffer = context.contentBuffers.get(sessionId);
-  if (sessionContentBuffer) {
-    sessionContentBuffer.clear();
-  }
-
-  context.flowChatStore.markSessionFinished(sessionId);
   
   const dialogTurn = session.dialogTurns.find(turn => turn.id === turnId);
   if (dialogTurn) {
+    const runtimeOwnsTurnPersistence = Boolean(dialogTurn.recovery);
     const terminalError = typeof error === 'string' && error.trim()
       ? error
       : errorDetail.rawMessage || errorDetail.providerMessage || 'Execution failed';
@@ -2554,18 +2617,21 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
         status: 'error' as const,
         error: terminalError,
         errorDetail,
-        endTime: Date.now()
+        endTime: Date.now(),
+        recovery: undefined,
       };
     });
     
-    saveDialogTurnToDisk(context, sessionId, turnId).catch(err => {
-      log.warn('Failed to save failed dialog turn', { sessionId, turnId, error: err });
-    });
+    if (!runtimeOwnsTurnPersistence) {
+      saveDialogTurnToDisk(context, sessionId, turnId).catch(err => {
+        log.warn('Failed to save failed dialog turn', { sessionId, turnId, error: err });
+      });
+    }
   }
   reconcileBackgroundSubagentSession(sessionId);
   
   const currentState = stateMachineManager.getCurrentState(sessionId);
-  if (isStreamingExecutionState(currentState)) {
+  if (ownsSessionSettlement && isStreamingExecutionState(currentState)) {
     stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
       error: error || 'Execution failed'
     }).catch(err => {
@@ -2576,8 +2642,11 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     });
   }
   
-  if (shouldMarkUnreadCompletion(sessionId)) {
+  if (ownsSessionSettlement && shouldMarkUnreadCompletion(sessionId)) {
     context.flowChatStore.markSessionUnreadCompletion(sessionId, 'error');
+  }
+  if (ownsSessionSettlement) {
+    context.userCancelledSessionIds.delete(sessionId);
   }
 }
 
@@ -2590,6 +2659,10 @@ function handleDialogTurnCancelled(
   _onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): void {
   const { sessionId, turnId } = event;
+
+  if (sessionId && turnId) {
+    interruptedTurnRecoveryGate.clearTerminal(sessionId, turnId);
+  }
 
   // P1-11: Idempotent terminal-event handling. The execution engine may emit
   // DialogTurnCancelled when it detects cancellation between rounds, and the
@@ -2616,18 +2689,15 @@ function handleDialogTurnCancelled(
     log.debug('Session not found (dialog turn cancelled)', { sessionId });
     return;
   }
+  const ownsSessionSettlement = eventOwnsLatestSessionTurn(session, sessionId, turnId);
   
-  const sessionActiveTextItems = context.activeTextItems.get(sessionId);
-  if (sessionActiveTextItems) {
-    sessionActiveTextItems.clear();
+  if (ownsSessionSettlement) {
+    cleanupSessionBuffers(context, sessionId);
+    context.flowChatStore.markSessionFinished(sessionId);
   }
-  
-  const sessionContentBuffer = context.contentBuffers.get(sessionId);
-  if (sessionContentBuffer) {
-    sessionContentBuffer.clear();
-  }
-
-  context.flowChatStore.markSessionFinished(sessionId);
+  const runtimeOwnsTurnPersistence = Boolean(
+    session.dialogTurns.find(turn => turn.id === turnId)?.recovery,
+  );
   
   context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => {
     const updatedModelRounds = turn.modelRounds.map((round) => {
@@ -2647,7 +2717,8 @@ function handleDialogTurnCancelled(
       ...turn,
       modelRounds: updatedModelRounds,
       status: 'cancelled' as const,
-      endTime: Date.now()
+      endTime: Date.now(),
+      recovery: undefined,
     };
   });
   reconcileBackgroundSubagentSession(sessionId);
@@ -2657,16 +2728,18 @@ function handleDialogTurnCancelled(
     appendPlanDisplayItemsIfNeeded(context, sessionId, turnId, dialogTurn);
   }
   
-  saveDialogTurnToDisk(context, sessionId, turnId).catch(err => {
-    log.warn('Failed to save cancelled dialog turn', { sessionId, turnId, error: err });
-  });
+  if (!runtimeOwnsTurnPersistence) {
+    saveDialogTurnToDisk(context, sessionId, turnId).catch(err => {
+      log.warn('Failed to save cancelled dialog turn', { sessionId, turnId, error: err });
+    });
+  }
 
   // Transition state machine to IDLE.  When the desktop's own stop button
   // is used, USER_CANCEL is dispatched before DialogTurnCancelled arrives,
   // so the machine is already IDLE.  When cancellation comes from an
   // external source (mobile remote), the machine is still PROCESSING.
   const currentState = stateMachineManager.getCurrentState(sessionId);
-  if (isStreamingExecutionState(currentState)) {
+  if (ownsSessionSettlement && isStreamingExecutionState(currentState)) {
     void stateMachineManager
       .transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED)
       .catch(error => {
@@ -2674,10 +2747,197 @@ function handleDialogTurnCancelled(
       });
   }
 
-  if (shouldMarkUnreadCompletion(sessionId) && !context.userCancelledSessionIds.has(sessionId)) {
+  if (
+    ownsSessionSettlement
+    && shouldMarkUnreadCompletion(sessionId)
+    && !context.userCancelledSessionIds.has(sessionId)
+  ) {
     context.flowChatStore.markSessionUnreadCompletion(sessionId, 'completed');
   }
-  context.userCancelledSessionIds.delete(sessionId);
+  if (ownsSessionSettlement) {
+    context.userCancelledSessionIds.delete(sessionId);
+  }
+}
+
+function handleDialogTurnInterrupted(context: FlowChatContext, event: any): void {
+  const sessionId = event?.sessionId ?? event?.session_id;
+  const turnId = event?.turnId ?? event?.turn_id;
+  const executionGeneration = optionalNumber(
+    event?.executionGeneration ?? event?.execution_generation,
+  );
+  const rawModelId = event?.modelId ?? event?.model_id;
+  const modelId = typeof rawModelId === 'string' && rawModelId.trim()
+    ? rawModelId.trim()
+    : undefined;
+  if (!sessionId || !turnId || executionGeneration === undefined) {
+    log.warn('DialogTurnInterrupted missing identity or generation', { event });
+    return;
+  }
+  interruptedTurnRecoveryGate.clearInterrupted({ sessionId, turnId, executionGeneration });
+  if (context.handledTerminalTurnEvents.has(`${sessionId}:${turnId}`)) {
+    log.debug('Ignoring DialogTurnInterrupted after authoritative terminal settlement', {
+      sessionId,
+      turnId,
+      executionGeneration,
+    });
+    return;
+  }
+  const currentTurn = context.flowChatStore
+    .getState()
+    .sessions.get(sessionId)
+    ?.dialogTurns.find(turn => turn.id === turnId);
+  const currentGeneration = currentTurn?.recovery?.executionGeneration;
+  if (
+    currentGeneration !== undefined
+    && (currentGeneration > executionGeneration
+      || (currentGeneration === executionGeneration
+        && currentTurn?.recovery?.status === 'interrupted'))
+  ) {
+    log.debug('Ignoring stale or duplicate DialogTurnInterrupted', {
+      sessionId,
+      turnId,
+      executionGeneration,
+      currentGeneration,
+    });
+    return;
+  }
+
+  const machine = stateMachineManager.get(sessionId);
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  const latestTurnId = session?.dialogTurns.at(-1)?.id;
+  const currentState = stateMachineManager.getCurrentState(sessionId);
+  const ownsSessionSettlement = latestTurnId === turnId
+    && (machine?.getContext().currentDialogTurnId === turnId
+      || currentState === SessionExecutionState.IDLE);
+
+  clearPendingTurnCompletion(context, sessionId, turnId);
+  clearRuntimeStatus(context, sessionId, turnId);
+  if (ownsSessionSettlement) {
+    cleanupSessionBuffers(context, sessionId);
+    context.flowChatStore.markSessionFinished(sessionId);
+  }
+  context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => ({
+    ...turn,
+    modelRounds: turn.modelRounds.map(round => ({
+      ...round,
+      isStreaming: false,
+      isComplete: true,
+      status: round.isStreaming ? 'cancelled' as const : round.status,
+      endTime: round.isStreaming ? Date.now() : round.endTime,
+    })),
+    status: 'cancelled' as const,
+    finishReason: 'interrupted',
+    endTime: Date.now(),
+    recovery: {
+      status: 'interrupted' as const,
+      executionGeneration,
+      resumeCount: executionGeneration,
+      interruptedAt: Date.now(),
+      modelId: modelId ?? turn.recovery?.modelId,
+    },
+  }));
+
+  if (ownsSessionSettlement && isStreamingExecutionState(currentState)) {
+    void stateMachineManager
+      .transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED)
+      .catch(error => {
+        log.error('State machine transition failed on interrupted turn settlement', {
+          sessionId,
+          turnId,
+          error,
+        });
+      });
+  }
+  if (ownsSessionSettlement && shouldMarkUnreadCompletion(sessionId)) {
+    context.flowChatStore.markSessionUnreadCompletion(sessionId, 'interrupted');
+  }
+  if (ownsSessionSettlement) {
+    context.userCancelledSessionIds.delete(sessionId);
+  }
+}
+
+function handleDialogTurnRecovered(context: FlowChatContext, event: any): void {
+  const sessionId = event?.sessionId ?? event?.session_id;
+  const turnId = event?.turnId ?? event?.turn_id;
+  const executionGeneration = optionalNumber(
+    event?.executionGeneration ?? event?.execution_generation,
+  );
+  if (!sessionId || !turnId || executionGeneration === undefined) {
+    log.warn('DialogTurnRecovered missing identity or generation', { event });
+    return;
+  }
+  if (projectDialogTurnRecovered(context, { sessionId, turnId, executionGeneration })) {
+    interruptedTurnRecoveryGate.clearRecovered({ sessionId, turnId, executionGeneration });
+  }
+}
+
+/** Apply one authoritative recovery admission from either RPC or broadcast. */
+export function projectDialogTurnRecovered(
+  context: FlowChatContext,
+  outcome: RecoverInterruptedDialogTurnResponse,
+): boolean {
+  const { sessionId, turnId, executionGeneration } = outcome;
+  const currentTurn = context.flowChatStore
+    .getState()
+    .sessions.get(sessionId)
+    ?.dialogTurns.find(turn => turn.id === turnId);
+  const recovery = currentTurn?.recovery;
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  const isMonotonicRecovery = session?.dialogTurns.at(-1)?.id === turnId
+    && currentTurn?.status === 'cancelled'
+    && currentTurn.finishReason === 'interrupted'
+    && recovery?.status === 'interrupted'
+    && executionGeneration === recovery.executionGeneration + 1;
+  if (!isMonotonicRecovery) {
+    log.debug('Ignoring non-monotonic DialogTurnRecovered', {
+      sessionId,
+      turnId,
+      executionGeneration,
+      currentGeneration: recovery?.executionGeneration,
+      recoveryStatus: recovery?.status,
+    });
+    return false;
+  }
+
+  context.handledTerminalTurnEvents.delete(`${sessionId}:${turnId}`);
+  context.contentBuffers.set(sessionId, new Map());
+  context.activeTextItems.set(sessionId, new Map());
+  context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => ({
+    ...turn,
+    status: 'processing' as const,
+    finishReason: undefined,
+    endTime: undefined,
+    success: undefined,
+    hasFinalResponse: undefined,
+    recovery: {
+      ...turn.recovery,
+      status: 'recovering' as const,
+      executionGeneration,
+      resumeCount: executionGeneration,
+    },
+  }));
+
+  const machine = stateMachineManager.get(sessionId);
+  if (machine) {
+    const machineContext = machine.getContext();
+    machineContext.taskId = sessionId;
+    machineContext.currentDialogTurnId = turnId;
+  }
+  if (stateMachineManager.getCurrentState(sessionId) === SessionExecutionState.IDLE) {
+    void stateMachineManager
+      .transition(sessionId, SessionExecutionEvent.START, {
+        taskId: sessionId,
+        dialogTurnId: turnId,
+      })
+      .catch(error => {
+        log.error('State machine transition failed on interrupted turn recovery', {
+          sessionId,
+          turnId,
+          error,
+        });
+      });
+  }
+  return true;
 }
 
 /**

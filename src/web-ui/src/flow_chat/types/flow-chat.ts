@@ -278,6 +278,14 @@ export interface DialogTurn {
   success?: boolean;
   /** Why the turn finished. */
   finishReason?: string;
+  /** Additive recovery metadata for an intentionally interrupted turn. */
+  recovery?: {
+    status: 'interrupted' | 'recovering';
+    executionGeneration: number;
+    resumeCount: number;
+    interruptedAt?: number;
+    modelId?: string;
+  };
   /** Whether the turn produced a final assistant response visible to the user. */
   hasFinalResponse?: boolean;
 }

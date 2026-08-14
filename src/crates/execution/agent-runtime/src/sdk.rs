@@ -64,7 +64,8 @@ pub use bitfun_harness::{
 };
 pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentContextReloadPort, AgentDialogSteerRequest,
-    AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment,
+    AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRecoveryOutcome,
+    AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest, AgentInputAttachment,
     AgentInteractionResponsePort, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
     AgentLocalCommandTurnRecordRequest, AgentLocalCommandTurnRecordResult,
     AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
@@ -86,18 +87,18 @@ pub use bitfun_runtime_ports::{
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
-    AgentUserAnswersRequest, AgentUserShellCommandPort, AgentUserShellCommandRequest,
-    AgentUserShellCommandResult, AgentWorkspaceReference, AgentWorkspaceReferenceKind,
-    AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchEntry,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult,
-    AgentWorkspaceReferenceSourceRange, ClockPort, DialogSteerOutcome, DialogSubmissionPolicy,
-    DialogSubmitOutcome, FileSystemPort, GitPort, McpCatalogPort, NetworkPort,
-    PermissionAuditRecord, PermissionDelegationContext, PermissionGrant, PermissionGrantKey,
-    PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestEvent,
-    PermissionRequestSource, PermissionRequestSourceKind, PortError, PortErrorKind, PortResult,
-    RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
+    AgentTurnCancellationResult, AgentTurnInterruptionRequest, AgentTurnInterruptionResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserAnswersRequest,
+    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
+    AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferencePort,
+    AgentWorkspaceReferenceSearchEntry, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, AgentWorkspaceReferenceSourceRange, ClockPort,
+    DialogSteerOutcome, DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, GitPort,
+    McpCatalogPort, NetworkPort, PermissionAuditRecord, PermissionDelegationContext,
+    PermissionGrant, PermissionGrantKey, PermissionReply, PermissionReplySource, PermissionRequest,
+    PermissionRequestEvent, PermissionRequestSource, PermissionRequestSourceKind, PortError,
+    PortErrorKind, PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort,
+    RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
@@ -666,6 +667,13 @@ impl AgentRuntime {
         self.inner.steer_dialog_turn(request).await
     }
 
+    pub async fn recover_interrupted_turn(
+        &self,
+        request: AgentDialogTurnRecoveryRequest,
+    ) -> Result<AgentDialogTurnRecoveryOutcome, RuntimeError> {
+        self.inner.recover_interrupted_turn(request).await
+    }
+
     pub async fn deliver_background_result(
         &self,
         request: AgentBackgroundResultRequest,
@@ -713,6 +721,13 @@ impl AgentRuntime {
         request: AgentTurnCancellationRequest,
     ) -> Result<AgentTurnCancellationResult, RuntimeError> {
         self.inner.cancel_turn(request).await
+    }
+
+    pub async fn interrupt_turn(
+        &self,
+        request: AgentTurnInterruptionRequest,
+    ) -> Result<AgentTurnInterruptionResult, RuntimeError> {
+        self.inner.interrupt_turn(request).await
     }
 
     pub async fn cancel_lineage_session(

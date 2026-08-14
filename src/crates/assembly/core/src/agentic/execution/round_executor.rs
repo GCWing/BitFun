@@ -4,7 +4,7 @@
 
 use super::model_exchange_trace::prepare_model_exchange_trace;
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
-use super::types::{FinishReason, RoundContext, RoundResult};
+use super::types::{coordinator_owns_cancel_lifecycle, FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{
     AgenticEvent, EventPriority, EventQueue, ModelRoundAttemptDiagnostic,
@@ -507,6 +507,9 @@ impl RoundExecutor {
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
                         allow_normal_tool_json_repair,
+                        suppress_cancel_lifecycle_event: coordinator_owns_cancel_lifecycle(
+                            &context.context_vars,
+                        ),
                         ..Default::default()
                     },
                 )

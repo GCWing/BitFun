@@ -309,6 +309,18 @@ async function performSaveDialogTurnToDisk(
       log.debug('Dialog turn not found, skipping save', { sessionId, turnId });
       return;
     }
+    if (dialogTurn.recovery) {
+      // The Runtime owns the durable snapshot and generation CAS for an
+      // interrupted/recovered turn. A frontend whole-turn save can otherwise
+      // overwrite newly appended rounds or restore stale recovery metadata.
+      log.debug('Runtime owns persistence for recoverable dialog turn', {
+        sessionId,
+        turnId,
+        recoveryStatus: dialogTurn.recovery.status,
+        executionGeneration: dialogTurn.recovery.executionGeneration,
+      });
+      return;
+    }
 
     const turnIndex = resolveStorageTurnIndex(session, dialogTurn);
     if (turnIndex === undefined) {
@@ -522,6 +534,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         }
       : undefined,
     finishReason: dialogTurn.finishReason,
+    recovery: dialogTurn.recovery,
     hasFinalResponse: dialogTurn.hasFinalResponse,
     error: dialogTurn.error,
     errorDetail: dialogTurn.errorDetail,

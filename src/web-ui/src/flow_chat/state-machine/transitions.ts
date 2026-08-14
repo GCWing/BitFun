@@ -13,7 +13,8 @@ import { SessionExecutionState, SessionExecutionEvent, StateTransitionTable, Pro
  * - FINISHING: backend completed, frontend is draining late events before becoming idle
  * - ERROR: error state, can reset or retry
  * 
- * Cancellation logic: USER_CANCEL → immediately switch to IDLE (no backend wait)
+ * Cancellation logic: USER_CANCEL enters FINISHING until the backend confirms
+ * the old execution has settled, so queued input cannot race tail writes.
  */
 export const STATE_TRANSITIONS: StateTransitionTable = {
   [SessionExecutionState.IDLE]: {
@@ -21,7 +22,7 @@ export const STATE_TRANSITIONS: StateTransitionTable = {
   },
   
   [SessionExecutionState.PROCESSING]: {
-    [SessionExecutionEvent.USER_CANCEL]: SessionExecutionState.IDLE,
+    [SessionExecutionEvent.USER_CANCEL]: SessionExecutionState.FINISHING,
     [SessionExecutionEvent.FINISHING_SETTLED]: SessionExecutionState.IDLE,
     
     [SessionExecutionEvent.ERROR_OCCURRED]: SessionExecutionState.ERROR,
@@ -40,7 +41,8 @@ export const STATE_TRANSITIONS: StateTransitionTable = {
   },
 
   [SessionExecutionState.FINISHING]: {
-    [SessionExecutionEvent.USER_CANCEL]: SessionExecutionState.IDLE,
+    [SessionExecutionEvent.USER_CANCEL]: SessionExecutionState.FINISHING,
+    [SessionExecutionEvent.USER_CANCEL_FAILED]: SessionExecutionState.PROCESSING,
     [SessionExecutionEvent.ERROR_OCCURRED]: SessionExecutionState.ERROR,
     [SessionExecutionEvent.FINISHING_SETTLED]: SessionExecutionState.IDLE,
     [SessionExecutionEvent.COMPACTION_STARTED]: SessionExecutionState.FINISHING,
@@ -78,6 +80,7 @@ export const PHASE_TRANSITIONS: Record<SessionExecutionEvent, ProcessingPhase | 
   [SessionExecutionEvent.BACKEND_STREAM_COMPLETED]: ProcessingPhase.FINALIZING,
   [SessionExecutionEvent.FINISHING_SETTLED]: null,
   [SessionExecutionEvent.USER_CANCEL]: null,
+  [SessionExecutionEvent.USER_CANCEL_FAILED]: null,
   [SessionExecutionEvent.ERROR_OCCURRED]: null,
   [SessionExecutionEvent.RESET]: null,
 };

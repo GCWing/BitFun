@@ -31,16 +31,20 @@ use crate::agentic::ConversationCoordinator;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::infrastructure::ai::reasoning_catalog::{
     load_models_dev_reasoning_catalog_without_refresh, normalize_reasoning_preset_for_model,
+    project_model_reasoning_catalog, reasoning_preset_runtime_fingerprint,
+    resolve_default_reasoning_preset, resolve_reasoning_preset,
 };
+use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig};
 use crate::service::config::{
     get_app_language_code, get_global_config_service, short_model_user_language_instruction,
     subscribe_config_updates, ConfigUpdateEvent,
 };
 use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::session::{
-    DialogTurnData, DialogTurnKind, ModelRoundData, SessionContextUsage, SessionMemoryMode,
-    SessionMetadata, SessionRelationship, SessionStatus, TextItemData, ThinkingItemData,
-    ToolCallData, ToolItemData, ToolResultData, TranscriptLineRange, TurnStatus, UserMessageData,
+    DialogTurnData, DialogTurnKind, DialogTurnRecoveryData, DialogTurnRecoveryStatus,
+    ModelRoundData, SessionContextUsage, SessionMemoryMode, SessionMetadata, SessionRelationship,
+    SessionStatus, TextItemData, ThinkingItemData, ToolCallData, ToolItemData, ToolResultData,
+    TranscriptLineRange, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::{
     ensure_snapshot_manager_for_workspace, get_or_create_snapshot_manager,
@@ -72,7 +76,7 @@ use tokio::time;
 
 #[cfg(test)]
 tokio::task_local! {
-    static TEST_MODEL_RESOLUTION_AI_CONFIG: crate::service::config::types::AIConfig;
+    pub(crate) static TEST_MODEL_RESOLUTION_AI_CONFIG: crate::service::config::types::AIConfig;
 }
 
 /// Session manager configuration
@@ -104,6 +108,68 @@ pub struct MaterializedSessionReference {
     pub session_id: String,
     pub session_name: String,
     pub transcript: MaterializedSessionReferenceTranscript,
+}
+
+pub(crate) const INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY: &str = "resolved_permission_mode";
+pub(crate) const INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY: &str =
+    "runtime_resolved_model_id";
+pub(crate) const INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY: &str =
+    "runtime_model_binding_fingerprint";
+pub(crate) const INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY: &str = "runtime_reasoning_preset";
+pub(crate) const INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY: &str =
+    "runtime_reasoning_selection";
+pub(crate) const INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY: &str =
+    "runtime_reasoning_fingerprint";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TurnAdmissionSessionFacts {
+    model_id: Option<String>,
+    reasoning_preset: Option<String>,
+    permission_mode: Option<PermissionMode>,
+    agent_type: String,
+    enable_tools: bool,
+}
+
+impl TurnAdmissionSessionFacts {
+    pub(crate) fn from_session(session: &Session) -> Self {
+        Self {
+            model_id: session.config.model_id.clone(),
+            reasoning_preset: session.config.reasoning_preset.clone(),
+            permission_mode: session.config.permission_mode,
+            agent_type: session.agent_type.clone(),
+            enable_tools: session.config.enable_tools,
+        }
+    }
+
+    pub(crate) fn with_reasoning_preset(mut self, reasoning_preset: Option<String>) -> Self {
+        self.reasoning_preset = reasoning_preset;
+        self
+    }
+
+    fn matches(&self, session: &Session) -> bool {
+        self.model_id == session.config.model_id
+            && self.reasoning_preset == session.config.reasoning_preset
+            && self.permission_mode == session.config.permission_mode
+            && self.agent_type == session.agent_type
+            && self.enable_tools == session.config.enable_tools
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct InterruptedTurnRecoveryPlan {
+    pub session_id: String,
+    pub turn_id: String,
+    pub turn_index: usize,
+    pub agent_type: String,
+    pub execution_generation: u32,
+    pub resume_count: u32,
+    pub initial_round_index: usize,
+    pub resolved_permission_mode: PermissionMode,
+    pub resolved_model_id: String,
+    pub model_binding_fingerprint: String,
+    pub user_input: String,
+    pub messages: Vec<Message>,
+    pub user_message_metadata: Option<serde_json::Value>,
 }
 
 impl Default for SessionManagerConfig {
@@ -587,8 +653,7 @@ impl SessionManager {
             }))
     }
 
-    async fn load_ai_config_for_model_resolution() -> Option<crate::service::config::types::AIConfig>
-    {
+    pub(crate) async fn load_ai_config_for_model_resolution() -> Option<AIConfig> {
         #[cfg(test)]
         if let Ok(ai_config) = TEST_MODEL_RESOLUTION_AI_CONFIG.try_with(Clone::clone) {
             return Some(ai_config);
@@ -596,6 +661,67 @@ impl SessionManager {
 
         let config_service = get_global_config_service().await.ok()?;
         config_service.get_config(Some("ai")).await.ok()
+    }
+
+    pub(crate) async fn resolve_effective_reasoning_preset_for_turn(
+        resolved_model_id: &str,
+        selected_preset: Option<&str>,
+    ) -> BitFunResult<(Option<String>, String)> {
+        let ai_config = Self::load_ai_config_for_model_resolution()
+            .await
+            .ok_or_else(|| {
+                BitFunError::AIClient(
+                    "AI configuration is unavailable for reasoning preset resolution".to_string(),
+                )
+            })?;
+        Self::resolve_effective_reasoning_preset_from_config(
+            &ai_config,
+            resolved_model_id,
+            selected_preset,
+        )
+        .await
+    }
+
+    async fn resolve_effective_reasoning_preset_from_config(
+        ai_config: &AIConfig,
+        resolved_model_id: &str,
+        selected_preset: Option<&str>,
+    ) -> BitFunResult<(Option<String>, String)> {
+        let canonical_model_id = ai_config
+            .resolve_model_reference(resolved_model_id)
+            .ok_or_else(|| {
+                BitFunError::AIClient(format!(
+                    "Dialog turn model is unavailable for reasoning preset resolution: {resolved_model_id}"
+                ))
+            })?;
+        let model = ai_config
+            .models
+            .iter()
+            .find(|model| model.enabled && model.id == canonical_model_id)
+            .ok_or_else(|| {
+                BitFunError::AIClient(format!(
+                    "Dialog turn model configuration is unavailable: {canonical_model_id}"
+                ))
+            })?;
+        let models_dev = load_models_dev_reasoning_catalog_without_refresh().await;
+        let projection = project_model_reasoning_catalog(model, models_dev.catalog.as_deref());
+        let preset = match selected_preset
+            .map(str::trim)
+            .filter(|preset| !preset.is_empty())
+        {
+            Some(selected_preset) => resolve_reasoning_preset(&projection, selected_preset)
+                .ok_or_else(|| {
+                    BitFunError::Validation(format!(
+                        "Reasoning preset is unavailable for the dialog turn model: {selected_preset}"
+                    ))
+                })
+                .map(Some)?,
+            None => resolve_default_reasoning_preset(&projection),
+        };
+        Ok((
+            preset.map(|preset| preset.id.clone()),
+            reasoning_preset_runtime_fingerprint(preset),
+        ))
     }
 
     fn is_auto_model_selector(model_id: &str) -> bool {
@@ -5642,12 +5768,46 @@ impl SessionManager {
         // Reset session state to Idle
         // After application restart, previous Processing state is invalid and must be reset
         let previous_state_was_not_idle = !matches!(session.state, SessionState::Idle);
+        let mut interrupted_recovery_restored_turn = None;
         if previous_state_was_not_idle {
             let old_state = session.state.clone();
             session.state = SessionState::Idle;
+            should_persist_restored_session = true;
             debug!(
                 "Resetting session state during restore: session_id={}, state={:?} -> Idle",
                 session_id, old_state
+            );
+        }
+
+        // A process exit can happen after the recovering Turn write but before
+        // the Processing Session write, or after both. No execution survives
+        // restart, so normalize from the durable Turn fact independently of
+        // the stale Session state.
+        if let Some(turn) = persisted_turns.last_mut().filter(|turn| {
+            turn.status == TurnStatus::InProgress
+                && turn
+                    .recovery
+                    .as_ref()
+                    .is_some_and(|recovery| recovery.status == DialogTurnRecoveryStatus::Recovering)
+        }) {
+            let now = SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            turn.status = TurnStatus::Cancelled;
+            turn.finish_reason = Some("interrupted".to_string());
+            turn.end_time = Some(now);
+            turn.duration_ms = Some(now.saturating_sub(turn.start_time));
+            if let Some(recovery) = turn.recovery.as_mut() {
+                recovery.status = DialogTurnRecoveryStatus::Interrupted;
+                recovery.interrupted_at = Some(now);
+                turn.recovery_epoch = Some(recovery.execution_generation);
+            }
+            interrupted_recovery_restored_turn = Some(turn.clone());
+            should_persist_restored_session = true;
+            info!(
+                "Restored abandoned recovery generation as interrupted: session_id={}, turn_id={}",
+                session_id, turn.turn_id
             );
         }
 
@@ -5781,6 +5941,11 @@ impl SessionManager {
         // Complete all fallible restore migrations before publishing any runtime state.
         // A failed write keeps the session unloaded; restore-time recovery handles any
         // partial metadata/state update left by the existing multi-file persistence format.
+        if let Some(turn) = interrupted_recovery_restored_turn.as_ref() {
+            self.persistence_manager
+                .save_dialog_turn(session_storage_path, turn)
+                .await?;
+        }
         if should_persist_restored_session && self.should_persist_session_id(session_id) {
             self.persistence_manager
                 .save_session(session_storage_path, &session)
@@ -6792,6 +6957,57 @@ impl SessionManager {
         Ok(turn_id)
     }
 
+    /// Persist a Turn only if the execution-affecting Session settings still
+    /// match the snapshot used to resolve its model, permission, prompt, and
+    /// reasoning metadata. The validation and Turn append share one Session
+    /// mutation lock, so a concurrent settings write must retry admission.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn start_dialog_turn_with_prepended_messages_if_session_matches(
+        &self,
+        session_id: &str,
+        agent_type: String,
+        user_input: String,
+        turn_id: Option<String>,
+        image_contexts: Option<Vec<ImageContextData>>,
+        prepended_messages: Vec<Message>,
+        user_message_metadata: Option<serde_json::Value>,
+        expected: &TurnAdmissionSessionFacts,
+    ) -> BitFunResult<String> {
+        let user_message =
+            if let Some(images) = image_contexts.as_ref().filter(|v| !v.is_empty()).cloned() {
+                Message::user_multimodal(user_input.clone(), images)
+                    .with_semantic_kind(MessageSemanticKind::ActualUserInput)
+            } else {
+                Message::user(user_input.clone())
+                    .with_semantic_kind(MessageSemanticKind::ActualUserInput)
+            };
+        let mut context_messages = prepended_messages;
+        context_messages.push(user_message);
+
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        let current = self
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        if !expected.matches(&current) {
+            return Err(BitFunError::Validation(
+                "Session execution settings changed during turn admission; retry submission"
+                    .to_string(),
+            ));
+        }
+
+        self.start_persisted_turn_locked(
+            session_id,
+            DialogTurnKind::UserDialog,
+            Some(agent_type),
+            user_input,
+            turn_id,
+            context_messages,
+            ProcessingPhase::Starting,
+            user_message_metadata,
+        )
+        .await
+    }
+
     /// Start a new dialog turn when the model-visible user message has already
     /// been inserted into runtime context by the caller.
     ///
@@ -7013,7 +7229,14 @@ impl SessionManager {
             match msg.role {
                 MessageRole::Assistant => {
                     let round_index = rounds.len();
-                    let round_id = format!("{}-round-{}", turn_id, round_index);
+                    let round_id = msg
+                        .metadata
+                        .round_id
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|round_id| !round_id.is_empty())
+                        .map(str::to_string)
+                        .unwrap_or_else(|| format!("{}-round-{}", turn_id, round_index));
 
                     let mut text_items = Vec::new();
                     let mut thinking_items = Vec::new();
@@ -7308,6 +7531,7 @@ impl SessionManager {
             }
         }
         turn.status = TurnStatus::Completed;
+        turn.recovery = None;
         turn.duration_ms = Some(stats.duration_ms);
         turn.end_time = Some(completion_timestamp);
 
@@ -7333,6 +7557,235 @@ impl SessionManager {
         Ok(())
     }
 
+    fn append_generation_rounds(
+        turn: &mut DialogTurnData,
+        turn_id: &str,
+        new_messages: &[Message],
+        timestamp: u64,
+    ) -> usize {
+        let mut next_round_index = turn
+            .model_rounds
+            .iter()
+            .map(|round| round.round_index)
+            .max()
+            .map_or(0, |index| index.saturating_add(1));
+        let generated_rounds =
+            Self::build_model_rounds_from_messages(new_messages, turn_id, timestamp);
+        let generated_count = generated_rounds.len();
+        for mut round in generated_rounds {
+            if let Some(existing_index) = turn
+                .model_rounds
+                .iter()
+                .position(|existing| existing.id == round.id)
+            {
+                let existing = &turn.model_rounds[existing_index];
+                for text_item in &mut round.text_items {
+                    if let Some(previous) = existing
+                        .text_items
+                        .iter()
+                        .find(|item| item.id == text_item.id)
+                    {
+                        text_item.timestamp = previous.timestamp;
+                        text_item.is_markdown = previous.is_markdown;
+                        text_item.order_index = previous.order_index;
+                        text_item.is_subagent_item = previous.is_subagent_item;
+                        text_item.parent_task_tool_id = previous.parent_task_tool_id.clone();
+                        text_item.subagent_session_id = previous.subagent_session_id.clone();
+                        text_item.status = previous.status.clone().or(text_item.status.clone());
+                        text_item.attempt_id = previous.attempt_id.clone();
+                        text_item.attempt_index = previous.attempt_index;
+                    }
+                }
+                for thinking_item in &mut round.thinking_items {
+                    if let Some(previous) = existing
+                        .thinking_items
+                        .iter()
+                        .find(|item| item.id == thinking_item.id)
+                    {
+                        thinking_item.timestamp = previous.timestamp;
+                        thinking_item.order_index = previous.order_index;
+                        thinking_item.status =
+                            previous.status.clone().or(thinking_item.status.clone());
+                        thinking_item.is_subagent_item = previous.is_subagent_item;
+                        thinking_item.parent_task_tool_id = previous.parent_task_tool_id.clone();
+                        thinking_item.subagent_session_id = previous.subagent_session_id.clone();
+                        thinking_item.attempt_id = previous.attempt_id.clone();
+                        thinking_item.attempt_index = previous.attempt_index;
+                    }
+                }
+                for tool_item in &mut round.tool_items {
+                    if let Some(previous) = existing
+                        .tool_items
+                        .iter()
+                        .find(|item| item.id == tool_item.id)
+                    {
+                        tool_item.ai_intent = previous.ai_intent.clone();
+                        tool_item.start_time = previous.start_time;
+                        tool_item.end_time = previous.end_time.or(tool_item.end_time);
+                        tool_item.duration_ms = previous.duration_ms.or(tool_item.duration_ms);
+                        tool_item.queue_wait_ms = previous.queue_wait_ms;
+                        tool_item.preflight_ms = previous.preflight_ms;
+                        tool_item.confirmation_wait_ms = previous.confirmation_wait_ms;
+                        tool_item.execution_ms = previous.execution_ms;
+                        tool_item.order_index = previous.order_index;
+                        tool_item.is_subagent_item = previous.is_subagent_item;
+                        tool_item.parent_task_tool_id = previous.parent_task_tool_id.clone();
+                        tool_item.subagent_session_id = previous.subagent_session_id.clone();
+                        tool_item.subagent_dialog_turn_id =
+                            previous.subagent_dialog_turn_id.clone();
+                        tool_item.attempt_id = previous.attempt_id.clone();
+                        tool_item.attempt_index = previous.attempt_index;
+                        tool_item.subagent_model_id = previous.subagent_model_id.clone();
+                        tool_item.subagent_model_display_name =
+                            previous.subagent_model_display_name.clone();
+                        tool_item.status = previous.status.clone().or(tool_item.status.clone());
+                        tool_item.interruption_reason = previous.interruption_reason.clone();
+                    }
+                }
+                round.round_index = existing.round_index;
+                round.round_group_id = existing.round_group_id.clone();
+                round.timestamp = existing.timestamp;
+                round.start_time = existing.start_time;
+                round.end_time = existing.end_time.or(round.end_time);
+                round.duration_ms = existing.duration_ms.or(round.duration_ms);
+                round.provider_id = existing.provider_id.clone();
+                round.model_config_id = existing.model_config_id.clone();
+                round.effective_model_name = existing.effective_model_name.clone();
+                round.first_chunk_ms = existing.first_chunk_ms;
+                round.first_visible_output_ms = existing.first_visible_output_ms;
+                round.stream_duration_ms = existing.stream_duration_ms;
+                round.attempt_count = existing.attempt_count;
+                round.attempt_diagnostics = existing.attempt_diagnostics.clone();
+                round.failure_category = existing.failure_category.clone();
+                round.token_details = existing.token_details.clone();
+                if existing.status != "streaming" {
+                    round.status = existing.status.clone();
+                }
+                turn.model_rounds[existing_index] = round;
+            } else {
+                round.round_index = next_round_index;
+                next_round_index = next_round_index.saturating_add(1);
+                turn.model_rounds.push(round);
+            }
+        }
+        generated_count
+    }
+
+    /// Complete a reopened interrupted turn by appending only the messages
+    /// produced by the current execution generation.
+    pub async fn complete_recovered_dialog_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        execution_generation: u32,
+        final_response: String,
+        new_messages: &[Message],
+        stats: TurnStats,
+    ) -> BitFunResult<()> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        let workspace_path = self
+            .effective_session_storage_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!("Session workspace_path is missing: {session_id}"))
+            })?;
+        let turn_index = self
+            .sessions
+            .get(session_id)
+            .and_then(|session| session.dialog_turn_ids.iter().position(|id| id == turn_id))
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {turn_id}")))?;
+        let mut turn = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, turn_index)
+            .await?
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {turn_id}")))?;
+
+        if turn.status == TurnStatus::Completed && turn.recovery.is_none() {
+            return Ok(());
+        }
+        let recovery = turn.recovery.as_ref().ok_or_else(|| {
+            BitFunError::Validation(format!(
+                "Recovered dialog turn has no recovery metadata: {turn_id}"
+            ))
+        })?;
+        if recovery.status != DialogTurnRecoveryStatus::Recovering
+            || recovery.execution_generation != execution_generation
+        {
+            return Err(BitFunError::Validation(format!(
+                "Recovered turn generation mismatch: expected={execution_generation}, actual={}",
+                recovery.execution_generation
+            )));
+        }
+
+        let completion_timestamp = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let first_round_index = turn
+            .model_rounds
+            .iter()
+            .map(|round| round.round_index)
+            .max()
+            .map_or(0, |index| index.saturating_add(1));
+        let appended_count =
+            Self::append_generation_rounds(&mut turn, turn_id, new_messages, completion_timestamp);
+        if appended_count == 0 && !final_response.trim().is_empty() {
+            turn.model_rounds.push(ModelRoundData {
+                id: format!("{turn_id}-round-{first_round_index}"),
+                turn_id: turn_id.to_string(),
+                round_index: first_round_index,
+                round_group_id: None,
+                timestamp: completion_timestamp,
+                text_items: vec![Self::make_text_item(
+                    &format!("{turn_id}-round-{first_round_index}-text-0"),
+                    &final_response,
+                    completion_timestamp,
+                    0,
+                )],
+                tool_items: Vec::new(),
+                thinking_items: Vec::new(),
+                start_time: completion_timestamp,
+                end_time: Some(completion_timestamp),
+                duration_ms: Some(0),
+                provider_id: None,
+                model_config_id: None,
+                effective_model_name: None,
+                first_chunk_ms: None,
+                first_visible_output_ms: None,
+                stream_duration_ms: None,
+                attempt_count: None,
+                attempt_diagnostics: vec![],
+                failure_category: None,
+                token_details: None,
+                status: "completed".to_string(),
+            });
+        }
+        turn.status = TurnStatus::Completed;
+        turn.recovery_epoch = Some(execution_generation);
+        turn.recovery = None;
+        turn.duration_ms = Some(stats.duration_ms);
+        turn.end_time = Some(completion_timestamp);
+
+        // A recovered generation is Runtime-owned, so its context snapshot is
+        // part of the completion commit. Persist it before the Completed Turn:
+        // a crash after the snapshot leaves a Recovering Turn that restore can
+        // safely normalize, while a Completed Turn never points at an older
+        // same-index snapshot that omits this generation's tool/results tail.
+        let context_messages = self.context_store.get_context_messages(session_id);
+        self.persistence_manager
+            .save_turn_context_snapshot(
+                &workspace_path,
+                session_id,
+                turn.turn_index,
+                &context_messages,
+            )
+            .await?;
+        self.persistence_manager
+            .save_dialog_turn(&workspace_path, &turn)
+            .await?;
+        Ok(())
+    }
+
     /// Mark a dialog turn as failed and persist it.
     /// Unlike `complete_dialog_turn`, this sets the state to `Failed` with an error message.
     pub async fn fail_dialog_turn(
@@ -7341,6 +7794,18 @@ impl SessionManager {
         turn_id: &str,
         error: String,
     ) -> BitFunResult<()> {
+        self.fail_dialog_turn_with_messages(session_id, turn_id, error, &[])
+            .await
+    }
+
+    pub(crate) async fn fail_dialog_turn_with_messages(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        error: String,
+        generation_messages: &[Message],
+    ) -> BitFunResult<()> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
         if !self.should_persist_session_id(session_id) {
             debug!(
                 "Skipping dialog turn persistence for transient session failure: session_id={}, turn_id={}, error={}",
@@ -7368,21 +7833,34 @@ impl SessionManager {
             .load_dialog_turn(&workspace_path, session_id, turn_index)
             .await?
             .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
-
+        let recovered_generation = turn.recovery.is_some();
+        let now = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        Self::append_generation_rounds(&mut turn, turn_id, generation_messages, now);
         turn.status = TurnStatus::Error;
-        turn.end_time = Some(
-            SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64,
-        );
+        turn.recovery = None;
+        turn.end_time = Some(now);
 
-        self.persist_context_snapshot_for_turn_best_effort(
-            session_id,
-            turn.turn_index,
-            "turn_failed",
-        )
-        .await;
+        if recovered_generation {
+            let context_messages = self.context_store.get_context_messages(session_id);
+            self.persistence_manager
+                .save_turn_context_snapshot(
+                    &workspace_path,
+                    session_id,
+                    turn.turn_index,
+                    &context_messages,
+                )
+                .await?;
+        } else {
+            self.persist_context_snapshot_for_turn_best_effort(
+                session_id,
+                turn.turn_index,
+                "turn_failed",
+            )
+            .await;
+        }
         if self.should_persist_session_id(session_id) {
             self.persistence_manager
                 .save_dialog_turn(&workspace_path, &turn)
@@ -7403,6 +7881,17 @@ impl SessionManager {
     /// from a fully-completed one. Any partial assistant content that was
     /// already streamed is preserved in `model_rounds`.
     pub async fn cancel_dialog_turn(&self, session_id: &str, turn_id: &str) -> BitFunResult<()> {
+        self.cancel_dialog_turn_with_messages(session_id, turn_id, &[])
+            .await
+    }
+
+    pub(crate) async fn cancel_dialog_turn_with_messages(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        generation_messages: &[Message],
+    ) -> BitFunResult<()> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
         if !self.should_persist_session_id(session_id) {
             debug!(
                 "Skipping dialog turn persistence for transient session cancellation: session_id={}, turn_id={}",
@@ -7430,21 +7919,35 @@ impl SessionManager {
             .load_dialog_turn(&workspace_path, session_id, turn_index)
             .await?
             .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
-
+        let recovered_generation = turn.recovery.is_some();
+        let now = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        Self::append_generation_rounds(&mut turn, turn_id, generation_messages, now);
         turn.status = TurnStatus::Cancelled;
-        turn.end_time = Some(
-            SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64,
-        );
+        turn.recovery = None;
+        turn.finish_reason = Some("cancelled".to_string());
+        turn.end_time = Some(now);
 
-        self.persist_context_snapshot_for_turn_best_effort(
-            session_id,
-            turn.turn_index,
-            "turn_cancelled",
-        )
-        .await;
+        if recovered_generation {
+            let context_messages = self.context_store.get_context_messages(session_id);
+            self.persistence_manager
+                .save_turn_context_snapshot(
+                    &workspace_path,
+                    session_id,
+                    turn.turn_index,
+                    &context_messages,
+                )
+                .await?;
+        } else {
+            self.persist_context_snapshot_for_turn_best_effort(
+                session_id,
+                turn.turn_index,
+                "turn_cancelled",
+            )
+            .await;
+        }
 
         self.persistence_manager
             .save_dialog_turn(&workspace_path, &turn)
@@ -7456,6 +7959,555 @@ impl SessionManager {
         );
 
         Ok(())
+    }
+
+    /// Persist a settled, intentionally interrupted user turn without adding a
+    /// new persisted enum variant that older builds cannot deserialize.
+    pub async fn mark_dialog_turn_interrupted(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> BitFunResult<DialogTurnRecoveryData> {
+        self.mark_dialog_turn_interrupted_with_messages(session_id, turn_id, &[])
+            .await
+    }
+
+    pub(crate) async fn mark_dialog_turn_interrupted_with_messages(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        generation_messages: &[Message],
+    ) -> BitFunResult<DialogTurnRecoveryData> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        if !self.should_persist_session_id(session_id) {
+            return Err(BitFunError::Validation(
+                "Recoverable interruption is unavailable for transient sessions".to_string(),
+            ));
+        }
+        let session = self
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        let turn_index = session
+            .dialog_turn_ids
+            .len()
+            .checked_sub(1)
+            .filter(|index| session.dialog_turn_ids[*index] == turn_id)
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Only the latest dialog turn can be interrupted: {turn_id}"
+                ))
+            })?;
+        let workspace_path = self
+            .effective_storage_path_for_config(&session.config)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!("Session workspace_path is missing: {session_id}"))
+            })?;
+        let mut turn = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, turn_index)
+            .await?
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {turn_id}")))?;
+        if turn.kind != DialogTurnKind::UserDialog {
+            return Err(BitFunError::Validation(
+                "Only a user dialog turn can be interrupted".to_string(),
+            ));
+        }
+        if turn
+            .user_message
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("acp_transport"))
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+        {
+            return Err(BitFunError::Validation(
+                "Recoverable interruption is unavailable for ACP turns".to_string(),
+            ));
+        }
+        if let Some(recovery) = turn
+            .recovery
+            .as_ref()
+            .filter(|recovery| recovery.status == DialogTurnRecoveryStatus::Interrupted)
+            .cloned()
+        {
+            if turn.recovery_epoch != Some(recovery.execution_generation) {
+                turn.recovery_epoch = Some(recovery.execution_generation);
+                self.persistence_manager
+                    .save_dialog_turn(&workspace_path, &turn)
+                    .await?;
+            }
+            return Ok(recovery);
+        }
+        if turn.status != TurnStatus::InProgress {
+            return Err(BitFunError::Validation(format!(
+                "Dialog turn is not running: {turn_id}"
+            )));
+        }
+
+        // Recovery is offered only when the exact settled model context is
+        // durable. If this write fails, the coordinator falls back to an
+        // ordinary non-recoverable cancellation rather than exposing a broken
+        // continue button.
+        let context_messages = self.context_store.get_context_messages(session_id);
+        self.persistence_manager
+            .save_turn_context_snapshot(&workspace_path, session_id, turn_index, &context_messages)
+            .await?;
+        let now = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let recovery = match turn.recovery.take() {
+            Some(mut recovery) => {
+                recovery.status = DialogTurnRecoveryStatus::Interrupted;
+                recovery.interrupted_at = Some(now);
+                recovery
+            }
+            None => DialogTurnRecoveryData {
+                status: DialogTurnRecoveryStatus::Interrupted,
+                execution_generation: 0,
+                resume_count: 0,
+                interrupted_at: Some(now),
+                model_id: session.config.model_id.clone(),
+            },
+        };
+        Self::append_generation_rounds(&mut turn, turn_id, generation_messages, now);
+        turn.status = TurnStatus::Cancelled;
+        turn.finish_reason = Some("interrupted".to_string());
+        turn.end_time = Some(now);
+        turn.duration_ms = Some(now.saturating_sub(turn.start_time));
+        turn.recovery = Some(recovery.clone());
+        turn.recovery_epoch = Some(recovery.execution_generation);
+        self.persistence_manager
+            .save_dialog_turn(&workspace_path, &turn)
+            .await?;
+        Ok(recovery)
+    }
+
+    /// Reopen the latest settled interrupted user turn from its exact context
+    /// snapshot. This does not run prompt-submit hooks or append a user Turn.
+    pub(crate) async fn reopen_interrupted_dialog_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        expected_execution_generation: u32,
+    ) -> BitFunResult<InterruptedTurnRecoveryPlan> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        let session = self
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        let turn_index = session
+            .dialog_turn_ids
+            .len()
+            .checked_sub(1)
+            .filter(|index| session.dialog_turn_ids[*index] == turn_id)
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Only the latest dialog turn can be recovered: {turn_id}"
+                ))
+            })?;
+        let workspace_path = self
+            .effective_storage_path_for_config(&session.config)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!("Session workspace_path is missing: {session_id}"))
+            })?;
+        let mut turn = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, turn_index)
+            .await?
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {turn_id}")))?;
+        let original_turn = turn.clone();
+        let recovery = turn.recovery.as_ref().ok_or_else(|| {
+            BitFunError::Validation(format!("Dialog turn has no recovery metadata: {turn_id}"))
+        })?;
+        if recovery.status != DialogTurnRecoveryStatus::Interrupted
+            || recovery.execution_generation != expected_execution_generation
+        {
+            return Err(BitFunError::Validation(format!(
+                "Interrupted turn generation mismatch: expected={}, actual={}",
+                expected_execution_generation, recovery.execution_generation
+            )));
+        }
+        if recovery.model_id != session.config.model_id {
+            return Err(BitFunError::Validation(
+                "The session model changed after interruption; start a new turn instead"
+                    .to_string(),
+            ));
+        }
+        if turn
+            .agent_type
+            .as_deref()
+            .is_some_and(|agent_type| agent_type != session.agent_type)
+        {
+            return Err(BitFunError::Validation(
+                "The session agent mode changed after interruption; start a new turn instead"
+                    .to_string(),
+            ));
+        }
+        if turn.kind != DialogTurnKind::UserDialog || turn.status != TurnStatus::Cancelled {
+            return Err(BitFunError::Validation(format!(
+                "Dialog turn is not recoverably interrupted: {turn_id}"
+            )));
+        }
+        if turn
+            .user_message
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("acp_transport"))
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+        {
+            return Err(BitFunError::Validation(
+                "Interrupted ACP turns cannot be recovered through the native runtime".to_string(),
+            ));
+        }
+        if !matches!(session.state, SessionState::Idle) {
+            return Err(BitFunError::Validation(format!(
+                "Session must be idle before recovering turn: {turn_id}"
+            )));
+        }
+        let mut messages = self
+            .persistence_manager
+            .load_turn_context_snapshot(&workspace_path, session_id, turn_index)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Context snapshot is unavailable for interrupted turn: {turn_id}"
+                ))
+            })?;
+        messages.retain(|message| {
+            message.internal_reminder_kind() != Some(InternalReminderKind::InterruptedContinue)
+        });
+        messages.push(
+            Message::internal_reminder(
+                InternalReminderKind::InterruptedContinue,
+                "Your previous work was interrupted by the user. Continue the same task from the last safe context boundary. Do not repeat completed work or assume that an interrupted tool call had no side effects; verify uncertain external state before acting again.",
+            )
+            .with_turn_id(turn_id.to_string()),
+        );
+
+        let next_generation = recovery.execution_generation.saturating_add(1);
+        let next_resume_count = recovery.resume_count.saturating_add(1);
+        turn.status = TurnStatus::InProgress;
+        turn.finish_reason = None;
+        turn.end_time = None;
+        turn.duration_ms = None;
+        turn.error = None;
+        turn.error_detail = None;
+        turn.recovery = Some(DialogTurnRecoveryData {
+            status: DialogTurnRecoveryStatus::Recovering,
+            execution_generation: next_generation,
+            resume_count: next_resume_count,
+            interrupted_at: recovery.interrupted_at,
+            model_id: recovery.model_id.clone(),
+        });
+        turn.recovery_epoch = Some(next_generation);
+        let initial_round_index = turn
+            .model_rounds
+            .iter()
+            .map(|round| round.round_index)
+            .max()
+            .map_or(0, |index| index.saturating_add(1));
+        let agent_type = turn
+            .agent_type
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| {
+                BitFunError::Validation(format!("Interrupted turn has no agent type: {turn_id}"))
+            })?;
+        let user_message_metadata = turn.user_message.metadata.clone();
+        let resolved_permission_mode = user_message_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY))
+            .and_then(serde_json::Value::as_str)
+            .and_then(PermissionMode::parse)
+            .ok_or_else(|| {
+                BitFunError::Validation(
+                    "Interrupted turn has no frozen permission mode; start a new turn instead"
+                        .to_string(),
+                )
+            })?;
+        let resolved_model_id = user_message_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY))
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|model_id| !model_id.is_empty())
+            .map(str::to_string)
+            .ok_or_else(|| {
+                BitFunError::Validation(
+                    "Interrupted turn has no frozen resolved model; start a new turn instead"
+                        .to_string(),
+                )
+            })?;
+        let expected_model_binding_fingerprint = user_message_metadata
+            .as_ref()
+            .and_then(|metadata| {
+                metadata.get(INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY)
+            })
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|fingerprint| !fingerprint.is_empty())
+            .map(str::to_string)
+            .ok_or_else(|| {
+                BitFunError::Validation(
+                    "Interrupted turn has no frozen model binding; start a new turn instead"
+                        .to_string(),
+                )
+            })?;
+        let ai_config = Self::load_ai_config_for_model_resolution()
+            .await
+            .ok_or_else(|| {
+                BitFunError::AIClient(
+                    "AI configuration is unavailable; retry interrupted turn recovery".to_string(),
+                )
+            })?;
+        let canonical_model_id = ai_config
+            .resolve_model_reference(&resolved_model_id)
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "The interrupted turn model is unavailable: {resolved_model_id}"
+                ))
+            })?;
+        let model = ai_config
+            .models
+            .iter()
+            .find(|model| model.enabled && model.id == canonical_model_id)
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "The interrupted turn model is unavailable: {resolved_model_id}"
+                ))
+            })?;
+        if model_runtime_binding_fingerprint(model) != expected_model_binding_fingerprint {
+            return Err(BitFunError::Validation(format!(
+                "The interrupted turn model binding changed after interruption: {resolved_model_id}"
+            )));
+        }
+        let resolved_reasoning_preset = match user_message_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY))
+        {
+            Some(serde_json::Value::Null) => None,
+            Some(serde_json::Value::String(value)) => value
+                .trim()
+                .is_empty()
+                .then_some(None)
+                .unwrap_or_else(|| Some(value.trim().to_string())),
+            _ => {
+                return Err(BitFunError::Validation(
+                    "Interrupted turn has no frozen reasoning preset; start a new turn instead"
+                        .to_string(),
+                ))
+            }
+        };
+        let expected_reasoning_fingerprint = user_message_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY))
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|fingerprint| !fingerprint.is_empty())
+            .ok_or_else(|| {
+                BitFunError::Validation(
+                    "Interrupted turn has no frozen reasoning fingerprint; start a new turn instead"
+                        .to_string(),
+                )
+            })?;
+        let reasoning_selection =
+            match user_message_metadata.as_ref().and_then(|metadata| {
+                metadata.get(INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY)
+            }) {
+                Some(serde_json::Value::Null) => None,
+                Some(serde_json::Value::String(value)) => value
+                    .trim()
+                    .is_empty()
+                    .then_some(None)
+                    .unwrap_or_else(|| Some(value.trim().to_string())),
+                _ => return Err(BitFunError::Validation(
+                    "Interrupted turn has no frozen reasoning selection; start a new turn instead"
+                        .to_string(),
+                )),
+            };
+        if reasoning_selection != session.config.reasoning_preset {
+            return Err(BitFunError::Validation(
+                "The session reasoning preset changed after interruption; start a new turn instead"
+                    .to_string(),
+            ));
+        }
+        let (current_resolved_reasoning_preset, current_reasoning_fingerprint) =
+            Self::resolve_effective_reasoning_preset_from_config(
+                &ai_config,
+                &resolved_model_id,
+                reasoning_selection.as_deref(),
+            )
+            .await?;
+        if current_resolved_reasoning_preset != resolved_reasoning_preset {
+            return Err(BitFunError::Validation(
+                "The dialog turn reasoning contract changed after interruption; start a new turn instead"
+                    .to_string(),
+            ));
+        }
+        if current_reasoning_fingerprint != expected_reasoning_fingerprint {
+            return Err(BitFunError::Validation(
+                "The dialog turn reasoning runtime contract changed after interruption; start a new turn instead"
+                    .to_string(),
+            ));
+        }
+        let user_input = turn.user_message.content.clone();
+
+        let mut updated_session = session.clone();
+        updated_session.state = SessionState::Processing {
+            current_turn_id: turn_id.to_string(),
+            phase: ProcessingPhase::Starting,
+        };
+        let now = SystemTime::now();
+        updated_session.updated_at = now;
+        updated_session.last_activity_at = now;
+
+        self.persistence_manager
+            .save_turn_context_snapshot(&workspace_path, session_id, turn_index, &messages)
+            .await?;
+        if let Err(error) = self
+            .persistence_manager
+            .save_dialog_turn(&workspace_path, &turn)
+            .await
+        {
+            if let Err(rollback_error) = self
+                .persistence_manager
+                .save_dialog_turn(&workspace_path, &original_turn)
+                .await
+            {
+                return Err(BitFunError::session(format!(
+                    "Recovery turn persistence failed and rollback did not complete: session_id={session_id}, turn_id={turn_id}, error={error}, rollback_error={rollback_error}"
+                )));
+            }
+            return Err(error);
+        }
+        if let Err(error) = self
+            .persistence_manager
+            .save_session(&workspace_path, &updated_session)
+            .await
+        {
+            let session_rollback = self
+                .persistence_manager
+                .save_session(&workspace_path, &session)
+                .await;
+            let turn_rollback = self
+                .persistence_manager
+                .save_dialog_turn(&workspace_path, &original_turn)
+                .await;
+            if session_rollback.is_err() || turn_rollback.is_err() {
+                return Err(BitFunError::session(format!(
+                    "Recovery persistence failed and rollback did not complete: session_id={session_id}, turn_id={turn_id}, error={error}, session_rollback_error={:?}, turn_rollback_error={:?}",
+                    session_rollback.err(),
+                    turn_rollback.err(),
+                )));
+            }
+            return Err(error);
+        }
+
+        self.sessions
+            .insert(session_id.to_string(), updated_session);
+        self.context_store
+            .replace_context(session_id, messages.clone());
+
+        Ok(InterruptedTurnRecoveryPlan {
+            session_id: session_id.to_string(),
+            turn_id: turn_id.to_string(),
+            turn_index,
+            agent_type,
+            execution_generation: next_generation,
+            resume_count: next_resume_count,
+            initial_round_index,
+            resolved_permission_mode,
+            resolved_model_id,
+            model_binding_fingerprint: expected_model_binding_fingerprint,
+            user_input,
+            messages,
+            user_message_metadata,
+        })
+    }
+
+    pub(crate) async fn latest_dialog_turn_holds_dispatch(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<bool> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(false);
+        }
+        let Some(session) = self.get_session(session_id) else {
+            return Ok(false);
+        };
+        let Some(turn_index) = session.dialog_turn_ids.len().checked_sub(1) else {
+            return Ok(false);
+        };
+        let Some(workspace_path) = self
+            .effective_storage_path_for_config(&session.config)
+            .await
+        else {
+            return Ok(false);
+        };
+        let Some(turn) = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, turn_index)
+            .await?
+        else {
+            return Ok(false);
+        };
+        Ok(turn.status == TurnStatus::Cancelled
+            && turn
+                .recovery
+                .as_ref()
+                .is_some_and(|recovery| recovery.status == DialogTurnRecoveryStatus::Interrupted))
+    }
+
+    pub(crate) async fn abandon_interrupted_dialog_turn(
+        &self,
+        session_id: &str,
+        expected_turn_id: Option<&str>,
+    ) -> BitFunResult<Option<String>> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        let Some(session) = self.get_session(session_id) else {
+            return Ok(None);
+        };
+        let turn_index = match expected_turn_id {
+            Some(expected) => session
+                .dialog_turn_ids
+                .iter()
+                .position(|turn_id| turn_id == expected),
+            None => session.dialog_turn_ids.len().checked_sub(1),
+        };
+        let Some(turn_index) = turn_index else {
+            return Ok(None);
+        };
+        let Some(workspace_path) = self
+            .effective_storage_path_for_config(&session.config)
+            .await
+        else {
+            return Ok(None);
+        };
+        let Some(mut turn) = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, turn_index)
+            .await?
+        else {
+            return Ok(None);
+        };
+        if turn.status != TurnStatus::Cancelled
+            || !turn
+                .recovery
+                .as_ref()
+                .is_some_and(|recovery| recovery.status == DialogTurnRecoveryStatus::Interrupted)
+        {
+            return Ok(None);
+        }
+        turn.recovery = None;
+        turn.finish_reason = Some("cancelled".to_string());
+        let turn_id = turn.turn_id.clone();
+        self.persistence_manager
+            .save_dialog_turn(&workspace_path, &turn)
+            .await?;
+        Ok(Some(turn_id))
     }
 
     /// Complete a maintenance turn and persist its synthetic model round payload.
@@ -8259,12 +9311,12 @@ mod tests {
     use super::{
         should_auto_migrate_session_model, CoreSessionStorePort, PermissionMode,
         SessionExecutionBindingError, SessionExecutionBindingUpdate, SessionManager,
-        SessionManagerConfig, TEST_MODEL_RESOLUTION_AI_CONFIG,
+        SessionManagerConfig, TurnAdmissionSessionFacts, TEST_MODEL_RESOLUTION_AI_CONFIG,
     };
     use crate::agentic::core::{
-        CompressionState, Message, MessageContent, MessageRole, ProcessingPhase, Session,
-        SessionAgentRouteOwner, SessionConfig, SessionModelBindingPolicy, SessionState, ToolCall,
-        ToolResult,
+        CompressionState, Message, MessageContent, MessageRole, MessageSemanticKind,
+        ProcessingPhase, Session, SessionAgentRouteOwner, SessionConfig, SessionModelBindingPolicy,
+        SessionState, ToolCall, ToolResult, TurnStats,
     };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
@@ -8273,15 +9325,22 @@ mod tests {
         UserContextCacheIdentity,
     };
     use crate::agentic::skill_agent_snapshot::{SkillSnapshotEntry, TurnSkillAgentSnapshot};
+    use crate::infrastructure::ai::reasoning_catalog::{
+        project_model_reasoning_catalog as project_test_model_reasoning_catalog,
+        reasoning_preset_runtime_fingerprint as test_reasoning_preset_runtime_fingerprint,
+        resolve_default_reasoning_preset as resolve_test_default_reasoning_preset,
+        resolve_reasoning_preset as resolve_test_reasoning_preset,
+    };
     use crate::infrastructure::PathManager;
     use crate::service::config::types::{
+        model_runtime_binding_fingerprint as service_model_runtime_binding_fingerprint,
         AIConfig as ServiceAIConfig, AIModelConfig as ServiceAIModelConfig,
     };
     use crate::service::session::{
-        DialogTurnData, DialogTurnKind, ModelRoundData, SessionContextUsage,
-        SessionContextUsageSource, SessionKind, SessionMetadata, SessionRelationship,
-        SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData, TurnStatus,
-        UserMessageData,
+        DialogTurnData, DialogTurnKind, DialogTurnRecoveryStatus, ModelRoundData,
+        SessionContextUsage, SessionContextUsageSource, SessionKind, SessionMetadata,
+        SessionRelationship, SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData,
+        TurnStatus, UserMessageData,
     };
     use crate::util::errors::BitFunError;
     use bitfun_core_types::{
@@ -8465,6 +9524,49 @@ mod tests {
         )
     }
 
+    async fn reopen_interrupted_turn_for_test(
+        manager: &SessionManager,
+        session_id: &str,
+        turn_id: &str,
+        expected_generation: u32,
+    ) -> crate::util::errors::BitFunResult<super::InterruptedTurnRecoveryPlan> {
+        TEST_MODEL_RESOLUTION_AI_CONFIG
+            .scope(
+                ServiceAIConfig {
+                    models: vec![configured_reasoning_model("model-original")],
+                    ..Default::default()
+                },
+                manager.reopen_interrupted_dialog_turn(session_id, turn_id, expected_generation),
+            )
+            .await
+    }
+
+    fn interrupted_turn_test_model_fingerprint() -> String {
+        service_model_runtime_binding_fingerprint(&configured_reasoning_model("model-original"))
+    }
+
+    fn interrupted_turn_test_reasoning_fingerprint(selected_preset: Option<&str>) -> String {
+        let model = configured_reasoning_model("model-original");
+        let projection = project_test_model_reasoning_catalog(&model, None);
+        let preset = selected_preset
+            .and_then(|preset_id| resolve_test_reasoning_preset(&projection, preset_id))
+            .or_else(|| {
+                selected_preset
+                    .is_none()
+                    .then(|| resolve_test_default_reasoning_preset(&projection))
+                    .flatten()
+            });
+        test_reasoning_preset_runtime_fingerprint(preset)
+    }
+
+    fn interrupted_turn_test_auto_reasoning_fingerprint(default_preset: &str) -> String {
+        let model = reasoning_model_with_default("model-original", default_preset);
+        let projection = project_test_model_reasoning_catalog(&model, None);
+        test_reasoning_preset_runtime_fingerprint(resolve_test_default_reasoning_preset(
+            &projection,
+        ))
+    }
+
     fn test_manager_with_config(
         persistence_manager: Arc<PersistenceManager>,
         config: SessionManagerConfig,
@@ -8544,6 +9646,954 @@ mod tests {
             .expect("metadata should load")
             .expect("metadata should exist");
         assert_eq!(metadata.current_context_usage, Some(usage));
+    }
+
+    #[tokio::test]
+    async fn interrupted_turn_reopens_same_turn_from_snapshot_with_generation_cas() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Recovery".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "finish the task".to_string(),
+                Some("turn-1".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "ask",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": interrupted_turn_test_model_fingerprint(),
+                    "runtime_reasoning_preset": null,
+                    "runtime_reasoning_selection": null,
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_reasoning_fingerprint(None)
+                })),
+            )
+            .await
+            .expect("turn should start");
+        manager
+            .add_message(
+                &session.session_id,
+                Message::assistant("safe completed fragment".to_string())
+                    .with_turn_id(turn_id.clone())
+                    .with_round_id("round-0".to_string()),
+            )
+            .await
+            .expect("safe boundary should persist");
+
+        let interrupted = manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("turn should become interrupted");
+        assert_eq!(interrupted.execution_generation, 0);
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle");
+        manager
+            .update_session_permission_mode(&session.session_id, Some(PermissionMode::FullAccess))
+            .await
+            .expect("session permission should change after interruption");
+
+        let plan = reopen_interrupted_turn_for_test(&manager, &session.session_id, &turn_id, 0)
+            .await
+            .expect("same generation should recover");
+
+        assert_eq!(plan.turn_id, turn_id);
+        assert_eq!(plan.turn_index, 0);
+        assert_eq!(plan.execution_generation, 1);
+        assert_eq!(plan.resume_count, 1);
+        assert_eq!(plan.initial_round_index, 0);
+        assert_eq!(plan.resolved_permission_mode, PermissionMode::Ask);
+        assert_eq!(plan.resolved_model_id, "model-original");
+        assert_eq!(
+            plan.messages
+                .iter()
+                .filter(|message| {
+                    message.metadata.semantic_kind == Some(MessageSemanticKind::ActualUserInput)
+                })
+                .count(),
+            1,
+            "recovery must not duplicate the original user message"
+        );
+        assert!(plan.messages.iter().any(|message| {
+            message
+                .content
+                .to_string()
+                .contains("previous work was interrupted")
+        }));
+
+        let duplicate =
+            reopen_interrupted_turn_for_test(&manager, &session.session_id, &plan.turn_id, 0)
+                .await
+                .expect_err("stale generation must be rejected");
+        assert!(duplicate.to_string().contains("generation"), "{duplicate}");
+
+        manager
+            .cancel_dialog_turn(&session.session_id, &plan.turn_id)
+            .await
+            .expect("ordinary cancellation should settle recovered work");
+        let persisted = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        assert!(
+            persisted.recovery.is_none(),
+            "ordinary cancellation must remove the recoverable state"
+        );
+    }
+
+    #[tokio::test]
+    async fn interrupted_turn_recovery_does_not_narrow_its_frozen_permission_mode() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Recovery permission".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    permission_mode: Some(PermissionMode::FullAccess),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "finish with the original permission".to_string(),
+                Some("turn-permission".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "full_access",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": interrupted_turn_test_model_fingerprint(),
+                    "runtime_reasoning_preset": null,
+                    "runtime_reasoning_selection": null,
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_reasoning_fingerprint(None)
+                })),
+            )
+            .await
+            .expect("turn should start");
+        manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("turn should become interrupted");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle");
+        manager
+            .update_session_permission_mode(&session.session_id, Some(PermissionMode::Ask))
+            .await
+            .expect("session permission should change after interruption");
+
+        let plan = reopen_interrupted_turn_for_test(&manager, &session.session_id, &turn_id, 0)
+            .await
+            .expect("turn should keep its original permission contract");
+        assert_eq!(plan.resolved_permission_mode, PermissionMode::FullAccess);
+    }
+
+    #[tokio::test]
+    async fn interrupted_turn_recovery_rejects_a_changed_reasoning_preset() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Recovery reasoning preset".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    reasoning_preset: Some("high".to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "continue with one reasoning contract".to_string(),
+                Some("turn-reasoning".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "ask",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": interrupted_turn_test_model_fingerprint(),
+                    "runtime_reasoning_preset": "high",
+                    "runtime_reasoning_selection": "high",
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_reasoning_fingerprint(Some("high"))
+                })),
+            )
+            .await
+            .expect("turn should start");
+        manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("turn should become interrupted");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should remain loaded")
+            .config
+            .reasoning_preset = Some("low".to_string());
+
+        let error = reopen_interrupted_turn_for_test(&manager, &session.session_id, &turn_id, 0)
+            .await
+            .expect_err("same Turn must not silently change reasoning preset");
+
+        assert!(error.to_string().contains("reasoning preset"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn interrupted_turn_recovery_rejects_a_changed_auto_reasoning_default() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Recovery auto reasoning".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    model_id: Some("model-original".to_string()),
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "continue with the original auto reasoning default".to_string(),
+                Some("turn-auto-reasoning".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "ask",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": service_model_runtime_binding_fingerprint(
+                        &reasoning_model_with_default("model-original", "low")
+                    ),
+                    "runtime_reasoning_preset": "high",
+                    "runtime_reasoning_selection": null,
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_auto_reasoning_fingerprint("high")
+                })),
+            )
+            .await
+            .expect("turn should start");
+        manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("turn should become interrupted");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle");
+
+        let error = TEST_MODEL_RESOLUTION_AI_CONFIG
+            .scope(
+                ServiceAIConfig {
+                    models: vec![reasoning_model_with_default("model-original", "low")],
+                    ..Default::default()
+                },
+                manager.reopen_interrupted_dialog_turn(&session.session_id, &turn_id, 0),
+            )
+            .await
+            .expect_err("Auto must not resolve to a different preset for the same Turn");
+
+        assert!(error.to_string().contains("reasoning contract"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn interrupted_turn_recovery_rejects_a_changed_model_binding() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Recovery model binding".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    model_id: Some("model-original".to_string()),
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "continue with the original model binding".to_string(),
+                Some("turn-model-binding".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "ask",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": interrupted_turn_test_model_fingerprint(),
+                    "runtime_reasoning_preset": null,
+                    "runtime_reasoning_selection": null,
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_reasoning_fingerprint(None)
+                })),
+            )
+            .await
+            .expect("turn should start");
+        manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("turn should become interrupted");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle");
+
+        let mut changed_model = configured_reasoning_model("model-original");
+        changed_model.model_name = "provider-model-v2".to_string();
+        let error = TEST_MODEL_RESOLUTION_AI_CONFIG
+            .scope(
+                ServiceAIConfig {
+                    models: vec![changed_model],
+                    ..Default::default()
+                },
+                manager.reopen_interrupted_dialog_turn(&session.session_id, &turn_id, 0),
+            )
+            .await
+            .expect_err("same model ID must not silently change its runtime binding");
+
+        assert!(error.to_string().contains("model binding"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn dialog_turn_admission_rejects_a_concurrent_session_model_change() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Turn admission CAS".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    model_id: Some("model-original".to_string()),
+                    reasoning_preset: Some("high".to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let expected = TurnAdmissionSessionFacts::from_session(&session);
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("session should remain loaded")
+            .config
+            .model_id = Some("model-updated".to_string());
+
+        let error = manager
+            .start_dialog_turn_with_prepended_messages_if_session_matches(
+                &session.session_id,
+                "agentic".to_string(),
+                "must retry admission".to_string(),
+                Some("turn-admission-race".to_string()),
+                None,
+                Vec::new(),
+                Some(serde_json::json!({"runtime_resolved_model_id": "model-original"})),
+                &expected,
+            )
+            .await
+            .expect_err("a concurrent settings update must invalidate admission");
+
+        assert!(error.to_string().contains("changed during turn admission"));
+        assert_eq!(manager.get_turn_count(&session.session_id), 0);
+    }
+
+    #[tokio::test]
+    async fn recovery_persistence_failure_keeps_memory_and_disk_interrupted() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Recovery rollback".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "finish the task".to_string(),
+                Some("turn-rollback".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "ask",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": interrupted_turn_test_model_fingerprint(),
+                    "runtime_reasoning_preset": null,
+                    "runtime_reasoning_selection": null,
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_reasoning_fingerprint(None)
+                })),
+            )
+            .await
+            .expect("turn should start");
+        manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("turn should become interrupted");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle");
+
+        persistence_manager.fail_next_session_state_write_for_test(&session.session_id);
+        reopen_interrupted_turn_for_test(&manager, &session.session_id, &turn_id, 0)
+            .await
+            .expect_err("injected session write must reject recovery");
+
+        let active = manager
+            .get_session(&session.session_id)
+            .expect("session should remain active");
+        assert!(matches!(active.state, SessionState::Idle));
+        let persisted_session = persistence_manager
+            .load_session(workspace.path(), &session.session_id)
+            .await
+            .expect("session should reload");
+        assert!(matches!(persisted_session.state, SessionState::Idle));
+        let persisted_turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        assert_eq!(persisted_turn.status, TurnStatus::Cancelled);
+        assert_eq!(
+            persisted_turn
+                .recovery
+                .as_ref()
+                .map(|recovery| recovery.status),
+            Some(DialogTurnRecoveryStatus::Interrupted),
+        );
+
+        let plan = reopen_interrupted_turn_for_test(&manager, &session.session_id, &turn_id, 0)
+            .await
+            .expect("retry should reopen after rollback");
+        persistence_manager.fail_next_dialog_turn_write_for_test(&session.session_id);
+        manager
+            .complete_recovered_dialog_turn(
+                &session.session_id,
+                &turn_id,
+                plan.execution_generation,
+                "completion that cannot persist".to_string(),
+                &[],
+                TurnStats {
+                    total_rounds: 1,
+                    total_tools: 0,
+                    total_tokens: 0,
+                    duration_ms: 1,
+                },
+            )
+            .await
+            .expect_err("injected recovered completion write must fail");
+        manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("failed recovered completion should return to interruption");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("fallback interruption should settle idle");
+        let persisted_turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        assert_eq!(persisted_turn.status, TurnStatus::Cancelled);
+        assert_eq!(
+            persisted_turn.recovery_epoch,
+            Some(plan.execution_generation)
+        );
+        assert_eq!(
+            persisted_turn
+                .recovery
+                .as_ref()
+                .map(|recovery| (recovery.status, recovery.execution_generation)),
+            Some((
+                DialogTurnRecoveryStatus::Interrupted,
+                plan.execution_generation
+            )),
+        );
+    }
+
+    #[tokio::test]
+    async fn recovered_completion_appends_rounds_after_the_existing_history() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Recovery append".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "finish the task".to_string(),
+                Some("turn-append".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "ask",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": interrupted_turn_test_model_fingerprint(),
+                    "runtime_reasoning_preset": null,
+                    "runtime_reasoning_selection": null,
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_reasoning_fingerprint(None)
+                })),
+            )
+            .await
+            .expect("turn should start");
+        let mut persisted_turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        persisted_turn.model_rounds = SessionManager::build_model_rounds_from_messages(
+            &[Message::assistant("before interruption".to_string())
+                .with_turn_id(turn_id.clone())
+                .with_round_id("round-before".to_string())],
+            &turn_id,
+            1,
+        );
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &persisted_turn)
+            .await
+            .expect("existing round should persist");
+        manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("turn should become interrupted");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle");
+        let plan = reopen_interrupted_turn_for_test(&manager, &session.session_id, &turn_id, 0)
+            .await
+            .expect("turn should reopen");
+
+        manager
+            .complete_recovered_dialog_turn(
+                &session.session_id,
+                &turn_id,
+                plan.execution_generation,
+                "after recovery".to_string(),
+                &[Message::assistant("after recovery".to_string())
+                    .with_turn_id(turn_id.clone())
+                    .with_round_id("round-after".to_string())],
+                TurnStats {
+                    total_rounds: 1,
+                    total_tools: 0,
+                    total_tokens: 0,
+                    duration_ms: 1,
+                },
+            )
+            .await
+            .expect("recovered completion should persist");
+
+        let completed = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        assert_eq!(completed.model_rounds.len(), 2);
+        assert_eq!(completed.model_rounds[0].round_index, 0);
+        assert_eq!(completed.model_rounds[1].round_index, 1);
+        assert_eq!(
+            completed.model_rounds[1].text_items[0].content,
+            "after recovery"
+        );
+        assert!(completed.recovery.is_none());
+        assert_eq!(completed.recovery_epoch, Some(plan.execution_generation));
+    }
+
+    #[tokio::test]
+    async fn repeated_interruption_persists_recovered_generation_rounds() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Repeated recovery".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "continue through two interruptions".to_string(),
+                Some("turn-repeat-interruption".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "ask",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": interrupted_turn_test_model_fingerprint(),
+                    "runtime_reasoning_preset": null,
+                    "runtime_reasoning_selection": null,
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_reasoning_fingerprint(None)
+                })),
+            )
+            .await
+            .expect("turn should start");
+        manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("first generation should interrupt");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle");
+        let first_recovery =
+            reopen_interrupted_turn_for_test(&manager, &session.session_id, &turn_id, 0)
+                .await
+                .expect("first recovery should reopen");
+
+        let assistant = Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall {
+                tool_id: "tool-recovered".to_string(),
+                tool_name: "Read".to_string(),
+                arguments: json!({"path": "README.md"}),
+                raw_arguments: None,
+                is_error: false,
+                parse_error: None,
+                recovered_from_truncation: false,
+                repair_kind: Default::default(),
+            }],
+        )
+        .with_turn_id(turn_id.clone())
+        .with_round_id("recovered-round".to_string());
+        let tool_result = Message::tool_result(ToolResult {
+            tool_id: "tool-recovered".to_string(),
+            tool_name: "Read".to_string(),
+            effective_tool_name: None,
+            result: json!({"content": "safe boundary"}),
+            result_for_assistant: Some("safe boundary".to_string()),
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        })
+        .with_turn_id(turn_id.clone())
+        .with_round_id("recovered-round".to_string());
+        manager
+            .mark_dialog_turn_interrupted_with_messages(
+                &session.session_id,
+                &turn_id,
+                &[assistant, tool_result],
+            )
+            .await
+            .expect("recovered generation should interrupt durably");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle again");
+
+        let persisted = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        assert_eq!(persisted.model_rounds.len(), 1);
+        assert_eq!(persisted.model_rounds[0].round_index, 0);
+        assert_eq!(
+            persisted.model_rounds[0].tool_items[0]
+                .tool_result
+                .as_ref()
+                .map(|result| result.success),
+            Some(true),
+        );
+        let next_recovery = reopen_interrupted_turn_for_test(
+            &manager,
+            &session.session_id,
+            &turn_id,
+            first_recovery.execution_generation,
+        )
+        .await
+        .expect("second recovery should reopen after appended history");
+        assert_eq!(next_recovery.initial_round_index, 1);
+    }
+
+    #[tokio::test]
+    async fn first_interruption_merges_a_partially_persisted_round_prefix() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Interrupted merge".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "merge frontend and runtime rounds".to_string(),
+                Some("turn-prefix-merge".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "ask",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": interrupted_turn_test_model_fingerprint(),
+                    "runtime_reasoning_preset": null,
+                    "runtime_reasoning_selection": null,
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_reasoning_fingerprint(None)
+                })),
+            )
+            .await
+            .expect("turn should start");
+        let persisted_prefix = Message::assistant("frontend prefix".to_string())
+            .with_turn_id(turn_id.clone())
+            .with_round_id("round-shared".to_string());
+        let mut persisted_turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        persisted_turn.model_rounds =
+            SessionManager::build_model_rounds_from_messages(&[persisted_prefix], &turn_id, 1);
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &persisted_turn)
+            .await
+            .expect("frontend prefix should persist");
+
+        let runtime_rounds = [
+            Message::assistant("runtime authoritative prefix".to_string())
+                .with_turn_id(turn_id.clone())
+                .with_round_id("round-shared".to_string()),
+            Message::assistant("runtime missing tail".to_string())
+                .with_turn_id(turn_id.clone())
+                .with_round_id("round-tail".to_string()),
+        ];
+        manager
+            .mark_dialog_turn_interrupted_with_messages(
+                &session.session_id,
+                &turn_id,
+                &runtime_rounds,
+            )
+            .await
+            .expect("interruption should merge the runtime journal");
+
+        let persisted = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        assert_eq!(persisted.model_rounds.len(), 2);
+        assert_eq!(persisted.model_rounds[0].id, "round-shared");
+        assert_eq!(persisted.model_rounds[0].round_index, 0);
+        assert_eq!(
+            persisted.model_rounds[0].text_items[0].content,
+            "runtime authoritative prefix"
+        );
+        assert_eq!(persisted.model_rounds[1].id, "round-tail");
+        assert_eq!(persisted.model_rounds[1].round_index, 1);
+    }
+
+    #[tokio::test]
+    async fn restore_reopens_a_recovering_turn_when_the_session_write_was_lost() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Recovery restart".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    model_id: Some("auto".to_string()),
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "finish after restart".to_string(),
+                Some("turn-restart".to_string()),
+                None,
+                Some(serde_json::json!({
+                    "resolved_permission_mode": "ask",
+                    "runtime_resolved_model_id": "model-original",
+                    "runtime_model_binding_fingerprint": interrupted_turn_test_model_fingerprint(),
+                    "runtime_reasoning_preset": null,
+                    "runtime_reasoning_selection": null,
+                    "runtime_reasoning_fingerprint": interrupted_turn_test_reasoning_fingerprint(None)
+                })),
+            )
+            .await
+            .expect("turn should start");
+        manager
+            .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
+            .await
+            .expect("turn should become interrupted");
+        manager
+            .update_session_state_for_turn_if_processing(
+                &session.session_id,
+                &turn_id,
+                SessionState::Idle,
+            )
+            .await
+            .expect("session should settle idle");
+        let first_recovery =
+            reopen_interrupted_turn_for_test(&manager, &session.session_id, &turn_id, 0)
+                .await
+                .expect("turn should start recovering");
+        assert_eq!(first_recovery.execution_generation, 1);
+
+        // Simulate a crash after the recovering Turn rename but before the
+        // Processing Session rename. The older Idle Session file must not hide
+        // the abandoned execution generation forever.
+        let mut stale_session = persistence_manager
+            .load_session(workspace.path(), &session.session_id)
+            .await
+            .expect("persisted session should load");
+        stale_session.state = SessionState::Idle;
+        persistence_manager
+            .save_session(workspace.path(), &stale_session)
+            .await
+            .expect("stale idle session should persist");
+        manager.evict_loaded_session_for_test(&session.session_id);
+        drop(manager);
+
+        let restored_manager = test_manager(persistence_manager.clone());
+        let (restored_session, restored_turns) = restored_manager
+            .restore_session_with_turns(workspace.path(), &session.session_id)
+            .await
+            .expect("restart should restore the session");
+
+        assert!(matches!(restored_session.state, SessionState::Idle));
+        let restored_turn = restored_turns.last().expect("latest turn should restore");
+        assert_eq!(restored_turn.status, TurnStatus::Cancelled);
+        assert_eq!(
+            restored_turn
+                .recovery
+                .as_ref()
+                .map(|recovery| (recovery.status, recovery.execution_generation)),
+            Some((DialogTurnRecoveryStatus::Interrupted, 1)),
+        );
+
+        let second_recovery =
+            reopen_interrupted_turn_for_test(&restored_manager, &session.session_id, &turn_id, 1)
+                .await
+                .expect("the interrupted generation should remain recoverable");
+        assert_eq!(second_recovery.execution_generation, 2);
     }
 
     #[tokio::test]
@@ -10607,6 +12657,30 @@ mod tests {
                     ..Default::default()
                 }],
                 ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn reasoning_model_with_default(id: &str, default_preset: &str) -> ServiceAIModelConfig {
+        ServiceAIModelConfig {
+            id: id.to_string(),
+            name: id.to_string(),
+            model_name: id.to_string(),
+            enabled: true,
+            reasoning: Some(ReasoningConfig {
+                catalog: ReasoningCatalogBinding::Disabled,
+                default_preset: Some(default_preset.to_string()),
+                presets: ["low", "high"]
+                    .into_iter()
+                    .map(|preset_id| ReasoningPreset {
+                        id: preset_id.to_string(),
+                        actions: vec![ReasoningPresetAction::Effort {
+                            value: preset_id.to_string(),
+                        }],
+                        ..Default::default()
+                    })
+                    .collect(),
             }),
             ..Default::default()
         }

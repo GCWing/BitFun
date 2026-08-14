@@ -3036,6 +3036,8 @@ mod tests {
             has_final_response: None,
             error: None,
             error_detail: None,
+            recovery: None,
+            recovery_epoch: None,
             status,
         }
     }

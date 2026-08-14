@@ -11,8 +11,9 @@ use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnPort,
-    AgentDialogTurnRequest, AgentInputAttachment, AgentInteractionResponsePort,
-    AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
+    AgentDialogTurnRecoveryOutcome, AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest,
+    AgentInputAttachment, AgentInteractionResponsePort, AgentLifecycleDeliveryPort,
+    AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
     AgentLocalCommandTurnRecordResult, AgentMessageWorkspaceReferencesRequest,
     AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
     AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
@@ -31,14 +32,14 @@ use bitfun_runtime_ports::{
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
-    AgentUserAnswersRequest, AgentUserShellCommandPort, AgentUserShellCommandRequest,
-    AgentUserShellCommandResult, AgentWorkspaceReference, AgentWorkspaceReferencePort,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DialogSteerOutcome,
-    DialogSubmitOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
-    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
-    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
-    WorkspaceDiffSnapshot,
+    AgentTurnCancellationResult, AgentTurnInterruptionRequest, AgentTurnInterruptionResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserAnswersRequest,
+    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
+    AgentWorkspaceReference, AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, DialogSubmitOutcome,
+    PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError,
+    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
+    SessionTranscriptRequest, ThreadGoal, WorkspaceDiffSnapshot,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -1502,6 +1503,33 @@ impl AgentRuntime {
         Ok(outcome)
     }
 
+    pub async fn recover_interrupted_turn(
+        &self,
+        request: AgentDialogTurnRecoveryRequest,
+    ) -> Result<AgentDialogTurnRecoveryOutcome, RuntimeError> {
+        let requested_session_id = request.session_id.clone();
+        let requested_turn_id = request.turn_id.clone();
+        let dialog_turn = self
+            .dialog_turn
+            .as_ref()
+            .ok_or(RuntimeError::MissingDialogTurnPort)?;
+        let outcome = dialog_turn
+            .recover_interrupted_turn(request)
+            .await
+            .map_err(RuntimeError::from)?;
+        if outcome.session_id != requested_session_id || outcome.turn_id != requested_turn_id {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                format!(
+                    "agent dialog recovery provider returned session_id '{}' and turn_id '{}' for requested session_id '{}' and turn_id '{}'",
+                    outcome.session_id, outcome.turn_id, requested_session_id, requested_turn_id
+                ),
+            )
+            .into());
+        }
+        Ok(outcome)
+    }
+
     pub async fn deliver_background_result(
         &self,
         request: AgentBackgroundResultRequest,
@@ -1592,6 +1620,20 @@ impl AgentRuntime {
             .ok_or(RuntimeError::MissingCancellationPort)?;
         cancellation
             .cancel_turn(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn interrupt_turn(
+        &self,
+        request: AgentTurnInterruptionRequest,
+    ) -> Result<AgentTurnInterruptionResult, RuntimeError> {
+        let cancellation = self
+            .cancellation
+            .as_ref()
+            .ok_or(RuntimeError::MissingCancellationPort)?;
+        cancellation
+            .interrupt_turn(request)
             .await
             .map_err(RuntimeError::from)
     }
@@ -1757,6 +1799,7 @@ mod tests {
         exact_session_result_id: Mutex<Option<String>>,
         submitted_messages: Mutex<Vec<AgentSubmissionRequest>>,
         cancelled_turns: Mutex<Vec<AgentTurnCancellationRequest>>,
+        interrupted_turns: Mutex<Vec<AgentTurnInterruptionRequest>>,
         compaction_requests: Mutex<Vec<AgentSessionCompactionRequest>>,
         before_turn_fork_requests: Mutex<Vec<AgentSessionForkBeforeTurnRequest>>,
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
@@ -2283,6 +2326,18 @@ mod tests {
                 requested: true,
             })
         }
+
+        async fn interrupt_turn(
+            &self,
+            request: AgentTurnInterruptionRequest,
+        ) -> PortResult<AgentTurnInterruptionResult> {
+            self.interrupted_turns.lock().unwrap().push(request.clone());
+            Ok(AgentTurnInterruptionResult {
+                session_id: request.session_id,
+                turn_id: request.turn_id,
+                requested: true,
+            })
+        }
     }
 
     #[derive(Debug, Default)]
@@ -2696,6 +2751,30 @@ mod tests {
                 .as_deref(),
             Some("requester_session")
         );
+    }
+
+    #[tokio::test]
+    async fn interrupt_turn_delegates_to_cancellation_owner() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_cancellation_port(ports.clone())
+            .build()
+            .expect("runtime");
+
+        let result = runtime
+            .interrupt_turn(AgentTurnInterruptionRequest {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                source: Some(AgentSubmissionSource::DesktopUi),
+                wait_timeout_ms: Some(30_000),
+            })
+            .await
+            .expect("interrupt");
+
+        assert!(result.requested);
+        assert_eq!(result.turn_id, "turn_1");
+        assert_eq!(ports.interrupted_turns.lock().unwrap().len(), 1);
     }
 
     #[tokio::test]
@@ -3378,6 +3457,54 @@ mod tests {
             dialog_turns.requests.lock().unwrap()[0].attachments[0].kind,
             "remote_image"
         );
+    }
+
+    #[tokio::test]
+    async fn recover_interrupted_turn_delegates_and_validates_identity() {
+        #[derive(Debug)]
+        struct RecoveryPort;
+
+        #[async_trait::async_trait]
+        impl bitfun_runtime_ports::AgentDialogTurnPort for RecoveryPort {
+            async fn submit_dialog_turn(
+                &self,
+                _request: AgentDialogTurnRequest,
+            ) -> PortResult<DialogSubmitOutcome> {
+                unreachable!("recovery must not submit a new turn")
+            }
+
+            async fn recover_interrupted_turn(
+                &self,
+                request: AgentDialogTurnRecoveryRequest,
+            ) -> PortResult<AgentDialogTurnRecoveryOutcome> {
+                Ok(AgentDialogTurnRecoveryOutcome {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id,
+                    execution_generation: request.execution_generation + 1,
+                })
+            }
+        }
+
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(FakeAgentRuntimePorts::default()))
+            .with_dialog_turn_port(Arc::new(RecoveryPort))
+            .build()
+            .expect("runtime");
+        let result = runtime
+            .recover_interrupted_turn(AgentDialogTurnRecoveryRequest {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                execution_generation: 0,
+                workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("recover");
+
+        assert_eq!(result.session_id, "session_1");
+        assert_eq!(result.turn_id, "turn_1");
+        assert_eq!(result.execution_generation, 1);
     }
 
     #[tokio::test]

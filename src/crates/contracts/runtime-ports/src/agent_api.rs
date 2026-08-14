@@ -580,6 +580,32 @@ pub struct AgentDialogTurnRequest {
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
+/// Recover one settled interrupted user dialog without creating a new Turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentDialogTurnRecoveryRequest {
+    pub session_id: String,
+    pub turn_id: String,
+    /// Compare-and-set generation observed by the caller.
+    pub execution_generation: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentDialogTurnRecoveryOutcome {
+    pub session_id: String,
+    pub turn_id: String,
+    pub execution_generation: u32,
+}
+
 /// Steering request for one exact running dialog turn.
 ///
 /// Carries the same payload shape as a turn submission: a mid-turn steering
@@ -762,6 +788,7 @@ pub fn should_suppress_agent_session_cancelled_reply(
 pub enum DialogTurnOutcomeKind {
     Completed,
     Cancelled,
+    Interrupted,
     Failed,
 }
 
@@ -769,7 +796,8 @@ pub const fn should_skip_agent_session_reply(
     outcome_kind: DialogTurnOutcomeKind,
     suppressed_cancelled_reply: bool,
 ) -> bool {
-    matches!(outcome_kind, DialogTurnOutcomeKind::Cancelled) && suppressed_cancelled_reply
+    matches!(outcome_kind, DialogTurnOutcomeKind::Interrupted)
+        || matches!(outcome_kind, DialogTurnOutcomeKind::Cancelled) && suppressed_cancelled_reply
 }
 
 /// Source session route used when an agent-session request should reply to the
@@ -1696,6 +1724,16 @@ pub trait AgentDialogTurnPort: Send + Sync {
             "dialog turn steering is not supported by this provider",
         ))
     }
+
+    async fn recover_interrupted_turn(
+        &self,
+        _request: AgentDialogTurnRecoveryRequest,
+    ) -> PortResult<AgentDialogTurnRecoveryOutcome> {
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "interrupted dialog turn recovery is not supported by this provider",
+        ))
+    }
 }
 
 #[async_trait::async_trait]
@@ -1761,12 +1799,44 @@ pub struct AgentTurnCancellationResult {
     pub requested: bool,
 }
 
+/// Request an intentional, recoverable interruption of one active Turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnInterruptionRequest {
+    pub session_id: String,
+    pub turn_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<AgentSubmissionSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wait_timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnInterruptionResult {
+    pub session_id: String,
+    pub turn_id: String,
+    pub requested: bool,
+}
+
 #[async_trait::async_trait]
 pub trait AgentTurnCancellationPort: Send + Sync {
     async fn cancel_turn(
         &self,
         request: AgentTurnCancellationRequest,
     ) -> PortResult<AgentTurnCancellationResult>;
+
+    async fn interrupt_turn(
+        &self,
+        _request: AgentTurnInterruptionRequest,
+    ) -> PortResult<AgentTurnInterruptionResult> {
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "recoverable interruption is not supported by this provider",
+        ))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -2985,6 +3055,32 @@ mod tests {
         }))
         .expect("deserialize legacy cancel request");
         assert!(legacy.cancel_descendants);
+    }
+
+    #[test]
+    fn interrupted_turn_requests_are_typed_and_generation_scoped() {
+        let interrupt = AgentTurnInterruptionRequest {
+            session_id: "session_1".to_string(),
+            turn_id: "turn_1".to_string(),
+            source: Some(AgentSubmissionSource::DesktopUi),
+            wait_timeout_ms: Some(30_000),
+        };
+        let recover = AgentDialogTurnRecoveryRequest {
+            session_id: "session_1".to_string(),
+            turn_id: "turn_1".to_string(),
+            execution_generation: 1,
+            workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        let interrupt_json = serde_json::to_value(interrupt).expect("serialize interruption");
+        let recover_json = serde_json::to_value(recover).expect("serialize recovery");
+
+        assert_eq!(interrupt_json["turnId"], "turn_1");
+        assert_eq!(interrupt_json["source"], "desktop_ui");
+        assert_eq!(recover_json["executionGeneration"], 1);
+        assert_eq!(recover_json["workspacePath"], "/workspace/project");
     }
 
     #[test]

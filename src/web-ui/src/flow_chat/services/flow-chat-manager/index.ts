@@ -58,7 +58,8 @@ export {
   shouldProcessEvent,
   mapBackendStateToFrontend,
   initializeEventListeners,
-  processBatchedEvents
+  processBatchedEvents,
+  projectDialogTurnRecovered,
 } from './EventHandlerModule';
 
 export {

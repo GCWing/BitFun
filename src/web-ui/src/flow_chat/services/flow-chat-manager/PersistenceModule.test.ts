@@ -343,6 +343,21 @@ describe('PersistenceModule', () => {
     expect(mockSaveSessionTurn).toHaveBeenCalledTimes(1);
   });
 
+  it('does not overwrite Runtime-owned interrupted or recovering turns', async () => {
+    const turn = createDialogTurn('processing');
+    turn.recovery = {
+      status: 'recovering',
+      executionGeneration: 1,
+      resumeCount: 1,
+    };
+    const context = createContext(turn);
+
+    await saveDialogTurnToDisk(context, SESSION_ID, TURN_ID);
+    await flushMicrotasks();
+
+    expect(mockSaveSessionTurn).not.toHaveBeenCalled();
+  });
+
   it('defers partial-history saves until a storage identity is available', async () => {
     const turn = createDialogTurn('completed');
     delete turn.storageTurnIndex;

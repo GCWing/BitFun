@@ -515,6 +515,27 @@ export interface AgenticEvent {
   [key: string]: any;
 }
 
+export interface InterruptedDialogTurnEvent extends AgenticEvent {
+  turnId: string;
+  executionGeneration: number;
+  modelId?: string;
+}
+
+export interface RecoverInterruptedDialogTurnRequest {
+  sessionId: string;
+  dialogTurnId: string;
+  executionGeneration: number;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export interface RecoverInterruptedDialogTurnResponse {
+  sessionId: string;
+  turnId: string;
+  executionGeneration: number;
+}
+
 export type DialogTurnStartedEvent = AgenticEvent;
 
 export interface OpenBuiltInBrowserEvent {
@@ -853,6 +874,27 @@ export class AgentAPI {
       await api.invoke<void>('cancel_dialog_turn', { request: { sessionId, dialogTurnId } });
     } catch (error) {
       throw createTauriCommandError('cancel_dialog_turn', error, { sessionId, dialogTurnId });
+    }
+  }
+
+  async interruptDialogTurn(sessionId: string, dialogTurnId: string): Promise<void> {
+    try {
+      await api.invoke<void>('interrupt_dialog_turn', { request: { sessionId, dialogTurnId } });
+    } catch (error) {
+      throw createTauriCommandError('interrupt_dialog_turn', error, { sessionId, dialogTurnId });
+    }
+  }
+
+  async recoverInterruptedDialogTurn(
+    request: RecoverInterruptedDialogTurnRequest,
+  ): Promise<RecoverInterruptedDialogTurnResponse> {
+    try {
+      return await api.invoke<RecoverInterruptedDialogTurnResponse>(
+        'recover_interrupted_dialog_turn',
+        { request },
+      );
+    } catch (error) {
+      throw createTauriCommandError('recover_interrupted_dialog_turn', error, request);
     }
   }
 
@@ -1317,6 +1359,14 @@ export class AgentAPI {
    
   onDialogTurnCancelled(callback: (event: AgenticEvent) => void): () => void {
     return api.listen<AgenticEvent>('agentic://dialog-turn-cancelled', callback);
+  }
+
+  onDialogTurnInterrupted(callback: (event: InterruptedDialogTurnEvent) => void): () => void {
+    return api.listen<InterruptedDialogTurnEvent>('agentic://dialog-turn-interrupted', callback);
+  }
+
+  onDialogTurnRecovered(callback: (event: InterruptedDialogTurnEvent) => void): () => void {
+    return api.listen<InterruptedDialogTurnEvent>('agentic://dialog-turn-recovered', callback);
   }
 
    

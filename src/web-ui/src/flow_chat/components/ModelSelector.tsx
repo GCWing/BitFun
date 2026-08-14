@@ -105,6 +105,8 @@ interface ModelSelectorProps {
   modeDefaultModelId?: string;
   /** Whether a selection also changes BitFun's shared built-in mode default. */
   persistSharedModeDefault?: boolean;
+  /** Whether lifecycle ownership currently prevents Session setting changes. */
+  disabled?: boolean;
 }
 
 interface ModelInfo {
@@ -233,6 +235,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   externalSelection,
   modeDefaultModelId,
   persistSharedModeDefault = true,
+  disabled = false,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
@@ -718,7 +721,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   }, [defaultModels, modelCatalog]);
   
   const handleSelectModel = useCallback(async (modelId: string) => {
-    if (loading || reasoningLoading) return;
+    if (disabled || loading || reasoningLoading) return;
 
     if (portalDropdownRef.current?.contains(document.activeElement)) {
       triggerRef.current?.focus();
@@ -824,6 +827,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     acpClientId,
     currentMode,
     defaultModels,
+    disabled,
     externalSelection,
     isAcpSession,
     loading,
@@ -837,7 +841,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const handleSelectReasoningPreset = useCallback(async (presetId: string | null) => {
     if (
-      loading
+      disabled
+      || loading
       || reasoningLoading
       || !sessionId
       || !concreteModelId
@@ -892,6 +897,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     concreteModelId,
     currentNativeModelId,
     currentReasoningProjection,
+    disabled,
     loading,
     reasoningLoading,
     sessionId,
@@ -900,7 +906,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   ]);
 
   const handleSetAcpFastMode = useCallback(async (enabled: boolean) => {
-    if (loading || !acpFastMode || !acpClientId || !sessionId) return;
+    if (disabled || loading || !acpFastMode || !acpClientId || !sessionId) return;
     const value = buildAcpFastModeValue(acpFastMode.option, enabled);
     if (!value) return;
 
@@ -930,12 +936,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     activeSession?.workspacePath,
     acpClientId,
     acpFastMode,
+    disabled,
     loading,
     sessionId,
   ]);
 
   const handleSelectAcpReasoning = useCallback(async (presetId: string | null) => {
-    if (loading || !presetId || !acpReasoning || !acpClientId || !sessionId) return;
+    if (disabled || loading || !presetId || !acpReasoning || !acpClientId || !sessionId) return;
     setReasoningLoading(true);
     try {
       const options = await ACPClientAPI.setSessionConfigOption({
@@ -963,6 +970,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     activeSession?.workspacePath,
     acpClientId,
     acpReasoning,
+    disabled,
     loading,
     sessionId,
     t,
@@ -1121,7 +1129,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               }
               setDropdownOpen(nextOpen);
             }}
-            disabled={loading || externalSelection.disabled}
+            disabled={disabled || loading || externalSelection.disabled}
           >
             <span className="bitfun-model-selector__name">
               {getModelDisplayLabel(externalCurrentModel, externalCurrentModelId)}
@@ -1136,7 +1144,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             selectedPreset={externalSelection.selectedReasoningPreset === 'auto'
               ? undefined
               : externalSelection.selectedReasoningPreset}
-            disabled={externalSelection.disabled}
+            disabled={disabled || externalSelection.disabled}
             loading={false}
             dropdownPlacement={dropdownPlacement}
             onSelect={externalSelection.onSelectReasoningPreset}
@@ -1256,7 +1264,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 void loadAcpOptions();
               }
             }}
-            disabled={loading}
+            disabled={disabled || loading}
            data-bf-component="model-selector" data-bf-part="trigger" data-bf-state={dropdownOpen ? 'open' : undefined}>
             <span className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
               {acpModeOnly ? acpModeLabel : getModelDisplayLabel(acpCurrentModel, currentAcpModelId)}
@@ -1277,7 +1285,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           <ReasoningPresetSelector
             projection={acpReasoning.projection}
             selectedPreset={acpReasoning.selectedPreset}
-            disabled={loading}
+            disabled={disabled || loading}
             loading={reasoningLoading}
             dropdownPlacement={dropdownPlacement}
             onSelect={handleSelectAcpReasoning}
@@ -1476,7 +1484,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             }
             setDropdownOpen(nextOpen);
           }}
-          disabled={loading || reasoningLoading}
+          disabled={disabled || loading || reasoningLoading}
          data-bf-component="model-selector" data-bf-part="trigger" data-bf-state={dropdownOpen ? 'open' : undefined}>
           <span className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
             {getModelDisplayLabel(currentModel, t('modelSelector.autoModel'))}
@@ -1489,7 +1497,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         <ReasoningPresetSelector
           projection={currentReasoningProjection}
           selectedPreset={selectedReasoningPreset}
-          disabled={loading}
+          disabled={disabled || loading}
           loading={reasoningLoading}
           dropdownPlacement={dropdownPlacement}
           onSelect={handleSelectReasoningPreset}

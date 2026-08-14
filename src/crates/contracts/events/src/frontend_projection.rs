@@ -239,6 +239,32 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "turnId": turn_id,
             }),
         )),
+        AgenticEvent::DialogTurnInterrupted {
+            session_id,
+            turn_id,
+            execution_generation,
+            model_id,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://dialog-turn-interrupted",
+            json!({
+                "sessionId": session_id,
+                "turnId": turn_id,
+                "executionGeneration": execution_generation,
+                "modelId": model_id,
+            }),
+        )),
+        AgenticEvent::DialogTurnRecovered {
+            session_id,
+            turn_id,
+            execution_generation,
+        } => Some(AgenticFrontendEvent::new(
+            "agentic://dialog-turn-recovered",
+            json!({
+                "sessionId": session_id,
+                "turnId": turn_id,
+                "executionGeneration": execution_generation,
+            }),
+        )),
         AgenticEvent::DialogTurnFailed {
             session_id,
             turn_id,
@@ -580,6 +606,29 @@ mod tests {
 
         assert_eq!(projected.event_name, "agentic://dialog-turn-completed");
         assert_eq!(projected.payload["durationMs"], 21_206);
+    }
+
+    #[test]
+    fn interrupted_turn_lifecycle_projects_generation() {
+        let interrupted = project_agentic_frontend_event(AgenticEvent::DialogTurnInterrupted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            execution_generation: 2,
+            model_id: Some("model-a".to_string()),
+        })
+        .expect("interrupted event should project");
+        let recovered = project_agentic_frontend_event(AgenticEvent::DialogTurnRecovered {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            execution_generation: 3,
+        })
+        .expect("recovered event should project");
+
+        assert_eq!(interrupted.event_name, "agentic://dialog-turn-interrupted");
+        assert_eq!(interrupted.payload["executionGeneration"], 2);
+        assert_eq!(interrupted.payload["modelId"], "model-a");
+        assert_eq!(recovered.event_name, "agentic://dialog-turn-recovered");
+        assert_eq!(recovered.payload["executionGeneration"], 3);
     }
 
     #[test]

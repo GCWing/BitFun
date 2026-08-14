@@ -533,6 +533,8 @@
     "sendShortcut": "Send (⏎)",
     "stop": "Stop",
     "stopGeneration": "Stop Generation (Esc)",
+    "continueInterrupted": "Continue interrupted work",
+    "continueInterruptedFailed": "Could not continue the interrupted work. Please try again.",
     "processingCapsule": "Processing",
     "cancelShortcut": "Cancel",
     "clear": "Clear",

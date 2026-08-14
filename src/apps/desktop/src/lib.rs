@@ -1219,6 +1219,8 @@ pub async fn run() {
             api::agentic_api::ensure_assistant_bootstrap,
             api::agentic_api::run_init_agents_md,
             api::agentic_api::cancel_dialog_turn,
+            api::agentic_api::interrupt_dialog_turn,
+            api::agentic_api::recover_interrupted_dialog_turn,
             api::agentic_api::steer_dialog_turn,
             api::agentic_api::control_deep_review_queue,
             api::agentic_api::cancel_session,

@@ -182,6 +182,7 @@
 | Chat 输入可编辑区域 | `chat-input-textarea` | 富文本可编辑区域。 |
 | Chat 发送按钮 | `chat-input-send-btn` | 输入有效时的发送动作。 |
 | Chat 取消按钮 | `chat-input-cancel-btn` | 存在时用于取消进行中的发送/生成。 |
+| Chat 继续中断任务按钮 | `chat-input-continue-interrupted-btn` | 输入框为空时继续最近一个可恢复的中断 Turn。 |
 | Chat 输入工作区条 | `chat-input-workspace-strip` | composer 上方的活动工作区条。 |
 | Chat 输入目标切换器 | `chat-input-target-switcher` | 目标/模式切换器。 |
 | Chat 输入图片条 | `chat-input-image-strip` | 已附加图片条。 |

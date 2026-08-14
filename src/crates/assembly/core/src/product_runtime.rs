@@ -46,11 +46,19 @@ use crate::agentic::events::EventQueue;
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::SessionBranchRequest;
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
-use crate::agentic::session::{CoreSessionStorePort, PromptCacheScope};
+use crate::agentic::session::{
+    CoreSessionStorePort, PromptCacheScope,
+    INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY,
+    INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY,
+    INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY,
+};
 use crate::agentic::tools::implementations::skills::SkillRegistry;
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
-    SessionTurnCatalog, SessionTurnWindowResponse,
+    SessionTurnCatalog, SessionTurnWindowResponse, TurnStatus,
 };
 use crate::service::session_usage::{
     generate_session_usage_report_from_storage_path, SessionUsageReport,
@@ -65,6 +73,60 @@ use crate::util::errors::{BitFunError, BitFunResult};
 
 pub use bitfun_product_capabilities::ProductRuntimeAssembly as CoreProductRuntimeAssembly;
 pub use runtime_services::{build_local_runtime_services, CoreRuntimeServicesProvider};
+
+fn projected_turn_save_would_overwrite_runtime_state(
+    persisted: &DialogTurnData,
+    projected: &DialogTurnData,
+) -> bool {
+    persisted.recovery.is_some()
+        || persisted.recovery_epoch.is_some()
+        || projected.recovery.is_some()
+        || projected.recovery_epoch.is_some()
+        || (matches!(
+            persisted.status,
+            TurnStatus::Completed | TurnStatus::Cancelled | TurnStatus::Error
+        ) && projected.status == TurnStatus::InProgress)
+}
+
+fn merge_runtime_owned_turn_facts(
+    persisted: &DialogTurnData,
+    projected: &DialogTurnData,
+) -> DialogTurnData {
+    let mut merged = projected.clone();
+    merged.agent_type = persisted.agent_type.clone();
+
+    let Some(persisted_metadata) = persisted
+        .user_message
+        .metadata
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+    else {
+        return merged;
+    };
+    let projected_metadata = merged
+        .user_message
+        .metadata
+        .get_or_insert_with(|| serde_json::json!({}));
+    if !projected_metadata.is_object() {
+        *projected_metadata = serde_json::json!({});
+    }
+    let target = projected_metadata
+        .as_object_mut()
+        .expect("projected metadata was normalized to an object");
+    for key in [
+        INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY,
+        INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY,
+        INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY,
+        INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY,
+        INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY,
+        INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY,
+    ] {
+        if let Some(value) = persisted_metadata.get(key) {
+            target.insert(key.to_string(), value.clone());
+        }
+    }
+    merged
+}
 
 struct ProductEventQueueDrain {
     task: tokio::task::JoinHandle<()>,
@@ -1297,8 +1359,26 @@ impl CoreAgentRuntimeCompatibility {
                 permit.session_id, turn.turn_index, turn.turn_id
             )));
         }
+        let mut projected = turn.clone();
+        if let Some(persisted) = self
+            .persistence
+            .load_dialog_turn(&permit.storage_path, &permit.session_id, turn.turn_index)
+            .await?
+        {
+            if projected_turn_save_would_overwrite_runtime_state(&persisted, turn) {
+                log::debug!(
+                    "Ignoring stale projected Turn save owned by the runtime: session_id={}, turn_id={}, persisted_status={:?}, projected_status={:?}",
+                    permit.session_id,
+                    turn.turn_id,
+                    persisted.status,
+                    turn.status
+                );
+                return Ok(());
+            }
+            projected = merge_runtime_owned_turn_facts(&persisted, turn);
+        }
         self.persistence
-            .save_dialog_turn(&permit.storage_path, turn)
+            .save_dialog_turn(&permit.storage_path, &projected)
             .await
     }
 
@@ -1938,11 +2018,12 @@ mod tests {
     use super::CoreProductAgentEventSource;
     use super::{
         build_session_lineage_snapshot, generate_core_session_usage_report,
-        get_snapshot_manager_for_workspace, latest_persisted_turn_id, runtime_lineage_snapshot,
-        runtime_port_error, validate_latest_turn_fork_scope, validate_persisted_session_id,
-        CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
-        CoreProductEventQueueOwner, CoreSessionOperationsPort, SESSION_PROVIDER_ACP,
-        SESSION_PROVIDER_METADATA_KEY,
+        get_snapshot_manager_for_workspace, latest_persisted_turn_id,
+        merge_runtime_owned_turn_facts, projected_turn_save_would_overwrite_runtime_state,
+        runtime_lineage_snapshot, runtime_port_error, validate_latest_turn_fork_scope,
+        validate_persisted_session_id, CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot,
+        CoreProductAgentRuntime, CoreProductEventQueueOwner, CoreSessionOperationsPort,
+        SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY,
     };
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
@@ -1958,7 +2039,10 @@ mod tests {
     use crate::agentic::tools::registry::ToolRegistry;
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::infrastructure::PathManager;
-    use crate::service::session::{DialogTurnData, SessionMetadata, UserMessageData};
+    use crate::service::session::{
+        DialogTurnData, DialogTurnRecoveryData, DialogTurnRecoveryStatus, SessionMetadata,
+        TurnStatus, UserMessageData,
+    };
     use crate::service::session_usage::UsageTokenSource;
     use crate::service::snapshot::manager::clear_snapshot_manager_for_test;
     use crate::service::token_usage::TokenUsageService;
@@ -2003,6 +2087,103 @@ mod tests {
             clear_snapshot_manager_for_test(&self.path);
             let _ = std::fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn stale_projected_turn_saves_cannot_overwrite_runtime_recovery_state() {
+        let mut persisted = DialogTurnData::new(
+            "turn-1".to_string(),
+            0,
+            "session-1".to_string(),
+            UserMessageData {
+                id: "user-1".to_string(),
+                content: "continue".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        let projected = persisted.clone();
+        persisted.status = TurnStatus::Cancelled;
+        persisted.recovery = Some(DialogTurnRecoveryData {
+            status: DialogTurnRecoveryStatus::Interrupted,
+            execution_generation: 0,
+            resume_count: 0,
+            interrupted_at: Some(2),
+            model_id: Some("model-a".to_string()),
+        });
+        persisted.recovery_epoch = Some(0);
+        assert!(projected_turn_save_would_overwrite_runtime_state(
+            &persisted, &projected
+        ));
+
+        let mut completed = persisted.clone();
+        completed.status = TurnStatus::Completed;
+        completed.recovery = None;
+        assert!(projected_turn_save_would_overwrite_runtime_state(
+            &completed, &projected
+        ));
+
+        let mut projected_with_recovery = projected.clone();
+        projected_with_recovery.recovery = persisted.recovery.clone();
+        assert!(projected_turn_save_would_overwrite_runtime_state(
+            &projected,
+            &projected_with_recovery
+        ));
+        assert!(!projected_turn_save_would_overwrite_runtime_state(
+            &projected, &projected
+        ));
+    }
+
+    #[test]
+    fn projected_turn_saves_preserve_runtime_execution_contract() {
+        let mut persisted = DialogTurnData::new(
+            "turn-1".to_string(),
+            0,
+            "session-1".to_string(),
+            UserMessageData {
+                id: "user-1".to_string(),
+                content: "continue".to_string(),
+                timestamp: 1,
+                metadata: Some(serde_json::json!({
+                    "runtime_resolved_model_id": "model-a",
+                    "runtime_model_binding_fingerprint": "binding-a",
+                    "runtime_reasoning_preset": "high",
+                    "runtime_reasoning_selection": "high",
+                    "runtime_reasoning_fingerprint": "reasoning-a",
+                    "resolved_permission_mode": "ask",
+                })),
+            },
+        );
+        persisted.agent_type = Some("runtime-agent".to_string());
+        let mut projected = persisted.clone();
+        projected.agent_type = Some("stale-agent".to_string());
+        projected.user_message.metadata = Some(serde_json::json!({
+            "canvas_context": { "node": "selected" }
+        }));
+
+        let merged = merge_runtime_owned_turn_facts(&persisted, &projected);
+        let metadata = merged
+            .user_message
+            .metadata
+            .and_then(|value| value.as_object().cloned())
+            .expect("merged metadata");
+        assert_eq!(merged.agent_type.as_deref(), Some("runtime-agent"));
+        assert_eq!(
+            metadata.get("runtime_resolved_model_id"),
+            Some(&serde_json::json!("model-a"))
+        );
+        assert_eq!(
+            metadata.get("runtime_reasoning_fingerprint"),
+            Some(&serde_json::json!("reasoning-a"))
+        );
+        assert_eq!(
+            metadata.get("resolved_permission_mode"),
+            Some(&serde_json::json!("ask"))
+        );
+        assert_eq!(
+            metadata.get("canvas_context"),
+            Some(&serde_json::json!({ "node": "selected" }))
+        );
     }
 
     #[tokio::test]

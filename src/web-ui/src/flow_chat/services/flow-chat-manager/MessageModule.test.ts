@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cancelSessionTask, sendMessage, syncSessionModelSelection } from './MessageModule';
+import {
+  cancelSessionTask,
+  drainPendingQueue,
+  sendMessage,
+  syncSessionModelSelection,
+} from './MessageModule';
 import { SessionExecutionEvent } from '../../state-machine/types';
 import {
   getRuntimeStatus,
@@ -9,6 +14,7 @@ import {
   tryBeginSessionMutation,
   useSessionMutationStore,
 } from '../../store/sessionMutationStore';
+import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
 
 const mockTransition = vi.fn();
 const mockGetCurrentState = vi.fn(() => 'processing');
@@ -26,6 +32,8 @@ const mockNotificationError = vi.fn();
 const mockNotificationDismiss = vi.fn();
 const mockPendingList = vi.fn((): unknown[] => []);
 const mockPendingEnqueue = vi.fn();
+const mockPendingSetStatus = vi.fn();
+const mockPendingRemove = vi.fn();
 
 vi.mock('../../state-machine', () => ({
   SessionExecutionEvent: {
@@ -33,7 +41,9 @@ vi.mock('../../state-machine', () => ({
     USER_CANCEL: 'user_cancel',
   },
   SessionExecutionState: {
+    IDLE: 'idle',
     PROCESSING: 'processing',
+    FINISHING: 'finishing',
   },
   stateMachineManager: {
     getCurrentState: (...args: unknown[]) => mockGetCurrentState(...args),
@@ -101,6 +111,8 @@ vi.mock('./PendingQueueModule', () => ({
   pendingQueueManager: {
     list: (...args: unknown[]) => mockPendingList(...args),
     enqueue: (...args: unknown[]) => mockPendingEnqueue(...args),
+    setStatus: (...args: unknown[]) => mockPendingSetStatus(...args),
+    remove: (...args: unknown[]) => mockPendingRemove(...args),
   },
 }));
 
@@ -410,12 +422,16 @@ describe('MessageModule session writer conflict', () => {
 describe('MessageModule cancellation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    interruptedTurnRecoveryGate.resetForTests();
     resetRuntimeStatuses();
     mockGetCurrentState.mockReturnValue('processing');
     mockTransition.mockResolvedValue(true);
   });
 
   it('cancels persistent /btw sessions through the ordinary dialog-turn path', async () => {
+    mockGetCurrentState
+      .mockReturnValueOnce('processing')
+      .mockReturnValue('finishing');
     const session = {
       sessionId: 'btw-child',
       isTransient: false,
@@ -457,11 +473,223 @@ describe('MessageModule cancellation', () => {
     expect(contentBuffers.has('btw-child')).toBe(false);
     expect(activeTextItems.has('btw-child')).toBe(false);
   });
+
+  it('preserves the running UI when the interrupt transition rolls back to processing', async () => {
+    mockGetCurrentState.mockReturnValue('processing');
+    const session = {
+      sessionId: 'session-interrupt-rejected',
+      sessionKind: 'normal',
+      dialogTurns: [],
+      config: {},
+    };
+    const contentBuffers = new Map([[session.sessionId, new Map([['round-1', 'text']])]]);
+    const activeTextItems = new Map([[session.sessionId, new Map([['round-1', 'item-1']])]]);
+    const context: any = {
+      flowChatStore: {
+        getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
+      },
+      userCancelledSessionIds: new Set<string>(),
+      eventBatcher: { getBufferSize: vi.fn(() => 0), clear: vi.fn() },
+      pendingTurnCompletions: new Map(),
+      runtimeStatusTimers: new Map(),
+      handledTerminalTurnEvents: new Set<string>(),
+      contentBuffers,
+      activeTextItems,
+    };
+
+    await expect(cancelSessionTask(context, session.sessionId)).resolves.toBe(false);
+
+    expect(context.userCancelledSessionIds.has(session.sessionId)).toBe(false);
+    expect(contentBuffers.has(session.sessionId)).toBe(true);
+    expect(activeTextItems.has(session.sessionId)).toBe(true);
+  });
+
+  it('queues a direct send while the cancellation outcome still owns the session', async () => {
+    mockGetCurrentState.mockReturnValue('idle');
+    mockPendingList.mockReturnValue([]);
+    mockPendingEnqueue.mockReturnValue({ id: 'queued-during-cancel' });
+    const session = {
+      sessionId: 'session-cancel-in-flight',
+      sessionKind: 'normal',
+      dialogTurns: [],
+      config: {},
+    };
+    const context: any = {
+      flowChatStore: {
+        getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
+      },
+      userCancelledSessionIds: new Set([session.sessionId]),
+    };
+
+    await sendMessage(context, 'follow-up', session.sessionId);
+
+    expect(mockPendingEnqueue).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: session.sessionId,
+      content: 'follow-up',
+    }));
+    expect(mockStartDialogTurn).not.toHaveBeenCalled();
+  });
+
+  it('holds pending input while an interrupt outcome is still in flight', async () => {
+    mockGetCurrentState.mockReturnValue('idle');
+    mockPendingList.mockReturnValue([{
+      id: 'pending-1',
+      sessionId: 'session-1',
+      content: 'do not auto-send',
+      status: 'queued',
+      retryCount: 0,
+    }]);
+    const context: any = {
+      flowChatStore: {
+        getState: () => ({
+          sessions: new Map([['session-1', {
+            sessionId: 'session-1',
+            dialogTurns: [],
+            config: {},
+          }]]),
+        }),
+      },
+      userCancelledSessionIds: new Set(['session-1']),
+    };
+
+    await drainPendingQueue(context, 'session-1');
+
+    expect(mockPendingSetStatus).not.toHaveBeenCalled();
+    expect(mockStartDialogTurn).not.toHaveBeenCalled();
+    expect(mockPendingRemove).not.toHaveBeenCalled();
+  });
+
+  it('rejects every direct submission while recovery admission is in flight', async () => {
+    const session: any = {
+      sessionId: 'session-interrupted',
+      dialogTurns: [],
+      config: {},
+    };
+    const context: any = {
+      flowChatStore: {
+        getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
+      },
+    };
+    interruptedTurnRecoveryGate.tryBegin({
+      sessionId: session.sessionId,
+      turnId: 'interrupted-turn',
+      executionGeneration: 0,
+    });
+
+    await expect(sendMessage(context, 'must not race recovery', session.sessionId)).rejects.toThrow(
+      'recovery is in flight',
+    );
+    expect(mockPendingEnqueue).not.toHaveBeenCalled();
+    expect(mockStartDialogTurn).not.toHaveBeenCalled();
+  });
+
+  it('lets an explicit send-now abandon interrupted recovery', async () => {
+    mockGetCurrentState.mockReturnValue('idle');
+    mockEnsureBackendSession.mockResolvedValue(undefined);
+    mockStartDialogTurn.mockResolvedValue({
+      sessionId: 'session-interrupted',
+      turnId: 'new-turn',
+      status: 'started',
+    });
+    const pendingItem = {
+      id: 'pending-explicit',
+      sessionId: 'session-interrupted',
+      content: 'start new work',
+      status: 'queued',
+      retryCount: 0,
+    };
+    mockPendingList.mockReturnValue([pendingItem]);
+    const session: any = {
+      sessionId: 'session-interrupted',
+      sessionKind: 'normal',
+      mode: 'agentic',
+      titleStatus: 'generated',
+      dialogTurns: [{
+        id: 'interrupted-turn',
+        status: 'cancelled',
+        finishReason: 'interrupted',
+        recovery: { status: 'interrupted', executionGeneration: 0 },
+      }],
+      config: { modelName: 'auto' },
+      maxContextTokens: 32_000,
+    };
+    const context: any = {
+      flowChatStore: {
+        getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
+        addDialogTurn: vi.fn((_sessionId: string, turn: any) => session.dialogTurns.push(turn)),
+        deleteDialogTurn: vi.fn((_sessionId: string, turnId: string) => {
+          session.dialogTurns = session.dialogTurns.filter((turn: any) => turn.id !== turnId);
+        }),
+        updateSessionLastSubmittedMode: vi.fn(),
+        updateSessionMode: vi.fn(),
+        updateSessionModelName: vi.fn(),
+        updateSessionMaxContextTokens: vi.fn(),
+      },
+      processingManager: {
+        registerStatus: vi.fn(),
+        clearSessionStatus: vi.fn(),
+      },
+      userCancelledSessionIds: new Set<string>(),
+      pendingHistoryLoads: new Map(),
+      contentBuffers: new Map(),
+      activeTextItems: new Map(),
+    };
+
+    await drainPendingQueue(context, session.sessionId);
+    expect(mockStartDialogTurn).not.toHaveBeenCalled();
+
+    await drainPendingQueue(context, session.sessionId, {
+      allowInterruptedRecoveryAbandon: true,
+    });
+
+    expect(mockStartDialogTurn).toHaveBeenCalledTimes(1);
+    expect(mockPendingRemove).toHaveBeenCalledWith(session.sessionId, pendingItem.id);
+  });
+
+  it('holds an explicit send-now while recovery admission is in flight', async () => {
+    mockGetCurrentState.mockReturnValue('idle');
+    mockPendingList.mockReturnValue([{
+      id: 'pending-race',
+      sessionId: 'session-interrupted',
+      content: 'must wait',
+      status: 'queued',
+      retryCount: 0,
+    }]);
+    const session: any = {
+      sessionId: 'session-interrupted',
+      dialogTurns: [{
+        id: 'interrupted-turn',
+        status: 'cancelled',
+        finishReason: 'interrupted',
+        recovery: { status: 'interrupted', executionGeneration: 0 },
+      }],
+      config: {},
+    };
+    const context: any = {
+      flowChatStore: {
+        getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
+      },
+      userCancelledSessionIds: new Set<string>(),
+    };
+    interruptedTurnRecoveryGate.tryBegin({
+      sessionId: session.sessionId,
+      turnId: 'interrupted-turn',
+      executionGeneration: 0,
+    });
+
+    await drainPendingQueue(context, session.sessionId, {
+      allowInterruptedRecoveryAbandon: true,
+    });
+
+    expect(mockStartDialogTurn).not.toHaveBeenCalled();
+    expect(mockPendingSetStatus).not.toHaveBeenCalled();
+  });
 });
 
 describe('MessageModule detached dispatch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPendingList.mockReturnValue([]);
     mockGetCurrentState.mockReturnValue('idle');
     mockDispatchSubmit.mockResolvedValue({
       accepted: true,
