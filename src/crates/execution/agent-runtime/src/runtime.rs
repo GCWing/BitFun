@@ -1686,11 +1686,54 @@ mod tests {
         ClockPort, DialogQueuePriority, DialogSubmissionPolicy, DialogSubmitOutcome,
         FileSystemPort, PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
         PluginRuntimeClient, PluginRuntimeUnavailableReason, PortErrorKind, PortResult,
-        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort,
-        SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
-        ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
+        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort,
+        SessionStorageKind, SessionStoragePathRequest, SessionStoragePathResolution,
+        SessionStorePort, SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest,
+        ThreadGoal, ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
     };
-    use bitfun_runtime_services::{test_support::FakeRuntimePort, RuntimeServicesBuilder};
+    use bitfun_runtime_services::RuntimeServicesBuilder;
+
+    #[derive(Debug)]
+    struct TestRuntimePort {
+        capability: RuntimeServiceCapability,
+    }
+
+    impl TestRuntimePort {
+        fn new(capability: RuntimeServiceCapability) -> Self {
+            Self { capability }
+        }
+    }
+
+    impl RuntimeServicePort for TestRuntimePort {
+        fn capability(&self) -> RuntimeServiceCapability {
+            self.capability
+        }
+    }
+
+    impl FileSystemPort for TestRuntimePort {}
+    impl WorkspacePort for TestRuntimePort {}
+
+    #[async_trait::async_trait]
+    impl SessionStorePort for TestRuntimePort {
+        async fn resolve_session_storage_path(
+            &self,
+            request: SessionStoragePathRequest,
+        ) -> PortResult<SessionStoragePathResolution> {
+            Ok(SessionStoragePathResolution::new(
+                request.workspace_path.clone(),
+                request.workspace_path,
+                SessionStorageKind::Local,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ))
+        }
+    }
+
+    impl ClockPort for TestRuntimePort {
+        fn now_unix_millis(&self) -> i64 {
+            0
+        }
+    }
 
     #[derive(Debug, Default)]
     struct FakeAgentRuntimePorts {
@@ -2242,13 +2285,13 @@ mod tests {
 
     fn runtime_services_with_events(events: Arc<dyn RuntimeEventSink>) -> RuntimeServices {
         let filesystem: Arc<dyn FileSystemPort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::FileSystem));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::FileSystem));
         let workspace: Arc<dyn WorkspacePort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Workspace));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::Workspace));
         let session_store: Arc<dyn SessionStorePort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::SessionStore));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::SessionStore));
         let clock: Arc<dyn ClockPort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Clock));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::Clock));
 
         RuntimeServicesBuilder::new()
             .with_filesystem(filesystem)

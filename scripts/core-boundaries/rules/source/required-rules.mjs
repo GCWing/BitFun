@@ -1,5 +1,7 @@
 // Boundary rules for source ownership, facades, and required owner content.
 
+import { agentRuntimeRootPublicModules } from './public-api-rules.mjs';
+
 export const requiredContentRules = [
   ...[
     'src/apps/cli/Cargo.toml',
@@ -873,6 +875,10 @@ export const requiredContentRules = [
       {
         regex: /default = \[\]/,
         message: 'agent-runtime default feature set must stay empty',
+      },
+      {
+        regex: /\[\[example\]\]\r?\nname = "sdk_minimal"\r?\npath = "examples\/sdk_minimal\.rs"\r?\nrequired-features = \["agent-runtime"\]/,
+        message: 'sdk_minimal example must declare the versioned agent-runtime owner feature',
       },
     ],
   },
@@ -2773,7 +2779,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/tests/agent_long_horizon_contracts/deep_research_contracts.rs',
+    path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
     reason:
       'agent-runtime must keep behavior-equivalence contracts for DeepResearch citation renumbering',
     patterns: [
@@ -5126,6 +5132,16 @@ export const requiredContentRules = [
       },
       {
         path: 'src/crates/contracts/runtime-ports/src/workspace_ports.rs',
+        regex: /\bfn join_path\(&self, root: &str, components: &\[&str\]\) -> String\b/,
+        message: 'workspace filesystem providers must own their path joining syntax',
+      },
+      {
+        path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_services.rs',
+        regex: /fn join_path\(&self, root: &str, components: &\[&str\]\) -> String \{\r?\n\s*join_posix_path\(root, components\)/,
+        message: 'remote workspace filesystem must keep POSIX path joining independent of the host',
+      },
+      {
+        path: 'src/crates/contracts/runtime-ports/src/workspace_ports.rs',
         regex: /\bpub trait WorkspaceShell\b/,
         message: 'missing workspace shell port contract',
       },
@@ -5402,6 +5418,42 @@ export const requiredContentRules = [
         regex: /\bsubagent_context_mode_preserves_fork_wire_value\b/,
         message: 'missing subagent context mode contract regression',
       },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/lib.rs',
+    reason: 'Agent Runtime leaf capability modules must stay behind their exact owner features',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "deep-research"\)\]\r?\npub mod deep_research;/,
+        message: 'deep-research must gate its pure report capability',
+      },
+      {
+        regex: /#\[cfg\(feature = "native-hook-settings"\)\]\r?\npub mod native_hooks;/,
+        message: 'native-hook-settings must gate the portable hook facade',
+      },
+      ...agentRuntimeRootPublicModules
+        .filter((moduleName) => !['deep_research', 'native_hooks'].includes(moduleName))
+        .map((moduleName) => ({
+          regex: new RegExp(`#\\[cfg\\(feature = "agent-runtime"\\)\\]\\r?\\npub mod ${moduleName};`),
+          message: `${moduleName} must stay behind the full agent-runtime owner`,
+        })),
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/native_hooks/mod.rs',
+    reason: 'native hook execution modules must stay behind native-hook-runtime',
+    patterns: [
+      ...['engine', 'output', 'payload'].flatMap((moduleName) => [
+        {
+          regex: new RegExp(`#\\[cfg\\(feature = "native-hook-runtime"\\)\\]\\r?\\nmod ${moduleName};`),
+          message: `${moduleName} must stay behind native-hook-runtime`,
+        },
+        {
+          regex: new RegExp(`#\\[cfg\\(feature = "native-hook-runtime"\\)\\]\\r?\\npub use ${moduleName}(?:::|\\{)`),
+          message: `${moduleName} exports must stay behind native-hook-runtime`,
+        },
+      ]),
     ],
   },
   {

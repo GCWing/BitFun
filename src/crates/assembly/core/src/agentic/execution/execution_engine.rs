@@ -4539,11 +4539,20 @@ impl ExecutionEngine {
                 success,
             ) {
                 if let Some(workspace) = context.workspace.as_ref() {
-                    bitfun_services_integrations::deep_research::run_for_session_workspace(
-                        workspace.root_path(),
-                        &context.session_id,
-                    )
-                    .await;
+                    if let Some(workspace_services) = context.workspace_services.as_ref() {
+                        bitfun_services_integrations::deep_research::run_for_session_workspace(
+                            workspace_services.fs.as_ref(),
+                            &workspace.root_path().to_string_lossy(),
+                            &context.session_id,
+                        )
+                        .await;
+                    } else {
+                        warn!(
+                            "citation_renumber: skipped because workspace filesystem services are unavailable: session_id={}, workspace={}",
+                            context.session_id,
+                            workspace.root_path().display()
+                        );
+                    }
                 }
             }
         }

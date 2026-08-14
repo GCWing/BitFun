@@ -318,6 +318,41 @@ Clap、Tracing Subscriber、Notify 等默认即产品契约或缺少独立收益
 
 重复版本数量只用于发现候选，不能直接转化为治理任务。`oxc`、`rquickjs`、vendored `git2`、`sherpa-onnx` 等重依赖都有真实 capability owner；只有某个产品入口不消费对应能力时，才允许让它退出该入口的构建图。
 
+以下以 `gcwing/main@d1d1dd9e8` 为变更前基线，把 `bitfun-agent-runtime` 内部长期共存的完整 Runtime、
+DeepResearch 纯编号和原生 Hook 配置/执行拆成同 crate 的 owner feature。没有新增 crate 或兼容 `full`
+umbrella；统计仍按三个既定 target triple、`normal,build` 版本化 package instance 去重：
+
+| 闭包 | Windows | macOS | Linux | 边界结果 |
+|---|---:|---:|---:|---|
+| Agent Runtime feature-free | 76 → 1 | 79 → 1 | 78 → 1 | 空默认只保留 crate 本身；所有运行时源码和第三方依赖由 owner feature 选择 |
+| Agent Runtime `agent-runtime` | 76 → 76 | 79 → 79 | 78 → 78 | 完整 Runtime API、Hook 执行和依赖闭包保持不变 |
+| Agent Runtime `native-hook-settings` | 76 → 10 | 79 → 10 | 78 → 10 | Hook 配置解析不再编译进程执行、Session、Tool 和 Runtime Services |
+| Services Integrations `deep-research` | 77 → 36 | 80 → 38 | 79 → 37 | 只保留纯编号、WorkspaceFS port 与报告 IO；完整 Agent Runtime 退出 |
+| Services Integrations `hook-import` | 121 → 89 | 112 → 79 | 111 → 78 | 只复用 Hook settings contract；Session/Agent lifecycle 退出 |
+| Core `product-full` | 569 → 569 | 556 → 556 | 600 → 600 | 完整产品显式恢复全部真实 owner，package 闭包不缩水 |
+
+测试闭包也按真实 owner 收敛：Agent Runtime 的 DeepResearch target 在 `normal,build,dev` 口径从
+`76/79/78` 降到 `6/6/6`，Hook settings target 降到 `10/10/10`；Services DeepResearch 测试从
+`80/85/85` 降到 `44/48/47`。为保持 feature 与进程失败域，Agent Runtime 显式 integration target 从
+5 个增为 7 个：DeepResearch 与 Hook settings 各自独立，Unix Hook 子进程测试继续独立；没有把这些
+focused target 加进 CI，也没有新增 job、矩阵或仓库级命令。
+
+该轮同时修复 DeepResearch post-turn IO 的既有远程路径错误：Core 现在把当前 session 注入的
+`WorkspaceFileSystem` 传给 Services Integrations，本地和 Remote SSH 都通过同一 provider 读取报告、
+引用表并写回 sidecar；远程逻辑路径不再被 Windows host 当成本机 `Path` 探测。provider 缺失时明确
+跳过并记录 warning，不允许回退到宿主文件系统。纯编号算法、报告内容、sidecar schema 和本地
+best-effort 行为保持不变。路径拼接语义也由 `WorkspaceFileSystem` provider 持有：本地 provider
+继承宿主路径规则，Remote SSH 对绝对、home 和相对 workspace root 均保持 POSIX 分隔符。
+
+`bitfun-services-integrations::deep_research::run_for_session_workspace` 与
+`try_renumber_research_report` 的公开函数签名现在要求显式传入 `WorkspaceFileSystem`；仓内唯一生产
+调用者已迁移。这是为消除远程路径宿主回退而做的有意源码契约收紧，不能描述为对未知的仓外 path/git
+consumer 零影响。完整 Rust Runtime SDK 同时将兼容版本提升为 v6：仓外 embedder 需要在
+`bitfun-agent-runtime` 依赖上显式选择 `agent-runtime`；启用后原 `sdk` 公开路径和行为保持不变。
+
+这里仍只报告依赖图和 focused-test 输入，不宣称完整产品 wall-clock 提速。根 `Cargo.lock` package
+集合与字节均不变，新增/升级/降级 package 为 0；`.github` 和 `ci.yml` 不变。
+
 ### 3.3 CI 与本地验证
 
 - 现有 CI 已覆盖 workspace check、Core/Desktop lib、平台敏感 owner 测试和独立 runtime/CLI 验证；本轮不新增 job、矩阵或 changed-path 分类器。
@@ -340,7 +375,7 @@ Clap、Tracing Subscriber、Notify 等默认即产品契约或缺少独立收益
 | 重型可选能力 | 文档转换和本地订阅凭据由弱 modifier 细化已有 runtime owner；Core 基线和 App Server 退出未消费闭包 |
 | Installer 闭包 | 删除 8 个未使用直接 dependency；独立 workspace 和发布生命周期不变，本 PR 不提交其生成 lockfile |
 | SDK Host 闭包 | 从 `product-full` 改为与当前协议/构造路径一致的显式 Core owner closure；保留 ring TLS 初始化，本机 SDK 行为不变，未交付的远程执行能力不再进入构建图 |
-| Agent Runtime 测试 | 28 个 integration executable 已收敛为 5 个职责/平台 target |
+| Agent Runtime 测试 | 28 个 integration executable 已完成职责聚合；当前 7 个 target 中，DeepResearch、Hook settings 与 Hook 子进程按 feature/进程失败域独立，其余保持聚合 |
 | Services 测试 | 两个服务 crate 使用显式 target；选中闭包少 8 个 integration executable，进程/feature/external-system 边界保持独立 |
 | External Sources 测试 | 四个 adapter/assembly crate 从 22 个 target 收敛到 7 个；MCP、插件服务和脚本 runtime 继续独立 |
 | Contracts/AI/Assembly 测试 | 五个 crate 从 28 个 target 收敛到 10 个；AI loopback 与纯协议、Product Domains 各 owner feature 保持独立 |

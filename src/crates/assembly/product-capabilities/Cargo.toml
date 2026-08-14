@@ -25,7 +25,7 @@ bitfun-tool-packs = { path = "../../execution/tool-provider-groups" }
 
 [dev-dependencies]
 async-trait = { workspace = true }
-bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
+bitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api"] }
 bitfun-runtime-services = { path = "../../execution/runtime-services", features = ["test-support"] }
 tokio = { workspace = true, features = ["macros", "rt"] }

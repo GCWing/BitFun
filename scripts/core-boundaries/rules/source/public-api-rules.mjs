@@ -16,6 +16,48 @@ export const publicApiContractSlices = [
   'external-integration-policy-contract',
 ];
 
+export const agentRuntimeRootPublicModules = [
+  'agents',
+  'checkpoint',
+  'context_profile',
+  'custom_agent',
+  'custom_subagent',
+  'deep_research',
+  'deep_review',
+  'dialog_turn',
+  'event_bus',
+  'event_queue',
+  'event_router',
+  'event_source',
+  'events',
+  'evidence_ledger',
+  'file_read_state',
+  'native_hooks',
+  'output_surface',
+  'permission',
+  'post_call_hooks',
+  'prompt',
+  'prompt_cache',
+  'prompt_markup',
+  'remote_file_delivery',
+  'runtime',
+  'scheduled_job',
+  'scheduler',
+  'sdk',
+  'session',
+  'session_control',
+  'session_state',
+  'session_state_manager',
+  'side_question',
+  'skill_agent_snapshot',
+  'skills',
+  'subagent_task',
+  'thread_goal',
+  'thread_goal_tools',
+  'turn_cancellation',
+  'user_questions',
+];
+
 const contractSlices = {
   frontendBackendCapabilityService: 'frontend-backend-capability-service',
   bitfunPluginExtension: 'bitfun-plugin-extension-contract',
@@ -1264,6 +1306,12 @@ export const managedPluginSourceServicePublicApiEntries = [
 );
 
 export const publicApiAllowlistRules = [
+  {
+    path: 'src/crates/execution/agent-runtime/src/lib.rs',
+    reason:
+      'Agent Runtime root must expose only the reviewed feature-owned capability modules',
+    allowedSymbols: agentRuntimeRootPublicModules,
+  },
   {
     path: 'src/crates/contracts/runtime-ports/src/plugin.rs',
     reason:

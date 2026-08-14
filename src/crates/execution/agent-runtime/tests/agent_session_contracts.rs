@@ -1,4 +1,5 @@
 //! Session, scheduler, event, SDK, and workspace-reference contracts.
+#![cfg(feature = "agent-runtime")]
 
 #[path = "agent_session_contracts/events_contracts.rs"]
 mod events_contracts;

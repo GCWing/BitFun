@@ -20,6 +20,7 @@ export const guardedEmptyInternalDefaultManifestPaths = [
   'src/crates/assembly/product-capabilities/Cargo.toml',
   'src/crates/contracts/product-domains/Cargo.toml',
   'src/crates/contracts/runtime-ports/Cargo.toml',
+  'src/crates/execution/agent-runtime/Cargo.toml',
   'src/crates/execution/tool-contracts/Cargo.toml',
   'src/crates/execution/tool-execution/Cargo.toml',
   'src/crates/execution/tool-provider-groups/Cargo.toml',
@@ -106,6 +107,34 @@ export const optionalDependencyFeatureOwnerRules = [
     ],
   },
   {
+    crateName: 'agent-runtime',
+    reviewedAggregateFeatures: ['native-hook-runtime'],
+    reason:
+      'agent-runtime optional dependencies must stay behind the full runtime, DeepResearch, or native-hook owner slice',
+    dependencies: [
+      { depName: 'async-trait', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-agent-tools', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-core-types', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-events', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-harness', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-runtime-services', ownerFeatures: ['agent-runtime'] },
+      { depName: 'dashmap', ownerFeatures: ['agent-runtime'] },
+      { depName: 'hex', ownerFeatures: ['agent-runtime'] },
+      { depName: 'log', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
+      { depName: 'regex', ownerFeatures: ['agent-runtime', 'deep-research', 'native-hook-settings'] },
+      { depName: 'serde', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
+      { depName: 'serde_json', ownerFeatures: ['agent-runtime', 'native-hook-runtime', 'native-hook-settings'] },
+      { depName: 'serde_yaml', ownerFeatures: ['agent-runtime'] },
+      { depName: 'sha2', ownerFeatures: ['agent-runtime'] },
+      { depName: 'thiserror', ownerFeatures: ['agent-runtime'] },
+      { depName: 'tokio', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
+      { depName: 'tokio-util', ownerFeatures: ['agent-runtime'] },
+      { depName: 'uuid', ownerFeatures: ['agent-runtime'] },
+    ],
+  },
+  {
     crateName: 'core',
     reason:
       'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',
@@ -116,7 +145,7 @@ export const optionalDependencyFeatureOwnerRules = [
         depName: 'bitfun-ai-adapters',
         ownerFeatures: ['ai-adapter-runtime', 'subscription-auth'],
       },
-      { depName: 'bitfun-agent-runtime', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-agent-runtime', ownerFeatures: ['agent-runtime', 'deep-research'] },
       { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-agent-tools', ownerFeatures: ['agent-runtime', 'local-storage', 'mcp-runtime'] },
       { depName: 'bitfun-claude-code-adapter', ownerFeatures: ['external-sources'] },
@@ -216,10 +245,10 @@ export const optionalDependencyFeatureOwnerRules = [
     dependencies: [
       { depName: 'aes', ownerFeatures: ['remote-connect'] },
       { depName: 'aes-gcm', ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh-concrete'] },
-      { depName: 'anyhow', ownerFeatures: ['browser-control', 'debug-log', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
+      { depName: 'anyhow', ownerFeatures: ['browser-control', 'debug-log', 'deep-research', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
       {
         depName: 'async-trait',
-        ownerFeatures: ['git', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
+        ownerFeatures: ['deep-research', 'git', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
       },
       {
         depName: 'base64',
@@ -228,7 +257,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'bitfun-agent-runtime', ownerFeatures: ['deep-research', 'hook-import'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['remote-connect', 'speech'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['canvas-runtime', 'function-agents', 'hook-import', 'miniapp-market', 'miniapp-runtime', 'plugin-source'] },
-      { depName: 'bitfun-runtime-ports', ownerFeatures: ['git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['deep-research', 'git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
       {
         depName: 'bitfun-services-core',
         ownerFeatures: ['browser-control', 'git', 'hook-import', 'mcp', 'miniapp-runtime', 'process-tree', 'remote-connect', 'remote-ssh', 'review-platform', 'workspace-search'],
@@ -349,8 +378,8 @@ export const capabilityContractDependencyRules = [
           'runtime-event-port',
           'terminal-port',
           'workspace-ports',
-        ]),
-      ])],
+        ], { optional: true }),
+      ], [], ['agent-runtime'])],
       ['bitfun-agent-runtime-ipc', capabilityConsumer([
         capabilityEdge(['agent-api', 'git-port']),
       ])],
@@ -423,6 +452,7 @@ export const capabilityContractDependencyRules = [
       ['bitfun-services-integrations', capabilityConsumer(
         [capabilityEdge([], { optional: true })],
         [
+          capabilityForwarder('deep-research', 'workspace-ports'),
           capabilityForwarder('git', 'git-port'),
           capabilityForwarder('remote-connect', 'agent-api'),
           capabilityForwarder('remote-connect', 'remote-workspace-ports'),
@@ -457,7 +487,11 @@ export const capabilityContractDependencyRules = [
         ['server'],
         ['default'],
       )],
-      ['bitfun-agent-runtime', capabilityConsumer([capabilityEdge()])],
+      ['bitfun-agent-runtime', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [],
+        ['agent-runtime'],
+      )],
       ['bitfun-agent-stream', capabilityConsumer([
         capabilityEdge([], { kind: 'dev' }),
       ])],
@@ -494,6 +528,100 @@ export const capabilityContractDependencyRules = [
         ['product-full'],
       )],
       ['tool-runtime', capabilityConsumer([capabilityEdge()])],
+    ]),
+  },
+  {
+    packageName: 'bitfun-agent-runtime',
+    manifestPath: 'src/crates/execution/agent-runtime/Cargo.toml',
+    featureProfiles: {
+      default: [],
+      'deep-research': ['dep:regex'],
+      'native-hook-settings': ['dep:regex', 'dep:serde_json'],
+      'native-hook-runtime': [
+        'native-hook-settings',
+        'dep:log',
+        'dep:serde',
+        'dep:serde_json',
+        'dep:tokio',
+        'tokio/io-util',
+        'tokio/macros',
+        'tokio/process',
+        'tokio/rt',
+        'tokio/time',
+      ],
+      'agent-runtime': [
+        'native-hook-runtime',
+        'dep:async-trait',
+        'dep:bitfun-agent-stream',
+        'dep:bitfun-agent-tools',
+        'dep:bitfun-core-types',
+        'dep:bitfun-events',
+        'dep:bitfun-harness',
+        'dep:bitfun-runtime-ports',
+        'dep:bitfun-runtime-services',
+        'dep:dashmap',
+        'dep:hex',
+        'dep:log',
+        'dep:regex',
+        'dep:serde',
+        'dep:serde_json',
+        'dep:serde_yaml',
+        'dep:sha2',
+        'dep:thiserror',
+        'dep:tokio',
+        'dep:tokio-util',
+        'dep:uuid',
+        'tokio/macros',
+        'tokio/rt',
+        'tokio/sync',
+      ],
+    },
+    consumers: new Map([
+      ['bitfun-acp', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [capabilityForwarder('server', 'agent-runtime')],
+        ['server'],
+        ['default'],
+      )],
+      ['bitfun-app-server', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-cli', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-core', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('agent-runtime', 'agent-runtime'),
+          capabilityForwarder('deep-research', 'deep-research', true),
+        ],
+        ['agent-runtime'],
+        ['external-sources', 'mcp-runtime', 'plugin-runtime', 'product-full', 'remote-connect', 'tools-mcp'],
+      )],
+      ['bitfun-desktop', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-product-capabilities', capabilityConsumer([
+        capabilityEdge(['agent-runtime'], { kind: 'dev' }),
+      ])],
+      ['bitfun-sdk-host', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-sdk-host-app', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-server', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-services-integrations', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('deep-research', 'deep-research'),
+          capabilityForwarder('hook-import', 'native-hook-settings'),
+        ],
+        ['deep-research', 'hook-import'],
+        ['product-full'],
+      )],
     ]),
   },
 ];
@@ -600,6 +728,7 @@ export const acpClosedFeatureProfileRules = [
     requiredFeatureRefs: [
       'dep:bitfun-agent-tools',
       'dep:bitfun-agent-runtime',
+      'bitfun-agent-runtime/agent-runtime',
       'dep:bitfun-core-types',
       'dep:bitfun-core',
       'dep:sha2',
@@ -624,6 +753,7 @@ export const coreClosedFeatureProfileRules = [
     requiredFeatureRefs: [
       'ai-adapter-runtime',
       'dep:bitfun-agent-runtime',
+      'bitfun-agent-runtime/agent-runtime',
       'dep:bitfun-agent-content',
       'dep:bitfun-agent-stream',
       'dep:bitfun-agent-tools',
@@ -883,7 +1013,10 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'deep-research',
-    requiredFeatureRefs: ['bitfun-services-integrations/deep-research'],
+    requiredFeatureRefs: [
+      'bitfun-agent-runtime?/deep-research',
+      'bitfun-services-integrations/deep-research',
+    ],
     exact: true,
     reason: 'deep-research must own only research report post-processing',
   },

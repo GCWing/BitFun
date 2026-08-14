@@ -2,11 +2,25 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, posix, relative } from 'node:path';
 
 export const agentRuntimeIntegrationTestTargets = [
-  { name: 'agent_definition_contracts', path: 'tests/agent_definition_contracts.rs' },
-  { name: 'agent_interaction_contracts', path: 'tests/agent_interaction_contracts.rs' },
-  { name: 'agent_long_horizon_contracts', path: 'tests/agent_long_horizon_contracts.rs' },
-  { name: 'agent_session_contracts', path: 'tests/agent_session_contracts.rs' },
-  { name: 'native_hook_execution_contracts', path: 'tests/native_hook_execution_contracts.rs' },
+  { name: 'agent_definition_contracts', path: 'tests/agent_definition_contracts.rs', requiredFeatures: ['agent-runtime'] },
+  { name: 'agent_interaction_contracts', path: 'tests/agent_interaction_contracts.rs', requiredFeatures: ['agent-runtime'] },
+  { name: 'agent_long_horizon_contracts', path: 'tests/agent_long_horizon_contracts.rs', requiredFeatures: ['agent-runtime'] },
+  { name: 'agent_session_contracts', path: 'tests/agent_session_contracts.rs', requiredFeatures: ['agent-runtime'] },
+  {
+    name: 'deep_research_contracts',
+    path: 'tests/deep_research_contracts.rs',
+    requiredFeatures: ['deep-research'],
+  },
+  {
+    name: 'native_hook_execution_contracts',
+    path: 'tests/native_hook_execution_contracts.rs',
+    requiredFeatures: ['native-hook-runtime'],
+  },
+  {
+    name: 'native_hook_settings_contracts',
+    path: 'tests/native_hook_settings_contracts.rs',
+    requiredFeatures: ['native-hook-settings'],
+  },
 ];
 
 export const cliIntegrationTestTargets = [

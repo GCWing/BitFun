@@ -10,54 +10,110 @@ autotests = false
 name = "bitfun_agent_runtime"
 crate-type = ["rlib"]
 
+[[example]]
+name = "sdk_minimal"
+path = "examples/sdk_minimal.rs"
+required-features = ["agent-runtime"]
+
 [features]
 default = []
+deep-research = ["dep:regex"]
+native-hook-settings = ["dep:regex", "dep:serde_json"]
+native-hook-runtime = [
+    "native-hook-settings",
+    "dep:log",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:tokio",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/time",
+]
+agent-runtime = [
+    "native-hook-runtime",
+    "dep:async-trait",
+    "dep:bitfun-agent-stream",
+    "dep:bitfun-agent-tools",
+    "dep:bitfun-core-types",
+    "dep:bitfun-events",
+    "dep:bitfun-harness",
+    "dep:bitfun-runtime-ports",
+    "dep:bitfun-runtime-services",
+    "dep:dashmap",
+    "dep:hex",
+    "dep:log",
+    "dep:regex",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:serde_yaml",
+    "dep:sha2",
+    "dep:thiserror",
+    "dep:tokio",
+    "dep:tokio-util",
+    "dep:uuid",
+    "tokio/macros",
+    "tokio/rt",
+    "tokio/sync",
+]
 
 [dependencies]
-async-trait = { workspace = true }
-bitfun-agent-stream = { path = "../agent-stream" }
-bitfun-agent-tools = { path = "../tool-contracts" }
-bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-events = { path = "../../contracts/events" }
-bitfun-harness = { path = "../harness" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "git-port", "permission", "plugin-runtime", "remote-workspace-ports", "runtime-event-port", "terminal-port", "workspace-ports"] }
-bitfun-runtime-services = { path = "../runtime-services" }
-dashmap = { workspace = true }
-hex = { workspace = true }
-log = { workspace = true }
-regex = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-serde_yaml = { workspace = true }
-sha2 = { workspace = true }
-thiserror = { workspace = true }
-uuid = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync", "time"] }
-tokio-util = { workspace = true }
-
-[dev-dependencies]
-bitfun-runtime-services = { path = "../runtime-services", features = ["test-support"] }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+async-trait = { workspace = true, optional = true }
+bitfun-agent-stream = { path = "../agent-stream", optional = true }
+bitfun-agent-tools = { path = "../tool-contracts", optional = true }
+bitfun-core-types = { path = "../../contracts/core-types", optional = true }
+bitfun-events = { path = "../../contracts/events", optional = true }
+bitfun-harness = { path = "../harness", optional = true }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true, features = ["agent-api", "git-port", "permission", "plugin-runtime", "remote-workspace-ports", "runtime-event-port", "terminal-port", "workspace-ports"] }
+bitfun-runtime-services = { path = "../runtime-services", optional = true }
+dashmap = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+serde_yaml = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true, optional = true }
 
 [[test]]
 name = "agent_definition_contracts"
 path = "tests/agent_definition_contracts.rs"
+required-features = ["agent-runtime"]
 
 [[test]]
 name = "agent_session_contracts"
 path = "tests/agent_session_contracts.rs"
+required-features = ["agent-runtime"]
 
 [[test]]
 name = "agent_interaction_contracts"
 path = "tests/agent_interaction_contracts.rs"
+required-features = ["agent-runtime"]
 
 [[test]]
 name = "agent_long_horizon_contracts"
 path = "tests/agent_long_horizon_contracts.rs"
+required-features = ["agent-runtime"]
 
 [[test]]
 name = "native_hook_execution_contracts"
 path = "tests/native_hook_execution_contracts.rs"
+required-features = ["native-hook-runtime"]
+
+[[test]]
+name = "deep_research_contracts"
+path = "tests/deep_research_contracts.rs"
+required-features = ["deep-research"]
+
+[[test]]
+name = "native_hook_settings_contracts"
+path = "tests/native_hook_settings_contracts.rs"
+required-features = ["native-hook-settings"]
 
 [lints]
 workspace = true

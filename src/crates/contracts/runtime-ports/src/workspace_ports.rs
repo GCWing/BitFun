@@ -146,6 +146,17 @@ pub enum WorkspacePathKind {
 /// Unified file system operations that work for both local and remote workspaces.
 #[async_trait::async_trait]
 pub trait WorkspaceFileSystem: Send + Sync {
+    /// Join path components using the syntax understood by this provider.
+    ///
+    /// Local providers inherit the host path syntax. Remote providers must
+    /// override this when their filesystem uses a different syntax than the
+    /// host process.
+    fn join_path(&self, root: &str, components: &[&str]) -> String {
+        let mut path = PathBuf::from(root);
+        path.extend(components);
+        path.to_string_lossy().into_owned()
+    }
+
     async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>>;
     /// Read binary content up to `max_bytes`.
     ///

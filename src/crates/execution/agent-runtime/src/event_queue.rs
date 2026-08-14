@@ -392,8 +392,7 @@ impl StreamEventSink for EventQueue {
 mod tests {
     use super::{EventQueue, EventQueueConfig};
     use bitfun_events::AgenticEvent;
-    use std::sync::Arc;
-    use tokio::sync::Barrier;
+    use std::sync::{Arc, Barrier};
 
     #[tokio::test]
     async fn full_legacy_queue_does_not_drop_broadcast_delivery() {
@@ -466,43 +465,55 @@ mod tests {
         }
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn concurrent_publishers_have_one_order_for_all_subscribers() {
+    #[test]
+    fn concurrent_publishers_have_one_order_for_all_subscribers() {
         const EVENT_COUNT: usize = 64;
         let queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
         let mut first = queue.subscribe();
         let mut second = queue.subscribe();
         let barrier = Arc::new(Barrier::new(EVENT_COUNT));
-        let mut tasks = Vec::with_capacity(EVENT_COUNT);
+        let mut publishers = Vec::with_capacity(EVENT_COUNT);
 
         for index in 0..EVENT_COUNT {
             let queue = queue.clone();
             let barrier = barrier.clone();
-            tasks.push(tokio::spawn(async move {
-                barrier.wait().await;
-                queue
-                    .enqueue(
-                        AgenticEvent::SessionStateChanged {
-                            session_id: format!("event-{index}"),
-                            new_state: "idle".to_string(),
-                        },
-                        None,
-                    )
-                    .await
-                    .expect("event should enqueue")
+            publishers.push(std::thread::spawn(move || {
+                barrier.wait();
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("publisher runtime")
+                    .block_on(async move {
+                        queue
+                            .enqueue(
+                                AgenticEvent::SessionStateChanged {
+                                    session_id: format!("event-{index}"),
+                                    new_state: "idle".to_string(),
+                                },
+                                None,
+                            )
+                            .await
+                            .expect("event should enqueue")
+                    })
             }));
         }
-        for task in tasks {
-            task.await.expect("publisher should complete");
+        for publisher in publishers {
+            publisher.join().expect("publisher should complete");
         }
 
-        let mut first_ids = Vec::with_capacity(EVENT_COUNT);
-        let mut second_ids = Vec::with_capacity(EVENT_COUNT);
-        for _ in 0..EVENT_COUNT {
-            first_ids.push(first.recv().await.expect("first broadcast").id);
-            second_ids.push(second.recv().await.expect("second broadcast").id);
-        }
-        assert_eq!(first_ids, second_ids);
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("subscriber runtime")
+            .block_on(async move {
+                let mut first_ids = Vec::with_capacity(EVENT_COUNT);
+                let mut second_ids = Vec::with_capacity(EVENT_COUNT);
+                for _ in 0..EVENT_COUNT {
+                    first_ids.push(first.recv().await.expect("first broadcast").id);
+                    second_ids.push(second.recv().await.expect("second broadcast").id);
+                }
+                assert_eq!(first_ids, second_ids);
+            });
     }
 
     #[test]

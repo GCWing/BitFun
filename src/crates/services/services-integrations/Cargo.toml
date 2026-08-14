@@ -121,7 +121,13 @@ canvas-runtime = [
     "uuid",
 ]
 debug-log = ["anyhow", "chrono", "reqwest", "reqwest/json", "reqwest/rustls", "tokio/rt", "uuid"]
-deep-research = ["bitfun-agent-runtime", "tokio/fs"]
+deep-research = [
+    "anyhow",
+    "async-trait",
+    "dep:bitfun-agent-runtime",
+    "bitfun-agent-runtime/deep-research",
+    "bitfun-runtime-ports/workspace-ports",
+]
 git = [
     "async-trait",
     "bitfun-runtime-ports/git-port",
@@ -226,7 +232,8 @@ plugin-source = [
     "windows",
 ]
 hook-import = [
-    "bitfun-agent-runtime",
+    "dep:bitfun-agent-runtime",
+    "bitfun-agent-runtime/native-hook-settings",
     "bitfun-product-domains/external-sources",
     "bitfun-services-core/local-storage",
     "dep:bitfun-product-domains",

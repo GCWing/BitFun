@@ -1,3 +1,6 @@
+//! DeepResearch report and citation contracts.
+#![cfg(feature = "deep-research")]
+
 use bitfun_agent_runtime::deep_research::renumber_research_report;
 
 #[test]

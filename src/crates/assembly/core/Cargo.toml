@@ -195,6 +195,7 @@ product-full = [
 agent-runtime = [
     "ai-adapter-runtime",
     "dep:bitfun-agent-runtime",
+    "bitfun-agent-runtime/agent-runtime",
     "dep:bitfun-agent-content",
     "dep:bitfun-agent-stream",
     "dep:bitfun-agent-tools",
@@ -298,7 +299,10 @@ web-tools = [
     "bitfun-services-integrations/web-tools",
     "tool-runtime/web-readable",
 ]
-deep-research = ["bitfun-services-integrations/deep-research"]
+deep-research = [
+    "bitfun-agent-runtime?/deep-research",
+    "bitfun-services-integrations/deep-research",
+]
 script-tool-runtime = [
     "bitfun-runtime-ports/script-tool-runtime",
     "bitfun-services-integrations/script-tool-runtime",

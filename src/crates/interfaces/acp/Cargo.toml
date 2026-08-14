@@ -18,6 +18,7 @@ client = [
 server = [
     "dep:bitfun-agent-tools",
     "dep:bitfun-agent-runtime",
+    "bitfun-agent-runtime/agent-runtime",
     "dep:bitfun-core-types",
     "dep:bitfun-core",
     "dep:sha2",

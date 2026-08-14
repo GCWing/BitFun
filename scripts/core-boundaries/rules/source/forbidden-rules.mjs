@@ -1,6 +1,24 @@
 // Boundary rules for source ownership, facades, and required owner content.
 
+import { agentRuntimeRootPublicModules } from './public-api-rules.mjs';
+
+const agentRuntimeRootUnexpectedLine = new RegExp(
+  `^(?!(?:[ \\t]*|[ \\t]*\\/\\/!.*|[ \\t]*#\\[cfg\\(feature = "(?:agent-runtime|deep-research|native-hook-settings)"\\)\\][ \\t]*|[ \\t]*pub mod (?:${agentRuntimeRootPublicModules.join('|')});[ \\t]*)\\r?$).+$`,
+  'm',
+);
+
 export const forbiddenContentRules = [
+  {
+    path: 'src/crates/execution/agent-runtime/src/lib.rs',
+    reason:
+      'Agent Runtime root is a flat feature-owned module wrapper, not a feature-free implementation surface',
+    patterns: [
+      {
+        regex: agentRuntimeRootUnexpectedLine,
+        message: 'unexpected Agent Runtime root content outside the reviewed cfg/module pairs',
+      },
+    ],
+  },
   {
     path: 'src/apps/cli/src/tui_backend.rs',
     reason:
