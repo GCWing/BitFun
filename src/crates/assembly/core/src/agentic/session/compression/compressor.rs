@@ -421,100 +421,207 @@ impl ContextCompressor {
             .unwrap_or_default();
 
         format!(
-            r#"Your current task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
-This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
-{contract_instruction}
+            r#"You are compressing all available context into a compact, durable execution state for another AI agent.
 
-CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
+Your PRIMARY goal is COMPRESSION: substantially reduce context size while preserving everything required to continue the task correctly and without regression.
 
-- Do NOT use Read, Bash, Grep, Glob, Edit, Write, or ANY other tool.
-- You already have all the context you need in the conversation above.
-- Tool calls will be REJECTED and will waste your only turn — you will fail the task.
-- Your entire response must be plain text: an <analysis> block followed by a <summary> block.
+The input may contain original messages, tool results, file contents, and one or more previously compressed states. A previous state may appear without wrapper tags.
 
-Before providing your final summary, wrap your analysis in <analysis> tags to organize your thoughts and ensure you've covered all necessary points. Then output the final retained summary in <summary> tags.
-Important: only the content inside <summary> will be kept as compressed history. The <analysis> section is transient and will be discarded, so do not put any required final information only in <analysis>.
-In your analysis process:
+## Hard Rules
 
-1. Chronologically analyze each message and section of the conversation. For each section thoroughly identify:
-   - The user's explicit requests and intents
-   - Your approach to addressing the user's requests
-   - Key decisions, technical concepts and code patterns
-   - Specific details like:
-     - file names
-     - full code snippets
-     - function signatures
-     - file edits
-   - Errors that you ran into and how you fixed them
-   - Pay special attention to specific user feedback that you received, especially if the user told you to do something differently.
-2. Double-check for technical accuracy and completeness, addressing each required element thoroughly.
+* Respond with TEXT ONLY.
+* Do NOT call tools.
+* Output exactly one `<summary>...</summary>` block.
+* Do not output anything before or after the `<summary>` block.
+* Do not use Markdown code fences around the block.
+* Do not invent information, present unsupported inference as fact, or silently resolve uncertainty.
+* Use adaptive length: preserve critical information exactly enough for execution, but compress everything else aggressively.
+* Produce a current execution state, not a transcript, chronological recap, unfiltered merge, or summary of a previous summary.
+* Record each fact once in its most relevant location; refer to requirement IDs instead of repeating requirements.
 
-Your summary should include the following sections:
+## Compression Procedure
 
-1. Primary Request and Intent: Capture all of the user's explicit requests and intents in detail
-2. Key Technical Concepts: List all important technical concepts, technologies, and frameworks discussed.
-3. Files and Code Sections: Enumerate specific files and code sections examined, modified, or created. Pay special attention to the most recent messages and include full code snippets where applicable and include a summary of why this file read or edit is important.
-4. Errors and fixes: List all errors that you ran into, and how you fixed them. Pay special attention to specific user feedback that you received, especially if the user told you to do something differently.
-5. Problem Solving: Document problems solved and any ongoing troubleshooting efforts.
-6. All user messages: List ALL user messages that are not tool results. These are critical for understanding the users' feedback and changing intent.
-7. Pending Tasks: Outline any pending tasks that you have explicitly been asked to work on.
-8. Current Work: Describe in detail precisely what was being worked on immediately before this summary request, paying special attention to the most recent messages from both user and assistant. Include file names and code snippets where applicable.
-9. Optional Next Step: List the next step that you will take that is related to the most recent work you were doing. IMPORTANT: ensure that this step is DIRECTLY in line with the user's most recent explicit requests, and the task you were working on immediately before this summary request. If your last task was concluded, then only list next steps if they are explicitly in line with the users request. Do not start on tangential requests or really old requests that were already completed without confirming with the user first. If there is a next step, include direct quotes from the most recent conversation showing exactly what task you were working on and where you left off. This should be verbatim to ensure there's no drift in task interpretation.
+1. Identify the latest active task, intended outcome, and authoritative requirements.
+2. Detect inherited structured state using section patterns, requirement IDs, file paths, task records, or semantic structure.
+3. Treat inherited state as retained task information, not disposable summary prose.
+4. Preserve all still-active inherited information and incorporate relevant newer evidence.
+5. Consolidate duplicates and remove obsolete, superseded, completed-but-irrelevant, or safely recoverable detail.
+6. Produce one compact representation of the current executable state.
 
-Here's an example of how your output should be structured:
+Use this principle:
 
-<example>
-<analysis>
-[Your thought process, ensuring all points are covered thoroughly and accurately]
-</analysis>
+`compressed state = essential inherited state + essential new state - duplication - obsolete or recoverable detail`
+
+Previous structured state is authoritative input, but must still be evaluated and compressed. Silence in newer messages does not cancel inherited requirements.
+
+## Information That Must Survive
+
+Preserve the smallest accurate representation of all information needed to continue safely:
+
+* current objective and durable user intent
+* active requirements, constraints, acceptance criteria, edge cases, and prohibited behavior
+* requirement-bearing user corrections, rejected approaches, and direction changes
+* authoritative source identities and exact file paths
+* stable requirement IDs
+* concrete formats, schemas, commands, values, expected outputs, and important symbols
+* current implementation state, current behavior, intended behavior, and important changes
+* architectural or technical decisions that still affect future work
+* test expectations, validation methods, and latest validation results
+* unresolved errors, blockers, uncertainties, and failed approaches that should not be repeated
+* pending work, priority, completion conditions, immediate next action, and exact stopping point
+* irrecoverable or conversation-only code, snippets, errors, outputs, or other exact details
+
+Authoritative sources include user instructions, inherited structured state, `instruction.md`, requirement or specification files, task descriptions, acceptance tests, evaluation scripts, and files explicitly identified as defining expected behavior.
+
+Never replace actual requirements with vague shorthand such as "follow the instruction file" or "pass the tests." Extract and preserve the operative requirements.
+
+## Recursive Compression Safety
+
+When inherited structured state exists:
+
+* preserve stable requirement IDs and precise requirement wording
+* keep active requirements even if newer messages do not mention them
+* update statuses only when supported by newer evidence
+* merge new constraints into the relevant existing record
+* consolidate duplicate records into one authoritative record
+* avoid repeated paraphrasing when retaining precise wording is safer
+* remove an inherited item only when it is:
+
+  * explicitly withdrawn or superseded
+  * disproved by authoritative evidence
+  * completed with no future or regression-prevention relevance
+  * safely recoverable from an available source
+
+"Preserve" does not mean copying everything. Retain only what keeps the task executable and prevents lost constraints, regressions, or repeated mistakes.
+
+## What to Compress or Remove
+
+Aggressively discard:
+
+* greetings, filler, and routine conversation
+* repeated requirements and explanations
+* routine tool calls and action narration
+* raw search queries, browsing paths, and search history
+* long excerpts once their operative conclusion is captured
+* ordinary file contents that can safely be reread
+* completed intermediate actions with no future effect
+* obsolete hypotheses, plans, diagnostics, and superseded state
+* duplicate descriptions inherited across compression cycles
+
+For research, retain only:
+
+* operative conclusion
+* authoritative reference
+* relevant version or date
+* unresolved uncertainty
+
+For ordinary files, retain only:
+
+* exact path and purpose
+* important symbols or sections
+* current and intended behavior
+* material changes
+* unresolved issues
+* validation status
+
+Preserve exact code only when it is unsaved, subtle, conversation-only, irrecoverable, or unsafe to reconstruct.
+
+## Requirement Handling
+
+For every authoritative requirement source:
+
+* preserve its exact identity or path
+* extract active atomic requirements
+* assign or preserve stable IDs such as `REQ-001`
+* preserve concrete values, paths, formats, commands, edge cases, expected outputs, and prohibitions
+* record implementation and validation status when known
+
+Use one of these statuses:
+
+`Completed | Partial | Blocked | Unverified | Not started | Superseded`
+
+When a requirement changes:
+
+* unchanged: retain it compactly
+* clarified: update the same record without losing earlier constraints
+* completed: retain expected behavior when needed to prevent regression
+* superseded: mark it and identify its replacement and supporting evidence
+* conflicting: retain both requirements and explicitly record the conflict
+* absent from newer messages: keep it active
+
+## Final Verification
+
+Before answering, verify that:
+
+* the output is substantially smaller than the useful input state
+* all active inherited and new requirements survived
+* precise requirements were not weakened through paraphrasing
+* duplicates and safely recoverable details were removed
+* unresolved work did not disappear because it was not recently mentioned
+* current behavior, intended behavior, and pending work remain distinguishable
+* implementation and validation statuses are evidence-based
+* blockers, failed approaches, user corrections, and conflicts remain visible
+* the exact continuation point is clear
+* the response contains exactly one `<summary>` block and no text outside it
+
+## Output Format
+
+Output exactly:
 
 <summary>
-1. Primary Request and Intent:
-   [Detailed description]
+1. OBJECTIVE
+- Current: [latest active task and intended outcome]
+- Durable intent: [earlier intent that remains active]
+- Constraints: [active constraints, acceptance criteria, and prohibited behavior]
+- Conflicts/Superseded: [conflicts or superseded intent, replacement, and evidence]
 
-2. Key Technical Concepts:
-   - [Concept 1]
-   - [Concept 2]
-   - [...]
+2. REQUIREMENTS
 
-3. Files and Code Sections:
-   - [File Name 1]
-      - [Summary of why this file is important]
-      - [Summary of the changes made to this file, if any]
-      - [Important Code Snippet]
-   - [File Name 2]
-      - [Important Code Snippet]
-   - [...]
+* Source: [exact user instruction, inherited state identity, or authoritative file path]
 
-4. Errors and fixes:
-    - [Detailed description of error 1]:
-      - [How you fixed the error]
-      - [User feedback on the error if any]
-    - [...]
+  * REQ-001 [Status]: [atomic requirement]
 
-5. Problem Solving:
-   [Description of solved problems and ongoing troubleshooting]
+    * State: [implementation state, current behavior, or latest material change]
+    * Files/symbols: [exact paths and important symbols]
+    * Validation: [test expectation and latest result]
+    * Notes: [clarification, correction, conflict, edge case, or replacement]
 
-6. All user messages:
-    - [Detailed non tool use user message]
-    - [...]
+3. EXECUTION STATE
 
-7. Pending Tasks:
-   - [Task 1]
-   - [Task 2]
-   - [...]
+* Files: [path — purpose; relevant symbols; current and intended behavior; changes; issues; validation]
+* Decisions: [decision and concise rationale]
+* Solved: [problem → solution → result]
+* Errors/failed approaches: [symptom → cause → attempts → current status → user correction → next diagnostic action]
+* Technical conclusions: [concept → relevance → current conclusion]
 
-8. Current Work:
-   [Precise description of current work]
+4. CONTINUATION
 
-9. Optional Next Step:
-   [Optional Next step to take]
+* Immediate task: [what should be done now]
+* Current state: [where the work stands]
+* Pending:
+
+  * P1 [priority]: [unfinished task — related REQ IDs; files; blocker; completion condition]
+* Latest validation: [most recent relevant result]
+* Exact stopping point: [last completed action and precise continuation location]
+* Next action: [single best next step and required context]
+
+5. CRITICAL EXACT DETAILS
+
+* [Only exact wording, paths, commands, schemas, identifiers, values, errors, expected outputs, or irrecoverable snippets that must survive]
 
 </summary>
-</example>
 
-Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.
-REMINDER: Do NOT call any tools. Respond with plain text only — an <analysis> block followed by a <summary> block. Tool calls will be rejected and you will fail the task.
+Formatting rules:
+
+* Keep the five top-level sections in the stated order.
+* Keep entries compact and combine related facts when clarity is preserved.
+* Omit empty optional fields or categories instead of printing many `None` values.
+* If an entire top-level section has no useful information, write `None` beneath that section.
+* Preserve requirement IDs across compression cycles.
+* Do not duplicate information already preserved accurately elsewhere.
+* Represent requirement-bearing user messages through their requirement, correction, rejection, or source identity rather than copying conversation history.
+* The `<summary>` tags must remain literal and must not be replaced with Markdown headings or code fences.
+{contract_instruction}
 "#
         )
     }
