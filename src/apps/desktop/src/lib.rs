@@ -682,14 +682,20 @@ pub async fn run() {
 
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            log::info!(
-                "Existing BitFun Desktop instance received launch request: args_count={}, cwd={}",
-                args.len(),
-                cwd
-            );
-            handle_secondary_launch(app);
-        }));
+        // The isolated embedded-WebDriver app must be able to run alongside a
+        // developer's normal BitFun instance. Its storage root and automation
+        // port are already test-scoped, so joining the product single-instance
+        // group would make the E2E child exit before WebDriver can attach.
+        if !logging::is_embedded_webdriver_mode() {
+            builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+                log::info!(
+                    "Existing BitFun Desktop instance received launch request: args_count={}, cwd={}",
+                    args.len(),
+                    cwd
+                );
+                handle_secondary_launch(app);
+            }));
+        }
     }
 
     let app = builder

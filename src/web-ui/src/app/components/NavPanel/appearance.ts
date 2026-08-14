@@ -38,7 +38,7 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   ],
   facets: [
     { id: 'layer', attribute: 'data-bf-layer', values: ['main', 'scene'] },
-    { id: 'action', attribute: 'data-bf-action', values: ['smart-members', 'long-term-tracking', 'todos', 'extensions', 'agents', 'skills', 'ecosystem-compatibility', 'session-filter'] },
+    { id: 'action', attribute: 'data-bf-action', values: ['new-session', 'smart-members', 'long-term-tracking', 'todos', 'extensions', 'agents', 'skills', 'ecosystem-compatibility', 'session-filter'] },
     { id: 'section', attribute: 'data-bf-section', values: ['smart-members', 'workspace'] },
   ],
   states: [

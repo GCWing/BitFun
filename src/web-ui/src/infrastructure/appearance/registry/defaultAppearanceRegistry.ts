@@ -230,7 +230,7 @@ import { contextCompressionCardAppearanceDescriptor } from '@/component-library/
 import { reviewSessionSummaryCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ReviewSessionSummaryCard.appearance';
 import { deepReviewConsentDialogAppearanceDescriptor } from '@/flow_chat/components/DeepReviewConsentDialog.appearance';
 import { flowTextBlockAppearanceDescriptor } from '@/flow_chat/components/FlowTextBlock.appearance';
-import { permissionRequestPanelAppearanceDescriptor } from '@/flow_chat/components/modern/PermissionRequestPanel.appearance';
+import { chatInputApprovalBandAppearanceDescriptor } from '@/flow_chat/components/ChatInputApprovalBand.appearance';
 import { toolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/BaseToolCard.appearance';
 import { canvasToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/CanvasToolCard.appearance';
 import { computerUseToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ComputerUseToolCard.appearance';
@@ -490,7 +490,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(nurseryGalleryAppearanceDescriptor)
     .registerComponent(deepReviewConsentDialogAppearanceDescriptor)
     .registerComponent(flowTextBlockAppearanceDescriptor)
-    .registerComponent(permissionRequestPanelAppearanceDescriptor)
+    .registerComponent(chatInputApprovalBandAppearanceDescriptor)
     .registerComponent(toolCardAppearanceDescriptor)
     .registerComponent(canvasToolCardAppearanceDescriptor)
     .registerComponent(computerUseToolCardAppearanceDescriptor)

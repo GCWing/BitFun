@@ -5,29 +5,23 @@
   display: inline-flex;
   align-items: center;
 
+  // One appearance everywhere: the meter alone, sized as a square target so the
+  // control cannot widen with the level it happens to be showing. It sits beside
+  // the model it belongs to rather than being relayed into a status host.
   &__trigger {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    height: 20px;
-    max-width: 112px;
-    padding: 0 8px;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
     border: none;
-    border-radius: 10px;
+    border-radius: var(--bf-appearance-token-size-radius-base);
     background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     cursor: pointer;
-    opacity: 0.72;
     outline: none;
-
-    .bitfun-chat-input__box:focus-within &,
-    &:hover,
-    &:focus-visible,
-    &--open {
-      color: var(--bf-appearance-token-color-text-primary);
-      opacity: 1;
-    }
 
     &:hover,
     &--open {
@@ -42,41 +36,12 @@
       cursor: default;
       opacity: 0.4;
     }
-
-    &--status {
-      gap: 6px;
-      height: 24px;
-      max-width: 100%;
-      padding: 0 6px;
-      border-radius: var(--bf-appearance-token-size-radius-base);
-      color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      opacity: 1;
-    }
-  }
-
-  &__label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__status-overview {
-    flex: none;
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
-  &__status-divider {
-    flex: none;
-    width: 1px;
-    height: 14px;
-    background: var(--bf-appearance-token-border-subtle);
   }
 
   &__status-meter {
     flex: none;
-    width: 16px;
-    height: 14px;
+    width: 14px;
+    height: 13px;
 
     path {
       stroke: var(--bf-appearance-token-color-text-muted);
@@ -201,11 +166,5 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-reasoning-preset-selector__menu {
     transition: opacity 100ms linear;
-  }
-}
-
-@media (max-width: 520px) {
-  .bitfun-reasoning-preset-selector__trigger {
-    max-width: 84px;
   }
 }

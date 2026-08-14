@@ -63,7 +63,7 @@ import {
 import {
   useBackgroundSubagentActivityStore,
 } from '../../store/backgroundSubagentActivityStore';
-import { PresenceBoundary, type LineRange } from '@/component-library';
+import { type LineRange } from '@/component-library';
 import { isChatPopupActive, subscribeChatPopupChange } from '../chatPopupState';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
@@ -104,7 +104,6 @@ import {
   type RenderedTranscriptRange,
 } from './flowChatLiveTailWindow';
 import './ModernFlowChatContainer.scss';
-import { PermissionRequestPanel } from './PermissionRequestPanel';
 import { pendingPermissionToolCallIdsForSession } from './permissionRequestRouting';
 import { usePermissionRequests } from './usePermissionRequests';
 import {
@@ -123,7 +122,6 @@ interface ModernFlowChatContainerProps {
   className?: string;
   config?: Partial<FlowChatConfig>;
   isViewportActive?: boolean;
-  permissionPanelAboveChatInput?: boolean;
   /** Host-owned replacement for the ordinary new-session WelcomePanel. */
   emptyState?: React.ReactNode;
 
@@ -281,7 +279,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   className = '',
   config,
   isViewportActive = true,
-  permissionPanelAboveChatInput = false,
   emptyState,
   onFileViewRequest,
   onTabOpen,
@@ -454,35 +451,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     renderedHistoryPresentation,
   ]);
 
-  const {
-    requests: permissionRequests,
-    activeBatch: activePermissionBatch,
-    respond: respondPermission,
-    respondBatch: respondPermissionBatch,
-  } = usePermissionRequests(activeSession?.sessionId);
-  const activePermissionPanelSnapshot = activeSession && activePermissionBatch
-    ? {
-        ownerSessionId: activeSession.sessionId,
-        batch: activePermissionBatch,
-        totalPendingCount: permissionRequests.length,
-        aboveChatInput: permissionPanelAboveChatInput,
-        onRespond: respondPermission,
-        onRespondBatch: respondPermissionBatch,
-      }
-    : null;
-  const retainedPermissionPanelSnapshotRef = useRef(activePermissionPanelSnapshot);
-  let renderedPermissionPanelSnapshot = activePermissionPanelSnapshot;
-  if (activePermissionPanelSnapshot) {
-    retainedPermissionPanelSnapshotRef.current = activePermissionPanelSnapshot;
-  } else if (
-    retainedPermissionPanelSnapshotRef.current?.ownerSessionId === activeSession?.sessionId
-  ) {
-    renderedPermissionPanelSnapshot = retainedPermissionPanelSnapshotRef.current;
-  } else {
-    // A retained exit belongs to its originating session. Never let it cross a
-    // session boundary with the new session's callbacks or surrounding props.
-    retainedPermissionPanelSnapshotRef.current = null;
-  }
+  // The transcript reads the pending list to mark the tool cards that are
+  // waiting; answering them belongs to the composer, which reads the same
+  // shared subscription.
+  const { requests: permissionRequests } = usePermissionRequests(activeSession?.sessionId);
   const visibleTurnInfo = useVisibleTurnInfo();
   const [queuedTurnNavigation, setQueuedTurnNavigation] = useState<QueuedTurnNavigation | null>(null);
   const [pendingHistoryOpenSession, setPendingHistoryOpenSession] = useState<HistorySessionOpenIntentDetail | null>(null);
@@ -2488,20 +2460,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onClose={handleCloseBackgroundCommandInput}
           onSend={handleSendBackgroundCommandInput}
         />
-
-        <PresenceBoundary active={activePermissionPanelSnapshot != null}>
-          {renderedPermissionPanelSnapshot ? (
-            <PermissionRequestPanel
-              key={`${renderedPermissionPanelSnapshot.batch.sessionId}:${renderedPermissionPanelSnapshot.batch.roundId}`}
-              requests={renderedPermissionPanelSnapshot.batch.requests}
-              totalPendingCount={renderedPermissionPanelSnapshot.totalPendingCount}
-              aboveChatInput={renderedPermissionPanelSnapshot.aboveChatInput}
-              visible={activePermissionPanelSnapshot != null}
-              onRespond={renderedPermissionPanelSnapshot.onRespond}
-              onRespondBatch={renderedPermissionPanelSnapshot.onRespondBatch}
-            />
-          ) : null}
-        </PresenceBoundary>
 
         <div
           className="modern-flowchat-container__messages"

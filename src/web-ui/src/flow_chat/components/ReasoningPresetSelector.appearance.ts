@@ -5,7 +5,6 @@ export const reasoningPresetSelectorAppearanceDescriptor: AppearanceSurfaceDescr
   parts: [
     { id: 'root' },
     { id: 'trigger' },
-    { id: 'label' },
     { id: 'menu' },
     { id: 'header' },
     { id: 'option' },

@@ -159,7 +159,6 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
       <FlowChatContainer
         className="bitfun-chat-pane__chat-container"
         isViewportActive={isSceneActive}
-        permissionPanelAboveChatInput={showChatInput}
         emptyState={emptyState}
         onOpenVisualization={(type, data) => {
           log.info('Opening visualization', { type, data });

@@ -18,7 +18,9 @@ export const harnessProfileSelectorAppearanceDescriptor: AppearanceSurfaceDescri
   states: [
     { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
     { id: 'current', selector: { kind: 'self', suffix: '[data-bf-state~="current"]' } },
-    { id: 'compatibility', selector: { kind: 'self', suffix: '[data-bf-state~="compatibility"]' } },
+    // The gear the composer is set to but the session has not adopted yet.
+    { id: 'pending', selector: { kind: 'self', suffix: '[data-bf-state~="pending"]' } },
+    { id: 'newSession', selector: { kind: 'self', suffix: '[data-bf-state~="new-session"]' } },
     { id: 'comingSoon', selector: { kind: 'self', suffix: '[data-bf-state~="coming-soon"]' } },
   ],
 };

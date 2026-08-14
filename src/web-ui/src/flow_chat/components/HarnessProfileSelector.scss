@@ -10,23 +10,28 @@
 }
 
 .bitfun-harness-selector__trigger {
+  position: relative;
+  box-sizing: border-box;
   width: auto;
   min-width: 0;
-  min-height: 20px;
-  display: flex;
+  height: 26px;
+  display: inline-flex;
   align-items: center;
-  gap: 0;
-  padding: 0;
+  gap: 6px;
+  padding: 0 9px 0 7px;
   border: 0;
-  border-radius: var(--bf-appearance-token-size-radius-base);
+  border-radius: 13px;
   background: transparent;
   color: var(--bf-appearance-token-color-text-secondary);
   font: inherit;
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-weight: 500;
+  white-space: nowrap;
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color tokens.$motion-fast tokens.$easing-standard,
+    color tokens.$motion-fast tokens.$easing-standard;
 
   &:hover,
   &[data-bf-state='open'] {
@@ -41,28 +46,64 @@
 }
 
 .bitfun-harness-selector__trigger-value {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-  min-height: 20px;
-  padding: 0 7px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-  svg {
-    flex: none;
-    width: 11px;
-    height: 11px;
+// Three ascending segments, filled up to the selected gear. Shape carries the
+// intensity so the reading survives the label being dropped on a narrow
+// composer; color only reports whether the gear is already in force.
+.bitfun-harness-selector__gauge {
+  display: inline-flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+}
+
+.bitfun-harness-selector__gauge-bar {
+  width: 2px;
+  border-radius: 1px;
+  background: var(--bf-appearance-token-color-text-muted);
+  opacity: 0.24;
+  transition:
+    background-color tokens.$motion-fast tokens.$easing-standard,
+    opacity tokens.$motion-fast tokens.$easing-standard;
+
+  &:nth-child(1) { height: 5px; }
+  &:nth-child(2) { height: 8px; }
+  &:nth-child(3) { height: 11px; }
+
+  &[data-filled='true'] {
+    background: var(--bf-appearance-token-color-accent-500);
+    opacity: 1;
   }
 }
 
-// Simplified picker: a plain three-row list, styled like the strip's
-// permission menu. No header, icons, descriptions, or footer.
+// A gear armed for the next turn has not shaped any completed turn yet, so its
+// gauge stays unfilled and a dot carries the "pending" fact instead.
+.bitfun-harness-selector__trigger[data-harness-pending='true'] {
+  .bitfun-harness-selector__gauge-bar[data-filled='true'] {
+    background: var(--bf-appearance-token-color-text-muted);
+    opacity: 0.52;
+  }
+}
+
+.bitfun-harness-selector__trigger[data-harness-legacy='true'] .bitfun-harness-selector__gauge {
+  display: none;
+}
+
+.bitfun-harness-selector__pending-dot {
+  flex: none;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--bf-appearance-token-color-accent-500);
+}
+
+// A plain three-row list: gauge, name plus the promise the gear makes, and a
+// trailing state.
 .bitfun-harness-selector__menu {
   position: fixed;
   z-index: tokens.$z-popover;
@@ -71,8 +112,8 @@
   flex-direction: column;
   gap: 2px;
   width: max-content;
-  min-width: 148px;
-  max-width: min(220px, calc(100vw - 16px));
+  min-width: 220px;
+  max-width: min(300px, calc(100vw - 16px));
   padding: 5px;
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: var(--bf-appearance-token-size-radius-base);
@@ -87,11 +128,10 @@
 .bitfun-harness-selector__profile {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 9px;
   width: 100%;
-  min-height: 28px;
-  padding: 0 8px;
+  min-height: 38px;
+  padding: 5px 8px;
   border: 0;
   border-radius: var(--bf-appearance-token-size-radius-sm);
   background: transparent;
@@ -107,14 +147,32 @@
     background: var(--bf-appearance-token-element-bg-soft);
   }
 
-  &.is-current {
+  &.is-current .bitfun-harness-selector__profile-name {
     color: var(--bf-appearance-token-color-accent-500);
   }
+}
+
+.bitfun-harness-selector__profile-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
 .bitfun-harness-selector__profile-name {
   min-width: 0;
   overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bitfun-harness-selector__profile-promise {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -128,5 +186,16 @@
 
   svg {
     color: var(--bf-appearance-token-color-accent-500);
+  }
+}
+
+// The gauge alone still reads the gear once the label no longer fits.
+@media (max-width: 560px) {
+  .bitfun-harness-selector__trigger-value {
+    display: none;
+  }
+
+  .bitfun-harness-selector__trigger {
+    padding: 0 7px;
   }
 }

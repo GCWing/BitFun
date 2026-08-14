@@ -4,7 +4,10 @@ import { Crosshair } from 'lucide-react';
 import { IconButton, Tooltip } from '@/component-library';
 import type { ThreadGoalSnapshot } from '../../services/goalService';
 import { resolveThreadGoalStatusLabel } from '../../utils/threadGoalDisplay';
-import { isThreadGoalActive, resolveThreadGoalStripIconTone } from './threadGoalStripIconTone';
+import {
+  resolveThreadGoalStripIconTone,
+  shouldShowThreadGoalObjective,
+} from './threadGoalStripIconTone';
 
 export interface ThreadGoalStripButtonProps {
   goal: ThreadGoalSnapshot | null;
@@ -27,7 +30,7 @@ export const ThreadGoalStripButton: React.FC<ThreadGoalStripButtonProps> = ({
     : t('threadGoal.stripTooltipEmpty');
 
   const ariaLabel = goal ? t('threadGoal.stripOpenWithGoal') : t('threadGoal.stripOpenEmpty');
-  const activeLabel = isThreadGoalActive(goal) ? goal?.objective.trim() : '';
+  const objectiveLabel = shouldShowThreadGoalObjective(goal) ? goal?.objective.trim() : '';
 
   return (
     <Tooltip content={tooltip}>
@@ -38,13 +41,14 @@ export const ThreadGoalStripButton: React.FC<ThreadGoalStripButtonProps> = ({
         type="button"
         aria-label={ariaLabel}
         data-testid="thread-goal-strip-button"
+        data-goal-tone={iconTone}
         onClick={e => {
           e.stopPropagation();
           onOpen();
         }}
       >
-        <Crosshair size={16} strokeWidth={1.8} aria-hidden />
-        {activeLabel ? <span>{activeLabel}</span> : null}
+        <Crosshair size={15} strokeWidth={1.9} aria-hidden />
+        {objectiveLabel ? <span>{objectiveLabel}</span> : null}
       </IconButton>
     </Tooltip>
   );

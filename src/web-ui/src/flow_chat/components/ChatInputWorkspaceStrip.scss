@@ -1,4 +1,11 @@
-/** Compact, borderless execution-status track under the floating chat input. */
+/**
+ * Compact, borderless execution-status track under the floating chat input.
+ *
+ * Two fixed rails, never a conditional column template: the left rail holds the
+ * situation and the right rail holds the next turn's contract. A control that
+ * appears or disappears grows or shrinks its own rail and cannot reflow the
+ * other one.
+ */
 
 @use '../../component-library/styles/tokens' as *;
 
@@ -7,73 +14,17 @@
   bottom: 0;
   z-index: 4;
   box-sizing: border-box;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 0;
+  justify-content: space-between;
+  column-gap: 12px;
   min-height: 20px;
-  padding: 0 14px;
+  padding: 0 12px;
   border: 0;
   border-radius: 0;
   background: transparent;
-
-  &--with-harness {
-    grid-template-columns: minmax(0, 1fr) minmax(180px, 0.72fr);
-  }
-
-  &--with-workspace#{&}--with-harness#{&}--with-runtime:not(#{&}--with-policy) {
-    // Three semantic groups: workspace; goal/Harness/approval; reasoning/context.
-    grid-template-columns:
-      minmax(0, 38fr)
-      minmax(0, 36fr)
-      minmax(0, 26fr);
-  }
-
-  &--with-workspace#{&}--with-harness#{&}--with-policy#{&}--with-runtime {
-    // Dispatch sync is an exceptional fourth group; it must not split approval
-    // away from the Harness group in the normal composer.
-    grid-template-columns:
-      minmax(0, 35fr)
-      minmax(0, 31fr)
-      minmax(0, 14fr)
-      minmax(0, 20fr);
-  }
-
-  &--with-workspace#{&}--with-harness#{&}--with-policy:not(#{&}--with-runtime) {
-    grid-template-columns: minmax(0, 42fr) minmax(0, 30fr) minmax(0, 28fr);
-  }
-
-  &--with-workspace#{&}--with-runtime:not(#{&}--with-harness):not(#{&}--with-policy) {
-    grid-template-columns: minmax(0, 68fr) minmax(0, 32fr);
-  }
-
-  // Approval without the Harness group (ACP sessions, dispatch sync): the
-  // policy actions get their own column instead of stacking under the
-  // breadcrumb, so the strip always stays a single row.
-  &--with-workspace#{&}--with-policy:not(#{&}--with-harness):not(#{&}--with-runtime) {
-    grid-template-columns: minmax(0, 66fr) minmax(0, 34fr);
-  }
-
-  &--with-workspace#{&}--with-policy#{&}--with-runtime:not(#{&}--with-harness) {
-    grid-template-columns: minmax(0, 52fr) minmax(0, 22fr) minmax(0, 26fr);
-  }
-
-  &--actions-only {
-    grid-template-columns: auto auto;
-    justify-content: end;
-
-    .bitfun-chat-input-workspace-strip__actions {
-      justify-self: end;
-    }
-  }
-
-  // Harness + approval + runtime without a workspace breadcrumb: three groups
-  // share one row instead of wrapping the runtime group onto a second line.
-  &--actions-only#{&}--with-harness#{&}--with-policy#{&}--with-runtime {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-  }
   font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
   line-height: var(--bf-appearance-token-flowchat-support-line-height);
   font-weight: 400;
   letter-spacing: 0.01em;
@@ -88,36 +39,16 @@
   width: 100%;
   max-width: none;
 
-  &__main {
+  // Left rail: where this session runs and what it is chasing. It takes the
+  // slack so the right rail keeps its natural width.
+  &__context {
     display: flex;
+    flex: 1 1 auto;
     align-items: center;
     justify-content: flex-start;
-    gap: 8px;
+    gap: 4px;
     min-width: 0;
-    min-height: 18px;
-    padding: 0 8px;
-  }
-
-  &__visual {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 16px;
-    width: 16px;
-    height: 16px;
-    color: var(--bf-appearance-token-color-text-primary);
-
-    svg {
-      width: 15px;
-      height: 15px;
-    }
-  }
-
-  &__workspace-copy {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
+    height: 18px;
 
     // Breadcrumb controls read as one continuous path in the reference, not
     // as a row of independent filled chips.
@@ -126,7 +57,7 @@
       padding: 0 2px;
       border-color: transparent;
       background: transparent;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+      font-size: inherit;
 
       &:hover:not(:disabled),
       &[aria-expanded='true'] {
@@ -136,90 +67,51 @@
     }
   }
 
-  &__workspace-meta {
+  // Right rail: what the next turn is allowed to do and how much room is left.
+  &__next {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  &__harness {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
+    justify-content: flex-end;
+    gap: 4px;
     min-width: 0;
     height: 18px;
-    padding: 0 10px;
-    border-left: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
-  &__permission-host,
-  &__reasoning-host {
+  &__visual {
     display: inline-flex;
     align-items: center;
-    min-width: 0;
-  }
-
-  &__permission-host {
-    flex: none;
-  }
-
-  &__actions {
-    display: flex;
-    align-items: center;
     justify-content: center;
-    // Right-side groups hug the right edge of the strip, mirroring the
-    // workspace group on the left, instead of floating in a fr-sized column.
-    justify-self: end;
-    gap: 5px;
-    min-width: 0;
-    height: 18px;
-    padding: 0 10px;
-    border-left: 1px solid var(--bf-appearance-token-border-subtle);
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    color: var(--bf-appearance-token-color-text-secondary);
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
   }
 
-  &__actions--portal-only {
-    display: none;
-  }
-
-  &__runtime {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    // Right-side groups hug the right edge of the strip, mirroring the
-    // workspace group on the left, instead of floating in a fr-sized column.
-    justify-self: end;
-    gap: 0;
-    min-width: 0;
-    height: 18px;
-    padding: 0 10px;
-    border-left: 1px solid var(--bf-appearance-token-border-subtle);
-  }
-
-  &__runtime--hidden,
-  &__reasoning-host--hidden {
-    display: none;
-  }
-
-  &__reasoning-host {
-    flex: 0 1 auto;
-    overflow: hidden;
-  }
-
-  &__runtime-divider {
+  &__breadcrumb-separator {
     flex: none;
-    width: 1px;
-    height: 12px;
-    margin: 0 6px;
-    background: var(--bf-appearance-token-border-subtle);
-  }
-
-  &__breadcrumb-chevron {
-    flex: none;
-    width: 12px;
-    height: 12px;
+    margin: 0 -1px;
     color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-weight: 400;
+    line-height: 1;
+    opacity: 0.62;
+  }
+
+  // Joins two different kinds of fact rather than continuing a path, so it is
+  // a dot instead of a slash.
+  &__rail-separator {
+    flex: none;
+    margin: 0 1px;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    line-height: 1;
+    opacity: 0.5;
   }
 
   &__permission {
@@ -245,7 +137,7 @@
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
     color: var(--bf-appearance-token-color-accent-500);
     font: inherit;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: inherit;
     line-height: 1;
     cursor: pointer;
     transition:
@@ -283,7 +175,7 @@
     background: transparent;
     color: var(--bf-appearance-token-color-text-primary);
     font: inherit;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: inherit;
     line-height: 1;
     letter-spacing: 0;
     cursor: pointer;
@@ -311,10 +203,40 @@
     svg {
       flex: none;
     }
+
+    // Full access is the one mode whose risk must stay visible after the label
+    // is dropped on a narrow composer, so it keeps a tinted body of its own.
+    &--full_access {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
+
+      &:hover:not(:disabled),
+      &--open:not(:disabled) {
+        background: color-mix(in srgb, var(--bf-appearance-token-color-error) 16%, transparent);
+      }
+    }
   }
 
+  // The risk ramp lives on the trigger too, not only inside the menu: this is
+  // the one control on the strip whose wrong value is expensive.
   &__permission-overview-icon {
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-appearance-token-color-text-secondary);
+
+    .bitfun-chat-input-workspace-strip__permission-trigger--ask & {
+      color: var(--bf-appearance-token-color-success);
+    }
+
+    .bitfun-chat-input-workspace-strip__permission-trigger--auto & {
+      color: var(--bf-appearance-token-color-warning);
+    }
+
+    .bitfun-chat-input-workspace-strip__permission-trigger--full_access & {
+      color: var(--bf-appearance-token-color-error);
+    }
+
+    .bitfun-chat-input-workspace-strip__permission-trigger--reject &,
+    .bitfun-chat-input-workspace-strip__permission-trigger--acp & {
+      color: var(--bf-appearance-token-color-text-muted);
+    }
   }
 
   &__permission-label {
@@ -617,13 +539,16 @@
     }
   }
 
+  // The goal is the only control on the strip that can be silently stuck, so
+  // color reports its state: a parked or blocked goal must not look like the
+  // absence of one.
   &__goal-btn.icon-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     min-width: 0;
     width: auto;
-    max-width: min(150px, 45%);
+    max-width: min(180px, 40%);
     height: 18px;
     padding: 0 4px;
     border-radius: $size-radius-base;
@@ -632,15 +557,14 @@
 
     svg {
       flex: none;
-      width: 16px;
-      height: 16px;
+      width: 15px;
+      height: 15px;
       color: currentColor;
     }
 
     span {
       min-width: 0;
       overflow: hidden;
-      color: var(--bf-appearance-token-color-text-primary);
       font-size: var(--bf-appearance-token-flowchat-font-size-xs);
       font-weight: 500;
       text-overflow: ellipsis;
@@ -650,12 +574,13 @@
     &:hover:not(:disabled) {
       transform: none;
       background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-primary);
+      color: inherit;
       opacity: 1;
     }
   }
 
-  &__goal-btn--none.icon-btn {
+  &__goal-btn--none.icon-btn,
+  &__goal-btn--complete.icon-btn {
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.58;
 
@@ -667,56 +592,28 @@
 
   &__goal-btn--active.icon-btn {
     color: var(--bf-appearance-token-color-text-primary);
-  }
-
-  &__goal-btn--complete.icon-btn {
-    color: var(--bf-appearance-token-color-text-muted);
-    opacity: 0.58;
-
-    &:hover:not(:disabled) {
-      color: var(--bf-appearance-token-color-text-muted);
-      opacity: 0.72;
-    }
-  }
-
-  &__goal-summary {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    max-width: min(150px, 45%);
-    color: var(--bf-appearance-token-color-text-primary);
 
     svg {
-      flex: none;
-      width: 16px;
-      height: 16px;
-    }
-
-    span {
-      min-width: 0;
-      overflow: hidden;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      font-weight: 500;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
-  &__goal-summary--inactive {
-    flex: none;
-    color: var(--bf-appearance-token-color-text-muted);
-    opacity: 0.58;
+  &__goal-btn--paused.icon-btn {
+    color: var(--bf-appearance-token-color-warning);
+  }
+
+  &__goal-btn--blocked.icon-btn {
+    color: var(--bf-appearance-token-color-error);
   }
 
   &__usage-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    min-width: 50px;
+    gap: 4px;
+    min-width: 0;
     height: 18px;
-    padding: 0 6px;
+    padding: 0 5px;
     border: 0;
     border-radius: $size-radius-base;
     background: transparent;
@@ -738,15 +635,15 @@
   &__usage-ring {
     position: relative;
     display: inline-flex;
-    flex: 0 0 16px;
-    width: 16px;
-    height: 16px;
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
 
     svg {
       position: absolute;
       inset: 0;
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
     }
 
     .is-track {
@@ -778,18 +675,13 @@
       background: var(--bf-appearance-token-element-bg-medium);
     }
 
-    &--workspace {
-      align-items: baseline;
-      flex: 0 1 auto;
-      max-width: 65%;
-    }
-
     &--branch {
       align-items: center;
       flex: 0 1 auto;
-      max-width: 120px;
-      gap: 5px;
+      max-width: 112px;
+      gap: 4px;
       margin: 0;
+      padding: 1px 4px;
       background: transparent;
     }
 
@@ -826,19 +718,19 @@
     min-width: 0;
     white-space: nowrap;
     font-family: inherit;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: inherit;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     padding-bottom: 0;
-    max-width: 100%;
+    max-width: 45%;
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__branch-icon {
     flex-shrink: 0;
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.9;
   }
@@ -847,41 +739,26 @@
     min-width: 0;
     white-space: nowrap;
     font-family: inherit;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: inherit;
     font-weight: inherit;
     flex: 1 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     padding-bottom: 1px;
-    color: var(--bf-appearance-token-color-text-primary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
 }
 
+// Degradation is ordered by what a reader loses: prose first, then labels, and
+// never the colors or the numeric readings that carry state and risk.
 @media (max-width: 680px) {
   .bitfun-chat-input-workspace-strip {
-    &--with-workspace#{&}--with-harness#{&}--with-runtime:not(#{&}--with-policy) {
-      grid-template-columns: minmax(0, 1fr) minmax(168px, auto) minmax(156px, auto);
-    }
-
-    &--with-workspace#{&}--with-harness#{&}--with-policy#{&}--with-runtime {
-      grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto minmax(150px, auto);
-    }
-
-    &--with-workspace#{&}--with-policy:not(#{&}--with-harness):not(#{&}--with-runtime) {
-      grid-template-columns: minmax(0, 1fr) auto;
-    }
-
-    &--with-workspace#{&}--with-policy#{&}--with-runtime:not(#{&}--with-harness) {
-      grid-template-columns: minmax(0, 1fr) auto auto;
-    }
-
     &__workspace {
       max-width: 112px;
     }
 
-    &__goal-btn.icon-btn,
-    &__goal-summary {
+    &__goal-btn.icon-btn {
       max-width: 118px;
     }
   }
@@ -890,6 +767,23 @@
 @media (max-width: 560px) {
   .bitfun-chat-input-workspace-strip {
     &__permission-label {
+      display: none;
+    }
+
+    &__chip--branch {
+      max-width: 84px;
+    }
+  }
+}
+
+@media (max-width: 460px) {
+  .bitfun-chat-input-workspace-strip {
+    // The objective goes, its status color does not.
+    &__goal-btn.icon-btn span {
+      display: none;
+    }
+
+    &__branch {
       display: none;
     }
   }

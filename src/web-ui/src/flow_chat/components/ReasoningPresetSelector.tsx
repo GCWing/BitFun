@@ -1,10 +1,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Brain,
-  ChartNoAxesColumnIncreasing,
   Check,
-  ChevronDown,
   Tally4,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +21,6 @@ interface ReasoningPresetSelectorProps {
   disabled?: boolean;
   loading?: boolean;
   dropdownPlacement?: 'top' | 'bottom';
-  variant?: 'inline' | 'status';
   onSelect: (presetId: string | null) => void | Promise<void>;
 }
 
@@ -126,7 +122,6 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
   disabled = false,
   loading = false,
   dropdownPlacement = 'top',
-  variant = 'inline',
   onSelect,
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -253,10 +248,13 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
   const statusLabel = effectivePreset
     ? presetStatusLabel(effectivePreset, t)
     : currentLabel;
+  // The trigger is the meter and nothing else, so this string is both the hover
+  // text and the control's accessible name. It names the level the meter draws
+  // rather than the preset's raw id, because that is what the shape shows.
   const tooltip = selected
-    ? t('reasoningSelector.current', { preset: currentLabel })
+    ? t('reasoningSelector.current', { preset: statusLabel })
     : t('reasoningSelector.currentAuto', {
-        preset: defaultPreset ? presetLabel(defaultPreset, t) : t('reasoningSelector.modelDefault'),
+        preset: effectivePreset ? statusLabel : t('reasoningSelector.modelDefault'),
       });
 
   return (
@@ -273,13 +271,13 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
           type="button"
           className={[
             'bitfun-reasoning-preset-selector__trigger',
-            variant === 'status' && 'bitfun-reasoning-preset-selector__trigger--status',
             open && 'bitfun-reasoning-preset-selector__trigger--open',
           ].filter(Boolean).join(' ')}
           data-bf-component="reasoning-preset-selector"
           data-bf-part="trigger"
           data-bf-state={open ? 'open' : undefined}
           data-testid="chat-reasoning-preset-selector-btn"
+          aria-label={tooltip}
           aria-haspopup="menu"
           aria-expanded={open}
           aria-controls={open ? menuId : undefined}
@@ -304,43 +302,16 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
             }
           }}
         >
-          {variant === 'status' ? (
-            <>
-              <ChartNoAxesColumnIncreasing
-                className="bitfun-reasoning-preset-selector__status-overview"
-                size={16}
-                strokeWidth={1.8}
-                aria-hidden="true"
-              />
-              <span
-                className="bitfun-reasoning-preset-selector__label"
-                data-bf-component="reasoning-preset-selector"
-                data-bf-part="label"
-              >
-                {statusLabel}
-              </span>
-              <span className="bitfun-reasoning-preset-selector__status-divider" aria-hidden="true" />
-              <Tally4
-                className="bitfun-reasoning-preset-selector__status-meter"
-                size={16}
-                strokeWidth={2.8}
-                data-active-bars={intensityBars}
-                aria-hidden="true"
-              />
-            </>
-          ) : (
-            <>
-              <Brain size={10} aria-hidden="true" />
-              <span
-                className="bitfun-reasoning-preset-selector__label"
-                data-bf-component="reasoning-preset-selector"
-                data-bf-part="label"
-              >
-                {currentLabel}
-              </span>
-              <ChevronDown size={10} aria-hidden="true" />
-            </>
-          )}
+          {/* Shape carries the intensity on its own. A word beside it would only
+              repeat what the four bars already say, in the one place along the
+              capsule where width is scarcest. */}
+          <Tally4
+            className="bitfun-reasoning-preset-selector__status-meter"
+            size={14}
+            strokeWidth={2.8}
+            data-active-bars={intensityBars}
+            aria-hidden="true"
+          />
         </button>
       </Tooltip>
 

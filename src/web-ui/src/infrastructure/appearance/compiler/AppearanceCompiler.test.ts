@@ -398,7 +398,7 @@ describe('AppearanceCompiler', () => {
           parts: {
             topAction: {
               contexts: [{
-                when: { facets: { action: 'assistant' }, states: ['active'] },
+                when: { facets: { action: 'new-session' }, states: ['active'] },
                 style: { backgroundColor: accent },
               }],
             },
@@ -422,7 +422,7 @@ describe('AppearanceCompiler', () => {
     const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
     expect(snapshot.cssText).toContain('[data-bf-component="about-dialog"][data-bf-part="hero"]');
     expect(snapshot.cssText).toContain('[data-bf-component="about-dialog"][data-bf-part="updateCard"][data-bf-state~="downloading"] [data-bf-component="about-dialog"][data-bf-part="progressFill"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="nav-panel"][data-bf-part="topAction"][data-bf-action="assistant"][data-bf-state~="active"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="nav-panel"][data-bf-part="topAction"][data-bf-action="new-session"][data-bf-state~="active"]');
     expect(snapshot.cssText).toContain('[data-bf-component="canvas-editor-area"][data-bf-part="root"][data-bf-layout="grid"]');
     expect(snapshot.cssText).toContain('[data-bf-component="canvas-tab"][data-bf-part="root"][data-bf-state~="active"]');
   });

@@ -137,7 +137,6 @@ vi.mock('../store/FlowChatStore', () => ({
 
 describe('ModelSelector external transport reuse', () => {
   let container: HTMLDivElement;
-  let reasoningHost: HTMLDivElement;
   let root: Root;
   let catalogUpdated: (() => void) | undefined;
 
@@ -173,15 +172,12 @@ describe('ModelSelector external transport reuse', () => {
     vi.stubGlobal('ResizeObserver', TestResizeObserver);
     container = document.createElement('div');
     document.body.appendChild(container);
-    reasoningHost = document.createElement('div');
-    document.body.appendChild(reasoningHost);
     root = createRoot(container);
   });
 
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
-    reasoningHost.remove();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -278,17 +274,15 @@ describe('ModelSelector external transport reuse', () => {
           currentMode="agentic"
           sessionId="miniapp-session"
           persistSharedModeDefault={false}
-          reasoningControlHost={reasoningHost}
         />,
       );
       await Promise.resolve();
     });
-    expect(
-      reasoningHost.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]'),
-    ).not.toBeNull();
+    // Thinking strength belongs to the model that does the thinking, so it
+    // renders beside the model trigger instead of being relocated elsewhere.
     expect(
       container.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]'),
-    ).toBeNull();
+    ).not.toBeNull();
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.click();
     });
@@ -308,7 +302,7 @@ describe('ModelSelector external transport reuse', () => {
     }));
 
     await act(async () => {
-      reasoningHost.querySelector<HTMLButtonElement>(
+      container.querySelector<HTMLButtonElement>(
         '[data-testid="chat-reasoning-preset-selector-btn"]',
       )?.click();
     });

@@ -1,0 +1,210 @@
+// The approval band sits in the composer stack, directly above the capsule.
+// It borrows the capsule's width and radius so it reads as the composer having
+// grown a row, not as a dialog that happens to be nearby.
+.bitfun-chat-input-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 52%, var(--bf-appearance-token-border-base));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, var(--bf-appearance-token-color-warning));
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  animation: bitfun-chat-input-approval-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
+
+  &__request {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 5px;
+  }
+
+  &__icon {
+    flex: none;
+    color: var(--bf-appearance-token-color-warning);
+  }
+
+  &__action {
+    flex: none;
+    font-weight: 600;
+  }
+
+  &__separator {
+    flex: none;
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  // The resource is the part worth the remaining width: which file, which
+  // command. Identity and owner are context and yield first.
+  &__resource {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__owner {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__count {
+    flex: none;
+    margin-left: auto;
+    padding: 1px 6px;
+    border-radius: 8px;
+    color: var(--bf-appearance-token-color-static-white);
+    background: var(--bf-appearance-token-color-warning);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-weight: 700;
+    cursor: default;
+  }
+
+  &__note {
+    margin: 0;
+    color: var(--bf-appearance-token-color-warning);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+
+    &--error {
+      color: var(--bf-appearance-token-color-error);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__spacer {
+    flex: 1 1 auto;
+  }
+
+  &__scope {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    padding: 2px;
+    border: 1px solid var(--bf-appearance-token-border-base);
+    border-radius: 7px;
+    background: var(--bf-appearance-token-color-bg-primary);
+  }
+
+  &__scope-option {
+    min-height: 20px;
+    padding: 1px 7px;
+    border: none;
+    border-radius: 5px;
+    color: var(--bf-appearance-token-color-text-secondary);
+    background: transparent;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    cursor: pointer;
+
+    &--active {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bf-appearance-token-color-warning);
+      outline-offset: 1px;
+    }
+  }
+
+  &__btn {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    min-height: 26px;
+    padding: 3px 10px;
+    border: 1px solid var(--bf-appearance-token-border-base);
+    border-radius: 7px;
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-color-bg-primary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    cursor: pointer;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-color-bg-primary));
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bf-appearance-token-color-warning);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: wait;
+      opacity: 0.6;
+    }
+
+    &--reject,
+    &--reject-reason {
+      color: var(--bf-appearance-token-color-error);
+    }
+
+    // Rejecting with the composer's text is a distinct answer, so it looks
+    // like one instead of like a second copy of the reject button.
+    &--reject-reason {
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 55%, var(--bf-appearance-token-border-base));
+      border-style: dashed;
+    }
+
+    &--allow {
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 60%, var(--bf-appearance-token-border-base));
+    }
+  }
+}
+
+// A narrow composer drops the tool's identity and then the answer labels, but
+// never an answer: every way out of the block stays reachable, and the two
+// that could be confused for each other keep their icons.
+@media (max-width: 560px) {
+  .bitfun-chat-input-approval {
+    &__owner {
+      display: none;
+    }
+
+    &__btn--reject span,
+    &__btn--reject-reason span,
+    &__btn--allow span {
+      display: none;
+    }
+  }
+}
+
+@keyframes bitfun-chat-input-approval-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-chat-input-approval {
+    animation: none;
+
+    &__btn {
+      transition-duration: 0ms;
+    }
+  }
+}

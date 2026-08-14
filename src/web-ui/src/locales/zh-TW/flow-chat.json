@@ -2,8 +2,6 @@
   "permission": {
     "title": "需要授權",
     "subagentOwner": "{{subagent}} 子 Agent",
-    "feedbackLabel": "拒絕回饋",
-    "feedbackPlaceholder": "拒絕時可選填後續建議",
     "responseFailed": "權限回覆未能送達，請重試。",
     "allowOnce": "允許一次",
     "allowAlways": "始終允許",
@@ -21,11 +19,12 @@
       "public": "公開"
     },
     "reject": "拒絕",
+    "rejectWithReason": "附理由拒絕",
+    "rejectWithReasonTooltip": "以輸入框中的內容作為拒絕理由，送出後清空輸入框。",
+    "scopeLabel": "回覆範圍",
+    "scopeThis": "本次",
+    "scopeAll": "全部",
     "batchCount": "{{count}} 個授權請求",
-    "collapsePanel": "收起授權請求",
-    "expandPanel": "展開 {{count}} 個待處理的授權請求",
-    "current": "目前",
-    "pending": "等待中",
     "actions": {
       "read": "讀取檔案",
       "edit": "編輯檔案",
@@ -172,7 +171,9 @@
       "turns": "{{count}} 輪",
       "calls": "{{count}} 次呼叫",
       "operations": "{{count}} 次操作",
-      "tokens": "{{value}} Tokens"
+      "tokens": "{{value}} Tokens",
+      "tokenUsage": "Tokens 用量",
+      "dataDelayDisclaimer": "資料統計可能存在延遲，最終以系統記錄為準"
     },
     "loading": {
       "title": "正在產生用量報告",
@@ -688,9 +689,9 @@
       "comingSoonNotice": "「{{name}}」Harness 正在開發中。",
       "legacySessionNotice": "該舊會話繼續使用原 Agent 模式；請新增會話使用 Agent Harness。",
       "profiles": {
-        "minimal": { "name": "極簡" },
-        "balanced": { "name": "均衡" },
-        "ultimate": { "name": "極致" }
+        "minimal": { "name": "極簡", "promise": "直接執行，最少編排與校驗" },
+        "balanced": { "name": "均衡", "promise": "先規劃再執行，關鍵處校驗" },
+        "ultimate": { "name": "極致", "promise": "深度規劃、多方協作、全面校驗" }
       }
     },
     "specialistAgents": {
