@@ -5,7 +5,7 @@
  * @module components/MarkdownEditor
  */
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
 import { analyzeMarkdownEditability, type MarkdownEditabilityAnalysis } from '../meditor/utils/tiptapMarkdown';
@@ -617,20 +617,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     return () => clearTimeout(timer);
   }, [jumpToLine, jumpToColumn, filePath, loading, content]);
 
-  const notices = useMemo(() => {
-    const nextNotices: string[] = [];
-
-    if (filePath && (
-      editability.mode === 'unsafe' ||
-      editability.containsRenderOnlyBlocks ||
-      editability.containsRawHtmlInlines
-    )) {
-      nextNotices.push(t('editor.markdownEditor.notice.sourcePreviewFallback'));
-    }
-
-    return nextNotices;
-  }, [editability, filePath, t]);
-
   const shouldUseSourcePreviewFallback = !!filePath && (
     editability.mode === 'unsafe' ||
     editability.containsRenderOnlyBlocks ||
@@ -664,16 +650,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   if (shouldUseSourcePreviewFallback) {
     return (
       <div className={`bitfun-markdown-editor ${className}`} data-bf-component="markdown-editor" data-bf-part="root" data-bf-view={unsafeViewMode}>
-        {notices.length > 0 && (
-          <div className="bitfun-markdown-editor__notice-bar" data-bf-component="markdown-editor" data-bf-part="notice">
-            <AlertCircle className="bitfun-markdown-editor__notice-icon" />
-            <div className="bitfun-markdown-editor__notice-copy">
-              {notices.map(notice => (
-                <p key={notice}>{notice}</p>
-              ))}
-            </div>
-          </div>
-        )}
         <div className="bitfun-markdown-editor__mode-toolbar" data-bf-component="markdown-editor" data-bf-part="toolbar">
           <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')} data-bf-component="markdown-editor" data-bf-part="modeToggle">
             <Button
@@ -771,16 +747,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   return (
     <div className={`bitfun-markdown-editor ${className}`} data-bf-component="markdown-editor" data-bf-part="root" data-bf-view={viewMode}>
-      {notices.length > 0 && (
-        <div className="bitfun-markdown-editor__notice-bar" data-bf-component="markdown-editor" data-bf-part="notice">
-          <AlertCircle className="bitfun-markdown-editor__notice-icon" />
-          <div className="bitfun-markdown-editor__notice-copy">
-            {notices.map(notice => (
-              <p key={notice}>{notice}</p>
-            ))}
-          </div>
-        </div>
-      )}
       <div className="bitfun-markdown-editor__mode-toolbar" data-bf-component="markdown-editor" data-bf-part="toolbar">
         <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')} data-bf-component="markdown-editor" data-bf-part="modeToggle">
           <Button

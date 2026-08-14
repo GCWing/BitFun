@@ -77,7 +77,7 @@
       "copiedMarkdown": "Copied Markdown",
       "viewModeLabel": "Markdown and preview mode",
       "notice": {
-        "sourcePreviewFallback": "This document contains HTML fragments that are not safely editable in visual mode. Edit in source mode or switch to preview."
+        "sourcePreviewFallback": "This document contains syntax that is not safely editable in visual mode. Edit in source mode or switch to preview."
       }
     },
     "planViewer": {
@@ -119,6 +119,9 @@
       "localImageFailed": "Image failed to load",
       "rawHtml": {
         "inlineLabel": "HTML"
+      },
+      "frontmatter": {
+        "label": "YAML Frontmatter"
       },
       "details": {
         "summaryPlaceholder": "Summary"

@@ -20,6 +20,7 @@ import { Preview } from './Preview'
 import type { EditorOptions, EditorInstance } from '../types'
 import { useI18n } from '@/infrastructure/i18n'
 import { analyzeMarkdownEditability } from '../utils/tiptapMarkdown'
+import { AlertCircle } from 'lucide-react'
 import './MEditor.scss'
 
 const log = createLogger('MEditor')
@@ -260,7 +261,12 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
 
   const tiptapEditorRef = useRef<TiptapEditorHandle>(null)
   const editability = useMemo(() => analyzeMarkdownEditability(value), [value])
-  const effectiveMode = mode === 'ir' && editability.containsRenderOnlyBlocks
+  const irNeedsSourceFallback = mode === 'ir' && (
+    editability.mode === 'unsafe' ||
+    editability.containsRenderOnlyBlocks ||
+    editability.containsRawHtmlInlines
+  )
+  const effectiveMode = irNeedsSourceFallback
     ? (readonly ? 'preview' : 'split')
     : mode
 
@@ -437,6 +443,12 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
       tabIndex={-1}
     >
       {toolbar && <div data-bf-component="m-editor" data-bf-part="toolbar" className="m-editor-toolbar">{t('editor.meditor.toolbarPlaceholder')}</div>}
+      {irNeedsSourceFallback && (
+        <div className="m-editor-notice" data-bf-component="m-editor" data-bf-part="notice">
+          <AlertCircle className="m-editor-notice__icon" />
+          <span>{t('editor.markdownEditor.notice.sourcePreviewFallback')}</span>
+        </div>
+      )}
       
       <div data-bf-component="m-editor" data-bf-part="content" className="m-editor-content">
         {effectiveMode === 'preview' && (

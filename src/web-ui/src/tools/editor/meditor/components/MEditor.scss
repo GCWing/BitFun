@@ -12,6 +12,26 @@
     background: var(--bf-appearance-token-element-bg-soft);
     backdrop-filter: blur(8px);
   }
+
+  &-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    line-height: 1.45;
+
+    &__icon {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      color: var(--bf-appearance-token-color-warning);
+    }
+  }
   
   &-content {
     flex: 1;
