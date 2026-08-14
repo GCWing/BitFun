@@ -76,10 +76,11 @@
     "items": {
       "sessions": "会话",
       "project": "目录",
-      "persona": "助理",
-      "todos": "待办事项",
+      "persona": "智能成员",
+      "longTermTracking": "长期跟踪",
       "agents": "专业智能体",
       "skills": "技能",
+      "ecosystemCompatibility": "生态兼容",
       "tools": "工具",
       "terminal": "Shell",
       "git": "Git",
@@ -87,17 +88,22 @@
       "insights": "洞察"
     },
     "tooltips": {
-      "persona": "助理 — 创建与管理所有助理实例",
-      "todos": "待办 — 汇总所有定时任务，列表与日历两层查看",
+      "persona": "智能成员 — 展开查看基于角色和记忆的成员会话",
+      "todos": "待办 — 打开全部待办事项",
+      "longTermTracking": "长期跟踪 — 持续任务与长期对话",
       "agents": "它能调用哪些 Agent",
       "skills": "它懂什么专项知识 — 技能知识文件",
+      "ecosystemCompatibility": "生态兼容 — 管理其他 AI 应用的兼容能力与扩展",
       "tools": "它能用什么工具 — 内置工具与 MCP 服务",
       "addWorkspace": "添加工作区"
     },
     "sections": {
-      "extensions": "定制",
+      "extensions": "扩展与兼容",
       "shell": "Shell",
       "assistantSessions": "助理会话"
+    },
+    "messages": {
+      "longTermTrackingComingSoon": "长期跟踪正在开发中"
     },
     "search": {
       "triggerPlaceholder": "搜索",
@@ -185,6 +191,60 @@
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "noSessions": "暂无会话",
+      "viewMenu": {
+        "title": "会话视图",
+        "tooltip": "组织与筛选会话",
+        "grouping": {
+          "label": "分组",
+          "workspace": "$t(shared:features.workspace)",
+          "all": "全部会话"
+        },
+        "ordering": {
+          "label": "排序",
+          "updated": "最近更新",
+          "status": "状态",
+          "created": "最新创建",
+          "name": "名称"
+        },
+        "show": {
+          "label": "显示",
+          "all": "全部会话",
+          "unread": "未读会话",
+          "attention": "需要处理"
+        },
+        "filters": {
+          "label": "筛选",
+          "reset": "重置"
+        },
+        "status": {
+          "label": "状态",
+          "running": "$t(shared:statuses.running)",
+          "attention": "需要处理",
+          "error": "错误",
+          "completed": "$t(shared:statuses.done)",
+          "idle": "空闲"
+        },
+        "worktree": {
+          "label": "工作树",
+          "main": "主工作区",
+          "worktree": "工作树会话"
+        },
+        "environment": {
+          "label": "环境",
+          "local": "本地",
+          "remote": "远程工作区",
+          "detached": "分离执行"
+        },
+        "source": {
+          "label": "来源",
+          "bitfun": "$t(shared:product.name)",
+          "external": "外部 Agent"
+        },
+        "archived": "归档会话",
+        "collapseAll": "全部折叠",
+        "markAllRead": "全部标为已读",
+        "noMatches": "没有符合当前筛选条件的会话"
+      },
       "rename": "重命名",
       "renameOutcomeUnknown": "重命名结果尚不确定。请刷新或重新打开会话列表，确认当前名称后再重试。",
       "copySessionId": "复制 ID",
@@ -221,7 +281,7 @@
       "ariaInputResolvedRemaining": "会话 '{{name}}' 已收到输入。还有 {{count}} 个会话等待中。",
       "badgeBackgroundSubagents": "后台 {{count}}",
       "backgroundSubagentsRunning": "{{count}} 个后台子 Agent 运行中",
-      "needProjectWorkspaceForSession": "请先打开或添加项目工作区。编码与工作（Cowork）会话不能在助理区域创建。",
+      "needProjectWorkspaceForSession": "请先打开或添加项目工作区，再新建项目会话。",
       "manage": "批量管理会话",
       "batchManageDescription": "选择此工作区中的会话，然后批量归档或删除。",
       "batchSelectionSummary": "已选择 {{count}} 个 · 共 {{total}} 个会话",

@@ -68,6 +68,7 @@ export const SessionUsageModal: React.FC = () => {
       onClose={closeSessionUsageModal}
       title={t('usage.title')}
       size="large"
+      overlayClassName="session-usage-modal"
       testId="session-usage-modal"
     >
       <div
@@ -76,6 +77,7 @@ export const SessionUsageModal: React.FC = () => {
         data-bf-part="content"
       >
         <SessionUsageReportCard
+          compact
           report={report}
           markdown={markdown}
           generatedAt={report?.generatedAt}

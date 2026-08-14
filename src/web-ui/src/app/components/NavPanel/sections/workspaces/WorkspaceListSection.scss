@@ -20,6 +20,13 @@
     }
   }
 
+  &__workspace-all-sessions {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+  }
+
   &__workspace-group {
     display: flex;
     flex-direction: column;
@@ -1515,6 +1522,14 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .bitfun-nav-panel__workspace-item:hover,
+  .bitfun-nav-panel__assistant-item:hover,
+  .bitfun-nav-panel__workspace-item-card:hover,
+  .bitfun-nav-panel__assistant-item-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
   .bitfun-nav-panel__workspace-item-card:hover,
   .bitfun-nav-panel__assistant-item-card:hover {
     background: var(--bf-appearance-token-element-bg-soft);

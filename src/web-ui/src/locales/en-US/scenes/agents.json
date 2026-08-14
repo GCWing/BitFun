@@ -9,13 +9,39 @@
   "loading": "Loading…",
   "page": {
     "title": "Agents",
-    "subtitle": "Review and manage core modes, agents, and sub-agents, including tools and skills.",
+    "subtitle": "Choose how the root Harness works, then review the specialist Agents it can call.",
     "searchPlaceholder": "Search agents by name or description…",
     "newAgent": "New Agent"
   },
   "nav": {
-    "coreAgents": "Core Agents",
-    "agents": "Agent"
+    "harness": "Agent Harness",
+    "coreAgents": "Connected Agents",
+    "agents": "Specialist Agents"
+  },
+  "harnessZone": {
+    "title": "Agent Harness",
+    "subtitle": "The root Agent strategy for each turn. Balanced is connected to the current agentic runtime; other profiles stay explicit until their runtime policies exist.",
+    "connected": "Connected",
+    "comingSoon": "In development",
+    "balancedConnectedNotice": "Balanced is already the default Harness for new sessions.",
+    "comingSoonNotice": "{{name}} Harness is in development.",
+    "profiles": {
+      "minimal": {
+        "name": "Minimal",
+        "description": "Fast, direct work with the least necessary coordination.",
+        "behavior": "Minimum planning and focused verification"
+      },
+      "balanced": {
+        "name": "Balanced",
+        "description": "Adaptive planning, on-demand Agents, and focused verification.",
+        "behavior": "Default · connected through agentic"
+      },
+      "ultimate": {
+        "name": "Ultimate",
+        "description": "Bounded decomposition, specialist collaboration, and independent review.",
+        "behavior": "Quality-first with explicit budgets"
+      }
+    }
   },
   "filters": {
     "source": "Source",
@@ -24,12 +50,12 @@
     "user": "User",
     "project": "Project",
     "external": "External",
-    "mode": "Agent",
-    "subagent": "Sub-Agent"
+    "mode": "Direct Agent",
+    "subagent": "Collaborating Agent"
   },
   "coreAgentsZone": {
-    "title": "Core Agents",
-    "subtitle": "Built-in core agents covering mainstream AI workflows, ready to use out of the box.",
+    "title": "Connected Agents",
+    "subtitle": "Existing runtime Agents that can already be configured. Legacy mode wiring remains visible during migration.",
     "empty": "No core agents detected",
     "roleLabel": "Primary Use · ",
     "computerUseDisabledBadge": "Disabled in Settings",
@@ -46,8 +72,8 @@
     }
   },
   "agentsZone": {
-    "title": "Agents Overview",
-    "subtitle": "Browse all agents and sub-agents, then manage tools and skills directly.",
+    "title": "Specialist Agents",
+    "subtitle": "Browse Agents the Harness can use for planning, research, review, coding, testing, and other focused work.",
     "empty": {
       "noAgents": "No agents are available right now",
       "noMatch": "No matching agents"

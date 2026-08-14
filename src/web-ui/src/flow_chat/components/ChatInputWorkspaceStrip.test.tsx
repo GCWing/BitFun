@@ -23,13 +23,27 @@ vi.mock('react-i18next', () => ({
     init: vi.fn(),
   },
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: { defaultValue?: string }) => ({
+      'deepReviewConsent.strategyLabels.normal': 'Standard',
+      'reasoningSelector.auto': 'Auto',
+      'chatInput.permissionMode.ask.label': 'Ask',
+    } as Record<string, string>)[key] ?? options?.defaultValue ?? key,
   }),
 }));
 
 vi.mock('@/component-library', () => ({
-  IconButton: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>{children}</button>
+  IconButton: ({
+    children,
+    onClick,
+    className,
+    'data-testid': testId,
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    className?: string;
+    'data-testid'?: string;
+  }) => (
+    <button type="button" className={className} data-testid={testId} onClick={onClick}>{children}</button>
   ),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -41,7 +55,9 @@ vi.mock('@/tools/git/hooks/useGitState', () => ({
 // The real picker pulls in account state, SSH dialogs and a lazy remote-connect
 // route. This suite only asserts whether the strip mounts it at all.
 vi.mock('@/features/dispatch/DispatchTargetPicker', () => ({
-  DispatchTargetPicker: () => <div data-testid="chat-input-dispatch-trigger" />,
+  DispatchTargetPicker: ({ locked }: { locked: boolean }) => (
+    <div data-testid="chat-input-dispatch-trigger" data-locked={locked ? 'true' : 'false'} />
+  ),
 }));
 
 describe('ChatInputWorkspaceStrip git refresh behavior', () => {
@@ -109,6 +125,155 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     }));
   });
 
+  it('keeps reasoning intensity and context usage in one runtime group', async () => {
+    let reasoningHost: HTMLDivElement | null = null;
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+          harnessControl={{ onActivateBalanced: vi.fn() }}
+          reasoningControl={{
+            visible: true,
+            hostRef: node => { reasoningHost = node; },
+          }}
+          usageReport={{ visible: true, percentage: 12, onOpen: vi.fn() }}
+        />
+      );
+    });
+
+    expect(container.textContent).toContain('BitFun');
+    expect(container.textContent).not.toContain('chatInput.harness.menuTitle');
+    expect(container.textContent).toContain('12%');
+    expect(container.querySelector('[data-bf-part="harness"]')).not.toBeNull();
+    expect(container.querySelector('.bitfun-chat-input-workspace-strip__goal-summary--inactive')).not.toBeNull();
+    const runtime = container.querySelector<HTMLElement>('[data-bf-part="runtime"]');
+    expect(runtime).not.toBeNull();
+    expect(reasoningHost).not.toBeNull();
+    expect(runtime?.contains(reasoningHost)).toBe(true);
+    expect(runtime?.querySelector('[data-bf-part="usageAction"]')).not.toBeNull();
+    expect(runtime?.querySelector('.bitfun-chat-input-workspace-strip__runtime-divider')).not.toBeNull();
+  });
+
+  it('keeps the three-tier Harness list but drops the heavy menu chrome', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+          harnessControl={{ onActivateBalanced: vi.fn() }}
+        />
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const menu = document.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
+    expect(menu).not.toBeNull();
+    expect(menu?.querySelectorAll('[data-bf-part="profile"]').length).toBe(3);
+    // Simplified list: no header, hint, footer, icons, or descriptions.
+    expect(menu?.querySelector('.bitfun-harness-selector__header')).toBeNull();
+    expect(menu?.querySelector('.bitfun-harness-selector__footer')).toBeNull();
+    expect(menu?.querySelector('.bitfun-harness-selector__profile-icon')).toBeNull();
+    expect(menu?.querySelector('.bitfun-harness-selector__profile-description')).toBeNull();
+    expect(menu?.querySelector('[data-bf-part="profile"][data-bf-profile="balanced"]'))
+      .not.toBeNull();
+  });
+
+  it('activates the Balanced harness from the simplified list', async () => {
+    const onActivateBalanced = vi.fn();
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+          harnessControl={{ onActivateBalanced }}
+        />
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const balancedRow = document.querySelector<HTMLButtonElement>(
+      '[data-bf-part="profile"][data-bf-profile="balanced"]',
+    );
+    expect(balancedRow?.dataset.bfState).toBe('current');
+
+    await act(async () => {
+      balancedRow?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onActivateBalanced).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
+  });
+
+  it('shows goal text only while the goal is active', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+          harnessControl={{ onActivateBalanced: vi.fn() }}
+          threadGoal={{
+            visible: true,
+            goal: null,
+            onOpen: vi.fn(),
+          }}
+        />
+      );
+    });
+
+    const goalButton = container.querySelector<HTMLElement>('[data-testid="thread-goal-strip-button"]');
+    expect(goalButton?.textContent).toBe('');
+    expect(goalButton?.classList.contains('bitfun-chat-input-workspace-strip__goal-btn--none')).toBe(true);
+
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+          harnessControl={{ onActivateBalanced: vi.fn() }}
+          threadGoal={{
+            visible: true,
+            goal: { objective: 'Optimize input interaction', status: 'active' },
+            onOpen: vi.fn(),
+          }}
+        />
+      );
+    });
+
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="thread-goal-strip-button"]')?.textContent,
+    ).toBe('Optimize input interaction');
+  });
+
+  it('places automatic approval immediately after the Harness profile', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+          harnessControl={{ onActivateBalanced: vi.fn() }}
+          permissionControl={{ mode: 'auto', onChange: vi.fn() }}
+        />
+      );
+    });
+
+    const harness = container.querySelector<HTMLElement>('[data-bf-part="harness"]');
+    const trigger = container.querySelector<HTMLElement>(
+      '[data-testid="chat-input-permission-trigger"]',
+    );
+    expect(trigger?.textContent).toContain('chatInput.permissionMode.auto.label');
+    expect(harness?.contains(trigger ?? null)).toBe(true);
+    expect(
+      container.querySelector('.bitfun-chat-input-workspace-strip__actions--portal-only'),
+    ).not.toBeNull();
+  });
+
   it('keeps an ask-mode permission entry visible and switches from its menu', async () => {
     const onChange = vi.fn();
     const onHide = vi.fn();
@@ -124,7 +289,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
 
     const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-permission-trigger"]');
     expect(trigger?.dataset.permissionMode).toBe('ask');
-    expect(trigger?.textContent).toContain('chatInput.permissionMode.ask.label');
+    expect(trigger?.textContent).toContain('Ask');
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -224,7 +389,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
       '[data-testid="chat-input-permission-option-ask"]',
     );
     // The row itself stays single-line; the description lives in the tooltip.
-    expect(option?.textContent).toBe('chatInput.permissionMode.ask.label');
+    expect(option?.textContent).toBe('Ask');
     expect(option?.getAttribute('aria-label')).toContain(
       'chatInput.permissionMode.ask.description',
     );
@@ -457,6 +622,50 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(trigger?.disabled).toBe(true);
     expect(trigger?.dataset.permissionMode).toBe('acp');
     expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
+  });
+
+  it('keeps the ACP strip groups in one row with the policy and runtime column layout', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+          permissionControl={{ mode: 'acp' }}
+          usageReport={{ visible: true, percentage: 42, onOpen: vi.fn() }}
+        />
+      );
+    });
+
+    const strip = container.querySelector<HTMLElement>('[data-testid="chat-input-workspace-strip"]');
+    expect(strip).not.toBeNull();
+    // ACP sessions have no Harness group, but the approval and runtime groups
+    // must still be placed on the strip's single grid row instead of stacking
+    // into additional lines below the workspace breadcrumb.
+    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-workspace');
+    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-policy');
+    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-runtime');
+    expect(strip?.className).not.toContain('bitfun-chat-input-workspace-strip--with-harness');
+    expect(strip?.querySelector('[data-bf-part="main"]')).not.toBeNull();
+    expect(strip?.querySelector('[data-bf-part="actions"]')).not.toBeNull();
+    expect(strip?.querySelector('[data-bf-part="runtime"]')).not.toBeNull();
+  });
+
+  it('keeps the ACP strip on a single row without a runtime group', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+          permissionControl={{ mode: 'acp' }}
+        />
+      );
+    });
+
+    const strip = container.querySelector<HTMLElement>('[data-testid="chat-input-workspace-strip"]');
+    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-workspace');
+    expect(strip?.className).toContain('bitfun-chat-input-workspace-strip--with-policy');
+    expect(strip?.className).not.toContain('bitfun-chat-input-workspace-strip--with-runtime');
+    expect(strip?.className).not.toContain('bitfun-chat-input-workspace-strip--with-harness');
   });
 
   it('reuses the permission control with dispatch-scoped choices', async () => {
@@ -704,7 +913,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(container.textContent).not.toContain('main');
   });
 
-  it('hides the dispatch picker outside a Git workspace, like the worktree toggle', async () => {
+  it('keeps the local execution breadcrumb visible but locked outside a Git workspace', async () => {
     mocks.useGitState.mockReturnValue({
       currentBranch: '',
       isRepository: false,
@@ -727,6 +936,10 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     });
 
     expect(container.querySelector('[data-testid="chat-input-worktree-toggle"]')).toBeNull();
-    expect(container.querySelector('[data-testid="chat-input-dispatch-trigger"]')).toBeNull();
+    const dispatchTrigger = container.querySelector<HTMLElement>(
+      '[data-testid="chat-input-dispatch-trigger"]',
+    );
+    expect(dispatchTrigger).not.toBeNull();
+    expect(dispatchTrigger?.dataset.locked).toBe('true');
   });
 });

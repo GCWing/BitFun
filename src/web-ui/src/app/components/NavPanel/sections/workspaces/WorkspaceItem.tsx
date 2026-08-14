@@ -25,6 +25,7 @@ import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace'
 import type { AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { loadWorkspaceAcpMenuClients } from './workspaceAcpMenuClients';
 import SessionsSection from '../sessions/SessionsSection';
+import { useWorkspaceSessionViewStore } from '../../workspaceSessionView';
 import {
   WorkspaceKind,
   isRemoteWorkspace,
@@ -111,10 +112,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
+  const collapseAllRequestId = useWorkspaceSessionViewStore(state => state.collapseAllRequestId);
   const [searchIndexModalOpen, setSearchIndexModalOpen] = useState(false);
   const [scheduledJobsModalOpen, setScheduledJobsModalOpen] = useState(false);
   const [sessionBatchModalOpen, setSessionBatchModalOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (collapseAllRequestId > 0) setSessionsCollapsed(true);
+  }, [collapseAllRequestId]);
   const [workspaceSearchEnabled, setWorkspaceSearchEnabled] = useState(
     () => aiExperienceConfigService.getSettings().enable_workspace_search,
   );
@@ -666,12 +672,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     workspace,
   ]);
 
-  const handleCreateCodeSession = useCallback(() => {
+  const handleCreateProjectSession = useCallback(() => {
     void handleCreateSession('agentic');
-  }, [handleCreateSession]);
-
-  const handleCreateCoworkSession = useCallback(() => {
-    void handleCreateSession('Cowork');
   }, [handleCreateSession]);
 
   const handleCreateAcpSession = useCallback(async (client: AcpClientInfo) => {
@@ -991,7 +993,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
             remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
             isActiveWorkspace={isActive}
-            assistantLabel={workspaceDisplayName}
+            presentation={{
+              kind: 'assistant',
+              assistant: {
+                id: workspace.assistantId || workspace.id,
+                name: workspaceDisplayName,
+                avatar: workspace.identity?.avatar,
+                emoji: workspace.identity?.emoji,
+              },
+            }}
             isVisible={!sessionsCollapsed}
           />
         </div>
@@ -1331,22 +1341,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   data-bf-component="workspace-item"
                   data-bf-part="menuItem"
                   className="bitfun-nav-panel__workspace-item-menu-item"
-                  onClick={handleCreateCodeSession}
-                  data-testid="nav-workspace-menu-create-code-session"
+                  onClick={handleCreateProjectSession}
+                  data-testid="nav-workspace-menu-create-session"
                 >
                   <Plus size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('shared:agents.code')}</span>
-                </button>
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
-                  onClick={handleCreateCoworkSession}
-                  data-testid="nav-workspace-menu-create-cowork-session"
-                >
-                  <Plus size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('shared:agents.cowork')}</span>
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newSession')}</span>
                 </button>
                 {acpClients.map(client => {
                   const label = client.name || client.id;
@@ -1511,6 +1510,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
           isActiveWorkspace={isActive}
           isVisible={!sessionsCollapsed}
+          useWorkspaceViewPreferences
         />
       </div>
 

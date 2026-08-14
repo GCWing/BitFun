@@ -3,6 +3,7 @@ export const chatInputWorkspaceStripAppearanceDescriptor: AppearanceSurfaceDescr
   id: 'chat-input-workspace-strip',
   parts: [
     { id: 'root' }, { id: 'main' }, { id: 'workspace' }, { id: 'branch' },
+    { id: 'harness' }, { id: 'runtime' },
     { id: 'actions' }, { id: 'permission' }, { id: 'permissionMenu' },
     { id: 'permissionOptions' }, { id: 'permissionOptionRow' },
     { id: 'permissionOption' }, { id: 'permissionOptionTrailing' },

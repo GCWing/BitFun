@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, Bot, ClipboardList, Code2, FolderKanban, Loader2, Trash2 } from 'lucide-react';
+import { Archive, Bot, FolderKanban, Loader2, MessageSquare, Trash2 } from 'lucide-react';
 import { Button, Checkbox, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
@@ -31,17 +31,14 @@ interface SessionBatchItem {
 
 const log = createLogger('WorkspaceSessionBatchModal');
 
-type SessionMode = 'code' | 'cowork' | 'claw';
+type SessionPresentation = 'project' | 'assistant';
 
-function resolveSessionMode(agentType: string | undefined): SessionMode {
+function resolveSessionPresentation(agentType: string | undefined): SessionPresentation {
   const normalized = agentType?.trim().toLowerCase() ?? '';
-  if (normalized === 'cowork') {
-    return 'cowork';
-  }
   if (normalized === 'claw') {
-    return 'claw';
+    return 'assistant';
   }
-  return 'code';
+  return 'project';
 }
 
 function buildSessionBatchItems(sessions: SessionMetadata[]): SessionBatchItem[] {
@@ -374,13 +371,8 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
           ) : (
             sessions.map(({ metadata, displayAsChild }) => {
               const isSelected = selectedSessionIds.has(metadata.sessionId);
-              const sessionMode = resolveSessionMode(metadata.agentType);
-              const SessionIcon =
-                sessionMode === 'cowork'
-                  ? ClipboardList
-                  : sessionMode === 'claw'
-                    ? Bot
-                    : Code2;
+              const sessionPresentation = resolveSessionPresentation(metadata.agentType);
+              const SessionIcon = sessionPresentation === 'assistant' ? Bot : MessageSquare;
               return (
                 <label data-bf-component="workspace-session-batch-modal" data-bf-part="row"
                   data-bf-state={[isSelected && 'selected', displayAsChild && 'child'].filter(Boolean).join(' ') || undefined}
@@ -394,7 +386,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
                       disabled={isBusy}
                     />
                   </div>
-                  <div className={`workspace-session-batch-modal__row-icon is-${sessionMode}`}>
+                  <div className={`workspace-session-batch-modal__row-icon is-${sessionPresentation}`}>
                     <SessionIcon size={15} />
                   </div>
                   <div data-bf-component="workspace-session-batch-modal" data-bf-part="rowContent" className="workspace-session-batch-modal__row-content">

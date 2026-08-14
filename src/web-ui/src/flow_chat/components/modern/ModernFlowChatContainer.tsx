@@ -7,7 +7,6 @@ import React, { useMemo, useCallback, useRef, useEffect, useLayoutEffect, useSta
 import { useTranslation } from 'react-i18next';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
-import { useSessionModeStore } from '@/app/stores/sessionModeStore';
 import {
   VirtualMessageList,
   type FlowChatTurnNavigationStatus,
@@ -2402,7 +2401,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     () => {
       void (async () => {
         try {
-          useSessionModeStore.getState().setMode('code');
           await FlowChatManager.getInstance().createChatSession(
             flowChatSessionConfigForCurrentWorkspace(activeWorkspace),
             'agentic',

@@ -19,6 +19,11 @@
     // No vertical margin: spacing between assistant blocks comes from 2px top/bottom padding only
     // (see .bitfun-nav-panel__items--session-blocks gap: 0), aligned with __workspace-item padding.
     margin: 0 $size-gap-1 0 calc(#{$size-gap-1} + 4px);
+
+    &.is-flat-workspace-view {
+      margin: 0 6px;
+      padding: 2px 0;
+    }
   }
 
   &__inline-action {
@@ -55,6 +60,33 @@
     color: var(--bf-appearance-token-color-text-muted);
     padding: 4px $size-gap-1;
     font-style: italic;
+
+    &.is-assistant {
+      display: flex;
+      min-width: 0;
+      min-height: 40px;
+      align-items: center;
+      gap: $size-gap-2;
+      font-style: normal;
+    }
+  }
+
+  &__inline-empty-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 1px;
+    line-height: 1.2;
+  }
+
+  &__inline-empty-name {
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: $font-weight-medium;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__inline-loading {
@@ -118,6 +150,12 @@
       background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
     }
 
+    &.is-assistant-session {
+      height: 40px;
+      gap: $size-gap-2;
+      padding-block: 4px;
+    }
+
     &:focus-visible {
       outline: 1px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: -1px;
@@ -153,9 +191,6 @@
         transform: translateY(-50%);
       }
 
-      .bitfun-nav-panel__inline-item-icon {
-        opacity: 0.72;
-      }
     }
 
     &.is-btw-child {
@@ -170,58 +205,6 @@
     }
   }
 
-  &__inline-item-icon-slot {
-    position: relative;
-    flex: 0 0 16px;
-    width: 16px;
-    height: 16px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    overflow: visible;
-  }
-
-  &__inline-item-icon {
-    flex-shrink: 0;
-    opacity: 0.78;
-    display: flex;
-    align-items: center;
-    color: inherit;
-    transform: scale(1);
-    transform-origin: center;
-    transition: opacity $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard;
-
-    &.is-cowork {
-      color: var(--bf-appearance-token-color-text-secondary);
-    }
-
-    &.is-running {
-      color: var(--bf-appearance-token-color-text-secondary);
-      transition: opacity $motion-fast $easing-standard;
-      animation: bitfun-nav-session-spin 1s linear infinite;
-    }
-
-    &.is-ask-user {
-      // Mix warning hue with text-primary to guarantee ≥3:1 contrast in both
-      // Light and Dark themes (pure --bf-appearance-token-color-warning falls below threshold in
-      // Light theme). 70% text-primary keeps the icon readable at 14px.
-      color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 70%, var(--bf-appearance-token-color-warning) 30%);
-      transition: opacity $motion-fast $easing-standard;
-      animation: bitfun-nav-ask-user-pulse 2s ease-in-out infinite;
-    }
-
-    .bitfun-nav-panel__inline-item:hover &,
-    .bitfun-nav-panel__inline-item.is-active & {
-      opacity: 1;
-    }
-  }
-
-  // 「助理会话」区块：行前导图标悬停微微放大（与顶部 __top-action-icon-slot 的 1.07 一致；运行中 Loader/问号仅用自身动画）
-  &__items--session-blocks &__inline-item:hover &__inline-item-icon:not(.is-running):not(.is-ask-user) {
-    transform: scale(1.07);
-  }
-
   &__inline-item-main {
     flex: 1 1 0;
     min-width: 0;
@@ -231,6 +214,50 @@
     align-items: center;
     gap: 4px;
     overflow: visible;
+  }
+
+  &__inline-item-avatar {
+    display: inline-flex;
+    flex: 0 0 26px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__inline-item-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 1px;
+    overflow: hidden;
+  }
+
+  &__inline-item-primary {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__inline-item-assistant-name {
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__inline-item-workspace-name {
+    flex: 0 1 38%;
+    min-width: 0;
+    margin-left: auto;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__inline-item:hover &__inline-item-main,
@@ -399,67 +426,6 @@
     color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.4;
     word-break: break-word;
-  }
-
-  &__inline-item-unread-dot {
-    position: absolute;
-    right: -1px;
-    bottom: -1px;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    border: 1px solid var(--bf-appearance-token-color-bg-primary);
-    background: var(--bf-appearance-token-color-success);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-success) 35%, transparent),
-      0 0 6px color-mix(in srgb, var(--bf-appearance-token-color-success) 42%, transparent);
-
-    &.is-error,
-    &.is-interrupted {
-      background: var(--bf-appearance-token-color-error);
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-error) 35%, transparent),
-        0 0 6px color-mix(in srgb, var(--bf-appearance-token-color-error) 42%, transparent);
-    }
-
-    // High-priority attention states: larger, brighter, with subtle pulse
-    &.is-ask-user,
-    &.is-tool-confirm {
-      width: 8px;
-      height: 8px;
-      right: -2px;
-      bottom: -2px;
-    }
-
-    &.is-ask-user {
-      background: var(--bf-appearance-token-color-warning);
-      box-shadow:
-        0 0 0 1.5px color-mix(in srgb, var(--bf-appearance-token-color-warning) 45%, transparent),
-        0 0 8px color-mix(in srgb, var(--bf-appearance-token-color-warning) 55%, transparent);
-    }
-
-    &.is-tool-confirm {
-      background: var(--bf-appearance-token-color-accent-500);
-      box-shadow:
-        0 0 0 1.5px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 45%, transparent),
-        0 0 8px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 55%, transparent);
-    }
-
-    // Pulse animation for high-priority states
-    &.is-high-priority {
-      animation: bitfun-unread-dot-pulse 2s ease-in-out infinite;
-    }
-  }
-
-  @keyframes bitfun-unread-dot-pulse {
-    0%, 100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.35);
-      opacity: 0.85;
-    }
   }
 
   &__inline-item-actions {
@@ -724,13 +690,6 @@
     opacity: 0.5;
   }
 
-  // Unhealthy MCP server indicator
-  &__inline-item.is-unhealthy {
-    .bitfun-nav-panel__inline-item-icon {
-      color: var(--bf-appearance-token-color-warning);
-      opacity: 0.9;
-    }
-  }
 }
 
 // Session running spin animation
@@ -740,18 +699,6 @@
   }
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes bitfun-nav-ask-user-pulse {
-  0%,
-  100% {
-    opacity: 0.9;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.12);
   }
 }
 
@@ -791,16 +738,6 @@
     }
   }
 
-  .bitfun-nav-panel__inline-item-icon.is-running {
-    animation: none;
-    opacity: 0.8;
-  }
-
-  .bitfun-nav-panel__inline-item-icon.is-ask-user {
-    animation: none;
-    opacity: 0.9;
-  }
-
   .bitfun-nav-panel__inline-item-review-badge svg {
     animation: none;
   }
@@ -818,13 +755,6 @@
     }
   }
 
-  .bitfun-nav-panel__items--session-blocks .bitfun-nav-panel__inline-item:hover .bitfun-nav-panel__inline-item-icon:not(.is-running):not(.is-ask-user) {
-    transform: scale(1);
-  }
-
-  .bitfun-nav-panel__items--session-blocks .bitfun-nav-panel__inline-item-icon:not(.is-running):not(.is-ask-user) {
-    transition: opacity $motion-fast $easing-standard;
-  }
 }
 
 // Compact session rows share the shell's 6px radius and 120ms physical press
@@ -869,10 +799,6 @@
       background: transparent;
       box-shadow: none;
     }
-  }
-
-  &__items--session-blocks &__inline-item:hover &__inline-item-icon:not(.is-running):not(.is-ask-user) {
-    transform: none;
   }
 
   &__inline-item-actions {

@@ -11,8 +11,10 @@
  * of the dialog's own options is: `.modal__content` ships `padding: 0`, and
  * `contentInset` sets `padding-inline` only.
  *
- * Everything else inside the card is left exactly as the transcript renders
- * it, which is the point of reusing the component rather than restyling it.
+ * The modal renders the card in its `compact` variant, which trims the
+ * duplicate heading and secondary export option while keeping the report
+ * metrics and summaries readable.
+
  */
 .session-usage-modal__content {
   .session-usage-report-card {
@@ -20,5 +22,29 @@
     border: none;
     background: none;
     box-shadow: none;
+  }
+}
+
+
+/*
+ * The dialog is the focused summary surface, so its title bar reads as the
+ * report title. Slightly stronger type, a touch more header padding, and a
+ * scene-tinted content area keep the compact card below from feeling like a
+ * second, unrelated block.
+ */
+.session-usage-modal {
+  .modal__title {
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-weight: 650;
+  }
+
+  .modal__header {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .modal__content {
+    background: var(--bf-appearance-token-color-bg-scene);
   }
 }

@@ -10,7 +10,12 @@ import { ReasoningPresetSelector } from './ReasoningPresetSelector';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key }),
+  useTranslation: () => ({
+    t: (key: string, options?: { defaultValue?: string }) => ({
+      'chatInput.reasoningStatus.levels.medium': 'Standard',
+      'chatInput.reasoningStatus.levels.high': 'High',
+    } as Record<string, string>)[key] ?? options?.defaultValue ?? key,
+  }),
 }));
 
 vi.mock('@/component-library', () => ({
@@ -118,6 +123,62 @@ describe('ReasoningPresetSelector', () => {
     expect(document.body.querySelector('[data-preset-id="custom-low"] small')?.textContent)
       .toBe('reasoningSelector.source.model_config');
     expect(document.body.querySelector('[data-preset-id="high"] small')).toBeNull();
+  });
+
+  it('renders the effective reasoning level as a compact signal control', async () => {
+    const projection = {
+      status: 'known' as const,
+      default_preset: 'medium',
+      presets: [
+        { id: 'low', label: 'Low', order: 10, source: 'models_dev' as const, actions: [{ type: 'effort' as const, value: 'low' }] },
+        { id: 'medium', label: 'Medium', order: 20, source: 'models_dev' as const, actions: [{ type: 'effort' as const, value: 'medium' }] },
+        { id: 'high', label: 'High', order: 30, source: 'models_dev' as const, actions: [{ type: 'effort' as const, value: 'high' }] },
+        { id: 'xhigh', label: 'Extra High', order: 40, source: 'models_dev' as const, actions: [{ type: 'effort' as const, value: 'xhigh' }] },
+      ],
+    };
+
+    await act(async () => {
+      root.render(
+        <ReasoningPresetSelector
+          variant="status"
+          projection={projection}
+          onSelect={vi.fn()}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLElement>(
+      '[data-testid="chat-reasoning-preset-selector-btn"]',
+    );
+    expect(trigger?.textContent).toContain('Standard');
+    const meter = trigger?.querySelector<SVGElement>(
+      '.bitfun-reasoning-preset-selector__status-meter',
+    );
+    expect(meter?.classList.contains('lucide-tally-4')).toBe(true);
+    expect(meter?.dataset.activeBars).toBe('2');
+    expect(trigger?.querySelectorAll('.bitfun-reasoning-preset-selector__status-meter')).toHaveLength(1);
+
+    for (const [presetId, expectedBars] of [
+      ['low', '1'],
+      ['high', '3'],
+      ['xhigh', '4'],
+    ] as const) {
+      await act(async () => {
+        root.render(
+          <ReasoningPresetSelector
+            variant="status"
+            projection={projection}
+            selectedPreset={presetId}
+            onSelect={vi.fn()}
+          />,
+        );
+      });
+      expect(
+        container.querySelector<SVGElement>(
+          '.bitfun-reasoning-preset-selector__status-meter',
+        )?.dataset.activeBars,
+      ).toBe(expectedBars);
+    }
   });
 
   it('returns focus to the trigger and keeps keyboard motion suppressed while exiting', async () => {

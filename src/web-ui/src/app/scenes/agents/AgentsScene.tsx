@@ -2,14 +2,19 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
   Bot,
+  Check,
   Cpu,
+  Gauge,
+  Orbit,
   RotateCcw,
+  Scale,
   Pencil,
   Plus,
   Puzzle,
   Search as SearchIcon,
   Trash2,
   Wrench,
+  Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, IconButton, Search, Select, confirmDanger } from '@/component-library';
@@ -70,6 +75,12 @@ import { useSceneManager } from '@/app/hooks/useSceneManager';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 
 const DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE = '__default_subagent_model__';
+
+const HARNESS_PROFILES = [
+  { id: 'minimal', icon: Zap, connected: false },
+  { id: 'balanced', icon: Scale, connected: true },
+  { id: 'ultimate', icon: Orbit, connected: false },
+] as const;
 
 type CapabilityTab = 'model' | 'tools' | 'skills' | 'subagents';
 
@@ -271,6 +282,15 @@ const AgentsHomeView: React.FC = () => {
       block: 'start',
     });
   }, []);
+
+  const handleHarnessProfileClick = useCallback((profileId: typeof HARNESS_PROFILES[number]['id']) => {
+    const name = t(`harnessZone.profiles.${profileId}.name`);
+    if (profileId === 'balanced') {
+      notification.success(t('harnessZone.balancedConnectedNotice'), { duration: 2600 });
+      return;
+    }
+    notification.info(t('harnessZone.comingSoonNotice', { name }), { duration: 3200 });
+  }, [notification, t]);
 
   const levelFilters = [
     { key: 'builtin', label: t('filters.builtin'), count: counts.builtin },
@@ -615,6 +635,14 @@ const AgentsHomeView: React.FC = () => {
             <button
               type="button"
               className="gallery-anchor-btn"
+              onClick={() => scrollToZone('harness-zone')}
+              data-testid="agents-anchor-harness"
+            >
+              {t('nav.harness')}
+            </button>
+            <button
+              type="button"
+              className="gallery-anchor-btn"
               onClick={() => scrollToZone('core-agents-zone')}
               data-testid="agents-anchor-core"
             >
@@ -655,6 +683,51 @@ const AgentsHomeView: React.FC = () => {
       />
 
       <div className="gallery-zones" data-bf-scene="agents" data-bf-part="zones" data-testid="agent-list">
+        <GalleryZone
+          id="harness-zone"
+          data-testid="agents-harness-zone"
+          title={t('harnessZone.title')}
+          subtitle={t('harnessZone.subtitle')}
+          tools={<span className="gallery-zone-count">3</span>}
+        >
+          <GalleryGrid minCardWidth={280} data-bf-scene="agents" data-bf-part="harnessGrid">
+            {HARNESS_PROFILES.map(({ id, icon: Icon, connected }, index) => (
+              <button
+                key={id}
+                type="button"
+                className={`bitfun-agents-scene__harness-card${connected ? ' is-connected' : ''}`}
+                style={{ '--surface-stagger-index': index } as React.CSSProperties}
+                data-bf-component="harness-profile-card"
+                data-bf-part="root"
+                data-bf-profile={id}
+                data-bf-state={connected ? 'connected' : 'coming-soon'}
+                onClick={() => handleHarnessProfileClick(id)}
+                data-testid={`agents-harness-${id}`}
+              >
+                <span className="bitfun-agents-scene__harness-card-icon" aria-hidden>
+                  <Icon size={22} strokeWidth={1.65} />
+                </span>
+                <span className="bitfun-agents-scene__harness-card-copy">
+                  <span className="bitfun-agents-scene__harness-card-title-row">
+                    <strong>{t(`harnessZone.profiles.${id}.name`)}</strong>
+                    <span className={`bitfun-agents-scene__harness-card-status${connected ? ' is-connected' : ''}`}>
+                      {connected ? t('harnessZone.connected') : t('harnessZone.comingSoon')}
+                    </span>
+                  </span>
+                  <span className="bitfun-agents-scene__harness-card-description">
+                    {t(`harnessZone.profiles.${id}.description`)}
+                  </span>
+                  <span className="bitfun-agents-scene__harness-card-behavior">
+                    <Gauge size={12} strokeWidth={1.8} aria-hidden />
+                    {t(`harnessZone.profiles.${id}.behavior`)}
+                  </span>
+                </span>
+                {connected ? <Check className="bitfun-agents-scene__harness-card-check" size={16} strokeWidth={2.2} aria-hidden /> : null}
+              </button>
+            ))}
+          </GalleryGrid>
+        </GalleryZone>
+
         <GalleryZone
           id="core-agents-zone"
           data-testid="agents-core-zone"

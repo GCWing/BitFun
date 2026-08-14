@@ -6,7 +6,7 @@ describe('resolveThreadGoalStripIconTone', () => {
     expect(resolveThreadGoalStripIconTone(null)).toBe('none');
   });
 
-  it('returns active for in-progress statuses', () => {
+  it('returns active only while the goal is actively running', () => {
     expect(resolveThreadGoalStripIconTone({
       objective: 'sync',
       status: 'active',
@@ -14,7 +14,7 @@ describe('resolveThreadGoalStripIconTone', () => {
     expect(resolveThreadGoalStripIconTone({
       objective: 'sync',
       status: 'paused',
-    })).toBe('active');
+    })).toBe('none');
   });
 
   it('returns complete when the goal is done', () => {

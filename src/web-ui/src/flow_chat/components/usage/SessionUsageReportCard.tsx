@@ -45,6 +45,7 @@ interface SessionUsageReportCardProps {
   markdown?: string;
   generatedAt?: number;
   isLoading?: boolean;
+  compact?: boolean;
   onOpenDetails?: (report: SessionUsageReport, initialTab?: SessionUsagePanelTab) => void;
 }
 
@@ -63,6 +64,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
   markdown = '',
   generatedAt,
   isLoading = false,
+  compact = false,
   onOpenDetails,
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -110,6 +112,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
     t('usage.loading.steps.tokens'),
     t('usage.loading.steps.safety'),
   ], [t]);
+  const compactClassName = compact ? ' session-usage-report-card--compact' : '';
 
   useEffect(() => {
     if (!isLoading || loadingHints.length <= 1) {
@@ -129,7 +132,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
 
   if (isLoading) {
     return (
-      <div data-bf-component="session-usage-report-card" data-bf-part="loading" data-bf-state="loading" className="session-usage-report-card session-usage-report-card--loading" aria-live="polite">
+      <div data-bf-component="session-usage-report-card" data-bf-part="loading" data-bf-state="loading" className={`session-usage-report-card session-usage-report-card--loading${compactClassName}`} aria-live="polite">
         <div className="session-usage-report-card__loading-main">
           <ToolProcessingDots className="session-usage-report-card__loading-dots" size={12} />
           <div>
@@ -146,7 +149,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
 
   if (!report) {
     return (
-      <div data-bf-component="session-usage-report-card" data-bf-part="fallback" data-bf-state="fallback" className="session-usage-report-card session-usage-report-card--fallback">
+      <div data-bf-component="session-usage-report-card" data-bf-part="fallback" data-bf-state="fallback" className={`session-usage-report-card session-usage-report-card--fallback${compactClassName}`}>
         <div className="session-usage-report-card__fallback-actions" data-bf-component="session-usage-report-card" data-bf-part="actions">
           <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
             <IconButton
@@ -229,7 +232,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
     (report.coverage.level !== 'complete' ? ' session-usage-report-card__coverage--hint' : '');
 
   return (
-    <div data-bf-component="session-usage-report-card" data-bf-part="root" className="session-usage-report-card" data-report-id={report.reportId}>
+    <div data-bf-component="session-usage-report-card" data-bf-part="root" className={`session-usage-report-card${compactClassName}`} data-report-id={report.reportId}>
       <div className="session-usage-report-card__header" data-bf-component="session-usage-report-card" data-bf-part="header">
         <div className="session-usage-report-card__title-block" data-bf-component="session-usage-report-card" data-bf-part="title">
           <h3 className="session-usage-report-card__title">{t('usage.card.heading')}</h3>

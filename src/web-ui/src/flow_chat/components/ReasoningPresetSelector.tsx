@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Brain, Check, ChevronDown } from 'lucide-react';
+import {
+  Brain,
+  ChartNoAxesColumnIncreasing,
+  Check,
+  ChevronDown,
+  Tally4,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
@@ -18,6 +24,7 @@ interface ReasoningPresetSelectorProps {
   disabled?: boolean;
   loading?: boolean;
   dropdownPlacement?: 'top' | 'bottom';
+  variant?: 'inline' | 'status';
   onSelect: (presetId: string | null) => void | Promise<void>;
 }
 
@@ -56,12 +63,70 @@ function presetSourceTooltip(
   }
 }
 
+function presetStatusLabel(
+  preset: ReasoningPresetDescriptor,
+  t: ReturnType<typeof useTranslation>['t'],
+): string {
+  const fallback = presetLabel(preset, t);
+  switch (preset.id) {
+    case 'none':
+      return t('chatInput.reasoningStatus.levels.none', { defaultValue: fallback });
+    case 'minimal':
+      return t('chatInput.reasoningStatus.levels.minimal', { defaultValue: fallback });
+    case 'low':
+      return t('chatInput.reasoningStatus.levels.low', { defaultValue: fallback });
+    case 'medium':
+      return t('chatInput.reasoningStatus.levels.medium', { defaultValue: fallback });
+    case 'high':
+      return t('chatInput.reasoningStatus.levels.high', { defaultValue: fallback });
+    case 'xhigh':
+      return t('chatInput.reasoningStatus.levels.xhigh', { defaultValue: fallback });
+    case 'max':
+      return t('chatInput.reasoningStatus.levels.max', { defaultValue: fallback });
+    default:
+      return fallback;
+  }
+}
+
+function reasoningIntensityBars(
+  preset: ReasoningPresetDescriptor | undefined,
+  orderedPresets: ReasoningPresetDescriptor[],
+): 0 | 1 | 2 | 3 | 4 {
+  if (!preset) return 0;
+
+  switch (preset.id) {
+    case 'none':
+      return 0;
+    case 'minimal':
+    case 'low':
+      return 1;
+    case 'medium':
+      return 2;
+    case 'high':
+      return 3;
+    case 'xhigh':
+    case 'max':
+      return 4;
+    default: {
+      const activePresets = orderedPresets.filter(item => item.id !== 'none');
+      const activeIndex = activePresets.findIndex(item => item.id === preset.id);
+      if (activeIndex < 0) return 0;
+      if (activePresets.length === 1) return 2;
+      return Math.min(
+        4,
+        Math.max(1, Math.round((activeIndex / (activePresets.length - 1)) * 3) + 1),
+      ) as 1 | 2 | 3 | 4;
+    }
+  }
+}
+
 export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = ({
   projection,
   selectedPreset,
   disabled = false,
   loading = false,
   dropdownPlacement = 'top',
+  variant = 'inline',
   onSelect,
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -182,6 +247,12 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
   const currentLabel = selected
     ? presetLabel(selected, t)
     : t('reasoningSelector.auto');
+  const effectivePreset = selected ?? defaultPreset;
+  const orderedPresets = [...presets].sort((left, right) => left.order - right.order);
+  const intensityBars = reasoningIntensityBars(effectivePreset, orderedPresets);
+  const statusLabel = effectivePreset
+    ? presetStatusLabel(effectivePreset, t)
+    : currentLabel;
   const tooltip = selected
     ? t('reasoningSelector.current', { preset: currentLabel })
     : t('reasoningSelector.currentAuto', {
@@ -200,7 +271,11 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
         <button
           ref={triggerRef}
           type="button"
-          className={`bitfun-reasoning-preset-selector__trigger${open ? ' bitfun-reasoning-preset-selector__trigger--open' : ''}`}
+          className={[
+            'bitfun-reasoning-preset-selector__trigger',
+            variant === 'status' && 'bitfun-reasoning-preset-selector__trigger--status',
+            open && 'bitfun-reasoning-preset-selector__trigger--open',
+          ].filter(Boolean).join(' ')}
           data-bf-component="reasoning-preset-selector"
           data-bf-part="trigger"
           data-bf-state={open ? 'open' : undefined}
@@ -229,15 +304,43 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
             }
           }}
         >
-          <Brain size={10} aria-hidden="true" />
-          <span
-            className="bitfun-reasoning-preset-selector__label"
-            data-bf-component="reasoning-preset-selector"
-            data-bf-part="label"
-          >
-            {currentLabel}
-          </span>
-          <ChevronDown size={10} aria-hidden="true" />
+          {variant === 'status' ? (
+            <>
+              <ChartNoAxesColumnIncreasing
+                className="bitfun-reasoning-preset-selector__status-overview"
+                size={16}
+                strokeWidth={1.8}
+                aria-hidden="true"
+              />
+              <span
+                className="bitfun-reasoning-preset-selector__label"
+                data-bf-component="reasoning-preset-selector"
+                data-bf-part="label"
+              >
+                {statusLabel}
+              </span>
+              <span className="bitfun-reasoning-preset-selector__status-divider" aria-hidden="true" />
+              <Tally4
+                className="bitfun-reasoning-preset-selector__status-meter"
+                size={16}
+                strokeWidth={2.8}
+                data-active-bars={intensityBars}
+                aria-hidden="true"
+              />
+            </>
+          ) : (
+            <>
+              <Brain size={10} aria-hidden="true" />
+              <span
+                className="bitfun-reasoning-preset-selector__label"
+                data-bf-component="reasoning-preset-selector"
+                data-bf-part="label"
+              >
+                {currentLabel}
+              </span>
+              <ChevronDown size={10} aria-hidden="true" />
+            </>
+          )}
         </button>
       </Tooltip>
 

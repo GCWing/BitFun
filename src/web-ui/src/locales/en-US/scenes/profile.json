@@ -36,6 +36,15 @@
     "avatarPickerHint": "Pick a marker or enter your own symbol",
     "avatarPickerClose": "Close avatar picker",
     "avatarPresets": "Avatar choices",
+    "avatarOfficialPresets": "BitFun styles",
+    "avatarEmojiPresets": "Emoji",
+    "avatarUseOfficialPreset": "Use {{name}} style",
+    "avatarFamilies": {
+      "signal": "Signal",
+      "orbit": "Orbit",
+      "mosaic": "Mosaic",
+      "companion": "Companion"
+    },
     "avatarUsePreset": "Use {{emoji}} as avatar",
     "avatarCustom": "Custom avatar symbol",
     "avatarCustomPlaceholder": "Enter one symbol",

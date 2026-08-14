@@ -32,6 +32,7 @@ import { markdownAppearanceDescriptor } from '@/component-library/components/Mar
 import { flowChatCardAppearanceDescriptor } from '@/component-library/components/FlowChatCards/appearance';
 import { viewTransitionBoundaryAppearanceDescriptor } from '@/component-library/components/ViewTransitionBoundary/appearance';
 import { chatInputAppearanceDescriptor } from '@/flow_chat/components/ChatInput.appearance';
+import { harnessProfileSelectorAppearanceDescriptor } from '@/flow_chat/components/HarnessProfileSelector.appearance';
 import { composerVoiceInputAppearanceDescriptor } from '@/flow_chat/components/voice/ComposerVoiceInputButton.appearance';
 import { sessionUsagePanelAppearanceDescriptor } from '@/flow_chat/components/usage/appearance';
 import { fileOperationToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/FileOperationToolCard.appearance';
@@ -313,6 +314,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(flowChatCardAppearanceDescriptor)
     .registerComponent(viewTransitionBoundaryAppearanceDescriptor)
     .registerComponent(chatInputAppearanceDescriptor)
+    .registerComponent(harnessProfileSelectorAppearanceDescriptor)
     .registerComponent(composerVoiceInputAppearanceDescriptor)
     .registerComponent(sessionUsagePanelAppearanceDescriptor)
     .registerComponent(fileOperationToolCardAppearanceDescriptor)

@@ -29,6 +29,7 @@ export interface WorkspaceIdentity {
   name?: string | null;
   creature?: string | null;
   vibe?: string | null;
+  avatar?: string | null;
   emoji?: string | null;
 }
 

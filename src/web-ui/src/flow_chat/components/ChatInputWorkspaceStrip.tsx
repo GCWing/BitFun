@@ -6,21 +6,22 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Activity,
   Check,
+  ChevronRight,
+  Circle,
+  Crosshair,
   EyeOff,
+  FolderPen,
   GitBranch,
   RefreshCw,
   Settings,
   Shield,
   ShieldAlert,
   ShieldCheck,
-  Square,
-  SquareCheck,
 } from 'lucide-react';
 import { ThreadGoalStripButton } from './thread-goal/ThreadGoalStripButton';
 import type { ThreadGoalSnapshot } from '../services/goalService';
-import { Tooltip, IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -29,6 +30,7 @@ import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPos
 import { DispatchResultDialog } from '@/features/dispatch/DispatchResultDialog';
 import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
+import { HarnessProfileSelector } from './HarnessProfileSelector';
 import './ChatInputWorkspaceStrip.scss';
 
 export interface ChatInputWorkspaceStripProps {
@@ -36,10 +38,23 @@ export interface ChatInputWorkspaceStripProps {
   repositoryPath: string;
   /** Resolved display name (workspace title or folder basename). */
   workspaceLabel: string;
+  /** Agent Harness profile control, centered as a first-class execution fact. */
+  harnessControl?: {
+    legacySession?: boolean;
+    /** The Balanced harness is already the session's active mode. */
+    active?: boolean;
+    onActivateBalanced: () => void;
+  };
   /** Session usage report (/usage) — icon on the right when visible. */
   usageReport?: {
     visible: boolean;
+    percentage?: number;
     onOpen: () => void;
+  };
+  /** Real model reasoning selector, mounted into the combined runtime group. */
+  reasoningControl?: {
+    visible: boolean;
+    hostRef: React.RefCallback<HTMLDivElement>;
   };
   /** Thread goal menu (/goal) — icon on the right when visible. */
   threadGoal?: {
@@ -138,7 +153,9 @@ const PERMISSION_MODE_ICONS: Record<ChatInputPermissionMode, typeof Shield> = {
 export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = ({
   repositoryPath,
   workspaceLabel,
+  harnessControl,
   usageReport,
+  reasoningControl,
   threadGoal,
   permissionControl,
   deferPassiveGitRefresh = false,
@@ -154,6 +171,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const permissionMenuRef = useRef<HTMLDivElement>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [permissionHost, setPermissionHost] = useState<HTMLDivElement | null>(null);
   const permissionMenuLayout = useAnchoredPopoverPosition({
     open: permissionMenuOpen,
     anchorRef: permissionTriggerRef,
@@ -188,43 +206,62 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   }, [refreshBasic, trimmedPath]);
 
   const showUsage = usageReport?.visible && !!usageReport.onOpen;
+  const showReasoning = !!reasoningControl?.visible;
+  const showRuntime = showReasoning || showUsage;
   const showGoal = threadGoal?.visible && !!threadGoal.onOpen;
+  const showHarness = !!harnessControl;
   const showPermission = !!permissionControl;
   const showDispatchResult = !!dispatchControl?.syncableJobId;
   const isWorktree = !!executionTarget?.worktreeId;
   const worktreeEnabled = worktreeControl?.enabled ?? isWorktree;
   const worktreeEnabledRef = useRef(worktreeEnabled);
   worktreeEnabledRef.current = worktreeEnabled;
-  // Dispatch delivers work as a Git worktree of the controller's repository, so
-  // it is only meaningful where a worktree itself is — the same condition the
-  // isolation toggle uses, evaluated from the same Git probe.
+  // Remote dispatch still requires Git, but the local execution target is a
+  // useful breadcrumb for every workspace. In a plain folder the picker stays
+  // visible and locked, so the strip does not lose its middle breadcrumb or
+  // accidentally offer an unsupported remote action.
   const isGitWorkspace = isRepository || isWorktree || worktreeEnabled;
   const showWorktreeToggle = !!worktreeControl && isGitWorkspace;
-  const showDispatchPicker = !!dispatchControl && isGitWorkspace;
-  const showRightActions =
-    showDispatchPicker || showDispatchResult || showPermission || showUsage || showGoal;
+  const showDispatchPicker = !!dispatchControl;
+  const dispatchPickerLocked = !!dispatchControl && (dispatchControl.locked || !isGitWorkspace);
+  const showPolicy = (!label && showDispatchPicker)
+    || showDispatchResult
+    || (showPermission && !showHarness);
+  const showActionsContainer = showPolicy || showPermission;
+  const actionsPortalOnly = showPermission && showHarness && !showPolicy;
+  const showRightActions = showPolicy || showRuntime;
+  const permissionModeLabels = {
+    ask: t('chatInput.permissionMode.ask.label'),
+    auto: t('chatInput.permissionMode.auto.label'),
+    full_access: t('chatInput.permissionMode.fullAccess.label'),
+    reject: t('chatInput.permissionMode.reject.label'),
+    acp: t('chatInput.permissionMode.acp.label'),
+  } satisfies Record<ChatInputPermissionMode, string>;
   const permissionCopy = {
     ask: {
-      label: t('chatInput.permissionMode.ask.label'),
+      label: permissionModeLabels.ask,
       description: t('chatInput.permissionMode.ask.description'),
     },
     auto: {
-      label: t('chatInput.permissionMode.auto.label'),
+      label: permissionModeLabels.auto,
       description: t('chatInput.permissionMode.auto.description'),
     },
     full_access: {
-      label: t('chatInput.permissionMode.fullAccess.label'),
+      label: permissionModeLabels.full_access,
       description: t('chatInput.permissionMode.fullAccess.description'),
     },
     reject: {
-      label: t('chatInput.permissionMode.reject.label'),
+      label: permissionModeLabels.reject,
       description: t('chatInput.permissionMode.reject.description'),
     },
     acp: {
-      label: t('chatInput.permissionMode.acp.label'),
+      label: permissionModeLabels.acp,
       description: t('chatInput.permissionMode.acp.tooltip'),
     },
-  } satisfies Record<ChatInputPermissionMode, { label: string; description: string }>;
+  } satisfies Record<ChatInputPermissionMode, {
+    label: string;
+    description: string;
+  }>;
 
   useEffect(() => {
     if (!permissionMenuOpen) return;
@@ -265,7 +302,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     [currentBranch, dispatchBranch, isRepository, t],
   );
 
-  if (!label && !showRightActions) {
+  // Keep the reasoning portal host mounted while ModelSelector discovers the
+  // active target's capabilities. Without it, a strip that only has runtime
+  // facts would never be able to report that reasoning is available.
+  if (!label && !showHarness && !showRightActions && !reasoningControl) {
     return null;
   }
 
@@ -313,9 +353,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       ? t('chatInput.permissionMode.currentTurnOverride', { mode: permissionModeLabel })
       : permissionOverridden
         ? t('chatInput.permissionMode.currentSessionOverride', { mode: permissionModeLabel })
-        : t('chatInput.permissionMode.current', { mode: permissionModeLabel });
+      : t('chatInput.permissionMode.current', { mode: permissionModeLabel });
   const PermissionIcon = PERMISSION_MODE_ICONS[permissionDisplayMode];
-  const showPermissionLabel = permissionMode !== 'acp';
+  const usagePercentage = Math.min(100, Math.max(0, usageReport?.percentage ?? 0));
+  const usageDash = `${((usagePercentage / 100) * 62.83).toFixed(2)} 62.83`;
 
   const handleWorktreeToggle = () => {
     if (!worktreeControl || worktreeToggleDisabled) {
@@ -326,15 +367,17 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     worktreeControl.onChange(nextEnabled);
   };
 
-  const split = !!label && showRightActions;
   const actionsOnly = !label && showRightActions;
 
   return (
     <div data-bf-component="chat-input-workspace-strip" data-bf-part="root"
       className={[
         'bitfun-chat-input-workspace-strip',
-        split && 'bitfun-chat-input-workspace-strip--split',
         actionsOnly && 'bitfun-chat-input-workspace-strip--actions-only',
+        label && 'bitfun-chat-input-workspace-strip--with-workspace',
+        showHarness && 'bitfun-chat-input-workspace-strip--with-harness',
+        showPolicy && 'bitfun-chat-input-workspace-strip--with-policy',
+        showRuntime && 'bitfun-chat-input-workspace-strip--with-runtime',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -342,76 +385,124 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     >
       {label ? (
         <div data-bf-component="chat-input-workspace-strip" data-bf-part="main" className="bitfun-chat-input-workspace-strip__main">
-          <Tooltip content={workspaceTooltipContent} placement="top">
-            <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--workspace">
+          <div className="bitfun-chat-input-workspace-strip__workspace-copy">
+            {showDispatchPicker && dispatchControl ? (
+              <>
+                <DispatchTargetPicker
+                  target={dispatchControl.target}
+                  sourceWorkspacePath={dispatchControl.sourceWorkspacePath}
+                  locked={dispatchPickerLocked}
+                  onSelectLocal={dispatchControl.onSelectLocal}
+                  onSelectTarget={dispatchControl.onSelectTarget}
+                />
+                <ChevronRight className="bitfun-chat-input-workspace-strip__breadcrumb-chevron" size={12} strokeWidth={2} aria-hidden />
+              </>
+            ) : null}
+            <span className="bitfun-chat-input-workspace-strip__visual" aria-hidden>
+              <FolderPen size={16} strokeWidth={1.8} />
+            </span>
+            <Tooltip content={workspaceTooltipContent} placement="top">
               <span data-bf-component="chat-input-workspace-strip" data-bf-part="workspace" className="bitfun-chat-input-workspace-strip__workspace">{label}</span>
-            </span>
-          </Tooltip>
-          <span className="bitfun-chat-input-workspace-strip__sep" aria-hidden>
-            {' / '}
-          </span>
-          <Tooltip content={branchTooltipContent} placement="top">
-            <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch">
-              <GitBranch
-                className="bitfun-chat-input-workspace-strip__branch-icon"
-                size={11}
-                strokeWidth={2}
-                aria-hidden
-              />
-              <span data-bf-component="chat-input-workspace-strip" data-bf-part="branch" className="bitfun-chat-input-workspace-strip__branch">{branchLabel}</span>
-            </span>
-          </Tooltip>
-          {showWorktreeToggle ? (
-            <Tooltip content={worktreeTooltip} placement="top">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={worktreeEnabled}
-                aria-label={tWorktrees('strip.toggleLabel')}
-                className={[
-                  'bitfun-chat-input-workspace-strip__chip',
-                  'bitfun-chat-input-workspace-strip__chip--worktree',
-                  worktreeEnabled && 'bitfun-chat-input-workspace-strip__chip--worktree-on',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                disabled={worktreeToggleDisabled}
-                data-testid="chat-input-worktree-toggle"
-                data-worktree-enabled={worktreeEnabled ? 'true' : 'false'}
-                data-worktree-materialized={isWorktree ? 'true' : 'false'}
-                onClick={handleWorktreeToggle}
-              >
-                {worktreeEnabled ? (
-                  <SquareCheck
-                    className="bitfun-chat-input-workspace-strip__worktree-icon"
-                    size={11}
-                    strokeWidth={2}
-                    aria-hidden
-                  />
-                ) : (
-                  <Square
-                    className="bitfun-chat-input-workspace-strip__worktree-icon"
-                    size={11}
-                    strokeWidth={2}
-                    aria-hidden
-                  />
-                )}
-                <span className="bitfun-chat-input-workspace-strip__worktree-label">
-                  {tWorktrees('strip.toggleLabel')}
-                </span>
-              </button>
             </Tooltip>
+            <ChevronRight className="bitfun-chat-input-workspace-strip__breadcrumb-chevron" size={12} strokeWidth={2} aria-hidden />
+            <div className="bitfun-chat-input-workspace-strip__workspace-meta">
+              {showWorktreeToggle ? (
+                <Tooltip content={worktreeTooltip} placement="top">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={worktreeEnabled}
+                    aria-label={tWorktrees('strip.toggleLabel')}
+                    className={[
+                      'bitfun-chat-input-workspace-strip__chip',
+                      'bitfun-chat-input-workspace-strip__chip--branch',
+                      'bitfun-chat-input-workspace-strip__chip--branch-toggle',
+                      worktreeEnabled && 'bitfun-chat-input-workspace-strip__chip--worktree-on',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    disabled={worktreeToggleDisabled}
+                    data-testid="chat-input-worktree-toggle"
+                    data-worktree-enabled={worktreeEnabled ? 'true' : 'false'}
+                    data-worktree-materialized={isWorktree ? 'true' : 'false'}
+                    onClick={handleWorktreeToggle}
+                  >
+                    <GitBranch
+                      className="bitfun-chat-input-workspace-strip__branch-icon"
+                      size={13}
+                      strokeWidth={1.9}
+                      aria-hidden
+                    />
+                    <span data-bf-component="chat-input-workspace-strip" data-bf-part="branch" className="bitfun-chat-input-workspace-strip__branch">{branchLabel}</span>
+                  </button>
+                </Tooltip>
+              ) : (
+                <Tooltip content={branchTooltipContent} placement="top">
+                  <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch">
+                    <GitBranch
+                      className="bitfun-chat-input-workspace-strip__branch-icon"
+                      size={13}
+                      strokeWidth={1.9}
+                      aria-hidden
+                    />
+                    <span data-bf-component="chat-input-workspace-strip" data-bf-part="branch" className="bitfun-chat-input-workspace-strip__branch">{branchLabel}</span>
+                  </span>
+                </Tooltip>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {harnessControl ? (
+        <div
+          className="bitfun-chat-input-workspace-strip__harness"
+          data-bf-component="chat-input-workspace-strip"
+          data-bf-part="harness"
+        >
+          {showGoal ? (
+            <ThreadGoalStripButton
+              goal={threadGoal.goal}
+              onOpen={threadGoal.onOpen}
+            />
+          ) : (
+            <span
+              className="bitfun-chat-input-workspace-strip__goal-summary bitfun-chat-input-workspace-strip__goal-summary--inactive"
+              aria-hidden
+            >
+              <Crosshair size={16} strokeWidth={1.8} aria-hidden />
+            </span>
+          )}
+          <HarnessProfileSelector
+            legacySession={harnessControl.legacySession}
+            active={harnessControl.active}
+            onActivateBalanced={harnessControl.onActivateBalanced}
+          />
+          {showPermission ? (
+            <div
+              ref={setPermissionHost}
+              className="bitfun-chat-input-workspace-strip__permission-host"
+            />
           ) : null}
         </div>
       ) : null}
 
-      {showRightActions ? (
+      {showActionsContainer ? (
         <div
-          className="bitfun-chat-input-workspace-strip__actions"
+          className={[
+            'bitfun-chat-input-workspace-strip__actions',
+            actionsPortalOnly && 'bitfun-chat-input-workspace-strip__actions--portal-only',
+          ].filter(Boolean).join(' ')}
           data-bf-component="chat-input-workspace-strip"
           data-bf-part="actions"
         >
-          {showDispatchPicker && dispatchControl ? (
+          {showPermission && !showHarness ? (
+            <div
+              ref={setPermissionHost}
+              className="bitfun-chat-input-workspace-strip__permission-host"
+            />
+          ) : null}
+          {!label && showDispatchPicker && dispatchControl ? (
             <DispatchTargetPicker
               target={dispatchControl.target}
               sourceWorkspacePath={dispatchControl.sourceWorkspacePath}
@@ -446,7 +537,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               />
             </>
           ) : null}
-          {showPermission ? (
+          {showPermission && permissionHost ? createPortal(
             <div
               ref={permissionRootRef}
               data-bf-component="chat-input-workspace-strip"
@@ -479,12 +570,15 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                     }
                   }}
                 >
-                  <PermissionIcon size={12} strokeWidth={2} aria-hidden />
-                  {showPermissionLabel ? (
-                    <span className="bitfun-chat-input-workspace-strip__permission-label">
-                      {permissionModeLabel}
-                    </span>
-                  ) : null}
+                  <PermissionIcon
+                    className="bitfun-chat-input-workspace-strip__permission-overview-icon"
+                    size={13}
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                  <span className="bitfun-chat-input-workspace-strip__permission-label">
+                    {permissionModeLabel}
+                  </span>
                   {/* Only a one-off override gets a dot: a session-level choice
                       is already legible from the label the trigger shows, and
                       marking both made every customized session look pending. */}
@@ -694,22 +788,38 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                 </div>,
                 getAppearanceOverlayHost(),
               ) : null}
-            </div>
+            </div>,
+            permissionHost,
           ) : null}
-          {showGoal ? (
-            <ThreadGoalStripButton
-              goal={threadGoal.goal}
-              onOpen={threadGoal.onOpen}
+        </div>
+      ) : null}
+      {reasoningControl || showUsage ? (
+        <div
+          className={[
+            'bitfun-chat-input-workspace-strip__runtime',
+            !showRuntime && 'bitfun-chat-input-workspace-strip__runtime--hidden',
+          ].filter(Boolean).join(' ')}
+          data-bf-component="chat-input-workspace-strip"
+          data-bf-part="runtime"
+        >
+          {reasoningControl ? (
+            <div
+              ref={reasoningControl.hostRef}
+              className={[
+                'bitfun-chat-input-workspace-strip__reasoning-host',
+                !showReasoning && 'bitfun-chat-input-workspace-strip__reasoning-host--hidden',
+              ].filter(Boolean).join(' ')}
             />
+          ) : null}
+          {showReasoning && showUsage ? (
+            <span className="bitfun-chat-input-workspace-strip__runtime-divider" aria-hidden />
           ) : null}
           {showUsage ? (
             <Tooltip content={t('usage.runtime.tooltip')}>
-              <IconButton
+              <button
                 data-bf-component="chat-input-workspace-strip"
                 data-bf-part="usageAction"
                 className="bitfun-chat-input-workspace-strip__usage-btn"
-                variant="ghost"
-                size="xs"
                 type="button"
                 aria-label={t('usage.runtime.open')}
                 onClick={e => {
@@ -717,8 +827,19 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                   usageReport.onOpen();
                 }}
               >
-                <Activity size={14} strokeWidth={2} aria-hidden />
-              </IconButton>
+                <span>{usagePercentage}%</span>
+                <span className="bitfun-chat-input-workspace-strip__usage-ring" aria-hidden>
+                  <Circle className="is-track" size={16} strokeWidth={2.8} />
+                  {usagePercentage > 0 ? (
+                    <Circle
+                      className="is-value"
+                      size={16}
+                      strokeWidth={2.8}
+                      strokeDasharray={usageDash}
+                    />
+                  ) : null}
+                </span>
+              </button>
             </Tooltip>
           ) : null}
         </div>

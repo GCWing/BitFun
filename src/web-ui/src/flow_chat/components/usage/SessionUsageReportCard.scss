@@ -496,3 +496,60 @@
     color: var(--bf-appearance-token-color-text-muted);
   }
 }
+
+
+/*
+ * Compact variant used when the card is shown inside the session-usage modal.
+ * The dialog already provides a title and an outer frame, so the card drops
+ * its own heading and the export-redaction toggle (the full panel still has
+ * it), tightens the vertical rhythm, and turns the three summary columns into
+ * light, borderless lists.
+ */
+.session-usage-report-card--compact {
+  gap: 8px;
+  animation: none;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__title,
+.session-usage-report-card--compact .session-usage-report-card__export-option {
+  display: none;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__meta {
+  flex-basis: auto;
+  gap: 6px 10px;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__actions {
+  gap: 6px;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__metric {
+  min-height: 32px;
+  padding: 5px 8px;
+  border-color: color-mix(in srgb, var(--bf-appearance-token-border-base) 42%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 44%, transparent);
+}
+
+.session-usage-report-card--compact .session-usage-report-card__lists {
+  gap: 6px;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__mini-list {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__mini-list-row {
+  min-height: 30px;
+  padding: 4px 0;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__mini-list-empty {
+  min-height: 24px;
+}
+
+.session-usage-report-card--compact .session-usage-report-card__mini-list-empty span {
+  display: none;
+}

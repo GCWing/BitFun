@@ -679,8 +679,43 @@
         "submissionUnconfirmed": "BitFun cannot yet confirm whether the target received this task. Check the task status shortly."
       }
     },
-    "addBoostTooltip": "Agent modes, image, or skills",
+    "harness": {
+      "selectorTooltip": "Balanced Harness is active",
+      "activateBalanced": "Switch to Balanced Harness",
+      "compatibilityShort": "Legacy",
+      "comingSoon": "In development",
+      "newSessionOnly": "New sessions",
+      "comingSoonNotice": "{{name}} Harness is in development.",
+      "legacySessionNotice": "This legacy session keeps its original agent mode. Create a new session to use Agent Harness.",
+      "profiles": {
+        "minimal": { "name": "Minimal" },
+        "balanced": { "name": "Balanced" },
+        "ultimate": { "name": "Ultimate" }
+      }
+    },
+    "specialistAgents": {
+      "available": "Available",
+      "needsChanges": "Needs changes",
+      "comingSoon": "In development",
+      "comingSoonNotice": "Direct {{name}} Agent invocation is in development.",
+      "reviewUnavailable": "Review Agent needs an active session with reviewable changes.",
+      "review": { "name": "Review" },
+      "cowork": { "name": "Cowork" },
+      "computerUse": { "name": "Computer Use" }
+    },
+    "addBoostTooltip": "Agents, context, images, or skills",
     "modeChangeFailed": "Failed to change the agent mode. Try again.",
+    "reasoningStatus": {
+      "levels": {
+        "none": "Off",
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Standard",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Maximum"
+      }
+    },
     "permissionMode": {
       "menuLabel": "Permission mode",
       "globalScope": "Global",
@@ -730,14 +765,14 @@
     "boostNewSession": "New session",
     "boostAddContext": "Reference file or folder",
     "boostSkills": "Skills",
-    "modeSection": "Modes",
+    "modeSection": "Agents",
     "boostSkillsLoading": "Loading skills…",
     "boostSkillsEmpty": "No enabled skills",
     "openSkillsLibrary": "Manage skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "addModeMenuTitle": "Add mode",
-    "createCustomMode": "Custom mode",
-    "resetToAgentic": "Back to default mode",
+    "addModeMenuTitle": "Choose Agent",
+    "createCustomMode": "Custom Agent",
+    "resetToAgentic": "Remove selected Agent",
     "noIncrementalModes": "No add-on modes available",
     "defaultModeSetTooltip": "Use {{mode}} as the default mode for new chats",
     "defaultModeUnsetTooltip": "Default mode override is active. Click to clear it.",
@@ -2080,6 +2115,7 @@
       "startNewChat": "Start new chat...",
       "openSessionMenu": "Sessions & new",
       "moreMenu": "More",
+      "newSessionItem": "New session",
       "newCodeSessionItem": "Code session",
       "newCoworkSessionItem": "Cowork session"
     },

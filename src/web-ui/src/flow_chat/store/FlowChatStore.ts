@@ -6154,6 +6154,7 @@ export class FlowChatStore {
       models: any[];
       defaultModels: Record<string, string>;
     }>,
+    includeArchived = false,
   ): Promise<void> {
     const surfaceGeneration = this.surfaceGeneration;
     const [
@@ -6177,8 +6178,7 @@ export class FlowChatStore {
         if (existingSession) {
           return;
         }
-        // Skip archived sessions - they are managed in the settings page.
-        if (metadata.status === 'archived') {
+        if (!includeArchived && metadata.status === 'archived') {
           return;
         }
 
@@ -6296,6 +6296,31 @@ export class FlowChatStore {
     };
 
     await Promise.all(sessions.map(processSession));
+  }
+
+  /**
+   * Opt-in archived projection for navigation views. Normal session hydration
+   * keeps archived records out of the working set until this is requested.
+   */
+  public async loadArchivedSessionMetadata(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+  ): Promise<void> {
+    const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
+    const sessions = await sessionAPI.listArchivedSessions(
+      workspacePath,
+      remoteConnectionId,
+      remoteSshHost,
+    );
+    await this.processPersistedSessionMetadataList(
+      sessions,
+      workspacePath,
+      remoteConnectionId,
+      remoteSshHost,
+      undefined,
+      true,
+    );
   }
 
   public async loadSessionMetadataPage(

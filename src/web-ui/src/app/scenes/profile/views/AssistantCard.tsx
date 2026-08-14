@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Bot,
   ChevronRight,
   LoaderCircle,
   MessageSquarePlus,
@@ -10,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Tooltip } from '@/component-library';
+import { AssistantAvatar } from '@/app/components/AssistantAvatar';
 import type { WorkspaceInfo } from '@/shared/types';
 
 interface AssistantCardProps {
@@ -41,6 +41,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
   const identity = workspace.identity;
 
   const name = identity?.name?.trim() || workspace.name || t('nursery.card.unnamed');
+  const avatar = identity?.avatar?.trim() ?? '';
   const emoji = identity?.emoji?.trim() ?? '';
   const creature = identity?.creature?.trim() || '';
   const vibe = identity?.vibe?.trim() || '';
@@ -65,12 +66,14 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
         disabled={isDeleting || isSettingPrimary}
       >
         <span className="assistant-card__header" data-bf-component="assistant-card" data-bf-part="header">
-          <span className="assistant-card__avatar" data-bf-component="assistant-card" data-bf-part="avatar">
-            {emoji ? (
-              <span className="assistant-card__emoji">{emoji}</span>
-            ) : (
-              <Bot className="assistant-card__avatar-icon" size={20} strokeWidth={1.6} aria-hidden="true" />
-            )}
+          <span data-bf-component="assistant-card" data-bf-part="avatar">
+            <AssistantAvatar
+              presetId={avatar}
+              emoji={emoji}
+              stableKey={workspace.assistantId || workspace.id}
+              name={name}
+              size={42}
+            />
           </span>
           <span className="assistant-card__header-info" data-bf-component="assistant-card" data-bf-part="headerInfo">
             <span className="assistant-card__title-row">

@@ -1,8 +1,4 @@
-/**
- * Narrow meta row in the gap under the floating chat input.
- * Collapsed: same width as the centered capsule (min(380px, 80%)), text left within that band.
- * Active: full input column width, left-aligned.
- */
+/** Compact, borderless execution-status track under the floating chat input. */
 
 @use '../../component-library/styles/tokens' as *;
 
@@ -11,22 +7,71 @@
   bottom: 0;
   z-index: 4;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
+  gap: 0;
+  min-height: 20px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 
-  &--split {
-    justify-content: space-between;
+  &--with-harness {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 0.72fr);
+  }
+
+  &--with-workspace#{&}--with-harness#{&}--with-runtime:not(#{&}--with-policy) {
+    // Three semantic groups: workspace; goal/Harness/approval; reasoning/context.
+    grid-template-columns:
+      minmax(0, 38fr)
+      minmax(0, 36fr)
+      minmax(0, 26fr);
+  }
+
+  &--with-workspace#{&}--with-harness#{&}--with-policy#{&}--with-runtime {
+    // Dispatch sync is an exceptional fourth group; it must not split approval
+    // away from the Harness group in the normal composer.
+    grid-template-columns:
+      minmax(0, 35fr)
+      minmax(0, 31fr)
+      minmax(0, 14fr)
+      minmax(0, 20fr);
+  }
+
+  &--with-workspace#{&}--with-harness#{&}--with-policy:not(#{&}--with-runtime) {
+    grid-template-columns: minmax(0, 42fr) minmax(0, 30fr) minmax(0, 28fr);
+  }
+
+  &--with-workspace#{&}--with-runtime:not(#{&}--with-harness):not(#{&}--with-policy) {
+    grid-template-columns: minmax(0, 68fr) minmax(0, 32fr);
+  }
+
+  // Approval without the Harness group (ACP sessions, dispatch sync): the
+  // policy actions get their own column instead of stacking under the
+  // breadcrumb, so the strip always stays a single row.
+  &--with-workspace#{&}--with-policy:not(#{&}--with-harness):not(#{&}--with-runtime) {
+    grid-template-columns: minmax(0, 66fr) minmax(0, 34fr);
+  }
+
+  &--with-workspace#{&}--with-policy#{&}--with-runtime:not(#{&}--with-harness) {
+    grid-template-columns: minmax(0, 52fr) minmax(0, 22fr) minmax(0, 26fr);
   }
 
   &--actions-only {
-    justify-content: flex-end;
+    grid-template-columns: auto auto;
+    justify-content: end;
+
+    .bitfun-chat-input-workspace-strip__actions {
+      justify-self: end;
+    }
   }
-  /* Room for descenders (g, y, p) */
-  /* Collapsed capsule uses 18px horizontal padding on `.bitfun-chat-input__box`; match so strip text lines up with pill content */
-  padding: 3px 18px 4px;
+
+  // Harness + approval + runtime without a workspace breadcrumb: three groups
+  // share one row instead of wrapping the runtime group onto a second line.
+  &--actions-only#{&}--with-harness#{&}--with-policy#{&}--with-runtime {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
   font-family: var(--bf-appearance-token-font-family-sans);
   font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   line-height: var(--bf-appearance-token-flowchat-support-line-height);
@@ -42,28 +87,139 @@
   transform: none;
   width: 100%;
   max-width: none;
-  padding: 3px calc(#{$size-gap-2} + 8px) 4px;
 
   &__main {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 0;
+    gap: 8px;
     min-width: 0;
-    flex: 0 1 auto;
+    min-height: 18px;
+    padding: 0 8px;
   }
 
-  &--split &__main {
-    flex: 1 1 auto;
-    max-width: 100%;
+  &__visual {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    color: var(--bf-appearance-token-color-text-primary);
+
+    svg {
+      width: 15px;
+      height: 15px;
+    }
+  }
+
+  &__workspace-copy {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+
+    // Breadcrumb controls read as one continuous path in the reference, not
+    // as a row of independent filled chips.
+    .dispatch-target-picker__trigger {
+      height: 18px;
+      padding: 0 2px;
+      border-color: transparent;
+      background: transparent;
+      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+
+      &:hover:not(:disabled),
+      &[aria-expanded='true'] {
+        border-color: transparent;
+        background: var(--bf-appearance-token-element-bg-soft);
+      }
+    }
+  }
+
+  &__workspace-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__harness {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    height: 18px;
+    padding: 0 10px;
+    border-left: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__permission-host,
+  &__reasoning-host {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  &__permission-host {
+    flex: none;
   }
 
   &__actions {
-    flex-shrink: 0;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 4px;
+    justify-content: center;
+    // Right-side groups hug the right edge of the strip, mirroring the
+    // workspace group on the left, instead of floating in a fr-sized column.
+    justify-self: end;
+    gap: 5px;
+    min-width: 0;
+    height: 18px;
+    padding: 0 10px;
+    border-left: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__actions--portal-only {
+    display: none;
+  }
+
+  &__runtime {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    // Right-side groups hug the right edge of the strip, mirroring the
+    // workspace group on the left, instead of floating in a fr-sized column.
+    justify-self: end;
+    gap: 0;
+    min-width: 0;
+    height: 18px;
+    padding: 0 10px;
+    border-left: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__runtime--hidden,
+  &__reasoning-host--hidden {
+    display: none;
+  }
+
+  &__reasoning-host {
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+
+  &__runtime-divider {
+    flex: none;
+    width: 1px;
+    height: 12px;
+    margin: 0 6px;
+    background: var(--bf-appearance-token-border-subtle);
+  }
+
+  &__breadcrumb-chevron {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__permission {
@@ -84,7 +240,7 @@
     height: 18px;
     max-width: 140px;
     padding: 0 5px;
-    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 45%, transparent);
+    border: 0;
     border-radius: $size-radius-sm;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
     color: var(--bf-appearance-token-color-accent-500);
@@ -93,11 +249,9 @@
     line-height: 1;
     cursor: pointer;
     transition:
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard;
+      background-color $motion-fast $easing-standard;
 
     &:hover {
-      border-color: var(--bf-appearance-token-color-accent-500);
       background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 22%, transparent);
     }
 
@@ -114,19 +268,20 @@
   }
 
   &__permission-trigger {
+    position: relative;
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: 4px;
     height: 18px;
-    min-width: 18px;
-    max-width: 124px;
-    padding: 0 5px;
-    border: 1px solid transparent;
-    border-radius: $size-radius-sm;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 6px;
+    border: 0;
+    border-radius: $size-radius-base;
     background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
+    color: var(--bf-appearance-token-color-text-primary);
     font: inherit;
     font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     line-height: 1;
@@ -139,8 +294,8 @@
 
     &:hover:not(:disabled),
     &--open:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-secondary);
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &:focus-visible {
@@ -153,57 +308,18 @@
       opacity: 0.62;
     }
 
-    &--acp {
-      width: 18px;
-      padding: 0;
-    }
-
-    &--ask {
-      border-color: var(--bf-appearance-token-color-success-border);
-      background: var(--bf-appearance-token-color-success-bg);
-      color: var(--bf-appearance-token-color-success);
-
-      &:hover:not(:disabled),
-      &.bitfun-chat-input-workspace-strip__permission-trigger--open {
-        border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 62%, transparent);
-        background: color-mix(in srgb, var(--bf-appearance-token-color-success) 17%, transparent);
-        color: var(--bf-appearance-token-color-success);
-      }
-    }
-
-    &--auto {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 42%, transparent);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 11%, transparent);
-      color: var(--bf-appearance-token-color-warning);
-
-      &:hover:not(:disabled),
-      &.bitfun-chat-input-workspace-strip__permission-trigger--open {
-        border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 62%, transparent);
-        background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 17%, transparent);
-        color: var(--bf-appearance-token-color-warning);
-      }
-    }
-
-    &--full_access {
-      border-color: var(--bf-appearance-token-color-error-border);
-      background: var(--bf-appearance-token-color-error-bg);
-      color: var(--bf-appearance-token-color-error);
-
-      &:hover:not(:disabled),
-      &.bitfun-chat-input-workspace-strip__permission-trigger--open {
-        border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 56%, transparent);
-        background: color-mix(in srgb, var(--bf-appearance-token-color-error) 15%, transparent);
-        color: var(--bf-appearance-token-color-error);
-      }
-    }
-
     svg {
       flex: none;
     }
   }
 
+  &__permission-overview-icon {
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
   &__permission-label {
     min-width: 0;
+    max-width: 88px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -353,7 +469,7 @@
     align-items: center;
     justify-content: center;
     width: 20px;
-    height: 20px;
+    height: 18px;
     padding: 0;
     border: 0;
     border-radius: 4px;
@@ -502,79 +618,145 @@
   }
 
   &__goal-btn.icon-btn {
-    width: 16px;
-    height: 16px;
-    min-width: 16px;
-    border-radius: 50%;
-    opacity: 0.86;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    width: auto;
+    max-width: min(150px, 45%);
+    height: 18px;
+    padding: 0 4px;
+    border-radius: $size-radius-base;
+    color: var(--bf-appearance-token-color-text-primary);
+    opacity: 1;
 
     svg {
+      flex: none;
+      width: 16px;
+      height: 16px;
       color: currentColor;
+    }
+
+    span {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &:hover:not(:disabled) {
+      transform: none;
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-text-primary);
+      opacity: 1;
     }
   }
 
   &__goal-btn--none.icon-btn {
     color: var(--bf-appearance-token-color-text-muted);
-    opacity: 0.72;
+    opacity: 0.58;
 
     &:hover:not(:disabled) {
-      transform: none;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 12%, var(--bf-appearance-token-element-bg-medium));
-      color: var(--bf-appearance-token-color-text-secondary);
-      opacity: 1;
+      color: var(--bf-appearance-token-color-text-muted);
+      opacity: 0.72;
     }
   }
 
   &__goal-btn--active.icon-btn {
-    color: var(--bf-appearance-token-color-warning);
-
-    &:hover:not(:disabled) {
-      transform: none;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, var(--bf-appearance-token-element-bg-medium));
-      color: var(--bf-appearance-token-color-warning);
-      opacity: 1;
-    }
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__goal-btn--complete.icon-btn {
-    color: var(--bf-appearance-token-color-success);
+    color: var(--bf-appearance-token-color-text-muted);
+    opacity: 0.58;
 
     &:hover:not(:disabled) {
-      transform: none;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, var(--bf-appearance-token-element-bg-medium));
-      color: var(--bf-appearance-token-color-success);
-      opacity: 1;
+      color: var(--bf-appearance-token-color-text-muted);
+      opacity: 0.72;
     }
   }
 
-  /* Keep the usage action compact, but large enough to read beside the strip text. */
-  &__usage-btn.icon-btn {
-    width: 16px;
-    height: 16px;
-    min-width: 16px;
-    border-radius: 50%;
-    opacity: 0.86;
-    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 62%, var(--bf-appearance-token-color-text-secondary));
-
-    &:hover:not(:disabled) {
-      transform: none;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, var(--bf-appearance-token-element-bg-medium));
-      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 86%, var(--bf-appearance-token-color-text-primary));
-      opacity: 1;
-    }
-
-    &:active:not(:disabled) {
-      transform: none;
-    }
+  &__goal-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: min(150px, 45%);
+    color: var(--bf-appearance-token-color-text-primary);
 
     svg {
-      flex-shrink: 0;
-      width: 14px;
-      height: 14px;
+      flex: none;
+      width: 16px;
+      height: 16px;
+    }
+
+    span {
+      min-width: 0;
+      overflow: hidden;
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__goal-summary--inactive {
+    flex: none;
+    color: var(--bf-appearance-token-color-text-muted);
+    opacity: 0.58;
+  }
+
+  &__usage-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 50px;
+    height: 18px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
+    font: inherit;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-weight: 500;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-accent-500);
+    }
+
+  }
+
+  &__usage-ring {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+
+    svg {
+      position: absolute;
+      inset: 0;
+      width: 16px;
+      height: 16px;
+    }
+
+    .is-track {
+      color: var(--bf-appearance-token-border-medium);
+    }
+
+    .is-value {
+      color: var(--bf-appearance-token-color-accent-500);
+      transform: rotate(-90deg);
+      transform-origin: center;
     }
   }
 
@@ -582,9 +764,13 @@
     display: inline-flex;
     min-width: 0;
     box-sizing: border-box;
+    border: 0;
     border-radius: $size-radius-sm;
-    padding: 2px 6px;
+    padding: 1px 5px;
     margin: 0 -2px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
     transition: background-color $motion-fast $easing-standard;
     cursor: default;
 
@@ -601,28 +787,18 @@
     &--branch {
       align-items: center;
       flex: 0 1 auto;
-      max-width: 35%;
-      gap: 3px;
+      max-width: 120px;
+      gap: 5px;
+      margin: 0;
+      background: transparent;
     }
 
-    /* Checkbox-style chip: reads as a control without competing with the branch. */
-    &--worktree {
-      align-items: center;
-      flex: none;
-      gap: 4px;
-      margin-left: 4px;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      background: transparent;
-      color: var(--bf-appearance-token-color-text-muted);
-      font: inherit;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-      line-height: 1;
-      white-space: nowrap;
+    &--branch-toggle {
       cursor: pointer;
 
       &:hover:not(:disabled) {
-        background: var(--bf-appearance-token-element-bg-medium);
-        color: var(--bf-appearance-token-color-text-secondary);
+        background: var(--bf-appearance-token-element-bg-soft);
+        color: var(--bf-appearance-token-color-text-primary);
       }
 
       &:focus-visible {
@@ -637,7 +813,7 @@
     }
 
     &--worktree-on {
-      border-color: var(--bf-appearance-token-color-accent-500);
+      background: transparent;
       color: var(--bf-appearance-token-color-accent-500);
 
       &:hover:not(:disabled) {
@@ -646,45 +822,23 @@
     }
   }
 
-  /*
-   * The UI font (Noto Sans SC) has CJK vertical metrics — 1.16em ascent against
-   * 0.32em descent — so `align-items: center` centers a line box whose glyphs sit
-   * ~0.06em below its middle. Beside the checkbox icon, which centers exactly,
-   * the label reads as low. The 1px bottom pad lifts the glyphs by half of it,
-   * matching what `__workspace` and `__branch` already carry; the icon still
-   * sets the 11px content box, so the chip's height is unchanged.
-   */
-  &__worktree-label {
-    padding-bottom: 1px;
-  }
-
-  &__worktree-icon {
-    flex-shrink: 0;
-    width: 11px;
-    height: 11px;
-    color: inherit;
-
-    &.is-spinning {
-      animation: bitfun-chat-input-workspace-strip-spin 0.9s linear infinite;
-    }
-  }
-
   &__workspace {
     min-width: 0;
     white-space: nowrap;
     font-family: inherit;
-    font-weight: inherit;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding-bottom: 1px;
+    padding-bottom: 0;
     max-width: 100%;
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__branch-icon {
     flex-shrink: 0;
-    width: 11px;
-    height: 11px;
+    width: 13px;
+    height: 13px;
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.9;
   }
@@ -693,6 +847,7 @@
     min-width: 0;
     white-space: nowrap;
     font-family: inherit;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     font-weight: inherit;
     flex: 1 1 auto;
     overflow: hidden;
@@ -701,36 +856,41 @@
     color: var(--bf-appearance-token-color-text-primary);
   }
 
-  &__sep {
-    flex: none;
-    padding: 0 3px;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-weight: 400;
+}
+
+@media (max-width: 680px) {
+  .bitfun-chat-input-workspace-strip {
+    &--with-workspace#{&}--with-harness#{&}--with-runtime:not(#{&}--with-policy) {
+      grid-template-columns: minmax(0, 1fr) minmax(168px, auto) minmax(156px, auto);
+    }
+
+    &--with-workspace#{&}--with-harness#{&}--with-policy#{&}--with-runtime {
+      grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto minmax(150px, auto);
+    }
+
+    &--with-workspace#{&}--with-policy:not(#{&}--with-harness):not(#{&}--with-runtime) {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    &--with-workspace#{&}--with-policy#{&}--with-runtime:not(#{&}--with-harness) {
+      grid-template-columns: minmax(0, 1fr) auto auto;
+    }
+
+    &__workspace {
+      max-width: 112px;
+    }
+
+    &__goal-btn.icon-btn,
+    &__goal-summary {
+      max-width: 118px;
+    }
   }
 }
 
 @media (max-width: 560px) {
   .bitfun-chat-input-workspace-strip {
-    &__permission-trigger--auto,
-    &__permission-trigger--full_access {
-      width: 18px;
-      padding: 0;
-    }
-
     &__permission-label {
       display: none;
     }
-  }
-}
-
-@keyframes bitfun-chat-input-workspace-strip-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bitfun-chat-input-workspace-strip__worktree-icon.is-spinning {
-    animation: none;
   }
 }

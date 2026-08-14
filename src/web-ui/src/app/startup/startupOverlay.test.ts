@@ -31,6 +31,30 @@ describe('startupOverlay', () => {
     expect(isStartupOverlayPresent()).toBe(false);
   });
 
+  it('releases startup-control focus before hiding the exiting overlay', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `
+      <div id="bitfun-startup-overlay">
+        <button type="button" data-startup-window-action="close">Close</button>
+      </div>
+    `;
+    const closeButton = document.querySelector<HTMLButtonElement>(
+      '[data-startup-window-action="close"]',
+    );
+    closeButton?.focus();
+    expect(document.activeElement).toBe(closeButton);
+
+    const hidden = hideStartupOverlay();
+    const overlay = document.getElementById('bitfun-startup-overlay');
+
+    expect(document.activeElement).not.toBe(closeButton);
+    expect(overlay?.hasAttribute('inert')).toBe(true);
+    expect(overlay?.getAttribute('aria-hidden')).toBe('true');
+
+    overlay?.dispatchEvent(new Event('animationend'));
+    await hidden;
+  });
+
   it('falls back to a timer when the exit animation event is not delivered', async () => {
     vi.useFakeTimers();
     document.body.innerHTML = '<div id="bitfun-startup-overlay"></div>';

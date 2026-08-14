@@ -1,10 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Target } from 'lucide-react';
+import { Crosshair } from 'lucide-react';
 import { IconButton, Tooltip } from '@/component-library';
 import type { ThreadGoalSnapshot } from '../../services/goalService';
 import { resolveThreadGoalStatusLabel } from '../../utils/threadGoalDisplay';
-import { resolveThreadGoalStripIconTone } from './threadGoalStripIconTone';
+import { isThreadGoalActive, resolveThreadGoalStripIconTone } from './threadGoalStripIconTone';
 
 export interface ThreadGoalStripButtonProps {
   goal: ThreadGoalSnapshot | null;
@@ -27,6 +27,7 @@ export const ThreadGoalStripButton: React.FC<ThreadGoalStripButtonProps> = ({
     : t('threadGoal.stripTooltipEmpty');
 
   const ariaLabel = goal ? t('threadGoal.stripOpenWithGoal') : t('threadGoal.stripOpenEmpty');
+  const activeLabel = isThreadGoalActive(goal) ? goal?.objective.trim() : '';
 
   return (
     <Tooltip content={tooltip}>
@@ -42,7 +43,8 @@ export const ThreadGoalStripButton: React.FC<ThreadGoalStripButtonProps> = ({
           onOpen();
         }}
       >
-        <Target size={14} strokeWidth={2} aria-hidden />
+        <Crosshair size={16} strokeWidth={1.8} aria-hidden />
+        {activeLabel ? <span>{activeLabel}</span> : null}
       </IconButton>
     </Tooltip>
   );
