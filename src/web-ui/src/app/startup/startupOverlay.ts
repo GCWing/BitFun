@@ -67,6 +67,15 @@ export async function hideStartupOverlay(): Promise<void> {
   }
 
   overlay.classList.add(EXIT_CLASS);
+  // Static startup window controls can still own focus when the React shell
+  // becomes ready. Release that focus before hiding the overlay from the
+  // accessibility tree, then make the exiting surface non-interactive so it
+  // cannot reclaim focus during its final animation.
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLElement && overlay.contains(activeElement)) {
+    activeElement.blur();
+  }
+  overlay.setAttribute('inert', '');
   overlay.setAttribute('aria-hidden', 'true');
   await waitForOverlayExitAnimation(overlay);
   overlay.remove();
