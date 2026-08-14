@@ -17,7 +17,9 @@
   height: 36px;
   min-height: 36px;
   flex-shrink: 0;
-  transition: all $motion-base $easing-standard;
+  transition:
+    background-color $motion-base $easing-standard,
+    border-color $motion-base $easing-standard;
   position: relative;
   z-index: 10;
 

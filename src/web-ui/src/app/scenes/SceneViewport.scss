@@ -79,6 +79,12 @@
     margin: 0;
   }
 
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   // ── Lazy chunk loading ────────────────────────────────
 
   &__lazy-fallback {
@@ -119,9 +125,44 @@
       z-index: 1;
     }
 
+    &--empty {
+      align-items: center;
+      justify-content: center;
+    }
+
+    &--incoming,
+    &--outgoing {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+
+    &--incoming {
+      transition:
+        opacity 180ms cubic-bezier(0.23, 1, 0.32, 1),
+        transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
     &--outgoing {
       z-index: 2;
       pointer-events: none;
+      transition:
+        opacity 140ms cubic-bezier(0.23, 1, 0.32, 1),
+        transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+  }
+
+  &__clip[data-scene-motion-phase='preparing'] {
+    .bitfun-scene-viewport__scene--incoming {
+      opacity: 0.72;
+      transform: translate3d(0, 6px, 0) scale(0.995);
+      transition: none;
+    }
+  }
+
+  &__clip[data-scene-motion-phase='running'] {
+    .bitfun-scene-viewport__scene--outgoing {
+      opacity: 0;
+      transform: translate3d(0, -4px, 0) scale(0.997);
     }
   }
 }
@@ -131,9 +172,22 @@
     transition: none;
   }
 
-  // Do not keep the previous scene painted during the exit grace period when
-  // the user has asked for motion to be reduced.
-  .bitfun-scene-viewport__scene--exiting {
-    display: none;
+  .bitfun-scene-viewport__scene--incoming,
+  .bitfun-scene-viewport__scene--outgoing {
+    transform: none;
+    transition: opacity 100ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .bitfun-scene-viewport__clip[data-scene-motion-phase='preparing'] {
+    .bitfun-scene-viewport__scene--incoming {
+      opacity: 0.82;
+      transform: none;
+    }
+  }
+
+  .bitfun-scene-viewport__clip[data-scene-motion-phase='running'] {
+    .bitfun-scene-viewport__scene--outgoing {
+      transform: none;
+    }
   }
 }

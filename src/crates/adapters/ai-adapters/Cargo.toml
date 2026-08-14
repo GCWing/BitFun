@@ -24,7 +24,7 @@ async-trait = { workspace = true }
 base64 = { workspace = true, optional = true }
 bitfun-agent-stream = { path = "../../execution/agent-stream" }
 bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-services-core = { path = "../../services/services-core", default-features = false, optional = true }
+bitfun-services-core = { path = "../../services/services-core", optional = true }
 chrono = { workspace = true }
 dirs = { workspace = true, optional = true }
 keyring-core = { workspace = true, optional = true }

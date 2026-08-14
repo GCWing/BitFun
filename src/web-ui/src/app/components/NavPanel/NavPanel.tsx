@@ -8,8 +8,9 @@
  *     item while SceneNav is revealed via clip-path expanding from the
  *     anchor's Y position. Both layers coexist in the DOM (overlay).
  *
- *   All other scenes (settings, …):
- *     Simple crossfade — MainNav hidden instantly, SceneNav fades in.
+ *   All other pointer-opened scenes (settings, …):
+ *     MainNav and SceneNav use a short paired crossfade/translation. Keyboard
+ *     and programmatic navigation stay immediate.
  *
  * MainNav is always mounted so its state is preserved across transitions.
  */
@@ -26,6 +27,8 @@ import { useI18n } from '@/infrastructure/i18n';
 import { useNavSceneStore } from '../../stores/navSceneStore';
 import { getSceneNav, preloadSceneNav } from '../../scenes/nav-registry';
 import type { SceneTabId } from '../SceneBar/types';
+import { ViewTransitionBoundary } from '@/component-library';
+import type { InteractionMotion } from '@/shared/utils/motionPreference';
 import MainNav from './MainNav';
 import PersistentFooterActions from './components/PersistentFooterActions';
 import { PeerRemoteBadge } from '@/infrastructure/peer-device/PeerRemoteBadge';
@@ -45,8 +48,10 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
   const { t } = useI18n('common');
   const showSceneNav = useNavSceneStore(s => s.showSceneNav);
   const navSceneId = useNavSceneStore(s => s.navSceneId);
+  const navigationMotion = useNavSceneStore(s => s.navigationMotion);
 
   const [mountedSceneId, setMountedSceneId] = useState<SceneTabId | null>(navSceneId);
+  const [mountedSceneMotion, setMountedSceneMotion] = useState<InteractionMotion>(navigationMotion);
   const sceneRequestRef = useRef(0);
   useEffect(() => {
     const requestId = ++sceneRequestRef.current;
@@ -56,10 +61,13 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
       if (sceneRequestRef.current !== requestId) return;
       // React keeps the currently painted navigation visible if the cached
       // lazy component still suspends for a final promise microtask.
-      startTransition(() => setMountedSceneId(navSceneId));
+      startTransition(() => {
+        setMountedSceneId(navSceneId);
+        setMountedSceneMotion(navigationMotion);
+      });
     };
     void preloadSceneNav(navSceneId).then(commit, commit);
-  }, [navSceneId]);
+  }, [navSceneId, navigationMotion]);
 
   const SceneNavComponent = mountedSceneId ? getSceneNav(mountedSceneId) : null;
 
@@ -96,6 +104,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
     'bitfun-nav-panel__content',
     hasMountedSceneNav && 'is-scene',
     useSplitOpen && 'is-split-open',
+    (showSceneNav ? mountedSceneMotion : navigationMotion) === 'pointer' && 'has-pointer-motion',
   ].filter(Boolean).join(' ');
 
   const sceneCls = [
@@ -128,9 +137,16 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
         {SceneNavComponent && (
           <div className={sceneCls} data-bf-component="nav-panel" data-bf-part="sceneLayer" data-bf-layer="scene" data-bf-state={showSceneNav ? 'active' : ''}>
             <Suspense fallback={null}>
-              <div key={mountedSceneId} className="bitfun-nav-panel__scene-inner" data-bf-component="nav-panel" data-bf-part="sceneContent">
+              <ViewTransitionBoundary
+                viewKey={mountedSceneId ?? 'main'}
+                animate={showSceneNav && mountedSceneMotion === 'pointer'}
+                className="bitfun-nav-panel__scene-transition"
+                viewClassName="bitfun-nav-panel__scene-inner"
+                data-bf-component="nav-panel"
+                data-bf-part="sceneContent"
+              >
                 <SceneNavComponent />
-              </div>
+              </ViewTransitionBoundary>
             </Suspense>
           </div>
         )}

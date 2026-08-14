@@ -24,7 +24,14 @@ export struct AppShell {
   build() {
     Stack({ alignContent: Alignment.Start }) {
       Column() {
-        this.sidebar()
+        // The drawer is a compact affordance. Wide layouts put the same session
+        // list in the master pane instead, and this copy stayed mounted behind
+        // an opacity of 0 — invisible, but rebuilt on every selection change,
+        // which on a tablet doubled the cost of switching sessions. Compact
+        // keeps it mounted so opening and closing still cross-fades.
+        if (!this.useWideLayout || this.shellState.showSidebar) {
+          this.sidebar()
+        }
       }
       .width(this.sidebarWidth())
       .height('100%')

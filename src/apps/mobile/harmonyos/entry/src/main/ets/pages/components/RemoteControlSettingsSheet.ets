@@ -1,5 +1,5 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
+import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemotePermissionMode } from '../../model/RemoteModels';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
@@ -23,7 +23,6 @@ export struct RemoteControlSettingsSheet {
   @Event onOpenAccount: () => void = () => {};
   @Event onAddConnection: () => void = () => {};
   @Event cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> = async (_relayUrl: string, _username: string, _password: string): Promise<string> => '';
-  @Event cloudSync: () => Promise<string> = async (): Promise<string> => '0';
   @Event cloudLogout: () => Promise<void> = async (): Promise<void> => {};
   @Event cloudListDevices: () => Promise<CloudAccountDevice[]> = async (): Promise<CloudAccountDevice[]> => [];
   @Event getPermissionMode: () => Promise<RemotePermissionMode> = async (): Promise<RemotePermissionMode> => 'ask';
@@ -33,8 +32,6 @@ export struct RemoteControlSettingsSheet {
   @Event onReconnect: () => void = () => {};
   @Local showProfile: boolean = false;
   @Local showLogin: boolean = false;
-  @Local cloudSyncBusy: boolean = false;
-  @Local cloudSyncStatus: string = '';
   @Local accountDevices: CloudAccountDevice[] = [];
   @Local accountDevicesBusy: boolean = false;
   @Local accountDevicesError: string = '';
@@ -553,32 +550,6 @@ export struct RemoteControlSettingsSheet {
         .lineHeight(20)
         .fontColor(MUTED)
         .width('100%')
-
-      Text(RemoteI18n.t('remote.settings.accountSync'))
-        .height(42)
-        .width('100%')
-        .fontSize(15)
-        .fontColor(PRIMARY_ACTION_TEXT)
-        .backgroundColor(PRIMARY_ACTION)
-        .textAlign(TextAlign.Center)
-        .borderRadius(21)
-        .opacity(this.cloudSyncBusy ? 0.52 : 1)
-        .onClick(async () => {
-          if (this.cloudSyncBusy) return;
-          this.cloudSyncBusy = true;
-          this.cloudSyncStatus = '';
-          try {
-            const count = await this.cloudSync();
-            this.cloudSyncStatus = RemoteI18n.f('remote.settings.accountSyncSuccess', count);
-          } catch (err) {
-            this.cloudSyncStatus = err instanceof Error ? err.message : RemoteI18n.t('remote.settings.accountSyncFailed');
-          } finally {
-            this.cloudSyncBusy = false;
-          }
-        })
-      if (this.cloudSyncStatus.length > 0) {
-        Text(this.cloudSyncStatus).fontSize(13).fontColor(MUTED).width('100%')
-      }
     }
     .width('100%')
     .padding({ left: 18, right: 18, top: 16, bottom: 16 })
@@ -613,7 +584,6 @@ export struct RemoteControlSettingsSheet {
       this.logoutBusy = true;
       try {
         await this.cloudLogout();
-        this.cloudSyncStatus = '';
         this.showProfile = false;
         this.showLogin = true;
       } finally {

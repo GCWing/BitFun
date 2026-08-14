@@ -47,6 +47,7 @@ import {
   pickSshCertificatePath,
   pickSshPrivateKeyPath,
 } from './pickSshPrivateKeyPath';
+import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import './SSHConnectionDialog.scss';
 
 interface SSHConnectionDialogProps {
@@ -111,7 +112,10 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const revealConnectionForm = useCallback(() => {
     const el = formRef.current;
     if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.scrollIntoView({
+      behavior: getMotionAwareScrollBehavior('smooth'),
+      block: 'start',
+    });
     setFormHighlighted(true);
     if (formHighlightTimerRef.current != null) {
       window.clearTimeout(formHighlightTimerRef.current);
@@ -709,8 +713,6 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     setLocalError(null);
     clearError();
   };
-
-  if (!open) return null;
 
   return (
     <>
@@ -1376,7 +1378,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
         </div>
       </Modal>
 
-      {credentialsPrompt && (
+      {open && credentialsPrompt && (
         <SSHAuthPromptDialog
           open
           targetDescription={`${credentialsPrompt.username}@${credentialsPrompt.host}:${credentialsPrompt.port}`}

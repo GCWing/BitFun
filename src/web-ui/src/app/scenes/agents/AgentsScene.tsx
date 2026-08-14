@@ -47,6 +47,7 @@ import { useAgentsList } from './hooks/useAgentsList';
 import { AGENT_ICON_MAP } from './agentsIcons';
 import { CAPABILITY_ACCENT, CORE_AGENT_ACCENTS, DEFAULT_CORE_AGENT_ACCENT } from './agentAppearance';
 import { getCardGradient } from '@/shared/utils/cardGradients';
+import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
 import './AgentsView.scss';
@@ -276,7 +277,10 @@ const AgentsHomeView: React.FC = () => {
   );
 
   const scrollToZone = useCallback((targetId: string) => {
-    document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById(targetId)?.scrollIntoView({
+      behavior: getMotionAwareScrollBehavior('smooth'),
+      block: 'start',
+    });
   }, []);
 
   const handleHarnessProfileClick = useCallback((profileId: typeof HARNESS_PROFILES[number]['id']) => {

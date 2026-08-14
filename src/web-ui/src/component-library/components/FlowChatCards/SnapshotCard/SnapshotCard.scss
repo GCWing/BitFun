@@ -11,7 +11,12 @@
 
   @include shared.liquid-card-base;
   font-family: tokens.$font-family-mono;
-  transition: all tokens.$motion-base tokens.$easing-standard;
+  transition:
+    background-color tokens.$motion-base tokens.$easing-standard,
+    border-color tokens.$motion-base tokens.$easing-standard,
+    box-shadow tokens.$motion-base tokens.$easing-standard,
+    opacity tokens.$motion-base tokens.$easing-standard,
+    transform tokens.$motion-base tokens.$easing-standard;
 }
 
 
@@ -65,27 +70,17 @@
 .snapshot-card--compact.snapshot-card--conflict {
   border-color: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 60%, transparent);
   background: linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 2%, transparent), color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 1%, transparent));
-  animation: pulse-warning 2s infinite;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 22%, transparent);
 
   &:hover {
     border-color: color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 80%, transparent);
   }
 }
 
-@keyframes pulse-warning {
-  0%, 100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 40%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 8px color-mix(in srgb, var(--bf-appearance-token-git-color-deleted) 0%, transparent);
-  }
-}
-
-
 .snapshot-card__icon {
   flex-shrink: 0;
   color: var(--snapshot-card-operation-color);
-  transition: all tokens.$motion-base;
+  transition: color tokens.$motion-base tokens.$easing-standard;
 }
 
 .snapshot-card__action {
@@ -141,7 +136,7 @@
 }
 
 .snapshot-card__status-spinner {
-  animation: spin 1s linear infinite;
+  animation: bitfun-snapshot-card-spin 1s linear infinite;
   color: var(--bf-appearance-token-color-info);
 }
 
@@ -157,7 +152,7 @@
   color: var(--bf-appearance-token-color-warning);
 }
 
-@keyframes spin {
+@keyframes bitfun-snapshot-card-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
@@ -180,7 +175,11 @@
   border-radius: tokens.$size-radius-sm;
   background: transparent;
   cursor: pointer;
-  transition: all tokens.$motion-base tokens.$easing-standard;
+  transition:
+    background-color tokens.$motion-base tokens.$easing-standard,
+    border-color tokens.$motion-base tokens.$easing-standard,
+    color tokens.$motion-base tokens.$easing-standard,
+    opacity tokens.$motion-base tokens.$easing-standard;
   padding: 0;
 
   svg {
@@ -345,7 +344,18 @@
 }
 
 .snapshot-card__processing-icon {
-  animation: spin 1s linear infinite;
+  animation: bitfun-snapshot-card-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snapshot-card__status-spinner,
+  .snapshot-card__processing-icon {
+    animation: none;
+  }
+
+  .snapshot-card--compact:hover {
+    transform: none;
+  }
 }
 
 .snapshot-card__error {

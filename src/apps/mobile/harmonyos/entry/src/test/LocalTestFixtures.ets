@@ -52,7 +52,17 @@ import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory'
 import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
 import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
 import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
+import {
+  RemoteChatCache,
+  RemoteChatCacheSlice,
+  RemoteChatCacheStore
+} from '../main/ets/services/RemoteChatCache';
 import { RemoteChatCommandClient, RemoteChatCommandController } from '../main/ets/services/RemoteChatCommandController';
+import {
+  RemoteSessionListCache,
+  RemoteSessionListSlice,
+  RemoteSessionListStore
+} from '../main/ets/services/RemoteSessionListCache';
 import { RemoteChatPollingLifecycleController } from '../main/ets/services/RemoteChatPollingLifecycleController';
 import {
   RemoteFileDownloadClient,
@@ -151,6 +161,10 @@ export interface GeneralChatRecordedRequest {
 export class FakeRemoteWorkspaceDataSource implements RemoteWorkspaceDataSource {
   recent: RecentWorkspaceEntry[] = [];
   sessionsByPath: Map<string, RemoteSession[]> = new Map<string, RemoteSession[]>();
+  /** Paths whose listing rejects, for the workspace a desktop cannot read. */
+  failingPaths: string[] = [];
+  /** Every path listed, in the order the listings were started. */
+  listedPaths: string[] = [];
 
   async listRecentWorkspaces(): Promise<RecentWorkspaceEntry[]> {
     return this.recent;
@@ -175,6 +189,10 @@ export class FakeRemoteWorkspaceDataSource implements RemoteWorkspaceDataSource 
   }
 
   async listSessionsForWorkspace(path: string, _limit: number): Promise<RemoteSession[]> {
+    this.listedPaths.push(path);
+    if (this.failingPaths.includes(path)) {
+      throw new Error(`workspace unavailable: ${path}`);
+    }
     return this.sessionsByPath.get(path) || [];
   }
 
@@ -916,6 +934,186 @@ export class RemoteChatMessagesProjectionRecord {
   hasMoreMessages: boolean = true;
   pollVersion: number = -1;
   knownMessageCount: number = -1;
+}
+
+/** Stands in for the RDB-backed transcript cache, keyed the same way it is. */
+/**
+ * An in-memory stand-in for `RemoteChatLocalRdbStore`.
+ *
+ * Recency is modelled the same way the real store models it — reads touch a
+ * session just as writes do — so a test can assert which transcript eviction
+ * actually kept rather than only that a prune was asked for.
+ */
+export class FakeRemoteChatCacheStore implements RemoteChatCacheStore {
+  readonly slices: Map<string, RemoteChatCacheSlice> = new Map<string, RemoteChatCacheSlice>();
+  appendCount: number = 0;
+  replaceCount: number = 0;
+  pruneRequests: number[] = [];
+  clearCount: number = 0;
+  shouldFail: boolean = false;
+  /** Cache keys, least recently touched first. */
+  private recency: string[] = [];
+
+  async init(_context: Context): Promise<void> {
+    this.failIfNeeded();
+  }
+
+  async loadSlice(deviceKey: string, sessionId: string): Promise<RemoteChatCacheSlice> {
+    this.failIfNeeded();
+    const key = FakeRemoteChatCacheStore.key(deviceKey, sessionId);
+    const slice = this.slices.get(key);
+    if (!slice) {
+      return { messages: [], lastMessageId: '' };
+    }
+    this.touch(key);
+    return { messages: slice.messages.slice(), lastMessageId: slice.lastMessageId };
+  }
+
+  async appendMessages(
+    deviceKey: string,
+    sessionId: string,
+    startSeq: number,
+    messages: ChatMessage[],
+    lastMessageId: string
+  ): Promise<void> {
+    this.failIfNeeded();
+    this.appendCount += 1;
+    const key = FakeRemoteChatCacheStore.key(deviceKey, sessionId);
+    const existing = this.slices.get(key);
+    const kept = existing ? existing.messages.slice(0, startSeq) : [];
+    this.slices.set(key, { messages: kept.concat(messages), lastMessageId });
+    this.touch(key);
+  }
+
+  async replaceMessages(
+    deviceKey: string,
+    sessionId: string,
+    messages: ChatMessage[],
+    lastMessageId: string
+  ): Promise<void> {
+    this.failIfNeeded();
+    this.replaceCount += 1;
+    const key = FakeRemoteChatCacheStore.key(deviceKey, sessionId);
+    this.slices.set(key, { messages: messages.slice(), lastMessageId });
+    this.touch(key);
+  }
+
+  async deleteSession(deviceKey: string, sessionId: string): Promise<void> {
+    this.failIfNeeded();
+    this.drop(FakeRemoteChatCacheStore.key(deviceKey, sessionId));
+  }
+
+  async pruneSessions(deviceKey: string, keepMostRecent: number): Promise<void> {
+    this.failIfNeeded();
+    this.pruneRequests.push(keepMostRecent);
+    const prefix = `${deviceKey}::`;
+    const owned = this.recency.filter((key: string): boolean => key.startsWith(prefix));
+    owned.slice(0, Math.max(0, owned.length - keepMostRecent))
+      .forEach((key: string): void => this.drop(key));
+  }
+
+  async clearAll(): Promise<void> {
+    this.failIfNeeded();
+    this.clearCount += 1;
+    this.slices.clear();
+    this.recency = [];
+  }
+
+  private touch(key: string): void {
+    this.recency = this.recency.filter((stored: string): boolean => stored !== key);
+    this.recency.push(key);
+  }
+
+  private drop(key: string): void {
+    this.slices.delete(key);
+    this.recency = this.recency.filter((stored: string): boolean => stored !== key);
+  }
+
+  private failIfNeeded(): void {
+    if (this.shouldFail) {
+      throw new Error('Expected remote chat cache failure.');
+    }
+  }
+
+  private static key(deviceKey: string, sessionId: string): string {
+    return `${deviceKey}::${sessionId}`;
+  }
+}
+
+/**
+ * A cache that never initializes, so every call is a miss.
+ *
+ * That is the shape most controller tests want: the cache is transparent and
+ * the assertions stay about the network path.
+ */
+export function inertRemoteChatCache(): RemoteChatCache {
+  return new RemoteChatCache(new FakeRemoteChatCacheStore(), (): string => 'device-1');
+}
+
+/** A cache backed by [store] and ready to read and write. */
+export async function readyRemoteChatCache(
+  store: FakeRemoteChatCacheStore,
+  deviceKey: string = 'device-1'
+): Promise<RemoteChatCache> {
+  const cache = new RemoteChatCache(store, (): string => deviceKey);
+  await cache.init({} as Context);
+  return cache;
+}
+
+export class FakeRemoteSessionListStore implements RemoteSessionListStore {
+  readonly lists: Map<string, RemoteSessionListSlice> = new Map<string, RemoteSessionListSlice>();
+  lastDeviceKey: string = '';
+  saveCount: number = 0;
+  clearCount: number = 0;
+  shouldFail: boolean = false;
+
+  async init(_context: Context): Promise<void> {
+    this.failIfNeeded();
+  }
+
+  async loadList(deviceKey: string): Promise<RemoteSessionListSlice> {
+    this.failIfNeeded();
+    const slice = this.lists.get(deviceKey);
+    if (!slice) {
+      return { sessions: [], hasMore: false };
+    }
+    return { sessions: slice.sessions.slice(), hasMore: slice.hasMore };
+  }
+
+  async loadLastList(): Promise<RemoteSessionListSlice> {
+    this.failIfNeeded();
+    return await this.loadList(this.lastDeviceKey);
+  }
+
+  async saveList(deviceKey: string, sessions: RemoteSession[], hasMore: boolean): Promise<void> {
+    this.failIfNeeded();
+    this.saveCount += 1;
+    this.lists.set(deviceKey, { sessions: sessions.slice(), hasMore });
+    this.lastDeviceKey = deviceKey;
+  }
+
+  async clearAll(): Promise<void> {
+    this.failIfNeeded();
+    this.clearCount += 1;
+    this.lists.clear();
+    this.lastDeviceKey = '';
+  }
+
+  private failIfNeeded(): void {
+    if (this.shouldFail) {
+      throw new Error('Expected remote session list cache failure.');
+    }
+  }
+}
+
+/** A session list cache backed by [store] and ready to read and write. */
+export async function readyRemoteSessionListCache(
+  store: FakeRemoteSessionListStore,
+  deviceKey: string = 'device-1'
+): Promise<RemoteSessionListCache> {
+  const cache = new RemoteSessionListCache(store, (): string => deviceKey);
+  await cache.init({} as Context);
+  return cache;
 }
 
 export class FakeGeneralChatCommandClient implements GeneralChatCommandClient {

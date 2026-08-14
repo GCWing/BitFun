@@ -243,7 +243,7 @@
   }
 
   .spinning {
-    animation: spin 1s linear infinite;
+    animation: bitfun-account-panel-spin 1s linear infinite;
   }
 
   &__sync-indicator {
@@ -564,7 +564,14 @@
   }
 }
 
-@keyframes spin {
+@keyframes bitfun-account-panel-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-panel .spinning {
+    animation: none;
+    transform: none;
+  }
 }

@@ -132,7 +132,6 @@ const extractedCloudAccountMethods = [
   'loginCloudAccount',
   'restoreCloudAccountSession',
   'loadGeneralChatAccountModels',
-  'syncCloudAccount',
   'applyCloudAccountSession',
   'logoutCloudAccount',
   'listCloudAccountDevices',

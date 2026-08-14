@@ -346,3 +346,10 @@
     }
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-session-batch-modal__spinner {
+    animation: none;
+    transform: none;
+  }
+}

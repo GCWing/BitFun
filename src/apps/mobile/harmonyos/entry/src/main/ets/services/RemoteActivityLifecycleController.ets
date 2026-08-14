@@ -4,7 +4,7 @@ export class RemoteActivityLifecycleController {
   private readonly heartbeatController: RemoteHeartbeatController;
 
   constructor(
-    onHeartbeatTick: () => void,
+    onHeartbeatTick: () => Promise<void>,
     heartbeatIntervalMs: number = 15000,
     heartbeatScheduler?: RemoteHeartbeatScheduler
   ) {

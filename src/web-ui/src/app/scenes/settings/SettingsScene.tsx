@@ -9,8 +9,11 @@
 import React, {
   Suspense,
   useEffect,
+  useLayoutEffect,
+  useRef,
   useState,
 } from 'react';
+import { ViewTransitionBoundary } from '@/component-library';
 import { useSettingsStore } from './settingsStore';
 import { useExternalAppAwareness } from '@/infrastructure/config/components/external-sources';
 import type { ConfigTab } from './settingsConfig';
@@ -82,7 +85,11 @@ const SettingsScene: React.FC = () => {
   const activeTab = useSettingsStore(s => s.activeTab);
   const contentFocus = useSettingsStore(s => s.contentFocus);
   const contentFocusRequestId = useSettingsStore(s => s.contentFocusRequestId);
+  const tabTransitionTarget = useSettingsStore(s => s.tabTransitionTarget);
+  const tabTransitionMotion = useSettingsStore(s => s.tabTransitionMotion);
+  const tabTransitionSequence = useSettingsStore(s => s.tabTransitionSequence);
   const setActiveTab = useSettingsStore(s => s.setActiveTab);
+  const appliedTransitionSequenceRef = useRef(tabTransitionSequence);
 
   const resolvedTab: ConfigTab =
     (activeTab as string) === 'session-config' ? 'session-personalization' : activeTab;
@@ -93,6 +100,16 @@ const SettingsScene: React.FC = () => {
       setActiveTab('session-personalization');
     }
   }, [activeTab, setActiveTab]);
+
+  const shouldAnimateTabTransition = (
+    appliedTransitionSequenceRef.current !== tabTransitionSequence
+    && tabTransitionTarget === resolvedTab
+    && tabTransitionMotion === 'pointer'
+  );
+
+  useLayoutEffect(() => {
+    appliedTransitionSequenceRef.current = tabTransitionSequence;
+  }, [tabTransitionSequence]);
 
   /**
    * Cold entries into the scene (first open after launch, deep links) mount a
@@ -132,25 +149,30 @@ const SettingsScene: React.FC = () => {
       data-bf-tab={resolvedTab}
     >
       {Content && (
-        <div
-          key={resolvedTab}
-          className="bitfun-settings-scene__content-wrapper"
-          data-testid="settings-scene-content"
-          data-bf-scene="settings"
-          data-bf-part="content"
-          data-bf-tab={resolvedTab}
+        <ViewTransitionBoundary
+          viewKey={resolvedTab}
+          animate={shouldAnimateTabTransition}
+          className="bitfun-settings-scene__content-transition"
+          viewClassName="bitfun-settings-scene__content-wrapper"
         >
-          <Suspense fallback={<SettingsSceneLoading />}>
-            {resolvedTab === 'external-sources' || resolvedTab === 'hooks' ? (
-              <ExternalSourcesConfig
-                initialFocus={contentFocus === 'hooks' ? 'hooks' : undefined}
-                focusRequestId={contentFocus === 'hooks' ? contentFocusRequestId : undefined}
-              />
-            ) : (
-              <Content />
-            )}
-          </Suspense>
-        </div>
+          <div
+            data-testid="settings-scene-content"
+            data-bf-scene="settings"
+            data-bf-part="content"
+            data-bf-tab={resolvedTab}
+          >
+            <Suspense fallback={<SettingsSceneLoading />}>
+              {resolvedTab === 'external-sources' || resolvedTab === 'hooks' ? (
+                <ExternalSourcesConfig
+                  initialFocus={contentFocus === 'hooks' ? 'hooks' : undefined}
+                  focusRequestId={contentFocus === 'hooks' ? contentFocusRequestId : undefined}
+                />
+              ) : (
+                <Content />
+              )}
+            </Suspense>
+          </div>
+        </ViewTransitionBoundary>
       )}
     </div>
   );

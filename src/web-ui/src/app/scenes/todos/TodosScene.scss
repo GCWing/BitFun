@@ -442,10 +442,38 @@ $todos-stack-breakpoint: 1080px;
 
   // ── Selected day detail ───────────────────────────────────────────────────
 
+  &__day-detail-presence {
+    display: grid;
+    grid-template-rows: 1fr;
+    min-height: 0;
+    overflow: hidden;
+    transform-origin: top center;
+    transition:
+      grid-template-rows 160ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 120ms ease,
+      transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &[data-open='true'] {
+      @starting-style {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+    }
+
+    &[data-open='false'] {
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+    }
+  }
+
   &__day-detail {
     display: flex;
     flex-direction: column;
     gap: $size-gap-2;
+    min-height: 0;
+    overflow: hidden;
     padding-top: $size-gap-3;
     border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 70%, transparent);
   }
@@ -477,6 +505,32 @@ $todos-stack-breakpoint: 1080px;
     background: var(--bf-appearance-token-element-bg-subtle);
     max-height: 46vh;
     overflow-y: auto;
+  }
+
+  &__editor-presence {
+    display: grid;
+    grid-template-rows: 1fr;
+    min-height: 0;
+    overflow: hidden;
+    transform-origin: top center;
+    transition:
+      grid-template-rows 160ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 120ms ease,
+      transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &[data-open='true'] {
+      @starting-style {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+    }
+
+    &[data-open='false'] {
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+    }
   }
 
   &__editor-head {
@@ -601,8 +655,11 @@ $todos-stack-breakpoint: 1080px;
 
 @media (prefers-reduced-motion: reduce) {
   .bf-todos__row,
-  .bf-todos__calendar-cell {
+  .bf-todos__calendar-cell,
+  .bf-todos__day-detail-presence,
+  .bf-todos__editor-presence {
     transition: none;
+    animation: none;
   }
 
   .bf-todos__spin {

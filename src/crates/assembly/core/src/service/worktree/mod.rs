@@ -1680,6 +1680,13 @@ async fn managed_target_path(
                 format!("Failed to resolve the managed worktree root: {io_error}"),
             )
         })?;
+    // `std::fs::canonicalize` (and Tokio's wrapper) returns a verbatim
+    // `\\?\C:\...` path on Windows. Git for Windows does not accept that form
+    // as a `worktree add` target after the Git adapter normalizes separators,
+    // because it becomes `//?/C:/...`. Keep the resolved path used for the
+    // containment checks, but prefer the ordinary drive-letter representation
+    // whenever it can address the same path.
+    let canonical_root = dunce::simplified(&canonical_root).to_path_buf();
     let repository_root = canonical_root.join(repository_id);
     match tokio::fs::symlink_metadata(&repository_root).await {
         Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
@@ -1715,6 +1722,7 @@ async fn managed_target_path(
                     format!("Failed to resolve the repository worktree root: {io_error}"),
                 )
             })?;
+    let canonical_repository_root = dunce::simplified(&canonical_repository_root).to_path_buf();
     if !canonical_repository_root.starts_with(&canonical_root) {
         return Err(error(
             WorktreeErrorCode::InvalidPath,
@@ -2090,6 +2098,32 @@ mod tests {
             .await
             .expect_err("existing target must be rejected");
         assert_eq!(collision.code, WorktreeErrorCode::InvalidPath);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn managed_target_path_is_compatible_with_git_for_windows() {
+        let root = tempfile::tempdir().expect("temp root");
+        let settings = WorktreeSettings {
+            root_path: root.path().join("managed-worktrees").display().to_string(),
+            ..WorktreeSettings::default()
+        };
+
+        let target = managed_target_path(
+            &settings,
+            "repository-id",
+            &root.path().join("projects/BitFun"),
+            "48e8b457e87649aebf801b408698f46c",
+        )
+        .await
+        .expect("managed target path");
+        let git_argument = target.to_string_lossy().replace('\\', "/");
+
+        assert!(
+            !git_argument.starts_with("//?/"),
+            "managed worktree targets passed to Git must not use a Windows verbatim path: {}",
+            target.display()
+        );
     }
 
     #[test]

@@ -18,8 +18,15 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 5. Workspace Rust dependencies own compatible versions, not broad capability
    unions. Each crate must select the dependency features it actually uses;
    keep test-only features in dev-dependencies and attach feature-gated service
-   capabilities to the owning crate feature. `tokio/full` is forbidden in the
-   root workspace and workspace members.
+   capabilities to the owning crate feature. Disable third-party defaults in
+   `[workspace.dependencies]` when they are not part of every consumer's
+   contract; members inherit that policy and add only their needed slices. For
+   internal crates whose guarded `default` is empty, do not repeat
+   `default-features = false` on every edge. Narrow consumers of an intentional
+   compatibility default, such as ACP, must still disable it explicitly.
+   Manifests copied into a standalone Docker build context must keep explicit
+   versions and default policy because they cannot inherit the workspace root.
+   `tokio/full` is forbidden in the root workspace and workspace members.
 
 ## Layered Module Index
 

@@ -19,12 +19,14 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  animation: branch-overlay-fade 0.2s ease;
-}
+  opacity: 1;
+  transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
 
-@keyframes branch-overlay-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  &[data-state='closed'] {
+    opacity: 0;
+    pointer-events: none;
+    transition-duration: 120ms;
+  }
 }
 
 // ==================== Dialog Body ====================
@@ -41,17 +43,27 @@
   max-width: calc(100vw - 48px);
   max-height: min(520px, calc(100vh - 48px));
   overflow: hidden;
-  animation: branch-dialog-enter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-@keyframes branch-dialog-enter {
-  from {
+.branch-select-overlay[data-state='closed'] .branch-select-dialog {
+  opacity: 0;
+  transform: translateY(4px) scale(0.985);
+  transition-duration: 120ms;
+}
+
+@starting-style {
+  .branch-select-overlay {
     opacity: 0;
-    transform: translateY(16px) scale(0.98);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+
+  .branch-select-dialog {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
   }
 }
 
@@ -329,5 +341,24 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .branch-select-dialog {
+    animation: none;
+    transform: none;
+    transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .branch-select-overlay[data-state='closed'] .branch-select-dialog {
+    transform: none;
+    transition-duration: 120ms;
+  }
+
+  .branch-select-dialog__loading-dots span {
+    animation: none;
+    opacity: 0.65;
+    transform: none;
   }
 }

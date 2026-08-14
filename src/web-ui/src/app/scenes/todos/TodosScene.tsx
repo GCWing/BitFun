@@ -11,9 +11,16 @@
  * broadcast on the shared change event so those views stay in step.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { CalendarClock, Plus, RefreshCw } from 'lucide-react';
-import { Button, IconButton, confirmDanger } from '@/component-library';
+import { Button, IconButton, PresenceBoundary, confirmDanger } from '@/component-library';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -87,6 +94,36 @@ const TodosScene: React.FC = () => {
     () => buildWorkspaceOptions(openedWorkspacesList),
     [openedWorkspacesList],
   );
+  const liveEditorSnapshot = {
+    editingJob,
+    draft,
+    validationErrors,
+    workspaceOptions,
+    selectedWorkspaceId,
+    saving,
+  };
+  const retainedEditorSnapshotRef = useRef(liveEditorSnapshot);
+  useLayoutEffect(() => {
+    if (editorOpen) {
+      retainedEditorSnapshotRef.current = {
+        editingJob,
+        draft,
+        validationErrors,
+        workspaceOptions,
+        selectedWorkspaceId,
+        saving,
+      };
+    }
+  }, [
+    draft,
+    editingJob,
+    editorOpen,
+    saving,
+    selectedWorkspaceId,
+    validationErrors,
+    workspaceOptions,
+  ]);
+  const renderedEditor = editorOpen ? liveEditorSnapshot : retainedEditorSnapshotRef.current;
 
   /** Where a new Todo lands by default: current workspace, else the assistant. */
   const defaultWorkspaceId = useMemo(() => {
@@ -150,6 +187,13 @@ const TodosScene: React.FC = () => {
     if (!selectedDayKey) return [];
     return groupOccurrencesByDay(buckets.calendar).get(selectedDayKey) ?? [];
   }, [buckets.calendar, selectedDayKey]);
+  const retainedSelectedDayOccurrencesRef = useRef(selectedDayOccurrences);
+  useLayoutEffect(() => {
+    if (selectedDayKey) retainedSelectedDayOccurrencesRef.current = selectedDayOccurrences;
+  }, [selectedDayKey, selectedDayOccurrences]);
+  const renderedSelectedDayOccurrences = selectedDayKey
+    ? selectedDayOccurrences
+    : retainedSelectedDayOccurrencesRef.current;
 
   const resetEditor = useCallback(() => {
     setEditorOpen(false);
@@ -347,24 +391,37 @@ const TodosScene: React.FC = () => {
         </div>
       </header>
 
-      {editorOpen ? (
-        <TodoEditor
-          draft={draft}
-          onDraftChange={setDraft}
-          validationErrors={validationErrors}
-          onValidationErrorsChange={setValidationErrors}
-          workspaceOptions={workspaceOptions}
-          selectedWorkspaceId={selectedWorkspaceId}
-          onSelectedWorkspaceIdChange={setSelectedWorkspaceId}
-          isEditing={Boolean(editingJob)}
-          boundSessionId={
-            editingJob?.target.kind === 'session' ? editingJob.target.sessionId : null
-          }
-          saving={saving}
-          onSave={() => { void handleSave(); }}
-          onCancel={resetEditor}
-        />
-      ) : null}
+      <PresenceBoundary
+        active={editorOpen}
+        exitDurationMs={160}
+        minimumExitDurationMs={160}
+      >
+        <div
+          className="bf-todos__editor-presence"
+          data-open={editorOpen ? 'true' : 'false'}
+          aria-hidden={!editorOpen}
+          {...(!editorOpen ? { inert: '' } : {})}
+        >
+          <TodoEditor
+            draft={renderedEditor.draft}
+            onDraftChange={setDraft}
+            validationErrors={renderedEditor.validationErrors}
+            onValidationErrorsChange={setValidationErrors}
+            workspaceOptions={renderedEditor.workspaceOptions}
+            selectedWorkspaceId={renderedEditor.selectedWorkspaceId}
+            onSelectedWorkspaceIdChange={setSelectedWorkspaceId}
+            isEditing={Boolean(renderedEditor.editingJob)}
+            boundSessionId={
+              renderedEditor.editingJob?.target.kind === 'session'
+                ? renderedEditor.editingJob.target.sessionId
+                : null
+            }
+            saving={renderedEditor.saving}
+            onSave={() => { void handleSave(); }}
+            onCancel={resetEditor}
+          />
+        </div>
+      </PresenceBoundary>
 
       <div className="bf-todos__panes" data-bf-scene="todos" data-bf-part="panes">
         {/* ── Tier 1: due within 24 hours ───────────────────── */}
@@ -448,47 +505,58 @@ const TodosScene: React.FC = () => {
             onSelectDay={setSelectedDayKey}
           />
 
-          {selectedDayKey ? (
-            <section
-              className="bf-todos__day-detail"
-              aria-label={t('calendar.dayDetailTitle')}
-              data-bf-scene="todos"
-              data-bf-part="dayDetail"
-              data-testid="todos-day-detail"
+          <PresenceBoundary
+            active={selectedDayKey != null}
+            exitDurationMs={160}
+            minimumExitDurationMs={160}
+          >
+            <div
+              className="bf-todos__day-detail-presence"
+              data-open={selectedDayKey ? 'true' : 'false'}
+              aria-hidden={!selectedDayKey}
+              {...(!selectedDayKey ? { inert: '' } : {})}
             >
-              <header className="bf-todos__day-detail-head">
-                <h4 className="bf-todos__day-detail-title">
-                  {selectedDayOccurrences[0]
-                    ? formatDateTime(selectedDayOccurrences[0].atMs, formatDate)
-                    : t('calendar.dayDetailTitle')}
-                </h4>
-                <Button size="small" variant="ghost" onClick={() => setSelectedDayKey(null)}>
-                  {t('calendar.clearDay')}
-                </Button>
-              </header>
-              {selectedDayOccurrences.length === 0 ? (
-                <p className="bf-todos__empty">{t('calendar.dayEmpty')}</p>
-              ) : (
-                <div className="bf-todos__rows">
-                  {selectedDayOccurrences.map((occurrence) => (
-                    <TodoItemRow
-                      key={`${occurrence.job.id}-${occurrence.atMs}`}
-                      job={occurrence.job}
-                      atMs={occurrence.atMs}
-                      isNextRun={occurrence.isNextRun}
-                      isRunning={occurrence.isRunning}
-                      nowMs={nowMs}
-                      workspaces={openedWorkspacesList}
-                      isSelected={editingJob?.id === occurrence.job.id}
-                      onEdit={handleEdit}
-                      onDelete={(job) => { void handleDelete(job); }}
-                      onToggleEnabled={(job, enabled) => { void handleToggleEnabled(job, enabled); }}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-          ) : null}
+              <section
+                className="bf-todos__day-detail"
+                aria-label={t('calendar.dayDetailTitle')}
+                data-bf-scene="todos"
+                data-bf-part="dayDetail"
+                data-testid="todos-day-detail"
+              >
+                <header className="bf-todos__day-detail-head">
+                  <h4 className="bf-todos__day-detail-title">
+                    {renderedSelectedDayOccurrences[0]
+                      ? formatDateTime(renderedSelectedDayOccurrences[0].atMs, formatDate)
+                      : t('calendar.dayDetailTitle')}
+                  </h4>
+                  <Button size="small" variant="ghost" onClick={() => setSelectedDayKey(null)}>
+                    {t('calendar.clearDay')}
+                  </Button>
+                </header>
+                {renderedSelectedDayOccurrences.length === 0 ? (
+                  <p className="bf-todos__empty">{t('calendar.dayEmpty')}</p>
+                ) : (
+                  <div className="bf-todos__rows">
+                    {renderedSelectedDayOccurrences.map((occurrence) => (
+                      <TodoItemRow
+                        key={`${occurrence.job.id}-${occurrence.atMs}`}
+                        job={occurrence.job}
+                        atMs={occurrence.atMs}
+                        isNextRun={occurrence.isNextRun}
+                        isRunning={occurrence.isRunning}
+                        nowMs={nowMs}
+                        workspaces={openedWorkspacesList}
+                        isSelected={editingJob?.id === occurrence.job.id}
+                        onEdit={handleEdit}
+                        onDelete={(job) => { void handleDelete(job); }}
+                        onToggleEnabled={(job, enabled) => { void handleToggleEnabled(job, enabled); }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </PresenceBoundary>
         </div>
       </div>
     </div>

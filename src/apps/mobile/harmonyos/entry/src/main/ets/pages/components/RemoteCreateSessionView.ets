@@ -8,6 +8,7 @@ import { ComposerBar, ComposerPresentation } from './ComposerBar';
 import { ConversationUiModelCatalog } from './ConversationUiModels';
 import { REMOTE_CREATE_COMPOSER_CAPABILITIES } from './ChatComposerCapabilities';
 import { SidebarToggleButton } from './SidebarToggleButton';
+import { TemplateIcon } from './TemplateIcon';
 
 @ComponentV2
 export struct RemoteCreateSessionView {
@@ -93,12 +94,11 @@ export struct RemoteCreateSessionView {
     Column() {
       Row() {
         Button() {
-          Image($r('app.media.remote_ref_back'))
-            .width(15)
-            .height(23)
-            .objectFit(ImageFit.Contain)
-            .renderMode(ImageRenderMode.Template)
-            .foregroundColor(INK)
+          TemplateIcon({
+            src: $r('app.media.remote_ref_back'),
+            iconWidth: 15,
+            iconHeight: 23
+          })
         }
         .width(44)
         .height(44)

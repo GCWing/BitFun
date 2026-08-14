@@ -1,4 +1,16 @@
-import React, { useCallback, useEffect, useImperativeHandle, forwardRef, useMemo, useRef } from 'react'
+import React, {
+  Component,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type ErrorInfo,
+  type ForwardedRef,
+  type ReactNode,
+} from 'react'
 import { createLogger } from '@/shared/utils/logger'
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService'
 import { useEditor } from '../hooks/useEditor'
@@ -10,7 +22,7 @@ import { useI18n } from '@/infrastructure/i18n'
 import { analyzeMarkdownEditability } from '../utils/tiptapMarkdown'
 import './MEditor.scss'
 
-void createLogger('MEditor')
+const log = createLogger('MEditor')
 let markdownTextareaTargetCounter = 0
 
 export type MEditorProps = EditorOptions;
@@ -37,7 +49,177 @@ function executeTextareaAction(
   return document.execCommand(action)
 }
 
-export const MEditor = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
+const MEditorSourceFallback = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
+  const {
+    value: controlledValue,
+    defaultValue = '',
+    height = '500px',
+    width = '100%',
+    readonly = false,
+    autofocus = false,
+    placeholder,
+    onChange,
+    onSave,
+    onFocus,
+    onBlur,
+    onDirtyChange,
+    className = '',
+    style = {},
+  } = props
+  const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const savedValueRef = useRef(controlledValue ?? defaultValue)
+  const currentValue = controlledValue ?? uncontrolledValue
+  const currentValueRef = useRef(currentValue)
+  currentValueRef.current = currentValue
+
+  const updateValue = useCallback((nextValue: string) => {
+    currentValueRef.current = nextValue
+    if (controlledValue === undefined) {
+      setUncontrolledValue(nextValue)
+    }
+    onChange?.(nextValue)
+    onDirtyChange?.(nextValue !== savedValueRef.current)
+  }, [controlledValue, onChange, onDirtyChange])
+
+  useImperativeHandle(ref, () => ({
+    getValue: () => currentValueRef.current,
+    setValue: updateValue,
+    insertValue: (nextValue: string, start?: number, end?: number) => {
+      const selectionStart = start ?? textareaRef.current?.selectionStart ?? currentValueRef.current.length
+      const selectionEnd = end ?? textareaRef.current?.selectionEnd ?? selectionStart
+      updateValue(
+        currentValueRef.current.slice(0, selectionStart) +
+          nextValue +
+          currentValueRef.current.slice(selectionEnd)
+      )
+    },
+    focus: () => textareaRef.current?.focus(),
+    blur: () => textareaRef.current?.blur(),
+    setMode: () => undefined,
+    getSelection: () => {
+      const start = textareaRef.current?.selectionStart ?? 0
+      const end = textareaRef.current?.selectionEnd ?? start
+      return { start, end, text: currentValueRef.current.slice(start, end) }
+    },
+    destroy: () => undefined,
+    undo: () => executeTextareaAction(textareaRef.current, 'undo'),
+    redo: () => executeTextareaAction(textareaRef.current, 'redo'),
+    canUndo: false,
+    canRedo: false,
+    markSaved: () => {
+      savedValueRef.current = currentValueRef.current
+      onDirtyChange?.(false)
+    },
+    setInitialContent: (content: string) => {
+      savedValueRef.current = content
+      updateValue(content)
+      onDirtyChange?.(false)
+    },
+    get isDirty() {
+      return currentValueRef.current !== savedValueRef.current
+    },
+  }), [onDirtyChange, updateValue])
+
+  const containerStyle: React.CSSProperties = {
+    ...style,
+    height: typeof height === 'number' ? `${height}px` : height,
+    width: typeof width === 'number' ? `${width}px` : width,
+  }
+
+  // Sizes the textarea when the container has no definite height, where a CSS
+  // height cannot resolve and the element would collapse to the default two rows.
+  const rows = Math.max(currentValue.split('\n').length + 1, 4)
+
+  return (
+    <div
+      className={`m-editor m-editor-mode-source-fallback ${className}`}
+      data-bf-component="m-editor"
+      data-bf-part="root"
+      data-m-editor-fallback="true"
+      style={containerStyle}
+      onKeyDown={(event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+          event.preventDefault()
+          event.stopPropagation()
+          onSave?.(currentValueRef.current)
+        }
+      }}
+    >
+      <textarea
+        ref={textareaRef}
+        className="m-editor-source-fallback"
+        value={currentValue}
+        rows={rows}
+        readOnly={readonly}
+        autoFocus={autofocus}
+        placeholder={placeholder}
+        onChange={(event) => updateValue(event.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        spellCheck={false}
+      />
+    </div>
+  )
+})
+
+MEditorSourceFallback.displayName = 'MEditorSourceFallback'
+
+interface MEditorErrorBoundaryProps {
+  children: ReactNode
+  editorProps: MEditorProps
+  forwardedRef: ForwardedRef<EditorInstance>
+}
+
+interface MEditorErrorBoundaryState {
+  error: Error | null
+}
+
+export class MEditorErrorBoundary extends Component<
+  MEditorErrorBoundaryProps,
+  MEditorErrorBoundaryState
+> {
+  state: MEditorErrorBoundaryState = { error: null }
+
+  static getDerivedStateFromError(error: Error): MEditorErrorBoundaryState {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    log.error('Markdown editor render failed, showing source fallback', {
+      message: error.message,
+      componentStack: errorInfo.componentStack,
+      filePath: this.props.editorProps.filePath,
+    })
+  }
+
+  // Only a new document clears the error. Retrying on every prop change would
+  // re-mount the editor that just threw and loop, because the failures this
+  // guards against (unsupported engine features) are deterministic.
+  componentDidUpdate(previousProps: MEditorErrorBoundaryProps) {
+    if (
+      this.state.error &&
+      previousProps.editorProps.filePath !== this.props.editorProps.filePath
+    ) {
+      this.setState({ error: null })
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <MEditorSourceFallback
+          {...this.props.editorProps}
+          ref={this.props.forwardedRef}
+        />
+      )
+    }
+
+    return this.props.children
+  }
+}
+
+const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
   const {
     value: controlledValue,
     defaultValue = '',
@@ -317,5 +499,13 @@ export const MEditor = forwardRef<EditorInstance, MEditorProps>((props, ref) => 
     </div>
   )
 })
+
+MEditorInner.displayName = 'MEditorInner'
+
+export const MEditor = forwardRef<EditorInstance, MEditorProps>((props, ref) => (
+  <MEditorErrorBoundary editorProps={props} forwardedRef={ref}>
+    <MEditorInner {...props} ref={ref} />
+  </MEditorErrorBoundary>
+))
 
 MEditor.displayName = 'MEditor'

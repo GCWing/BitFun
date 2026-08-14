@@ -25,7 +25,9 @@
   margin: 6px 0;
   padding: 0;
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   box-sizing: border-box;
   position: relative;
   font-family: tokens.$font-family-mono;
@@ -35,7 +37,7 @@
     content: '';
     position: absolute;
     top: 0;
-    left: -100%;
+    left: 0;
     width: 100%;
     height: 100%;
     background: linear-gradient(
@@ -44,13 +46,14 @@
       var(--bf-appearance-token-color-overlay-white-12) 50%,
       transparent 100%
     );
-    transition: left 0.5s ease;
+    transform: translateX(-100%);
+    transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
     pointer-events: none;
     z-index: 1;
   }
 
   &:hover::before {
-    left: 100%;
+    transform: translateX(100%);
   }
 
   &:hover {
@@ -115,7 +118,7 @@
 }
 
 .context-compression-card__status-spinner {
-  animation: spin 1s linear infinite;
+  animation: bitfun-context-compression-card-spin 1s linear infinite;
   color: var(--context-compression-accent);
 }
 
@@ -131,7 +134,7 @@
   color: var(--context-compression-accent);
 }
 
-@keyframes spin {
+@keyframes bitfun-context-compression-card-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
@@ -207,6 +210,17 @@
 
 .context-compression-card__processing-icon {
   color: var(--context-compression-accent);
-  animation: spin 1s linear infinite;
+  animation: bitfun-context-compression-card-spin 1s linear infinite;
   flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-compression-card::before {
+    transition: none;
+  }
+
+  .context-compression-card__status-spinner,
+  .context-compression-card__processing-icon {
+    animation: none;
+  }
 }

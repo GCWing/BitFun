@@ -4,6 +4,8 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ConnectAccountDevicePage } from './ConnectAccountDevicePage';
 import { ConnectManualPairingOverlay } from './ConnectManualPairingOverlay';
+import { CONNECT_INTENT_AUTO } from '../state/AppShellState';
+import { ConnectOpenIntentPolicy } from '../policy/ConnectOpenIntentPolicy';
 import { ACCENT, CARD, CONNECT_HERO_ACCENT, CONNECT_HERO_BG, CONNECT_HERO_SECONDARY,
   CONNECT_HERO_SURFACE, CONNECT_SCAN_ACCENT, GREEN, INK, LINE, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT,
   SUBTLE } from './Theme';
@@ -28,7 +30,7 @@ export struct ConnectView {
   @Param controlTargetDeviceId: string = '';
   @Param requiresAccountAuth: boolean = false;
   @Param accountUsername: string = '';
-  @Param startWithScanner: boolean = true;
+  @Param openIntent: string = CONNECT_INTENT_AUTO;
   @Event onBack: () => void = () => {};
   @Event onConnect: (password?: string) => void = (_password?: string) => {};
   @Event onRemoteUrlChange: (value: string) => void = (_value: string) => {};
@@ -46,11 +48,12 @@ export struct ConnectView {
   @Local requestingCameraPermission: boolean = false;
 
   aboutToAppear(): void {
-    if (this.isAccountAuthenticated()) {
-      this.pairingStep = 'account';
-    } else if (this.startWithScanner && this.remoteUrl.trim().length === 0) {
-      this.pairingStep = 'scan';
-    }
+    this.pairingStep = ConnectOpenIntentPolicy.initialStep(
+      this.openIntent,
+      this.isAccountAuthenticated(),
+      this.remoteUrl,
+      this.pairingStep
+    );
   }
 
   aboutToDisappear(): void {
@@ -261,7 +264,8 @@ export struct ConnectView {
       .borderRadius(24)
       .position({ x: 28, y: 18 })
       .onClick(() => {
-        if (this.currentStep() === 'scan' && this.remoteUrl.trim().length === 0 && !this.showManualPairing) {
+        if (ConnectOpenIntentPolicy.backStaysInSheet(
+          this.openIntent, this.currentStep(), this.remoteUrl, this.showManualPairing)) {
           this.stopInlineScan();
           this.pairingStep = this.isAccountAuthenticated() ? 'account' : 'intro';
           return;

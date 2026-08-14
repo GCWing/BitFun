@@ -173,12 +173,18 @@
     border: 3px solid var(--bf-appearance-token-border-medium);
     border-top-color: var(--bf-appearance-token-color-accent-500);
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: bitfun-image-viewer-spin 0.8s linear infinite;
   }
 
-  @keyframes spin {
+  @keyframes bitfun-image-viewer-spin {
     to {
       transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bitfun-image-viewer__spinner {
+      animation: none;
     }
   }
 

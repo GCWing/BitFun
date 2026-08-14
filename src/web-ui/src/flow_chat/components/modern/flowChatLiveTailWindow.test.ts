@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveHistoryBoundaryTarget,
+  resolveTailBoundaryPrecondition,
   resolveTailWindowGrowth,
   transcriptReachesLatestTurn,
 } from './flowChatLiveTailWindow';
@@ -175,5 +176,50 @@ describe('resolveHistoryBoundaryTarget', () => {
       renderedRange: { startOrdinal: 41, endOrdinalExclusive: 48 },
       knownTurnCount: 40,
     })).toEqual({ status: 'exhausted', reason: 'beyond-known-total' });
+  });
+});
+
+describe('resolveTailBoundaryPrecondition', () => {
+  const ask = {
+    direction: 'before' as const,
+    isPartial: true,
+    hasSession: true,
+    turnCatalogMatches: true,
+  };
+
+  it('asks when there is history the catalog can resolve', () => {
+    expect(resolveTailBoundaryPrecondition(ask)).toBe('ask');
+  });
+
+  it('is exhausted for a session that holds every Turn it has', () => {
+    /*
+     * The treadmill this closes: 652 asks in one session, 648 answered
+     * `precondition` because the session was fully loaded and the reader was
+     * resting at its head. A cancel re-arms the direction, so the next scroll
+     * event asked again, and the next.
+     */
+    expect(resolveTailBoundaryPrecondition({ ...ask, isPartial: false })).toBe('exhausted');
+    expect(resolveTailBoundaryPrecondition({ ...ask, isPartial: undefined })).toBe('exhausted');
+  });
+
+  it('cancels below the tail rather than latch a direction that cannot re-arm', () => {
+    // True that nothing follows the canonical tail, but this is only reached
+    // through the retained continuous projection, whose bounds never change —
+    // so the latch would never be cleared again.
+    expect(resolveTailBoundaryPrecondition({ ...ask, direction: 'after' })).toBe('cancelled');
+  });
+
+  it('cancels rather than latches while the catalog is still on its way', () => {
+    // Expected to turn up, so the direction has to stay armed for it.
+    expect(resolveTailBoundaryPrecondition({ ...ask, turnCatalogMatches: false })).toBe('cancelled');
+  });
+
+  it('cancels for a session that is not in the store at all', () => {
+    // Absent is not the same fact as complete, and only one of them is final.
+    expect(resolveTailBoundaryPrecondition({
+      ...ask,
+      hasSession: false,
+      isPartial: undefined,
+    })).toBe('cancelled');
   });
 });

@@ -100,8 +100,11 @@ export interface ConversationUiMessage {
 }
 
 export interface ConversationUiQuestionAnswer {
-  answer: string;
-  '0': string;
+  answer?: string;
+  '0'?: string | string[];
+  '1'?: string | string[];
+  '2'?: string | string[];
+  '3'?: string | string[];
 }
 
 export function toConversationUiSession(source: SessionSummary): ConversationUiSession {
@@ -205,5 +208,22 @@ export function toConversationUiMessage(source: ChatMessage): ConversationUiMess
 }
 
 export function toRemoteQuestionAnswer(source: ConversationUiQuestionAnswer): RemoteQuestionAnswerPayload {
-  return { answer: source.answer, '0': source.answer };
+  const result: Record<string, Object> = {};
+  const values = source as Record<string, Object>;
+  if (source.answer !== undefined) {
+    result['answer'] = source.answer as Object;
+  }
+  if (values['0'] !== undefined) {
+    result['0'] = values['0'];
+  }
+  if (values['1'] !== undefined) {
+    result['1'] = values['1'];
+  }
+  if (values['2'] !== undefined) {
+    result['2'] = values['2'];
+  }
+  if (values['3'] !== undefined) {
+    result['3'] = values['3'];
+  }
+  return result as RemoteQuestionAnswerPayload;
 }

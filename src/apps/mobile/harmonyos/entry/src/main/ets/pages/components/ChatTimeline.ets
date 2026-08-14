@@ -1,6 +1,6 @@
 import { ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, toConversationUiMessage } from './ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
+import { ChatTimelineItem, ChatTimelineRevisionTracker } from '../../services/ChatTimelineProjector';
 import { ChatSurface } from './ChatSurface';
 import { CARD, INK, LINE, MUTED, RED } from './Theme';
 import { ChatMessageBubble } from './ChatMessageBubble';
@@ -9,6 +9,11 @@ import { RemoteLogger } from '../../services/RemoteLogger';
 @ComponentV2
 export struct ChatTimeline {
   private readonly listScroller: Scroller = new Scroller();
+  // Whether new content should pull the viewport down with it. True until the
+  // user scrolls up to read back through the transcript: at that point taking
+  // the viewport away from them would be worse than letting the reply grow off
+  // screen, and the chevron button below gives them the way back.
+  @Local stickToBottom: boolean = true;
   @Param surface: ChatSurface = ChatSurface.Remote;
   @Param timelineItems: ChatTimelineItem[] = [];
   @Param timelineRevision: number = 0;
@@ -34,6 +39,27 @@ export struct ChatTimeline {
   @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
   @Event onDownloadFile: (path: string) => void = (_path: string) => {};
 
+  // Says whether an open reuses this subtree or rebuilds it. A rebuild means
+  // every bubble is constructed from nothing, and the cost of that is the
+  // difference between the two readings.
+  aboutToAppear(): void {
+    RemoteLogger.info(`chat timeline mounted surface=${this.surface} items=${this.timelineItems.length}`);
+  }
+
+  aboutToDisappear(): void {
+    RemoteLogger.info(`chat timeline disposed items=${this.timelineItems.length}`);
+  }
+
+  // `stackFromEnd` covers content that grows inside the last item, but a whole
+  // new bubble arriving is a layout change the list does not chase on its own.
+  @Monitor('timelineRevision')
+  onTimelineChanged(): void {
+    if (!this.stickToBottom) {
+      return;
+    }
+    this.listScroller.scrollEdge(Edge.Bottom);
+  }
+
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       List({ space: 12, scroller: this.listScroller }) {
@@ -52,15 +78,27 @@ export struct ChatTimeline {
         }
         ForEach(this.timelineItems, (item: ChatTimelineItem) => {
           this.TimelineItem(item)
-        }, (item: ChatTimelineItem) => `${this.timelineRevision}-${item.id}`)
+        }, (item: ChatTimelineItem) => ChatTimelineRevisionTracker.itemSignature(item))
       }
       .width('100%')
       .height('100%')
       .padding({ left: 20, right: 20, top: 0, bottom: 12 })
-      .stackFromEnd(false)
+      // A streaming reply grows in place rather than arriving as a new item, so
+      // the bottom of the list has to be the anchor — otherwise the text the
+      // agent is writing right now renders below the fold and never comes back.
+      .stackFromEnd(true)
+      // Keeps the read position when older messages are prepended above.
+      .maintainVisibleContentPosition(true)
       .scrollBar(BarState.Off)
+      .onDidScroll((_scrollOffset: number, scrollState: ScrollState) => {
+        if (this.listScroller.isAtEnd()) {
+          this.stickToBottom = true;
+        } else if (scrollState !== ScrollState.Idle) {
+          this.stickToBottom = false;
+        }
+      })
 
-      if (this.surface === ChatSurface.Remote && this.timelineItems.length > 2) {
+      if (this.surface === ChatSurface.Remote && !this.stickToBottom) {
         Stack({ alignContent: Alignment.Center }) {
           SymbolGlyph($r('sys.symbol.chevron_down'))
             .fontSize(18)
@@ -73,6 +111,7 @@ export struct ChatTimeline {
         .shadow({ radius: 14, color: '#14000000', offsetY: 5 })
         .margin({ bottom: 4 })
         .onClick(() => {
+          this.stickToBottom = true;
           this.listScroller.scrollEdge(Edge.Bottom);
         })
       }

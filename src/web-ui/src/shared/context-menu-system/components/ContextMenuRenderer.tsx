@@ -105,10 +105,6 @@ export const ContextMenuRenderer: React.FC = () => {
 
   const uiItems = items.map(convertMenuItem);
 
-  if (!visible) {
-    return null;
-  }
-
   return (
     <ContextMenu
       items={uiItems}
@@ -121,4 +117,3 @@ export const ContextMenuRenderer: React.FC = () => {
 };
 
 export default ContextMenuRenderer;
-

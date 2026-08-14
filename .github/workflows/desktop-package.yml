@@ -280,6 +280,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Apple Developer ID signing and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          BITFUN_REQUIRE_APPLE_SIGNING: ${{ needs.prepare.outputs.upload_to_release }}
+        run: bash scripts/ci/setup-macos-signing.sh
+
       - name: Project beta build version
         if: needs.prepare.outputs.release_channel == 'beta'
         run: node scripts/set-build-version.mjs --version "${{ needs.prepare.outputs.version }}"
@@ -289,6 +303,11 @@ jobs:
 
       - name: Build desktop app
         run: ${{ matrix.platform.build_command }}
+
+      - name: Verify Apple signature and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash scripts/ci/verify-macos-signing.sh "${{ matrix.platform.target }}"
 
       - name: Verify AppImage fcitx5 GTK module
         if: runner.os == 'Linux'

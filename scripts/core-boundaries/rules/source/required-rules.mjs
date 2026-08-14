@@ -3924,12 +3924,12 @@ export const requiredContentRules = [
     patterns: [
       {
         regex:
-          /bitfun-tool-packs = \{ path = "\.\.\/\.\.\/execution\/tool-provider-groups", default-features = false, optional = true \}/,
+          /bitfun-tool-packs = \{ path = "\.\.\/\.\.\/execution\/tool-provider-groups", optional = true \}/,
         message: 'bitfun-tool-packs dependency must stay optional and not force product-full outside the core feature graph',
       },
       {
         regex:
-          /bitfun-services-integrations = \{ path = "\.\.\/\.\.\/services\/services-integrations", default-features = false, optional = true \}/,
+          /bitfun-services-integrations = \{ path = "\.\.\/\.\.\/services\/services-integrations", optional = true \}/,
         message:
           'bitfun-services-integrations dependency must stay optional so local workspace profiles do not compile remote integrations',
       },
@@ -3987,13 +3987,13 @@ export const requiredContentRules = [
       },
       {
         regex:
-          /bitfun-product-domains = \{ path = "\.\.\/\.\.\/contracts\/product-domains", default-features = false, optional = true \}/,
+          /bitfun-product-domains = \{ path = "\.\.\/\.\.\/contracts\/product-domains", optional = true \}/,
         message:
           'bitfun-product-domains dependency must stay optional and not force product-full outside the core feature graph',
       },
       {
         regex:
-          /bitfun-product-capabilities = \{ path = "\.\.\/product-capabilities", default-features = false, optional = true \}/,
+          /bitfun-product-capabilities = \{ path = "\.\.\/product-capabilities", optional = true \}/,
         message:
           'bitfun-product-capabilities dependency must stay optional and not force product-full outside the core feature graph',
       },

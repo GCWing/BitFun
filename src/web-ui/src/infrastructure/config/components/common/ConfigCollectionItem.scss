@@ -101,7 +101,23 @@
 
 // ─── expandable details ────────────────────────────────────────────────────────
 
+.bitfun-collection-item__details-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 180ms $easing-standard,
+    opacity 120ms ease;
+
+  &[data-open='true'] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
 .bitfun-collection-item__details {
+  min-height: 0;
+  overflow: hidden;
   padding: $size-gap-4;
   border-top: 1px dashed var(--bitfun-collection-details-border);
   background: var(--bitfun-collection-details-bg);
@@ -109,7 +125,6 @@
   display: flex;
   flex-direction: column;
   gap: $size-gap-3;
-  animation: bitfun-collection-slide-down 0.18s $easing-standard;
 }
 
 // ─── shared action button ──────────────────────────────────────────────────────
@@ -258,6 +273,18 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-collection-item__details-collapse,
+  .bitfun-collection-item__details-toggle svg,
+  .bitfun-collection-btn {
+    transition: none;
+  }
+
+  .bitfun-collection-form {
+    animation: none;
   }
 }
 

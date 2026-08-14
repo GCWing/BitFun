@@ -3,11 +3,11 @@
 $toast-width: 320px;
 
 // ─── Container (fixed bottom-left) ───────────────────────────────────────────
-// Left offset accounts for the fan-out spread (ghost cards translate ±38px).
+// Left offset leaves room for the subtle deck spread.
 .announcement-toast-stack {
   position: fixed;
   bottom: 64px;
-  left: 58px; // 20px margin + ~38px fan-out buffer
+  left: 36px;
   z-index: calc(#{$z-notification} + 1);
   pointer-events: none;
   // Clip nothing — overflow visible so rotated ghosts are always fully shown
@@ -29,7 +29,9 @@ $toast-width: 320px;
   > .announcement-toast {
     position: relative;
     z-index: 3;
-    transition: transform 0.4s ease, box-shadow 0.4s ease;
+    transition:
+      box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   // Ghost layers ─────────────────────────────────────────────────────────────
@@ -41,7 +43,7 @@ $toast-width: 320px;
     bottom: 0;
     border-radius: $size-radius-lg;
     pointer-events: none;
-    transition: transform 0.4s ease;
+    transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
     // Ghost 1: tilted left  →  fans left on hover
     &--1 {
@@ -62,19 +64,21 @@ $toast-width: 320px;
     }
   }
 
-  // Hover: fan the deck open + lift + slight scale ──────────────────────────
-  &:hover {
-    > .announcement-toast {
-      transform: translateY(-10px) scale(1.025);
-      box-shadow: 0 16px 40px var(--bf-appearance-token-color-overlay-black-20);
-    }
+  // Keep hover feedback subtle and only enable it for precise pointing devices.
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      > .announcement-toast {
+        transform: translateY(-2px) scale(1.005);
+        box-shadow: 0 10px 28px var(--bf-appearance-token-color-overlay-black-20);
+      }
 
-    .announcement-toast-ghost--1 {
-      transform: translateX(-38px) rotate(-15deg);
-    }
+      .announcement-toast-ghost--1 {
+        transform: translateX(-12px) rotate(-10deg);
+      }
 
-    .announcement-toast-ghost--2 {
-      transform: translateX(38px) rotate(15deg);
+      .announcement-toast-ghost--2 {
+        transform: translateX(12px) rotate(10deg);
+      }
     }
   }
 }
@@ -93,13 +97,13 @@ $toast-width: 320px;
   overflow: hidden;
 
   &--entering {
-    animation: toastSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation: bitfun-announcement-toast-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
     // Disable hover transition while entering so the two don't fight
     transition: none !important;
   }
 
   &--exiting {
-    animation: toastSlideOut 0.25s ease-in both;
+    animation: bitfun-announcement-toast-out 220ms cubic-bezier(0.4, 0, 1, 1) both;
     transition: none !important;
   }
 
@@ -163,7 +167,7 @@ $toast-width: 320px;
     stroke-linecap: round;
     stroke-dasharray: $ring-circumference;
     stroke-dashoffset: 0;
-    animation: ringCountdown linear both;
+    animation: bitfun-announcement-ring-countdown linear both;
     // Smooth opacity fade at the very end
     transition: opacity 0.3s ease;
   }
@@ -181,16 +185,20 @@ $toast-width: 320px;
     border-radius: 50%;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: background $motion-base $easing-standard, color $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      color $motion-base $easing-standard;
 
     svg {
       width: 13px;
       height: 13px;
     }
 
-    &:hover {
-      background: var(--bf-appearance-token-color-bg-secondary);
-      color: var(--bf-appearance-token-color-text-primary);
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        background: var(--bf-appearance-token-color-bg-secondary);
+        color: var(--bf-appearance-token-color-text-primary);
+      }
     }
   }
 
@@ -225,14 +233,21 @@ $toast-width: 320px;
     font-weight: $font-weight-medium;
     border: none;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard,
+      color $motion-base $easing-standard,
+      opacity $motion-base $easing-standard,
+      transform $motion-base $easing-standard;
     white-space: nowrap;
 
     &--primary {
       background: var(--bf-appearance-token-color-accent-500);
       color: var(--bf-appearance-token-color-static-white);
 
-      &:hover { opacity: 0.9; }
+      @media (hover: hover) and (pointer: fine) {
+        &:hover { opacity: 0.9; }
+      }
       &:active { transform: scale(0.98); }
     }
 
@@ -241,19 +256,21 @@ $toast-width: 320px;
       color: var(--bf-appearance-token-color-text-secondary);
       border: 1px solid var(--bf-appearance-token-border-base);
 
-      &:hover {
-        background: var(--bf-appearance-token-color-bg-secondary);
-        color: var(--bf-appearance-token-color-text-primary);
+      @media (hover: hover) and (pointer: fine) {
+        &:hover {
+          background: var(--bf-appearance-token-color-bg-secondary);
+          color: var(--bf-appearance-token-color-text-primary);
+        }
       }
     }
   }
 
 }
 
-@keyframes toastSlideIn {
+@keyframes bitfun-announcement-toast-in {
   from {
     opacity: 0;
-    transform: translateX(-110%) scale(0.97);
+    transform: translateX(-12px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -261,21 +278,36 @@ $toast-width: 320px;
   }
 }
 
-@keyframes toastSlideOut {
+@keyframes bitfun-announcement-toast-out {
   from {
     opacity: 1;
     transform: translateX(0);
-    max-height: 260px;
   }
   to {
     opacity: 0;
-    transform: translateX(-110%);
-    max-height: 0;
-    margin-bottom: -12px;
+    transform: translateX(-12px) scale(0.985);
   }
 }
 
-@keyframes ringCountdown {
+@keyframes bitfun-announcement-ring-countdown {
   from { stroke-dashoffset: 0; }
   to   { stroke-dashoffset: 72.26px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .announcement-toast-deck > .announcement-toast,
+  .announcement-toast-deck .announcement-toast-ghost {
+    transition: none;
+  }
+
+  .announcement-toast--entering,
+  .announcement-toast--exiting,
+  .announcement-toast__ring-fill {
+    animation: none;
+    transform: none;
+  }
+
+  .announcement-toast--exiting {
+    opacity: 0;
+  }
 }

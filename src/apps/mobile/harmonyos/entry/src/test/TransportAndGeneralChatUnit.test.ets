@@ -1,7 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
 import { ChatSessionController, ChatSessionSnapshot } from '../main/ets/services/ChatSessionController';
-import { ChatComposerPolicy } from '../main/ets/services/ChatComposerPolicy';
+import { ChatComposerPolicy, ComposerPrimaryAction } from '../main/ets/services/ChatComposerPolicy';
 import { ChatTimelineItem, ChatTimelineProjector } from '../main/ets/services/ChatTimelineProjector';
 import { ChatTimelineStore } from '../main/ets/services/ChatTimelineStore';
 import { ConversationEvent } from '../main/ets/services/ConversationEvent';
@@ -53,6 +53,7 @@ import { ModelProviderSseParser } from '../main/ets/services/general-chat/ModelP
 import { MockGeneralChatAdapter } from '../main/ets/services/general-chat/MockGeneralChatAdapter';
 import { MarkdownParser } from '../main/ets/services/MarkdownParser';
 import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory';
+import { toRemoteQuestionAnswer } from '../main/ets/pages/components/ConversationUiModels';
 import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
 import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
 import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
@@ -719,6 +720,39 @@ export default function transportAndGeneralChatUnitTest() {
       expect(ChatComposerPolicy.canSend('运行任务', 0, false, true, 'connected')).assertEqual(true);
       expect(ChatComposerPolicy.canSend('运行任务', 0, false, true, 'reconnecting')).assertEqual(true);
     });
+
+    it('lets a draft outrank a running turn where the message can be handed over', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('追加要求', 0, false, false, true, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Send);
+      expect(ChatComposerPolicy.primaryAction('', 0, false, false, true, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+    });
+
+    it('keeps a running turn in front of the draft where nothing queues it', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('追加要求', 0, true, false, true, false, false, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+      expect(ChatComposerPolicy.primaryAction('', 0, true, false, true, false, false, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+    });
+
+    it('keeps dictation in front of the draft it is still writing', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('说到一半', 0, false, true, false, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+      expect(ChatComposerPolicy.primaryAction('说到一半', 0, false, true, true, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Stop);
+    });
+
+    it('still shows a draft it cannot carry as blocked rather than idle', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('断线时写的', 0, false, false, true, true, true, 'failed', true))
+        .assertEqual(ComposerPrimaryAction.SendBlocked);
+    });
+
+    it('offers dictation only once no turn is running and no draft exists', 0, () => {
+      expect(ChatComposerPolicy.primaryAction('', 0, false, false, false, true, true, 'connected', true))
+        .assertEqual(ComposerPrimaryAction.Voice);
+      expect(ChatComposerPolicy.primaryAction('', 0, false, false, false, true, true, 'connected', false))
+        .assertEqual(ComposerPrimaryAction.Idle);
+    });
   });
 
   describe('GeneralChatApiClient', () => {
@@ -1203,13 +1237,24 @@ export default function transportAndGeneralChatUnitTest() {
 
     it('builds tool and file commands', 0, () => {
       const answers: RemoteQuestionAnswerPayload = { answer: 'yes', '0': 'yes' };
+      const multipleAnswers: RemoteQuestionAnswerPayload = { '0': 'yes', '1': ['tests', 'docs'] };
 
       expectCommandJson(RemoteCommandFactory.confirmTool('tool-1'), '{"cmd":"confirm_tool","tool_id":"tool-1"}');
       expectCommandJson(RemoteCommandFactory.rejectTool('tool-1', 'no'), '{"cmd":"reject_tool","tool_id":"tool-1","reason":"no"}');
       expectCommandJson(RemoteCommandFactory.cancelTool('tool-1', 'stop'), '{"cmd":"cancel_tool","tool_id":"tool-1","reason":"stop"}');
       expectCommandJson(RemoteCommandFactory.answerQuestion('tool-2', answers), '{"cmd":"answer_question","tool_id":"tool-2","answers":{"0":"yes","answer":"yes"}}');
+      expectCommandJson(RemoteCommandFactory.answerQuestion('tool-3', multipleAnswers), '{"cmd":"answer_question","tool_id":"tool-3","answers":{"0":"yes","1":["tests","docs"]}}');
       expectCommandJson(RemoteCommandFactory.getFileInfo('/tmp/a.txt', 's1'), '{"cmd":"get_file_info","path":"/tmp/a.txt","session_id":"s1"}');
       expectCommandJson(RemoteCommandFactory.readFileChunk('/tmp/a.txt', 12, 64, 's1'), '{"cmd":"read_file_chunk","path":"/tmp/a.txt","offset":12,"limit":64,"session_id":"s1"}');
+    });
+
+    it('preserves indexed question answers when dispatching from the UI', 0, () => {
+      const answers = toRemoteQuestionAnswer({ '0': 'tests', '1': ['docs', 'src'] });
+
+      expectCommandJson(
+        RemoteCommandFactory.answerQuestion('tool-4', answers),
+        '{"cmd":"answer_question","tool_id":"tool-4","answers":{"0":"tests","1":["docs","src"]}}'
+      );
     });
   });
 

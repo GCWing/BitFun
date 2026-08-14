@@ -8,7 +8,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil, Trash2, Check, X, Bot, MoreHorizontal, Loader2, Archive, Clock3, Copy, FileDown, ChevronLeft } from 'lucide-react';
-import { IconButton, Input, Tooltip } from '@/component-library';
+import { IconButton, Input, PresenceBoundary, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
 import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManager';
@@ -959,6 +959,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const scheduledJobsSession = scheduledJobsSessionId
     ? flowChatState.sessions.get(scheduledJobsSessionId) ?? null
     : null;
+  const lastScheduledJobsSessionRef = useRef<Session | null>(null);
+  if (scheduledJobsSession) {
+    lastScheduledJobsSessionRef.current = scheduledJobsSession;
+  }
+  const retainedScheduledJobsSession = scheduledJobsSession ?? lastScheduledJobsSessionRef.current;
   const lastHistoryOpenIntentRef = useRef<{ sessionId: string; atMs: number } | null>(null);
 
   const dispatchHistoryOpenIntentForSession = useCallback(
@@ -1917,24 +1922,26 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         </button>
       )}
 
-      {scheduledJobsSession && (
-        <Suspense fallback={null}>
-          <ScheduledJobsModal
-            isOpen={scheduledJobsSession != null}
-            onClose={() => setScheduledJobsSessionId(null)}
-            workspacePath={scheduledJobsSession.workspacePath || workspacePath}
-            workspaceId={scheduledJobsSession.workspaceId || workspaceId}
-            remoteConnectionId={scheduledJobsSession.remoteConnectionId || remoteConnectionId}
-            remoteSshHost={scheduledJobsSession.remoteSshHost || remoteSshHost}
-            sessionId={scheduledJobsSession.sessionId}
-            targetKind="session"
-            lockSessionId
-            title={t('nav.scheduledJobs.title')}
-            targetLabel={resolveSessionTitle(scheduledJobsSession)}
-            targetDescription={scheduledJobsSession.workspacePath || workspacePath}
-          />
-        </Suspense>
-      )}
+      <PresenceBoundary active={scheduledJobsSession != null}>
+        {retainedScheduledJobsSession && (
+          <Suspense fallback={null}>
+            <ScheduledJobsModal
+              isOpen={scheduledJobsSession != null}
+              onClose={() => setScheduledJobsSessionId(null)}
+              workspacePath={retainedScheduledJobsSession.workspacePath || workspacePath}
+              workspaceId={retainedScheduledJobsSession.workspaceId || workspaceId}
+              remoteConnectionId={retainedScheduledJobsSession.remoteConnectionId || remoteConnectionId}
+              remoteSshHost={retainedScheduledJobsSession.remoteSshHost || remoteSshHost}
+              sessionId={retainedScheduledJobsSession.sessionId}
+              targetKind="session"
+              lockSessionId
+              title={t('nav.scheduledJobs.title')}
+              targetLabel={resolveSessionTitle(retainedScheduledJobsSession)}
+              targetDescription={retainedScheduledJobsSession.workspacePath || workspacePath}
+            />
+          </Suspense>
+        )}
+      </PresenceBoundary>
     </div>
   );
 };

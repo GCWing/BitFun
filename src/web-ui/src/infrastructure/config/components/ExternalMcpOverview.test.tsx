@@ -738,7 +738,11 @@ describe('ExternalMcpOverview', () => {
         record: {
           ...snapshot.sources[0].record,
           health: 'degraded',
-          diagnostics: [{ severity: 'warning', code: 'source_stale', message: 'details' }],
+          diagnostics: [{
+            severity: 'warning',
+            code: 'source_stale',
+            message: 'sensitive source diagnostic',
+          }],
         },
       }],
       mcpServers: snapshot.mcpServers,
@@ -752,7 +756,7 @@ describe('ExternalMcpOverview', () => {
 
     expect(container.textContent).toContain('external.status.degraded');
     expect(container.textContent).toContain('external.status.approvalRequired');
-    expect(container.textContent).not.toContain('details');
+    expect(container.textContent).not.toContain('sensitive source diagnostic');
   });
 
   it('summarizes top-level MCP diagnostics without exposing their raw message', async () => {

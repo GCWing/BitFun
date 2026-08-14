@@ -4413,11 +4413,11 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/Cargo.toml',
       contracts: [
-        'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", default-features = false, optional = true \\}',
+        'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", optional = true \\}',
         'bitfun-ai-adapters = \\{ path = "\\.\\.\\/\\.\\.\\/adapters\\/ai-adapters", optional = true \\}',
-        'bitfun-tool-packs = \\{ path = "\\.\\.\\/\\.\\.\\/execution\\/tool-provider-groups", default-features = false, optional = true \\}',
-        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, optional = true \\}',
-        'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", default-features = false, optional = true \\}',
+        'bitfun-tool-packs = \\{ path = "\\.\\.\\/\\.\\.\\/execution\\/tool-provider-groups", optional = true \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", optional = true \\}',
+        'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", optional = true \\}',
         'dep:bitfun-ai-adapters',
         'ai-adapter-runtime',
         'canvas-runtime',

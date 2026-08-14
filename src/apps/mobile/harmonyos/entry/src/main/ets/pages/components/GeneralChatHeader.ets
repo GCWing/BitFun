@@ -1,6 +1,7 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
 import { CompactMenuButton } from './CompactMenuButton';
+import { TemplateIcon } from './TemplateIcon';
 import { SidebarToggleButton } from './SidebarToggleButton';
 
 @ComponentV2
@@ -71,12 +72,11 @@ export struct GeneralChatHeader {
       })
     } else if (this.showBackButton) {
       Stack({ alignContent: Alignment.Center }) {
-        Image($r('app.media.remote_ref_back'))
-          .width(15)
-          .height(23)
-          .objectFit(ImageFit.Contain)
-          .renderMode(ImageRenderMode.Template)
-          .foregroundColor(INK)
+        TemplateIcon({
+          src: $r('app.media.remote_ref_back'),
+          iconWidth: 15,
+          iconHeight: 23
+        })
       }
       .width(44)
       .height(44)
@@ -103,12 +103,11 @@ export struct GeneralChatHeader {
   private TrailingControl() {
     if (this.showActions) {
       Stack({ alignContent: Alignment.Center }) {
-        Image($r('app.media.remote_ref_more'))
-          .width(23)
-          .height(7)
-          .objectFit(ImageFit.Contain)
-          .renderMode(ImageRenderMode.Template)
-          .foregroundColor(INK)
+        TemplateIcon({
+          src: $r('app.media.remote_ref_more'),
+          iconWidth: 23,
+          iconHeight: 7
+        })
       }
       .width(44)
       .height(44)

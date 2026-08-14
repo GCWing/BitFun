@@ -26,6 +26,7 @@ import { i18nService } from '@/infrastructure/i18n';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { WorkspaceKind } from '@/shared/types';
 import { createLogger } from '@/shared/utils/logger';
+import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 
 const logger = createLogger('ExternalSourcesConfig');
 import {
@@ -1303,7 +1304,10 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         ) ?? matchingEcosystemElements[0]
       : document.querySelector<HTMLElement>('[data-external-attention="true"]');
     if (!target) return;
-    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.scrollIntoView({
+      block: 'center',
+      behavior: getMotionAwareScrollBehavior('smooth'),
+    });
     if (target instanceof HTMLDetailsElement) {
       target.open = true;
       target.querySelector<HTMLElement>('summary')?.focus();
@@ -1329,7 +1333,10 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     window.requestAnimationFrame(() => {
       const policyCard = document.querySelector<HTMLElement>('[data-bf-part="policyCard"]');
       if (!policyCard) return;
-      policyCard.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      policyCard.scrollIntoView({
+        block: 'center',
+        behavior: getMotionAwareScrollBehavior('smooth'),
+      });
       policyCard.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus();
     });
   }, []);

@@ -2,6 +2,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConversationUiSession } from './ConversationUiModels';
 import { ACCENT, CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, SOFT } from './Theme';
 import { CompactMenuButton } from './CompactMenuButton';
+import { TemplateIcon } from './TemplateIcon';
 import { SidebarToggleButton } from './SidebarToggleButton';
 
 @ComponentV2
@@ -86,12 +87,11 @@ export struct RemoteChatHeader {
       })
     } else if (this.showBackButton) {
       Stack({ alignContent: Alignment.Center }) {
-        Image($r('app.media.remote_ref_back'))
-          .width(15)
-          .height(23)
-          .objectFit(ImageFit.Contain)
-          .renderMode(ImageRenderMode.Template)
-          .foregroundColor(INK)
+        TemplateIcon({
+          src: $r('app.media.remote_ref_back'),
+          iconWidth: 15,
+          iconHeight: 23
+        })
       }
       .width(44)
       .height(44)
@@ -118,12 +118,11 @@ export struct RemoteChatHeader {
   @Builder
   private ActionsControl() {
     Stack({ alignContent: Alignment.Center }) {
-        Image($r('app.media.remote_ref_more'))
-        .width(23)
-        .height(7)
-        .objectFit(ImageFit.Contain)
-        .renderMode(ImageRenderMode.Template)
-        .foregroundColor(INK)
+        TemplateIcon({
+          src: $r('app.media.remote_ref_more'),
+          iconWidth: 23,
+          iconHeight: 7
+        })
     }
     .width(44)
     .height(44)

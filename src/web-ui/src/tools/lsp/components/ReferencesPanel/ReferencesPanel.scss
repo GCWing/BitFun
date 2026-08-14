@@ -311,15 +311,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .references-panel {
-    transition: opacity $motion-instant ease;
     transform: none;
+    animation: references-panel-reduced-fade-in $motion-instant ease forwards;
   }
   
   .references-panel__reference-item {
     transition: background-color $motion-instant ease;
   }
   
-  @keyframes references-panel-fade-in {
+  @keyframes references-panel-reduced-fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
   }

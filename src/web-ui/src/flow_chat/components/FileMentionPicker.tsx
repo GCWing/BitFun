@@ -472,7 +472,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   useEffect(() => {
     if (!containerRef.current || displayItems.length === 0) return;
     containerRef.current.querySelector(`[data-index="${selectedIndex}"]`)
-      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      ?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
   }, [displayItems.length, selectedIndex]);
 
   if (!isOpen) return null;

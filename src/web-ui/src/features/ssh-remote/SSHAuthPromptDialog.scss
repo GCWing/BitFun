@@ -92,3 +92,9 @@
     transform: rotate(360deg);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .ssh-auth-prompt-dialog__spinner {
+    animation: none;
+  }
+}

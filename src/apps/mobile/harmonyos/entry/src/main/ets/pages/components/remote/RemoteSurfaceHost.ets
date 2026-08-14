@@ -1,5 +1,7 @@
 import { RemoteI18n } from '../../../i18n/RemoteI18n';
 import { RemoteSession } from '../../../model/RemoteModels';
+import { RemoteLogger } from '../../../services/RemoteLogger';
+import { RemoteUiState } from '../../../services/RemoteUiState';
 import { RemotePageState } from '../../state/RemotePageState';
 import {
   AppRootPresentationActions,
@@ -53,6 +55,14 @@ export struct RemoteSurfaceHost {
   @Event onRestoreSidebar: () => void = () => {};
   @Event onCloseSettings: () => void = () => {};
 
+  // The wide layout keeps the master pane inside a routed destination, so a
+  // mount here while switching sessions means the navigation stack was torn
+  // down for a change that is only page state — the sidebar rebuild this used
+  // to pay for. See AppShellViewModel.replaceRouteWithoutAnimation.
+  aboutToAppear(): void {
+    RemoteLogger.info(`remote surface mounted mode=${this.mode}`);
+  }
+
   build() {
     if (this.mode === RemoteSurfaceMode.Master) {
       this.MasterContent();
@@ -89,6 +99,9 @@ export struct RemoteSurfaceHost {
           showStatusMetadata: this.presentationState.showStatusMetadata,
           hasMoreSessions: this.remotePageState.hasMoreSessions,
           isBusy: this.remotePageState.conversation.isBusy || this.remotePageState.isLoadingSessions,
+          // A pending id means a row was tapped, whether or not the open is slow
+          // enough to have raised a skeleton. Keying the highlight off the
+          // loading flag instead used to tie selection to how long the load took.
           selectedSessionId: this.remotePageState.pendingSessionId.length > 0 ?
             this.remotePageState.pendingSessionId :
             (this.showSelectedSession ? this.remotePageState.conversation.activeSession.sessionId : ''),
@@ -121,6 +134,17 @@ export struct RemoteSurfaceHost {
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .layoutWeight(1)
+      if (this.canReconnect()) {
+        Text(RemoteI18n.t('remote.settings.reconnect'))
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(PRIMARY_ACTION_TEXT)
+          .height(28)
+          .padding({ left: 12, right: 12 })
+          .backgroundColor(PRIMARY_ACTION)
+          .borderRadius(14)
+          .onClick(() => this.actions.onRemoteHome.connectWorkspace())
+      }
     }
     .width('100%')
     .margin({ top: 16, bottom: 6 })
@@ -129,7 +153,7 @@ export struct RemoteSurfaceHost {
 
   @Builder
   private StatusIndicator() {
-    if (this.isInitialLoading()) {
+    if (this.isSyncing()) {
       LoadingProgress().width(14).height(14).color(MUTED)
     } else {
       Stack() {
@@ -201,11 +225,22 @@ export struct RemoteSurfaceHost {
         .fontSize(14).lineHeight(21).fontColor(MUTED).maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis }).textAlign(TextAlign.Center)
         .constraintSize({ maxWidth: 280 })
-      Text(RemoteI18n.t('remote.startSession'))
-        .width(148).height(46).fontSize(15).fontWeight(FontWeight.Medium)
-        .fontColor(PRIMARY_ACTION_TEXT).backgroundColor(PRIMARY_ACTION)
-        .textAlign(TextAlign.Center).borderRadius(23).margin({ top: 12 })
-        .onClick(() => this.actions.onRemoteHome.createAssistant())
+      // Starting a session needs a desktop on the other end, so while the link
+      // is down the button that is actually useful is the one that brings it
+      // back up.
+      if (this.canReconnect()) {
+        Text(RemoteI18n.t('remote.settings.reconnect'))
+          .width(148).height(46).fontSize(15).fontWeight(FontWeight.Medium)
+          .fontColor(PRIMARY_ACTION_TEXT).backgroundColor(PRIMARY_ACTION)
+          .textAlign(TextAlign.Center).borderRadius(23).margin({ top: 12 })
+          .onClick(() => this.actions.onRemoteHome.connectWorkspace())
+      } else {
+        Text(RemoteI18n.t('remote.startSession'))
+          .width(148).height(46).fontSize(15).fontWeight(FontWeight.Medium)
+          .fontColor(PRIMARY_ACTION_TEXT).backgroundColor(PRIMARY_ACTION)
+          .textAlign(TextAlign.Center).borderRadius(23).margin({ top: 12 })
+          .onClick(() => this.actions.onRemoteHome.createAssistant())
+      }
     }
     .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center).padding({ left: 24, right: 24, bottom: 56 })
@@ -304,13 +339,41 @@ export struct RemoteSurfaceHost {
     this.actions.onRemoteHome.createAssistant();
   }
 
+  /**
+   * Whether the surface still owes the user a way back onto a desktop.
+   *
+   * The connect button used to live only on the disconnected placeholder, so
+   * the moment a restored session list took that placeholder's place there was
+   * no entry point left anywhere on the surface — a list from the cache reads
+   * as "connected" while nothing is. Offering it from the status row instead
+   * keeps the two independent: the list says what the phone knows, this says
+   * whether the desktop is answering.
+   */
+  private canReconnect(): boolean {
+    return !RemoteUiState.canUseRemote(this.remotePageState.connectionState) && !this.isSyncing();
+  }
+
   private canShowSessionList(): boolean {
     return this.remotePageState.connectionState === 'connected' ||
       this.remotePageState.visibleSessions().length > 0 ||
       this.remotePageState.isLoadingHome || this.remotePageState.isLoadingSessions;
   }
 
+  /**
+   * Only the first load gets a skeleton. Once there are sessions to show — from
+   * this connection or from the cache a launch restored — connecting is a
+   * refresh happening behind a usable list, and replacing that list with
+   * placeholder rows would be a step backwards.
+   */
   private isInitialLoading(): boolean {
+    if (this.remotePageState.sessions.length > 0) {
+      return false;
+    }
+    return this.isSyncing();
+  }
+
+  /** Work in progress, whether or not there is already a list behind it. */
+  private isSyncing(): boolean {
     return this.remotePageState.isLoadingHome || this.isConnecting();
   }
 

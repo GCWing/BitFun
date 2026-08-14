@@ -135,6 +135,8 @@
   // ==================== Dropdown menu ====================
   
   &__dropdown {
+    --bitfun-model-dropdown-offset: -4px;
+
     position: fixed;
     min-width: clamp(0px, 220px, calc(100vw - 16px));
     max-width: clamp(0px, 280px, calc(100vw - 16px));
@@ -152,7 +154,32 @@
       0 0 1px var(--bf-appearance-token-color-overlay-white-12),
       inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
     z-index: $z-popover;
-    animation: bitfun-model-dropdown-fade-in 0.15s ease-out;
+    transform-origin: center top;
+    transition:
+      opacity 100ms ease,
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &[data-open='true']:not([data-keyboard-open='true']) {
+      @starting-style {
+        opacity: 0;
+        transform: translateY(var(--bitfun-model-dropdown-offset)) scale(0.98);
+      }
+    }
+
+    &[data-placement='top'] {
+      --bitfun-model-dropdown-offset: 4px;
+      transform-origin: center bottom;
+    }
+
+    &[data-open='false'] {
+      opacity: 0;
+      transform: translateY(var(--bitfun-model-dropdown-offset)) scale(0.98);
+      pointer-events: none;
+    }
+
+    &[data-keyboard-open='true'] {
+      transition: none;
+    }
   }
   
   &__dropdown-header {
@@ -359,18 +386,6 @@
         background: var(--bf-appearance-token-color-overlay-slate-12);
       }
     }
-  }
-}
-
-// Dropdown fade-in animation
-@keyframes bitfun-model-dropdown-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 

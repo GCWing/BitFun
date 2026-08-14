@@ -46,6 +46,7 @@ export class RemoteConnectionController {
   private readonly stopHeartbeat: () => void;
   private readonly stopPolling: () => void;
   private readonly loadRecentWorkspaces: () => Promise<void>;
+  private readonly clearCachedRemoteData: () => Promise<void>;
   private readonly replaceRoute: (route: AppRoute) => void;
   private readonly closeConnectSheet: () => void;
   private readonly openConnectSheet: () => void;
@@ -70,6 +71,7 @@ export class RemoteConnectionController {
     stopHeartbeat: () => void,
     stopPolling: () => void,
     loadRecentWorkspaces: () => Promise<void>,
+    clearCachedRemoteData: () => Promise<void>,
     replaceRoute: (route: AppRoute) => void,
     closeConnectSheet: () => void,
     openConnectSheet: () => void
@@ -89,6 +91,7 @@ export class RemoteConnectionController {
     this.stopHeartbeat = stopHeartbeat;
     this.stopPolling = stopPolling;
     this.loadRecentWorkspaces = loadRecentWorkspaces;
+    this.clearCachedRemoteData = clearCachedRemoteData;
     this.replaceRoute = replaceRoute;
     this.closeConnectSheet = closeConnectSheet;
     this.openConnectSheet = openConnectSheet;
@@ -167,7 +170,10 @@ export class RemoteConnectionController {
       this.pageState.setStatusText(RemoteI18n.t('connection.connected'));
       this.closeConnectSheet();
       this.startHeartbeat();
-      await this.loadRecentWorkspaces();
+      // Left running rather than awaited: this scan costs one round trip per
+      // recent workspace, and everything it finds is an addition to a session
+      // list that is already on screen. Its own failures are logged inside.
+      void this.loadRecentWorkspaces();
       this.pageState.setLoadingHome(false);
       RemoteLogger.info('connect success');
     } catch (err) {
@@ -238,6 +244,10 @@ export class RemoteConnectionController {
       this.pageState.setAccountPairing(false, '');
       this.pageState.setRemoteUrlInputVisible(false);
       await this.identity.clearPairingInput();
+      // Unpairing is the user saying they are done with that desktop. Leaving
+      // its sessions on disk would put them back on Remote Home at the next
+      // launch, with nothing behind them to open.
+      await this.clearCachedRemoteData();
     } else {
       this.pageState.setRemoteUrlInputVisible(this.pageState.remoteUrl.trim().length > 0);
     }

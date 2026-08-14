@@ -107,7 +107,10 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease;
 
     &:hover {
       background: var(--bf-appearance-token-color-bg-primary);
@@ -164,15 +167,22 @@
   }
 
   &__executing-icon {
-    animation: pulse 2s ease-in-out infinite;
+    animation: bitfun-task-card-pulse 2s ease-in-out infinite;
   }
 }
 
-@keyframes pulse {
+@keyframes bitfun-task-card-pulse {
   0%, 100% {
     opacity: 1;
   }
   50% {
     opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-card__executing-icon {
+    animation: none;
+    opacity: 1;
   }
 }

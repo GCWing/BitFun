@@ -45,13 +45,14 @@ const WelcomeScene    = lazy(() => import('./welcome/WelcomeScene'));
 const MiniAppScene    = lazy(() => import('./miniapps/MiniAppScene'));
 const PanelViewScene  = lazy(() => import('./panel-view/PanelViewScene'));
 
-// Keep in sync with bitfun-motion-view-exit in app/styles/motion.scss.
-const SCENE_EXIT_DURATION_MS = 140;
+const SCENE_TRANSITION_RETENTION_MS = 200;
+const EMPTY_SCENE_ID = '__empty-scene__' as const;
+type RenderedSceneId = SceneTabId | typeof EMPTY_SCENE_ID;
 
 interface SceneTransition {
-  outgoingTabId: SceneTabId;
-  incomingTabId: SceneTabId;
-  phase: 'holding' | 'exiting';
+  outgoingTabId: RenderedSceneId;
+  incomingTabId: RenderedSceneId;
+  phase: 'holding' | 'preparing' | 'running';
 }
 
 interface SceneReadyBoundaryProps {
@@ -83,12 +84,20 @@ interface SceneViewportProps {
 }
 
 const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering = false }) => {
-  const { openTabs, activeTabId } = useSceneManager();
+  const {
+    openTabs,
+    activeTabId,
+    navigationMotion,
+    navigationSequence,
+  } = useSceneManager();
   const { t } = useI18n('common');
+  const activeRenderedSceneId: RenderedSceneId = openTabs.length === 0
+    ? EMPTY_SCENE_ID
+    : activeTabId;
   const [transition, setTransition] = useState<SceneTransition | null>(null);
   const [readyVersion, setReadyVersion] = useState(0);
-  const readySceneIdsRef = useRef<Set<SceneTabId>>(new Set());
-  const previousActiveTabIdRef = useRef<SceneTabId>(activeTabId);
+  const readySceneIdsRef = useRef<Set<RenderedSceneId>>(new Set([EMPTY_SCENE_ID]));
+  const previousActiveTabIdRef = useRef<RenderedSceneId>(activeRenderedSceneId);
   useDialogCompletionNotify();
 
   const markSceneReady = useCallback((sceneId: SceneTabId) => {
@@ -100,28 +109,38 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
   // Derive the outgoing id during render as well as from state. This keeps a
   // just-closed active tab (notably the welcome tab) in the keyed React tree
   // for its exit frame instead of unmounting and remounting it after layout.
-  const outgoingTabId = previousActiveTabIdRef.current !== activeTabId
-    ? previousActiveTabIdRef.current
+  const activeSceneChanged = previousActiveTabIdRef.current !== activeRenderedSceneId;
+  const outgoingTabId = activeSceneChanged
+    ? navigationMotion === 'pointer'
+      ? previousActiveTabIdRef.current
+      : null
     : transition?.outgoingTabId ?? null;
-  const renderedTabIds = openTabs.map(tab => tab.id);
+  const renderedTabIds: RenderedSceneId[] = openTabs.length === 0
+    ? [EMPTY_SCENE_ID]
+    : openTabs.map(tab => tab.id);
   if (outgoingTabId && !renderedTabIds.includes(outgoingTabId)) {
     renderedTabIds.push(outgoingTabId);
   }
 
   useLayoutEffect(() => {
     const previousActiveTabId = previousActiveTabIdRef.current;
-    previousActiveTabIdRef.current = activeTabId;
+    previousActiveTabIdRef.current = activeRenderedSceneId;
 
-    if (!previousActiveTabId || previousActiveTabId === activeTabId) {
+    if (previousActiveTabId === activeRenderedSceneId) {
+      return;
+    }
+
+    if (navigationMotion !== 'pointer') {
+      setTransition(null);
       return;
     }
 
     setTransition({
       outgoingTabId: previousActiveTabId,
-      incomingTabId: activeTabId,
-      phase: readySceneIdsRef.current.has(activeTabId) ? 'exiting' : 'holding',
+      incomingTabId: activeRenderedSceneId,
+      phase: readySceneIdsRef.current.has(activeRenderedSceneId) ? 'preparing' : 'holding',
     });
-  }, [activeTabId]);
+  }, [activeRenderedSceneId, navigationMotion, navigationSequence]);
 
   useLayoutEffect(() => {
     if (
@@ -133,87 +152,122 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
 
     setTransition(current => (
       current?.incomingTabId === transition.incomingTabId
-        ? { ...current, phase: 'exiting' }
+        ? { ...current, phase: 'preparing' }
         : current
     ));
   }, [readyVersion, transition]);
 
   useEffect(() => {
-    if (transition?.phase !== 'exiting') return;
+    if (transition?.phase !== 'preparing') return;
+
+    const preparedTransition = transition;
+    let runningFrame: number | null = null;
+    const preparationFrame = window.requestAnimationFrame(() => {
+      runningFrame = window.requestAnimationFrame(() => {
+        setTransition(current => (
+          current === preparedTransition
+            ? { ...current, phase: 'running' }
+            : current
+        ));
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(preparationFrame);
+      if (runningFrame !== null) {
+        window.cancelAnimationFrame(runningFrame);
+      }
+    };
+  }, [transition]);
+
+  useEffect(() => {
+    if (transition?.phase !== 'running') return;
 
     const completedTransition = transition;
     const exitTimer = window.setTimeout(() => {
       setTransition(current => (
         current === completedTransition ? null : current
       ));
-    }, SCENE_EXIT_DURATION_MS);
+    }, SCENE_TRANSITION_RETENTION_MS);
 
     return () => window.clearTimeout(exitTimer);
   }, [transition]);
 
-  // All tabs closed — show empty state
-  if (openTabs.length === 0) {
-    return (
-      <div className="bitfun-scene-viewport" data-testid="scene-viewport" data-bf-scene="workbench" data-bf-part="viewport" data-bf-state="empty">
-        <div
-          className="bitfun-scene-viewport__clip bitfun-scene-viewport__clip--empty"
-          data-testid="scene-viewport-empty"
-          data-bf-scene="workbench"
-          data-bf-part="empty"
-          data-bf-state="empty"
-        >
-          <p className="bitfun-scene-viewport__empty-hint">{t('welcomeScene.emptyHint')}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="bitfun-scene-viewport" data-testid="scene-viewport" data-bf-scene="workbench" data-bf-part="viewport">
-      <div className="bitfun-scene-viewport__clip" data-testid="scene-viewport-clip" data-bf-scene="workbench" data-bf-part="viewportClip">
+    <div
+      className="bitfun-scene-viewport"
+      data-testid="scene-viewport"
+      data-bf-scene="workbench"
+      data-bf-part="viewport"
+      data-bf-state={activeRenderedSceneId === EMPTY_SCENE_ID ? 'empty' : undefined}
+    >
+      <div
+        className="bitfun-scene-viewport__clip"
+        data-testid="scene-viewport-clip"
+        data-scene-motion-phase={transition?.phase}
+        data-bf-scene="workbench"
+        data-bf-part="viewportClip"
+      >
         {renderedTabIds.map(tabId => {
-          const isActive = tabId === activeTabId;
+          const isEmpty = tabId === EMPTY_SCENE_ID;
+          const isActive = tabId === activeRenderedSceneId;
           const isOutgoing = !isActive && tabId === outgoingTabId;
-          const isExiting = isOutgoing && transition?.phase === 'exiting';
+          const isIncoming = isActive && transition?.incomingTabId === tabId;
           return (
             <div
               key={tabId}
               className={[
                 'bitfun-scene-viewport__scene',
+                isEmpty && 'bitfun-scene-viewport__scene--empty',
                 isActive && 'bitfun-scene-viewport__scene--active',
+                isIncoming && 'bitfun-scene-viewport__scene--incoming',
                 isOutgoing && 'bitfun-scene-viewport__scene--outgoing',
-                isExiting && 'bitfun-scene-viewport__scene--exiting',
               ].filter(Boolean).join(' ')}
               aria-hidden={!isActive}
+              {...(!isActive ? { inert: '' } : {})}
               data-testid="scene-viewport-scene"
               data-scene-id={tabId}
               data-scene-active={isActive ? 'true' : 'false'}
-              data-scene-transition={isExiting ? 'exit' : undefined}
               data-bf-scene="workbench"
               data-bf-part="scene"
-              data-bf-scene-id={tabId}
-              data-bf-state={isActive ? 'active' : undefined}
+              data-bf-scene-id={isEmpty ? undefined : tabId}
+              data-bf-state={[
+                isActive && 'active',
+                isEmpty && 'empty',
+              ].filter(Boolean).join(' ') || undefined}
             >
-              <Suspense
-                fallback={
-                  isActive ? (
-                    <div
-                      className="bitfun-scene-viewport__lazy-fallback"
-                      role="status"
-                      aria-busy="true"
-                      aria-label={t('loading.scenes')}
-                      data-bf-scene="workbench"
-                      data-bf-part="loading"
-                    >
-                      <DotMatrixLoader size="medium" />
-                    </div>
-                  ) : null
-                }
-              >
-                <SceneReadyBoundary sceneId={tabId} onReady={markSceneReady}>
-                  {renderScene(tabId, workspacePath, isEntering, isActive)}
-                </SceneReadyBoundary>
-              </Suspense>
+              {isEmpty ? (
+                <div
+                  className="bitfun-scene-viewport__empty"
+                  data-testid="scene-viewport-empty"
+                  data-bf-scene="workbench"
+                  data-bf-part="empty"
+                  data-bf-state="empty"
+                >
+                  <p className="bitfun-scene-viewport__empty-hint">{t('welcomeScene.emptyHint')}</p>
+                </div>
+              ) : (
+                <Suspense
+                  fallback={
+                    isActive ? (
+                      <div
+                        className="bitfun-scene-viewport__lazy-fallback"
+                        role="status"
+                        aria-busy="true"
+                        aria-label={t('loading.scenes')}
+                        data-bf-scene="workbench"
+                        data-bf-part="loading"
+                      >
+                        <DotMatrixLoader size="medium" />
+                      </div>
+                    ) : null
+                  }
+                >
+                  <SceneReadyBoundary sceneId={tabId} onReady={markSceneReady}>
+                    {renderScene(tabId, workspacePath, isEntering, isActive)}
+                  </SceneReadyBoundary>
+                </Suspense>
+              )}
             </div>
           );
         })}

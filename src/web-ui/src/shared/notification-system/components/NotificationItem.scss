@@ -13,7 +13,7 @@
   border: 1px solid var(--bf-appearance-token-border-base);
   min-width: 280px;
   max-width: 320px;
-  animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: bitfun-notification-enter 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
   font-family: $font-family-sans;
 
   
@@ -114,7 +114,10 @@
     font-weight: $font-weight-medium;
     border: none;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      scale $motion-fast $easing-standard;
 
     &--primary {
       background: var(--bf-appearance-token-color-accent-600);
@@ -170,7 +173,10 @@
     border-radius: $size-radius-sm;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      scale $motion-fast $easing-standard;
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-base);
@@ -181,29 +187,40 @@
       transform: scale(0.95);
     }
   }
+
+  &--exiting {
+    animation: bitfun-notification-exit 120ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    pointer-events: none;
+  }
 }
 
 
-@keyframes slideIn {
+@keyframes bitfun-notification-enter {
   from {
     opacity: 0;
-    transform: translateX(-100%);
+    transform: translateX(-12px) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
   }
 }
 
 
-@keyframes slideOut {
+@keyframes bitfun-notification-exit {
   from {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
   }
   to {
     opacity: 0;
-    transform: translateX(-100%);
+    transform: translateX(-8px) scale(0.99);
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .notification-item,
+  .notification-item--exiting {
+    transform: none;
+  }
+}

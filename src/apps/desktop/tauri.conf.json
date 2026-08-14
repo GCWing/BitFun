@@ -24,6 +24,23 @@
       "../../crates/services/services-integrations/assets/models-dev.LICENSE.txt": "third-party/models.dev/LICENSE.txt",
       "../../crates/services/services-integrations/assets/models-dev.provenance.json": "third-party/models.dev/provenance.json"
     },
+    "macOS": {
+      "dmg": {
+        "background": "dmg/background.png",
+        "windowSize": {
+          "width": 800,
+          "height": 563
+        },
+        "appPosition": {
+          "x": 235,
+          "y": 240
+        },
+        "applicationFolderPosition": {
+          "x": 565,
+          "y": 240
+        }
+      }
+    },
     "linux": {
       "deb": {
         "depends": [

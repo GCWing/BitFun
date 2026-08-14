@@ -9,12 +9,13 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
+import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import type {
   ReasoningCatalogProjection,
   ReasoningPresetDescriptor,
 } from '@/infrastructure/config/types';
-import { getModelSelectorDropdownStyle } from './modelSelectorDropdownPosition';
+import { getModelSelectorDropdownLayout } from './modelSelectorDropdownPosition';
 import './ReasoningPresetSelector.scss';
 
 interface ReasoningPresetSelectorProps {
@@ -139,6 +140,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
     position: 'fixed',
     visibility: 'hidden',
   });
+  const [resolvedPlacement, setResolvedPlacement] = useState(dropdownPlacement);
 
   const presets = useMemo(
     () => (projection?.status === 'known' ? projection.presets ?? [] : []),
@@ -168,12 +170,14 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
     if (!open || !rootRef.current) return;
     const updatePosition = () => {
       if (!rootRef.current || !menuRef.current) return;
-      setMenuStyle(getModelSelectorDropdownStyle(
+      const layout = getModelSelectorDropdownLayout(
         rootRef.current.getBoundingClientRect(),
         menuRef.current.getBoundingClientRect(),
         dropdownPlacement,
         { width: window.innerWidth, height: window.innerHeight },
-      ));
+      );
+      setMenuStyle(layout.style);
+      setResolvedPlacement(layout.placement);
     };
     updatePosition();
     const observer = new ResizeObserver(updatePosition);
@@ -202,17 +206,18 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
   }, [keyboardOpen, open]);
 
   const select = useCallback((presetId: string | null) => {
+    if (menuRef.current?.contains(document.activeElement)) {
+      triggerRef.current?.focus();
+    }
     setOpen(false);
-    setKeyboardOpen(false);
     void onSelect(presetId);
   }, [onSelect]);
 
   const handleMenuKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      setOpen(false);
-      setKeyboardOpen(false);
       triggerRef.current?.focus();
+      setOpen(false);
       return;
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
@@ -262,7 +267,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
       data-bf-part="root"
       data-bf-state={open ? 'open' : undefined}
     >
-      <Tooltip content={tooltip}>
+      <Tooltip content={tooltip} disabled={open}>
         <button
           ref={triggerRef}
           type="button"
@@ -281,7 +286,11 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
           disabled={disabled || loading}
           onClick={(event) => {
             const nextOpen = !open;
-            setKeyboardOpen(nextOpen && event.detail === 0);
+            if (nextOpen) {
+              setKeyboardOpen(event.detail === 0);
+            } else if (event.detail !== 0) {
+              setKeyboardOpen(false);
+            }
             setOpen(nextOpen);
           }}
           onKeyDown={(event) => {
@@ -292,7 +301,6 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
             } else if (event.key === 'Escape' && open) {
               event.preventDefault();
               setOpen(false);
-              setKeyboardOpen(false);
             }
           }}
         >
@@ -336,15 +344,21 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
         </button>
       </Tooltip>
 
-      {open && createPortal(
-        <div
+      <PresenceBoundary active={open}>
+        {createPortal(
+          <div
           id={menuId}
           ref={menuRef}
           className="bitfun-reasoning-preset-selector__menu"
           data-bf-component="reasoning-preset-selector"
           data-bf-part="menu"
+          data-placement={resolvedPlacement}
+          data-open={open ? 'true' : 'false'}
+          data-keyboard-open={keyboardOpen ? 'true' : 'false'}
           style={menuStyle}
           role="menu"
+          aria-hidden={!open}
+          {...(!open ? { inert: '' } : {})}
           aria-label={t('reasoningSelector.title')}
           data-testid="chat-reasoning-preset-selector-menu"
           onKeyDown={handleMenuKeyDown}
@@ -404,9 +418,10 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
               </Tooltip>
             );
           })}
-        </div>,
-        getAppearanceOverlayHost(),
-      )}
+          </div>,
+          getAppearanceOverlayHost(),
+        )}
+      </PresenceBoundary>
     </div>
   );
 };

@@ -372,14 +372,14 @@
 
 .model-round-item__fork-btn {
   .spinning {
-    animation: spin 1s linear infinite;
+    animation: model-round-item-spin 1s linear infinite;
   }
 }
 
 // Export image button
 .model-round-item__export-btn {
   .spinning {
-    animation: spin 1s linear infinite;
+    animation: model-round-item-spin 1s linear infinite;
   }
 
   &:disabled {
@@ -388,23 +388,12 @@
   }
 }
 
-@keyframes spin {
+@keyframes model-round-item-spin {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 

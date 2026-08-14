@@ -534,8 +534,8 @@ export class AppearanceCompiler {
     if (value.kind === 'ref') return this.referenceToVariable(value.path);
     const easings = {
       linear: 'linear',
-      standard: 'cubic-bezier(0.2, 0, 0, 1)',
-      decelerate: 'cubic-bezier(0, 0, 0, 1)',
+      standard: 'cubic-bezier(0.23, 1, 0.32, 1)',
+      decelerate: 'cubic-bezier(0.23, 1, 0.32, 1)',
       accelerate: 'cubic-bezier(0.3, 0, 1, 1)',
     } as const;
     return easings[value.value];

@@ -47,10 +47,9 @@ Cargo 会统一同一 package 在依赖图中的 feature；workspace dependency 
 
 ### 3.2 产品入口显式选择 Core 能力
 
-`src/apps/*`、`src/crates/interfaces/*` 和 installer app 直接依赖 `bitfun-core` 时必须同时：
-
-1. 设置 `default-features = false`；
-2. 声明非空 `features` 列表。
+`src/apps/*`、`src/crates/interfaces/*` 和 installer app 直接依赖 `bitfun-core` 时必须声明非空
+`features` 列表。Core 的 `default` 由 Core 自身和边界检查保证为空，因此仓内 consumer 不重复声明
+`default-features = false`；能力边界仍由 consumer 的显式 feature 集合决定。
 
 入口应选择真实需要的 owner feature；`product-full` 只能描述确实需要完整产品装配的兼容入口，不能作为尚未完成 feature/owner 分解时的占位解法。缩小某个产品的 capability 集合时必须从实际 construction/command path 反推，并保留行为等价或明确 unsupported-state 测试。
 
@@ -83,6 +82,11 @@ Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品
 ### 3.3 Workspace dependency 只提供共同底座
 
 - workspace 声明负责版本和真正跨产品共享的最小 feature；
+- 第三方依赖的默认 feature 若不是每个 consumer 的稳定契约，在 workspace 声明统一关闭；成员继承该策略，
+  只增加自身实际使用的 feature，不在各 manifest 重复 `default-features = false`；
+- 仓内 crate 的空默认值由被依赖 crate 拥有并由边界检查锁定，consumer 不重复关闭；只有 ACP 这类有意保留
+  非空兼容默认的 crate，窄 consumer 才必须显式关闭默认值并选择角色；
+- 被 Docker 等独立构建上下文单独复制的 manifest 无法继承 workspace 根，继续显式声明版本与默认策略；
 - runtime、HTTP、TLS、crypto、codec 等产品特定 feature 留给实际 app/service/adapter owner；
 - `full` feature 只有在所有真实消费者都需要且更窄集合不能稳定维护时才允许；
 - target-specific dependency 放在最接近平台实现的 owner，不因单一平台需求污染跨平台 crate；
@@ -103,8 +107,8 @@ Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品
 或复制公共类型。feature 关闭时 API 不可见是明确的编译期契约变化；feature 开启后必须保留原公开路径、序列化
 形状和错误语义。
 
-- contract crate 的 `default` 保持空，consumer 的每条 normal/dev/build/target dependency edge 都显式关闭
-  default features，并只选择实际消费的切片；
+- contract crate 的 `default` 保持空并由目标 crate 的边界契约看护；consumer 继承该空默认值，只选择实际
+  消费的切片，不在每条 normal/dev/build/target dependency edge 重复关闭 default features；
 - feature 名描述稳定能力，例如 Agent API、workspace/terminal/remote/Git port、协议 bridge 或 Computer Use
   contract，不描述某个临时调用方、PR 或测试；
 - 不提供 `full`、`service-ports`、`all-contracts` 等重新合并全部表面的 umbrella。只有多个 owner 共同消费且

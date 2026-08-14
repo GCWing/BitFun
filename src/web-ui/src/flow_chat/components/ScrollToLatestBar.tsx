@@ -3,8 +3,9 @@
  * Minimal divider style with a soft fade.
  */
 
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PresenceBoundary } from '@/component-library';
 import {
   CHAT_INPUT_DROP_ZONE_BOTTOM_PX,
   SCROLL_TO_LATEST_INPUT_CLEARANCE_PX,
@@ -21,6 +22,7 @@ interface ScrollToLatestBarProps {
   /** Measured height of the ChatInput container in pixels (0 if unknown). */
   inputHeight?: number;
   className?: string;
+  focusReturnRef?: React.RefObject<HTMLElement | null>;
 }
 
 export const ScrollToLatestBar: React.FC<ScrollToLatestBarProps> = ({
@@ -29,11 +31,22 @@ export const ScrollToLatestBar: React.FC<ScrollToLatestBarProps> = ({
   isInputExpanded = false,
   isInputActive = true,
   inputHeight = 0,
-  className = ''
+  className = '',
+  focusReturnRef,
 }) => {
   const { t } = useTranslation('flow-chat');
-  
-  if (!visible) return null;
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!visible && barRef.current?.contains(document.activeElement)) {
+      const focusTarget = focusReturnRef?.current;
+      if (focusTarget) {
+        focusTarget.focus({ preventScroll: true });
+      } else {
+        (document.activeElement as HTMLElement).blur();
+      }
+    }
+  }, [focusReturnRef, visible]);
 
   // Derive the modifier class from ChatInput state.
   const inputStateClass = !isInputActive 
@@ -64,33 +77,39 @@ export const ScrollToLatestBar: React.FC<ScrollToLatestBarProps> = ({
   }
 
   return (
-    <div
-      data-bf-component="scroll-to-latest-bar"
-      data-bf-part="root"
-      data-bf-input={!isInputActive ? 'collapsed' : isInputExpanded ? 'expanded' : 'active'}
-      className={`scroll-to-latest-bar ${inputStateClass} ${className}`}
-      style={dynamicStyle}
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      aria-label={t('scroll.toLatest')}
-    >
-      <div data-bf-component="scroll-to-latest-bar" data-bf-part="gradient" className="scroll-to-latest-bar__gradient" />
-      
-      <div data-bf-component="scroll-to-latest-bar" data-bf-part="content" className="scroll-to-latest-bar__content" style={contentStyle}>
-        <button data-bf-component="scroll-to-latest-bar" data-bf-part="button" className="scroll-to-latest-bar__btn" aria-hidden="true" tabIndex={-1}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 3.5V12.5M8 12.5L4 8.5M8 12.5L12 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
+    <PresenceBoundary active={visible}>
+      <div
+        ref={barRef}
+        data-bf-component="scroll-to-latest-bar"
+        data-bf-part="root"
+        data-bf-input={!isInputActive ? 'collapsed' : isInputExpanded ? 'expanded' : 'active'}
+        data-visible={visible ? 'true' : 'false'}
+        className={`scroll-to-latest-bar ${inputStateClass} ${className}`}
+        style={dynamicStyle}
+        onClick={visible ? onClick : undefined}
+        role="button"
+        tabIndex={visible ? 0 : -1}
+        onKeyDown={(e) => {
+          if (visible && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            onClick();
+          }
+        }}
+        aria-hidden={!visible}
+        {...(!visible ? { inert: '' } : {})}
+        aria-label={t('scroll.toLatest')}
+      >
+        <div data-bf-component="scroll-to-latest-bar" data-bf-part="gradient" className="scroll-to-latest-bar__gradient" />
+
+        <div data-bf-component="scroll-to-latest-bar" data-bf-part="content" className="scroll-to-latest-bar__content" style={contentStyle}>
+          <button data-bf-component="scroll-to-latest-bar" data-bf-part="button" className="scroll-to-latest-bar__btn" aria-hidden="true" tabIndex={-1}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3.5V12.5M8 12.5L4 8.5M8 12.5L12 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
-    </div>
+    </PresenceBoundary>
   );
 };
 

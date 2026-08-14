@@ -29,6 +29,7 @@
     position: relative;
     display: flex;
     align-items: center;
+    transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   // Actions area
@@ -64,6 +65,12 @@
       background: var(--bf-appearance-token-glass-red-hover);
       color: var(--bf-appearance-token-color-error);
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-tab-bar__tab-wrapper {
+    transition: none;
   }
 }
 

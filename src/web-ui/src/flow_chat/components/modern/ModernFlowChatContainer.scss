@@ -174,3 +174,10 @@
     transform: rotate(360deg);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .history-session-placeholder__icon svg,
+  .modern-flowchat-container__history-open-intent-spinner {
+    animation: none;
+  }
+}

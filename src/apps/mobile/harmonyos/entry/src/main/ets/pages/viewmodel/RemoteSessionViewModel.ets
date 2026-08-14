@@ -4,6 +4,9 @@ import { RemoteChatCommandController } from '../../services/RemoteChatCommandCon
 import { RemoteModelController } from '../../services/RemoteModelController';
 import { RemoteSessionController } from '../../services/RemoteSessionController';
 import { RemoteFileDownloadController } from '../../services/RemoteFileDownloadController';
+import { DeferredLoadingGate } from '../../services/DeferredLoadingGate';
+import { RemoteLogger } from '../../services/RemoteLogger';
+import { MainThreadStallProbe } from '../../services/MainThreadStallProbe';
 import { RemotePageState } from '../state/RemotePageState';
 
 export interface RemoteSessionViewModelHooks {
@@ -18,7 +21,6 @@ export interface RemoteSessionViewModelHooks {
   readonly onResetTimeline: (sessionId: string) => void;
   readonly onClearRemoteFiles: () => void;
   readonly onKnownStateReset: () => void;
-  readonly onLoadModelCatalog: (sessionId: string) => Promise<void>;
   readonly onLoadActiveMessages: () => Promise<void>;
   readonly onRefreshSessions: () => Promise<void>;
   readonly onSelectWorkspace: (path: string) => Promise<void>;
@@ -32,6 +34,14 @@ export class RemoteSessionViewModel {
   private readonly models: RemoteModelController;
   private readonly files: RemoteFileDownloadController;
   private readonly hooks: RemoteSessionViewModelHooks;
+  // Long enough that a cached transcript never flashes a skeleton on its way in,
+  // short enough that a transcript coming over the relay still says so.
+  private readonly openLoadingGate: DeferredLoadingGate =
+    new DeferredLoadingGate(140, (visible: boolean): void => this.pageState.setConversationLoading(visible));
+  // How many opens this view model has started and not yet settled. Opening a
+  // session raises the busy flag, so without this the flag an open sets would
+  // read, to the next tap, as a run in progress.
+  private openInFlight: number = 0;
 
   constructor(
     pageState: RemotePageState,
@@ -47,6 +57,13 @@ export class RemoteSessionViewModel {
     this.models = models;
     this.files = files;
     this.hooks = hooks;
+  }
+
+  private static shortId(value: string): string {
+    if (value.length <= 10) {
+      return value;
+    }
+    return `${value.slice(0, 6)}...${value.slice(-4)}`;
   }
 
   async refreshSessions(): Promise<void> {
@@ -81,7 +98,29 @@ export class RemoteSessionViewModel {
     onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat,
     modelId: string = ''
   ): Promise<void> {
-    await this.sessions.create(
+    if (this.hooks.isBusy() || !this.hooks.remoteAvailable()) {
+      return;
+    }
+    const previousSession: SessionSummary = this.copySession(this.pageState.activeSession);
+    this.beginSessionCreation(onRouteChat);
+    try {
+      const created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId);
+      if (!created) {
+        this.restoreAfterFailedCreation(previousSession, onRouteChat);
+      }
+    } finally {
+      this.pageState.setConversationLoading(false);
+      this.pageState.setPendingSessionId('');
+    }
+  }
+
+  private async performCreateSession(
+    agentType: string,
+    instruction: string,
+    onRouteChat: (sessionId: string) => void,
+    modelId: string
+  ): Promise<SessionSummary | undefined> {
+    return await this.sessions.create(
       agentType,
       this.hooks.isBusy(),
       this.hooks.remoteAvailable(),
@@ -91,10 +130,12 @@ export class RemoteSessionViewModel {
         this.hooks.onKnownStateReset();
         this.hooks.onResetTimeline(session.sessionId);
         onRouteChat(session.sessionId);
-        await this.hooks.onLoadModelCatalog(session.sessionId);
-        await this.refreshSessions();
+        // Same ordering as openSession: whatever the new session already has to
+        // show goes up first. The model picker needs no request of its own —
+        // the poll started here carries the catalog back with it.
         await this.hooks.onLoadActiveMessages();
         this.hooks.onStartPolling();
+        await this.refreshSessions();
       },
       instruction,
       modelId
@@ -109,14 +150,69 @@ export class RemoteSessionViewModel {
     onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat,
     modelId: string = ''
   ): Promise<void> {
-    if (path.length > 0 && path !== currentPath) {
-      await this.hooks.onSelectWorkspace(path);
-      await this.createSession(agentType, instruction, onRouteChat, modelId);
+    if (this.hooks.isBusy() || !this.hooks.remoteAvailable()) {
       return;
     }
-    if (path.length === 0 || path === currentPath) {
-      await this.createSession(agentType, instruction, onRouteChat, modelId);
+    const previousSession: SessionSummary = this.copySession(this.pageState.activeSession);
+    const previousWorkspacePath = currentPath;
+    this.beginSessionCreation(onRouteChat);
+    let created: SessionSummary | undefined;
+    try {
+      if (path.length > 0 && path !== currentPath) {
+        await this.hooks.onSelectWorkspace(path);
+        // Workspace selection clears page discovery state. Creation still owns
+        // the detail pane until the create command resolves.
+        this.pageState.setConversationLoading(true);
+      }
+      if (path.length === 0 || path === currentPath) {
+        created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId);
+      } else if (this.pageState.workspacePath === path) {
+        created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId);
+      }
+      if (!created) {
+        if (this.pageState.workspacePath === previousWorkspacePath) {
+          this.restoreAfterFailedCreation(previousSession, onRouteChat);
+        } else {
+          this.pageState.clearActiveSession();
+          this.hooks.onResetTimeline('');
+          this.hooks.onKnownStateReset();
+          this.hooks.onRouteHome();
+        }
+      }
+    } finally {
+      this.pageState.setConversationLoading(false);
+      this.pageState.setPendingSessionId('');
     }
+  }
+
+  private beginSessionCreation(onRouteChat: (sessionId: string) => void): void {
+    this.hooks.onStopPolling();
+    this.pageState.setPendingSessionId('');
+    this.pageState.setConversationLoading(true);
+    onRouteChat('');
+  }
+
+  private restoreAfterFailedCreation(
+    previousSession: SessionSummary,
+    onRouteChat: (sessionId: string) => void
+  ): void {
+    if (previousSession.sessionId.length === 0) {
+      this.hooks.onRouteHome();
+      return;
+    }
+    this.pageState.setActiveSession(previousSession);
+    onRouteChat(previousSession.sessionId);
+    this.hooks.onStartPolling();
+  }
+
+  private copySession(session: SessionSummary): SessionSummary {
+    return {
+      sessionId: session.sessionId,
+      title: session.title,
+      workspacePath: session.workspacePath,
+      agentType: session.agentType,
+      initialTurnId: session.initialTurnId
+    };
   }
 
   async openSession(
@@ -124,14 +220,36 @@ export class RemoteSessionViewModel {
     currentWorkspacePath: string,
     onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat
   ): Promise<void> {
-    const isBusy = this.hooks.isBusy();
+    // A tap that arrives while another open is still in flight is a correction,
+    // not a mistake: the user has picked a different session and expects that
+    // one. It used to be swallowed, because `RemoteSessionController.open`
+    // raises the busy flag for the whole open and this guard read that flag as
+    // a run in progress — so for the second or so an uncached open takes, every
+    // row in the list was dead and nothing on screen said why. Opens supersede
+    // each other instead; only a run this view model did not start blocks.
+    const isBusy = this.hooks.isBusy() && this.openInFlight === 0;
     const remoteAvailable = this.hooks.remoteAvailable();
     if (isBusy || item.id.length === 0 || !remoteAvailable) {
+      // Dropped taps are invisible from the outside — the row simply does
+      // nothing — so say which guard swallowed it.
+      RemoteLogger.info(`session open ignored session=${RemoteSessionViewModel.shortId(item.id)} busy=${isBusy ? '1' : '0'} available=${remoteAvailable ? '1' : '0'}`);
       return;
     }
+    // Bracketing the open: every stage between this line and the transcript
+    // reaching the screen logs, so the gap that the user feels can be pinned on
+    // one of them rather than inferred from the two ends.
+    RemoteLogger.info(`session open tap session=${RemoteSessionViewModel.shortId(item.id)}`);
+    MainThreadStallProbe.watch('session-open', 6000);
     this.pageState.setPendingSessionId(item.id);
-    this.pageState.setConversationLoading(true);
+    // No skeleton yet. The tapped row highlights from the pending id alone, and
+    // everything the detail pane needs to show the new session empty — title,
+    // workspace, a cleared timeline — is set synchronously below. If the
+    // transcript is cached it lands before the gate opens and the pane goes
+    // straight from one conversation to the next.
+    const loadingToken = this.openLoadingGate.arm();
     onRouteChat(item.id);
+    RemoteLogger.info(`session open routed session=${RemoteSessionViewModel.shortId(item.id)}`);
+    this.openInFlight += 1;
     try {
       await this.sessions.open(
         item,
@@ -145,7 +263,16 @@ export class RemoteSessionViewModel {
           this.pageState.setHasMoreMessages(false);
           this.files.clear();
           this.pageState.clearComposer();
-          await this.hooks.onLoadModelCatalog(item.id);
+          // Transcript first: it is the thing the user opened the session to
+          // see, and a cached one needs no round trip at all.
+          //
+          // Nothing fetches the model catalog here. The reset above puts the
+          // known catalog version back to zero, so the first poll asks for the
+          // catalog as part of the same request and the desktop sends it. A
+          // separate `get_model_catalog` would only queue ahead of the
+          // transcript — the desktop answers device RPCs one at a time, and
+          // measured against this device it pushed the transcript from ~2.4s
+          // out to ~5.5s.
           await this.hooks.onLoadActiveMessages();
           if (this.pageState.activeSession.sessionId === session.sessionId) {
             this.hooks.onStartPolling();
@@ -153,8 +280,14 @@ export class RemoteSessionViewModel {
         }
       );
     } finally {
-      this.pageState.setConversationLoading(false);
-      this.pageState.setPendingSessionId('');
+      this.openInFlight -= 1;
+      this.openLoadingGate.release(loadingToken);
+      // Only the tap that still owns the gate owns the highlight: a second tap
+      // during the first open has already moved both.
+      if (loadingToken === this.openLoadingGate.currentToken()) {
+        this.pageState.setPendingSessionId('');
+      }
+      RemoteLogger.info(`session open settled session=${RemoteSessionViewModel.shortId(item.id)}`);
     }
   }
 
@@ -168,6 +301,7 @@ export class RemoteSessionViewModel {
       this.pageState.sessionFilter,
       async (): Promise<void> => {
         this.hooks.onStopPolling();
+        await this.chat.forgetMessages(item.id);
         this.hooks.onResetTimeline('');
         this.pageState.setHasMoreMessages(false);
         this.pageState.clearComposer();
@@ -197,10 +331,6 @@ export class RemoteSessionViewModel {
       this.pageState.hasMoreMessages,
       this.hooks.isBusy()
     );
-  }
-
-  async loadModelCatalog(sessionId: string, isChatRoute: (sessionId: string) => boolean): Promise<void> {
-    await this.models.loadCatalog(sessionId, this.hooks.remoteAvailable(), isChatRoute);
   }
 
   async selectModel(modelId: string): Promise<void> {

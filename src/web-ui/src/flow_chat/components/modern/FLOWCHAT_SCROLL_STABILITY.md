@@ -321,12 +321,49 @@ Two properties are shared with the gesture path, and one is not:
 Native scroll anchoring cannot help here: `overflow-anchor: none` is set
 throughout the transcript, because it fights the virtualizer.
 
+## An Animation Only as Far as the Reader Can Follow
+
+A jump to latest animates within `FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS` of where
+the viewport already is, and lands outright past that. The distance is counted
+in viewports, not pixels: what a reader can follow is a share of what they can
+see, and the same 2000px is two and a half screens on a laptop and most of one
+on a tall display.
+
+**The animation is the affordance, not the movement.** Its job is spatial
+continuity — showing which way and how far the viewport went — and three screens
+on, the transcript in between goes past faster than anyone can read it. What is
+left is a wait where the answer was, which is why every other navigation in the
+transcript is instant already.
+
+Distance also costs more than it looks. Animating across N screens of a
+virtualized transcript renders and measures every item passed while the
+animation runs, and heights are estimates until they are measured — so the
+content end moves under an animation aimed at where it used to be, and the
+follow loop corrects that afterwards as a second, visible movement.
+
+And past a few screens the animation does not finish. The stand-down below is
+bounded, and what it does not cover is delivered as a jump: measured, a jump
+issued for 8717px animated 5480 of them and was finished by the loop in a single
+3290px write. Two thirds of a scroll and then a jump is worse than either half
+alone, and no yield budget fixes it — a longer one only makes the reader wait
+through more of an animation they cannot read.
+
+The other `'smooth'` request in `useFlowChatFollowOutput`, the post-streaming
+settle, needs no such test: the gap it closes is bounded by `tailHoldMaxGapPx`,
+which is 60% of one viewport.
+
+`followOutput.jumpBehavior` records the decision and the distance in viewports.
+It is also how the constant is checked: if `followOutput.animatedScrollEnded`
+still reports a `backstop` reason, an animation ran out its yield without
+arriving and the number is too high.
+
 ## The Frame Loop Yields to Its Own Animated Scrolls
 
 `applyFollowTarget` assigns `scrollTop` outright, which cancels an in-flight
 smooth scroll on the very next frame. Both `'smooth'` requests in
-`useFlowChatFollowOutput` — the jump to latest and the post-streaming settle —
-were therefore jumps in practice, so the loop stands down while one travels.
+`useFlowChatFollowOutput` — the near jump to latest and the post-streaming
+settle — were therefore jumps in practice, so the loop stands down while one
+travels.
 
 **What ends the stand-down is the viewport having sat still for
 `SMOOTH_SCROLL_STALL_MS`.** That says the animation is over, or was cancelled,
@@ -339,10 +376,11 @@ of the animation:
 
 - The budget was 45 frames — 0.75s at 60Hz, 0.52s on a busy 200Hz display — so
   what a caller bought depended on the machine. The browser scales a smooth
-  scroll's duration with its distance, and a jump to latest from the top of a
-  transcript is the longest thing this issues; measured, one aimed at 8717px
-  animated 5480 of them and was finished by the loop in a single 3290px write,
-  38% short.
+  scroll's duration with its distance; measured, a jump aimed at 8717px animated
+  5480 of them and was finished by the loop in a single 3290px write, 38% short.
+  A wall-clock budget is what makes that failure the same size everywhere, and
+  the distance cap above is what stops anything asking for a jump that size in
+  the first place.
 - The stall check was then two frames, which is 10ms at 200Hz. A programmatic
   smooth scroll *eases in* — measured, 2px in its first 50ms against 9734px to
   travel — and with scroll offsets quantised to 0.8px the early frames

@@ -6,6 +6,7 @@
  */
 
 import { create } from 'zustand';
+import type { InteractionMotion } from '@/shared/utils/motionPreference';
 import type { ConfigTab, SettingsContentFocus } from './settingsConfig';
 import { DEFAULT_SETTINGS_TAB, SETTINGS_CATEGORIES } from './settingsConfig';
 
@@ -13,8 +14,15 @@ interface SettingsState {
   activeTab: ConfigTab;
   contentFocus: SettingsContentFocus | null;
   contentFocusRequestId: number;
-  openTab: (tab: ConfigTab, focus?: SettingsContentFocus | null) => void;
-  setActiveTab: (tab: ConfigTab) => void;
+  tabTransitionTarget: ConfigTab | null;
+  tabTransitionMotion: InteractionMotion;
+  tabTransitionSequence: number;
+  openTab: (
+    tab: ConfigTab,
+    focus?: SettingsContentFocus | null,
+    motion?: InteractionMotion,
+  ) => void;
+  setActiveTab: (tab: ConfigTab, motion?: InteractionMotion) => void;
   /** Debounced from SettingsNav search input; used for filtering index. */
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -33,17 +41,29 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   activeTab: DEFAULT_SETTINGS_TAB,
   contentFocus: null,
   contentFocusRequestId: 0,
+  tabTransitionTarget: null,
+  tabTransitionMotion: 'instant',
+  tabTransitionSequence: 0,
   searchQuery: '',
   unseenTabs: [],
 
-  openTab: (tab, focus = null) => set((state) => ({
+  openTab: (tab, focus = null, motion = 'instant') => set((state) => ({
     activeTab: tab,
     contentFocus: focus,
     contentFocusRequestId: focus
       ? state.contentFocusRequestId + 1
       : state.contentFocusRequestId,
+    tabTransitionTarget: tab,
+    tabTransitionMotion: motion,
+    tabTransitionSequence: state.tabTransitionSequence + 1,
   })),
-  setActiveTab: (tab) => set({ activeTab: tab, contentFocus: null }),
+  setActiveTab: (tab, motion = 'instant') => set((state) => ({
+    activeTab: tab,
+    contentFocus: null,
+    tabTransitionTarget: tab,
+    tabTransitionMotion: motion,
+    tabTransitionSequence: state.tabTransitionSequence + 1,
+  })),
   setSearchQuery: (query) => set({ searchQuery: query }),
   markTabUnseen: (tab, unseen) => set((state) => {
     const has = state.unseenTabs.includes(tab);

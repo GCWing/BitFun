@@ -2,6 +2,7 @@ import { KeyboardAvoidMode } from '@kit.ArkUI';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
 import { ConnectionStatusPresenter } from '../../services/ConnectionStatusPresenter';
+import { RemoteLogger } from '../../services/RemoteLogger';
 import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from './ChatComposerCapabilities';
 import { ChatSurface } from './ChatSurface';
 import { ChatStatusBar } from './ChatStatusBar';
@@ -90,17 +91,17 @@ export struct ConversationView {
   @Event onSend: () => void = () => {};
   @Event onVoiceInput: () => void = () => {};
   @Event onChatInputChange: (value: string) => void = (_value: string) => {};
-  @Event onToggleQuickActions: () => void = () => {};
-  @Local showQuickActions: boolean = false;
   @Local showHeaderActions: boolean = false;
   private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET;
 
   aboutToAppear(): void {
+    RemoteLogger.info(`conversation view mounted surface=${this.surface}`);
     this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode();
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
   }
 
   aboutToDisappear(): void {
+    RemoteLogger.info('conversation view disposed');
     this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode);
   }
 
@@ -140,10 +141,6 @@ export struct ConversationView {
         .animation({ duration: 220, curve: Curve.EaseInOut })
       }
       .width('100%').height('100%').backgroundColor(PAGE_BG)
-      if (this.showQuickActions && this.composerCapabilities.supportsAttachments) {
-        this.MenuBackdrop(() => { this.showQuickActions = false; })
-        this.QuickActionsMenu()
-      }
     }
     .width('100%')
     .height('100%')
@@ -173,7 +170,6 @@ export struct ConversationView {
           this.onBack();
         },
         onOpenActions: () => {
-          this.showQuickActions = false;
           this.showHeaderActions = !this.showHeaderActions;
         },
         onActionsMenuStateChange: (visible: boolean) => {
@@ -202,7 +198,6 @@ export struct ConversationView {
           this.onRestoreSidebar();
         },
         onOpenActions: () => {
-          this.showQuickActions = false;
           this.showHeaderActions = !this.showHeaderActions;
         },
         onActionsMenuStateChange: (visible: boolean) => {
@@ -330,10 +325,6 @@ export struct ConversationView {
       presentation: this.composerPresentation,
       capabilities: this.composerCapabilities,
       chatInput: this.chatInput,
-      showQuickActions: this.showQuickActions,
-      onToggleQuickActions: () => {
-        this.showQuickActions = !this.showQuickActions;
-      },
       selectedImages: this.selectedImages,
       isBusy: this.isBusy,
       canStop: this.canStop,
@@ -363,97 +354,6 @@ export struct ConversationView {
         this.onChatInputChange(value);
       }
     })
-  }
-
-  @Builder
-  AttachmentPanel() {
-    Column({ space: 8 }) {
-      Row() {
-        Text(RemoteI18n.t('chat.attachments'))
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
-        Blank()
-        Text(RemoteI18n.t('common.close'))
-          .fontSize(12)
-          .fontColor(MUTED)
-          .onClick(() => {
-            this.showQuickActions = false;
-          })
-      }
-      .width('100%')
-      this.ImageActionRow()
-      Text(RemoteI18n.t('chat.quickPrompts'))
-        .fontSize(11)
-        .fontColor(MUTED)
-        .width('100%')
-      Row({ space: 8 }) {
-        this.QuickActionChip(RemoteI18n.t('chat.quickExplain'), RemoteI18n.t('chat.quickExplainPrompt'))
-        this.QuickActionChip(RemoteI18n.t('chat.quickContinue'), RemoteI18n.t('chat.quickContinuePrompt'))
-        this.QuickActionChip(RemoteI18n.t('chat.quickSummary'), RemoteI18n.t('chat.quickSummaryPrompt'))
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .padding({ left: 18, right: 18, top: 12, bottom: 10 })
-  }
-
-  @Builder
-  MenuBackdrop(onClose: () => void) {
-    Text('')
-      .width('100%').height('100%')
-      .backgroundColor(this.composerPresentation === ComposerPresentation.Floating ? '#00000000' : '#18000000')
-      .zIndex(5)
-      .onClick(onClose)
-  }
-
-  @Builder
-  QuickActionsMenu() {
-    if (this.composerPresentation === ComposerPresentation.Floating) {
-      this.QuickActionsPopover()
-    } else {
-      this.QuickActionsBottomSheet()
-    }
-  }
-
-  @Builder
-  QuickActionsPopover() {
-    Column() {
-      this.AttachmentPanel()
-    }
-    .width(360)
-    .backgroundColor(CARD)
-    .border({ width: 1, color: LINE })
-    .borderRadius(18)
-    .shadow({ radius: 20, color: '#1A000000', offsetY: 8 })
-    .position({ left: 80 + this.contentHorizontalOffset, bottom: 86 })
-    .zIndex(6)
-    .transition(TransitionEffect.translate({ x: 0, y: 14 })
-      .combine(TransitionEffect.opacity(0))
-      .animation({ duration: 220, curve: Curve.EaseOut }))
-  }
-
-  @Builder
-  QuickActionsBottomSheet() {
-    Column() {
-      Text('')
-        .width(36)
-        .height(4)
-        .backgroundColor(LINE)
-        .borderRadius(2)
-        .margin({ top: 10 })
-      this.AttachmentPanel()
-    }
-    .width('100%')
-    .backgroundColor(CARD)
-    .border({ width: { top: 1 }, color: LINE })
-    .borderRadius({ topLeft: 18, topRight: 18 })
-    .position({ left: 0, bottom: 0 })
-    .zIndex(6)
-    .alignItems(HorizontalAlign.Center)
-    .transition(TransitionEffect.translate({ x: 0, y: 24 })
-      .combine(TransitionEffect.opacity(0))
-      .animation({ duration: 220, curve: Curve.EaseOut }))
   }
 
   @Builder
@@ -523,63 +423,6 @@ export struct ConversationView {
     } else {
       SymbolGlyph($r('sys.symbol.gearshape')).fontSize(20).fontColor([MUTED]).width(23).height(23)
     }
-  }
-
-  @Builder
-  ImageActionRow() {
-    Row({ space: 10 }) {
-      Text('+')
-        .width(32)
-        .height(32)
-        .fontSize(21)
-        .fontColor(INK)
-        .textAlign(TextAlign.Center)
-        .backgroundColor(SOFT)
-        .borderRadius(16)
-      Column({ space: 3 }) {
-        Text(RemoteI18n.t('chat.pickImage'))
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
-        Text(RemoteI18n.t('chat.pickImageDesc'))
-          .fontSize(11)
-          .fontColor(MUTED)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      Text('>')
-        .fontSize(20)
-        .fontColor(MUTED)
-    }
-    .width('100%')
-    .height(48)
-    .padding({ left: 12, right: 12 })
-    .backgroundColor(CARD)
-    .borderRadius(14)
-    .border({ width: 1, color: LINE })
-    .onClick(() => {
-      this.showQuickActions = false;
-      this.onPickImages();
-    })
-  }
-
-  @Builder
-  QuickActionChip(label: string, prompt: string) {
-    Text(label)
-      .fontSize(11)
-      .fontColor(INK)
-      .textAlign(TextAlign.Center)
-      .layoutWeight(1)
-      .height(30)
-      .backgroundColor(CARD)
-      .borderRadius(15)
-      .border({ width: 1, color: LINE })
-      .onClick(() => {
-        this.onChatInputChange(prompt);
-        this.showQuickActions = false;
-      })
   }
 
   @Builder

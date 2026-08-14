@@ -368,20 +368,23 @@ describe('PermissionRequestPanel', () => {
       '[data-testid="permission-request-panel-collapse"]',
     );
     expect(collapseButton?.getAttribute('aria-expanded')).toBe('true');
+    collapseButton?.focus();
 
     act(() => collapseButton?.click());
 
-    expect(container.querySelector('.permission-request-panel')).toBeNull();
+    expect(container.querySelector('.permission-request-panel')?.getAttribute('aria-hidden')).toBe('true');
     const expandButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="permission-request-panel-expand"]',
     );
     expect(expandButton?.textContent).toContain('3');
     expect(expandButton?.getAttribute('aria-label')).toBe('Expand 3 pending permission requests');
     expect(expandButton?.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(expandButton);
 
     act(() => expandButton?.click());
 
-    expect(container.querySelector('.permission-request-panel')).not.toBeNull();
+    expect(container.querySelector('.permission-request-panel')?.getAttribute('aria-hidden')).toBe('false');
+    expect(document.activeElement).toBe(collapseButton);
   });
 
   it('expands again when a newly active permission batch replaces a collapsed one', () => {

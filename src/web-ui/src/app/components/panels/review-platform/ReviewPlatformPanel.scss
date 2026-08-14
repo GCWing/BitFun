@@ -1699,3 +1699,11 @@
     }
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .review-platform__loading-inline--icon,
+  .review-platform__thread-loading svg {
+    animation: none;
+    transform: none;
+  }
+}

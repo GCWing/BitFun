@@ -1,11 +1,15 @@
 import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { TimeFormat } from '../../services/TimeFormat';
 import { CARD, INK, MUTED, SOFT } from './Theme';
 import { SessionActionPresentation, SessionActionSurface } from './SessionActionSurface';
 import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../policy/SessionActionPolicy';
 import { SessionDetailsView } from './SessionDetailsView';
-import { ConversationSessionFilterPolicy } from '../policy/ConversationSessionFilterPolicy';
+import {
+  SessionListInputs,
+  SessionListProjection,
+  SessionListProjectionCache,
+  SessionListProjector
+} from '../policy/SessionListProjection';
 
 @ComponentV2
 export struct RemoteSessionList {
@@ -47,6 +51,11 @@ export struct RemoteSessionList {
   @Local detailsSessionId: string = '';
   @Local showSessionDetails: boolean = false;
   @Local optimisticSelectedSessionId: string = '';
+  // Selecting a row reruns this whole builder tree, and the tree asks for the
+  // grouped lists far more often than it changes them. The cache answers from
+  // the last projection unless the sessions, the workspaces or a filter moved —
+  // none of which a selection touches.
+  private readonly projectionCache: SessionListProjectionCache = new SessionListProjectionCache();
 
   @Monitor('isBusy', 'workspacePath')
   onWorkspaceContextChanged(): void {
@@ -414,21 +423,34 @@ export struct RemoteSessionList {
     }
   }
 
+  /**
+   * The grouped session list, computed at most once per change to its inputs.
+   *
+   * Every derived accessor below reads through here rather than deriving
+   * anything itself, so calling them repeatedly across the builder tree — which
+   * is what the tree does — costs a map lookup instead of a full scan.
+   */
+  private view(): SessionListProjection {
+    const inputs: SessionListInputs = {
+      sessions: this.sessions,
+      query: this.query,
+      sortMode: this.sortMode,
+      workspaceName: this.workspaceName,
+      workspacePath: this.workspacePath,
+      workspaceKind: this.workspaceKind,
+      recentWorkspaces: this.recentWorkspaces,
+      workspaceFilter: this.workspaceFilter,
+      agentFilter: this.agentFilter,
+      statusFilter: this.statusFilter,
+      showWorkspaceMetadata: this.showWorkspaceMetadata,
+      showUpdatedMetadata: this.showUpdatedMetadata,
+      showStatusMetadata: this.showStatusMetadata
+    };
+    return this.projectionCache.get(inputs);
+  }
+
   private projectEntries(): RecentWorkspaceEntry[] {
-    const entries: RecentWorkspaceEntry[] = [];
-    if ((this.workspacePath.length > 0 || this.workspaceName.length > 0) && !this.isAssistantWorkspace(this.workspacePath)) {
-      entries.push({ path: this.workspacePath, name: this.workspaceName, lastOpened: '', workspaceKind: 'normal' });
-    }
-    this.recentWorkspaces.forEach((item: RecentWorkspaceEntry) => {
-      if (item.path.length > 0 && !this.isAssistantWorkspace(item.path) &&
-        !entries.some((entry: RecentWorkspaceEntry) => entry.path === item.path)) {
-        entries.push(item);
-      }
-    });
-    if (!this.hasActiveListFilter()) {
-      return entries;
-    }
-    return entries.filter((item: RecentWorkspaceEntry) => this.projectSessions(item.path).length > 0);
+    return this.view().projects;
   }
 
   private visibleProjectEntries(): RecentWorkspaceEntry[] {
@@ -445,76 +467,31 @@ export struct RemoteSessionList {
   }
 
   private visibleChatSessions(): RemoteSession[] {
-    return this.filteredSessions().filter((item: RemoteSession) => this.isAssistantSession(item));
+    return this.view().chats;
   }
 
   private sessionsByTime(): RemoteSession[] {
-    return this.filteredSessions().slice().sort((left: RemoteSession, right: RemoteSession) => {
-      return this.sessionTimestamp(right) - this.sessionTimestamp(left);
-    });
+    return this.view().byTime;
   }
 
   private sessionsForTimeBucket(bucket: string): RemoteSession[] {
-    return this.sessionsByTime().filter((item: RemoteSession) => {
-      return this.timeBucket(item) === bucket;
-    });
-  }
-
-  private timeBucket(item: RemoteSession): string {
-    const timestamp = this.sessionTimestamp(item);
-    if (timestamp <= 0) {
-      return 'earlier';
+    const projection = this.view();
+    if (bucket === 'today') {
+      return projection.today;
     }
-    const sessionDate = new Date(timestamp);
-    const now = new Date();
-    if (this.sameCalendarDay(sessionDate, now)) {
-      return 'today';
-    }
-    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-    return this.sameCalendarDay(sessionDate, yesterday) ? 'yesterday' : 'earlier';
-  }
-
-  private sessionTimestamp(item: RemoteSession): number {
-    const updated = TimeFormat.timestampMs(item.updatedAt || '');
-    if (!Number.isNaN(updated) && updated > 0) {
-      return updated;
-    }
-    const created = TimeFormat.timestampMs(item.createdAt || '');
-    return !Number.isNaN(created) && created > 0 ? created : 0;
-  }
-
-  private sameCalendarDay(left: Date, right: Date): boolean {
-    return left.getFullYear() === right.getFullYear() &&
-      left.getMonth() === right.getMonth() &&
-      left.getDate() === right.getDate();
+    return bucket === 'yesterday' ? projection.yesterday : projection.earlier;
   }
 
   private projectSessions(path: string): RemoteSession[] {
-    return this.filteredSessions().filter((item: RemoteSession) => {
-      return !this.isAssistantSession(item) && ConversationSessionFilterPolicy.workspacePathsEqual(
-        item.workspacePath || this.workspacePath,
-        path
-      );
-    });
+    return SessionListProjector.sessionsForProject(this.view(), path);
   }
 
   private filteredSessions(): RemoteSession[] {
-    return this.sessions.filter((item: RemoteSession) => {
-      return ConversationSessionFilterPolicy.matches(
-        item,
-        this.query,
-        this.workspacePath,
-        this.workspaceFilter,
-        this.agentFilter,
-        this.statusFilter,
-        this.isAssistantSession(item)
-      );
-    });
+    return this.view().filtered;
   }
 
   private hasActiveListFilter(): boolean {
-    return this.query.trim().length > 0 || this.workspaceFilter.length > 0 ||
-      this.agentFilter.length > 0 || this.statusFilter.length > 0;
+    return this.view().hasActiveFilter;
   }
 
   private visibleProjectSessions(path: string): RemoteSession[] {
@@ -533,25 +510,6 @@ export struct RemoteSessionList {
   private nextChatBatchSize(): number {
     return Math.min(3, this.visibleChatSessions().length - this.chatVisibleCount);
   }
-
-  private isAssistantSession(item: RemoteSession): boolean {
-    const agentType = (item.agentType || '').toLowerCase();
-    return agentType === 'claw' || agentType === 'assistant' || agentType === 'chat' ||
-      this.isAssistantWorkspace(item.workspacePath || '');
-  }
-
-  private isAssistantWorkspace(path: string): boolean {
-    if (path.length === 0) {
-      return this.workspaceKind.toLowerCase() === 'assistant';
-    }
-    if (path === this.workspacePath && this.workspaceKind.toLowerCase() === 'assistant') {
-      return true;
-    }
-    return this.recentWorkspaces.some((item: RecentWorkspaceEntry) => {
-      return item.path === path && item.workspaceKind.toLowerCase() === 'assistant';
-    });
-  }
-
 
   private isWorkspaceCollapsed(path: string): boolean {
     return this.collapsedWorkspacePaths.indexOf(path) >= 0;
@@ -748,20 +706,7 @@ export struct RemoteSessionList {
   }
 
   private metadataText(item: RemoteSession): string {
-    const values: string[] = [];
-    if (this.showWorkspaceMetadata) {
-      const workspace = item.workspaceName || item.workspacePath || '';
-      if (workspace.length > 0) {
-        values.push(workspace);
-      }
-    }
-    if (this.showUpdatedMetadata && !Number.isNaN(TimeFormat.timestampMs(item.updatedAt))) {
-      values.push(TimeFormat.relative(item.updatedAt));
-    }
-    if (this.showStatusMetadata && item.status.length > 0) {
-      values.push(item.status === 'archived' ? RemoteI18n.t('sidebar.archived') : item.status);
-    }
-    return values.join(' · ');
+    return SessionListProjector.metadataFor(this.view(), item.id);
   }
 
   private actionCapabilities(): SessionActionCapabilities {

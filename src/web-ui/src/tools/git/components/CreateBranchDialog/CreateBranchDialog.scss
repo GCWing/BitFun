@@ -1,19 +1,5 @@
 @use '@/component-library/styles/tokens.scss' as *;
 
-.bitfun-create-branch-dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bf-appearance-token-color-overlay-black-50);
-  z-index: $z-modal;
-  animation: bitfun-create-branch-dialog-fade-in 0.2s ease-out;
-}
-
 .bitfun-create-branch-dialog {
   background: var(--bf-appearance-token-color-bg-primary);
   border: 1px solid var(--bf-appearance-token-border-base);
@@ -24,7 +10,6 @@
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 8px 16px var(--bf-appearance-token-color-overlay-black-30);
-  animation: bitfun-create-branch-dialog-scale-in 0.2s ease-out;
 
   &__header {
     display: flex;
@@ -139,7 +124,11 @@
     color: var(--bf-appearance-token-color-text-primary);
     font-family: $font-family-mono;
     font-size: var(--bf-appearance-token-font-size-sm);
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard,
+      box-shadow $motion-base $easing-standard,
+      opacity $motion-base $easing-standard;
 
     &:focus {
       outline: none;
@@ -248,26 +237,6 @@
     }
   }
 
-}
-
-@keyframes bitfun-create-branch-dialog-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes bitfun-create-branch-dialog-scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
 }
 
 @keyframes bitfun-create-branch-dialog-shake {

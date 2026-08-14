@@ -86,7 +86,6 @@ export interface SettingsPresentationActions {
   readonly reconnect: () => void;
   readonly openAccount: () => void;
   readonly cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string>;
-  readonly cloudSync: () => Promise<string>;
   readonly cloudLogout: () => Promise<void>;
   readonly cloudListDevices: () => Promise<CloudAccountDevice[]>;
   readonly getPermissionMode: () => Promise<RemotePermissionMode>;
@@ -136,7 +135,7 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
     },
     onSettings: {
       close: () => {}, addConnection: () => {}, disconnect: () => {}, reconnect: () => {}, openAccount: () => {},
-      cloudLogin: async () => '', cloudSync: async () => '', cloudLogout: async () => {},
+      cloudLogin: async () => '', cloudLogout: async () => {},
       cloudListDevices: async () => [], getPermissionMode: async () => 'ask',
       setPermissionMode: async (mode: RemotePermissionMode) => mode,
       testGeneral: async () => '', saveGeneral: async () => ''

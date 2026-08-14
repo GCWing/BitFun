@@ -26,7 +26,9 @@
     border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: var(--bf-appearance-token-size-radius-sm);
     cursor: pointer;
-    transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     min-height: 36px;
     position: relative;
     min-width: 0;
@@ -125,7 +127,10 @@
     font-size: var(--bf-appearance-token-font-size-xs);
     color: var(--bf-appearance-token-color-accent-500);
     max-width: 150px;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &:hover {
       background: var(--bf-appearance-token-color-accent-100);
@@ -164,7 +169,9 @@
     font-size: 14px;
     line-height: 1;
     color: var(--bf-appearance-token-color-text-muted);
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     margin-left: 2px;
 
     &:hover {
@@ -189,7 +196,9 @@
     border-radius: 50%;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     font-size: 16px;
     line-height: 1;
     padding: 0;
@@ -221,7 +230,9 @@
     align-items: center;
     justify-content: center;
     color: var(--bf-appearance-token-color-text-muted);
-    transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+    transition:
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &--open {
       transform: rotate(180deg);
@@ -230,7 +241,7 @@
   }
 
   &__dropdown {
-    --select-entry-y: -2px;
+    --select-motion-y: -2px;
     position: fixed;
     box-sizing: border-box;
     max-width: calc(100vw - 16px);
@@ -243,10 +254,33 @@
     border-radius: 0 0 var(--bf-appearance-token-size-radius-sm) var(--bf-appearance-token-size-radius-sm);
     box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-40);
     z-index: tokens.$z-popover;
-    animation: select-dropdown-appear var(--bf-appearance-token-motion-fast) tokens.$easing-decelerate;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transform-origin: center top;
+    transition:
+      opacity 100ms tokens.$easing-decelerate,
+      transform 120ms tokens.$easing-decelerate;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+
+    &[data-open='true']:not([data-keyboard-open='true']) {
+      @starting-style {
+        opacity: 0;
+        transform: translateY(var(--select-motion-y)) scale(0.985);
+      }
+    }
+
+    &[data-open='false'] {
+      opacity: 0;
+      transform: translateY(var(--select-motion-y)) scale(0.985);
+      transition-duration: 100ms;
+      pointer-events: none;
+    }
+
+    &[data-keyboard-open='true'] {
+      transition: none;
+    }
 
     &::before {
       content: '';
@@ -259,7 +293,8 @@
     }
 
     &--top {
-      --select-entry-y: 2px;
+      --select-motion-y: 2px;
+      transform-origin: center bottom;
       border-top: 1px solid var(--bf-appearance-token-border-medium);
       border-bottom: none;
       border-radius: var(--bf-appearance-token-size-radius-sm) var(--bf-appearance-token-size-radius-sm) 0 0;
@@ -300,7 +335,9 @@
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     flex-shrink: 0;
     padding: 0;
     border: 0;
@@ -324,7 +361,7 @@
     box-shadow: none !important;
     appearance: none;
     -webkit-appearance: none;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition: background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &::placeholder {
       color: var(--bf-appearance-token-color-text-muted);
@@ -354,7 +391,9 @@
     font-weight: var(--bf-appearance-token-font-weight-medium);
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     background: transparent;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     border-radius: 3px;
     margin-bottom: 0;
     padding-bottom: 8px;
@@ -376,7 +415,6 @@
     gap: 8px;
     padding: 6px 10px;
     cursor: pointer;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     font-size: var(--bf-appearance-token-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
     border-radius: 3px;
@@ -453,7 +491,10 @@
     justify-content: center;
     flex-shrink: 0;
     font-size: 11px;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     background: transparent;
     color: transparent;
 
@@ -503,7 +544,10 @@
     gap: 8px;
     padding: 8px 12px;
     cursor: pointer;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     font-size: var(--bf-appearance-token-font-size-sm);
     color: var(--bf-appearance-token-color-accent-500);
     border-radius: 3px;
@@ -626,17 +670,6 @@
   }
 }
 
-@keyframes select-dropdown-appear {
-  from {
-    opacity: 0;
-    transform: translateY(var(--select-entry-y)) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @media (hover: hover) and (pointer: fine) {
   .select:not(.select--disabled) .select__trigger:hover {
     background: var(--bf-appearance-token-element-bg-subtle);
@@ -686,20 +719,51 @@
 
 @media (prefers-reduced-motion: reduce) {
   .select__trigger,
+  .select__tag,
   .select__tag-remove,
   .select__clear,
+  .select__arrow,
+  .select__search-clear,
+  .select__search-input,
+  .select__select-all,
+  .select__checkbox,
+  .select__custom-value-hint {
+    transition-duration: var(--bf-appearance-token-motion-instant);
+  }
+
+  .select__trigger,
+  .select__tag-remove,
+  .select__clear,
+  .select__arrow,
   .select__search-clear {
     transform: none;
   }
 
   .select__dropdown {
-    animation: select-dropdown-fade var(--bf-appearance-token-motion-fast) ease;
+    transform: none;
+    transition: opacity var(--bf-appearance-token-motion-instant) ease;
   }
-}
 
-@keyframes select-dropdown-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  .select__dropdown[data-open='true']:not([data-keyboard-open='true']) {
+    @starting-style {
+      opacity: 0;
+      transform: none;
+    }
+  }
+
+  .select__dropdown[data-open='false'] {
+    opacity: 0;
+    transform: none;
+    transition-duration: var(--bf-appearance-token-motion-instant);
+  }
+
+  .select__dropdown[data-keyboard-open='true'] {
+    transition: none;
+  }
+
+  .select__loading-spinner {
+    animation: none;
+  }
 }
 
 @keyframes select-spin {

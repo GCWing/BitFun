@@ -78,6 +78,9 @@ vi.mock('@/component-library', () => ({
     <button {...props}>{children}</button>
   ),
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  PresenceBoundary: ({ active, children }: { active: boolean; children: React.ReactNode }) => (
+    active ? <>{children}</> : null
+  ),
   Select: () => <div />,
   confirmDanger: mocks.confirmDanger,
   confirmWarning: vi.fn(),

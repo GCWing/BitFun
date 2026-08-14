@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import {
+  isViewportDiagnosticsEnabled,
   roundViewportPx,
   traceViewportRepeating,
 } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
@@ -11,13 +12,16 @@ import {
   nextEasedScrollTopPx,
   shouldEaseTailFollow,
 } from '../../utils/flowChatTailEase';
+import { getMotionAwareScrollBehavior } from '../../utils/motionPreference';
 import type { FlowChatViewportOwnerApi } from './useFlowChatViewportOwner';
+import { USER_DRIVEN_SCROLL_WINDOW_MS } from './flowChatViewportAnchor';
 import { SNAP_BACK_HOLD_MS } from './flowChatViewportOwnership';
 import {
   contentEndScrollTop,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
   memorylessFollowState,
   nextTailFollowState,
+  resolveAnimatedJumpBehavior,
   tailHoldMaxGapPx,
   tailSnapBackScrollTop,
   type TailFollowState,
@@ -64,6 +68,17 @@ interface UseFlowChatFollowOutputOptions {
    * nothing else has to carry a private opinion about when this hook is busy.
    */
   viewportOwner: FlowChatViewportOwnerApi;
+  /**
+   * Which transcript this hook belongs to, for the trail only.
+   *
+   * The list is keyed on the session, so every switch is a fresh instance with
+   * a fresh scroller — and two of them can overlap, or a second pane can hold
+   * one of its own. Read on its own, `followOutput.enter` followed by a
+   * boundary ask that passes the "is follow following" gate reads as an exit
+   * that left no trace; with this it reads as two instances, which is a
+   * different fault entirely.
+   */
+  viewportId?: number;
 }
 
 export interface ViewportResizeInput {
@@ -169,6 +184,27 @@ export const SMOOTH_SCROLL_STALL_MS = 120;
  */
 const SETTLE_FRAMES = 90;
 
+/**
+ * How long after a refused snap back it is asked for again.
+ *
+ * One gesture window plus a frame, because the gesture is what refuses it: the
+ * claim `notifyUserScrollIntent` takes lapses after `USER_DRIVEN_SCROLL_WINDOW_MS`,
+ * and asking before then can only be refused a second time.
+ */
+const SNAP_BACK_RETRY_DELAY_MS = USER_DRIVEN_SCROLL_WINDOW_MS + 20;
+
+/**
+ * Times a refused snap back is re-asked before it is left to the next settle.
+ *
+ * A reader who is still scrolling refuses every one of these and does not need
+ * them — their own next settle asks again with a fresh budget. This is for the
+ * reader who has *stopped* while something else was still moving the transcript
+ * under them, where no further scroll event is coming and this is the only
+ * thing left that will ask. A second of cover is enough for that; more would
+ * just be a timer chasing a viewport nobody is touching.
+ */
+const SNAP_BACK_RETRY_ATTEMPTS = 5;
+
 export function useFlowChatFollowOutput({
   activeSessionId,
   latestTurnId,
@@ -183,6 +219,7 @@ export function useFlowChatFollowOutput({
   resolveTurnTopScrollTop,
   isOpeningViewport,
   viewportOwner,
+  viewportId = 0,
 }: UseFlowChatFollowOutputOptions): UseFlowChatFollowOutputResult {
   const [isFollowingOutput, setIsFollowingOutput] = useState(false);
   const isFollowingOutputRef = useRef(false);
@@ -220,11 +257,45 @@ export function useFlowChatFollowOutput({
   /** Where the animation started, so the trace can say how far it got. */
   const smoothScrollFromPxRef = useRef(0);
   const pendingSnapBackTargetRef = useRef<number | null>(null);
+  /** A refused snap back waiting for the hold that refused it to lapse. */
+  const snapBackRetryTimerRef = useRef<number | null>(null);
+  const snapBackRetryAttemptsRef = useRef(0);
+  /** Assigned below, so a retry can re-enter the evaluation that scheduled it. */
+  const evaluateSnapBackRef = useRef<() => void>(() => {});
 
-  isFollowingOutputRef.current = isFollowingOutput;
+  /*
+   * Deliberately *not* mirrored from `isFollowingOutput` here.
+   *
+   * Every other ref on this line is a prop, and a prop is whatever the render
+   * that assigned it was given — consistent by construction. Ownership is not:
+   * it is written imperatively by `enterFollowOutput` and `exitFollowOutput`,
+   * and the state is only how the rest of the component hears about it. Between
+   * the two, React is free to render the value from *before* the update — an
+   * update scheduled from a passive effect sits at a lower priority than a
+   * synchronous render, which then renders without it — and the assignment took
+   * ownership away from a writer that had just taken it, with nothing anywhere
+   * saying so.
+   *
+   * Measured on session open, which is the entry that comes from a mount
+   * effect and so hits this every time: `followOutput.enter` recorded at 31976,
+   * the first frame of the loop stood down 345ms later with `not-following` and
+   * its 90-frame budget untouched, and no `followOutput.exit` in the trail
+   * because nothing exited. The register still held `follow-output`, so the
+   * 22301px prepend that landed in between was left to a writer that was no
+   * longer running — `followTargetPx: null` while `heldBy: follow-output` — and
+   * the session was revealed at offset 0 of a window starting eight Turns above
+   * the tail.
+   */
   isStreamingRef.current = isStreaming;
   isViewportActiveRef.current = isViewportActive;
   latestTurnIdRef.current = latestTurnId;
+
+  const clearSnapBackRetry = useCallback(() => {
+    if (snapBackRetryTimerRef.current !== null) {
+      window.clearTimeout(snapBackRetryTimerRef.current);
+      snapBackRetryTimerRef.current = null;
+    }
+  }, []);
 
   const stopFollowFrame = useCallback(() => {
     if (followFrameRef.current !== null) {
@@ -301,14 +372,15 @@ export function useFlowChatFollowOutput({
   }, [retirePin, resolveTurnTopScrollTop]);
 
   /**
-   * Offset the follow rule would own for the current geometry, ignoring any
-   * offset it was holding. Used to decide, and to aim, a snap back — both of
-   * which happen while the viewport belongs to nobody.
+   * The state the follow rule would hold for the current geometry, ignoring any
+   * offset it was holding. Used to decide and to aim a snap back — both of
+   * which happen while the viewport belongs to nobody — and to resume on one
+   * that has landed.
    *
    * Retires a pin that has crossed over on the way past: with no frame loop
    * running, this is the only place that crossover can be noticed.
    */
-  const resolveFollowTargetScrollTop = useCallback((scroller: HTMLElement) => {
+  const resolveFollowState = useCallback((scroller: HTMLElement): TailFollowState => {
     const desired = readContentEndScrollTop(scroller);
     const next = memorylessFollowState(
       pinTurnIdRef.current ? 'pin-turn-top' : 'hold-tail',
@@ -321,8 +393,12 @@ export function useFlowChatFollowOutput({
     if (next.mode === 'hold-tail') {
       retirePin();
     }
-    return next.target;
+    return next;
   }, [readContentEndScrollTop, readPinScrollTop, retirePin]);
+
+  const resolveFollowTargetScrollTop = useCallback((scroller: HTMLElement) => (
+    resolveFollowState(scroller).target
+  ), [resolveFollowState]);
 
   /**
    * Stand the frame loop down for an animated scroll this hook is about to
@@ -372,14 +448,55 @@ export function useFlowChatFollowOutput({
    * the animation never plays.
    */
   const runContentEndScroll = useCallback((behavior: ScrollBehavior) => {
-    if (behavior === 'smooth') {
+    const resolvedBehavior = getMotionAwareScrollBehavior(
+      behavior === 'smooth' ? 'smooth' : 'auto',
+    );
+    if (resolvedBehavior === 'smooth') {
       beginSmoothScrollYield();
     } else {
       // An instant scroll of ours replaces whatever was travelling.
       endSmoothScrollYield('superseded');
     }
-    scrollToContentEnd(behavior);
+    scrollToContentEnd(resolvedBehavior);
   }, [beginSmoothScrollYield, endSmoothScrollYield, scrollToContentEnd]);
+
+  /**
+   * Decide how a jump to latest travels, and record the decision.
+   *
+   * Traced because the two outcomes are indistinguishable afterwards — an
+   * animation that was never issued and one the loop cut short both end as a
+   * viewport that arrived without moving through anything — and they call for
+   * opposite fixes. This line says which one a reader is describing.
+  */
+  const resolveJumpBehavior = useCallback((scroller: HTMLElement, targetPx: number) => {
+    const distanceBehavior = resolveAnimatedJumpBehavior({
+      fromPx: scroller.scrollTop,
+      targetPx,
+      clientHeight: scroller.clientHeight,
+    });
+    const behavior = getMotionAwareScrollBehavior(distanceBehavior);
+    const distancePx = Math.abs(targetPx - scroller.scrollTop);
+    traceViewportRepeating(`follow|jumpBehavior|${behavior}`, {
+      location: 'followOutput.jumpBehavior',
+      message: behavior === 'smooth'
+        ? 'the jump to latest is near enough to animate'
+        : distanceBehavior === 'smooth'
+          ? 'the jump to latest lands outright because reduced motion is enabled'
+          : 'the jump to latest is too far to animate, so it lands outright',
+      travelPx: targetPx - scroller.scrollTop,
+      data: () => ({
+        behavior,
+        distanceBehavior,
+        viewportId,
+        distancePx: roundViewportPx(distancePx),
+        viewports: scroller.clientHeight > 0
+          ? Math.round((distancePx / scroller.clientHeight) * 10) / 10
+          : null,
+        clientHeightPx: scroller.clientHeight,
+      }),
+    });
+    return behavior;
+  }, [viewportId]);
 
   /** Move the viewport to whatever the follow state currently owns. */
   const applyFollowTarget = useCallback(() => {
@@ -419,6 +536,45 @@ export function useFlowChatFollowOutput({
     }
 
     const onTarget = Math.abs(next.target - scroller.scrollTop) <= BOTTOM_EPSILON_PX;
+    /*
+     * What the loop decided this frame, coalesced by the decision.
+     *
+     * A frame that writes nothing is the interesting one: it means the follow
+     * rule believes the viewport is already where it belongs, and the reader is
+     * looking at something else. Measured on a reopened session, that is the
+     * whole fault — a history window arrived above a viewport at 0 during the
+     * opening reveal, and whether the loop then aimed at the new content end or
+     * was still reading an unmeasured 0 could not be told apart from outside.
+     */
+    if (isViewportDiagnosticsEnabled()) {
+      // Guarded rather than left to the coalescer, which is the rule for
+      // anything on this path: it runs on every frame of every follow, and even
+      // the key would be a string built sixty times a second for a switch that
+      // is off.
+      traceViewportRepeating(
+        `follow|frame|${onTarget}|${isOpeningViewport()}|${next.mode}`,
+        {
+          location: 'followOutput.frame',
+          message: onTarget
+            ? 'the viewport is already on the offset the follow rule owns'
+            : 'the follow rule is moving the viewport to the offset it owns',
+          travelPx: next.target - scroller.scrollTop,
+          data: () => ({
+            viewportId,
+            onTarget,
+            mode: next.mode,
+            isOpening: isOpeningViewport(),
+            desiredPx: roundViewportPx(desired),
+            targetPx: roundViewportPx(next.target),
+            pinPx: pin === null ? null : roundViewportPx(pin),
+            scrollTopPx: roundViewportPx(scroller.scrollTop),
+            scrollRangePx: roundViewportPx(scroller.scrollHeight),
+            settleFrames: settleFramesRef.current,
+            smoothYieldActive: smoothScrollUntilMsRef.current !== 0,
+          }),
+        },
+      );
+    }
     if (smoothScrollUntilMsRef.current !== 0) {
       /*
        * An animated scroll of ours is in flight and heading for this same
@@ -517,21 +673,47 @@ export function useFlowChatFollowOutput({
     readPinScrollTop,
     retirePin,
     scrollerRef,
+    viewportId,
     viewportOwner,
   ]);
 
   const runFollowFrame = useCallback(() => {
     followFrameRef.current = null;
-    if (
-      !isFollowingOutputRef.current ||
-      !isViewportActiveRef.current ||
-      document.hidden
-    ) {
-      return;
-    }
-    // Streaming holds the loop open indefinitely; anything else runs only
-    // until the transcript stops moving.
-    if (!isStreamingRef.current && settleFramesRef.current <= 0) {
+    /*
+     * Why the loop is not running, which the trail could not say.
+     *
+     * "The session opened on the wrong Turn" has looked identical from outside
+     * whether follow was refused the viewport, was never following, or simply
+     * ran out of budget — all three are a viewport that stops where it was left
+     * and a log with nothing in it after `followOutput.enter`. Measured on a
+     * reopened session: `enter` at session-open, a history window prepended
+     * 22317px above 136ms later, and not one write for the next half second.
+     */
+    const standDownReason = !isFollowingOutputRef.current
+      ? 'not-following'
+      : !isViewportActiveRef.current
+        ? 'viewport-inactive'
+        : document.hidden
+          ? 'document-hidden'
+          : (!isStreamingRef.current && settleFramesRef.current <= 0)
+            // Streaming holds the loop open indefinitely; anything else runs
+            // only until the transcript stops moving.
+            ? 'settle-exhausted'
+            : null;
+    if (standDownReason !== null) {
+      traceViewportRepeating(`follow|standDown|${standDownReason}`, {
+        location: 'followOutput.frameStoodDown',
+        message: 'the follow loop stopped running',
+        data: () => ({
+          reason: standDownReason,
+          viewportId,
+          settleFrames: settleFramesRef.current,
+          isStreaming: isStreamingRef.current,
+          isOpening: isOpeningViewport(),
+          followTargetPx: roundViewportPx(followStateRef.current.target),
+          scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+        }),
+      });
       return;
     }
     if (!isStreamingRef.current) {
@@ -540,7 +722,7 @@ export function useFlowChatFollowOutput({
 
     applyFollowTarget();
     followFrameRef.current = requestAnimationFrame(runFollowFrame);
-  }, [applyFollowTarget]);
+  }, [applyFollowTarget, isOpeningViewport, scrollerRef, viewportId]);
 
   const startFollowFrame = useCallback(() => {
     if (
@@ -554,6 +736,22 @@ export function useFlowChatFollowOutput({
 
   const enterFollowOutput = useCallback((reason: FollowOutputEnterReason) => {
     if (!isViewportActiveRef.current) {
+      /*
+       * The one way this hook can decline to take the viewport and leave no
+       * trace at all — and it leaves the transcript with no continuous writer
+       * for the rest of its life, because nothing asks again until a Turn
+       * arrives or the session changes. A second pane holding an inactive copy
+       * of the same transcript looks exactly like this from the trail.
+       */
+      traceViewportRepeating(`follow|enterDeclined|${reason}`, {
+        location: 'followOutput.enterDeclined',
+        message: 'follow-output was asked for a viewport that is not active',
+        data: () => ({
+          reason,
+          viewportId,
+          scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+        }),
+      });
       return;
     }
 
@@ -596,6 +794,7 @@ export function useFlowChatFollowOutput({
       message: 'follow-output took the viewport',
       data: () => ({
         reason,
+        viewportId,
         pinnedTurnId: pinnedTurnToTop ? pinTurnId : pinTurnIdRef.current,
         isStreaming: isStreamingRef.current,
         scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
@@ -613,14 +812,29 @@ export function useFlowChatFollowOutput({
     const scroller = scrollerRef.current;
     const contentEnd = scroller ? readContentEndScrollTop(scroller) : 0;
 
-    // A snap back has already placed the viewport on the target it chose, and
-    // that target was resolved under whichever mode still applies. Resume
-    // ownership without a second move.
+    /*
+     * A snap back has already placed the viewport, so resume ownership without
+     * a second move — but on the offset the follow rule owns *now*, not on the
+     * one the animation stopped at.
+     *
+     * The two are the same only if nothing moved while it travelled, and the
+     * one thing that reliably does is the reason the snap was needed: a history
+     * page whose items are still measuring. Taking `scrollTop` instead adopts
+     * the stale offset as the hold rule's memory, and the hold rule then
+     * defends it — it tolerates a gap below the content end of up to 60% of the
+     * viewport, so the difference is not corrected, it is *kept*.
+     *
+     * Measured on a 43-Turn session paged from a three-Turn tail: the snap was
+     * issued for 12336 while the content end was there, landed 608ms later
+     * against a content end of 11972, and the first follow frame afterwards
+     * read `desired 11972, target 12336, onTarget true` and never moved again.
+     * The reader was left with 364px of reserved blank under the transcript and
+     * the fourth-from-last Turn cut off at the top of the viewport.
+     */
     if (reason === 'tail-snap-back') {
-      followStateRef.current = {
-        mode: pinTurnIdRef.current ? 'pin-turn-top' : 'hold-tail',
-        target: scroller?.scrollTop ?? contentEnd,
-      };
+      followStateRef.current = scroller
+        ? resolveFollowState(scroller)
+        : { mode: pinTurnIdRef.current ? 'pin-turn-top' : 'hold-tail', target: contentEnd };
       startFollowFrame();
       return;
     }
@@ -643,15 +857,21 @@ export function useFlowChatFollowOutput({
     ) {
       const pinTarget = readPinScrollTop() ?? scroller?.scrollTop ?? contentEnd;
       followStateRef.current = { mode: 'pin-turn-top', target: pinTarget };
-      // Animated like every other jump to latest. The frame loop would cancel
-      // the animation on its next tick, so it stands down for it exactly as it
-      // does for `runContentEndScroll`.
+      // Travels like every other jump to latest, animated or not. The frame
+      // loop would cancel an animation on its next tick, so it stands down for
+      // this one exactly as it does for `runContentEndScroll` — and an instant
+      // write of ours replaces whatever was still travelling.
       if (scroller && Math.abs(scroller.scrollTop - pinTarget) > BOTTOM_EPSILON_PX) {
-        beginSmoothScrollYield();
+        const behavior = resolveJumpBehavior(scroller, pinTarget);
+        if (behavior === 'smooth') {
+          beginSmoothScrollYield();
+        } else {
+          endSmoothScrollYield('superseded');
+        }
         viewportOwner.write({
           owner: 'follow-output',
           topPx: pinTarget,
-          behavior: 'smooth',
+          behavior,
         });
       }
       startFollowFrame();
@@ -668,7 +888,17 @@ export function useFlowChatFollowOutput({
     } else {
       retirePin();
       followStateRef.current = { mode: 'hold-tail', target: contentEnd };
-      runContentEndScroll(reason === 'jump-to-latest' ? 'smooth' : 'auto');
+      /*
+       * Only a jump to latest is ever a candidate for an animation, and only a
+       * near one. Every other entry reason is the transcript resuming a follow
+       * it already owned, where an animation would be a movement the reader did
+       * not ask for.
+       */
+      runContentEndScroll(
+        reason === 'jump-to-latest' && scroller
+          ? resolveJumpBehavior(scroller, contentEnd)
+          : 'auto',
+      );
     }
 
     startFollowFrame();
@@ -678,11 +908,14 @@ export function useFlowChatFollowOutput({
     endSmoothScrollYield,
     readContentEndScrollTop,
     readPinScrollTop,
+    resolveFollowState,
+    resolveJumpBehavior,
     retirePin,
     runContentEndScroll,
     scrollTurnToTop,
     scrollerRef,
     startFollowFrame,
+    viewportId,
   ]);
 
   /**
@@ -691,17 +924,25 @@ export function useFlowChatFollowOutput({
    * than fall through to the tail.
    */
   const exitFollowOutput = useCallback((reason: FollowOutputExitReason) => {
-    if (isFollowingOutputRef.current) {
-      traceViewportRepeating(`follow|exit|${reason}`, {
-        location: 'followOutput.exit',
-        message: 'follow-output gave the viewport up',
-        data: () => ({
-          reason,
-          pinnedTurnId: pinTurnIdRef.current,
-          scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
-        }),
-      });
-    }
+    /*
+     * Traced whether or not there was anything to give up. An exit that finds
+     * follow already released is the answer to "who ended the follow this
+     * session opened with" being nobody — and gating the line on ownership is
+     * what made that case indistinguishable from the exit never being reached.
+     */
+    traceViewportRepeating(`follow|exit|${reason}|${isFollowingOutputRef.current}`, {
+      location: 'followOutput.exit',
+      message: isFollowingOutputRef.current
+        ? 'follow-output gave the viewport up'
+        : 'follow-output was released while it held nothing',
+      data: () => ({
+        reason,
+        viewportId,
+        wasFollowing: isFollowingOutputRef.current,
+        pinnedTurnId: pinTurnIdRef.current,
+        scrollTopPx: roundViewportPx(scrollerRef.current?.scrollTop ?? 0),
+      }),
+    });
     isFollowingOutputRef.current = false;
     setIsFollowingOutput(false);
     endSmoothScrollYield('superseded');
@@ -709,7 +950,7 @@ export function useFlowChatFollowOutput({
     viewportOwner.release('follow-output');
     viewportOwner.release('snap-back');
     stopFollowFrame();
-  }, [endSmoothScrollYield, scrollerRef, stopFollowFrame, viewportOwner]);
+  }, [endSmoothScrollYield, scrollerRef, stopFollowFrame, viewportId, viewportOwner]);
 
   /**
    * Re-assert ownership after a layout change. This deliberately does not force
@@ -779,7 +1020,7 @@ export function useFlowChatFollowOutput({
    * fighting momentum: the correction runs after the gesture is over, never
    * during it.
    */
-  const handleScrollSettled = useCallback(() => {
+  const evaluateSnapBack = useCallback(() => {
     const scroller = scrollerRef.current;
     if (!scroller || !isViewportActiveRef.current) {
       return;
@@ -862,7 +1103,7 @@ export function useFlowChatFollowOutput({
     const issued = viewportOwner.write({
       owner: 'snap-back',
       topPx: snapTo,
-      behavior: 'smooth',
+      behavior: getMotionAwareScrollBehavior('smooth'),
       holdForMs: SNAP_BACK_HOLD_MS,
     });
     traceViewportRepeating(`snapBack|issued|${issued}`, {
@@ -872,12 +1113,51 @@ export function useFlowChatFollowOutput({
         fromPx: roundViewportPx(scroller.scrollTop),
         targetPx: roundViewportPx(snapTo),
         followTargetPx: roundViewportPx(followTarget),
+        // Who refused it. The gesture is the one that lapses on a timer, and
+        // the retry below is aimed at exactly that.
+        heldBy: viewportOwner.currentOwner(),
+        attempt: snapBackRetryAttemptsRef.current,
       }),
     });
     if (issued) {
       pendingSnapBackTargetRef.current = snapTo;
+      return;
     }
+
+    /*
+     * A refused snap back is still owed, so ask again rather than give up.
+     *
+     * What refuses it is almost always the reader's own gesture, and that claim
+     * is a lapse timer — a wheel has no end of its own, so the register goes on
+     * answering with them for a window after each notch. This correction is the
+     * one writer that asks from inside that window, because coming to rest is
+     * what triggers it.
+     *
+     * Which is also why the hold must not simply be released here. Tried, and
+     * measured: a settle lands between two wheel notches, so releasing put the
+     * snap back in the middle of a gesture that was still going — the reader
+     * scrolled down into the reserved blank and was dragged back out of it
+     * every 800ms, a dozen times, which is the transcript stuttering under
+     * their hands. The hold was doing its job; what was missing was a second
+     * ask once it had done it.
+     *
+     * So the ask repeats while the refusal is the kind that expires. A reader
+     * still scrolling keeps re-taking the viewport and keeps being answered
+     * with a refusal that moves nothing, and their next settle re-arms the
+     * whole thing anyway; a reader who has stopped is snapped back one window
+     * after their last notch.
+     */
+    if (snapBackRetryAttemptsRef.current >= SNAP_BACK_RETRY_ATTEMPTS) {
+      return;
+    }
+    snapBackRetryAttemptsRef.current += 1;
+    clearSnapBackRetry();
+    snapBackRetryTimerRef.current = window.setTimeout(() => {
+      snapBackRetryTimerRef.current = null;
+      evaluateSnapBackRef.current();
+    }, SNAP_BACK_RETRY_DELAY_MS);
   }, [
+    clearSnapBackRetry,
     viewportOwner,
     enterFollowOutput,
     isFollowCorrectingViewport,
@@ -885,6 +1165,16 @@ export function useFlowChatFollowOutput({
     resolveFollowTargetScrollTop,
     scrollerRef,
   ]);
+  evaluateSnapBackRef.current = evaluateSnapBack;
+
+  const handleScrollSettled = useCallback(() => {
+    // A settle of the reader's own is a fresh ask, not a continuation of the
+    // last one: it gets the full retry budget, and supersedes what is left of
+    // the previous one.
+    snapBackRetryAttemptsRef.current = 0;
+    clearSnapBackRetry();
+    evaluateSnapBack();
+  }, [clearSnapBackRetry, evaluateSnapBack]);
 
   const getFollowTargetScrollTop = useCallback(() => (
     isFollowingOutputRef.current ? followStateRef.current.target : null
@@ -1095,6 +1385,7 @@ export function useFlowChatFollowOutput({
   }, [scheduleFollowToLatest]);
 
   useEffect(() => stopFollowFrame, [stopFollowFrame]);
+  useEffect(() => clearSnapBackRetry, [clearSnapBackRetry]);
 
   return {
     isFollowingOutput,

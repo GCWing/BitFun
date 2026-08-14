@@ -21,6 +21,7 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { useNotification } from '@/shared/notification-system';
 import { InputDialog, CubeLoading } from '@/component-library';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
+import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import { PanelHeader } from './base';
 import { createLogger } from '@/shared/utils/logger';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
@@ -619,7 +620,10 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       const escapedPath = finalExpandPath.replace(/\\/g, '\\\\');
       const targetElement = document.querySelector(`[data-file-path="${escapedPath}"]`);
       if (targetElement) {
-        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetElement.scrollIntoView({
+          behavior: getMotionAwareScrollBehavior('smooth'),
+          block: 'center',
+        });
         targetElement.classList.add('bitfun-file-explorer__node-content--highlighted');
         setTimeout(() => {
           targetElement.classList.remove('bitfun-file-explorer__node-content--highlighted');

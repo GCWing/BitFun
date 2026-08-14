@@ -62,40 +62,40 @@ $_section-header-height: 24px;
       flex: 1 1 auto;
       min-width: 0;
       max-width: 100%;
-      transition: opacity 0.2s $easing-standard;
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+      transition: none;
 
-      // Non-split scenes: hide MainNav instantly when scene nav opens
+      // Non-split scenes move as a coordinated pair when pointer motion is on.
       .is-scene:not(.is-split-open) & {
         opacity: 0;
+        transform: translate3d(-4px, 0, 0);
         pointer-events: none;
       }
     }
 
     // ── SceneNav overlay ──
     &--scene {
-      clip-path: inset(var(--clip-origin-top) 0 var(--clip-origin-bottom) 0);
-      transition: clip-path $motion-base $easing-decelerate,
-                  opacity $motion-fast $easing-decelerate;
+      clip-path: inset(0 0 0 0);
       position: absolute;
       inset: 0;
       z-index: 1;
       pointer-events: none;
-        clip-path: inset(0 0 0 0);
       opacity: 0;
+      transform: translate3d(6px, 0, 0);
       background: var(--bf-appearance-token-color-bg-primary);
-
-      // Default transition for non-split scenes: simple fade
-      transition: opacity 0.25s $easing-decelerate;
+      transition: none;
 
       &.is-active {
         pointer-events: auto;
         opacity: 1;
+        transform: translate3d(0, 0, 0);
       }
 
       // Split-open scenes (file-viewer): clip-path reveal from anchor.
       // The opaque background ensures revealed portions fully cover MainNav
       // so departing items never bleed through.
-      .is-split-open & {
+      .is-split-open.has-pointer-motion & {
         clip-path: inset(var(--clip-origin-top) 0 var(--clip-origin-bottom) 0);
         transition: clip-path 0.26s cubic-bezier(0.22, 1, 0.36, 1),
                     opacity 0.06s linear;
@@ -104,6 +104,39 @@ $_section-header-height: 24px;
           clip-path: inset(0 0 0 0);
         }
       }
+    }
+  }
+
+  &__content.has-pointer-motion &__layer--main {
+    transition:
+      opacity 140ms cubic-bezier(0.23, 1, 0.32, 1),
+      transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  &__content.has-pointer-motion:not(.is-split-open) &__layer--scene {
+    transition:
+      opacity 160ms cubic-bezier(0.23, 1, 0.32, 1),
+      transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &.is-active {
+      @starting-style {
+        opacity: 0;
+        transform: translate3d(6px, 0, 0);
+      }
+    }
+  }
+
+  &__scene-transition {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+
+    > .bitfun-view-transition-boundary__view {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
     }
   }
 
@@ -2066,7 +2099,12 @@ $_section-header-height: 24px;
   padding: 7px 16px;
   font-size: var(--bf-appearance-token-font-size-xs);
   cursor: pointer;
-  transition: all $motion-fast $easing-standard;
+  transition:
+    background-color $motion-fast $easing-standard,
+    border-color $motion-fast $easing-standard,
+    color $motion-fast $easing-standard,
+    opacity $motion-fast $easing-standard,
+    transform $motion-fast $easing-standard;
 }
 
 .bitfun-nav-panel__remote-disclaimer-btn--secondary {
@@ -2101,7 +2139,6 @@ $_section-header-height: 24px;
     &__item-icon,
     &__section,
     &__section-label,
-    &__layer--scene,
     &__collapsible,
     &__mode-pill,
     &__mode-pill-liquid,
@@ -2112,6 +2149,24 @@ $_section-header-height: 24px;
       animation: none;
       clip-path: none;
       filter: none;
+    }
+
+    &__layer--main,
+    &__layer--scene {
+      transform: none;
+    }
+
+    &__content.has-pointer-motion &__layer--main,
+    &__content.has-pointer-motion:not(.is-split-open) &__layer--scene {
+      transform: none;
+      transition: opacity 100ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    &__content.has-pointer-motion:not(.is-split-open) &__layer--scene.is-active {
+      @starting-style {
+        opacity: 0;
+        transform: none;
+      }
     }
   }
 
@@ -2674,7 +2729,10 @@ $_section-header-height: 24px;
     }
   }
 
-  &__collapsible,
+  &__collapsible {
+    transition: grid-template-rows 150ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
   &__item-slot {
     transition: none;
 

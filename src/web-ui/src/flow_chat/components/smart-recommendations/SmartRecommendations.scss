@@ -8,7 +8,7 @@
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 12px;
-  animation: slideDown 0.2s ease-out;
+  animation: smart-recommendations-enter 160ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &__header {
     display: flex;
@@ -33,7 +33,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition:
+      background-color 160ms ease,
+      color 160ms ease,
+      scale 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-hover);
@@ -59,7 +62,13 @@
     font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 160ms ease,
+      border-color 160ms ease,
+      box-shadow 180ms ease,
+      opacity 160ms ease;
     white-space: nowrap;
 
     svg {
@@ -108,14 +117,14 @@
   }
 
   &__loading {
-    animation: blink 1s infinite;
+    animation: smart-recommendations-loading 1s ease-in-out infinite;
   }
 }
 
-@keyframes slideDown {
+@keyframes smart-recommendations-enter {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-4px);
   }
   to {
     opacity: 1;
@@ -123,7 +132,7 @@
   }
 }
 
-@keyframes blink {
+@keyframes smart-recommendations-loading {
   0%, 100% {
     opacity: 1;
   }
@@ -132,3 +141,9 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-smart-recommendations,
+  .bitfun-smart-recommendations__loading {
+    animation: none;
+  }
+}

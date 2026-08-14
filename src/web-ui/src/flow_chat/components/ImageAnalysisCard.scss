@@ -19,7 +19,9 @@
   border-radius: 8px;
   padding: 12px;
   margin: 8px 0;
-  transition: all 0.2s ease;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease;
   
   &[data-status="analyzing"] {
     border-color: var(--image-analysis-primary);
@@ -30,7 +32,7 @@
       var(--image-analysis-surface) 100%
     );
     background-size: 200% 100%;
-    animation: shimmer 2s infinite;
+    animation: image-analysis-shimmer 2s linear infinite;
   }
   
   &[data-status="completed"] {
@@ -42,7 +44,7 @@
   }
 }
 
-@keyframes shimmer {
+@keyframes image-analysis-shimmer {
   0% {
     background-position: -200% 0;
   }
@@ -106,7 +108,7 @@
     color: var(--image-analysis-primary);
     
     .spinner {
-      animation: spin 1s linear infinite;
+      animation: image-analysis-spin 1s linear infinite;
     }
   }
   
@@ -140,12 +142,19 @@
   }
 }
 
-@keyframes spin {
+@keyframes image-analysis-spin {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image-analysis-card[data-status="analyzing"],
+  .image-analysis-card__status.analyzing .spinner {
+    animation: none;
   }
 }
 
@@ -272,4 +281,3 @@
   --image-analysis-success: var(--bf-appearance-token-color-success);
   --image-analysis-error: var(--bf-appearance-token-color-error);
 }
-

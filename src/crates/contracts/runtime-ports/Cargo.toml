@@ -33,7 +33,7 @@ required-features = ["workspace-ports"]
 [dependencies]
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true }
-bitfun-product-domains = { path = "../product-domains", default-features = false, optional = true }
+bitfun-product-domains = { path = "../product-domains", optional = true }
 bitfun-core-types = { path = "../core-types", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

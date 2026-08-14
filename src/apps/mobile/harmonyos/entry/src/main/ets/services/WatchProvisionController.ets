@@ -1,6 +1,5 @@
 import { abilityAccessCtrl, common, Context, Permissions } from '@kit.AbilityKit';
 import { RemoteI18n } from '../i18n/RemoteI18n';
-import { PeerDeviceProvisionOutcome } from './RelayHttpClient';
 import { RemoteLogger } from './RemoteLogger';
 import { WatchHandoffStore } from './WatchHandoffStore';
 import { WatchProvisionCrypto } from './WatchProvisionCrypto';
@@ -13,12 +12,36 @@ import { WatchProvisionState } from '../pages/state/WatchProvisionState';
 
 const DATASYNC_PERMISSION: Permissions = 'ohos.permission.DISTRIBUTED_DATASYNC';
 
+/**
+ * A minting attempt's result, whoever performed it.
+ *
+ * `relayUrl` travels with the credential rather than being asked for
+ * separately, because the two are only valid together: a token minted by this
+ * phone's own account authenticates against the account's relay, one minted by
+ * a paired desktop against the room's. Reporting them from two places is how
+ * they would come to disagree.
+ */
+export interface WatchProvisionOutcome {
+  ok: boolean;
+  relayUrl: string;
+  token: string;
+  userId: string;
+  masterKeyBase64: string;
+  deviceId: string;
+  failure: string;
+  /** True when a desktop answered and refused, so `failure` is worth showing. */
+  desktopReported: boolean;
+}
+
 /** What the controller needs from the remote stack, kept narrow for testing. */
 export interface WatchProvisionPort {
-  /** True when a QR-paired desktop room is live; provisioning needs one. */
-  canProvision(): boolean;
-  provision(deviceId: string, deviceName: string, requestId: string): Promise<PeerDeviceProvisionOutcome>;
-  relayUrl(): string;
+  /** True when some path to a credential exists — account or paired desktop. */
+  readonly canProvision: () => boolean;
+  readonly provision: (
+    deviceId: string,
+    deviceName: string,
+    requestId: string
+  ) => Promise<WatchProvisionOutcome>;
 }
 
 /**
@@ -112,12 +135,20 @@ export class WatchProvisionController {
     if (this.pending && this.pending.requestId === request.requestId) {
       return;
     }
-    if (this.inFlight || this.pending) {
+    if (this.inFlight || (this.pending && this.pending.deviceId !== request.deviceId)) {
       // One at a time: a second watch waiting behind a silent card would look
       // identical to a phone that never heard it.
       this.answered.add(request.requestId);
       void this.writeError(request.requestId, RemoteI18n.t('watchProvision.busy'));
       return;
+    }
+    if (this.pending) {
+      // The same watch asking again: it gave up on the last attempt and started
+      // over, and the card still up here is for a request nobody is waiting on.
+      // Replace it — telling a watch it is busy with itself is the one answer
+      // that cannot be true.
+      RemoteLogger.info('watch provisioning request replaced by a newer one from the same watch');
+      this.answered.add(this.pending.requestId);
     }
     this.pending = request;
     this.state.ask(request.deviceName, request.deviceId);
@@ -167,7 +198,7 @@ export class WatchProvisionController {
       await this.failAttempt(request.requestId, RemoteI18n.t('watchProvision.errors.noDesktop'));
       return;
     }
-    let outcome: PeerDeviceProvisionOutcome;
+    let outcome: WatchProvisionOutcome;
     try {
       outcome = await this.port.provision(request.deviceId, request.deviceName, request.requestId);
     } catch (err) {
@@ -185,8 +216,15 @@ export class WatchProvisionController {
       return;
     }
 
+    if (outcome.relayUrl.trim().length === 0) {
+      // A credential with no relay to present it at is unusable, and the watch
+      // would only discover that after signing in. Stop here instead.
+      RemoteLogger.error('watch provisioning produced a credential without a relay url');
+      await this.failAttempt(request.requestId, RemoteI18n.t('watchProvision.errors.handoffFailed'));
+      return;
+    }
     const credential: WatchProvisionCredential = {
-      relay_url: this.port.relayUrl(),
+      relay_url: outcome.relayUrl,
       token: outcome.token,
       user_id: outcome.userId,
       master_key: outcome.masterKeyBase64,

@@ -4,9 +4,11 @@ import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { AsyncLifecycleGate } from '../../services/AsyncLifecycleGate';
 import { RemoteActivityLifecycleController } from '../../services/RemoteActivityLifecycleController';
 import { RemoteConnectionCoordinator } from '../../services/RemoteConnectionCoordinator';
+import { RemoteLogger } from '../../services/RemoteLogger';
 
 export interface RemoteActivityViewModelHooks {
   readonly isConnected: () => boolean;
+  readonly isReconnecting: () => boolean;
   readonly isBusy: () => boolean;
   readonly hasRemoteBinding: () => boolean;
   readonly isRemoteChat: () => boolean;
@@ -14,7 +16,6 @@ export interface RemoteActivityViewModelHooks {
   readonly onConnectionState: (state: string) => void;
   readonly onStatus: (status: string) => void;
   readonly onConnectionError: (err: Object) => Promise<boolean>;
-  readonly onStopHeartbeat: () => void;
   readonly onStartPolling: () => void;
   readonly onStopPolling: () => void;
   readonly onPoll: () => Promise<void>;
@@ -28,6 +29,7 @@ export class RemoteActivityViewModel {
   private readonly connection: RemoteConnectionCoordinator;
   private readonly gate: AsyncLifecycleGate;
   private readonly hooks: RemoteActivityViewModelHooks;
+  private recovering: boolean = false;
 
   constructor(
     activity: RemoteActivityLifecycleController,
@@ -49,21 +51,52 @@ export class RemoteActivityViewModel {
     this.activity.stopHeartbeat();
   }
 
+  /**
+   * A health check while the link is up, a recovery probe once it is not.
+   *
+   * A failed ping used to park the connection in `failed` and stop the
+   * heartbeat with it. Nothing survived that: the poller was stopped too, and
+   * `failed` disables every remote action, so a desktop that blinked out for a
+   * moment left the phone dead until the user backgrounded and refocused the
+   * app. The heartbeat is the only thing still ticking at that point, which
+   * makes it the only thing that can notice the desktop coming back — so it
+   * keeps ticking, and the first ping that answers puts the session back on the
+   * wire. Ticks are serialised by the heartbeat itself, and a ping is cheap
+   * enough to repeat every interval for as long as the drop lasts.
+   */
   async checkConnectionHealth(): Promise<void> {
-    if (!this.hooks.isConnected() || this.hooks.isBusy()) {
+    if (this.hooks.isBusy() || this.recovering || !this.hooks.hasRemoteBinding()) {
+      return;
+    }
+    const wasConnected = this.hooks.isConnected();
+    if (!wasConnected && !this.hooks.isReconnecting()) {
       return;
     }
     try {
       await this.connection.ping();
+      if (!wasConnected) {
+        await this.restoreAfterHealthyPing();
+      }
     } catch (err) {
       if (await this.hooks.onConnectionError(err)) {
         return;
       }
-      const message = ConnectionErrorPolicy.errorText(err);
-      this.hooks.onConnectionState('failed');
-      this.hooks.onStatus(message);
-      this.hooks.onStopPolling();
-      this.hooks.onStopHeartbeat();
+      this.hooks.onStatus(ConnectionErrorPolicy.errorText(err));
+      if (wasConnected) {
+        RemoteLogger.info('heartbeat ping failed, waiting for the link to come back');
+        this.hooks.onStopPolling();
+        this.hooks.onConnectionState('reconnecting');
+      }
+    }
+  }
+
+  private async restoreAfterHealthyPing(): Promise<void> {
+    RemoteLogger.info('heartbeat ping answered, link restored');
+    this.hooks.onConnectionState('connected');
+    this.hooks.onStatus(RemoteI18n.t('connection.connected'));
+    if (this.hooks.isRemoteChat() && this.hooks.activeSession().sessionId.length > 0) {
+      this.hooks.onStartPolling();
+      await this.hooks.onPoll();
     }
   }
 
@@ -103,9 +136,18 @@ export class RemoteActivityViewModel {
         return;
       }
       this.hooks.onStatus(ConnectionErrorPolicy.errorText(err));
-      this.hooks.onStopHeartbeat();
       this.hooks.onConnectionState('reconnecting');
-      await this.reconnect(token);
+      // The heartbeat keeps running through this. If the reconnect below fails
+      // there is nothing else left to try again, and its next tick is the retry
+      // — it just has to stay out of the way while this one is in flight.
+      this.recovering = true;
+      try {
+        await this.reconnect(token);
+      } catch (reconnectErr) {
+        this.hooks.onStatus(ConnectionErrorPolicy.errorText(reconnectErr));
+      } finally {
+        this.recovering = false;
+      }
     }
   }
 

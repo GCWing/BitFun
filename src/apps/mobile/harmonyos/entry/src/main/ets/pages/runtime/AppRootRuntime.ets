@@ -5,6 +5,7 @@ import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteUiState } from '../../services/RemoteUiState';
 import { AppRootHostPort } from '../host/AppRootHostAdapter';
+import { CONNECT_INTENT_SCAN } from '../state/AppShellState';
 import {
   AppNavigationBackAction,
   AppRoute,
@@ -23,6 +24,9 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   async aboutToAppear(): Promise<void> {
     this.syncRemotePageSummary();
+    await this.remoteChatCache.init(this.host.context());
+    await this.remoteSessionListCache.init(this.host.context());
+    await this.restoreCachedRemoteSessions();
     await this.generalChatBootstrapController.restore(this.host.context());
     await this.settingsController.initializeCloudAccount(this.host.context());
     await this.settingsController.refreshModelCatalog();
@@ -31,12 +35,16 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   /**
-   * Only ask for distributed data sync once the phone actually has a desktop
-   * to relay to. A fresh install has nothing to provision a watch with, and a
-   * permission prompt at first launch would have no explanation behind it.
+   * Only ask for distributed data sync once the phone actually has something to
+   * provision a watch with. A fresh install has nothing, and a permission
+   * prompt at first launch would have no explanation behind it.
+   *
+   * A signed-in account counts on its own, with no desktop in sight: the phone
+   * mints the watch's credential itself in that case, so waiting for a live
+   * connection would keep the listener down exactly when it is not needed.
    */
   private async startWatchProvisioning(): Promise<void> {
-    if (!this.hasRemoteBindingForResume()) {
+    if (!this.settingsController.hasCloudAccountSession() && !this.hasRemoteBindingForResume()) {
       return;
     }
     await this.watchProvisionController.start(this.host.context());
@@ -111,9 +119,34 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   async restoreIdentity(): Promise<void> {
     if (this.remotePageState.controlTargetType === 'account_device') {
+      await this.restoreAccountDeviceTarget(false);
       return;
     }
     await this.remoteConnectionController.restore(this.host.context());
+  }
+
+  /**
+   * Reconnects to the desktop the signed-in account was last driving.
+   *
+   * The scanned-room path restores itself from its pairing snapshot, but the
+   * account path used to do nothing at launch: the phone came up holding a
+   * session list and a desktop name with no link behind either, and the only
+   * way back was for the user to walk the device picker again. Announcing
+   * `reconnecting` up front is what keeps that from reading as connected while
+   * the device lookup is still in flight.
+   */
+  private async restoreAccountDeviceTarget(navigateHome: boolean): Promise<void> {
+    const deviceId = this.remotePageState.controlTargetDeviceId.trim();
+    if (deviceId.length === 0) {
+      return;
+    }
+    this.remotePageState.setConnectionState(ConnectionState.Reconnecting);
+    this.remotePageState.setStatusText(RemoteI18n.t('status.restoringConnection'));
+    await this.settingsController.restoreCloudTarget(
+      deviceId,
+      this.remotePageState.controlTargetDeviceName,
+      navigateHome
+    );
   }
 
   async connect(autoReconnect: boolean = false, accountPassword: string = ''): Promise<void> {
@@ -123,10 +156,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   async reconnect(): Promise<void> {
     if (this.remotePageState.controlTargetType === 'account_device') {
-      await this.settingsController.restoreCloudTarget(
-        this.remotePageState.controlTargetDeviceId,
-        this.remotePageState.controlTargetDeviceName
-      );
+      await this.restoreAccountDeviceTarget(true);
       return;
     }
     await this.remoteConnectionController.reconnect();
@@ -146,8 +176,20 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     }
   }
 
+  /**
+   * A request that failed against a link the phone still has a binding for is a
+   * link that dropped, not one that ended, so the heartbeat stays up and its
+   * next ping is what notices the desktop coming back. Killing it here is what
+   * used to make a momentary drop permanent: `failed` disables every remote
+   * action, and nothing was left running to lift it again.
+   */
   failRemoteConnection(err: Object): void {
     this.remotePageState.setStatusText(ConnectionErrorPolicy.errorText(err));
+    if (this.hasRemoteBindingForResume()) {
+      this.remotePageState.setConnectionState(ConnectionState.Reconnecting);
+      this.remoteActivityViewModel.startHeartbeat();
+      return;
+    }
     this.remotePageState.setConnectionState(ConnectionState.Failed);
     this.remoteActivityViewModel.stopHeartbeat();
   }
@@ -278,10 +320,16 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     }, 180);
   }
 
+  /**
+   * From the settings row that says 「扫描二维码连接」, and so straight to the
+   * camera: this is the one entry that names what it opens, and it is also the
+   * only way a signed-in phone can reach the scanner at all — every other path
+   * stops at the account's device list.
+   */
   openAddConnectionFromSettings(): void {
     this.appShellState.setSettingsVisible(false);
     setTimeout(() => {
-      this.appShellState.setConnectSheetVisible(true);
+      this.appShellState.setConnectSheetVisible(true, CONNECT_INTENT_SCAN);
     }, 220);
   }
 
@@ -289,7 +337,42 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     this.remoteWorkspaceSessions = all;
     const current = this.remotePageState.sessions;
     const extras = all.filter((item: RemoteSession) => item.workspacePath !== this.remotePageState.workspacePath);
-    this.remotePageState.setSessions(this.mergeSessions(current, extras), this.remotePageState.hasMoreSessions);
+    this.publishRemoteSessions(this.mergeSessions(current, extras), this.remotePageState.hasMoreSessions);
+  }
+
+  /**
+   * The single way a session list reaches the screen, so everything the user
+   * sees is also what the next launch starts from.
+   *
+   * The write is deliberately not awaited: the list is on screen either way,
+   * and making a repaint wait on disk is the one way this cache could make the
+   * app feel slower than it did without it.
+   */
+  publishRemoteSessions(sessions: RemoteSession[], hasMore: boolean): void {
+    this.remotePageState.setSessions(sessions, hasMore);
+    this.remoteSessionListCache.save(sessions, hasMore);
+  }
+
+  /**
+   * Fills Remote Home from disk before anything is connected.
+   *
+   * Runs against whichever desktop was used last, because the device to key on
+   * is not known this early — identity is still being restored, and the
+   * auto-reconnect that follows targets exactly that desktop. Anything the
+   * desktop reports replaces this, so a stale entry costs a repaint.
+   */
+  private async restoreCachedRemoteSessions(): Promise<void> {
+    if (this.remotePageState.sessions.length > 0) {
+      return;
+    }
+    const cached = await this.remoteSessionListCache.restoreLast();
+    // Checked again: a connection may have landed while the read was in flight,
+    // and the desktop's answer outranks the stored one.
+    if (cached.sessions.length === 0 || this.remotePageState.sessions.length > 0) {
+      return;
+    }
+    RemoteLogger.info(`session list from cache count=${cached.sessions.length}`);
+    this.remotePageState.setSessions(cached.sessions, cached.hasMore);
   }
 
   mergeSessions(primary: RemoteSession[], extras: RemoteSession[]): RemoteSession[] {

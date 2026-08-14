@@ -16,7 +16,9 @@
   border: 1px solid var(--bf-appearance-token-border-base);
   background: var(--bf-appearance-token-color-bg-scene);
   backdrop-filter: blur(10px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    border-color 160ms ease,
+    box-shadow 180ms ease;
   overflow: hidden;
   position: relative;
 
@@ -195,7 +197,10 @@
   border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: var(--bf-appearance-token-size-radius-md);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
 
   &:hover:not(:has(input:disabled)) {
     background: var(--bf-appearance-token-element-bg-subtle);
@@ -245,7 +250,9 @@
     border: 1.5px solid var(--bf-appearance-token-border-base);
     border-radius: 50%;
     background: transparent;
-    transition: all 0.15s ease;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease;
   }
 
   &::after {
@@ -257,8 +264,12 @@
     height: 6px;
     border-radius: 50%;
     background: transparent;
-    transition: all 0.15s ease;
-    transform: scale(0);
+    opacity: 0;
+    transform: scale(0.8);
+    transition:
+      background-color 150ms ease,
+      opacity 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   input:checked + &::before {
@@ -267,6 +278,7 @@
 
   input:checked + &::after {
     background: var(--bf-appearance-token-color-text-primary);
+    opacity: 1;
     transform: scale(1);
   }
 
@@ -297,7 +309,9 @@
     border: 1.5px solid var(--bf-appearance-token-border-base);
     border-radius: 3px;
     background: transparent;
-    transition: all 0.15s ease;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease;
   }
 
   &::after {
@@ -309,8 +323,12 @@
     height: 8px;
     border: solid transparent;
     border-width: 0 1.5px 1.5px 0;
-    transform: rotate(45deg) scale(0);
-    transition: all 0.15s ease;
+    opacity: 0;
+    transform: rotate(45deg) scale(0.8);
+    transition:
+      border-color 150ms ease,
+      opacity 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   input:checked + &::before {
@@ -320,6 +338,7 @@
 
   input:checked + &::after {
     border-color: var(--bf-appearance-token-color-text-primary);
+    opacity: 1;
     transform: rotate(45deg) scale(1);
   }
 
@@ -420,7 +439,10 @@
   font-size: var(--bf-appearance-token-tool-card-action-font-size);
   color: var(--bf-appearance-token-color-text-primary);
   background: var(--bf-appearance-token-color-bg-tertiary);
-  transition: all 0.15s ease;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
   min-width: 0;
 
   &:focus {
@@ -453,7 +475,11 @@
   font-size: var(--bf-appearance-token-tool-card-action-font-size);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
   white-space: nowrap;
 
   &:hover:not(:disabled) {
@@ -546,7 +572,6 @@
   margin-top: 0;
   padding-top: 12px;
   border-top: 1px solid var(--bf-appearance-token-border-base);
-  animation: expandDown 0.2s ease-out;
 
   .option-label {
     pointer-events: none;
@@ -584,10 +609,16 @@
 }
 
 .animate-spin {
-  animation: spin 1s linear infinite;
+  animation: ask-user-question-spin 1s linear infinite;
 }
 
-@keyframes spin {
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin {
+    animation: none;
+  }
+}
+
+@keyframes ask-user-question-spin {
   from {
     transform: rotate(0deg);
   }

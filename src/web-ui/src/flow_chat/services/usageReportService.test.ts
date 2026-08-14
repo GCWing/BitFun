@@ -327,4 +327,3 @@ describe('runUsageReportCommand', () => {
     expect(markdown).not.toContain('model round');
   });
 });
-

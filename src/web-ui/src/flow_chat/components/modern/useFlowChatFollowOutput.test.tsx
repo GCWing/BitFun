@@ -2,6 +2,7 @@
 
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { flushSync } from 'react-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tailSpacerPxForViewport } from './flowChatTailFollow';
 import {
@@ -10,7 +11,11 @@ import {
   TAIL_EASE_SNAP_ABOVE_PX,
 } from '../../utils/flowChatTailEase';
 import { SMOOTH_SCROLL_STALL_MS, useFlowChatFollowOutput } from './useFlowChatFollowOutput';
-import { useFlowChatViewportOwner } from './useFlowChatViewportOwner';
+import {
+  useFlowChatViewportOwner,
+  type FlowChatViewportOwnerApi,
+} from './useFlowChatViewportOwner';
+import { USER_DRIVEN_SCROLL_WINDOW_MS } from './flowChatViewportAnchor';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -56,6 +61,8 @@ interface HarnessProps {
   resolveTurnTopScrollTop?: (turnId: string) => number | null;
   isOpeningViewport?: boolean;
   onController: (controller: Controller) => void;
+  /** The register the hook writes through, for a test that has to hold it. */
+  onViewportOwner?: (owner: FlowChatViewportOwnerApi) => void;
 }
 
 function Harness({
@@ -68,11 +75,13 @@ function Harness({
   resolveTurnTopScrollTop = () => null,
   isOpeningViewport = false,
   onController,
+  onViewportOwner,
 }: HarnessProps) {
   const scrollerRef = React.useRef<HTMLElement | null>(scroller);
   // The real register, not a stand-in: what this hook is allowed to write is
   // now part of its behaviour, so a permissive fake would test the wrong thing.
   const viewportOwner = useFlowChatViewportOwner(scrollerRef);
+  onViewportOwner?.(viewportOwner);
   const controller = useFlowChatFollowOutput({
     activeSessionId: 'session-1',
     latestTurnId,
@@ -560,8 +569,14 @@ describe('useFlowChatFollowOutput', () => {
     expect(cancelAnimationFrame).toHaveBeenCalled();
   });
 
-  it('uses smooth behavior only for an explicit jump to latest', () => {
+  /** Mount on a transcript of `contentEndPx`, then jump to latest from the top. */
+  function jumpToLatestAcross(contentEndPx: number) {
     const scrollToContentEnd = vi.fn();
+    setScrollerMetrics(scroller, {
+      scrollHeight: contentEndPx + VIEWPORT + TAIL_SPACER,
+      clientHeight: VIEWPORT,
+      scrollTop: 0,
+    });
     act(() => {
       root.render(
         <Harness
@@ -572,8 +587,38 @@ describe('useFlowChatFollowOutput', () => {
         />,
       );
     });
+    runNextFrame();
+    expect(scroller.scrollTop).toBe(contentEndPx);
+    scroller.scrollTop = 0;
+    scrollToContentEnd.mockClear();
     act(() => controller?.enterFollowOutput('jump-to-latest'));
-    expect(scrollToContentEnd).toHaveBeenCalledWith('smooth');
+    return scrollToContentEnd;
+  }
+
+  it('uses smooth behavior only for an explicit jump to latest', () => {
+    // Well inside `FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS`, so the distance is not
+    // what this is testing.
+    expect(jumpToLatestAcross(VIEWPORT)).toHaveBeenCalledWith('smooth');
+  });
+
+  it('lands a near jump immediately when reduced motion is requested', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+
+    expect(jumpToLatestAcross(VIEWPORT)).toHaveBeenCalledWith('auto');
+  });
+
+  it('lands a jump too far to follow rather than animate part of it', () => {
+    /*
+     * The animation cannot finish this and the frame loop takes the viewport
+     * back wherever it has got to — measured, a jump issued for 8717px animated
+     * 5480 of them and was finished in one 3290px write. The reader sees two
+     * thirds of a scroll and then a jump, which is worse than either.
+     *
+     * It would not be worth watching even if it did finish: three screens on,
+     * the transcript in between is going past faster than anyone can read it,
+     * so the continuity an animation exists to show is not there to see.
+     */
+    expect(jumpToLatestAcross(VIEWPORT * 10)).toHaveBeenCalledWith('auto');
   });
 
   it('yields the frame loop to its own animated scroll instead of overwriting it', () => {
@@ -624,9 +669,20 @@ describe('useFlowChatFollowOutput', () => {
       nowSpy.mockRestore();
     });
 
+    /*
+     * A viewport tall enough that the jump below is one the follow rule agrees
+     * to animate at all: only a jump inside
+     * `FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS` is animated, and everything in
+     * this block is about what happens *during* an animation, so it has to be
+     * given one. The distance is left where it was so the frame counts below
+     * still mean what their comments say.
+     */
+    const TALL_VIEWPORT = 1_600;
+    const CONTENT_END = 4_500;
+
     /**
-     * Mounts a transcript whose content ends at 4500, settles there, and then
-     * issues an animated jump to latest from the top.
+     * Mounts a transcript whose content ends at `CONTENT_END`, settles there,
+     * and then issues an animated jump to latest from the top.
      *
      * jsdom does not animate, so the animation is played by hand below. That is
      * the point of these tests: what ends the stand-down is the viewport having
@@ -635,8 +691,8 @@ describe('useFlowChatFollowOutput', () => {
      */
     function jumpToLatestFromTheTop() {
       setScrollerMetrics(scroller, {
-        scrollHeight: 5000 + TAIL_SPACER,
-        clientHeight: VIEWPORT,
+        scrollHeight: CONTENT_END + TALL_VIEWPORT + spacerFor(TALL_VIEWPORT),
+        clientHeight: TALL_VIEWPORT,
         scrollTop: 0,
       });
       act(() => {
@@ -649,7 +705,7 @@ describe('useFlowChatFollowOutput', () => {
         );
       });
       runNextFrame();
-      expect(scroller.scrollTop).toBe(4500);
+      expect(scroller.scrollTop).toBe(CONTENT_END);
       scroller.scrollTop = 0;
       act(() => controller?.enterFollowOutput('jump-to-latest'));
     }
@@ -703,7 +759,7 @@ describe('useFlowChatFollowOutput', () => {
       expect(scroller.scrollTop).toBe(50);
 
       animateFrame(0, 20);
-      expect(scroller.scrollTop).toBe(4500);
+      expect(scroller.scrollTop).toBe(CONTENT_END);
     });
 
     it('takes the viewport back on the backstop when the animation never ends', () => {
@@ -713,7 +769,7 @@ describe('useFlowChatFollowOutput', () => {
         animateFrame(1, 100);
       }
 
-      expect(scroller.scrollTop).toBe(4500);
+      expect(scroller.scrollTop).toBe(CONTENT_END);
     });
   });
 
@@ -1097,6 +1153,156 @@ describe('useFlowChatFollowOutput', () => {
       expect(controller?.isFollowingOutput).toBe(true);
     });
 
+    it('asks again once the gesture that refused it has lapsed', () => {
+      /*
+       * The gesture's claim is a lapse timer, because a wheel has no end of its
+       * own, and this correction is the one writer that asks from inside that
+       * window — coming to rest is what triggers it. So the first ask is
+       * refused by construction, and the answer is to ask again rather than to
+       * release the hold: a settle also lands *between* two notches of a
+       * gesture still in progress, and forcing the snap through there drags the
+       * reader out of the blank they are scrolling into, every 800ms.
+       *
+       * Measured, the case the retry is for: a wheel at the head of a
+       * three-Turn tail paged in 13 Turns, the compensation moved the reader
+       * 2727px on the virtualizer's estimates, the real heights landed ~1670px
+       * shorter and the browser clamped the offset to the end of the shrunken
+       * range — 841px past the content end, the whole reserved spacer, blank.
+       * The snap back was refused `heldBy: user-gesture` 57ms into a 200ms
+       * hold, and nothing moved for the four minutes that followed.
+       */
+      let owner: FlowChatViewportOwnerApi | null = null;
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      vi.useFakeTimers();
+      try {
+        act(() => {
+          root.render(
+            <Harness
+              latestTurnId="turn-1"
+              isStreaming={false}
+              scroller={scroller}
+              onController={next => { controller = next; }}
+              onViewportOwner={next => { owner = next; }}
+            />,
+          );
+        });
+        act(() => controller?.handleUserScrollIntent());
+        // The wheel, as the list takes it: the reader holds the viewport for
+        // the window the anchor uses, and the settle below lands inside it.
+        act(() => {
+          owner?.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+        });
+        scrollTo.mockClear();
+
+        restInBlank(1000 + TAIL_SPACER);
+        // Refused, and rightly: as far as the register knows the reader still
+        // has the viewport.
+        expect(scrollTo).not.toHaveBeenCalled();
+
+        act(() => { vi.advanceTimersByTime(USER_DRIVEN_SCROLL_WINDOW_MS + 20); });
+
+        expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('stops asking rather than chase a reader who keeps scrolling', () => {
+      // Every retry is refused while the reader keeps re-taking the viewport,
+      // and none of them move it. Their own next settle is what asks again.
+      let owner: FlowChatViewportOwnerApi | null = null;
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      vi.useFakeTimers();
+      try {
+        act(() => {
+          root.render(
+            <Harness
+              latestTurnId="turn-1"
+              isStreaming={false}
+              scroller={scroller}
+              onController={next => { controller = next; }}
+              onViewportOwner={next => { owner = next; }}
+            />,
+          );
+        });
+        act(() => controller?.handleUserScrollIntent());
+        act(() => {
+          owner?.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+        });
+        scrollTo.mockClear();
+        restInBlank(1000 + TAIL_SPACER);
+
+        // Notches inside the window they renew, for longer than the retry
+        // budget covers. This is what a wheel actually looks like: the register
+        // never stops answering with the reader.
+        for (let notch = 0; notch < 16; notch += 1) {
+          act(() => {
+            owner?.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+            vi.advanceTimersByTime(USER_DRIVEN_SCROLL_WINDOW_MS / 2);
+          });
+        }
+
+        expect(scrollTo).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('resumes on the end the content has now, not the one the snap aimed at', () => {
+      /*
+       * The snap is animated, and what it was aiming at can move while it
+       * travels — a history page whose items are still measuring is exactly
+       * that, and is also the reason the snap was needed. Resuming on
+       * `scrollTop` adopts the stale offset as the hold rule's memory, and the
+       * hold rule defends a gap rather than closing it.
+       *
+       * Measured on a 43-Turn session paged from a three-Turn tail: issued for
+       * 12336, landed 608ms later against a content end of 11972, and the first
+       * frame after it read `desired 11972, target 12336, onTarget true`. The
+       * reader kept 364px of reserved blank and a Turn cut off at the top.
+       */
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1500 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 0,
+      });
+      act(() => {
+        root.render(
+          <Harness
+            latestTurnId="turn-1"
+            isStreaming={false}
+            scroller={scroller}
+            onController={next => { controller = next; }}
+          />,
+        );
+      });
+      act(() => controller?.handleUserScrollIntent());
+      restInBlank(1000 + TAIL_SPACER);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+
+      // The items measured shorter while the snap travelled, so the end of
+      // content is 300px above where it was aimed.
+      setScrollerMetrics(scroller, {
+        scrollHeight: 1200 + TAIL_SPACER,
+        clientHeight: VIEWPORT,
+        scrollTop: 1000,
+      });
+      restInBlank(1000);
+
+      expect(controller?.isFollowingOutput).toBe(true);
+      // Not 1000, which is inside the gap the hold rule tolerates and would
+      // therefore have been kept for good.
+      expect(controller?.getFollowTargetScrollTop()).toBe(700);
+    });
+
     it('does not take the viewport back when a gesture overrode the snap', () => {
       setScrollerMetrics(scroller, {
         scrollHeight: 1500 + TAIL_SPACER,
@@ -1284,6 +1490,58 @@ describe('useFlowChatFollowOutput', () => {
       }));
 
       expect(scroller.scrollTop).toBe(200);
+    });
+  });
+
+  describe('ownership across renders', () => {
+    /*
+     * Ownership is a ref because the loop reads it between renders, and it was
+     * *also* assigned from the `isFollowingOutput` state on every render. Those
+     * two writers disagree for exactly as long as a state update is queued, and
+     * React is free to render in that window: an update scheduled from a
+     * passive effect sits at a lower priority than a synchronous render, which
+     * then renders the value from before it and put the ref back to `false`.
+     *
+     * Measured on session open, which is where this always happens — the entry
+     * comes from a mount effect: `followOutput.enter` recorded, then the very
+     * first frame of the loop stood down with `not-following` and its settle
+     * budget untouched, and no `followOutput.exit` anywhere in the trail
+     * because nothing had exited. The register still held `follow-output`, so
+     * the prepend compensation for a history window that arrived 90ms later was
+     * left to a writer that was no longer running, and the transcript stayed at
+     * offset 0 — the top of the window, eight Turns above the tail.
+     */
+    it('survives a render that has not seen the entry yet', () => {
+      act(() => {
+        root.render(
+          <Harness
+            scroller={scroller}
+            latestTurnId="turn-1"
+            isStreaming={false}
+            onController={(next) => { controller = next; }}
+          />,
+        );
+      });
+      act(() => controller?.handleUserScrollIntent());
+      expect(controller?.isFollowingOutputNow()).toBe(false);
+
+      // Outside `act`, so the state update this schedules is still queued.
+      controller?.enterFollowOutput('jump-to-latest');
+      expect(controller?.isFollowingOutputNow()).toBe(true);
+
+      // A synchronous render, which does not carry the queued update.
+      flushSync(() => {
+        root.render(
+          <Harness
+            scroller={scroller}
+            latestTurnId="turn-1"
+            isStreaming={false}
+            onController={(next) => { controller = next; }}
+          />,
+        );
+      });
+
+      expect(controller?.isFollowingOutputNow()).toBe(true);
     });
   });
 });

@@ -23,6 +23,7 @@ import {
 import {
   Button,
   Input,
+  PresenceBoundary,
   Select,
   confirmDanger,
   confirmWarning,
@@ -1098,7 +1099,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
           </div>
         )}
       </div>
-      {showAccountDialog && (
+      <PresenceBoundary active={showAccountDialog}>
         <Suspense fallback={null}>
           <RemoteConnectDialog
             isOpen={showAccountDialog}
@@ -1109,7 +1110,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
             }}
           />
         </Suspense>
-      )}
+      </PresenceBoundary>
     </GalleryLayout>
   );
 };

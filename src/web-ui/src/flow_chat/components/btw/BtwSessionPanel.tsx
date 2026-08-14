@@ -14,6 +14,10 @@ import {FLOWCHAT_FOCUS_ITEM_EVENT, type FlowChatFocusItemRequest} from '../../ev
 import {fileTabManager} from '@/shared/services/FileTabManager';
 import {createTab} from '@/shared/utils/tabUtils';
 import {IconButton, type LineRange} from '@/component-library';
+import {
+  PRESENCE_BOUNDARY_MIN_EXIT_MS,
+  PresenceBoundary,
+} from '@/component-library/components/PresenceBoundary';
 import {resolveSessionRelationship} from '../../utils/sessionMetadata';
 import {agentAPI} from '@/infrastructure/api';
 import {globalEventBus} from '@/infrastructure/event-bus';
@@ -53,6 +57,7 @@ import {
   collectModifiedFilePathsFromTurns,
   hasOpaqueWorkspaceMutationRisk,
 } from '../../utils/modifiedFilePaths';
+import { getMotionAwareScrollBehavior } from '../../utils/motionPreference';
 
 function findReviewChildByRequestId(
   parentSessionId: string | null | undefined,
@@ -299,7 +304,10 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     const container = scrollContainerRef.current;
     if (!container) return;
     shouldAutoScrollRef.current = true;
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: getMotionAwareScrollBehavior('smooth'),
+    });
     setShowScrollToBottom(false);
   }, []);
 
@@ -396,12 +404,40 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     actionBarPhase !== 'idle' &&
     !actionBarMinimized;
 
+  const [retainedReviewActionBarOwnerId, setRetainedReviewActionBarOwnerId] = useState<string | null>(
+    showReviewActionBar ? childSessionId ?? null : null,
+  );
+  useEffect(() => {
+    const ownerId = childSessionId ?? null;
+    if (showReviewActionBar && ownerId) {
+      setRetainedReviewActionBarOwnerId(ownerId);
+      return undefined;
+    }
+    if (!ownerId || retainedReviewActionBarOwnerId !== ownerId) {
+      if (retainedReviewActionBarOwnerId !== null) {
+        setRetainedReviewActionBarOwnerId(null);
+      }
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setRetainedReviewActionBarOwnerId((currentOwnerId) =>
+        currentOwnerId === ownerId ? null : currentOwnerId,
+      );
+    }, PRESENCE_BOUNDARY_MIN_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [childSessionId, retainedReviewActionBarOwnerId, showReviewActionBar]);
+  const retainsReviewActionBarLayout = Boolean(
+    showReviewActionBar ||
+    (childSessionId && retainedReviewActionBarOwnerId === childSessionId),
+  );
+
   const showMinimizedIndicator =
     isReviewSession &&
     actionBarChildSessionId === childSessionId &&
     actionBarPhase !== 'idle' &&
     actionBarMinimized;
-  const reviewActionBottomPadding = showReviewActionBar
+  const reviewActionBottomPadding = retainsReviewActionBarLayout
     ? actionBarHeight + REVIEW_ACTION_BOTTOM_BLANK_SPACE_PX
     : showMinimizedIndicator
       ? REVIEW_ACTION_BOTTOM_BLANK_SPACE_PX
@@ -852,7 +888,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
   // Observe action bar height to adjust body padding dynamically
   useEffect(() => {
-    if (!showReviewActionBar) {
+    if (!retainsReviewActionBarLayout) {
       setActionBarHeight(0);
       return;
     }
@@ -876,7 +912,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     return () => {
       observer.disconnect();
     };
-  }, [showReviewActionBar]);
+  }, [retainsReviewActionBarLayout]);
 
   const handleStopReviewSession = useCallback(async () => {
     if (!childSessionId || stoppingReview || !isTurnProcessing) {
@@ -957,11 +993,11 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     <FlowChatContext.Provider value={contextValue}>
       <FlowChatVolatileContext.Provider value={volatileContextValue}>
       <div
-        className={`btw-session-panel${showReviewActionBar ? ' btw-session-panel--has-action-bar' : ''}`}
+        className={`btw-session-panel${retainsReviewActionBarLayout ? ' btw-session-panel--has-action-bar' : ''}`}
         data-bf-component="btw-session-panel"
         data-bf-part="root"
         data-bf-view="session"
-        data-bf-state={showReviewActionBar ? 'hasActionBar' : undefined}
+        data-bf-state={retainsReviewActionBarLayout ? 'hasActionBar' : undefined}
       >
         <div className="btw-session-panel__header" data-bf-component="btw-session-panel" data-bf-part="header">
           <div className="btw-session-panel__header-left" data-bf-component="btw-session-panel" data-bf-part="headerMain">
@@ -1026,6 +1062,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
         <div
           ref={scrollContainerRef}
+          tabIndex={-1}
           className="btw-session-panel__body"
           data-bf-component="btw-session-panel"
           data-bf-part="body"
@@ -1077,12 +1114,19 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
         <ScrollToBottomButton
           visible={showScrollToBottom}
           onClick={handleScrollToBottom}
+          focusReturnRef={scrollContainerRef}
           className="btw-session-panel__scroll-to-bottom"
           data-bf-component="btw-session-panel"
           data-bf-part="scrollToBottom"
         />
-        {showMinimizedIndicator && (
-          <div className="btw-session-panel__minimized-indicator" data-bf-component="btw-session-panel" data-bf-part="minimized" data-bf-state="minimized">
+        <div
+          className="btw-session-panel__minimized-indicator"
+          data-bf-component="btw-session-panel"
+          data-bf-part="minimized"
+          data-bf-state={showMinimizedIndicator ? 'minimized' : 'hidden'}
+          aria-hidden={!showMinimizedIndicator}
+          {...(!showMinimizedIndicator ? { inert: '' } : {})}
+        >
             <button
               type="button"
               onClick={() => useReviewActionBarStore.getState().restore(childSessionId)}
@@ -1101,14 +1145,21 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
                 </span>
               )}
             </button>
-          </div>
-        )}
+        </div>
 
-        {showReviewActionBar && (
-          <div ref={actionBarRef} className="btw-session-panel__action-bar-wrapper" data-bf-component="btw-session-panel" data-bf-part="actionBar">
+        <PresenceBoundary active={showReviewActionBar}>
+          <div
+            ref={actionBarRef}
+            className="btw-session-panel__action-bar-wrapper"
+            data-bf-component="btw-session-panel"
+            data-bf-part="actionBar"
+            data-visible={showReviewActionBar ? 'true' : 'false'}
+            aria-hidden={!showReviewActionBar}
+            {...(!showReviewActionBar ? { inert: '' } : {})}
+          >
             <ReviewActionBar childSessionId={childSessionId} />
           </div>
-        )}
+        </PresenceBoundary>
       </div>
       </FlowChatVolatileContext.Provider>
     </FlowChatContext.Provider>

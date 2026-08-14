@@ -10,7 +10,12 @@
 .search-card {
   @include shared.liquid-card-base;
   font-family: tokens.$font-family-mono;
-  transition: all tokens.$motion-base tokens.$easing-standard;
+  transition:
+    background-color tokens.$motion-base tokens.$easing-standard,
+    border-color tokens.$motion-base tokens.$easing-standard,
+    box-shadow tokens.$motion-base tokens.$easing-standard,
+    opacity tokens.$motion-base tokens.$easing-standard,
+    transform tokens.$motion-base tokens.$easing-standard;
 }
 
 
@@ -38,7 +43,7 @@
 
 .search-card__icon {
   flex-shrink: 0;
-  transition: all tokens.$motion-base;
+  transition: color tokens.$motion-base tokens.$easing-standard;
 }
 
 .search-card__action {
@@ -77,7 +82,7 @@
 }
 
 .search-card__status-spinner {
-  animation: spin 1s linear infinite;
+  animation: bitfun-search-card-spin 1s linear infinite;
   color: var(--bf-appearance-token-color-info);
 }
 
@@ -93,7 +98,7 @@
   color: var(--bf-appearance-token-color-warning);
 }
 
-@keyframes spin {
+@keyframes bitfun-search-card-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
@@ -180,7 +185,10 @@
   font-size: var(--bf-appearance-token-font-size-sm);
   font-weight: tokens.$font-weight-medium;
   cursor: pointer;
-  transition: all tokens.$motion-base tokens.$easing-standard;
+  transition:
+    background-color tokens.$motion-base tokens.$easing-standard,
+    border-color tokens.$motion-base tokens.$easing-standard,
+    color tokens.$motion-base tokens.$easing-standard;
 
   &:hover {
     background: var(--bf-appearance-token-element-bg-soft);
@@ -217,7 +225,7 @@
   gap: tokens.$size-gap-2;
   padding: tokens.$size-gap-2;
   border-radius: tokens.$size-radius-sm;
-  transition: all tokens.$motion-base;
+  transition: background-color tokens.$motion-base tokens.$easing-standard;
 
   &:hover {
     background: var(--bf-appearance-token-element-bg-soft);
@@ -226,6 +234,12 @@
   svg {
     color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-card__status-spinner {
+    animation: none;
   }
 }
 

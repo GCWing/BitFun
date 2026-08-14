@@ -14,16 +14,19 @@ crate-type = ["rlib"]
 name = "product_capability_contracts"
 path = "tests/product_capability_contracts.rs"
 
+[features]
+default = []
+
 [dependencies]
 bitfun-harness = { path = "../../execution/harness" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, features = ["plugin-runtime"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["plugin-runtime"] }
 bitfun-runtime-services = { path = "../../execution/runtime-services" }
-bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false }
+bitfun-tool-packs = { path = "../../execution/tool-provider-groups" }
 
 [dev-dependencies]
 async-trait = { workspace = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, features = ["agent-api"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api"] }
 bitfun-runtime-services = { path = "../../execution/runtime-services", features = ["test-support"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 

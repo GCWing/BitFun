@@ -63,7 +63,7 @@ import {
 import {
   useBackgroundSubagentActivityStore,
 } from '../../store/backgroundSubagentActivityStore';
-import type { LineRange } from '@/component-library';
+import { PresenceBoundary, type LineRange } from '@/component-library';
 import { isChatPopupActive, subscribeChatPopupChange } from '../chatPopupState';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
@@ -98,6 +98,7 @@ import {
 } from '../../services/historySessionDiagnostics';
 import {
   resolveHistoryBoundaryTarget,
+  resolveTailBoundaryPrecondition,
   resolveTailWindowGrowth,
   transcriptReachesLatestTurn,
   type RenderedTranscriptRange,
@@ -459,6 +460,29 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     respond: respondPermission,
     respondBatch: respondPermissionBatch,
   } = usePermissionRequests(activeSession?.sessionId);
+  const activePermissionPanelSnapshot = activeSession && activePermissionBatch
+    ? {
+        ownerSessionId: activeSession.sessionId,
+        batch: activePermissionBatch,
+        totalPendingCount: permissionRequests.length,
+        aboveChatInput: permissionPanelAboveChatInput,
+        onRespond: respondPermission,
+        onRespondBatch: respondPermissionBatch,
+      }
+    : null;
+  const retainedPermissionPanelSnapshotRef = useRef(activePermissionPanelSnapshot);
+  let renderedPermissionPanelSnapshot = activePermissionPanelSnapshot;
+  if (activePermissionPanelSnapshot) {
+    retainedPermissionPanelSnapshotRef.current = activePermissionPanelSnapshot;
+  } else if (
+    retainedPermissionPanelSnapshotRef.current?.ownerSessionId === activeSession?.sessionId
+  ) {
+    renderedPermissionPanelSnapshot = retainedPermissionPanelSnapshotRef.current;
+  } else {
+    // A retained exit belongs to its originating session. Never let it cross a
+    // session boundary with the new session's callbacks or surrounding props.
+    retainedPermissionPanelSnapshotRef.current = null;
+  }
   const visibleTurnInfo = useVisibleTurnInfo();
   const [queuedTurnNavigation, setQueuedTurnNavigation] = useState<QueuedTurnNavigation | null>(null);
   const [pendingHistoryOpenSession, setPendingHistoryOpenSession] = useState<HistorySessionOpenIntentDetail | null>(null);
@@ -1845,18 +1869,31 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           ? renderedHistoryPresentationRef.current.range
           : null;
       if (!presentation) {
-        if (
-          direction !== 'before'
-          || session?.isPartial !== true
-          || session.turnCatalog?.sessionId !== sessionId
-        ) {
-          recordHistoryPagingEvent(sessionId, 'outcome_cancelled', {
-            direction,
-            reason: 'precondition',
-            isPartial: session?.isPartial,
-            turnCatalogMatches: session?.turnCatalog?.sessionId === sessionId,
-          });
-          return 'cancelled';
+        const precondition = resolveTailBoundaryPrecondition({
+          direction,
+          isPartial: session?.isPartial,
+          hasSession: session !== undefined,
+          turnCatalogMatches: session?.turnCatalog?.sessionId === sessionId,
+        });
+        if (precondition !== 'ask') {
+          /*
+           * Told apart because only one of them stops the asking. A boundary
+           * that answers `cancelled` is re-armed and asked again on the
+           * reader's next scroll event, which is right while the catalog is
+           * still on its way and is a treadmill once the session has every Turn
+           * it will ever have.
+           */
+          recordHistoryPagingEvent(
+            sessionId,
+            precondition === 'exhausted' ? 'outcome_exhausted' : 'outcome_cancelled',
+            {
+              direction,
+              reason: precondition === 'exhausted' ? 'no-window-nothing-loadable' : 'precondition',
+              isPartial: session?.isPartial,
+              turnCatalogMatches: session?.turnCatalog?.sessionId === sessionId,
+            },
+          );
+          return precondition;
         }
         const canonicalTailRange = flowChatStore.getSessionCanonicalTailRange(sessionId);
         if (!canonicalTailRange) {
@@ -2452,16 +2489,19 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onSend={handleSendBackgroundCommandInput}
         />
 
-        {activePermissionBatch && (
-          <PermissionRequestPanel
-            key={`${activePermissionBatch.sessionId}:${activePermissionBatch.roundId}`}
-            requests={activePermissionBatch.requests}
-            totalPendingCount={permissionRequests.length}
-            aboveChatInput={permissionPanelAboveChatInput}
-            onRespond={respondPermission}
-            onRespondBatch={respondPermissionBatch}
-          />
-        )}
+        <PresenceBoundary active={activePermissionPanelSnapshot != null}>
+          {renderedPermissionPanelSnapshot ? (
+            <PermissionRequestPanel
+              key={`${renderedPermissionPanelSnapshot.batch.sessionId}:${renderedPermissionPanelSnapshot.batch.roundId}`}
+              requests={renderedPermissionPanelSnapshot.batch.requests}
+              totalPendingCount={renderedPermissionPanelSnapshot.totalPendingCount}
+              aboveChatInput={renderedPermissionPanelSnapshot.aboveChatInput}
+              visible={activePermissionPanelSnapshot != null}
+              onRespond={renderedPermissionPanelSnapshot.onRespond}
+              onRespondBatch={renderedPermissionPanelSnapshot.onRespondBatch}
+            />
+          ) : null}
+        </PresenceBoundary>
 
         <div
           className="modern-flowchat-container__messages"

@@ -222,7 +222,7 @@ export default function lifecycleUnitTest() {
     it('owns heartbeat timer restart, stop, and tick dispatch', 0, () => {
       const scheduler = new FakeRemoteHeartbeatScheduler();
       let tickCount = 0;
-      const controller = new RemoteHeartbeatController(() => {
+      const controller = new RemoteHeartbeatController(async () => {
         tickCount += 1;
       }, 15000, scheduler);
 
@@ -244,13 +244,39 @@ export default function lifecycleUnitTest() {
       expect(scheduler.clearedIds.length).assertEqual(2);
       expect(scheduler.clearedIds[1]).assertEqual(2);
     });
+
+    it('drops ticks that arrive while the previous one is unanswered', 0, async () => {
+      const scheduler = new FakeRemoteHeartbeatScheduler();
+      let started = 0;
+      let answer: () => void = () => {};
+      const controller = new RemoteHeartbeatController((): Promise<void> => {
+        started += 1;
+        return new Promise<void>((resolve: () => void) => {
+          answer = resolve;
+        });
+      }, 15000, scheduler);
+
+      controller.start();
+      scheduler.tick(1);
+      scheduler.tick(1);
+      scheduler.tick(1);
+      // Three intervals have elapsed against a desktop that answered none of
+      // them, and exactly one request is out.
+      expect(started).assertEqual(1);
+
+      answer();
+      await Promise.resolve();
+      await Promise.resolve();
+      scheduler.tick(1);
+      expect(started).assertEqual(2);
+    });
   });
 
   describe('RemoteActivityLifecycleController', () => {
     it('owns remote heartbeat lifecycle while preserving tick dispatch', 0, () => {
       const scheduler = new FakeRemoteHeartbeatScheduler();
       let tickCount = 0;
-      const controller = new RemoteActivityLifecycleController(() => {
+      const controller = new RemoteActivityLifecycleController(async () => {
         tickCount += 1;
       }, 15000, scheduler);
 

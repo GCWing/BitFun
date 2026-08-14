@@ -16,7 +16,9 @@
   border: 1px solid var(--bf-appearance-token-border-base);
   background: var(--bf-appearance-token-color-bg-scene);
   backdrop-filter: blur(10px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    border-color 160ms ease,
+    box-shadow 180ms ease;
   overflow: hidden;
   width: 100%;
   box-sizing: border-box;
@@ -58,7 +60,7 @@
       0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent),
       0 0 12px color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent),
       inset 0 0 8px color-mix(in srgb, var(--bf-appearance-token-color-warning) 5%, transparent);
-    animation: confirmationPulse 2s ease-in-out infinite;
+    animation: base-tool-card-confirmation-pulse 2s ease-in-out infinite;
     
     &:hover {
       border-color: var(--bf-appearance-token-color-warning);
@@ -92,7 +94,7 @@
     0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent),
     0 0 12px color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent),
     inset 0 0 8px color-mix(in srgb, var(--bf-appearance-token-color-warning) 5%, transparent);
-  animation: confirmationPulse 2s ease-in-out infinite;
+  animation: base-tool-card-confirmation-pulse 2s ease-in-out infinite;
 }
 
 .flow-tool-card-wrapper--permission-pending > :first-child:hover {
@@ -264,20 +266,8 @@
   }
 }
 
-/* ========== Expand animation ========== */
-@keyframes expandDown {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* ========== Confirmation state pulse animation ========== */
-@keyframes confirmationPulse {
+@keyframes base-tool-card-confirmation-pulse {
   0%, 100% {
     box-shadow: 
       0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent),
@@ -289,6 +279,13 @@
       0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-warning) 25%, transparent),
       0 0 20px color-mix(in srgb, var(--bf-appearance-token-color-warning) 35%, transparent),
       inset 0 0 12px color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .base-tool-card-wrapper.requires-confirmation,
+  .flow-tool-card-wrapper--permission-pending > :first-child {
+    animation: none;
   }
 }
 
@@ -334,10 +331,10 @@
 .base-tool-card-wrapper--loading-shimmer .tool-card-icon-marks,
 .base-tool-card-wrapper--loading-shimmer .tool-card-action,
 .base-tool-card-wrapper--loading-shimmer .tool-card-content {
-  animation: tool-card-text-fade 2.2s ease-in-out infinite;
+  animation: base-tool-card-loading-fade 2.2s ease-in-out infinite;
 }
 
-@keyframes tool-card-text-fade {
+@keyframes base-tool-card-loading-fade {
   0%, 100% {
     opacity: 1;
   }

@@ -141,7 +141,7 @@
   }
 
   &__status-spinner {
-    animation: spin 1s linear infinite;
+    animation: bitfun-base-tool-card-spin 1s linear infinite;
     color: var(--bf-appearance-token-color-accent-500);
   }
 
@@ -296,7 +296,7 @@
 }
 
 
-@keyframes spin {
+@keyframes bitfun-base-tool-card-spin {
   from {
     transform: rotate(0deg);
   }
@@ -305,11 +305,8 @@
   }
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
+@media (prefers-reduced-motion: reduce) {
+  .base-tool-card__status-spinner {
+    animation: none;
   }
 }

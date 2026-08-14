@@ -191,3 +191,9 @@
     background-color: var(--bf-appearance-token-color-overlay-black-08);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .code-preview__cursor {
+    animation: none;
+  }
+}

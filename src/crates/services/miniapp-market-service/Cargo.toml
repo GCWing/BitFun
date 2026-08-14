@@ -23,7 +23,7 @@ serde_json = { workspace = true }
 semver = { workspace = true }
 sha2 = { workspace = true }
 similar = { workspace = true }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "rt", "sync", "time"] }
 tower-http = { version = "0.6.11", features = ["fs", "set-header", "trace"] }

@@ -240,3 +240,10 @@ $_dropdown-width: 220px;
 @keyframes breadcrumb-spin {
   to { transform: rotate(360deg); }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-breadcrumb-dropdown,
+  .editor-breadcrumb-dropdown__spinner {
+    animation: none;
+  }
+}

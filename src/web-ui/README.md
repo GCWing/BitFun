@@ -94,6 +94,7 @@ VITE_BUILD_TARGET=web pnpm --dir src/web-ui run build
 ## Related docs (within this package)
 
 - [Logging guide](LOGGING.md)
+- [Motion audit and optimization checklist](MOTION_AUDIT.md)
 - [Component library README](src/component-library/README.md)
 - [i18n README](src/infrastructure/i18n/README.md)
 

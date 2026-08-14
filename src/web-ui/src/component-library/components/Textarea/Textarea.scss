@@ -39,7 +39,9 @@
     background: var(--bf-appearance-token-element-bg-subtle);
     border: 1.5px solid var(--bf-appearance-token-border-base);
     border-radius: 4px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     resize: vertical;
     font-family: inherit;
 
@@ -162,5 +164,11 @@
 
   .bitfun-textarea--filled .bitfun-textarea__field:hover:not(:disabled) {
     background: var(--bf-appearance-token-element-bg-base);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-textarea__field {
+    transition-duration: var(--bf-appearance-token-motion-instant);
   }
 }

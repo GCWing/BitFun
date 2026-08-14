@@ -1,5 +1,10 @@
 import { AppRoute } from '../navigation/AppRouteContract';
 
+/** The connect sheet decides for itself where to open. */
+export const CONNECT_INTENT_AUTO: string = 'auto';
+/** The user tapped something that promised a camera, so open the camera. */
+export const CONNECT_INTENT_SCAN: string = 'scan';
+
 @ObservedV2
 export class AppShellState {
   /**
@@ -12,6 +17,13 @@ export class AppShellState {
   @Trace showSettings: boolean = false;
   @Trace settingsMode: string = 'general';
   @Trace showConnectSheet: boolean = false;
+  /**
+   * Why the connect sheet was opened, which is not something the sheet can work
+   * out for itself: a signed-in phone has an account device list to offer and a
+   * camera to offer, and only the entry point knows which one the user just
+   * asked for by name.
+   */
+  @Trace connectSheetIntent: string = CONNECT_INTENT_AUTO;
   /**
    * Mirror of the resolved master-detail layout mode. Only the presentation
    * layer measures the viewport, so runtime logic that must branch on compact
@@ -55,7 +67,15 @@ export class AppShellState {
     this.setSettingsVisible(false);
   }
 
-  setConnectSheetVisible(visible: boolean): void {
+  /**
+   * The intent is set on every open rather than cleared on close, because the
+   * sheet can also be dismissed by a drag that never reaches this class — and a
+   * default that only holds while nobody swipes is not a default.
+   */
+  setConnectSheetVisible(visible: boolean, intent: string = CONNECT_INTENT_AUTO): void {
+    if (visible) {
+      this.connectSheetIntent = intent;
+    }
     this.showConnectSheet = visible;
   }
 

@@ -18,6 +18,20 @@
   
   // Height follows live composer measurements; do not animate layout.
   transition: none;
+
+  &[data-visible='false'] {
+    pointer-events: none;
+
+    .scroll-to-latest-bar__gradient,
+    .scroll-to-latest-bar__content {
+      opacity: 0;
+    }
+
+    .scroll-to-latest-bar__content {
+      transform: translateY(4px);
+      pointer-events: none;
+    }
+  }
   
   // ========== ChatInput collapsed ==========
   &--input-collapsed {
@@ -48,6 +62,7 @@
       var(--bf-appearance-token-color-overlay-black-80) 60%,
       black 85%
     );
+    transition: opacity 140ms ease;
   }
   
   // ========== Divider content layer ==========
@@ -63,7 +78,15 @@
     align-items: center;
     justify-content: center;
     
-    transition: opacity 140ms ease;
+    transition:
+      opacity 100ms ease,
+      transform 100ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    .scroll-to-latest-bar[data-visible='true'] & {
+      @starting-style {
+        opacity: 0;
+      }
+    }
   }
   
   // ========== Circle arrow button ==========
@@ -86,15 +109,6 @@
       opacity 120ms ease;
   }
   
-  // ========== Hover state ==========
-  &:hover {
-    .scroll-to-latest-bar__btn {
-      border-color: var(--bf-appearance-token-border-medium);
-      color: var(--bf-appearance-token-color-text-primary);
-      transform: translateY(1px);
-    }
-  }
-  
   // ========== Active state ==========
   &:active {
     .scroll-to-latest-bar__btn {
@@ -113,11 +127,21 @@
   }
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .scroll-to-latest-bar[data-visible='true']:hover .scroll-to-latest-bar__btn {
+    border-color: var(--bf-appearance-token-border-medium);
+    color: var(--bf-appearance-token-color-text-primary);
+    transform: translateY(1px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .scroll-to-latest-bar__content,
-  .scroll-to-latest-bar__btn {
+  .scroll-to-latest-bar__btn,
+  .scroll-to-latest-bar__gradient {
     transition-duration: 0ms;
   }
+
 }
 
 // ========== Responsive tweaks ==========

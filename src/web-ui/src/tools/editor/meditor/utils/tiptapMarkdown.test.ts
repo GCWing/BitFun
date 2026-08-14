@@ -55,6 +55,29 @@ describe('tiptap markdown compatibility', () => {
     expect(getUnsupportedTiptapMarkdownFeatures(markdown)).toEqual([]);
   });
 
+  it('parses gfm email autolinks without lookbehind-dependent behavior', () => {
+    const markdown = 'Contact support@example.com or see /admin@example.com.';
+
+    const doc = markdownToTiptapDoc(markdown);
+    const paragraph = doc.content?.[0];
+    const emailNode = paragraph?.content?.find(node =>
+      node.marks?.some(mark =>
+        mark.type === 'link' && mark.attrs?.href === 'mailto:support@example.com'
+      )
+    );
+    const slashEmailNode = paragraph?.content?.find(node =>
+      node.marks?.some(mark =>
+        mark.type === 'link' && mark.attrs?.href === 'mailto:admin@example.com'
+      )
+    );
+
+    expect(emailNode?.text).toBe('support@example.com');
+    expect(slashEmailNode).toBeUndefined();
+    expect(tiptapDocToMarkdown(doc)).toBe(
+      'Contact [support@example.com](mailto:support@example.com) or see /admin@example.com.'
+    );
+  });
+
   it('supports deep heading levels', () => {
     const markdown = '#### Deep heading';
 

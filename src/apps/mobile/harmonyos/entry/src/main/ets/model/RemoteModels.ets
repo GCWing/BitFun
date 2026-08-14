@@ -356,8 +356,11 @@ export interface RemoteToolStatusResponse {
 }
 
 export interface RemoteQuestionAnswerPayload {
-  answer: string;
-  '0': string;
+  answer?: string;
+  '0'?: string | string[];
+  '1'?: string | string[];
+  '2'?: string | string[];
+  '3'?: string | string[];
 }
 
 export interface ChatMessageItemResponse {

@@ -71,6 +71,9 @@ export class ConversationViewState {
     state.workspaceBranch = remote.workspaceBranch;
     state.connectionState = remote.connectionState;
     state.isLoadingConversation = remote.isLoadingConversation;
+    if (state.isLoadingConversation) {
+      state.activeSession = ConversationViewState.emptySession();
+    }
     state.composerCapabilities = REMOTE_CHAT_COMPOSER_CAPABILITIES;
     state.showSuggestionsWhenEmpty = false;
     state.downloadingFilePath = remote.downloadingFilePath;

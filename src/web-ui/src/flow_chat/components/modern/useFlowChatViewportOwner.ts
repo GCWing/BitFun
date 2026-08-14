@@ -24,6 +24,7 @@ import {
   type FlowChatViewportOwner,
   type ViewportClaim,
 } from './flowChatViewportOwnership';
+import { getMotionAwareScrollBehavior } from '../../utils/motionPreference';
 
 export interface ViewportWriteRequest {
   owner: FlowChatViewportOwner;
@@ -143,6 +144,9 @@ export function useFlowChatViewportOwner(
      * refusal is visible at all — a writer that was outranked leaves no trace
      * anywhere else, and "nothing moved" is the more common complaint.
      */
+    const behavior = getMotionAwareScrollBehavior(
+      request.behavior === 'smooth' ? 'smooth' : 'auto',
+    );
     if (isViewportDiagnosticsEnabled()) {
       const fromPx = scroller.scrollTop;
       traceViewportRepeating(`write|${request.owner}|${granted}|${heldBy}`, {
@@ -155,14 +159,14 @@ export function useFlowChatViewportOwner(
           heldBy,
           fromPx: roundViewportPx(fromPx),
           toPx: roundViewportPx(request.topPx),
-          behavior: request.behavior ?? 'auto',
+          behavior,
           holdForMs: request.holdForMs ?? null,
         }),
       });
     }
     if (!granted) return false;
-    if (request.behavior === 'smooth') {
-      scroller.scrollTo({ top: request.topPx, behavior: 'smooth' });
+    if (behavior === 'smooth') {
+      scroller.scrollTo({ top: request.topPx, behavior });
     } else {
       // Assigned rather than `scrollTo({behavior:'auto'})`: an assignment also
       // cancels any animation still running, which is what a writer taking the

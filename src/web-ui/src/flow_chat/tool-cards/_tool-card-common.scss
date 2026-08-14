@@ -31,7 +31,7 @@
 }
 
 /* Animations */
-@keyframes spin {
+@keyframes tool-card-common-spin {
   from {
     transform: rotate(0deg);
   }
@@ -41,18 +41,7 @@
 }
 
 .animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes expandDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: tool-card-common-spin 1s linear infinite;
 }
 
 /* ========== Shared icon-slot (left rail) ========== */
@@ -195,5 +184,11 @@
   .icon-error {
     color: var(--bf-appearance-token-color-error);
     filter: drop-shadow(0 0 4px color-mix(in srgb, var(--bf-appearance-token-color-error) 40%, transparent));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin {
+    animation: none;
   }
 }

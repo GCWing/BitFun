@@ -13,8 +13,8 @@ crate-type = ["rlib"]
 [dependencies]
 async-trait = { workspace = true }
 bitfun-events = { path = "../../contracts/events" }
-bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, features = ["agent-api", "git-port"] }
+bitfun-product-domains = { path = "../../contracts/product-domains" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "git-port"] }
 dunce = { workspace = true }
 fs2 = { workspace = true }
 serde = { workspace = true }

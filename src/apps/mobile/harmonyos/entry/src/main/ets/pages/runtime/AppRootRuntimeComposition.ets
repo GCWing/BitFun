@@ -30,7 +30,9 @@ import { MobileIdentityStore } from '../../services/MobileIdentityStore';
 import { CloudAccountClient, CloudAccountDevice } from '../../services/CloudAccountClient';
 import { CloudAccountSessionStore } from '../../services/CloudAccountSessionStore';
 import { RemoteActivityLifecycleController } from '../../services/RemoteActivityLifecycleController';
+import { RemoteChatCache } from '../../services/RemoteChatCache';
 import { RemoteChatCommandController } from '../../services/RemoteChatCommandController';
+import { RemoteChatLocalRdbStore } from '../../services/RemoteChatLocalRdbStore';
 import { RemoteChatPollingLifecycleController, RemoteChatPollingSnapshot } from '../../services/RemoteChatPollingLifecycleController';
 import { RemoteFileDownloadController } from '../../services/RemoteFileDownloadController';
 import { FilePreviewController } from '../viewmodel/FilePreviewController';
@@ -40,6 +42,8 @@ import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteModelController } from '../../services/RemoteModelController';
 import { RemotePairingPolicy } from '../../services/RemotePairingPolicy';
 import { RemoteSessionController } from '../../services/RemoteSessionController';
+import { RemoteSessionListCache } from '../../services/RemoteSessionListCache';
+import { RemoteSessionListRdbStore } from '../../services/RemoteSessionListRdbStore';
 import { RemoteSessionManager } from '../../services/RemoteSessionManager';
 import { RemoteWorkspaceRepository } from '../../services/RemoteWorkspaceRepository';
 import { RemoteWorkspaceCoordinator } from '../../services/RemoteWorkspaceCoordinator';
@@ -70,8 +74,11 @@ import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { RemotePageState } from '../state/RemotePageState';
 import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
 import { WatchProvisionState } from '../state/WatchProvisionState';
-import { WatchProvisionController } from '../../services/WatchProvisionController';
-import { PeerDeviceProvisionOutcome } from '../../services/RelayHttpClient';
+import {
+  WatchProvisionController,
+  WatchProvisionOutcome,
+  WatchProvisionPort
+} from '../../services/WatchProvisionController';
 import { ConversationViewModel } from '../viewmodel/ConversationViewModel';
 import { FilePreviewState } from '../state/FilePreviewState';
 import { FilePreviewRequest } from '../../model/FilePreviewTarget';
@@ -117,6 +124,7 @@ export abstract class AppRootRuntimeComposition {
   abstract openAppSidebar(): void;
   abstract openRemoteControlSettings(): void;
   abstract pickImages(): Promise<void>;
+  abstract publishRemoteSessions(sessions: RemoteSession[], hasMore: boolean): void;
   abstract reconnect(): Promise<void>;
   abstract reconnectActiveRemote(): Promise<void>;
   abstract selectAssistant(path: string): Promise<void>;
@@ -151,17 +159,71 @@ export abstract class AppRootRuntimeComposition {
   readonly remotePageState: RemotePageState = new RemotePageState();
   readonly remoteCreateState: RemoteCreateSessionState = new RemoteCreateSessionState();
   readonly watchProvisionState: WatchProvisionState = new WatchProvisionState();
+  private readonly watchProvisionPort: WatchProvisionPort = {
+    // Two ways to reach a credential, and the phone's own account is the
+    // better one: it works with the desktop asleep. The room channel stays as
+    // the fallback for a phone that only ever scanned a QR code and so has no
+    // account of its own to mint from.
+    canProvision: (): boolean => this.settingsController.canMintWatchCredential() ||
+      this.canProvisionViaDesktop(),
+    provision: (deviceId: string, deviceName: string, requestId: string): Promise<WatchProvisionOutcome> =>
+      this.provisionWatchDevice(deviceId, deviceName, requestId)
+  };
   readonly watchProvisionController: WatchProvisionController =
-    new WatchProvisionController(this.watchProvisionState, {
-      // Provisioning only rides the QR-paired room channel: that is the one
-      // path where the desktop holds the pairing identity that authorizes it.
-      canProvision: (): boolean =>
-        (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected &&
-          this.sessionManager.hasRoomChannel(),
-      provision: (deviceId: string, deviceName: string, requestId: string): Promise<PeerDeviceProvisionOutcome> =>
-        this.sessionManager.provisionPeerDevice(deviceId, deviceName, requestId),
-      relayUrl: (): string => this.sessionManager.roomRelayEndpoint()
-    });
+    new WatchProvisionController(this.watchProvisionState, this.watchProvisionPort);
+
+  private canProvisionViaDesktop(): boolean {
+    return (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected &&
+      this.sessionManager.hasRoomChannel();
+  }
+
+  /**
+   * Mints the watch's credential, preferring this phone's own account.
+   *
+   * The relay gates minting on holding a device token, which a password login
+   * on this phone produces — the desktop was never uniquely entitled, it was
+   * just the only party the old code asked. Going direct means a watch can be
+   * onboarded with the desktop closed, and skips a 45-second round trip when
+   * it is open.
+   *
+   * `undefined` back from the account path means "not entitled" (a token
+   * delegated by a room pairing rather than a login), which is the one case
+   * worth falling back for. A network failure throws instead, so a blip is not
+   * reported as a missing desktop.
+   */
+  private async provisionWatchDevice(
+    deviceId: string,
+    deviceName: string,
+    requestId: string
+  ): Promise<WatchProvisionOutcome> {
+    const minted = await this.settingsController.provisionWatchCredential(deviceId, deviceName, requestId);
+    if (minted) {
+      return minted;
+    }
+    if (!this.canProvisionViaDesktop()) {
+      return AppRootRuntimeComposition.provisionUnavailable();
+    }
+    const outcome = await this.sessionManager.provisionPeerDevice(deviceId, deviceName, requestId);
+    return {
+      ok: outcome.ok,
+      // The desktop mints against the relay its room lives on, which is not
+      // necessarily the one this phone's account is on.
+      relayUrl: outcome.ok ? this.sessionManager.roomRelayEndpoint() : '',
+      token: outcome.token,
+      userId: outcome.userId,
+      masterKeyBase64: outcome.masterKeyBase64,
+      deviceId: outcome.deviceId,
+      failure: outcome.failure,
+      desktopReported: outcome.desktopReported
+    };
+  }
+
+  private static provisionUnavailable(): WatchProvisionOutcome {
+    return {
+      ok: false, relayUrl: '', token: '', userId: '', masterKeyBase64: '', deviceId: '',
+      failure: '', desktopReported: false
+    };
+  }
   readonly generalChatConfigStore: GeneralChatConfigStore = new GeneralChatConfigStore();
   readonly generalChatController: GeneralChatController =
     GeneralChatController.createDefault(this.generalChatConfigStore);
@@ -180,6 +242,25 @@ export abstract class AppRootRuntimeComposition {
       (): string => this.conversationController.visibleGeneralChatDraftId()
     );
   readonly chatTimelineStore: ConversationViewModel = new ConversationViewModel();
+  // Scoped to the desktop currently being controlled: session ids are issued by
+  // the desktop, so two of them on one account can name different conversations
+  // with the same id.
+  readonly remoteChatCache: RemoteChatCache =
+    new RemoteChatCache(
+      new RemoteChatLocalRdbStore(),
+      (): string => this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId
+    );
+  readonly remoteSessionListCache: RemoteSessionListCache =
+    new RemoteSessionListCache(
+      new RemoteSessionListRdbStore(),
+      (): string => this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId
+    );
+  // Both caches hold what one account saw on one desktop, so they are dropped
+  // together whenever that binding ends.
+  readonly clearCachedRemoteData: () => Promise<void> = async (): Promise<void> => {
+    await this.remoteChatCache.clear();
+    await this.remoteSessionListCache.clear();
+  };
   readonly generalChatCommandController: GeneralChatCommandController =
     new GeneralChatCommandController(
       this.generalChatController,
@@ -234,8 +315,11 @@ export abstract class AppRootRuntimeComposition {
     );
   readonly voiceInputService: VoiceInputService = new VoiceInputService();
   readonly remoteActivityLifecycleController: RemoteActivityLifecycleController =
-    new RemoteActivityLifecycleController(() => {
-      this.remoteActivityViewModel.checkConnectionHealth();
+    new RemoteActivityLifecycleController((): Promise<void> => {
+      // Returned, not fired and forgotten: the heartbeat skips its next tick
+      // while this one is still out, and it can only do that if it is handed
+      // something to wait on.
+      return this.remoteActivityViewModel.checkConnectionHealth();
     });
   readonly remoteActivityViewModel: RemoteActivityViewModel =
     new RemoteActivityViewModel(
@@ -244,6 +328,7 @@ export abstract class AppRootRuntimeComposition {
       this.remoteResumeGate,
       {
         isConnected: (): boolean => (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected,
+        isReconnecting: (): boolean => (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Reconnecting,
         isBusy: (): boolean => this.remotePageState.isBusy,
         hasRemoteBinding: (): boolean => this.hasRemoteBindingForResume(),
         isRemoteChat: (): boolean => this.appShellViewModel.isRoute(AppRoute.RemoteChat),
@@ -251,7 +336,6 @@ export abstract class AppRootRuntimeComposition {
         onConnectionState: (state: string): void => this.remotePageState.setConnectionState(state as ConnectionState),
         onStatus: (status: string): void => this.remotePageState.setStatusText(status),
         onConnectionError: async (err: Object): Promise<boolean> => this.settingsController.handleRemoteConnectionError(err),
-        onStopHeartbeat: (): void => this.remoteActivityViewModel.stopHeartbeat(),
         onStartPolling: (): void => this.conversationController.startRemotePolling(),
         onStopPolling: (): void => this.remoteChatPollingLifecycleController.stop(),
         onPoll: async (): Promise<void> => {
@@ -328,7 +412,7 @@ export abstract class AppRootRuntimeComposition {
           const extras = this.remoteWorkspaceSessions.filter((item: RemoteSession) => {
             return item.workspacePath !== this.remotePageState.workspacePath;
           });
-          this.remotePageState.setSessions(this.mergeSessions(sessions, extras), hasMore);
+          this.publishRemoteSessions(this.mergeSessions(sessions, extras), hasMore);
         },
         onActiveSession: (session: SessionSummary) => {
           this.conversationController.applyRemoteActiveSession(session);
@@ -371,6 +455,9 @@ export abstract class AppRootRuntimeComposition {
         onMessageCountKnown: (pollVersion: number, knownMessageCount: number) => {
           this.conversationController.updateKnownMessageCount(pollVersion, knownMessageCount);
         },
+        onTimelineReady: () => {
+          this.remotePageState.setConversationLoading(false);
+        },
         onSendSucceeded: (turnId: string, pendingActiveId: string) => {
           if (turnId.length > 0) {
             this.chatTimelineStore.setLocalActiveTurn(turnId);
@@ -404,13 +491,17 @@ export abstract class AppRootRuntimeComposition {
         onStatusText: (statusText: string) => {
           this.remotePageState.setStatusText(statusText);
         },
+        onToast: (message: string) => {
+          this.conversationController.showHomeToast(message);
+        },
         onBusy: (isBusy: boolean) => {
           this.remotePageState.setBusy(isBusy);
         },
         onPollRequested: () => {
-          this.remoteChatPollingLifecycleController.pollNow();
+          this.remoteChatPollingLifecycleController.nudge();
         }
-      }
+      },
+      this.remoteChatCache
     );
   readonly remoteFileDownloadController: RemoteFileDownloadController =
     new RemoteFileDownloadController(
@@ -452,7 +543,7 @@ export abstract class AppRootRuntimeComposition {
         this.remotePageState.setBusy(isBusy);
       },
       () => {
-        this.remoteChatPollingLifecycleController.pollNow();
+        this.remoteChatPollingLifecycleController.nudge();
       }
     );
   readonly remoteChatPollingLifecycleController: RemoteChatPollingLifecycleController =
@@ -511,9 +602,6 @@ export abstract class AppRootRuntimeComposition {
         onResetTimeline: (sessionId: string): void => this.conversationController.resetRemoteTimeline(sessionId),
         onClearRemoteFiles: (): void => this.remoteFileDownloadController.clear(),
         onKnownStateReset: (): void => this.conversationController.resetKnownRemoteState(),
-        onLoadModelCatalog: async (sessionId: string): Promise<void> => {
-          await this.conversationController.loadRemoteModelCatalog(sessionId);
-        },
         onLoadActiveMessages: async (): Promise<void> => {
           await this.conversationController.loadRemoteMessages();
         },
@@ -565,6 +653,7 @@ export abstract class AppRootRuntimeComposition {
       async (): Promise<void> => {
         await this.remoteWorkspaceViewModel.loadRecentWorkspacesInBackground();
       },
+      this.clearCachedRemoteData,
       (route: AppRoute): void => this.appShellViewModel.replaceRouteWithoutAnimation(route),
       (): void => this.appShellState.setConnectSheetVisible(false),
       (): void => this.appShellState.setConnectSheetVisible(true)
@@ -594,6 +683,7 @@ export abstract class AppRootRuntimeComposition {
           startHeartbeat: (): void => this.remoteActivityViewModel.startHeartbeat(),
           resetTimeline: (): void => this.conversationController.resetRemoteTimeline(''),
           resetKnownRemoteState: (): void => this.conversationController.resetKnownRemoteState(),
+          clearCachedRemoteData: this.clearCachedRemoteData,
           closeSettings: (): void => this.appShellState.setSettingsVisible(false),
           closeConnectSheet: (): void => this.appShellState.setConnectSheetVisible(false),
           navigateRemoteHome: (): void => this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome),
@@ -612,6 +702,7 @@ export abstract class AppRootRuntimeComposition {
       {
         timeline: this.chatTimelineStore,
         chat: this.remoteChatCommandController,
+        chatCache: this.remoteChatCache,
         polling: this.remoteChatPollingLifecycleController,
         models: this.remoteModelController,
         files: this.remoteFileDownloadController,
@@ -773,7 +864,6 @@ export abstract class AppRootRuntimeComposition {
       openAccount: (): void => { this.appShellState.openSettings('account'); },
       cloudLogin: (relayUrl: string, username: string, password: string): Promise<string> =>
         this.settingsController.loginCloudAccount(relayUrl, username, password),
-      cloudSync: (): Promise<string> => this.settingsController.syncCloudAccount(),
       cloudLogout: (): Promise<void> => this.settingsController.logoutCloudAccount(),
       cloudListDevices: (): Promise<CloudAccountDevice[]> => this.settingsController.listCloudAccountDevices(),
       getPermissionMode: (): Promise<RemotePermissionMode> => this.settingsController.getRemotePermissionMode(),
@@ -815,4 +905,3 @@ export abstract class AppRootRuntimeComposition {
 
 
 }
-

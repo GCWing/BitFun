@@ -129,7 +129,6 @@ $_indent-width: 8px;
   overflow-x: hidden;
   padding: $size-gap-2 0;
   -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
 
 }
 
@@ -147,7 +146,9 @@ $_indent-width: 8px;
   position: relative;
   
   background: transparent;
-  transition: all $motion-base $easing-standard;
+  transition:
+    background-color $motion-base $easing-standard,
+    color $motion-base $easing-standard;
   color: var(--bf-appearance-token-color-text-secondary);
   
   &:focus {
@@ -190,8 +191,21 @@ $_indent-width: 8px;
   }
 
   &--highlighted {
-    background: var(--bf-appearance-token-git-color-branch-bg) !important;
-    animation: file-node-highlight-fade 2s ease-out forwards;
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      border-radius: inherit;
+      background: var(--bf-appearance-token-git-color-branch-bg);
+      pointer-events: none;
+      animation: file-node-highlight-fade 240ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    }
+
+    > * {
+      position: relative;
+      z-index: 1;
+    }
     
     .bitfun-file-explorer__node-name {
       color: var(--bf-appearance-token-git-color-branch);
@@ -201,24 +215,35 @@ $_indent-width: 8px;
 }
 
 @keyframes file-node-highlight-fade {
-  0% {
-    background: rgba(var(--bf-appearance-token-color-accent-500-rgb) / 0.2);
-  }
-  30% {
-    background: var(--bf-appearance-token-git-color-branch-bg);
-  }
-  100% {
-    background: transparent;
-  }
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .bitfun-file-explorer__expand-icon {
   @include mixins.flex-layout(row, center, center, 0);
   @include mixins.size($_icon-size);
-  transition: transform $motion-fast $easing-standard;
   color: var(--bf-appearance-token-color-text-muted);
   flex-shrink: 0;
   min-width: $_icon-size;
+
+  > svg:not(.bitfun-file-explorer__loading-icon) {
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  &--expanded > svg:not(.bitfun-file-explorer__loading-icon) {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-file-explorer__node-content--highlighted::after {
+    opacity: 0.2;
+    animation: none;
+  }
+
+  .bitfun-file-explorer__expand-icon > svg {
+    transition: none;
+  }
 }
 
 .bitfun-file-explorer__icon {

@@ -24,9 +24,9 @@ image = { workspace = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = { workspace = true }
 objc2 = { workspace = true }
-objc2-app-kit = { workspace = true, features = ["NSImage", "NSImageRep", "NSBitmapImageRep"] }
-objc2-foundation = { workspace = true, features = ["NSString", "NSData", "NSError", "NSDictionary"] }
-objc2-web-kit = { workspace = true }
+objc2-app-kit = { workspace = true, features = ["std", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
+objc2-foundation = { workspace = true, features = ["std", "NSString", "NSData", "NSError", "NSDictionary"] }
+objc2-web-kit = { workspace = true, features = ["std", "WKContentWorld", "WKWebView", "WKSnapshotConfiguration", "WKPDFConfiguration", "block2", "objc2-app-kit"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 tempfile = { workspace = true }

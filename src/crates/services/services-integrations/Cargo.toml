@@ -17,18 +17,18 @@ serde_json = { workspace = true }
 log = { workspace = true }
 ts-rs = { workspace = true, optional = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
-bitfun-agent-tools = { path = "../../execution/tool-contracts", default-features = false, optional = true }
+bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
-bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, optional = true }
+bitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
 aes-gcm = { workspace = true, optional = true }
 aes = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 argon2 = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
-bitfun-services-core = { path = "../services-core", default-features = false, optional = true }
+bitfun-services-core = { path = "../services-core", optional = true }
 bzip2 = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 dunce = { workspace = true, optional = true }
@@ -47,7 +47,7 @@ mac_address = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
 oxc = { workspace = true, optional = true }
-qrcode = { workspace = true, optional = true }
+qrcode = { workspace = true, features = ["image", "svg"], optional = true }
 rand = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["http2"], optional = true }
 semver = { workspace = true, optional = true }

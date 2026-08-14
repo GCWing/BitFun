@@ -25,6 +25,7 @@ import { getProviderDisplayName } from '@/infrastructure/config/services/modelCo
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { Switch, Tooltip } from '@/component-library';
+import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
 import { notificationService } from '@/shared/notification-system';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
@@ -41,7 +42,7 @@ import {
   type ContextUsageSource,
 } from '../utils/tokenUsageDisplay';
 import { createLogger } from '@/shared/utils/logger';
-import { getModelSelectorDropdownStyle } from './modelSelectorDropdownPosition';
+import { getModelSelectorDropdownLayout } from './modelSelectorDropdownPosition';
 import { ReasoningPresetSelector } from './ReasoningPresetSelector';
 import {
   getRecentReasoningPreset,
@@ -270,6 +271,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     position: 'fixed',
     visibility: 'hidden',
   });
+  const [resolvedDropdownPlacement, setResolvedDropdownPlacement] = useState(dropdownPlacement);
   const activeSession = sessionId ? FlowChatStore.getInstance().getState().sessions.get(sessionId) : undefined;
   const sessionReasoningPreset = useSyncExternalStore(
     useCallback(
@@ -438,6 +440,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       if (dropdownRef.current && !dropdownRef.current.contains(target)
           && portalDropdownRef.current && !portalDropdownRef.current.contains(target)) {
         setDropdownOpen(false);
+        setKeyboardNavigationOpen(false);
       }
     };
 
@@ -458,12 +461,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       if (!dropdownRef.current || !portalDropdownRef.current) return;
       const anchorRect = dropdownRef.current.getBoundingClientRect();
       const dropdownRect = portalDropdownRef.current.getBoundingClientRect();
-      setDropdownStyle(getModelSelectorDropdownStyle(
+      const layout = getModelSelectorDropdownLayout(
         anchorRect,
         dropdownRect,
         dropdownPlacement,
         { width: window.innerWidth, height: window.innerHeight },
-      ));
+      );
+      setDropdownStyle(layout.style);
+      setResolvedDropdownPlacement(layout.placement);
     };
 
     updatePosition();
@@ -722,6 +727,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const handleSelectModel = useCallback(async (modelId: string) => {
     if (loading || reasoningLoading) return;
 
+    if (portalDropdownRef.current?.contains(document.activeElement)) {
+      triggerRef.current?.focus();
+    }
     setLoading(true);
     setDropdownOpen(false);
 
@@ -981,16 +989,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     if (event.key === 'Escape' && dropdownOpen) {
       event.preventDefault();
       setDropdownOpen(false);
-      setKeyboardNavigationOpen(false);
     }
   }, [dropdownOpen, isAcpSession, loadAcpOptions]);
 
   const handleDropdownKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      setDropdownOpen(false);
-      setKeyboardNavigationOpen(false);
       triggerRef.current?.focus();
+      setDropdownOpen(false);
       return;
     }
 
@@ -1030,6 +1036,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     });
 
     return () => window.cancelAnimationFrame(frameId);
+  }, [dropdownOpen, keyboardNavigationOpen]);
+
+  useEffect(() => {
+    if (!dropdownOpen && keyboardNavigationOpen) {
+      triggerRef.current?.focus();
+    }
   }, [dropdownOpen, keyboardNavigationOpen]);
   
   const tokenPercentage = useMemo(() => {
@@ -1074,7 +1086,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         ref={dropdownRef}
         className={`bitfun-model-selector ${className}`}
       >
-        <Tooltip content={getModelTooltipText(
+        <Tooltip disabled={dropdownOpen} content={getModelTooltipText(
           externalCurrentModel,
           externalSelection.providerLabel,
         )}>
@@ -1089,7 +1101,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             onKeyDown={handleTriggerKeyDown}
             onClick={(event) => {
               const nextOpen = !dropdownOpen;
-              setKeyboardNavigationOpen(nextOpen && event.detail === 0);
+              if (nextOpen) {
+                setKeyboardNavigationOpen(event.detail === 0);
+              } else if (event.detail !== 0) {
+                setKeyboardNavigationOpen(false);
+              }
               setDropdownOpen(nextOpen);
             }}
             disabled={loading || externalSelection.disabled}
@@ -1115,15 +1131,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           />,
         )}
 
-        {dropdownOpen && createPortal(
-          <div
+        <PresenceBoundary active={dropdownOpen}>
+          {createPortal(
+            <div
             id={menuId}
             className="bitfun-model-selector__dropdown"
             ref={portalDropdownRef}
             style={dropdownStyle}
             data-testid="chat-model-selector-menu"
             data-keyboard-open={keyboardNavigationOpen ? 'true' : 'false'}
-            data-placement={dropdownPlacement}
+            data-placement={resolvedDropdownPlacement}
+            data-open={dropdownOpen ? 'true' : 'false'}
+            aria-hidden={!dropdownOpen}
+            {...(!dropdownOpen ? { inert: '' } : {})}
             role="menu"
             aria-label={t('modelSelector.modelSelection')}
             onKeyDown={handleDropdownKeyDown}
@@ -1163,9 +1183,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 );
               })}
             </div>
-          </div>,
-          document.body,
-        )}
+            </div>,
+            document.body,
+          )}
+        </PresenceBoundary>
       </div>
     );
   }
@@ -1192,7 +1213,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         ref={dropdownRef}
         className={`bitfun-model-selector ${className}`}
       >
-        <Tooltip content={acpTooltip}>
+        <Tooltip content={acpTooltip} disabled={dropdownOpen}>
           <button
             ref={triggerRef}
             data-testid="chat-model-selector-btn"
@@ -1204,7 +1225,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             onKeyDown={handleTriggerKeyDown}
             onClick={(event) => {
               const nextOpen = !dropdownOpen;
-              setKeyboardNavigationOpen(nextOpen && event.detail === 0);
+              if (nextOpen) {
+                setKeyboardNavigationOpen(event.detail === 0);
+              } else if (event.detail !== 0) {
+                setKeyboardNavigationOpen(false);
+              }
               setDropdownOpen(nextOpen);
               if (nextOpen) {
                 void loadAcpOptions();
@@ -1239,8 +1264,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           />,
         )}
 
-        {dropdownOpen && createPortal(
-          <div
+        <PresenceBoundary active={dropdownOpen}>
+          {createPortal(
+            <div
             id={menuId}
             className="bitfun-model-selector__dropdown"
             data-bf-component="model-selector"
@@ -1249,7 +1275,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             style={dropdownStyle}
             data-testid="chat-model-selector-menu"
             data-keyboard-open={keyboardNavigationOpen ? 'true' : 'false'}
-            data-placement={dropdownPlacement}
+            data-placement={resolvedDropdownPlacement}
+            data-open={dropdownOpen ? 'true' : 'false'}
+            aria-hidden={!dropdownOpen}
+            {...(!dropdownOpen ? { inert: '' } : {})}
             role="menu"
             aria-label="ACP model"
             onKeyDown={handleDropdownKeyDown}
@@ -1319,9 +1348,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 </div>
               </>
             )}
-          </div>,
-          getAppearanceOverlayHost()
-        )}
+            </div>,
+            getAppearanceOverlayHost()
+          )}
+        </PresenceBoundary>
       </div>
     );
   }
@@ -1349,7 +1379,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       ref={dropdownRef}
       className={`bitfun-model-selector ${className}`}
     >
-      <Tooltip content={tooltipContent}>
+      <Tooltip content={tooltipContent} disabled={dropdownOpen}>
         <button
           ref={triggerRef}
           data-testid="chat-model-selector-btn"
@@ -1361,7 +1391,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           onKeyDown={handleTriggerKeyDown}
           onClick={(event) => {
             const nextOpen = !dropdownOpen;
-            setKeyboardNavigationOpen(nextOpen && event.detail === 0);
+            if (nextOpen) {
+              setKeyboardNavigationOpen(event.detail === 0);
+            } else if (event.detail !== 0) {
+              setKeyboardNavigationOpen(false);
+            }
             setDropdownOpen(nextOpen);
           }}
           disabled={loading || reasoningLoading}
@@ -1393,8 +1427,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </Tooltip>
       )}
 
-      {dropdownOpen && createPortal(
-        <div
+      <PresenceBoundary active={dropdownOpen}>
+        {createPortal(
+          <div
           id={menuId}
           className="bitfun-model-selector__dropdown"
           data-bf-component="model-selector"
@@ -1403,7 +1438,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           style={dropdownStyle}
           data-testid="chat-model-selector-menu"
           data-keyboard-open={keyboardNavigationOpen ? 'true' : 'false'}
-          data-placement={dropdownPlacement}
+          data-placement={resolvedDropdownPlacement}
+          data-open={dropdownOpen ? 'true' : 'false'}
+          aria-hidden={!dropdownOpen}
+          {...(!dropdownOpen ? { inert: '' } : {})}
           role="menu"
           aria-label={t('modelSelector.modelSelection')}
           onKeyDown={handleDropdownKeyDown}
@@ -1541,9 +1579,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               );
             })}
           </div>
-        </div>,
-        getAppearanceOverlayHost()
-      )}
+          </div>,
+          getAppearanceOverlayHost()
+        )}
+      </PresenceBoundary>
     </div>
   );
 };

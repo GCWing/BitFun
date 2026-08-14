@@ -1,8 +1,8 @@
 # BitFun 编译与依赖治理计划
 
-> 最近核实：2026-08-12
+> 最近核实：2026-08-13
 >
-> 实现复核基线：`gcwing/main@a4e06cae3`
+> 实现复核基线：`gcwing/main@a4d944e5b`
 >
 > 性能 A/B 基线：`gcwing/main@1f538b96d`
 >
@@ -23,6 +23,7 @@
 | Core 默认值不再代表完整产品 | Core library 的默认 feature 集合为空，能力内部实现依赖回到实际 owner；最新三平台 feature-free 闭包继续减少 30/31/31 个 package instance |
 | ACP 按实际宿主拆分角色 | 兼容默认值仍为 client + server；Desktop 只选择 client，CLI 选择两者。Desktop 独立构建不再编译 ACP 的 4,211 行 server/runtime 源码，产品协议与远程行为不变 |
 | 完整产品行为保持 | `product-full` 显式组合全部 capability owner；Core 自身不再携带 Desktop host transport而减少 1 个 package，Desktop 闭包不变。CLI 显式保留原先实际生效的 Oniguruma 高亮后端，ACP 默认组合保持原能力 |
+| 默认 feature 责任已集中 | 仓内空默认由被依赖 crate 和边界检查负责；workspace member 的 `default-features = false` 从 70 处降到 6 处，仅保留 ACP 两个窄 consumer 与 Relay 独立 Docker 上下文的 4 处必要声明。第三方默认策略尽可能回到 workspace 根，根 lock 只删除 11 个 package、无新增 |
 | Installer 删除未使用的直接能力 | 独立 manifest 的直接 dependency 从 18 降到 10，Windows normal/build 闭包减少 6；不把 Installer 并入根 workspace，本 PR 按要求不提交其生成 lockfile |
 | focused test 仍保持精确 | 同 owner、feature、平台和进程语义的源文件进入分组 target；使用 `--test <target> <module>::<filter>` 运行单模块 |
 
@@ -243,7 +244,7 @@ workspace 读取由 `workspace-text-runtime` 选择，诊断日志脱敏与本�
 已全部迁移，完整产品的运行时事件、翻译和服务行为不变，但这些源码迁移不能描述为对未知外部
 consumer 零影响。
 
-根 lock package 仍为 1169，新增、升级、降级 package 均为 0。由于 Core 删除本地
+该轮结束时根 lock package 为 1169，新增、升级、降级 package 均为 0。由于 Core 删除本地
 `bitfun-transport` 直接边，`Cargo.lock` 的 Core dependency record 同步删除这一行；这是依赖边
 收敛，不是 package 集合增长，也不通过保留无 owner 的 optional dependency 伪造字节不变。
 
@@ -278,6 +279,34 @@ wire shape 与行为不变。
 本轮没有新增、升级或降级第三方 package，根 `Cargo.lock` 保持字节不变；也没有新增 CI job、矩阵或命令。
 Runtime Ports 的 owner-specific integration targets 保持彼此独立，避免为了减少 executable 数重新制造
 feature union。
+
+以下以 `gcwing/main@a4d944e5b` 为变更前基线，统一默认 feature 的责任位置。该主线相对前次测量
+没有 Cargo 输入变化；统计继续使用同样三个
+target triple 和 `normal,build` 版本化 package instance 去重口径；它只描述编译图，不直接代表墙钟时间：
+
+| 闭包 | Windows | macOS | Linux | 结果 |
+|---|---:|---:|---:|---|
+| Core feature-free | 63 → 63 | 51 → 51 | 50 → 50 | 空默认与显式 owner feature 不变；只删除 consumer 侧冗余开关 |
+| Core `product-full` | 569 → 569 | 556 → 556 | 600 → 600 | 完整产品 owner 集合与运行能力不变 |
+| CLI | 642 → 640 | 641 → 639 | 664 → 662 | Markdown 只使用 parser，退出未消费的 `getopts` 与 HTML renderer |
+| Desktop | 790 → 790 | 805 → 793 | 887 → 887 | BitFun 的 macOS Objective-C 直接依赖边按实际 imports 选择 feature；Tauri/wry 等第三方仍合并自身所需 feature |
+| Relay Service | 190 → 190 | 193 → 193 | 192 → 192 | 独立 Docker manifest 保持显式版本与默认策略，闭包不变 |
+| Services Integrations feature-free | 26 → 26 | 28 → 28 | 27 → 27 | Qrcode 的 PNG/SVG 能力仍由 `remote-connect` owner 显式选择 |
+
+workspace member 中显式 `default-features = false` 从 70 处降到 6 处：62 个仓内空默认重复声明删除，
+MiniApp/Skin Market 的 2 个 SQLx 声明改为继承 workspace 根策略。剩余 6 处中，两处是 Desktop/CLI 对 ACP
+的必要例外，因为 ACP 有意保留 `client + server` 兼容默认，而两个产品入口必须分别选择 client-only 和
+双角色；另 4 处属于 Relay Server、Relay Service 和 Page Function Runtime，它们会被 Docker 单独复制、
+无法继承 workspace 根，因此继续显式声明 Tokio、SQLx 与 RquickJS 的默认策略。
+
+第三方默认收敛只处理有源码与构建证据的依赖：Futures 保留 `std`，Tracing 保留 `std`，Chrono 保留
+`serde + clock + std`；Tokio Stream 的真实 consumer 只使用 feature-free 的 Receiver/iter wrappers；
+Remote Connect 显式选择 qrcode 的 `image + svg`；Pulldown-Cmark 不启用 CLI 未使用的命令行/HTML renderer；
+BitFun 的 macOS Objective-C binding 直接依赖边只选择源码导入的类型和所需 `std`；Cargo 的最终
+feature union 仍包含 Tauri、wry、notification、updater 等第三方路径的需求。根 `Cargo.lock` 从 1169
+降到 1158，新增 package 为 0；删除项仅来自
+Pulldown-Cmark 的 `getopts`/HTML escape 子图和未使用的 Objective-C framework binding。未关闭 Axum、Tauri、
+Clap、Tracing Subscriber、Notify 等默认即产品契约或缺少独立收益证据的依赖。
 
 | 状态 | 范围 | 处理结论 |
 |---|---|---|

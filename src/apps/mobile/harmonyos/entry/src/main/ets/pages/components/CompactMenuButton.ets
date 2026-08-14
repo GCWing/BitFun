@@ -1,5 +1,6 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, INK } from './Theme';
+import { TemplateIcon } from './TemplateIcon';
+import { CARD } from './Theme';
 
 @ComponentV2
 export struct CompactMenuButton {
@@ -8,12 +9,11 @@ export struct CompactMenuButton {
 
   build() {
     Stack({ alignContent: Alignment.Center }) {
-      Image($r('app.media.gpt_home_menu_glyph'))
-        .width(22)
-        .height(14)
-        .objectFit(ImageFit.Contain)
-        .renderMode(ImageRenderMode.Template)
-        .foregroundColor(INK)
+      TemplateIcon({
+        src: $r('app.media.gpt_home_menu_glyph'),
+        iconWidth: 22,
+        iconHeight: 14
+      })
     }
     .width(this.controlSize)
     .height(this.controlSize)

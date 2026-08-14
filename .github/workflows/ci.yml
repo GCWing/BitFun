@@ -335,6 +335,9 @@ jobs:
       - name: Validate theme visual governance contract
         run: pnpm run theme:visual-contract
 
+      - name: Validate WebKit compatibility gate
+        run: pnpm run verify:webkit-compatibility:test
+
       - name: Lint web UI
         run: pnpm run lint:web
 

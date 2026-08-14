@@ -3,13 +3,18 @@
  * A single editor group with tab bar and content area.
  */
 
-import React, { useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabBar } from '../tab-bar';
 import { DropZone } from './DropZone';
 import FlexiblePanel from '../../base/FlexiblePanel';
 import { usePanelViewCanvasStore } from '../stores';
 import { useSceneStore } from '../../../../stores/sceneStore';
+import {
+  getInteractionMotion,
+  isReducedMotionPreferred,
+  type InteractionMotion,
+} from '@/shared/utils/motionPreference';
 import type { 
   EditorGroupId, 
   EditorGroupState, 
@@ -77,6 +82,13 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
 }) => {
   const { t } = useTranslation('components');
   const visibleTabs = useMemo(() => group.tabs.filter(t => !t.isHidden), [group.tabs]);
+  const activeTabContentRef = useRef<HTMLDivElement | null>(null);
+  const activeTabAnimationRef = useRef<Animation | null>(null);
+  const previousActiveTabIdRef = useRef(group.activeTabId);
+  const tabTransitionIntentRef = useRef<{
+    motion: InteractionMotion;
+    tabId: string;
+  } | null>(null);
   const isKeepAliveTerminalTab = useCallback((tab: EditorGroupState['tabs'][number]) =>
     tab.content.type === 'terminal',
   []);
@@ -142,6 +154,49 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
     useSceneStore.getState().openScene('panel-view');
   }, [group.tabs]);
 
+  const handleVisibleTabClick = useCallback((tabId: string) => {
+    tabTransitionIntentRef.current = {
+      motion: getInteractionMotion(),
+      tabId,
+    };
+    onTabClick(tabId);
+  }, [onTabClick]);
+
+  useLayoutEffect(() => {
+    const previousTabId = previousActiveTabIdRef.current;
+    previousActiveTabIdRef.current = group.activeTabId;
+    if (!previousTabId || !group.activeTabId || previousTabId === group.activeTabId) {
+      return;
+    }
+
+    const intent = tabTransitionIntentRef.current;
+    const motion = intent?.tabId === group.activeTabId
+      ? intent.motion
+      : getInteractionMotion();
+    tabTransitionIntentRef.current = null;
+    if (motion !== 'pointer' || !activeTabContentRef.current) return;
+
+    activeTabAnimationRef.current?.cancel();
+    const reducedMotion = isReducedMotionPreferred();
+    activeTabAnimationRef.current = activeTabContentRef.current.animate(
+      reducedMotion
+        ? [{ opacity: 0.82 }, { opacity: 1 }]
+        : [
+            { opacity: 0.72, transform: 'translate3d(0, 4px, 0) scale(0.997)' },
+            { opacity: 1, transform: 'translate3d(0, 0, 0) scale(1)' },
+          ],
+      {
+        duration: reducedMotion ? 100 : 150,
+        easing: 'cubic-bezier(0.23, 1, 0.32, 1)',
+      },
+    );
+
+    return () => {
+      activeTabAnimationRef.current?.cancel();
+      activeTabAnimationRef.current = null;
+    };
+  }, [group.activeTabId]);
+
   const isDragging = draggingTabId !== null;
 
   return (
@@ -155,7 +210,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
         groupId={groupId}
         activeTabId={group.activeTabId}
         isActiveGroup={isActive}
-        onTabClick={onTabClick}
+        onTabClick={handleVisibleTabClick}
         onTabDoubleClick={onTabDoubleClick}
         onTabClose={onTabClose}
         onTabPin={onTabPin}
@@ -181,6 +236,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
             tabsToRender.map((tab) => (
               <div
                 key={tab.id}
+                ref={group.activeTabId === tab.id ? activeTabContentRef : undefined}
                 data-bf-component="canvas-editor-group"
                 data-bf-part="tabContent"
                 className="canvas-editor-group__tab-content"

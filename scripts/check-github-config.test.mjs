@@ -426,6 +426,27 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
   assert.match(packageJob.env.TAURI_UPDATER_ENDPOINT, /github\.repository/);
   assert.match(packageJob.env.TAURI_UPDATER_ENDPOINT, /channel-beta/);
   assert.match(packageJob.env.BITFUN_RELEASE_PUBKEY, /BITFUN_RELEASE_PUBKEY/);
+  const appleSetupIndex = packageJob.steps.findIndex(
+    (step) => step.name === 'Configure Apple Developer ID signing and notarization',
+  );
+  const desktopBuildIndex = packageJob.steps.findIndex(
+    (step) => step.name === 'Build desktop app',
+  );
+  const appleVerifyIndex = packageJob.steps.findIndex(
+    (step) => step.name === 'Verify Apple signature and notarization',
+  );
+  assert.ok(
+    appleSetupIndex >= 0 &&
+      appleSetupIndex < desktopBuildIndex &&
+      desktopBuildIndex < appleVerifyIndex,
+    'Apple credentials must be configured before packaging and verified afterwards',
+  );
+  assert.equal(packageJob.steps[appleSetupIndex].if, "runner.os == 'macOS'");
+  assert.equal(
+    packageJob.steps[appleSetupIndex].env.BITFUN_REQUIRE_APPLE_SIGNING,
+    '${{ needs.prepare.outputs.upload_to_release }}',
+  );
+  assert.equal(packageJob.steps[appleVerifyIndex].if, "runner.os == 'macOS'");
   const patchIndex = packageJob.steps.findIndex(
     (step) => step.name === 'Project beta build version',
   );

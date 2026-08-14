@@ -13,7 +13,7 @@ import {
   BarChart3,
   ChevronUp,
 } from 'lucide-react';
-import { Tooltip, Modal } from '@/component-library';
+import { Tooltip, Modal, PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneManager } from '../../../hooks/useSceneManager';
 import { useNavSceneStore } from '../../../stores/navSceneStore';
@@ -355,12 +355,12 @@ const PersistentFooterActions: React.FC = () => {
           <NotificationButton className="bitfun-nav-panel__footer-btn" navFooterHoverIconSwap />
         </div>
       </div>
-      {showAbout && (
+      <PresenceBoundary active={showAbout}>
         <Suspense fallback={null}>
           <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
         </Suspense>
-      )}
-      {showRemoteConnect && (
+      </PresenceBoundary>
+      <PresenceBoundary active={showRemoteConnect}>
         <Suspense fallback={null}>
           <RemoteConnectDialog
             isOpen={showRemoteConnect}
@@ -368,7 +368,7 @@ const PersistentFooterActions: React.FC = () => {
             initialGroup={remoteInitialGroup}
           />
         </Suspense>
-      )}
+      </PresenceBoundary>
       <Modal
         isOpen={showRemoteDisclaimer}
         onClose={() => setShowRemoteDisclaimer(false)}

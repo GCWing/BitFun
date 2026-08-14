@@ -16,11 +16,11 @@ default = []
 [dependencies]
 async-trait = { workspace = true }
 bitfun-agent-stream = { path = "../agent-stream" }
-bitfun-agent-tools = { path = "../tool-contracts", default-features = false }
+bitfun-agent-tools = { path = "../tool-contracts" }
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-harness = { path = "../harness" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, features = ["agent-api", "git-port", "permission", "plugin-runtime", "remote-workspace-ports", "runtime-event-port", "terminal-port", "workspace-ports"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "git-port", "permission", "plugin-runtime", "remote-workspace-ports", "runtime-event-port", "terminal-port", "workspace-ports"] }
 bitfun-runtime-services = { path = "../runtime-services" }
 dashmap = { workspace = true }
 hex = { workspace = true }

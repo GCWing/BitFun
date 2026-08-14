@@ -2,7 +2,7 @@
  * Dialog when a remote update is available (daily prompt or manual check).
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Modal, Button } from '@/component-library';
 import { Download } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
@@ -27,16 +27,23 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
   onInstall
 }) => {
   const { t } = useI18n('common');
-  if (!isOpen || !data?.updateAvailable) {
+  const lastAvailableDataRef = useRef<CheckForUpdatesResponse | null>(null);
+  if (data?.updateAvailable) {
+    lastAvailableDataRef.current = data;
+  }
+  const displayData = data?.updateAvailable ? data : lastAvailableDataRef.current;
+  const modalOpen = isOpen && data?.updateAvailable === true;
+
+  if (!displayData) {
     return null;
   }
 
-  const latest = data.latestVersion ?? '';
-  const notes = data.releaseNotes?.trim();
+  const latest = displayData.latestVersion ?? '';
+  const notes = displayData.releaseNotes?.trim();
 
   return (
     <Modal
-      isOpen={isOpen}
+      isOpen={modalOpen}
       onClose={onLater}
       title={t('update.availableTitle')}
       showCloseButton={true}
@@ -80,7 +87,7 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
             data-bf-part="versionRow"
           >
             <span className="bitfun-update-available__label" data-bf-component="update" data-bf-part="versionLabel">{t('update.currentVersion')}</span>
-            <span className="bitfun-update-available__value" data-bf-component="update" data-bf-part="versionValue">{data.currentVersion}</span>
+            <span className="bitfun-update-available__value" data-bf-component="update" data-bf-part="versionValue">{displayData.currentVersion}</span>
           </div>
           <div
             className="bitfun-update-available__row bitfun-update-available__row--highlight"

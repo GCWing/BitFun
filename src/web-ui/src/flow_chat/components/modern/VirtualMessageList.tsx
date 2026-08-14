@@ -35,6 +35,7 @@ import {
 import { useChatInputState } from '../../store/chatInputStateStore';
 import type { ActiveTurnRenderRange } from '../../types/flow-chat';
 import { computeFlowChatInputStackFooterPx } from '../../utils/flowChatScrollLayout';
+import { getMotionAwareScrollBehavior } from '../../utils/motionPreference';
 import { ScrollToLatestBar } from '../ScrollToLatestBar';
 import { ScrollToTurnHeaderButton } from '../ScrollToTurnHeaderButton';
 import {
@@ -109,6 +110,16 @@ const SCROLL_SETTLE_FALLBACK_MS = 140;
  */
 const TAIL_REALIGN_RESIZE_CALLBACKS = 6;
 const HISTORY_WINDOW_DIRECTIONS: readonly SessionHistoryWindowDirection[] = ['before', 'after'];
+/**
+ * Transcripts mounted this session, counted.
+ *
+ * The list is keyed on the session id, so a switch is a full remount: new
+ * scroller, empty measurement cache, fresh opening reveal, and a follow hook
+ * that has never followed anything. Nothing in the trail said which instance a
+ * line came from, and two of the three viewport faults measured here turned out
+ * to be two instances disagreeing rather than one instance changing its mind.
+ */
+let nextViewportInstanceId = 0;
 const IDLE_HISTORY_WINDOW_BOUNDARY_STATE: Record<
   SessionHistoryWindowDirection,
   'idle' | 'loading' | 'error'
@@ -379,6 +390,20 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
    * is the same bug wearing the opposite sign.
    */
   const latestTurnId = activeSession?.dialogTurns.at(-1)?.id ?? null;
+  const viewportIdRef = useRef<number | null>(null);
+  if (viewportIdRef.current === null) {
+    nextViewportInstanceId += 1;
+    viewportIdRef.current = nextViewportInstanceId;
+  }
+  const viewportId = viewportIdRef.current;
+  // Mirrors, so the unmount line below can report the state it ended on rather
+  // than the state it was created with.
+  const activeSessionIdRef = useRef(activeSessionId);
+  activeSessionIdRef.current = activeSessionId;
+  const isViewportActiveRef = useRef(isViewportActive);
+  isViewportActiveRef.current = isViewportActive;
+  const itemCountRef = useRef(virtualItems.length);
+  itemCountRef.current = virtualItems.length;
   const scrollerElementRef = useRef<HTMLElement | null>(null);
   /**
    * Who is moving the viewport, for everything in this transcript that moves
@@ -616,7 +641,39 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     resolveTurnTopScrollTop,
     isOpeningViewport,
     viewportOwner,
+    viewportId,
   });
+
+  /*
+   * The transcript's own lifetime, which every viewport line above is relative
+   * to. A remount resets the scroller to offset 0, empties the measurement
+   * cache and re-arms the opening reveal — so a placement that looks like it
+   * was undone is often a placement made to a scroller that no longer exists.
+   */
+  useEffect(() => {
+    traceViewport({
+      location: 'virtualMessageList.mounted',
+      message: 'a transcript was mounted',
+      data: () => ({
+        viewportId,
+        sessionId: activeSessionIdRef.current,
+        itemCount: itemCountRef.current,
+        isViewportActive: isViewportActiveRef.current,
+      }),
+    });
+    return () => {
+      traceViewport({
+        location: 'virtualMessageList.unmounted',
+        message: 'a transcript was unmounted',
+        data: () => ({
+          viewportId,
+          sessionId: activeSessionIdRef.current,
+          itemCount: itemCountRef.current,
+          scrollTopPx: roundViewportPx(scrollerElementRef.current?.scrollTop ?? 0),
+        }),
+      });
+    };
+  }, [viewportId]);
 
 
   /**
@@ -761,6 +818,29 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      */
     if (compensated) viewportAnchor.absorbViewportShift(shiftedPx);
     /*
+     * A refusal leaves the displacement to whoever holds a target — so make
+     * sure they are awake to take it.
+     *
+     * Follow-output is the only holder that can be asleep. Its ownership
+     * deliberately outlives its frame loop, so that streaming can resume
+     * without re-entering, and the loop stops on its own once the transcript
+     * settles; a navigation's aim and a snap back's animation are both still
+     * running by construction. So a page landing after the settle budget ran
+     * out is refused by a writer that will never act, and the reader is left
+     * holding an offset that now means something else.
+     *
+     * Measured, from the fault this was found in: 22301px of history arrived
+     * above a viewport at 0, the shift was refused with `heldBy:
+     * follow-output`, and nothing moved for the rest of the session — the
+     * transcript was revealed at the top of the window, eight Turns above the
+     * tail. Re-asserting is idempotent when the loop *is* running: it aims at
+     * the offset the follow rule already owns.
+     */
+    const wokeFollowOutput = !compensated
+      && shiftedPx > 0
+      && viewportOwner.currentOwner() === 'follow-output';
+    if (wokeFollowOutput) scheduleFollowToLatest();
+    /*
      * Both amounts, because their disagreement is the diagnosis. `prependedPx`
      * against what the scroll range actually grew by says how far the cache is
      * ahead of the DOM; against `shiftedPx` it says how much of the
@@ -770,27 +850,47 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     traceViewport({
       location: 'virtualMessageList.prependCompensated',
       message: 'history arrived above the reader',
-      data: () => ({
-        compensated,
-        prependedPx: roundViewportPx(prependedPx),
-        shiftedPx: roundViewportPx(shiftedPx),
-        scrollRangeGrowthPx: roundViewportPx(scrollRangeGrowthPx),
-        itemsAbove: movedTo,
-        fromPx: roundViewportPx(fromPx),
-        contentEndPx: roundViewportPx(contentEndPx),
-        scrollTopPx: roundViewportPx(scroller.scrollTop),
-        // The baseline every later `anchor.correct` in this settle is read
-        // against: a correction that arrives with the range unchanged is a
-        // compensation that over-shot, and one that arrives with the range
-        // smaller is the transcript above the reader measuring down.
-        scrollRangePx: roundViewportPx(scroller.scrollHeight),
-        presentationMode,
-      }),
+      data: () => {
+        const followTargetPx = getFollowTargetScrollTop();
+        return {
+          viewportId,
+          compensated,
+          prependedPx: roundViewportPx(prependedPx),
+          shiftedPx: roundViewportPx(shiftedPx),
+          scrollRangeGrowthPx: roundViewportPx(scrollRangeGrowthPx),
+          itemsAbove: movedTo,
+          fromPx: roundViewportPx(fromPx),
+          contentEndPx: roundViewportPx(contentEndPx),
+          scrollTopPx: roundViewportPx(scroller.scrollTop),
+          /*
+           * Who the displacement was left to, and where they are taking it.
+           * A refused shift is only correct if the holder then places the
+           * reader itself; read after the re-assertion above, so `null` here
+           * with `wokeFollowOutput` true is a holder that could not be woken —
+           * the register believes someone owns the viewport and the follow rule
+           * believes it is not following, which is the one state nothing can
+           * recover from on its own.
+           */
+          followTargetPx: followTargetPx === null ? null : roundViewportPx(followTargetPx),
+          wokeFollowOutput,
+          isOpening: isOpeningViewport(),
+          // The baseline every later `anchor.correct` in this settle is read
+          // against: a correction that arrives with the range unchanged is a
+          // compensation that over-shot, and one that arrives with the range
+          // smaller is the transcript above the reader measuring down.
+          scrollRangePx: roundViewportPx(scroller.scrollHeight),
+          presentationMode,
+        };
+      },
     });
   }, [
+    getFollowTargetScrollTop,
+    isOpeningViewport,
     presentationMode,
     readContentEndScrollTop,
+    scheduleFollowToLatest,
     viewportAnchor,
+    viewportId,
     viewportOwner,
     virtualItems,
     virtualizer,
@@ -957,13 +1057,26 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         traceViewport({
           location: 'virtualMessageList.openReveal',
           message: 'transcript revealed',
-          data: () => ({
-            settled: quietFrames >= OPEN_REVEAL_QUIET_FRAMES,
-            frames: frame,
-            itemCount: virtualItems.length,
-            scrollTopPx: roundViewportPx(scrollerElement.scrollTop),
-            contentEndPx: roundViewportPx(readContentEndScrollTop(scrollerElement)),
-          }),
+          data: () => {
+            const followTargetPx = getFollowTargetScrollTop();
+            return {
+              viewportId,
+              settled: quietFrames >= OPEN_REVEAL_QUIET_FRAMES,
+              frames: frame,
+              itemCount: virtualItems.length,
+              scrollTopPx: roundViewportPx(scrollerElement.scrollTop),
+              contentEndPx: roundViewportPx(readContentEndScrollTop(scrollerElement)),
+              /*
+               * Revealed away from the content end is the reader's "it opened
+               * on the wrong Turn", and these two say whose it is: a follow
+               * that owns a target it has not reached is a placement still on
+               * its way, and no target at all is nobody having taken the
+               * transcript on open.
+               */
+              followTargetPx: followTargetPx === null ? null : roundViewportPx(followTargetPx),
+              isFollowCorrecting: isFollowCorrectingViewport(),
+            };
+          },
         });
         setIsOpenViewportSettled(true);
         return;
@@ -975,7 +1088,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     return () => {
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [isOpenViewportSettled, readContentEndScrollTop, scrollerElement, virtualItems.length]);
+  }, [
+    getFollowTargetScrollTop,
+    isFollowCorrectingViewport,
+    isOpenViewportSettled,
+    readContentEndScrollTop,
+    scrollerElement,
+    viewportId,
+    virtualItems.length,
+  ]);
 
   /*
    * "At the bottom" is a band, not a point. Its upper edge is the end of real
@@ -1279,7 +1400,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * apart. The drift in particular: a navigation that lands and is then taken
      * away leaves the same final position as one that never aimed right.
      */
-    const traceNavigation = (branch: string, place: () => void, targetPx?: number) => {
+    const traceNavigation = (
+      branch: string,
+      place: () => void,
+      targetPx?: number,
+      extra?: () => Record<string, unknown>,
+    ) => {
       traceViewportPlacement(
         scroller,
         {
@@ -1303,6 +1429,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
             itemCount: virtualItems.length,
             behavior,
             presentationMode,
+            ...(extra?.() ?? {}),
           }),
         },
         place,
@@ -1328,31 +1455,55 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return 'settled';
     }
 
-    // Placed instantly on purpose: an animated scroll has not arrived yet, so
-    // there would be nothing to read back. The requested behaviour is spent on
-    // the placement, which is what turn-rail navigation already asks for.
-    traceNavigation('unrendered-placed-instantly', () => {
-      virtualizer.scrollItemIntoView(targetIndex, {
-        align: 'start',
-        owner: 'one-shot-navigation',
-        holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
-      });
-    });
-    if (scroller && turnTopAlignmentEntersReservedBlank({
-      turnTopScrollTop: scroller.scrollTop,
-      // Re-read: placing the viewport renders items, which re-measures the
-      // transcript and moves the content end with it.
-      contentEndScrollTop: readContentEndScrollTop(scroller),
-    })) {
-      traceNavigation(
-        'unrendered-clamped-to-content-end',
-        () => scrollToContentEndThroughVirtualizer(
+    /*
+     * Placed instantly on purpose: an animated scroll has not arrived yet, so
+     * there would be nothing to read back. The requested behaviour is spent on
+     * the placement, which is what turn-rail navigation already asks for.
+     *
+     * The clamp belongs to the same placement rather than being a second one.
+     * It is decided from where the instant placement landed and applied in the
+     * same task, so the reader sees one movement — and tracing it as two made
+     * the first one's outcome sample compare the offset the viewport came to
+     * rest at against a position this function had itself replaced 20ms
+     * earlier. Measured: `driftPx: -892.7` against a target of 2484 that was
+     * superseded by 1591, which is the clamp working exactly as intended
+     * reported as the largest displacement in the recording.
+     */
+    let clampedToContentEnd = false;
+    let unclampedPx: number | null = null;
+    traceNavigation(
+      'unrendered-placed-instantly',
+      () => {
+        virtualizer.scrollItemIntoView(targetIndex, {
+          align: 'start',
+          owner: 'one-shot-navigation',
+          holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
+        });
+        if (!scroller) return;
+        unclampedPx = scroller.scrollTop;
+        if (!turnTopAlignmentEntersReservedBlank({
+          turnTopScrollTop: scroller.scrollTop,
+          // Re-read: placing the viewport renders items, which re-measures the
+          // transcript and moves the content end with it.
+          contentEndScrollTop: readContentEndScrollTop(scroller),
+        })) {
+          return;
+        }
+        clampedToContentEnd = true;
+        scrollToContentEndThroughVirtualizer(
           'auto',
           'one-shot-navigation',
           ONE_SHOT_NAVIGATION_HOLD_MS,
-        ),
-      );
-    }
+        );
+      },
+      undefined,
+      // Where the Turn's own alignment would have put the viewport, kept
+      // because the clamp is only correct if that offset was in the blank.
+      () => ({
+        clampedToContentEnd,
+        unclampedPx: unclampedPx === null ? null : roundViewportPx(unclampedPx),
+      }),
+    );
     return 'settled';
   }, [
     exitFollowOutput,
@@ -1421,9 +1572,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     if (status === 'settled') preparedTurnNavigationRef.current = null;
   }, [navigateToTurnWithStatus, virtualItems]);
 
+  /**
+   * Land on a Turn by its position in the transcript on screen.
+   *
+   * Instant, like the other two ways the same request can be resolved. This is
+   * the last-resort branch of a focus request — `resolvedTurnId` and
+   * `resolvedVirtualIndex` are tried first, both instant — and which branch runs
+   * depends only on what the request happened to carry, not on anything the
+   * reader did. Animating this one made the same usage-report click animate or
+   * jump depending on whether the report knew the Turn's id.
+   */
   const scrollToTurn = useCallback((turnIndex: number) => {
     const target = userMessageItems[turnIndex - 1];
-    if (target) navigateToTurn(target.item.turnId, { behavior: 'smooth' });
+    if (target) navigateToTurn(target.item.turnId, { behavior: 'auto' });
   }, [navigateToTurn, userMessageItems]);
 
   const scrollToIndex = useCallback((index: number) => {
@@ -1548,7 +1709,20 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   const requestHistoryBoundary = useCallback((direction: SessionHistoryWindowDirection) => {
     /*
-     * Two refusals, both asking whether the ask describes the reader.
+     * Three refusals, all asking whether the ask describes the reader.
+     *
+     * The first is the opening reveal. Until it ends the transcript is hidden
+     * and still being placed — item heights are estimates and the viewport is
+     * walking down to the content end — so the offset a boundary would be
+     * judged from is not a position anybody chose, and on a session whose
+     * loaded tail is shorter than one viewport the head is trivially "reached"
+     * at offset 0. Worse, what the page then does is prepend history *above*
+     * that viewport, and the compensation for it is deliberately left to
+     * whoever holds a target; landing it in the middle of the opening
+     * placement puts those two in a race that the reader loses by eight Turns.
+     * Measured: a re-opened session paged 140ms after mount, from a viewport
+     * still at 0, and was revealed at the top of the window it had just pulled
+     * in. Deferred rather than dropped — the reveal settling asks again.
      *
      * While the follow rule owns the viewport, the position the ask was derived
      * from is our own placement — as true of a history window being opened as
@@ -1558,14 +1732,27 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * pages landed in 890ms, each one displacing the viewport and so requesting
      * the next, until history ran out.
      *
-     * The second is the arming latch; see `boundaryArmedRef`.
+     * The third is the arming latch; see `boundaryArmedRef`.
      *
-     * Both are invisible when they fire: the boundary status stays idle, which
-     * is also what "there is no more history" looks like. The faults have been
-     * at either extreme — pages arriving in a chain because neither refusal
+     * All three are invisible when they fire: the boundary status stays idle,
+     * which is also what "there is no more history" looks like. The faults have
+     * been at either extreme — pages arriving in a chain because no refusal
      * fired, and a boundary that never pages because the latch stayed shut — so
      * the reason is recorded rather than inferred from what did not happen.
      */
+    if (isOpeningViewport()) {
+      traceViewportRepeating(`paging|${direction}|opening`, {
+        location: 'historyPaging.refused',
+        message: 'the transcript is still being placed, so the boundary is not the reader\'s',
+        data: () => ({
+          direction,
+          reason: 'opening-reveal',
+          viewportId,
+          scrollTopPx: roundViewportPx(scrollerElementRef.current?.scrollTop ?? 0),
+        }),
+      });
+      return;
+    }
     if (isFollowingOutputNow()) {
       traceViewportRepeating(`paging|${direction}|following`, {
         location: 'historyPaging.refused',
@@ -1593,9 +1780,22 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
        * to fetch more. That is correct once history really is exhausted, and a
        * silent data loss when it is not — the boundary status stays idle either
        * way, so the transcript looks like it simply has no earlier Turns.
+       *
+       * The head, and only the head. `after` latches the moment the reader
+       * reaches the newest Turn, which is every session that has ever been
+       * paged, and a partial session stays partial throughout — so raising this
+       * for it is a warning that fires on the ordinary case and means nothing.
+       * Measured: four of them in one recording, all `after`, all correct
+       * behaviour. `resolveHistoryBoundaryTarget` draws the same line one layer
+       * down, between `reached-latest` and `beyond-known-total`.
        */
       const session = activeSessionRef.current;
-      if (latchedExhausted && session?.sessionId && session.isPartial === true) {
+      if (
+        direction === 'before'
+        && latchedExhausted
+        && session?.sessionId
+        && session.isPartial === true
+      ) {
         warnHistoryPagingRefusedWithPendingTurns(session.sessionId, {
           direction,
           reason: 'latched-exhausted-while-partial',
@@ -1610,6 +1810,29 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     // Disarmed for as long as this page is the reason the window sits at the
     // boundary. Only the window moving off it arms the direction again.
     boundaryArmedRef.current[direction] = false;
+    /*
+     * The ask itself, and the viewport it was derived from.
+     *
+     * Every refusal above is recorded, and the one that goes through was not —
+     * so a page that arrives while the transcript is still opening, from a
+     * viewport nobody is following and at an offset the reader never chose,
+     * looked exactly like a page the reader asked for. That page prepends
+     * history above them, and the compensation for it is deliberately left to
+     * whoever holds a target; with nothing holding one, this line is where that
+     * chain starts.
+     */
+    traceViewport({
+      location: 'historyPaging.asked',
+      message: 'the boundary was reached by the reader, so history was asked for',
+      data: () => ({
+        direction,
+        viewportId,
+        isOpening: isOpeningViewport(),
+        presentationMode,
+        itemCount: virtualItems.length,
+        scrollTopPx: roundViewportPx(scrollerElementRef.current?.scrollTop ?? 0),
+      }),
+    });
     const request = Promise.resolve(onHistoryWindowBoundaryIntent(direction)).then(
       normalizeBoundaryResult,
     ).then(result => {
@@ -1627,7 +1850,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       boundaryRequestRef.current[direction] = null;
     });
     boundaryRequestRef.current[direction] = request;
-  }, [isFollowingOutputNow, onHistoryWindowBoundaryIntent]);
+  }, [
+    isFollowingOutputNow,
+    isOpeningViewport,
+    onHistoryWindowBoundaryIntent,
+    presentationMode,
+    viewportId,
+    virtualItems.length,
+  ]);
 
   /**
    * Whether either end of the loaded transcript is on screen, and act on it.
@@ -1732,6 +1962,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * reason the last ask was declined.
      */
     isFollowingOutput,
+    /*
+     * And so is the transcript finishing its opening placement, for the same
+     * reason: the ask that the reveal refused above is owed a second chance,
+     * and this is the only thing that changes when the reveal ends. A session
+     * whose loaded tail is shorter than one viewport produces no scroll events
+     * at all — it has nowhere to scroll — so without this it would never page
+     * its older Turns in until the reader spun the wheel against a boundary
+     * that could not move.
+     */
+    isOpenViewportSettled,
     scheduleVisibleTurnInfoUpdate,
     virtualizer.rows,
   ]);
@@ -1751,6 +1991,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollerElementRef.current = scroller;
     setScrollerElement(scroller);
     if (scroller) {
+      if (!scroller.hasAttribute('tabindex')) {
+        scroller.tabIndex = -1;
+      }
       setViewportHeightPx(scroller.clientHeight);
       // Seed the box so the observer's first callback is not read as a resize.
       observedViewportBoxRef.current = {
@@ -1806,7 +2049,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const visibleTurnInfo = useModernFlowChatStore(state => state.visibleTurnInfo);
   const handleJumpToCurrentTurn = useCallback(() => {
     if (visibleTurnInfo?.turnId) {
-      navigateToTurn(visibleTurnInfo.turnId, { behavior: 'smooth' });
+      navigateToTurn(visibleTurnInfo.turnId, {
+        behavior: getMotionAwareScrollBehavior('smooth'),
+      });
     }
   }, [navigateToTurn, visibleTurnInfo?.turnId]);
   const { shouldShowButton: shouldShowTurnHeaderButton, handleClick: handleTurnHeaderClick } =
@@ -1922,6 +2167,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         onClick={viewportMode === 'history-reading' && onRequestJumpToLatest
           ? onRequestJumpToLatest
           : scrollToLatestEndPosition}
+        focusReturnRef={scrollerElementRef}
         isInputActive={isInputActive}
         isInputExpanded={isInputExpanded}
         inputHeight={inputHeight}

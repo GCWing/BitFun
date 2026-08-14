@@ -46,6 +46,10 @@ before reporting a defect as new.
   waits for the animation at all. Neither may be a frame count: a frame count
   is not a duration, and a smooth scroll eases in slowly enough that its first
   frames do not move at all on a high-refresh display.
+- A jump to latest animates only within `FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS`
+  and lands outright past it. Measured in viewports, never in pixels: the
+  question is whether the reader can follow the movement, and what they can
+  follow is a share of what they can see.
 - Footer height represents only the current input-stack layout and real footer
   content such as history state and `RuntimeStatusSlot`. The tail spacer is a
   separate sibling and must not be folded into it.

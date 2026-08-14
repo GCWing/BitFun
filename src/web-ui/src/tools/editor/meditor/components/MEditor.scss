@@ -19,6 +19,28 @@
     overflow: hidden;
     border-radius: 0;
   }
+
+  &-source-fallback {
+    width: 100%;
+    // Grow to fill a container with a definite height; fall back to the
+    // content-sized `rows` when the host passes `height="auto"` (PlanViewer),
+    // where a percentage height would resolve to the default two rows.
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    resize: none;
+    border: 0;
+    outline: 0;
+    padding: $size-gap-3;
+    box-sizing: border-box;
+    background: var(--bf-appearance-token-color-bg-scene);
+    color: var(--bf-appearance-token-color-text-primary);
+    font: inherit;
+    font-family: var(--bf-appearance-token-font-family-mono);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow: auto;
+  }
   
   &-edit-panel,
   &-preview-panel,

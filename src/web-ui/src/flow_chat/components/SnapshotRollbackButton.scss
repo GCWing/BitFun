@@ -18,7 +18,13 @@
   background: var(--bf-appearance-token-color-bg-elevated);
   color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 180ms ease,
+    opacity 160ms ease;
   white-space: nowrap;
   
   svg {
@@ -93,15 +99,21 @@
   
   // Spinner animation
   &__spinner {
-    animation: spin 1s linear infinite;
+    animation: snapshot-rollback-spin 1s linear infinite;
   }
 }
 
-@keyframes spin {
+@keyframes snapshot-rollback-spin {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snapshot-rollback-button__spinner {
+    animation: none;
   }
 }

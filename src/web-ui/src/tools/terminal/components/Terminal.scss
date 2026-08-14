@@ -212,6 +212,17 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-terminal__loading-spinner {
+    animation: none;
+  }
+
+  .xterm .xterm-cursor-layer .xterm-cursor {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
 // xterm.js theme overrides
 .xterm {
   .xterm-screen {

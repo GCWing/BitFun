@@ -13,7 +13,7 @@ async-trait = { workspace = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-events = { path = "../../contracts/events" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, features = ["agent-api"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api"] }
 futures-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -23,7 +23,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", default-features = false, features = ["permission"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission"] }
 
 [lints]
 workspace = true

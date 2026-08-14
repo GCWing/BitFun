@@ -403,6 +403,7 @@ export struct AppRootPresentation {
     AppConnectSurface({
       remotePageState: this.remotePageState,
       deviceId: this.deviceId,
+      openIntent: this.shellState.connectSheetIntent,
       actions: this.actions
     })
   }

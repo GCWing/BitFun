@@ -3,7 +3,7 @@ import {
   emptyAppRootPresentationActions
 } from '../actions/AppRootPresentationActions';
 import { AppRouteContract, ConversationSource } from '../navigation/AppRouteContract';
-import { AppShellState } from '../state/AppShellState';
+import { AppShellState, CONNECT_INTENT_AUTO } from '../state/AppShellState';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { RemotePageState } from '../state/RemotePageState';
 import { AppSidebar } from './AppSidebar';
@@ -120,7 +120,6 @@ export struct AppSettingsSurface {
         onOpenAccount: this.actions.onSettings.openAccount,
         onAddConnection: this.actions.onSettings.addConnection,
         cloudLogin: this.actions.onSettings.cloudLogin,
-        cloudSync: this.actions.onSettings.cloudSync,
         cloudLogout: this.actions.onSettings.cloudLogout,
         cloudListDevices: this.actions.onSettings.cloudListDevices,
         getPermissionMode: this.actions.onSettings.getPermissionMode,
@@ -152,6 +151,7 @@ export struct AppSettingsSurface {
 export struct AppConnectSurface {
   @Param remotePageState: RemotePageState = new RemotePageState();
   @Param deviceId: string = '';
+  @Param openIntent: string = CONNECT_INTENT_AUTO;
   @Param actions: AppRootPresentationActions = emptyAppRootPresentationActions();
 
   build() {
@@ -169,7 +169,7 @@ export struct AppConnectSurface {
       controlTargetDeviceId: this.remotePageState.controlTargetDeviceId,
       requiresAccountAuth: this.remotePageState.requiresAccountAuth,
       accountUsername: this.remotePageState.accountUsername,
-      startWithScanner: true,
+      openIntent: this.openIntent,
       onBack: this.actions.onConnect.back,
       onConnect: this.actions.onConnect.connect,
       onRemoteUrlChange: this.actions.onConnect.urlChanged,

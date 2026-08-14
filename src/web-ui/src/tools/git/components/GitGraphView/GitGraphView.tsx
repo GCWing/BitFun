@@ -205,7 +205,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
     
     containerRef.current.scrollTo({
       top: Math.max(0, centeredScrollTop),
-      behavior: 'smooth'
+      behavior: 'auto'
     });
 
 

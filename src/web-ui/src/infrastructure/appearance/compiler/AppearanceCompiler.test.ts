@@ -47,6 +47,17 @@ describe('AppearanceCompiler', () => {
     });
   });
 
+  it('keeps built-in UI motion within the responsive interaction budget', () => {
+    const seconds = (value: string) => Number.parseFloat(value.replace('s', ''));
+
+    builtinAppearancePalettes.forEach((palette) => {
+      expect(seconds(palette.motion.duration.fast)).toBeLessThanOrEqual(0.16);
+      expect(seconds(palette.motion.duration.base)).toBeLessThanOrEqual(0.24);
+      expect(seconds(palette.motion.duration.slow)).toBeLessThanOrEqual(0.45);
+      expect(palette.motion.easing.standard).toBe('cubic-bezier(0.23, 1, 0.32, 1)');
+    });
+  });
+
   it('calculates real contrast diagnostics for structured colors', () => {
     const pkg: AppearancePackage = {
       schema: 'bitfun.appearance',

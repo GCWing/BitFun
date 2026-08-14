@@ -117,10 +117,10 @@ export const bitfunDarkPalette: AppearancePalette = {
 
   motion: {
     duration: {
-      instant: '0.1s',
-      fast: '0.15s',
-      base: '0.3s',
-      slow: '0.6s',
+      instant: '0.08s',
+      fast: '0.14s',
+      base: '0.22s',
+      slow: '0.42s',
     },
 
     easing: createStandardEasing(),
@@ -188,7 +188,6 @@ export const bitfunDarkPalette: AppearancePalette = {
     },
   },
 };
-
 
 
 

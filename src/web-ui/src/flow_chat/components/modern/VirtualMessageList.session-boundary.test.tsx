@@ -28,6 +28,16 @@ const mocks = vi.hoisted(() => ({
    */
   isFollowingOutput: false,
   followsNow: false,
+  scheduleFollowToLatest: vi.fn(),
+  /**
+   * The register the list built, reached through the hook it hands it to.
+   *
+   * Taking the viewport is what the follow hook does on entry, and the tests
+   * below need the list to face a register in that state — a displacement is
+   * refused by whoever holds a target, and that refusal is a contract with the
+   * holder rather than a dead end.
+   */
+  viewportOwner: null as null | { claim: (owner: string) => boolean },
   /** False stands in for a Turn the virtualizer can place but the DOM cannot. */
   renderItemMetadata: true,
 }));
@@ -154,28 +164,33 @@ vi.mock('../../store/chatInputStateStore', () => ({
 }));
 
 vi.mock('./useFlowChatFollowOutput', () => ({
-  useFlowChatFollowOutput: () => ({
-    isFollowingOutput: mocks.isFollowingOutput,
-    enterFollowOutput: mocks.enterFollowOutput,
-    exitFollowOutput: mocks.exitFollowOutput,
-    scheduleFollowToLatest: vi.fn(),
-    isFollowingOutputNow: () => mocks.followsNow,
-    // Nothing streams here, so the frame loop is never correcting: the band is
-    // judged on the viewport itself, exactly as it is for a resting transcript.
-    isFollowCorrectingViewport: () => false,
-    handleUserScrollIntent: () => {
-      // What the real one does first: release, synchronously.
-      mocks.followsNow = false;
-      mocks.handleUserScrollIntent();
-    },
-    handleTurnsRolledBack: vi.fn(),
-    handleScroll: vi.fn(),
-    handleScrollSettled: vi.fn(),
-    handleViewportResize: vi.fn(),
-    // Follow owns nothing here, which is what the real hook returns when
-    // `isFollowingOutput` is false.
-    getFollowTargetScrollTop: () => null,
-  }),
+  useFlowChatFollowOutput: (options: {
+    viewportOwner: { claim: (owner: string) => boolean };
+  }) => {
+    mocks.viewportOwner = options.viewportOwner;
+    return {
+      isFollowingOutput: mocks.isFollowingOutput,
+      enterFollowOutput: mocks.enterFollowOutput,
+      exitFollowOutput: mocks.exitFollowOutput,
+      scheduleFollowToLatest: mocks.scheduleFollowToLatest,
+      isFollowingOutputNow: () => mocks.followsNow,
+      // Nothing streams here, so the frame loop is never correcting: the band is
+      // judged on the viewport itself, exactly as it is for a resting transcript.
+      isFollowCorrectingViewport: () => false,
+      handleUserScrollIntent: () => {
+        // What the real one does first: release, synchronously.
+        mocks.followsNow = false;
+        mocks.handleUserScrollIntent();
+      },
+      handleTurnsRolledBack: vi.fn(),
+      handleScroll: vi.fn(),
+      handleScrollSettled: vi.fn(),
+      handleViewportResize: vi.fn(),
+      // Follow owns nothing here, which is what the real hook returns when
+      // `isFollowingOutput` is false.
+      getFollowTargetScrollTop: () => null,
+    };
+  },
 }));
 
 vi.mock('./VirtualItemRenderer', () => ({
@@ -215,11 +230,41 @@ function userMessage(turnId: string, id: string, content: string) {
 describe('VirtualMessageList natural scroll contract', () => {
   let container: HTMLDivElement;
   let root: Root;
+  let animationFrames: Map<number, FrameRequestCallback>;
+  let nextAnimationFrameId: number;
+
+  /**
+   * Run the opening reveal to its end, which is what mounting a transcript
+   * really costs.
+   *
+   * The reveal holds the transcript hidden while it is placed, and the paging
+   * rule refuses a boundary derived from a viewport still being placed — so a
+   * test that asserts what the list asks for on mount has to get past it, the
+   * same way half a second of animation frames does in the app. Frames are a
+   * manual queue rather than jsdom's timer-backed ones so that draining them is
+   * a step in the test rather than a wait.
+   */
+  async function settleOpenReveal() {
+    // The reveal's own cap is 40 frames; a few more cover the commits its
+    // settling schedules.
+    for (let generation = 0; generation < 48; generation += 1) {
+      const pending = [...animationFrames.values()];
+      animationFrames.clear();
+      if (pending.length === 0) return;
+      await act(async () => {
+        pending.forEach(frame => frame(16));
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+  }
 
   beforeEach(() => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+    animationFrames = new Map();
+    nextAnimationFrameId = 0;
     mocks.items = [
       userMessage('turn-1', 'message-1', 'First'),
       userMessage('turn-2', 'message-2', 'Second'),
@@ -236,11 +281,21 @@ describe('VirtualMessageList natural scroll contract', () => {
     mocks.enterFollowOutput.mockReset();
     mocks.exitFollowOutput.mockReset();
     mocks.handleUserScrollIntent.mockReset();
+    mocks.scheduleFollowToLatest.mockReset();
+    mocks.viewportOwner = null;
     mocks.setVisibleTurnInfo.mockReset();
     mocks.renderItemMetadata = true;
     vi.stubGlobal('ResizeObserver', class {
       observe() {}
       disconnect() {}
+    });
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      nextAnimationFrameId += 1;
+      animationFrames.set(nextAnimationFrameId, callback);
+      return nextAnimationFrameId;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+      animationFrames.delete(id);
     });
   });
 
@@ -588,6 +643,44 @@ describe('VirtualMessageList natural scroll contract', () => {
 
       expect(scroller.scrollTop).toBe(500);
     });
+
+    it('wakes the follow rule it left the displacement to', () => {
+      /*
+       * Refusing the shift is a contract with whoever holds a target, and
+       * follow-output is the one holder that can be asleep: its ownership
+       * deliberately outlives its frame loop so streaming can resume without
+       * re-entering, and the loop stops once the transcript settles. So a page
+       * landing after that is left to a writer that will never act.
+       *
+       * Measured: 22301px of history arrived above a viewport at offset 0 on
+       * session open, the shift was refused with `heldBy: follow-output`, and
+       * nothing moved again — the transcript was revealed at the top of the
+       * window it had just pulled in, eight Turns above the tail.
+       */
+      withGrowingRange({ scrollHeightPx: 3000, growthPx: 120 }, scroller => {
+        // Follow-output takes the viewport, exactly as entering does.
+        mocks.viewportOwner?.claim('follow-output');
+        mocks.scheduleFollowToLatest.mockReset();
+
+        prependOlderTurns(3);
+
+        // Refused, because the holder owns a target of its own...
+        expect(scroller.scrollTop).toBe(500);
+        // ...and asked to go and reach it.
+        expect(mocks.scheduleFollowToLatest).toHaveBeenCalled();
+      });
+    });
+
+    it('wakes nobody when it could put the reader back itself', () => {
+      withGrowingRange({ scrollHeightPx: 3000, growthPx: 120 }, scroller => {
+        mocks.scheduleFollowToLatest.mockReset();
+
+        prependOlderTurns(3);
+
+        expect(scroller.scrollTop).toBe(620);
+        expect(mocks.scheduleFollowToLatest).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('asking for older Turns', () => {
@@ -608,10 +701,10 @@ describe('VirtualMessageList natural scroll contract', () => {
     /**
      * A transcript with a page already behind it.
      *
-     * The list opens at the top, so it asks and disarms `before` on mount. That
-     * is the state both of these are about: one page dispatched, and what has
-     * to happen for the next one. `asked` is cleared afterwards so it counts
-     * only what the scrolls produced.
+     * The list opens at the top, so once the reveal is over it asks and disarms
+     * `before`. That is the state both of these are about: one page dispatched,
+     * and what has to happen for the next one. `asked` is cleared afterwards so
+     * it counts only what the scrolls produced.
      */
     async function withPagedTranscript(
       run: (scroller: HTMLElement, asked: string[]) => Promise<void>,
@@ -638,6 +731,11 @@ describe('VirtualMessageList natural scroll contract', () => {
           await Promise.resolve();
           await Promise.resolve();
         });
+        // Nothing while the transcript is still being placed: at offset 0 of an
+        // unplaced viewport the head is trivially reached, and paging from
+        // there prepends history under the placement.
+        expect(asked).toEqual([]);
+        await settleOpenReveal();
         expect(asked).toEqual(['before']);
         asked.length = 0;
         await run(container.querySelector<HTMLElement>('[data-flowchat-scroller]')!, asked);
@@ -709,6 +807,7 @@ describe('VirtualMessageList natural scroll contract', () => {
           await Promise.resolve();
           await Promise.resolve();
         });
+        await settleOpenReveal();
         expect(asked).toEqual(['before']);
         asked.length = 0;
 
@@ -763,6 +862,7 @@ describe('VirtualMessageList natural scroll contract', () => {
           await Promise.resolve();
           await Promise.resolve();
         });
+        await settleOpenReveal();
         // Refused on mount, correctly: follow owned it and nobody had gestured.
         expect(asked).toEqual([]);
 
@@ -816,6 +916,7 @@ describe('VirtualMessageList natural scroll contract', () => {
           await Promise.resolve();
           await Promise.resolve();
         });
+        await settleOpenReveal();
         expect(asked).toContain('before');
         asked.length = 0;
 

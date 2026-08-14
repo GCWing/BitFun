@@ -484,6 +484,7 @@ describe('BtwSessionPanel review action bar integration', () => {
     });
     container.remove();
     useReviewActionBarStore.getState().reset();
+    vi.useRealTimers();
   });
 
   it('shows a Review-check loading state instead of an empty thread', async () => {
@@ -1180,6 +1181,76 @@ describe('BtwSessionPanel review action bar integration', () => {
     });
 
     const body = container.querySelector<HTMLElement>('.btw-session-panel__body');
+    expect(body?.style.paddingBottom).toBe('96px');
+  });
+
+  it('retains action-bar layout through exit and cancels release when reopened', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      bottom: 80,
+      height: 80,
+      left: 0,
+      right: 0,
+      top: 0,
+      width: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+    await act(async () => {
+      useReviewActionBarStore.getState().showCapacityQueueBar({
+        childSessionId: 'deep-review-child',
+        parentSessionId: 'parent-session',
+        capacityQueueState: {
+          toolId: 'task-security',
+          subagentType: 'ReviewSecurity',
+          status: 'queued_for_capacity',
+          queuedReviewerCount: 1,
+          waitingReviewers: [{
+            toolId: 'task-security',
+            subagentType: 'ReviewSecurity',
+            status: 'queued_for_capacity',
+          }],
+        },
+      });
+    });
+
+    const panel = container.querySelector<HTMLElement>('.btw-session-panel');
+    const body = container.querySelector<HTMLElement>('.btw-session-panel__body');
+    expect(panel?.classList.contains('btw-session-panel--has-action-bar')).toBe(true);
+    expect(body?.style.paddingBottom).toBe('176px');
+
+    act(() => useReviewActionBarStore.getState().minimize('deep-review-child'));
+    expect(panel?.classList.contains('btw-session-panel--has-action-bar')).toBe(true);
+    expect(body?.style.paddingBottom).toBe('176px');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(199);
+    });
+    expect(panel?.classList.contains('btw-session-panel--has-action-bar')).toBe(true);
+
+    act(() => useReviewActionBarStore.getState().restore('deep-review-child'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(panel?.classList.contains('btw-session-panel--has-action-bar')).toBe(true);
+    expect(body?.style.paddingBottom).toBe('176px');
+
+    act(() => useReviewActionBarStore.getState().minimize('deep-review-child'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(panel?.classList.contains('btw-session-panel--has-action-bar')).toBe(false);
     expect(body?.style.paddingBottom).toBe('96px');
   });
 

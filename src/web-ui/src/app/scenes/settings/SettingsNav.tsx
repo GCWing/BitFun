@@ -22,6 +22,7 @@ import React, {
 import type { i18n as I18nApi } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { Search, Badge } from '@/component-library';
+import { getInteractionMotion } from '@/shared/utils/motionPreference';
 import { useSettingsStore } from './settingsStore';
 import { SETTINGS_CATEGORIES } from './settingsConfig';
 import type { ConfigTab } from './settingsConfig';
@@ -183,7 +184,7 @@ function useSettingsNav() {
   }, [setSearchQuery]);
 
   const activateTab = useCallback(
-    (tab: ConfigTab) => {
+    (tab: ConfigTab, motion = getInteractionMotion()) => {
       const requestId = ++activationRequestRef.current;
       const commit = () => {
         if (activationRequestRef.current !== requestId) return;
@@ -191,7 +192,7 @@ function useSettingsNav() {
         // first mount; inside a transition React keeps the painted panel until
         // the new one is ready instead of committing the skeleton fallback.
         startTransition(() => {
-          setActiveTab(tab);
+          setActiveTab(tab, motion);
           clearSearch();
         });
       };
@@ -202,11 +203,12 @@ function useSettingsNav() {
 
   const handleTabClick = useCallback(
     (tab: ConfigTab) => {
+      const motion = getInteractionMotion();
       const requestId = ++activationRequestRef.current;
       const commit = () => {
         if (activationRequestRef.current !== requestId) return;
         startTransition(() => {
-          setActiveTab(tab);
+          setActiveTab(tab, motion);
         });
       };
       void preloadSettingsTabContent(tab).then(commit, commit);
@@ -233,7 +235,7 @@ function useSettingsNav() {
       }
       if (e.key === 'Enter' && results.length === 1) {
         e.preventDefault();
-        activateTab(results[0].tabId);
+        activateTab(results[0].tabId, 'instant');
       }
     },
     [clearSearch, results, activateTab, resultsRef]
@@ -266,7 +268,7 @@ function useSettingsNav() {
       }
       if (e.key === 'Enter' && highlightedIndex >= 0 && highlightedIndex < results.length) {
         e.preventDefault();
-        activateTab(results[highlightedIndex].tabId);
+        activateTab(results[highlightedIndex].tabId, 'instant');
       }
     },
     [isSearchMode, results, highlightedIndex, activateTab, clearSearch]

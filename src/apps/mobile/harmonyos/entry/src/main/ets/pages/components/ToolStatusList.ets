@@ -146,11 +146,12 @@ export struct ToolStatusList {
       if (this.isQuestionTool(tool)) {
         ToolQuestionAnswerPanel({
           toolId: tool.id || '',
-          prompt: this.questionPrompt(tool),
+          questionsJson: this.questionInputJson(tool),
+          isBusy: this.isBusy,
           onAnswerQuestion: this.onAnswerQuestion
         })
       }
-      if (this.isRunningTool(tool)) {
+      if (this.isRunningTool(tool) || this.isQuestionTool(tool)) {
         Row() {
           Blank()
           Text(RemoteI18n.t('chat.cancelTool'))
@@ -1015,8 +1016,8 @@ export struct ToolStatusList {
 
   private isQuestionTool(tool: ConversationUiToolStatus): boolean {
     const status = (tool.status || '').toLowerCase();
-    const name = tool.name || '';
-    return name === 'AskUserQuestion' &&
+    const name = this.normalizedToolName(tool);
+    return (name === 'askuserquestion' || name === 'ask_user_question') &&
       status !== 'completed' &&
       status !== 'done' &&
       status !== 'failed' &&
@@ -1037,6 +1038,16 @@ export struct ToolStatusList {
       return RemoteI18n.t('chat.questionDefault');
     }
     return this.toolPreview(preview);
+  }
+
+  private questionInputJson(tool: ConversationUiToolStatus): string {
+    if (tool.tool_input) {
+      try {
+        return JSON.stringify(tool.tool_input);
+      } catch (_err) {
+      }
+    }
+    return this.toolInputPreview(tool);
   }
 
   private questionPromptFromJson(preview: string): string {

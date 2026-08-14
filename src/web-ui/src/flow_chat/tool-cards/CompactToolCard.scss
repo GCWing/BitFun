@@ -95,13 +95,13 @@
 /* E — action + content breathe; keep tool-identifier-icon steady */
 .compact-tool-card-wrapper--loading-shimmer .compact-card-action,
 .compact-tool-card-wrapper--loading-shimmer .compact-card-content {
-  animation: tool-card-text-fade 2.2s ease-in-out infinite;
+  animation: compact-tool-card-loading-fade 2.2s ease-in-out infinite;
 }
 
 /* Legacy compact cards that still use status icon as left icon (no .tool-identifier-icon child):
    fade the icon-marks too for the original shimmer effect. */
 .compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks:not(:has(.tool-identifier-icon)) {
-  animation: tool-card-text-fade 2.2s ease-in-out infinite;
+  animation: compact-tool-card-loading-fade 2.2s ease-in-out infinite;
 }
 
 /* ========== Card body - transparent, no border ========== */
@@ -179,7 +179,7 @@
   line-height: var(--bf-appearance-token-tool-card-action-line-height);
   font-weight: var(--bf-appearance-token-font-weight-medium);
   color: var(--bf-appearance-token-color-text-muted);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 160ms ease;
   flex-shrink: 0;
 }
 
@@ -389,7 +389,9 @@
   .inline-icon {
     flex-shrink: 0;
     color: var(--bf-appearance-token-color-text-muted);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      color 160ms ease;
   }
 }
 
@@ -432,23 +434,19 @@
   }
 }
 
-/* ========== Expand animation ========== */
-@keyframes expandDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes tool-card-text-fade {
+@keyframes compact-tool-card-loading-fade {
   0%, 100% {
     opacity: 1;
   }
   50% {
     opacity: 0.68;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-tool-card-wrapper--loading-shimmer .compact-card-action,
+  .compact-tool-card-wrapper--loading-shimmer .compact-card-content,
+  .compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks:not(:has(.tool-identifier-icon)) {
+    animation: none;
   }
 }

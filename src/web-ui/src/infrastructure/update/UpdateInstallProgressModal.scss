@@ -14,10 +14,12 @@
 }
 
 .bitfun-update-progress__fill {
+  width: 100%;
   height: 100%;
   border-radius: 4px;
   background: var(--bf-appearance-token-color-accent-500);
-  transition: width 0.15s ease-out;
+  transform-origin: left center;
+  transition: transform 0.15s ease-out;
 }
 
 .bitfun-update-progress__fill--indeterminate {
@@ -56,4 +58,15 @@
   justify-content: flex-end;
   gap: 8px;
   margin-top: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-update-progress__fill {
+    transition: none;
+  }
+
+  .bitfun-update-progress__fill--indeterminate {
+    animation: none;
+    transform: none;
+  }
 }

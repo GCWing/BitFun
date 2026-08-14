@@ -75,10 +75,14 @@ Choose the smallest matching check:
 pnpm run i18n:audit
 pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit
 pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts
+pnpm run motion:audit
 pnpm run type-check:web
 ```
 
 Use the first line for resource-only locale changes, the second for
 contract/shared-term changes, the third for i18n runtime/namespace-loading
-changes, and the fourth for ordinary Web UI code. Rely on CI for full lint,
-build, and broad test coverage unless the local change specifically needs it.
+changes, the fourth for presentation or interaction-motion changes, and the
+fifth for ordinary Web UI code. The motion audit is an intent-review inventory,
+not a pass/fail gate; do not mechanically replace deliberate layout transitions
+or animate virtualized content. Rely on CI for full lint, build, and broad test
+coverage unless the local change specifically needs it.

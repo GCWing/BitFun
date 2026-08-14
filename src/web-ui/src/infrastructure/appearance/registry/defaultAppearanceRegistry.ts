@@ -30,6 +30,7 @@ import { textStrokeEffectAppearanceDescriptor } from '@/component-library/compon
 import { windowControlsAppearanceDescriptor } from '@/component-library/components/WindowControls/appearance';
 import { markdownAppearanceDescriptor } from '@/component-library/components/Markdown/appearance';
 import { flowChatCardAppearanceDescriptor } from '@/component-library/components/FlowChatCards/appearance';
+import { viewTransitionBoundaryAppearanceDescriptor } from '@/component-library/components/ViewTransitionBoundary/appearance';
 import { chatInputAppearanceDescriptor } from '@/flow_chat/components/ChatInput.appearance';
 import { harnessProfileSelectorAppearanceDescriptor } from '@/flow_chat/components/HarnessProfileSelector.appearance';
 import { composerVoiceInputAppearanceDescriptor } from '@/flow_chat/components/voice/ComposerVoiceInputButton.appearance';
@@ -121,6 +122,7 @@ import { reviewPlatformAppearanceDescriptor } from '@/app/components/panels/revi
 import { remoteAccountPanelAppearanceDescriptor, remoteConnectDialogAppearanceDescriptor } from '@/app/components/RemoteConnectDialog/appearance';
 import { scheduledJobsViewAppearanceDescriptor } from '@/app/components/scheduled-jobs/appearance';
 import { localizedDateTimeFieldAppearanceDescriptor } from '@/app/components/scheduled-jobs/LocalizedDateTimeField.appearance';
+import { dateTimePickerAppearanceDescriptor } from '@/app/components/scheduled-jobs/DateTimePickerPopover.appearance';
 import { todosSceneAppearanceDescriptor } from '@/app/scenes/todos/appearance';
 import { flexiblePanelAppearanceDescriptor } from '@/app/components/panels/base/FlexiblePanel.appearance';
 import { btwSessionPanelAppearanceDescriptor } from '@/flow_chat/components/btw/BtwSessionPanel.appearance';
@@ -310,6 +312,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(windowControlsAppearanceDescriptor)
     .registerComponent(markdownAppearanceDescriptor)
     .registerComponent(flowChatCardAppearanceDescriptor)
+    .registerComponent(viewTransitionBoundaryAppearanceDescriptor)
     .registerComponent(chatInputAppearanceDescriptor)
     .registerComponent(harnessProfileSelectorAppearanceDescriptor)
     .registerComponent(composerVoiceInputAppearanceDescriptor)
@@ -411,6 +414,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(remoteAccountPanelAppearanceDescriptor)
     .registerComponent(scheduledJobsViewAppearanceDescriptor)
     .registerComponent(localizedDateTimeFieldAppearanceDescriptor)
+    .registerComponent(dateTimePickerAppearanceDescriptor)
     .registerComponent(flexiblePanelAppearanceDescriptor)
     .registerComponent(btwSessionPanelAppearanceDescriptor)
     .registerComponent(modernFlowChatAppearanceDescriptor)

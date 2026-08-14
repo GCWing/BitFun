@@ -22,6 +22,7 @@ import { Input } from '@/component-library';
 import { editorAiAPI } from '@/infrastructure/api/service-api/EditorAiAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 import { MarkdownAlignmentExtension } from '../extensions/MarkdownAlignmentExtension';
 import { BlockIdExtension } from '../extensions/BlockIdExtension';
@@ -886,7 +887,10 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       return;
     }
 
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element.scrollIntoView({
+      behavior: getMotionAwareScrollBehavior('smooth'),
+      block: 'center',
+    });
 
     if (highlight) {
       element.classList.add('m-editor-tiptap-block-highlighted');

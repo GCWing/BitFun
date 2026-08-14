@@ -23,12 +23,17 @@ interface ModelSelectorDropdownStyle {
   bottom: 'auto';
 }
 
-export function getModelSelectorDropdownStyle(
+export interface ModelSelectorDropdownLayout {
+  style: ModelSelectorDropdownStyle;
+  placement: FixedPopoverPlacement;
+}
+
+export function getModelSelectorDropdownLayout(
   anchorRect: ModelSelectorDropdownAnchorRect,
   dropdownSize: ModelSelectorDropdownSize,
   preferredPlacement: FixedPopoverPlacement,
   viewport: FixedPopoverViewport,
-): ModelSelectorDropdownStyle {
+): ModelSelectorDropdownLayout {
   const position = computeFixedPopoverPositionInViewport(
     anchorRect,
     dropdownSize.width,
@@ -36,12 +41,34 @@ export function getModelSelectorDropdownStyle(
     viewport,
     { preferredPlacement },
   );
+  const placement = position.top + dropdownSize.height <= anchorRect.top
+    ? 'top'
+    : position.top >= anchorRect.bottom
+      ? 'bottom'
+      : preferredPlacement;
 
   return {
-    position: 'fixed',
-    visibility: 'visible',
-    left: `${position.left}px`,
-    top: `${position.top}px`,
-    bottom: 'auto',
+    placement,
+    style: {
+      position: 'fixed',
+      visibility: 'visible',
+      left: `${position.left}px`,
+      top: `${position.top}px`,
+      bottom: 'auto',
+    },
   };
+}
+
+export function getModelSelectorDropdownStyle(
+  anchorRect: ModelSelectorDropdownAnchorRect,
+  dropdownSize: ModelSelectorDropdownSize,
+  preferredPlacement: FixedPopoverPlacement,
+  viewport: FixedPopoverViewport,
+): ModelSelectorDropdownStyle {
+  return getModelSelectorDropdownLayout(
+    anchorRect,
+    dropdownSize,
+    preferredPlacement,
+    viewport,
+  ).style;
 }

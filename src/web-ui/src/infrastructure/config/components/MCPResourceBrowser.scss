@@ -94,7 +94,12 @@
         padding: 1rem;
         cursor: pointer;
         border-bottom: 1px solid var(--bf-appearance-token-border-base);
-        transition: all 0.2s ease;
+        transition:
+          background-color 0.2s ease,
+          border-color 0.2s ease,
+          color 0.2s ease,
+          opacity 0.2s ease,
+          transform 0.2s ease;
 
         &:hover {
           background: var(--bf-appearance-token-color-bg-tertiary);
@@ -239,5 +244,4 @@
     }
   }
 }
-
 

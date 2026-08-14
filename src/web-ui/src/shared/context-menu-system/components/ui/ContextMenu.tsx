@@ -1,6 +1,6 @@
  
 
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useCallback, useState } from 'react';
 import { ContextMenuProps, ContextMenuItem } from './types';
 import { createLogger } from '@/shared/utils/logger';
 import './ContextMenu.scss';
@@ -11,6 +11,12 @@ const log = createLogger('ContextMenu');
 const SUBMENU_OPEN_DELAY = 150;   
 const SUBMENU_CLOSE_DELAY = 300;  
 const SAFE_TRIANGLE_TOLERANCE = 50; 
+const CONTEXT_MENU_EXIT_DURATION_MS = 100;
+
+interface InternalContextMenuProps extends ContextMenuProps {
+  autoFocusOnOpen?: boolean;
+  onKeyboardBack?: () => void;
+}
 
  
 function isPointInTriangle(
@@ -33,20 +39,44 @@ function isPointInTriangle(
   return !(hasNeg && hasPos);
 }
 
-export const ContextMenu: React.FC<ContextMenuProps> = ({
+export const ContextMenu: React.FC<InternalContextMenuProps> = ({
   items,
   position,
   visible,
   context,
   onClose,
-  onItemClick
+  onItemClick,
+  autoFocusOnOpen = true,
+  onKeyboardBack,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef(new Map<number, HTMLDivElement>());
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const wasVisibleRef = useRef(false);
+  const exitTimerRef = useRef<number | null>(null);
+  const enterFrameRef = useRef<number | null>(null);
+  const submenuFocusFrameRef = useRef<number | null>(null);
+  const [isPresent, setIsPresent] = useState(visible);
+  const [motionPhase, setMotionPhase] = useState<'entering' | 'entered' | 'exiting'>(
+    visible ? 'entering' : 'exiting',
+  );
   
   
   const [activeSubmenuId, setActiveSubmenuId] = useState<string | null>(null);
   const submenuOpenTimerRef = useRef<number | null>(null);
   const submenuCloseTimerRef = useRef<number | null>(null);
+  const focusableItemIndices = useMemo(
+    () => items.reduce<number[]>((indices, item, index) => {
+      if (!item.separator && !item.disabled) {
+        indices.push(index);
+      }
+      return indices;
+    }, []),
+    [items],
+  );
+  const [focusedItemIndex, setFocusedItemIndex] = useState(
+    () => focusableItemIndices[0] ?? -1,
+  );
   
   
   const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
@@ -64,6 +94,98 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       submenuCloseTimerRef.current = null;
     }
   }, []);
+
+  const restorePreviousFocus = useCallback(() => {
+    const previousFocus = previousFocusRef.current;
+    if (previousFocus?.isConnected && !previousFocus.matches(':disabled')) {
+      previousFocus.focus();
+      return;
+    }
+
+    const activeElement = document.activeElement;
+    if (activeElement instanceof window.HTMLElement && menuRef.current?.contains(activeElement)) {
+      activeElement.blur();
+    }
+  }, []);
+
+  const focusItemAtIndex = useCallback((index: number) => {
+    setFocusedItemIndex(index);
+    itemRefs.current.get(index)?.focus();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (visible && !wasVisibleRef.current) {
+      previousFocusRef.current = document.activeElement instanceof window.HTMLElement
+        ? document.activeElement
+        : null;
+      const firstItemIndex = focusableItemIndices[0] ?? -1;
+      setFocusedItemIndex(firstItemIndex);
+
+      if (autoFocusOnOpen) {
+        if (firstItemIndex >= 0) {
+          itemRefs.current.get(firstItemIndex)?.focus();
+        } else {
+          menuRef.current?.focus();
+        }
+      }
+    } else if (!visible && wasVisibleRef.current) {
+      const activeElement = document.activeElement;
+      if (activeElement instanceof window.HTMLElement && menuRef.current?.contains(activeElement)) {
+        restorePreviousFocus();
+      }
+    }
+
+    wasVisibleRef.current = visible;
+  }, [autoFocusOnOpen, focusableItemIndices, restorePreviousFocus, visible]);
+
+  useEffect(() => {
+    if (!focusableItemIndices.includes(focusedItemIndex)) {
+      setFocusedItemIndex(focusableItemIndices[0] ?? -1);
+    }
+  }, [focusableItemIndices, focusedItemIndex]);
+
+  useEffect(() => {
+    if (exitTimerRef.current !== null) {
+      window.clearTimeout(exitTimerRef.current);
+      exitTimerRef.current = null;
+    }
+    if (enterFrameRef.current !== null) {
+      window.cancelAnimationFrame(enterFrameRef.current);
+      enterFrameRef.current = null;
+    }
+
+    if (visible) {
+      setIsPresent(true);
+      setMotionPhase('entering');
+      enterFrameRef.current = window.requestAnimationFrame(() => {
+        enterFrameRef.current = window.requestAnimationFrame(() => {
+          setMotionPhase('entered');
+          enterFrameRef.current = null;
+        });
+      });
+    } else {
+      setMotionPhase('exiting');
+      exitTimerRef.current = window.setTimeout(() => {
+        setIsPresent(false);
+        exitTimerRef.current = null;
+      }, CONTEXT_MENU_EXIT_DURATION_MS);
+    }
+
+    return () => {
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current);
+        exitTimerRef.current = null;
+      }
+      if (enterFrameRef.current !== null) {
+        window.cancelAnimationFrame(enterFrameRef.current);
+        enterFrameRef.current = null;
+      }
+      if (submenuFocusFrameRef.current !== null) {
+        window.cancelAnimationFrame(submenuFocusFrameRef.current);
+        submenuFocusFrameRef.current = null;
+      }
+    };
+  }, [visible]);
 
   
   const handleMenuItemMouseEnter = useCallback((
@@ -208,10 +330,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   }, [activeSubmenuId, visible]);
 
   
-  const handleItemClick = useCallback(async (item: ContextMenuItem, event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-
+  const activateItem = useCallback(async (item: ContextMenuItem, restoreFocusAfter = false) => {
     if (item.disabled || item.separator) {
       return;
     }
@@ -234,30 +353,132 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       onItemClick(item, context);
     }
 
-    
+    if (restoreFocusAfter) {
+      restorePreviousFocus();
+    }
     onClose();
-  }, [context, onItemClick, onClose]);
+  }, [context, onItemClick, onClose, restorePreviousFocus]);
+
+  const handleItemClick = useCallback((item: ContextMenuItem, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void activateItem(item);
+  }, [activateItem]);
+
+  const openSubmenuFromKeyboard = useCallback((item: ContextMenuItem, index: number) => {
+    if (!item.submenu?.length || item.disabled) {
+      return;
+    }
+
+    clearAllTimers();
+    setActiveSubmenuId(item.id || `item-${index}`);
+    if (submenuFocusFrameRef.current !== null) {
+      window.cancelAnimationFrame(submenuFocusFrameRef.current);
+    }
+    submenuFocusFrameRef.current = window.requestAnimationFrame(() => {
+      const firstSubmenuItem = itemRefs.current.get(index)?.querySelector<HTMLElement>(
+        '.context-menu-submenu [role="menu"] > [role="menuitem"]:not([aria-disabled="true"])',
+      );
+      firstSubmenuItem?.focus();
+      submenuFocusFrameRef.current = null;
+    });
+  }, [clearAllTimers]);
 
   
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (!visible) return;
 
+    const activeElement = document.activeElement instanceof window.HTMLElement
+      ? document.activeElement
+      : null;
+    const owningMenu = activeElement?.closest('[role="menu"]');
+    if (owningMenu !== menuRef.current) {
+      return;
+    }
+
+    const currentPosition = focusableItemIndices.indexOf(focusedItemIndex);
+    const currentItem = focusedItemIndex >= 0 ? items[focusedItemIndex] : undefined;
+
     switch (event.key) {
       case 'Escape':
         event.preventDefault();
+        event.stopPropagation();
+        restorePreviousFocus();
         onClose();
         break;
-      case 'ArrowDown':
-        
+      case 'ArrowDown': {
+        event.preventDefault();
+        event.stopPropagation();
+        if (focusableItemIndices.length > 0) {
+          const nextPosition = currentPosition < 0
+            ? 0
+            : (currentPosition + 1) % focusableItemIndices.length;
+          focusItemAtIndex(focusableItemIndices[nextPosition]);
+        }
         break;
-      case 'ArrowUp':
-        
+      }
+      case 'ArrowUp': {
+        event.preventDefault();
+        event.stopPropagation();
+        if (focusableItemIndices.length > 0) {
+          const previousPosition = currentPosition <= 0
+            ? focusableItemIndices.length - 1
+            : currentPosition - 1;
+          focusItemAtIndex(focusableItemIndices[previousPosition]);
+        }
+        break;
+      }
+      case 'Home':
+        event.preventDefault();
+        event.stopPropagation();
+        if (focusableItemIndices.length > 0) {
+          focusItemAtIndex(focusableItemIndices[0]);
+        }
+        break;
+      case 'End':
+        event.preventDefault();
+        event.stopPropagation();
+        if (focusableItemIndices.length > 0) {
+          focusItemAtIndex(focusableItemIndices[focusableItemIndices.length - 1]);
+        }
         break;
       case 'Enter':
-        
+      case ' ':
+        event.preventDefault();
+        event.stopPropagation();
+        if (currentItem?.submenu?.length) {
+          openSubmenuFromKeyboard(currentItem, focusedItemIndex);
+        } else if (currentItem) {
+          void activateItem(currentItem, true);
+        }
+        break;
+      case 'ArrowRight':
+        if (currentItem?.submenu?.length) {
+          event.preventDefault();
+          event.stopPropagation();
+          openSubmenuFromKeyboard(currentItem, focusedItemIndex);
+        }
+        break;
+      case 'ArrowLeft':
+        if (onKeyboardBack) {
+          event.preventDefault();
+          event.stopPropagation();
+          onKeyboardBack();
+        }
         break;
     }
-  }, [visible, onClose]);
+  }, [
+    activateItem,
+    focusItemAtIndex,
+    focusedItemIndex,
+    focusableItemIndices,
+    items,
+    onClose,
+    onKeyboardBack,
+    openSubmenuFromKeyboard,
+    restorePreviousFocus,
+    visible,
+  ]);
 
   
   const handleClickOutside = useCallback((event: MouseEvent) => {
@@ -337,7 +558,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   
   const adjustPosition = useCallback(() => {
-    if (!menuRef.current || !visible) return;
+    if (!menuRef.current || !isPresent) return;
 
     const menu = menuRef.current;
     const rect = menu.getBoundingClientRect();
@@ -370,20 +591,23 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
-  }, [position, visible]);
+    const originX = Math.min(Math.max(position.x - x, 8), Math.max(rect.width - 8, 8));
+    const originY = Math.min(Math.max(position.y - y, 8), Math.max(rect.height - 8, 8));
+    menu.style.setProperty('--context-menu-transform-origin', `${originX}px ${originY}px`);
+  }, [position, isPresent]);
 
   
   useEffect(() => {
-    if (visible) {
+    if (isPresent) {
       
-      requestAnimationFrame(adjustPosition);
+      window.requestAnimationFrame(adjustPosition);
     }
-  }, [visible, adjustPosition]);
+  }, [isPresent, adjustPosition]);
 
   
   const renderMenuItem = (item: ContextMenuItem, index: number) => {
     if (item.separator) {
-      return <div key={`separator-${index}`} className="context-menu-separator" data-bf-component="context-menu" data-bf-part="separator" />;
+      return <div key={`separator-${index}`} className="context-menu-separator" data-bf-component="context-menu" data-bf-part="separator" role="separator" />;
     }
 
     const itemId = item.id || `item-${index}`;
@@ -392,6 +616,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
     return (
       <div
+        ref={(element) => {
+          if (element) {
+            itemRefs.current.set(index, element);
+          } else {
+            itemRefs.current.delete(index);
+          }
+        }}
         key={itemId}
         className={`context-menu-item ${item.disabled ? 'disabled' : ''} ${isSubmenuActive ? 'submenu-active' : ''}`}
         onClick={(event) => handleItemClick(item, event)}
@@ -401,6 +632,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         data-bf-component="context-menu"
         data-bf-part="item"
         data-bf-state={[item.disabled && 'disabled', isSubmenuActive && 'submenu-active'].filter(Boolean).join(' ') || undefined}
+        role="menuitem"
+        aria-disabled={item.disabled || undefined}
+        aria-haspopup={hasSubmenu ? 'menu' : undefined}
+        aria-expanded={hasSubmenu ? isSubmenuActive : undefined}
+        tabIndex={!item.disabled && index === focusedItemIndex ? 0 : -1}
+        data-menu-index={index}
       >
         {item.icon && (
           <span className="context-menu-item-icon" data-bf-component="context-menu" data-bf-part="icon">
@@ -432,6 +669,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 context={context}
                 onClose={onClose}
                 onItemClick={onItemClick}
+                autoFocusOnOpen={false}
+                onKeyboardBack={() => {
+                  setActiveSubmenuId(null);
+                  focusItemAtIndex(index);
+                }}
               />
             </div>
           </>
@@ -440,14 +682,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     );
   };
 
-  if (!visible) {
+  if (!isPresent) {
     return null;
   }
 
   return (
     <div
       ref={menuRef}
-      className={`context-menu ${visible ? 'visible' : ''}`}
+      className="context-menu"
       style={{
         left: position.x,
         top: position.y
@@ -455,6 +697,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       onContextMenu={(event) => event.preventDefault()}
       data-bf-component="context-menu"
       data-bf-part="root"
+      data-motion="presence"
+      data-state={motionPhase}
+      role="menu"
+      tabIndex={-1}
+      aria-hidden={(!visible || motionPhase === 'exiting') || undefined}
+      {...(!visible || motionPhase === 'exiting' ? { inert: '' } : {})}
     >
       {items.map(renderMenuItem)}
     </div>

@@ -248,3 +248,61 @@ export function isViewportAtTail(input: ViewportAtTailInput): boolean {
   return input.scrollTop >= input.contentEndScrollTop - input.thresholdPx
     && input.scrollTop <= input.followTargetScrollTop + input.thresholdPx;
 }
+
+/**
+ * Viewports a jump to the latest output may animate across.
+ *
+ * Counted in viewports rather than pixels because the question is whether the
+ * reader can follow the movement, and what they can follow is a share of what
+ * they can see: the same 2000px is two and a half screens on a laptop and most
+ * of one on a tall display.
+ *
+ * Three is about the largest number the animation reliably finishes. The frame
+ * loop yields to a smooth scroll for a bounded time and takes the viewport back
+ * afterwards wherever it has got to — measured, a jump issued for 8717px
+ * animated 5480 of them and was finished by the loop in a single 3290px write.
+ * That is 38% of the distance delivered as a hard jump at the end of an
+ * animation, which is worse than either half on its own. The same measurement
+ * puts the sustained rate near 4570px/s, so three 800px viewports travel in
+ * roughly half the budget.
+ *
+ * `followOutput.animatedScrollEnded` is where this number is checked: a
+ * `backstop` reason means an animation ran out its yield without arriving, and
+ * this is then too high.
+ */
+export const FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS = 3;
+
+export interface AnimatedJumpInput {
+  /** Where the viewport is now. */
+  fromPx: number;
+  /** Where the jump would leave it. */
+  targetPx: number;
+  clientHeight: number;
+}
+
+/**
+ * How a jump to the latest output should travel.
+ *
+ * An animation earns its cost only while the reader can read it. Its whole job
+ * is spatial continuity — showing which way and how far the viewport went — and
+ * past a few screens the transcript in between goes by faster than anyone can
+ * track, leaving a wait where the answer was. So a far jump lands instantly,
+ * the way every other navigation in the transcript already does, and a near one
+ * animates.
+ *
+ * Distance also costs more than it looks. Animating across N screens of a
+ * virtualized transcript renders and measures every item passed while the
+ * animation runs, and heights are estimates until they are measured — so the
+ * content end moves under an animation aimed at where it used to be, and the
+ * follow loop corrects that afterwards as a second, visible movement. A jump
+ * inside a few viewports passes items that are already rendered and measured.
+ */
+export function resolveAnimatedJumpBehavior(input: AnimatedJumpInput): 'smooth' | 'auto' {
+  // An unmeasured scroller is not a short distance, it is no distance at all:
+  // there is nothing to scale the budget by and nothing on screen to follow.
+  if (input.clientHeight <= 0) return 'auto';
+  return Math.abs(input.targetPx - input.fromPx)
+    <= input.clientHeight * FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS
+    ? 'smooth'
+    : 'auto';
+}
