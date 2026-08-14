@@ -1,0 +1,12 @@
+# dsh-bitfun bundle patch: register the BitFun SDK Host bridge in this profile.
+# The row below carries neutral defaults; override it in the profile's own
+# cordis.patch.yml when a custom host binary or tighter caps are needed, e.g.:
+#
+#   - id: bitfun
+#     config:
+#       hostPath: '/absolute/path/to/bitfun-sdk-host'
+#       queryTimeoutMs: 1800000
+#
+- insert:
+    - id: bitfun
+      name: 'dsh-bitfun'
