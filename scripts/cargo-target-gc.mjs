@@ -314,12 +314,15 @@ function sleepMs(ms) {
 export function isCompilerBusy({ exec = execFileSync, platform = process.platform } = {}) {
   try {
     if (platform === 'win32') {
-      const out = exec(
-        'cmd.exe',
-        ['/d', '/s', '/c', 'tasklist /FI "IMAGENAME eq cargo.exe" & tasklist /FI "IMAGENAME eq rustc.exe"'],
-        { encoding: 'utf8' }
-      );
-      return /\bcargo\.exe\b/i.test(out) || /\brustc\.exe\b/i.test(out);
+      for (const imageName of ['cargo.exe', 'rustc.exe']) {
+        const out = exec('tasklist', ['/FI', `IMAGENAME eq ${imageName}`, '/NH'], {
+          encoding: 'utf8',
+        });
+        if (out.toLowerCase().includes(imageName)) {
+          return true;
+        }
+      }
+      return false;
     }
     const cargo = exec('pgrep', ['-x', 'cargo'], { encoding: 'utf8' }).trim();
     if (cargo) {
