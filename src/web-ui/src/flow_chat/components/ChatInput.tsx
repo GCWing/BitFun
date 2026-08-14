@@ -465,6 +465,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const [permissionModeSaving, setPermissionModeSaving] = useState(false);
   const [showPermissionModeControl, setShowPermissionModeControl] = useState(true);
+  const [reasoningControlHost, setReasoningControlHost] = useState<HTMLDivElement | null>(null);
+  const [reasoningControlVisible, setReasoningControlVisible] = useState(false);
   // The session's own selection. `null` means it follows the global default,
   // which is what keeps switching modes in one conversation from moving every
   // other open session.
@@ -4567,6 +4569,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [dispatchInput, inlineTriggerState, inputState.value, isBtwSession, setQueuedInput]);
 
+  const selectReviewAgent = useCallback(() => {
+    dispatchMode({ type: 'CLOSE_DROPDOWN' });
+    if (!canLaunchReview) {
+      notificationService.info(t('chatInput.specialistAgents.reviewUnavailable'), { duration: 3200 });
+      return;
+    }
+    selectSlashCommandAction('review');
+  }, [canLaunchReview, selectSlashCommandAction, t]);
+
+  const showSpecialistAgentComingSoon = useCallback((agentName: string) => {
+    dispatchMode({ type: 'CLOSE_DROPDOWN' });
+    notificationService.info(t('chatInput.specialistAgents.comingSoonNotice', { name: agentName }), {
+      duration: 3200,
+    });
+  }, [t]);
+
   const selectSlashExternalPromptCommand = useCallback((item: SlashExternalPromptCommandItem) => {
     if (!item.available) {
       notificationService.warning(item.unavailableReason || t('chatInput.noMatchingCommand'));
@@ -5882,6 +5900,60 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                 );
                               })
                             )}
+                            <div
+                              role="menuitem"
+                              tabIndex={0}
+                              className={`bitfun-chat-input__mode-option${canLaunchReview ? '' : ' bitfun-chat-input__mode-option--coming-soon'}`}
+                              data-bf-component="chat-input"
+                              data-bf-part="boostItem"
+                              data-bf-boost-item-kind="agent"
+                              data-bf-agent-id="Review"
+                              onClick={selectReviewAgent}
+                              onKeyDown={event => {
+                                if (event.key !== 'Enter' && event.key !== ' ') return;
+                                event.preventDefault();
+                                selectReviewAgent();
+                              }}
+                            >
+                              <span className="bitfun-chat-input__mode-option-name">
+                                {t('chatInput.specialistAgents.review.name')}
+                              </span>
+                              <span className="bitfun-chat-input__mode-option-actions">
+                                <span className="bitfun-chat-input__slash-command-current">
+                                  {canLaunchReview
+                                    ? t('chatInput.specialistAgents.available')
+                                    : t('chatInput.specialistAgents.needsChanges')}
+                                </span>
+                              </span>
+                            </div>
+                            {(['cowork', 'computerUse'] as const).map(agentId => {
+                              const agentName = t(`chatInput.specialistAgents.${agentId}.name`);
+                              return (
+                                <div
+                                  key={agentId}
+                                  role="menuitem"
+                                  tabIndex={0}
+                                  className="bitfun-chat-input__mode-option bitfun-chat-input__mode-option--coming-soon"
+                                  data-bf-component="chat-input"
+                                  data-bf-part="boostItem"
+                                  data-bf-boost-item-kind="agent"
+                                  data-bf-agent-id={agentId}
+                                  onClick={() => showSpecialistAgentComingSoon(agentName)}
+                                  onKeyDown={event => {
+                                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                                    event.preventDefault();
+                                    showSpecialistAgentComingSoon(agentName);
+                                  }}
+                                >
+                                  <span className="bitfun-chat-input__mode-option-name">{agentName}</span>
+                                  <span className="bitfun-chat-input__mode-option-actions">
+                                    <span className="bitfun-chat-input__slash-command-current">
+                                      {t('chatInput.specialistAgents.comingSoon')}
+                                    </span>
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
 
                           <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
@@ -6095,6 +6167,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     externalSelection={dispatchModelSelection}
                     modeDefaultModelId={targetModeInfo?.model}
                     persistSharedModeDefault={Boolean(targetModeInfo && targetModeInfo.source !== 'external')}
+                    reasoningControlHost={reasoningControlHost}
+                    onReasoningAvailabilityChange={setReasoningControlVisible}
                   />
                   </div>
                 ) : null}
@@ -6111,10 +6185,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <ChatInputWorkspaceStrip
         repositoryPath={chatStripRepositoryPath}
         workspaceLabel={chatStripWorkspaceLabel}
+        harnessControl={!isAcpTargetSession && !isSubagentInputTarget && !isAssistantWorkspace
+          ? {
+              legacySession: !canSwitchModes,
+              active: currentMode === 'agentic',
+              onActivateBalanced: () => {
+                if (currentMode !== 'agentic') {
+                  requestSessionModeChange('agentic');
+                }
+              },
+            }
+          : undefined}
         executionTarget={effectiveTargetSession?.config.executionTarget}
         dispatchControl={dispatchControl}
         worktreeControl={worktreeControl}
         deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
+        reasoningControl={{
+          visible: reasoningControlVisible,
+          hostRef: setReasoningControlHost,
+        }}
         permissionControl={showPermissionModeControl
           ? caps.sessionScopedApproval
             ? {
@@ -6150,7 +6239,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           : undefined}
         usageReport={
           effectiveTargetSessionId && effectiveTargetSession && caps.usageReport
-            ? { visible: true, onOpen: handleToolbarUsageReport }
+            ? {
+                visible: true,
+                percentage: tokenUsage.max > 0
+                  ? Math.min(100, Math.max(0, Math.round((tokenUsage.current / tokenUsage.max) * 100)))
+                  : 0,
+                onOpen: handleToolbarUsageReport,
+              }
             : undefined
         }
         threadGoal={

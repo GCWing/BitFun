@@ -22,9 +22,9 @@
   padding: 0 $size-gap-2;
   pointer-events: auto !important;
 
-  /* Reserve the band between the input card bottom edge and workspace strip (larger = more gap above strip text). */
+  /* Reserve the compact status band plus a small optical gap below the input. */
   &:has(.bitfun-chat-input-workspace-strip) {
-    padding-bottom: 32px;
+    padding-bottom: 30px;
   }
 
   &.bitfun-context-drop-zone--can-accept {
@@ -351,9 +351,9 @@
       align-items: center;
       min-height: 44px;
       max-height: 44px;
-      // 7px horizontal padding matches the (44 - 2*1 - 28) / 2 = 7px vertical
-      // gap around the 28px round buttons, keeping all four sides equal
-      padding: 0 7px;
+      // The reference is intentionally downscaled for BitFun's desktop density:
+      // 44px capsule, 32px controls, and compact 8px horizontal insets.
+      padding: 0 8px;
       border-radius: 22px;
       overflow: visible;
 
@@ -368,19 +368,34 @@
         display: flex;
         align-items: center;
         padding: 0;
-        // Match the 7px box padding so the round Plus button keeps equal
-        // clearance on all four sides (top/bottom/left/right)
-        margin-right: 7px;
+        // Keep the input text clear of the enlarged Plus control.
+        margin-right: 20px;
 
         // Enlarge the Plus button to match the capsule height
         .bitfun-chat-input__agent-boost-add {
-          width: 28px !important;
-          height: 28px !important;
-          min-width: 28px !important;
+          width: 32px !important;
+          height: 32px !important;
+          min-width: 32px !important;
+          padding: 0 !important;
+          border: 1px solid var(--bf-appearance-token-border-subtle) !important;
           border-radius: 50% !important;
+          background: transparent !important;
+          color: var(--bf-appearance-token-color-text-primary);
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
+
+          svg {
+            width: 16px;
+            height: 16px;
+          }
+
+          &:hover,
+          &:focus-visible,
+          .bitfun-chat-input__box:focus-within & {
+            border-color: var(--bf-appearance-token-border-medium) !important;
+            background: var(--bf-appearance-token-element-bg-soft) !important;
+          }
         }
       }
 
@@ -394,8 +409,8 @@
         align-items: center;
 
         .rich-text-input {
-          min-height: 22px !important;
-          max-height: 22px !important;
+          min-height: 20px !important;
+          max-height: 20px !important;
           overflow: hidden;
           line-height: var(--bf-appearance-token-flowchat-support-line-height);
           font-size: var(--bf-appearance-token-flowchat-font-size-base);
@@ -412,13 +427,13 @@
         flex-shrink: 0;
         display: flex;
         align-items: center;
-        gap: $size-gap-1;
+        gap: 6px;
         padding: 0;
 
         // Enlarge send/stop button to match the capsule height
         .bitfun-chat-input__send-button {
-          width: 28px !important;
-          height: 28px !important;
+          width: 32px !important;
+          height: 32px !important;
           border-radius: 50% !important;
           display: inline-flex !important;
           align-items: center !important;
@@ -431,13 +446,60 @@
         }
 
         .bitfun-chat-input__breathing-circle {
-          width: 28px !important;
-          height: 28px !important;
+          width: 32px !important;
+          height: 32px !important;
         }
 
         .bitfun-chat-input__model-usage-group {
           display: flex;
           align-items: center;
+        }
+
+        // The reference keeps the composer model control to one responsibility.
+        // Reasoning and context usage remain available in their owning menus and
+        // in the status track below instead of being repeated inside the capsule.
+        .bitfun-reasoning-preset-selector,
+        .bitfun-model-selector__ctx-usage {
+          display: none;
+        }
+
+        .bitfun-model-selector__trigger {
+          height: 30px;
+          padding: 0 12px;
+          border: 1px solid var(--bf-appearance-token-border-subtle);
+          border-radius: 15px;
+          background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 66%, transparent);
+          font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+          opacity: 1;
+
+          &:hover,
+          &--open {
+            border-color: var(--bf-appearance-token-border-medium);
+            background: var(--bf-appearance-token-element-bg-soft);
+          }
+        }
+
+        .bitfun-model-selector__name {
+          max-width: 160px;
+        }
+
+        .bitfun-chat-input__voice-control.icon-btn {
+          width: 32px;
+          height: 32px;
+          min-width: 32px;
+          min-height: 32px;
+          border: 1px solid var(--bf-appearance-token-border-subtle);
+          background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 58%, transparent);
+
+          svg {
+            width: 16px;
+            height: 16px;
+          }
+        }
+
+        .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing) svg {
+          width: 16px;
+          height: 16px;
         }
       }
 
@@ -614,7 +676,7 @@
     position: relative;
     width: 100%;
     height: auto;
-    min-height: 76px;
+    min-height: 68px;
     max-height: 500px;
     display: flex;
     flex-direction: column;
@@ -644,7 +706,7 @@
       border-radius: 22px;
       min-height: 44px;
       max-height: 44px;
-      padding: 0 7px;
+      padding: 0 8px;
       background: rgba(var(--private-chat-input-capsule-bg-rgb), 0.22);
       border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
       backdrop-filter: blur(8px);
@@ -695,7 +757,7 @@
     &--multi-line {
       // Max ~5 lines: 5 × (14px × 1.45) ≈ 101px + padding + action bar ≈ 160px
       .bitfun-chat-input__input-area {
-        min-height: 56px;
+        min-height: 48px;
 
         .rich-text-input {
           max-height: 102px; // ~5 lines of text
@@ -796,7 +858,7 @@
     flex-direction: column;
     align-items: stretch;
     width: 100%;
-    min-height: 56px;
+    min-height: 48px;
     overflow: visible;
     // Last line descenders + clearance above the action row (send is 28px tall in a short bar)
     padding-bottom: 4px;
@@ -1393,6 +1455,10 @@
       &:hover {
         background: transparent;
       }
+    }
+
+    &--coming-soon {
+      color: var(--bf-appearance-token-color-text-muted);
     }
 
   }
@@ -2140,6 +2206,20 @@
     line-height: 1;
     box-shadow: 0 0 0 1px rgba(var(--private-chat-input-queued-badge-ring-rgb), 0.85);
     pointer-events: none;
+  }
+}
+
+// In the light reference the send affordance remains a charcoal disk even
+// before content is entered. The muted arrow communicates the disabled state
+// without changing the control into a large pale circle.
+:root[data-bf-appearance-mode='light'] .bitfun-chat-input--capsule,
+.light .bitfun-chat-input--capsule {
+  .bitfun-chat-input__box--capsule
+    .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing):disabled {
+    border: 1px solid transparent;
+    background: rgb(var(--private-chat-input-send-inverse-surface-end-rgb));
+    color: rgba(var(--private-chat-input-send-inverse-text-rgb), 0.58);
+    filter: none;
   }
 }
 

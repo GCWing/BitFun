@@ -7,6 +7,8 @@ import { useAgentsStore } from './agentsStore';
 import { isLocallyManageableSubagent } from './agentVisibility';
 
 const useAgentsListMock = vi.hoisted(() => vi.fn());
+const notificationInfoMock = vi.hoisted(() => vi.fn());
+const notificationSuccessMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -128,10 +130,10 @@ vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
 
 vi.mock('@/shared/notification-system', () => ({
   useNotification: () => ({
-    success: vi.fn(),
+    success: notificationSuccessMock,
     error: vi.fn(),
     warning: vi.fn(),
-    info: vi.fn(),
+    info: notificationInfoMock,
   }),
 }));
 
@@ -193,6 +195,8 @@ describeWithJsdom('AgentsScene', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
     useAgentsStore.getState().openHome();
+    notificationInfoMock.mockReset();
+    notificationSuccessMock.mockReset();
     mockAgentsList();
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -251,6 +255,35 @@ describeWithJsdom('AgentsScene', () => {
     expect(coreCardSurfaceStyles).toMatch(/width: 100%;\s+min-width: 0;/);
     expect(agentCardStyles).not.toContain('width: 360px;');
     expect(coreCardSurfaceStyles).not.toContain('width: 360px;');
+  });
+
+  it('shows all Harness profiles and keeps unfinished profiles explicit', async () => {
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+
+    const minimal = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-minimal"]');
+    const balanced = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-balanced"]');
+    const ultimate = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-ultimate"]');
+    expect(minimal).toBeTruthy();
+    expect(balanced?.dataset.bfState).toBe('connected');
+    expect(ultimate?.dataset.bfState).toBe('coming-soon');
+
+    await act(async () => {
+      minimal?.click();
+      balanced?.click();
+    });
+
+    expect(notificationInfoMock).toHaveBeenCalledWith(
+      'harnessZone.comingSoonNotice',
+      expect.objectContaining({ duration: 3200 }),
+    );
+    expect(notificationSuccessMock).toHaveBeenCalledWith(
+      'harnessZone.balancedConnectedNotice',
+      expect.objectContaining({ duration: 2600 }),
+    );
   });
 
   it('shows skill grouping and editing for a custom subagent with the Skill tool', async () => {

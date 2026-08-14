@@ -1,0 +1,132 @@
+@use '../../component-library/styles/tokens' as tokens;
+
+.bitfun-harness-selector {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: auto;
+  flex: none;
+  min-width: 0;
+}
+
+.bitfun-harness-selector__trigger {
+  width: auto;
+  min-width: 0;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--bf-appearance-token-size-radius-base);
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+
+  &:hover,
+  &[data-bf-state='open'] {
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline-offset: -2px;
+  }
+}
+
+.bitfun-harness-selector__trigger-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  min-height: 20px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  white-space: nowrap;
+
+  svg {
+    flex: none;
+    width: 11px;
+    height: 11px;
+  }
+}
+
+// Simplified picker: a plain three-row list, styled like the strip's
+// permission menu. No header, icons, descriptions, or footer.
+.bitfun-harness-selector__menu {
+  position: fixed;
+  z-index: tokens.$z-popover;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  min-width: 148px;
+  max-width: min(220px, calc(100vw - 16px));
+  padding: 5px;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: var(--bf-appearance-token-size-radius-base);
+  background: var(--bf-appearance-token-color-bg-elevated);
+  box-shadow: var(--bf-appearance-token-shadow-lg);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  user-select: none;
+}
+
+.bitfun-harness-selector__profile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-primary);
+  font: inherit;
+  letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    background: var(--bf-appearance-token-element-bg-soft);
+  }
+
+  &.is-current {
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+}
+
+.bitfun-harness-selector__profile-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bitfun-harness-selector__profile-status {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+
+  svg {
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+}

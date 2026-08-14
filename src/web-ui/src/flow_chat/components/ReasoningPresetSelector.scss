@@ -42,12 +42,56 @@
       cursor: default;
       opacity: 0.4;
     }
+
+    &--status {
+      gap: 6px;
+      height: 24px;
+      max-width: 100%;
+      padding: 0 6px;
+      border-radius: var(--bf-appearance-token-size-radius-base);
+      color: var(--bf-appearance-token-color-text-primary);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      opacity: 1;
+    }
   }
 
   &__label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__status-overview {
+    flex: none;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__status-divider {
+    flex: none;
+    width: 1px;
+    height: 14px;
+    background: var(--bf-appearance-token-border-subtle);
+  }
+
+  &__status-meter {
+    flex: none;
+    width: 16px;
+    height: 14px;
+
+    path {
+      stroke: var(--bf-appearance-token-color-text-muted);
+      opacity: 0.22;
+      transition:
+        stroke $motion-fast $easing-standard,
+        opacity $motion-fast $easing-standard;
+    }
+
+    @for $active-bars from 1 through 4 {
+      &[data-active-bars='#{$active-bars}'] path:nth-of-type(-n + #{$active-bars}) {
+        stroke: var(--bf-appearance-token-color-accent-500);
+        opacity: 1;
+      }
+    }
   }
 
   &__menu {

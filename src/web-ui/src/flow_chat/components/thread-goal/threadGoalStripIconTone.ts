@@ -1,6 +1,6 @@
 import type { ThreadGoalSnapshot } from '../../services/goalService';
 
-/** Strip icon tone: none = gray, active = yellow, complete = green. */
+/** Only a running goal is emphasized; absent, paused, and completed goals stay muted. */
 export type ThreadGoalStripIconTone = 'none' | 'active' | 'complete';
 
 function normalizeThreadGoalStatus(status: string | undefined): string {
@@ -27,5 +27,9 @@ export function resolveThreadGoalStripIconTone(
   if (normalizeThreadGoalStatus(goal.status) === 'complete') {
     return 'complete';
   }
-  return 'active';
+  return normalizeThreadGoalStatus(goal.status) === 'active' ? 'active' : 'none';
+}
+
+export function isThreadGoalActive(goal: ThreadGoalSnapshot | null): boolean {
+  return !!goal && normalizeThreadGoalStatus(goal.status) === 'active';
 }

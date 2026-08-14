@@ -103,6 +103,10 @@ interface ModelSelectorProps {
   modeDefaultModelId?: string;
   /** Whether a selection also changes BitFun's shared built-in mode default. */
   persistSharedModeDefault?: boolean;
+  /** Optional status-strip host for the real session reasoning control. */
+  reasoningControlHost?: HTMLElement | null;
+  /** Reports whether the active target exposes selectable reasoning presets. */
+  onReasoningAvailabilityChange?: (available: boolean) => void;
 }
 
 interface ModelInfo {
@@ -128,6 +132,12 @@ function resolveConcreteModelId(
   if (modelId === 'auto' || modelId === 'primary') return defaultModels.primary ?? undefined;
   if (modelId === 'fast') return defaultModels.fast ?? defaultModels.primary ?? undefined;
   return modelId || undefined;
+}
+
+function hasReasoningPresets(
+  projection: ReasoningCatalogProjection | null | undefined,
+): boolean {
+  return projection?.status === 'known' && (projection.presets?.length ?? 0) > 0;
 }
 
 const formatContextWindow = (contextWindow?: number): string | null => {
@@ -231,6 +241,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   externalSelection,
   modeDefaultModelId,
   persistSharedModeDefault = true,
+  reasoningControlHost,
+  onReasoningAvailabilityChange,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
@@ -1033,6 +1045,24 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const resolvedContextUsageSource: ContextUsageSource =
     contextUsageSource ?? (isAcpSession ? 'acp_context' : 'agent_prompt');
+  const reasoningControlAvailable = externalSelection
+    ? externalAvailableModels.length > 0
+      && !!externalSelection.onSelectReasoningPreset
+      && hasReasoningPresets(externalReasoningProjection)
+    : isAcpSession
+      ? !!acpReasoning && hasReasoningPresets(acpReasoning.projection)
+      : !!sessionId && hasReasoningPresets(currentReasoningProjection);
+  useEffect(() => {
+    onReasoningAvailabilityChange?.(reasoningControlAvailable);
+  }, [onReasoningAvailabilityChange, reasoningControlAvailable]);
+  useEffect(
+    () => () => onReasoningAvailabilityChange?.(false),
+    [onReasoningAvailabilityChange],
+  );
+
+  const reasoningVariant = reasoningControlHost ? 'status' : 'inline';
+  const mountReasoningControl = (control: React.ReactElement): React.ReactNode =>
+    reasoningControlHost ? createPortal(control, reasoningControlHost) : control;
 
   if (externalSelection) {
     if (externalAvailableModels.length === 0) {
@@ -1071,8 +1101,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           </button>
         </Tooltip>
 
-        {externalSelection.onSelectReasoningPreset && (
+        {externalSelection.onSelectReasoningPreset && mountReasoningControl(
           <ReasoningPresetSelector
+            variant={reasoningVariant}
             projection={externalReasoningProjection}
             selectedPreset={externalSelection.selectedReasoningPreset === 'auto'
               ? undefined
@@ -1081,7 +1112,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             loading={false}
             dropdownPlacement={dropdownPlacement}
             onSelect={externalSelection.onSelectReasoningPreset}
-          />
+          />,
         )}
 
         {dropdownOpen && createPortal(
@@ -1196,15 +1227,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           </button>
         </Tooltip>
 
-        {acpReasoning && (
+        {acpReasoning && mountReasoningControl(
           <ReasoningPresetSelector
+            variant={reasoningVariant}
             projection={acpReasoning.projection}
             selectedPreset={acpReasoning.selectedPreset}
             disabled={loading}
             loading={reasoningLoading}
             dropdownPlacement={dropdownPlacement}
             onSelect={handleSelectAcpReasoning}
-          />
+          />,
         )}
 
         {dropdownOpen && createPortal(
@@ -1341,15 +1373,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </button>
       </Tooltip>
 
-      {sessionId && (
+      {sessionId && mountReasoningControl(
         <ReasoningPresetSelector
+          variant={reasoningVariant}
           projection={currentReasoningProjection}
           selectedPreset={selectedReasoningPreset}
           disabled={loading}
           loading={reasoningLoading}
           dropdownPlacement={dropdownPlacement}
           onSelect={handleSelectReasoningPreset}
-        />
+        />,
       )}
 
       {tokenPercentage > 0 && (

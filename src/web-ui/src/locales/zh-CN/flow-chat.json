@@ -679,8 +679,43 @@
         "submissionUnconfirmed": "暂时无法确认目标是否已接收任务。请稍后检查任务状态。"
       }
     },
-    "addBoostTooltip": "智能体模式、图片或 Skill",
+    "harness": {
+      "selectorTooltip": "当前使用均衡 Harness",
+      "activateBalanced": "切换到均衡 Harness",
+      "compatibilityShort": "兼容模式",
+      "comingSoon": "开发中",
+      "newSessionOnly": "仅新会话",
+      "comingSoonNotice": "「{{name}}」Harness 正在开发中。",
+      "legacySessionNotice": "该旧会话继续使用原 Agent 模式；请新建会话使用 Agent Harness。",
+      "profiles": {
+        "minimal": { "name": "极简" },
+        "balanced": { "name": "均衡" },
+        "ultimate": { "name": "极致" }
+      }
+    },
+    "specialistAgents": {
+      "available": "可用",
+      "needsChanges": "需要变更",
+      "comingSoon": "开发中",
+      "comingSoonNotice": "直接调用「{{name}}」Agent 的能力正在开发中。",
+      "reviewUnavailable": "Review Agent 需要一个包含可审查变更的活动会话。",
+      "review": { "name": "Review" },
+      "cowork": { "name": "Cowork" },
+      "computerUse": { "name": "Computer Use" }
+    },
+    "addBoostTooltip": "Agent、上下文、图片或 Skill",
     "modeChangeFailed": "切换智能体模式失败，请重试。",
+    "reasoningStatus": {
+      "levels": {
+        "none": "关闭",
+        "minimal": "极低",
+        "low": "低",
+        "medium": "标准",
+        "high": "高",
+        "xhigh": "极高",
+        "max": "最高"
+      }
+    },
     "permissionMode": {
       "menuLabel": "权限模式",
       "globalScope": "全局",
@@ -730,14 +765,14 @@
     "boostNewSession": "新建会话",
     "boostAddContext": "引用文件或文件夹",
     "boostSkills": "Skills",
-    "modeSection": "模式",
+    "modeSection": "Agent",
     "boostSkillsLoading": "正在加载 Skills…",
     "boostSkillsEmpty": "暂无已启用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "addModeMenuTitle": "附加模式",
-    "createCustomMode": "自定义模式",
-    "resetToAgentic": "恢复默认模式",
+    "addModeMenuTitle": "选择 Agent",
+    "createCustomMode": "自定义 Agent",
+    "resetToAgentic": "移除当前 Agent",
     "noIncrementalModes": "暂无可附加模式",
     "defaultModeSetTooltip": "将 {{mode}} 设为新聊天默认模式",
     "defaultModeUnsetTooltip": "默认模式覆盖已启用，点击清除",
@@ -2080,6 +2115,7 @@
       "startNewChat": "开始新对话...",
       "openSessionMenu": "会话与新建",
       "moreMenu": "更多",
+      "newSessionItem": "新建会话",
       "newCodeSessionItem": "编程会话",
       "newCoworkSessionItem": "办公会话"
     },

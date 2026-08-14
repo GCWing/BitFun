@@ -2,8 +2,8 @@
  * Session menu shared by the floating chat surfaces (floating window mode and
  * the floating chat bubble).
  *
- * One "+" trigger opening one dropdown: new code session, new cowork session,
- * then the recent sessions to switch to. Both surfaces mount this component
+ * One "+" trigger opening one dropdown: one unified new session action, then
+ * the recent sessions to switch to. Both surfaces mount this component
  * rather than each growing its own header affordances, so the interaction stays
  * identical and there is a single place to change it.
  */
@@ -47,8 +47,8 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
 
   const toggleMenu = useCallback(() => setOpen(!isMenuOpen), [isMenuOpen, setOpen]);
 
-  const createSession = useCallback((mode: 'code' | 'cowork') => {
-    window.dispatchEvent(new CustomEvent('toolbar-create-session', { detail: { mode } }));
+  const createSession = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('toolbar-create-session'));
     setOpen(false);
   }, [setOpen]);
 
@@ -136,38 +136,18 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
               data-bf-component="session-menu"
               data-bf-part="item"
               data-bf-item-kind="create"
-              data-bf-session-kind="code"
+              data-bf-session-kind="unified"
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                createSession('code');
+                createSession();
               }}
             >
               <span className="bitfun-session-menu__item-icon" data-bf-component="session-menu" data-bf-part="itemIcon" aria-hidden>
                 <Plus size={13} strokeWidth={2.25} />
               </span>
               <span className="bitfun-session-menu__item-label" data-bf-component="session-menu" data-bf-part="itemLabel">
-                {t('toolCards.toolbar.newCodeSessionItem')}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="bitfun-session-menu__item bitfun-session-menu__item--new"
-              data-bf-component="session-menu"
-              data-bf-part="item"
-              data-bf-item-kind="create"
-              data-bf-session-kind="cowork"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                createSession('cowork');
-              }}
-            >
-              <span className="bitfun-session-menu__item-icon" data-bf-component="session-menu" data-bf-part="itemIcon" aria-hidden>
-                <Plus size={13} strokeWidth={2.25} />
-              </span>
-              <span className="bitfun-session-menu__item-label" data-bf-component="session-menu" data-bf-part="itemLabel">
-                {t('toolCards.toolbar.newCoworkSessionItem')}
+                {t('toolCards.toolbar.newSessionItem')}
               </span>
             </button>
             <div className="bitfun-session-menu__divider" data-bf-component="session-menu" data-bf-part="divider" role="separator" />

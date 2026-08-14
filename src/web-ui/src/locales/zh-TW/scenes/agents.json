@@ -9,13 +9,39 @@
   "loading": "載入中…",
   "page": {
     "title": "專業智能體",
-    "subtitle": "查看與管理核心模式、Agent 與 Sub-Agent，設定工具與 Skills。",
+    "subtitle": "選擇根 Harness 的工作方式，並查看它可以呼叫的專業 Agent。",
     "searchPlaceholder": "搜尋 Agent 名稱或描述…",
     "newAgent": "新增 Agent"
   },
   "nav": {
-    "coreAgents": "核心智能體",
-    "agents": "Agent"
+    "harness": "Agent Harness",
+    "coreAgents": "已接入 Agent",
+    "agents": "專業 Agent"
+  },
+  "harnessZone": {
+    "title": "Agent Harness",
+    "subtitle": "每個 Turn 的根 Agent 策略。均衡已接入目前 agentic Runtime；其他策略會在執行時契約完成後開放。",
+    "connected": "已接入",
+    "comingSoon": "開發中",
+    "balancedConnectedNotice": "均衡已作為新會話的預設 Harness。",
+    "comingSoonNotice": "「{{name}}」Harness 正在開發中。",
+    "profiles": {
+      "minimal": {
+        "name": "極簡",
+        "description": "快速直接，以最低必要協作完成工作。",
+        "behavior": "最少規劃與針對性驗證"
+      },
+      "balanced": {
+        "name": "均衡",
+        "description": "自適應規劃、按需呼叫 Agent，並進行針對性驗證。",
+        "behavior": "預設 · 透過 agentic 接入"
+      },
+      "ultimate": {
+        "name": "極致",
+        "description": "有界分解、專業協作與獨立複核。",
+        "behavior": "品質優先，預算明確"
+      }
+    }
   },
   "filters": {
     "source": "來源",
@@ -24,12 +50,12 @@
     "user": "用戶",
     "project": "項目",
     "external": "外部",
-    "mode": "Agent",
-    "subagent": "Sub-Agent"
+    "mode": "可直接呼叫",
+    "subagent": "協作 Agent"
   },
   "coreAgentsZone": {
-    "title": "核心智能體",
-    "subtitle": "平臺內置的核心 Agent，覆蓋主流 AI 工作流，開箱即用。",
+    "title": "已接入 Agent",
+    "subtitle": "目前已經可以設定的 Runtime Agent；遷移期間仍會顯示舊 Mode 接線。",
     "empty": "暫未檢測到核心智能體",
     "roleLabel": "主要應用 · ",
     "computerUseDisabledBadge": "已在設定中停用",
@@ -46,8 +72,8 @@
     }
   },
   "agentsZone": {
-    "title": "Agent 總覽",
-    "subtitle": "查看所有 Agent / Sub-Agent，並直接管理工具與 Skills。",
+    "title": "專業 Agent",
+    "subtitle": "查看 Harness 可用於規劃、研究、審核、編碼、測試等專項工作的 Agent。",
     "empty": {
       "noAgents": "目前沒有可用的 Agent",
       "noMatch": "沒有匹配的 Agent"

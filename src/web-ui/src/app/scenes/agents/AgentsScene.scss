@@ -39,6 +39,102 @@
     white-space: nowrap;
   }
 
+  &__harness-card {
+    width: 100%;
+    min-width: 0;
+    min-height: 148px;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: $size-gap-3;
+    padding: $size-gap-4;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: var(--bf-appearance-token-size-radius-base);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      transform $motion-fast $easing-decelerate,
+      border-color $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard;
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+      transform: translateY(-1px);
+      border-color: var(--bf-appearance-token-border-medium);
+      background: var(--bf-appearance-token-element-bg-base);
+    }
+
+    &.is-connected {
+      border-color: var(--bf-appearance-token-border-accent);
+      background: var(--bf-appearance-token-color-accent-100);
+    }
+  }
+
+  &__harness-card-icon {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--bf-appearance-token-size-radius-sm);
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &__harness-card-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+
+  &__harness-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+
+    strong {
+      font-size: var(--bf-appearance-token-font-size-base);
+      font-weight: $font-weight-semibold;
+    }
+  }
+
+  &__harness-card-status {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: 10px;
+    line-height: 1.5;
+
+    &.is-connected {
+      background: var(--bf-appearance-token-color-accent-200);
+      color: var(--bf-appearance-token-color-accent-500);
+    }
+  }
+
+  &__harness-card-description {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    line-height: $line-height-relaxed;
+  }
+
+  &__harness-card-behavior {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+  }
+
+  &__harness-card-check {
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+
   &__subagent-model-select {
     width: min(280px, 100%);
     max-width: 100%;
