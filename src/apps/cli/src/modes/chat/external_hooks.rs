@@ -464,11 +464,26 @@ impl ChatMode {
                 if let Some(snapshot) = &self.hook_management_snapshot {
                     chat_state.add_system_message(render_hook_management(snapshot));
                 }
-                let agent = Arc::clone(&self.agent);
+                if self.agent.is_remote_workspace() {
+                    chat_state.add_system_message(
+                        "Hook management is unavailable for a Remote workspace".to_string(),
+                    );
+                    return;
+                }
+                let workspace =
+                    std::path::PathBuf::from(self.agent.project_workspace_path_string());
                 self.spawn_hook_management(
                     async move {
-                        let imports = agent.external_hook_snapshot(refresh).await?;
-                        let native = agent.native_hook_overview().await?;
+                        let imports =
+                            bitfun_core::external_hook_import::external_hook_import_snapshot(
+                                Some(&workspace),
+                                refresh,
+                            )
+                            .await?;
+                        let native = project_native_hook_overview(
+                            bitfun_core::native_hooks::overview(Some(&workspace)).await,
+                            &workspace,
+                        );
                         Ok(HookManagementResult::Snapshot(HookManagementSnapshot {
                             native,
                             imports,
@@ -563,14 +578,22 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        if self.agent.is_remote_workspace() {
+            chat_state.add_system_message(
+                "Hook management is unavailable for a Remote workspace".to_string(),
+            );
+            return;
+        }
+        let workspace = std::path::PathBuf::from(self.agent.project_workspace_path_string());
         if !confirm {
-            let agent = Arc::clone(&self.agent);
             self.spawn_hook_management(
                 async move {
-                    agent
-                        .external_hook_plan(source)
-                        .await
-                        .map(HookManagementResult::Plan)
+                    bitfun_core::external_hook_import::plan_external_hook_import(
+                        Some(&workspace),
+                        source,
+                    )
+                    .await
+                    .map(HookManagementResult::Plan)
                 },
                 "Preparing Hook import review...",
                 chat_view,
@@ -590,16 +613,18 @@ impl ChatMode {
             );
             return;
         };
-        let agent = Arc::clone(&self.agent);
+        let workspace = std::path::PathBuf::from(self.agent.project_workspace_path_string());
         self.spawn_hook_management(
             async move {
-                let result = agent
-                    .external_hook_apply(ExternalHookImportApplyRequestV1 {
+                let result = bitfun_core::external_hook_import::apply_external_hook_import(
+                    Some(&workspace),
+                    ExternalHookImportApplyRequestV1 {
                         schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
                         source: source.clone(),
                         plan_fingerprint: plan.plan_fingerprint,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 let (snapshot, applied) = match result.outcome {
                     ExternalHookImportApplyOutcomeV1::Stale { refreshed_plan } => {
                         return Ok(HookManagementResult::Plan(refreshed_plan));
@@ -610,7 +635,10 @@ impl ChatMode {
                 let status =
                     crate::hook_import::completed_import_status(&snapshot, &source, applied)
                         .to_string();
-                let native = agent.native_hook_overview().await?;
+                let native = project_native_hook_overview(
+                    bitfun_core::native_hooks::overview(Some(&workspace)).await,
+                    &workspace,
+                );
                 Ok(HookManagementResult::Changed {
                     snapshot: HookManagementSnapshot {
                         native,
@@ -672,17 +700,28 @@ impl ChatMode {
             .as_ref()
             .map(|snapshot| snapshot.imports.revision.clone())
             .expect("import_at requires a loaded Hook snapshot");
-        let agent = Arc::clone(&self.agent);
+        if self.agent.is_remote_workspace() {
+            chat_state.add_system_message(
+                "Hook management is unavailable for a Remote workspace".to_string(),
+            );
+            return;
+        }
+        let workspace = std::path::PathBuf::from(self.agent.project_workspace_path_string());
         self.spawn_hook_management(
             async move {
-                let imports = agent
-                    .external_hook_mutate(ExternalHookImportMutationRequestV1 {
+                let imports = bitfun_core::external_hook_import::mutate_external_hook_import(
+                    Some(&workspace),
+                    ExternalHookImportMutationRequestV1 {
                         schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
                         expected_revision,
                         action,
-                    })
-                    .await?;
-                let native = agent.native_hook_overview().await?;
+                    },
+                )
+                .await?;
+                let native = project_native_hook_overview(
+                    bitfun_core::native_hooks::overview(Some(&workspace)).await,
+                    &workspace,
+                );
                 let status = if remove {
                     format!(
                         "Removed BitFun's managed copy of {import_id}; the source was unchanged."
@@ -736,17 +775,28 @@ impl ChatMode {
             return;
         }
         let expected_revision = snapshot.imports.revision.clone();
-        let agent = Arc::clone(&self.agent);
+        if self.agent.is_remote_workspace() {
+            chat_state.add_system_message(
+                "Hook management is unavailable for a Remote workspace".to_string(),
+            );
+            return;
+        }
+        let workspace = std::path::PathBuf::from(self.agent.project_workspace_path_string());
         self.spawn_hook_management(
             async move {
-                let imports = agent
-                    .external_hook_mutate(ExternalHookImportMutationRequestV1 {
+                let imports = bitfun_core::external_hook_import::mutate_external_hook_import(
+                    Some(&workspace),
+                    ExternalHookImportMutationRequestV1 {
                         schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
                         expected_revision,
                         action: ExternalHookImportMutationV1::ResetCorruptStore { scope },
-                    })
-                    .await?;
-                let native = agent.native_hook_overview().await?;
+                    },
+                )
+                .await?;
+                let native = project_native_hook_overview(
+                    bitfun_core::native_hooks::overview(Some(&workspace)).await,
+                    &workspace,
+                );
                 Ok(HookManagementResult::Changed {
                     snapshot: HookManagementSnapshot { native, imports },
                     status: format!(

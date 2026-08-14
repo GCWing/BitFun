@@ -1,4 +1,4 @@
-//! Concrete App Server management adapter over the existing product owners.
+//! App Server management adapter over the existing product owners.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -16,6 +16,9 @@ use bitfun_app_server_protocol::model::*;
 use bitfun_app_server_protocol::skill::*;
 use bitfun_app_server_protocol::subagent::*;
 use bitfun_app_server_protocol::worktree::*;
+use bitfun_core::service::config::model_projection::{
+    model_catalog_projection, model_edit_projection, model_list_projection, selector_is_unset,
+};
 use bitfun_core::service::remote_connect::account_runtime::{
     AccountRuntime, AccountSyncProgress, AccountSyncStatus,
 };
@@ -25,7 +28,7 @@ use super::{
     SETTINGS_SYNC_CAPABILITY, WORKTREES_CAPABILITY,
 };
 
-/// App Server adapter shared by Embedded and local Shared compatibility Hosts.
+/// Management adapter shared by App Server, Embedded, and local Shared Hosts.
 ///
 /// The service delegates to the existing config, registry, MCP, and external
 /// source owners. Local-only capabilities must be enabled through the local
@@ -57,7 +60,7 @@ impl AppManagementService {
     ) -> Result<Self> {
         let config = bitfun_core::service::config::get_global_config_service()
             .await
-            .context("Failed to load the App Server management configuration owner")?;
+            .context("Failed to load the Host management configuration owner")?;
         let (external_source_updates, _) = tokio::sync::broadcast::channel(64);
         Ok(Self {
             config,
@@ -383,79 +386,6 @@ fn sanitize_management_error(error: impl AsRef<str>) -> String {
     }
 }
 
-fn resolve_selector(
-    ai: &bitfun_core::service::config::AIConfig,
-    selector: &Option<String>,
-) -> Option<String> {
-    selector
-        .as_deref()
-        .and_then(|selector| ai.resolve_model_selection(selector))
-}
-
-fn resolve_model_selector(
-    ai: &bitfun_core::service::config::AIConfig,
-    selector: &str,
-) -> Option<String> {
-    match selector.trim() {
-        "" | "auto" | "default" => ai.resolve_model_selection("primary"),
-        selector => ai.resolve_model_selection(selector),
-    }
-}
-
-fn model_summary(model: &bitfun_core::service::config::AIModelConfig) -> ModelSummary {
-    let mut custom_header_names = model
-        .custom_headers
-        .as_ref()
-        .map(|headers| headers.keys().cloned().collect::<Vec<_>>())
-        .unwrap_or_default();
-    custom_header_names.sort();
-    ModelSummary {
-        id: model.id.clone(),
-        name: model.name.clone(),
-        provider: model.provider.clone(),
-        model_name: model.model_name.clone(),
-        base_url: model.base_url.clone(),
-        enabled: model.enabled,
-        context_window: model.context_window,
-        max_tokens: model.max_tokens,
-        api_key_configured: !model.api_key.is_empty(),
-        custom_header_names,
-        custom_request_body_configured: model.custom_request_body.is_some(),
-        auth_source: Some(match model.auth {
-            bitfun_core::service::config::AuthConfig::ApiKey => "api_key".to_string(),
-            bitfun_core::service::config::AuthConfig::Subscription { provider, .. } => {
-                format!("subscription:{provider:?}").to_ascii_lowercase()
-            }
-        }),
-    }
-}
-
-fn model_edit_projection(
-    model: &bitfun_core::service::config::AIModelConfig,
-) -> ModelEditProjection {
-    ModelEditProjection {
-        summary: model_summary(model),
-        reasoning_preset_options: model
-            .reasoning
-            .as_ref()
-            .map(|reasoning| {
-                reasoning
-                    .presets
-                    .iter()
-                    .map(|preset| preset.id.clone())
-                    .collect()
-            })
-            .unwrap_or_default(),
-        reasoning: model.reasoning.clone(),
-        inline_think_in_text: model.inline_think_in_text,
-        skip_ssl_verify: model.skip_ssl_verify,
-        custom_headers_mode: model
-            .custom_headers_mode
-            .clone()
-            .unwrap_or_else(|| "merge".to_string()),
-    }
-}
-
 fn secret_update_value(
     update: Option<SecretUpdate>,
     existing: Option<String>,
@@ -538,12 +468,6 @@ fn validate_model_update_identity(
         ));
     }
     Ok(())
-}
-
-fn selector_is_unset(selector: &Option<String>) -> bool {
-    selector
-        .as_deref()
-        .is_none_or(|selector| selector.trim().is_empty())
 }
 
 fn skill_from_info(
@@ -809,41 +733,13 @@ fn mcp_config_from_mutation(
     })
 }
 
-fn schedule_mcp_stop(manager: Arc<bitfun_core::service::mcp::MCPServerManager>, server_id: String) {
-    tokio::spawn(async move {
-        for attempt in 1..=20 {
-            let result = tokio::time::timeout(
-                std::time::Duration::from_millis(250),
-                manager.stop_server(&server_id),
-            )
-            .await;
-            match result {
-                Ok(Ok(())) | Ok(Err(bitfun_core::util::errors::BitFunError::NotFound(_))) => return,
-                Ok(Err(error)) => tracing::debug!(
-                    "Best-effort MCP stop failed: id={} attempt={} error={}",
-                    server_id,
-                    attempt,
-                    error
-                ),
-                Err(_) => tracing::debug!(
-                    "Best-effort MCP stop timed out: id={} attempt={}",
-                    server_id,
-                    attempt
-                ),
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-        }
-        tracing::warn!("Best-effort MCP stop exhausted retries: id={}", server_id);
-    });
-}
-
 impl AppManagementService {
     pub fn capabilities(&self) -> AppManagementCapabilities {
         let mut capabilities = AppManagementCapabilities::available();
         if self.mcp.is_none() {
             capabilities.mcp =
                 bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
-                    reason: "The App Server Host MCP owner is unavailable".to_string(),
+                    reason: "The Host MCP owner is unavailable".to_string(),
                 };
         }
         if self.account.is_none() {
@@ -1303,14 +1199,12 @@ impl AppManagementService {
         let models = self.config.get_ai_models().await.map_err(core_error)?;
         let config: bitfun_core::service::config::GlobalConfig =
             self.config.get_config(None).await.map_err(core_error)?;
+        let projection = model_list_projection(&models, &config);
         Ok(ListModelsResponse {
-            models: models.iter().map(model_summary).collect(),
-            primary_model_id: resolve_selector(&config.ai, &config.ai.default_models.primary),
-            fast_model_id: resolve_selector(&config.ai, &config.ai.default_models.fast),
-            mode_default_model_id: resolve_model_selector(
-                &config.ai,
-                &config.ai.agent_model_defaults.mode,
-            ),
+            models: projection.models,
+            primary_model_id: projection.primary_model_id,
+            fast_model_id: projection.fast_model_id,
+            mode_default_model_id: projection.mode_default_model_id,
         })
     }
 
@@ -1330,25 +1224,10 @@ impl AppManagementService {
         let catalog = bitfun_core::get_ai_model_catalog()
             .await
             .map_err(AppManagementError::internal)?;
-        let reasoning_presets_by_model = catalog
-            .models
-            .into_iter()
-            .filter_map(|model| {
-                model.reasoning.map(|reasoning| {
-                    (
-                        model.id,
-                        reasoning
-                            .presets
-                            .into_iter()
-                            .map(|preset| preset.id)
-                            .collect(),
-                    )
-                })
-            })
-            .collect();
+        let projection = model_catalog_projection(catalog);
         Ok(TuiModelCatalogResponse {
-            provider_catalog: catalog.provider_catalog,
-            reasoning_presets_by_model,
+            provider_catalog: projection.provider_catalog,
+            reasoning_presets_by_model: projection.reasoning_presets_by_model,
         })
     }
 
@@ -1552,9 +1431,10 @@ impl AppManagementService {
         &self,
         request: ListMcpServersRequest,
     ) -> AppManagementResult<ListMcpServersResponse> {
-        let mcp = self.mcp.as_ref().ok_or_else(|| {
-            AppManagementError::unsupported("The App Server Host MCP owner is unavailable")
-        })?;
+        let mcp = self
+            .mcp
+            .as_ref()
+            .ok_or_else(|| AppManagementError::unsupported("The Host MCP owner is unavailable"))?;
         let workspace = PathBuf::from(request.workspace_path);
         let external =
             bitfun_core::external_sources::external_source_snapshot(Some(&workspace), false)
@@ -1692,9 +1572,10 @@ impl AppManagementService {
         &self,
         request: ToggleMcpServerRequest,
     ) -> AppManagementResult<ToggleMcpServerResponse> {
-        let mcp = self.mcp.as_ref().ok_or_else(|| {
-            AppManagementError::unsupported("The App Server Host MCP owner is unavailable")
-        })?;
+        let mcp = self
+            .mcp
+            .as_ref()
+            .ok_or_else(|| AppManagementError::unsupported("The Host MCP owner is unavailable"))?;
         let manager = mcp.server_manager();
         match manager.get_server_status(&request.server_id).await {
             Ok(bitfun_core::service::mcp::MCPServerStatus::Connected)
@@ -1711,9 +1592,10 @@ impl AppManagementService {
         &self,
         request: AddMcpServerRequest,
     ) -> AppManagementResult<AddMcpServerResponse> {
-        let mcp = self.mcp.as_ref().ok_or_else(|| {
-            AppManagementError::unsupported("The App Server Host MCP owner is unavailable")
-        })?;
+        let mcp = self
+            .mcp
+            .as_ref()
+            .ok_or_else(|| AppManagementError::unsupported("The Host MCP owner is unavailable"))?;
         let config = mcp_config_from_mutation(&request.name, request.config)?;
         mcp.server_manager()
             .add_server(config)
@@ -1726,14 +1608,15 @@ impl AppManagementService {
         &self,
         request: DeleteMcpServerRequest,
     ) -> AppManagementResult<DeleteMcpServerResponse> {
-        let mcp = self.mcp.as_ref().ok_or_else(|| {
-            AppManagementError::unsupported("The App Server Host MCP owner is unavailable")
-        })?;
+        let mcp = self
+            .mcp
+            .as_ref()
+            .ok_or_else(|| AppManagementError::unsupported("The Host MCP owner is unavailable"))?;
         mcp.config_service()
             .delete_server_config(&request.server_id)
             .await
             .map_err(core_error)?;
-        schedule_mcp_stop(mcp.server_manager(), request.server_id);
+        mcp.server_manager().schedule_stop_server(request.server_id);
         Ok(DeleteMcpServerResponse {})
     }
 
@@ -1883,7 +1766,7 @@ fn bounded_error(message: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::management::AppManagementErrorKind;
+    use crate::AppManagementErrorKind;
 
     fn native_overview_with_sensitive_paths() -> bitfun_core::native_hooks::NativeHookOverview {
         bitfun_core::native_hooks::NativeHookOverview {
@@ -2045,7 +1928,7 @@ mod tests {
             ..Default::default()
         };
 
-        let summary = model_summary(&model);
+        let summary = bitfun_core::service::config::model_projection::model_summary(&model);
         assert!(summary.api_key_configured);
         assert_eq!(summary.custom_header_names, ["A-Header", "Z-Header"]);
         let debug = format!("{summary:?}");

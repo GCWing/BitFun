@@ -6,6 +6,7 @@
 pub mod ai;
 pub mod errors;
 pub mod lsp;
+pub mod model;
 pub mod session;
 pub mod session_usage;
 pub mod speech;
@@ -26,6 +27,10 @@ pub use ai::{
     ToolCallConfirmationDetails, ToolCallRequestInfo, ToolCallResponseInfo, ToolDefinition,
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
+pub use model::{
+    ModelEditProjection, ModelListProjection, ModelMutation, ModelSummary, SecretUpdate,
+    TuiModelCatalogProjection,
+};
 pub use session::{
     validate_session_id, SessionAgentRouteOwner, SessionContinuationPolicy, SessionKind,
     SessionModelBindingPolicy, SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY,

@@ -13,7 +13,7 @@ use ratatui::{
 };
 
 use crate::ui::theme::{StyleKind, Theme};
-use bitfun_app_server_protocol::account::{
+use bitfun_product_domains::account::{
     AccountDevice, AccountInfo, SettingsSyncProgress, SettingsSyncStatus,
 };
 

@@ -2407,4 +2407,18 @@ mod runtime_error_tests {
         );
         assert_eq!(runtime_error_kind(&error), "capability_unavailable");
     }
+
+    #[test]
+    fn missing_mode_catalog_port_uses_not_available_contract() {
+        let error = RuntimeError::Port(PortError::new(
+            PortErrorKind::NotAvailable,
+            "agent mode catalog port is not registered",
+        ));
+
+        assert_eq!(
+            runtime_error_facts(&error),
+            (ErrorCode::CapabilityUnavailable, false, None)
+        );
+        assert_eq!(runtime_error_kind(&error), "not_available");
+    }
 }

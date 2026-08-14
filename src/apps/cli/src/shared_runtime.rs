@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    AgentRuntime, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
-    AgentSessionForkRequest, AgentSessionRenameRequest, AgentSessionRestoreRequest,
-    AgentUserAnswersRequest, DialogSubmitOutcome, PermissionRequest, PermissionRequestEvent,
-    PortErrorKind, RuntimeError, SessionTranscriptRequest,
+    AgentModeCatalogQuery, AgentRuntime, AgentSessionDeleteRequest,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionRenameRequest,
+    AgentSessionRestoreRequest, AgentUserAnswersRequest, DialogSubmitOutcome, PermissionRequest,
+    PermissionRequestEvent, PortErrorKind, RuntimeError, SessionTranscriptRequest,
 };
 use bitfun_agent_runtime_ipc::{
     DiscoveryStore, RuntimeAgentModeSummary, RuntimeInstanceIdentity, RuntimeIpcClient,
@@ -47,7 +47,7 @@ type SubagentRoutes = Mutex<HashMap<String, SubagentRoute>>;
 
 pub(crate) struct SharedRuntimeHandler {
     runtime: AgentRuntime,
-    compatibility: CoreAgentRuntimeCompatibility,
+    compatibility: Option<CoreAgentRuntimeCompatibility>,
     workspace: PathBuf,
     events: Arc<SessionEventSenders>,
     question_sessions: Arc<Mutex<HashMap<String, String>>>,
@@ -59,6 +59,19 @@ impl SharedRuntimeHandler {
     pub(crate) fn build(
         runtime: AgentRuntime,
         compatibility: CoreAgentRuntimeCompatibility,
+        workspace: &Path,
+    ) -> Result<Self> {
+        Self::build_optional(runtime, Some(compatibility), workspace)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn build_for_test(runtime: AgentRuntime, workspace: &Path) -> Result<Self> {
+        Self::build_optional(runtime, None, workspace)
+    }
+
+    fn build_optional(
+        runtime: AgentRuntime,
+        compatibility: Option<CoreAgentRuntimeCompatibility>,
         workspace: &Path,
     ) -> Result<Self> {
         let mut agent_events = runtime
@@ -234,28 +247,20 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     ),
                     None => self.workspace.clone(),
                 };
-                if let Err(error) =
-                    bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
-                        &workspace,
-                    ))
+                let modes = self
+                    .runtime
+                    .list_agent_modes(AgentModeCatalogQuery {
+                        workspace_root: Some(workspace.to_string_lossy().to_string()),
+                        include_external: true,
+                    })
                     .await
-                {
-                    tracing::warn!(
-                        "Failed to initialize external agent sources for Shared TUI mode catalog: {}",
-                        error
-                    );
-                }
-                let registry = bitfun_core::agentic::agents::get_agent_registry();
-                let modes = registry
-                    .get_modes_info_for_workspace(Some(&workspace), true)
-                    .await
+                    .map_err(runtime_ipc_error)?
                     .into_iter()
                     .map(|mode| RuntimeAgentModeSummary {
                         id: mode.id,
                         description: mode.description,
-                        model_id: mode.model,
-                        is_external: mode.source
-                            == bitfun_core::agentic::agents::AgentSource::External,
+                        model_id: mode.model_id,
+                        is_external: mode.is_external,
                     })
                     .collect();
                 Ok(RuntimeIpcOperationResult::AgentModes { modes })
@@ -394,6 +399,11 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
             }
             RuntimeIpcOperation::ReloadSessionContext { request } => {
                 self.compatibility
+                    .as_ref()
+                    .ok_or_else(|| RuntimeIpcError {
+                        code: RuntimeIpcErrorCode::Unavailable,
+                        message: "Shared Runtime context reload is unavailable".to_string(),
+                    })?
                     .reload_session_context(request)
                     .await
                     .map_err(core_ipc_error)?;

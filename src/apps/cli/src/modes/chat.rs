@@ -20,15 +20,16 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
-use bitfun_app_server_protocol::model::{AddModelRequest, UpdateModelRequest};
-use bitfun_app_server_protocol::skill::SkillSummary;
-use bitfun_app_server_protocol::subagent::SubagentSummary;
 use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
+use bitfun_product_domains::account::{AccountSnapshotProjection, SettingsSyncStatus};
+use bitfun_product_domains::agent_catalog::{SkillSummary, SubagentSummary};
+use bitfun_product_domains::native_hooks::{
+    NativeHookOverview, NativeHookRuleSummary as NativeHookRuleView,
+};
 use bitfun_runtime_ports::{
-    AgentSessionComposerUpdate, AgentSessionLineageEntry,
-    AgentSessionLineageInspection, AgentSessionLineageSnapshot, AgentSessionUsageRequest,
-    AgentTurnCancellationResult, AgentWorkspaceReferenceSearchResult, SessionTranscript,
-    WorkspaceDiffSnapshot,
+    AgentSessionComposerUpdate, AgentSessionLineageEntry, AgentSessionLineageInspection,
+    AgentSessionLineageSnapshot, AgentSessionUsageRequest, AgentTurnCancellationResult,
+    AgentWorkspaceReferenceSearchResult, SessionTranscript, WorkspaceDiffSnapshot,
 };
 use resize::ResizeRedrawState;
 
@@ -38,7 +39,9 @@ use crate::actions::{
     ActionState, ResolvedKeymap, IMAGE_ATTACHMENTS_REQUIRE_MESSAGE, SHARED_TUI_EMBEDDED_HANDOFF,
     SHARED_TUI_HELP_NOTE,
 };
-use crate::agent::tui_client::{SessionOperationError, TuiAgentClient, TuiAgentMode};
+use crate::agent::runtime_client::{
+    CliAgentMode as TuiAgentMode, CliAgentRuntimeClient, SessionOperationError,
+};
 use crate::chat_state::{ChatState, ModelTokenUsageSnapshot};
 use crate::config::CliConfig;
 use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
@@ -67,10 +70,7 @@ use crate::ui::theme::{
 };
 use crate::ui::theme_selector::ThemeItem;
 use crate::ui::{init_terminal, restore_terminal, TerminalGuard};
-use bitfun_app_server_protocol::external_source::ExternalSourceReviewAction;
-use bitfun_app_server_protocol::hook::{
-    NativeHookOverview, NativeHookRuleSummary as NativeHookRuleView,
-};
+use bitfun_core::service::remote_connect::account_runtime::AccountRuntime;
 use bitfun_core::service::session_usage::render_usage_report_markdown;
 use bitfun_product_domains::external_hook_catalog::{
     ExternalHookCatalogSnapshotV1, ExternalHookMatcherSummary, ExternalHookNativeActivation,
@@ -439,12 +439,6 @@ enum PendingLocalEffect {
     },
 }
 
-impl crate::tui_backend::TuiEffect for PendingLocalEffect {
-    fn route(&self) -> crate::tui_backend::TuiEffectRoute {
-        crate::tui_backend::TuiEffectRoute::Local
-    }
-}
-
 fn terminal_event_allowed_while_local_effect_pending(event: &Event) -> bool {
     matches!(event, Event::Resize(_, _))
 }
@@ -498,7 +492,8 @@ pub(crate) struct ChatMode {
     agent_type: String,
     workspace: Option<String>,
     local_cwd: std::path::PathBuf,
-    agent: Arc<TuiAgentClient>,
+    agent: Arc<CliAgentRuntimeClient>,
+    account_runtime: Option<Arc<AccountRuntime>>,
     /// User-level default resolved from shared config for this TUI run.
     auto_approve_ask_default: bool,
     /// Temporary override for the current session only.
@@ -581,7 +576,8 @@ impl ChatMode {
         config: CliConfig,
         agent_type: String,
         workspace: Option<String>,
-        agent: Arc<TuiAgentClient>,
+        agent: Arc<CliAgentRuntimeClient>,
+        account_runtime: Option<Arc<AccountRuntime>>,
     ) -> Self {
         let keymap = ResolvedKeymap::new(&config.shortcuts);
         Self {
@@ -591,6 +587,7 @@ impl ChatMode {
             workspace,
             local_cwd: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
             agent,
+            account_runtime,
             auto_approve_ask_default: false,
             auto_approve_ask_override: None,
             restore_session_id: None,

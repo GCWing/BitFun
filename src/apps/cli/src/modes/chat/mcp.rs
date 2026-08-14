@@ -1,6 +1,5 @@
-use bitfun_app_server_protocol::mcp::{
-    ExternalMcpDecisionRequest, McpConflictChoiceRequest, McpServerAction, McpServerMutation,
-    McpServerSummary, McpTransport,
+use bitfun_product_domains::mcp::{
+    McpServerAction, McpServerMutation, McpServerSummary, McpTransport,
 };
 
 fn bounded_mcp_terminal_text(value: &str) -> String {
@@ -60,6 +59,208 @@ fn mcp_item_from_summary(server: McpServerSummary) -> McpItem {
     }
 }
 
+fn native_mcp_detail(config: &bitfun_core::service::mcp::MCPServerConfig) -> String {
+    let server_type = format!("{:?}", config.server_type).to_ascii_lowercase();
+    let transport = config.resolved_transport().as_str();
+    if config.server_type == bitfun_core::service::mcp::MCPServerType::Local {
+        format!(
+            "type: {server_type}; transport: {transport}; command: {}; arguments: {}; environment variables set: {}",
+            config.command.as_deref().unwrap_or("unknown"),
+            config.args.len(),
+            if config.env.is_empty() { "none" } else { "configured" }
+        )
+    } else {
+        let origin = config
+            .url
+            .as_deref()
+            .and_then(|value| url::Url::parse(value).ok())
+            .and_then(|url| {
+                let host = url.host_str()?;
+                Some(match url.port() {
+                    Some(port) => format!("{}://{}:{}", url.scheme(), host, port),
+                    None => format!("{}://{}", url.scheme(), host),
+                })
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+        format!(
+            "type: {server_type}; transport: {transport}; remote origin: {origin}; HTTP headers: {}",
+            if config.headers.is_empty() { "none" } else { "configured" }
+        )
+    }
+}
+
+fn external_mcp_action(
+    entry: &bitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
+    snapshot: &bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot,
+) -> McpServerAction {
+    use bitfun_product_domains::external_sources::ExternalMcpActivationState as State;
+    match &entry.activation_state {
+        State::ApprovalRequired | State::Declined | State::ConfigurationChanged => {
+            McpServerAction::ExternalDecision {
+                candidate_id: entry.candidate_id.clone(),
+                decision_key: entry.decision_key.clone(),
+                approved: true,
+                expected_mcp_generation: snapshot.mcp_generation,
+                expected_preference_revision: snapshot.preference_revision,
+            }
+        }
+        State::Starting | State::Active | State::RuntimeUnavailable { .. } => {
+            McpServerAction::ExternalDecision {
+                candidate_id: entry.candidate_id.clone(),
+                decision_key: entry.decision_key.clone(),
+                approved: false,
+                expected_mcp_generation: snapshot.mcp_generation,
+                expected_preference_revision: snapshot.preference_revision,
+            }
+        }
+        State::Conflict | State::Covered { .. } => snapshot
+            .mcp_conflicts
+            .iter()
+            .find(|conflict| {
+                conflict
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.candidate_id == entry.candidate_id)
+            })
+            .map(|conflict| McpServerAction::ConflictChoice {
+                conflict_key: conflict.conflict_key.clone(),
+                candidate_id: entry.candidate_id.clone(),
+                approve_external: true,
+                expected_mcp_generation: snapshot.mcp_generation,
+                expected_preference_revision: snapshot.preference_revision,
+            })
+            .unwrap_or_else(|| McpServerAction::ReadOnly {
+                reason: "Refresh to review the current conflict".to_string(),
+            }),
+        State::Unsupported { reason } => McpServerAction::ReadOnly {
+            reason: format!("Not supported: {reason}"),
+        },
+        State::SourceDisabled => McpServerAction::ReadOnly {
+            reason: "Enable this server in the source application".to_string(),
+        },
+        State::Removed => McpServerAction::ReadOnly {
+            reason: "Removed".to_string(),
+        },
+        _ => McpServerAction::ReadOnly {
+            reason: "This external MCP state is read-only".to_string(),
+        },
+    }
+}
+
+async fn external_mcp_status(
+    entry: &bitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
+    manager: &bitfun_core::service::mcp::MCPServerManager,
+) -> String {
+    use bitfun_product_domains::external_sources::ExternalMcpActivationState as State;
+    match &entry.activation_state {
+        State::Active => match entry.runtime_id.as_deref() {
+            Some(id) => {
+                match tokio::time::timeout(Duration::from_millis(30), manager.get_server_status(id))
+                    .await
+                {
+                    Ok(Ok(value)) => format!("{value:?}"),
+                    Ok(Err(_)) => "Unavailable".to_string(),
+                    Err(_) => "Starting".to_string(),
+                }
+            }
+            None => "Enabled".to_string(),
+        },
+        State::ApprovalRequired => "Confirmation required".to_string(),
+        State::Starting => "Starting".to_string(),
+        State::Declined => "Kept disabled".to_string(),
+        State::Conflict => "Choice required".to_string(),
+        State::Covered { .. } => "Not selected".to_string(),
+        State::SourceDisabled => "Source disabled".to_string(),
+        State::ConfigurationChanged => "Changed; confirm again".to_string(),
+        State::Unsupported { .. } => "Not supported".to_string(),
+        State::RuntimeUnavailable { reason } => format!("Unavailable - {reason}"),
+        State::Removed => "Removed".to_string(),
+        _ => "Unavailable".to_string(),
+    }
+}
+
+fn external_mcp_detail(
+    entry: &bitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
+) -> String {
+    let definition = &entry.definition;
+    match definition.transport {
+        bitfun_product_domains::external_sources::ExternalMcpTransportKind::LocalStdio => format!(
+            "source MCP configuration; local command: {}; arguments: {}; environment variables set: {}",
+            definition.command_preview.as_deref().unwrap_or("unknown"),
+            definition.argument_count,
+            if definition.environment_keys.is_empty() { "none" } else { "configured" },
+        ),
+        bitfun_product_domains::external_sources::ExternalMcpTransportKind::StreamableHttp => format!(
+            "source MCP configuration; remote origin: {}; HTTP headers: {}",
+            definition.remote_url_preview.as_deref().unwrap_or("unknown"),
+            if definition.header_names.is_empty() { "none" } else { "configured" },
+        ),
+        _ => "unsupported external MCP transport".to_string(),
+    }
+}
+
+fn mcp_config_from_mutation(
+    name: &str,
+    mutation: McpServerMutation,
+) -> Result<bitfun_core::service::mcp::MCPServerConfig> {
+    let (server_type, transport) = match mutation.transport {
+        McpTransport::Stdio => (
+            bitfun_core::service::mcp::MCPServerType::Local,
+            bitfun_core::service::mcp::MCPServerTransport::Stdio,
+        ),
+        McpTransport::Sse => (
+            bitfun_core::service::mcp::MCPServerType::Remote,
+            bitfun_core::service::mcp::MCPServerTransport::Sse,
+        ),
+        McpTransport::StreamableHttp => (
+            bitfun_core::service::mcp::MCPServerType::Remote,
+            bitfun_core::service::mcp::MCPServerTransport::StreamableHttp,
+        ),
+    };
+    let oauth = mutation
+        .oauth
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|_| anyhow!("MCP OAuth configuration does not match the supported schema"))?;
+    let xaa = mutation
+        .xaa
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|_| anyhow!("MCP XAA configuration does not match the supported schema"))?;
+    Ok(bitfun_core::service::mcp::MCPServerConfig {
+        id: name.to_string(),
+        name: name.to_string(),
+        server_type,
+        transport: Some(transport),
+        command: mutation.command,
+        args: mutation.args,
+        env: mutation.env,
+        working_directory: None,
+        inherit_parent_environment: None,
+        headers: mutation.headers,
+        url: mutation.url,
+        auto_start: mutation.auto_start,
+        enabled: mutation.enabled,
+        location: bitfun_core::service::mcp::ConfigLocation::User,
+        capabilities: Vec::new(),
+        settings: std::collections::HashMap::new(),
+        oauth,
+        oauth_enabled: None,
+        xaa,
+        timeouts: Default::default(),
+    })
+}
+
+fn sanitize_mcp_error(error: impl AsRef<str>) -> String {
+    let value = error.as_ref();
+    let lower = value.to_ascii_lowercase();
+    if lower.contains("api key") || lower.contains("authorization") || lower.contains("header") {
+        "The MCP owner rejected the request".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
 /// Completion message for the `/mcp` add flow. In Shared TUI mode the add
 /// mutates the local MCP compatibility owner of this CLI process, not the
 /// already-running Shared Runtime Host, so it must not be reported as
@@ -78,37 +279,170 @@ impl ChatMode {
     fn show_mcp_selector(
         &self,
         chat_view: &mut ChatView,
-        chat_state: &mut ChatState,
+        _chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        match tokio::task::block_in_place(|| rt_handle.block_on(self.agent.list_mcp_servers())) {
-            Ok(response) => chat_view.show_mcp_selector(
-                response
-                    .servers
-                    .into_iter()
-                    .map(mcp_item_from_summary)
-                    .collect(),
-            ),
-            Err(error) => {
-                chat_state.add_system_message(format!("Could not load MCP servers: {error}"));
-                chat_view.show_mcp_selector(Vec::new());
-            }
-        }
+        chat_view.show_mcp_selector(self.get_mcp_items(rt_handle));
     }
 
     pub(super) fn get_mcp_items(&self, rt_handle: &tokio::runtime::Handle) -> Vec<McpItem> {
-        tokio::task::block_in_place(|| rt_handle.block_on(self.agent.list_mcp_servers()))
-            .map(|response| {
-                response
-                    .servers
-                    .into_iter()
-                    .map(mcp_item_from_summary)
-                    .collect()
+        tokio::task::block_in_place(|| {
+            rt_handle.block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("MCP management is unavailable for a Remote workspace")
+                }
+                let mcp = if let Some(mcp) = bitfun_core::service::mcp::get_global_mcp_service() {
+                    mcp
+                } else {
+                    let config = bitfun_core::service::config::get_global_config_service()
+                        .await
+                        .map_err(|error| anyhow!(error.to_string()))?;
+                    crate::ensure_cli_mcp_service(config)
+                        .ok_or_else(|| anyhow!("The current CLI Host has no MCP service"))?
+                };
+                let workspace = self.agent.workspace_path_string();
+                let external = bitfun_core::external_sources::external_source_snapshot(
+                    Some(std::path::Path::new(&workspace)),
+                    false,
+                )
+                .await
+                .map_err(|error| anyhow!(sanitize_mcp_error(error)))?;
+                let tool_registry =
+                    bitfun_core::agentic::tools::registry::get_global_tool_registry();
+                let tools = tool_registry.read().await.get_all_tools();
+                let configs = mcp
+                    .config_service()
+                    .load_all_configs()
+                    .await
+                    .map_err(|error| anyhow!(error.to_string()))?;
+                let manager = mcp.server_manager();
+                let mut servers = Vec::new();
+
+                for config in configs {
+                    let status = if !config.enabled {
+                        "Stopped".to_string()
+                    } else {
+                        match tokio::time::timeout(
+                            Duration::from_millis(30),
+                            manager.get_server_status(&config.id),
+                        )
+                        .await
+                        {
+                            Ok(Ok(value)) => format!("{value:?}"),
+                            _ => "Starting".to_string(),
+                        }
+                    };
+                    let prefix = format!("mcp_{}_", config.id);
+                    let tool_count = tools
+                        .iter()
+                        .filter(|tool| tool.name().starts_with(&prefix))
+                        .count();
+                    let native_id =
+                        bitfun_core::external_sources::native_mcp_candidate_id(&config.id);
+                    let conflict = external.mcp_conflicts.iter().find(|conflict| {
+                        conflict
+                            .candidates
+                            .iter()
+                            .any(|candidate| candidate.candidate_id == native_id)
+                    });
+                    let action = match conflict {
+                        Some(conflict)
+                            if conflict
+                                .candidates
+                                .iter()
+                                .find(|candidate| candidate.candidate_id == native_id)
+                                .is_some_and(|candidate| !candidate.available) =>
+                        {
+                            let reason = conflict
+                                .candidates
+                                .iter()
+                                .find(|candidate| candidate.candidate_id == native_id)
+                                .and_then(|candidate| candidate.unavailable_reason.clone())
+                                .unwrap_or_else(|| {
+                                    "Enable this BitFun server in its MCP configuration".to_string()
+                                });
+                            McpServerAction::ReadOnly { reason }
+                        }
+                        Some(conflict)
+                            if conflict.selected_candidate_id.as_deref() != Some(&native_id) =>
+                        {
+                            McpServerAction::ConflictChoice {
+                                conflict_key: conflict.conflict_key.clone(),
+                                candidate_id: native_id,
+                                approve_external: false,
+                                expected_mcp_generation: external.mcp_generation,
+                                expected_preference_revision: external.preference_revision,
+                            }
+                        }
+                        _ => McpServerAction::NativeToggle,
+                    };
+                    servers.push(McpServerSummary {
+                        id: config.id.clone(),
+                        name: config.name.clone(),
+                        server_type: format!("{:?}", config.server_type).to_ascii_lowercase(),
+                        status,
+                        tool_count,
+                        source_label: "BitFun".to_string(),
+                        external: false,
+                        detail: native_mcp_detail(&config),
+                        action,
+                    });
+                }
+
+                for entry in &external.mcp_servers {
+                    let source_label = external
+                        .sources
+                        .iter()
+                        .find(|source| source.record.key == entry.definition.id.source)
+                        .map(|source| source.record.display_name.clone())
+                        .unwrap_or_else(|| "External AI app".to_string());
+                    let action = external_mcp_action(entry, &external);
+                    let status = external_mcp_status(entry, manager.as_ref()).await;
+                    let tool_count = entry.runtime_id.as_deref().map_or(0, |runtime_id| {
+                        let prefix = format!("mcp_{runtime_id}_");
+                        tools
+                            .iter()
+                            .filter(|tool| tool.name().starts_with(&prefix))
+                            .count()
+                    });
+                    servers.push(McpServerSummary {
+                        id: entry.candidate_id.clone(),
+                        name: entry.definition.name.clone(),
+                        server_type: "external".to_string(),
+                        status,
+                        tool_count,
+                        source_label,
+                        external: true,
+                        detail: external_mcp_detail(entry),
+                        action,
+                    });
+                }
+
+                if servers.is_empty() && external.discovery_pending {
+                    servers.push(McpServerSummary {
+                        id: "external-mcp-discovery-pending".to_string(),
+                        name: "External MCP servers".to_string(),
+                        server_type: "external".to_string(),
+                        status: "Checking".to_string(),
+                        tool_count: 0,
+                        source_label: "External AI applications".to_string(),
+                        external: true,
+                        detail: "BitFun is still checking compatible MCP settings".to_string(),
+                        action: McpServerAction::ReadOnly {
+                            reason: "Still checking; this list updates automatically".to_string(),
+                        },
+                    });
+                }
+
+                Ok::<Vec<McpItem>, anyhow::Error>(
+                    servers.into_iter().map(mcp_item_from_summary).collect(),
+                )
             })
-            .unwrap_or_else(|error| {
-                tracing::warn!("Failed to load MCP server catalog: {error}");
-                Vec::new()
-            })
+        })
+        .unwrap_or_else(|error| {
+            tracing::warn!("Failed to load MCP server catalog: {error}");
+            Vec::new()
+        })
     }
 
     fn activate_mcp_item(
@@ -147,15 +481,22 @@ impl ChatMode {
         _chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let agent = Arc::clone(&self.agent);
         let server_id = server_id.to_string();
         let tracked_server_id = server_id.clone();
         let handle = rt_handle.spawn(async move {
-            agent
-                .toggle_mcp_server(server_id)
-                .await
-                .map(|_| ())
-                .map_err(|error| error.to_string())
+            let mcp = bitfun_core::service::mcp::get_global_mcp_service()
+                .ok_or_else(|| "The current CLI Host has no MCP service".to_string())?;
+            let manager = mcp.server_manager();
+            match manager.get_server_status(&server_id).await {
+                Ok(bitfun_core::service::mcp::MCPServerStatus::Connected)
+                | Ok(bitfun_core::service::mcp::MCPServerStatus::Healthy) => {
+                    manager.stop_server(&server_id).await
+                }
+                _ => manager.start_server(&server_id).await,
+            }
+            .map_err(|error| anyhow!(error.to_string()))
+            .map(|_| ())
+            .map_err(|error| error.to_string())
         });
         self.pending_mcp_tasks.push(PendingMcpTask::Toggle {
             server_id: tracked_server_id,
@@ -170,7 +511,6 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let agent = Arc::clone(&self.agent);
         let workspace_path = self.agent.workspace_path_string();
         let action = item.action.clone();
         let item_id = item.id.clone();
@@ -183,37 +523,35 @@ impl ChatMode {
                     approved,
                     expected_mcp_generation,
                     expected_preference_revision,
-                } => agent
-                    .external_mcp_decision(ExternalMcpDecisionRequest {
-                        workspace_path,
-                        candidate_id,
-                        decision_key,
-                        approved,
-                        expected_mcp_generation,
-                        expected_preference_revision,
-                    })
-                    .await
-                    .map(|_| ()),
+                } => bitfun_core::external_sources::set_external_mcp_server_decision(
+                    Some(std::path::Path::new(&workspace_path)),
+                    &candidate_id,
+                    &decision_key,
+                    approved,
+                    expected_mcp_generation,
+                    expected_preference_revision,
+                )
+                .await
+                .map(|_| ()),
                 McpItemAction::ConflictChoice {
                     conflict_key,
                     candidate_id,
                     approve_external,
                     expected_mcp_generation,
                     expected_preference_revision,
-                } => agent
-                    .mcp_conflict_choice(McpConflictChoiceRequest {
-                        workspace_path,
-                        conflict_key,
-                        candidate_id,
-                        approve_external,
-                        expected_mcp_generation,
-                        expected_preference_revision,
-                    })
-                    .await
-                    .map(|_| ()),
-                McpItemAction::NativeToggle | McpItemAction::ReadOnly { .. } => Err(anyhow!(
-                    "The MCP action is no longer available; reopen /mcp"
-                )),
+                } => bitfun_core::external_sources::choose_external_mcp_conflict(
+                    Some(std::path::Path::new(&workspace_path)),
+                    &conflict_key,
+                    &candidate_id,
+                    approve_external,
+                    expected_mcp_generation,
+                    expected_preference_revision,
+                )
+                .await
+                .map(|_| ()),
+                McpItemAction::NativeToggle | McpItemAction::ReadOnly { .. } => {
+                    Err("The MCP action is no longer available; reopen /mcp".to_string())
+                }
             }
             .map_err(|error| error.to_string())
         });
@@ -395,12 +733,15 @@ impl ChatMode {
             oauth: config.get("oauth").cloned(),
             xaa: config.get("xaa").cloned(),
         };
-        let agent = Arc::clone(&self.agent);
         let name = name.to_string();
         let task_name = name.clone();
         let handle = rt_handle.spawn(async move {
-            agent
-                .add_mcp_server(name, mutation)
+            let mcp = bitfun_core::service::mcp::get_global_mcp_service()
+                .ok_or_else(|| "The current CLI Host has no MCP service".to_string())?;
+            let config =
+                mcp_config_from_mutation(&name, mutation).map_err(|error| error.to_string())?;
+            mcp.server_manager()
+                .add_server(config)
                 .await
                 .map(|_| ())
                 .map_err(|error| error.to_string())
@@ -427,15 +768,17 @@ impl ChatMode {
         _chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let agent = Arc::clone(&self.agent);
         let server_id = server_id.to_string();
         let task_server_id = server_id.clone();
         let handle = rt_handle.spawn(async move {
-            agent
-                .delete_mcp_server(server_id)
+            let mcp = bitfun_core::service::mcp::get_global_mcp_service()
+                .ok_or_else(|| "The current CLI Host has no MCP service".to_string())?;
+            mcp.config_service()
+                .delete_server_config(&server_id)
                 .await
-                .map(|_| ())
-                .map_err(|error| error.to_string())
+                .map_err(|error| error.to_string())?;
+            mcp.server_manager().schedule_stop_server(server_id);
+            Ok::<(), String>(())
         });
         self.pending_mcp_tasks.push(PendingMcpTask::Delete {
             server_id: task_server_id,
@@ -443,13 +786,14 @@ impl ChatMode {
         });
     }
 
-    fn open_mcp_config(&self, chat_state: &mut ChatState, rt_handle: &tokio::runtime::Handle) {
-        let config_path = tokio::task::block_in_place(|| {
-            rt_handle
-                .block_on(self.agent.list_mcp_servers())
+    fn open_mcp_config(&self, chat_state: &mut ChatState, _rt_handle: &tokio::runtime::Handle) {
+        let config_path = if self.agent.is_remote_workspace() {
+            None
+        } else {
+            bitfun_core::infrastructure::try_get_path_manager_arc()
                 .ok()
-                .and_then(|response| response.config_path)
-        });
+                .map(|manager| manager.app_config_file().display().to_string())
+        };
         match config_path {
             Some(config_path) => chat_state.add_system_message(format!(
                 "MCP servers are configured in:\n  {config_path}\n\nEdit the \"mcp_servers\" section."

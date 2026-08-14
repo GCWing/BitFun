@@ -20,15 +20,15 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/apps/cli/src/tui_backend.rs',
+    path: 'src/apps/cli/Cargo.toml',
     reason:
-      'The CLI-local TUI backend may consume App Server client and wire contracts but must not depend on backend implementations, Runtime, services, or private IPC',
+      'CLI/TUI consumes stable contracts and must not depend on App Server implementation, client transport, wire DTOs, or a shared TUI management crate',
     patterns: [
       {
         regex:
-          /\b(?:bitfun_core|bitfun_agent_runtime|bitfun_agent_runtime_ipc|bitfun_services_core|bitfun_services_integrations|bitfun_runtime_services|bitfun_product_capabilities|bitfun_external_sources|bitfun_app_server)::/,
+          /^\s*bitfun-(?:app-server|app-server-client|app-server-protocol|tui-management)\s*=/m,
         message:
-          'CLI-local TuiBackend must stay on the App Server client/protocol boundary',
+          'bitfun-cli must not depend on App Server implementation, client transport, wire DTOs, or a shared TUI management crate',
       },
     ],
   },

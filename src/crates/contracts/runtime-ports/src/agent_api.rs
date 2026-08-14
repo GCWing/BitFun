@@ -230,6 +230,34 @@ pub struct AgentSessionModeUpdateRequest {
     pub mode_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModeCatalogQuery {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_root: Option<String>,
+    #[serde(default)]
+    pub include_external: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModeCatalogEntry {
+    pub id: String,
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub is_external: bool,
+}
+
+#[async_trait::async_trait]
+pub trait AgentModeCatalogPort: Send + Sync {
+    async fn list_modes(
+        &self,
+        query: AgentModeCatalogQuery,
+    ) -> PortResult<Vec<AgentModeCatalogEntry>>;
+}
+
 /// Starts one audited manual context-compaction maintenance turn.
 ///
 /// The caller supplies the exact turn identity so process adapters can register

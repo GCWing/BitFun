@@ -2691,3 +2691,11 @@ mod prompt_command_shell_review_tests {
         assert!(debug.contains("command_count"));
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalSourceConflictPreferences {
+    pub choices: std::collections::BTreeMap<String, String>,
+    pub lineage_current_keys: std::collections::BTreeMap<String, String>,
+    pub conflicted_candidate_ids: std::collections::BTreeSet<String>,
+}

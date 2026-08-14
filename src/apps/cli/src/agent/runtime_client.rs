@@ -12,9 +12,9 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::{broadcast, Mutex};
 
 use bitfun_agent_runtime::sdk::{
-    AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest, AgentEventReceiver,
-    AgentInputAttachment, AgentMessageWorkspaceReferencesRequest, AgentRuntime,
-    AgentSessionCompactionRequest,
+    AgentContextReloadPort, AgentDialogSteerRequest, AgentDialogTurnExecution,
+    AgentDialogTurnRequest, AgentEventReceiver, AgentInputAttachment,
+    AgentMessageWorkspaceReferencesRequest, AgentRuntime, AgentSessionCompactionRequest,
     AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
     AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
     AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
@@ -35,9 +35,9 @@ use bitfun_agent_runtime_ipc::{
 };
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope};
 use bitfun_runtime_ports::{
-    put_agent_workspace_references, AgentSessionSummary, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, AgentSubmissionSource, DialogSubmissionPolicy,
-    SessionExecutionTarget,
+    put_agent_workspace_references, AgentContextReloadRequest, AgentModeCatalogQuery,
+    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget,
 };
 
 use crate::actions::SHARED_TUI_EMBEDDED_HANDOFF;
@@ -55,6 +55,39 @@ fn shared_restore_error(error: RuntimeIpcClientError) -> anyhow::Error {
         anyhow::Error::new(error)
     };
     with_session_conflict_help(error)
+}
+
+fn runtime_error_from_ipc(error: RuntimeIpcClientError) -> RuntimeError {
+    let kind = match &error {
+        RuntimeIpcClientError::Remote(remote) => match remote.code {
+            RuntimeIpcErrorCode::InvalidRequest => PortErrorKind::InvalidRequest,
+            RuntimeIpcErrorCode::Unauthorized => PortErrorKind::PermissionDenied,
+            RuntimeIpcErrorCode::NotFound => PortErrorKind::NotFound,
+            RuntimeIpcErrorCode::SessionInUse
+            | RuntimeIpcErrorCode::ControllerRequired
+            | RuntimeIpcErrorCode::SessionMismatch => PortErrorKind::SessionInUse,
+            RuntimeIpcErrorCode::OutcomeUnknown => PortErrorKind::OutcomeUnknown,
+            RuntimeIpcErrorCode::OperationUnsupported
+            | RuntimeIpcErrorCode::Unavailable
+            | RuntimeIpcErrorCode::IncompatibleProtocol
+            | RuntimeIpcErrorCode::WrongInstance => PortErrorKind::NotAvailable,
+            RuntimeIpcErrorCode::FrameTooLarge | RuntimeIpcErrorCode::Internal => {
+                PortErrorKind::Backend
+            }
+        },
+        RuntimeIpcClientError::Timeout
+        | RuntimeIpcClientError::Disconnected
+        | RuntimeIpcClientError::UnexpectedResponse
+        | RuntimeIpcClientError::Io(_) => PortErrorKind::OutcomeUnknown,
+        RuntimeIpcClientError::InvalidClientIdentity
+        | RuntimeIpcClientError::InvalidTimeout
+        | RuntimeIpcClientError::RequestEncoding(_) => PortErrorKind::InvalidRequest,
+        RuntimeIpcClientError::IncompatibleProtocol { .. } => PortErrorKind::NotAvailable,
+        RuntimeIpcClientError::RequestIdExhausted | RuntimeIpcClientError::Transport(_) => {
+            PortErrorKind::Backend
+        }
+    };
+    RuntimeError::Port(PortError::new(kind, error.to_string()))
 }
 
 fn validated_session_summary(
@@ -206,19 +239,23 @@ impl SessionOperationError {
 
 #[derive(Clone, Debug)]
 struct CliWorkspacePaths {
+    workspace_id: Option<String>,
     project: Option<PathBuf>,
     execution: Option<PathBuf>,
     execution_target: Option<SessionExecutionTarget>,
-    remote: bool,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
 }
 
 impl CliWorkspacePaths {
     fn new(workspace_path: Option<PathBuf>) -> Self {
         Self {
+            workspace_id: None,
             project: workspace_path.clone(),
             execution: workspace_path,
             execution_target: None,
-            remote: false,
+            remote_connection_id: None,
+            remote_ssh_host: None,
         }
     }
 
@@ -239,6 +276,7 @@ impl CliWorkspacePaths {
     }
 
     fn apply_binding(&mut self, binding: &AgentSessionWorkspaceBinding) {
+        self.workspace_id = binding.workspace_id.clone();
         let execution = PathBuf::from(&binding.workspace_path);
         let project = binding
             .project_workspace_path
@@ -249,7 +287,24 @@ impl CliWorkspacePaths {
         self.execution = Some(execution);
         self.project = Some(project);
         self.execution_target = binding.execution_target.clone();
-        self.remote = binding.remote_connection_id.is_some() || binding.remote_ssh_host.is_some();
+        self.remote_connection_id = binding.remote_connection_id.clone();
+        self.remote_ssh_host = binding.remote_ssh_host.clone();
+    }
+
+    fn binding(&self) -> AgentSessionWorkspaceBinding {
+        let execution = self.execution();
+        AgentSessionWorkspaceBinding {
+            workspace_id: self.workspace_id.clone(),
+            workspace_path: execution.to_string_lossy().to_string(),
+            project_workspace_path: Some(self.project().to_string_lossy().to_string()),
+            execution_target: self.execution_target.clone().or_else(|| {
+                Some(SessionExecutionTarget::local(
+                    execution.to_string_lossy().to_string(),
+                ))
+            }),
+            remote_connection_id: self.remote_connection_id.clone(),
+            remote_ssh_host: self.remote_ssh_host.clone(),
+        }
     }
 
     fn reset_execution_to_project(&mut self) -> PathBuf {
@@ -258,12 +313,14 @@ impl CliWorkspacePaths {
         self.execution_target = Some(SessionExecutionTarget::local(
             project.to_string_lossy().to_string(),
         ));
-        self.remote = false;
+        self.workspace_id = None;
+        self.remote_connection_id = None;
+        self.remote_ssh_host = None;
         project
     }
 
     fn workspace_diff_unavailable_reason(&self) -> Option<&'static str> {
-        if self.remote {
+        if self.remote_connection_id.is_some() || self.remote_ssh_host.is_some() {
             return Some("Workspace diff is unavailable for remote Sessions");
         }
         let execution = self.execution();
@@ -287,8 +344,9 @@ fn same_workspace_location(left: &Path, right: &Path) -> bool {
 
 /// CLI-owned client for the portable Agent Runtime SDK.
 /// Stateless regarding agent_type; callers pass it per call.
-pub(crate) struct ExecAgentRuntimeClient {
+pub(crate) struct CliAgentRuntimeClient {
     backend: CliAgentRuntimeBackend,
+    context_reload: Option<Arc<dyn AgentContextReloadPort>>,
     approval_policy: Arc<RwLock<CliApprovalPolicy>>,
     workspace_paths: Arc<RwLock<CliWorkspacePaths>>,
     /// Session ID — uses Mutex for interior mutability
@@ -316,10 +374,11 @@ pub(crate) struct CliAgentMode {
 
 type SharedBroadcast<T> = Arc<RwLock<Option<broadcast::Sender<T>>>>;
 
-impl ExecAgentRuntimeClient {
+impl CliAgentRuntimeClient {
     pub(crate) fn new(runtime: &CliRuntimeContext, workspace_path: Option<PathBuf>) -> Self {
         Self {
             backend: CliAgentRuntimeBackend::Embedded(runtime.agent_runtime().clone()),
+            context_reload: Some(Arc::new(runtime.compatibility().clone())),
             approval_policy: Arc::new(RwLock::new(runtime.approval_policy())),
             workspace_paths: Arc::new(RwLock::new(CliWorkspacePaths::new(workspace_path))),
             session_id: Arc::new(Mutex::new(None)),
@@ -347,6 +406,7 @@ impl ExecAgentRuntimeClient {
         );
         Self {
             backend: CliAgentRuntimeBackend::Shared(client),
+            context_reload: None,
             approval_policy: Arc::new(RwLock::new(CliApprovalPolicy::Ask)),
             workspace_paths: Arc::new(RwLock::new(CliWorkspacePaths::new(workspace_path))),
             session_id,
@@ -354,6 +414,24 @@ impl ExecAgentRuntimeClient {
             shared_agent_events: Some(shared_agent_events),
             shared_permission_events: Some(shared_permission_events),
             shared_pending_permissions,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_embedded_for_test(
+        runtime: AgentRuntime,
+        workspace_path: Option<PathBuf>,
+    ) -> Self {
+        Self {
+            backend: CliAgentRuntimeBackend::Embedded(runtime),
+            context_reload: None,
+            approval_policy: Arc::new(RwLock::new(CliApprovalPolicy::Ask)),
+            workspace_paths: Arc::new(RwLock::new(CliWorkspacePaths::new(workspace_path))),
+            session_id: Arc::new(Mutex::new(None)),
+            current_turn_id: Arc::new(Mutex::new(None)),
+            shared_agent_events: None,
+            shared_permission_events: None,
+            shared_pending_permissions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -366,30 +444,24 @@ impl ExecAgentRuntimeClient {
     /// consults the controller process's local registry.
     pub(crate) async fn available_agent_modes(&self) -> Result<Vec<CliAgentMode>> {
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(_) => {
-                let workspace = self.workspace_path_buf();
-                if let Err(error) =
-                    bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
-                        &workspace,
-                    ))
-                    .await
-                {
-                    tracing::warn!("Failed to initialize external agent sources: {error}");
-                }
-                let registry = bitfun_core::agentic::agents::get_agent_registry();
-                Ok(registry
-                    .get_modes_info_for_workspace(Some(&workspace), true)
-                    .await
-                    .into_iter()
-                    .map(|mode| CliAgentMode {
-                        id: mode.id,
-                        description: mode.description,
-                        model_id: mode.model,
-                        is_external: mode.source
-                            == bitfun_core::agentic::agents::AgentSource::External,
-                    })
-                    .collect())
-            }
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .list_agent_modes(AgentModeCatalogQuery {
+                    workspace_root: Some(self.workspace_path_string()),
+                    include_external: true,
+                })
+                .await
+                .map(|modes| {
+                    modes
+                        .into_iter()
+                        .map(|mode| CliAgentMode {
+                            id: mode.id,
+                            description: mode.description,
+                            model_id: mode.model_id,
+                            is_external: mode.is_external,
+                        })
+                        .collect()
+                })
+                .map_err(|error| anyhow::anyhow!(error.into_message())),
             CliAgentRuntimeBackend::Shared(client) => {
                 let session_id = self.session_id.lock().await.clone();
                 match client
@@ -528,6 +600,22 @@ impl ExecAgentRuntimeClient {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .apply_binding(binding);
+    }
+
+    pub(crate) fn remote_workspace_scope(&self) -> (Option<String>, Option<String>) {
+        let paths = self
+            .workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        (
+            paths.remote_connection_id.clone(),
+            paths.remote_ssh_host.clone(),
+        )
+    }
+
+    pub(crate) fn is_remote_workspace(&self) -> bool {
+        let (connection_id, ssh_host) = self.remote_workspace_scope();
+        connection_id.is_some() || ssh_host.is_some()
     }
 
     fn execution_target(&self) -> Option<SessionExecutionTarget> {
@@ -685,63 +773,83 @@ impl ExecAgentRuntimeClient {
         let previous_summary =
             validated_session_summary(&sessions, session_id, &project_workspace)?;
 
-        let (restored, transcript, shared_pending, shared_workspace_binding) = match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => {
-                let restored = runtime
-                    .restore_session(AgentSessionRestoreRequest {
-                        workspace_path: project_workspace.to_string_lossy().to_string(),
-                        session_id: session_id.to_string(),
-                        include_internal: false,
-                        remote_connection_id: None,
-                        remote_ssh_host: None,
-                    })
-                    .await
-                    .map(|restored| restored.session)
-                    .map_err(anyhow::Error::new)
-                    .map_err(with_session_conflict_help)?;
-                let transcript = runtime
-                    .read_session_transcript(SessionTranscriptRequest {
-                        session_id: session_id.to_string(),
-                        turn_id: None,
-                    })
-                    .await
-                    .unwrap_or_else(|error| {
-                        tracing::warn!(
-                            "Failed to read Embedded session transcript: {}",
-                            error.into_message()
-                        );
-                        SessionTranscript {
+        let (restored, transcript, restored_turn_id, shared_pending, shared_workspace_binding) =
+            match &self.backend {
+                CliAgentRuntimeBackend::Embedded(runtime) => {
+                    let restored = runtime
+                        .restore_session(AgentSessionRestoreRequest {
+                            workspace_path: project_workspace.to_string_lossy().to_string(),
                             session_id: session_id.to_string(),
-                            messages: Vec::new(),
-                        }
-                    });
-                (restored, transcript, None, None)
-            }
-            CliAgentRuntimeBackend::Shared(client) => match client
-                .request(RuntimeIpcOperation::RestoreSession {
-                    request: RuntimeSessionRestoreRequest {
-                        workspace_path: project_workspace.to_string_lossy().to_string(),
-                        session_id: session_id.to_string(),
-                    },
-                })
-                .await
-                .map_err(shared_restore_error)?
-            {
-                RuntimeIpcOperationResult::SessionRestored {
-                    session,
-                    workspace_binding,
-                    transcript,
-                    pending_permissions,
-                    ..
-                } => (
-                    session,
-                    transcript,
-                    Some(pending_permissions),
-                    Some(workspace_binding),
-                ),
-                _ => return Err(unexpected_shared_result("restore_session")),
-            },
-        };
+                            include_internal: false,
+                            remote_connection_id: None,
+                            remote_ssh_host: None,
+                        })
+                        .await
+                        .map_err(anyhow::Error::new)
+                        .map_err(with_session_conflict_help)?;
+                    let restored_turn_id = match &restored.state {
+                        bitfun_agent_runtime::sdk::SessionState::Processing {
+                            current_turn_id,
+                            ..
+                        } => Some(current_turn_id.clone()),
+                        bitfun_agent_runtime::sdk::SessionState::Idle
+                        | bitfun_agent_runtime::sdk::SessionState::Error { .. } => None,
+                    };
+                    let transcript = runtime
+                        .read_session_transcript(SessionTranscriptRequest {
+                            session_id: session_id.to_string(),
+                            turn_id: None,
+                        })
+                        .await
+                        .unwrap_or_else(|error| {
+                            tracing::warn!(
+                                "Failed to read Embedded session transcript: {}",
+                                error.into_message()
+                            );
+                            SessionTranscript {
+                                session_id: session_id.to_string(),
+                                messages: Vec::new(),
+                            }
+                        });
+                    (restored.session, transcript, restored_turn_id, None, None)
+                }
+                CliAgentRuntimeBackend::Shared(client) => match client
+                    .request(RuntimeIpcOperation::RestoreSession {
+                        request: RuntimeSessionRestoreRequest {
+                            workspace_path: project_workspace.to_string_lossy().to_string(),
+                            session_id: session_id.to_string(),
+                        },
+                    })
+                    .await
+                    .map_err(shared_restore_error)?
+                {
+                    RuntimeIpcOperationResult::SessionRestored {
+                        session,
+                        state,
+                        workspace_binding,
+                        transcript,
+                        pending_permissions,
+                        ..
+                    } => {
+                        let restored_turn_id = match state {
+                            bitfun_agent_runtime_ipc::RuntimeSessionState::Processing {
+                                current_turn_id,
+                                ..
+                            } => Some(current_turn_id),
+                            bitfun_agent_runtime_ipc::RuntimeSessionState::Idle
+                            | bitfun_agent_runtime_ipc::RuntimeSessionState::Error { .. } => None,
+                        };
+                        (
+                            session,
+                            transcript,
+                            restored_turn_id,
+                            Some(pending_permissions),
+                            Some(workspace_binding),
+                        )
+                    }
+                    _ => return Err(unexpected_shared_result("restore_session")),
+                },
+            };
 
         let binding = if let Some(binding) = shared_workspace_binding {
             self.set_workspace_binding(&binding);
@@ -753,7 +861,7 @@ impl ExecAgentRuntimeClient {
         let mut session_id_guard = self.session_id.lock().await;
         let mut turn_id_guard = self.current_turn_id.lock().await;
         *session_id_guard = Some(session_id.to_string());
-        *turn_id_guard = None;
+        *turn_id_guard = restored_turn_id;
         drop(session_id_guard);
         drop(turn_id_guard);
         if let Some(requests) = shared_pending {
@@ -805,9 +913,40 @@ impl ExecAgentRuntimeClient {
         &self,
         session_id: &str,
     ) -> Result<AgentSessionWorkspaceBinding> {
+        if self.session_id.lock().await.as_deref() == Some(session_id) {
+            return Ok(self
+                .workspace_paths
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .binding());
+        }
+        if self.is_shared() {
+            return Err(anyhow::anyhow!("Session {session_id} is not attached"));
+        }
         let project_workspace = self.project_workspace_path_buf();
         self.resolve_session_workspace_binding(session_id, &project_workspace)
             .await
+    }
+
+    pub(crate) async fn reload_context(&self, request: AgentContextReloadRequest) -> Result<()> {
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(_) => {
+                let context_reload = self
+                    .context_reload
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("session context reload is unavailable"))?;
+                context_reload
+                    .reload_session_context(request)
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error.message))
+            }
+            CliAgentRuntimeBackend::Shared(client) => expect_unit(
+                client
+                    .request(RuntimeIpcOperation::ReloadSessionContext { request })
+                    .await?,
+                "reload_session_context",
+            ),
+        }
     }
 
     pub(crate) async fn delete_session(
@@ -1100,10 +1239,19 @@ impl ExecAgentRuntimeClient {
         &self,
         request: AgentSessionUsageRequest,
     ) -> Result<SessionUsageReport> {
-        self.embedded_runtime("generating session usage")?
-            .generate_session_usage(request)
-            .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .generate_session_usage(request)
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message())),
+            CliAgentRuntimeBackend::Shared(client) => match client
+                .request(RuntimeIpcOperation::SessionUsage { request })
+                .await?
+            {
+                RuntimeIpcOperationResult::SessionUsage { usage } => Ok(usage),
+                _ => Err(unexpected_shared_result("session_usage")),
+            },
+        }
     }
 
     pub(crate) async fn wait_for_turn_settlement(
@@ -1112,20 +1260,24 @@ impl ExecAgentRuntimeClient {
         turn_id: &str,
         wait_timeout_ms: u64,
     ) -> std::result::Result<(), RuntimeError> {
+        let request = AgentTurnSettlementRequest {
+            session_id: session_id.to_string(),
+            turn_id: turn_id.to_string(),
+            wait_timeout_ms,
+        };
         match &self.backend {
             CliAgentRuntimeBackend::Embedded(runtime) => {
-                runtime
-                    .wait_for_turn_settlement(AgentTurnSettlementRequest {
-                        session_id: session_id.to_string(),
-                        turn_id: turn_id.to_string(),
-                        wait_timeout_ms,
-                    })
-                    .await
+                runtime.wait_for_turn_settlement(request).await
             }
-            CliAgentRuntimeBackend::Shared(_) => Err(RuntimeError::Port(PortError::new(
-                PortErrorKind::NotAvailable,
-                "turn settlement waiting is not available in the first Shared TUI slice",
-            ))),
+            CliAgentRuntimeBackend::Shared(client) => {
+                let result = client
+                    .request(RuntimeIpcOperation::WaitForSettlement { request })
+                    .await
+                    .map_err(runtime_error_from_ipc)?;
+                expect_unit(result, "wait_for_settlement").map_err(|error| {
+                    RuntimeError::Port(PortError::new(PortErrorKind::Backend, error.to_string()))
+                })
+            }
         }
     }
 
@@ -1260,7 +1412,7 @@ impl ExecAgentRuntimeClient {
     }
 }
 
-impl ExecAgentRuntimeClient {
+impl CliAgentRuntimeClient {
     pub(crate) async fn ensure_session(&self, agent_type: &str) -> Result<String> {
         self.ensure_session_with_model(agent_type, None).await
     }
@@ -1965,7 +2117,7 @@ fn unexpected_shared_result(operation: &str) -> anyhow::Error {
 mod recovery_tests {
     use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
 
-    use super::ExecAgentRuntimeClient;
+    use super::CliAgentRuntimeClient;
 
     #[test]
     fn session_recovery_requires_structured_not_found_error() {
@@ -1974,10 +2126,10 @@ mod recovery_tests {
         let unrelated_backend_error =
             RuntimeError::Port(PortError::new(PortErrorKind::Backend, "model not found"));
 
-        assert!(ExecAgentRuntimeClient::is_session_not_found_error(
+        assert!(CliAgentRuntimeClient::is_session_not_found_error(
             &missing_session
         ));
-        assert!(!ExecAgentRuntimeClient::is_session_not_found_error(
+        assert!(!CliAgentRuntimeClient::is_session_not_found_error(
             &unrelated_backend_error
         ));
     }
@@ -2547,5 +2699,932 @@ mod tests {
         assert!(
             matches!(permission, PermissionRequestEvent::Asked { request } if request.delegation.as_ref().is_some_and(|delegation| delegation.parent_session_id == "root"))
         );
+    }
+}
+
+#[cfg(test)]
+mod dual_backend_behavior_tests {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex as StdMutex};
+    use std::time::Duration;
+
+    use async_trait::async_trait;
+    use bitfun_agent_runtime::event_queue::{EventQueue, EventQueueConfig};
+    use bitfun_agent_runtime::sdk::{
+        AgentDialogTurnPort, AgentDialogTurnRequest, AgentEventSource, AgentModeCatalogEntry,
+        AgentModeCatalogPort, AgentModeCatalogQuery, AgentRuntime, AgentRuntimeBuilder,
+        AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
+        AgentSessionListRequest, AgentSessionManagementPort, AgentSessionRestorePort,
+        AgentSessionRestoreRequest, AgentSessionRestoreResult, AgentSessionWorkspaceBinding,
+        AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
+        AgentSubmissionResult, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+        AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
+        AgenticEvent, DialogSubmitOutcome, PermissionReply, PermissionRequest,
+        PermissionRequestManager, PermissionRequestSource, PermissionRequestSourceKind, PortError,
+        PortErrorKind, PortResult, RuntimeError, SessionState, SessionTranscript,
+        SessionTranscriptReader, SessionTranscriptRequest,
+    };
+    use bitfun_agent_runtime_ipc::{
+        RuntimeInstanceIdentity, RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcErrorCode,
+        RuntimeIpcOperation, RuntimeIpcOperationResult, RuntimeIpcServer, RuntimeIpcServerConfig,
+    };
+    use bitfun_runtime_ports::{
+        ClockPort, PermissionAuditRecord, PermissionAuditStorePort, PermissionReplyStorePort,
+        RuntimeServiceCapability, RuntimeServicePort, SessionExecutionTarget,
+    };
+
+    use crate::shared_runtime::SharedRuntimeHandler;
+
+    use super::CliAgentRuntimeClient;
+
+    fn fixture_identity() -> RuntimeInstanceIdentity {
+        let identity = format!(
+            "{}{}",
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple()
+        );
+        RuntimeInstanceIdentity::parse(&identity).expect("valid instance identity")
+    }
+    #[derive(Clone)]
+    struct FixtureState {
+        workspace: PathBuf,
+        event_queue: Arc<EventQueue>,
+        sessions: Arc<StdMutex<HashMap<String, bitfun_agent_runtime::sdk::AgentSessionSummary>>>,
+        transcripts: Arc<StdMutex<HashMap<String, SessionTranscript>>>,
+        cancellation_requests: Arc<StdMutex<Vec<AgentTurnCancellationRequest>>>,
+        settlement_outcomes: Arc<StdMutex<HashMap<String, Option<PortError>>>>,
+    }
+
+    impl FixtureState {
+        fn new(workspace: PathBuf) -> Self {
+            Self {
+                workspace,
+                event_queue: Arc::new(EventQueue::new(EventQueueConfig::default())),
+                sessions: Arc::new(StdMutex::new(HashMap::new())),
+                transcripts: Arc::new(StdMutex::new(HashMap::new())),
+                cancellation_requests: Arc::new(StdMutex::new(Vec::new())),
+                settlement_outcomes: Arc::new(StdMutex::new(HashMap::new())),
+            }
+        }
+
+        fn summary(
+            session_id: impl Into<String>,
+            session_name: impl Into<String>,
+            agent_type: impl Into<String>,
+        ) -> bitfun_agent_runtime::sdk::AgentSessionSummary {
+            bitfun_agent_runtime::sdk::AgentSessionSummary {
+                session_id: session_id.into(),
+                session_name: session_name.into(),
+                agent_type: agent_type.into(),
+                model_id: None,
+                reasoning_preset: None,
+                last_user_dialog_agent_type: None,
+                last_submitted_agent_type: None,
+                turn_count: 0,
+                created_at_ms: 1,
+                last_active_at_ms: 1,
+            }
+        }
+
+        fn insert_session(&self, session_id: String, session_name: String, agent_type: String) {
+            self.sessions.lock().unwrap().insert(
+                session_id.clone(),
+                Self::summary(session_id, session_name, agent_type),
+            );
+        }
+
+        fn workspace_binding(&self) -> AgentSessionWorkspaceBinding {
+            let workspace = self.workspace.to_string_lossy().into_owned();
+            AgentSessionWorkspaceBinding {
+                workspace_id: None,
+                workspace_path: workspace.clone(),
+                project_workspace_path: Some(workspace.clone()),
+                execution_target: Some(SessionExecutionTarget::local(workspace)),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            }
+        }
+    }
+
+    fn embedded_modes() -> Vec<AgentModeCatalogEntry> {
+        vec![
+            AgentModeCatalogEntry {
+                id: "agentic".to_string(),
+                description: "Primary workspace agent".to_string(),
+                model_id: Some("primary-model".to_string()),
+                is_external: false,
+            },
+            AgentModeCatalogEntry {
+                id: "workspace-plan".to_string(),
+                description: "Workspace plan agent".to_string(),
+                model_id: Some("plan-model".to_string()),
+                is_external: true,
+            },
+        ]
+    }
+
+    #[derive(Clone)]
+    struct FixtureSubmission {
+        state: FixtureState,
+    }
+
+    #[async_trait]
+    impl AgentSubmissionPort for FixtureSubmission {
+        async fn create_session(
+            &self,
+            request: AgentSessionCreateRequest,
+        ) -> PortResult<AgentSessionCreateResult> {
+            let session_id = format!("session-{}", uuid::Uuid::new_v4());
+            self.state.insert_session(
+                session_id.clone(),
+                request.session_name.clone(),
+                request.agent_type.clone(),
+            );
+            Ok(AgentSessionCreateResult::new(
+                session_id,
+                request.session_name,
+                request.agent_type,
+            ))
+        }
+
+        async fn submit_message(
+            &self,
+            request: AgentSubmissionRequest,
+        ) -> PortResult<AgentSubmissionResult> {
+            Ok(AgentSubmissionResult {
+                turn_id: request
+                    .turn_id
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                accepted: true,
+            })
+        }
+
+        async fn resolve_session_agent_type(&self, session_id: &str) -> PortResult<Option<String>> {
+            Ok(self
+                .state
+                .sessions
+                .lock()
+                .unwrap()
+                .get(session_id)
+                .map(|session| session.agent_type.clone()))
+        }
+    }
+
+    #[derive(Clone)]
+    struct FixtureSessionManagement {
+        state: FixtureState,
+    }
+
+    #[async_trait]
+    impl AgentSessionManagementPort for FixtureSessionManagement {
+        async fn list_sessions(
+            &self,
+            _request: AgentSessionListRequest,
+        ) -> PortResult<Vec<bitfun_agent_runtime::sdk::AgentSessionSummary>> {
+            Ok(self
+                .state
+                .sessions
+                .lock()
+                .unwrap()
+                .values()
+                .cloned()
+                .collect())
+        }
+
+        async fn delete_session(&self, request: AgentSessionDeleteRequest) -> PortResult<()> {
+            self.state
+                .sessions
+                .lock()
+                .unwrap()
+                .remove(&request.session_id);
+            self.state
+                .transcripts
+                .lock()
+                .unwrap()
+                .remove(&request.session_id);
+            Ok(())
+        }
+
+        async fn rename_session(
+            &self,
+            request: bitfun_agent_runtime::sdk::AgentSessionRenameRequest,
+        ) -> PortResult<()> {
+            let mut sessions = self.state.sessions.lock().unwrap();
+            let session = sessions.get_mut(&request.session_id).ok_or_else(|| {
+                PortError::new(PortErrorKind::NotFound, "fixture session not found")
+            })?;
+            session.session_name = request.session_name;
+            Ok(())
+        }
+
+        async fn resolve_session_workspace_binding(
+            &self,
+            request: AgentSessionWorkspaceRequest,
+        ) -> PortResult<Option<AgentSessionWorkspaceBinding>> {
+            Ok(self
+                .state
+                .sessions
+                .lock()
+                .unwrap()
+                .contains_key(&request.session_id)
+                .then(|| self.state.workspace_binding()))
+        }
+    }
+
+    #[derive(Clone)]
+    struct FixtureRestore {
+        state: FixtureState,
+    }
+
+    #[async_trait]
+    impl AgentSessionRestorePort for FixtureRestore {
+        async fn restore_session(
+            &self,
+            request: AgentSessionRestoreRequest,
+        ) -> PortResult<AgentSessionRestoreResult> {
+            let session = self
+                .state
+                .sessions
+                .lock()
+                .unwrap()
+                .get(&request.session_id)
+                .cloned()
+                .ok_or_else(|| {
+                    PortError::new(PortErrorKind::NotFound, "fixture session not found")
+                })?;
+            Ok(AgentSessionRestoreResult {
+                session,
+                state: SessionState::Idle,
+            })
+        }
+    }
+
+    #[derive(Clone)]
+    struct FixtureTranscript {
+        state: FixtureState,
+    }
+
+    #[async_trait]
+    impl SessionTranscriptReader for FixtureTranscript {
+        async fn read_session_transcript(
+            &self,
+            request: SessionTranscriptRequest,
+        ) -> PortResult<SessionTranscript> {
+            Ok(self
+                .state
+                .transcripts
+                .lock()
+                .unwrap()
+                .get(&request.session_id)
+                .cloned()
+                .unwrap_or_else(|| SessionTranscript {
+                    session_id: request.session_id,
+                    messages: Vec::new(),
+                }))
+        }
+    }
+
+    #[derive(Clone)]
+    struct FixtureDialogTurn {
+        state: FixtureState,
+    }
+
+    #[async_trait]
+    impl AgentDialogTurnPort for FixtureDialogTurn {
+        async fn submit_dialog_turn(
+            &self,
+            request: AgentDialogTurnRequest,
+        ) -> PortResult<DialogSubmitOutcome> {
+            let session_id = request.session_id.clone();
+            let turn_id = request
+                .turn_id
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            self.state
+                .event_queue
+                .enqueue(
+                    AgenticEvent::DialogTurnCompleted {
+                        session_id: session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        total_rounds: 1,
+                        total_tools: 0,
+                        duration_ms: 1,
+                        partial_recovery_reason: None,
+                        success: Some(true),
+                        finish_reason: Some("fixture-complete".to_string()),
+                        has_final_response: Some(true),
+                    },
+                    None,
+                )
+                .await
+                .expect("fixture turn completion event should enqueue");
+            Ok(DialogSubmitOutcome::Started {
+                session_id,
+                turn_id,
+            })
+        }
+    }
+
+    #[derive(Clone)]
+    struct FixtureCancellation {
+        state: FixtureState,
+    }
+
+    #[async_trait]
+    impl AgentTurnCancellationPort for FixtureCancellation {
+        async fn cancel_turn(
+            &self,
+            request: AgentTurnCancellationRequest,
+        ) -> PortResult<AgentTurnCancellationResult> {
+            self.state
+                .cancellation_requests
+                .lock()
+                .unwrap()
+                .push(request.clone());
+            Ok(AgentTurnCancellationResult {
+                session_id: request.session_id,
+                turn_id: request.turn_id,
+                requested: true,
+            })
+        }
+    }
+
+    #[derive(Clone)]
+    struct FixtureSettlement {
+        state: FixtureState,
+    }
+
+    #[async_trait]
+    impl AgentTurnSettlementPort for FixtureSettlement {
+        async fn wait_for_turn_settlement(
+            &self,
+            request: AgentTurnSettlementRequest,
+        ) -> PortResult<()> {
+            match self
+                .state
+                .settlement_outcomes
+                .lock()
+                .unwrap()
+                .get(&request.turn_id)
+                .cloned()
+            {
+                Some(Some(error)) => Err(error),
+                _ => Ok(()),
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct FixtureModeCatalog(Vec<AgentModeCatalogEntry>);
+
+    #[async_trait]
+    impl AgentModeCatalogPort for FixtureModeCatalog {
+        async fn list_modes(
+            &self,
+            _query: AgentModeCatalogQuery,
+        ) -> PortResult<Vec<AgentModeCatalogEntry>> {
+            Ok(self.0.clone())
+        }
+    }
+
+    #[derive(Default)]
+    struct MemoryPermissionStore {
+        audit: StdMutex<Vec<PermissionAuditRecord>>,
+    }
+
+    impl RuntimeServicePort for MemoryPermissionStore {
+        fn capability(&self) -> RuntimeServiceCapability {
+            RuntimeServiceCapability::Permission
+        }
+    }
+
+    #[async_trait]
+    impl PermissionAuditStorePort for MemoryPermissionStore {
+        async fn append_permission_audit(&self, record: PermissionAuditRecord) -> PortResult<()> {
+            self.audit.lock().unwrap().push(record);
+            Ok(())
+        }
+
+        async fn list_project_permission_audit(
+            &self,
+            project_id: &str,
+        ) -> PortResult<Vec<PermissionAuditRecord>> {
+            Ok(self
+                .audit
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|record| record.request.project_id == project_id)
+                .cloned()
+                .collect())
+        }
+    }
+
+    #[async_trait]
+    impl PermissionReplyStorePort for MemoryPermissionStore {
+        async fn commit_permission_reply(
+            &self,
+            _grants: Vec<bitfun_agent_runtime::sdk::PermissionGrant>,
+            audit: Vec<PermissionAuditRecord>,
+        ) -> PortResult<()> {
+            self.audit.lock().unwrap().extend(audit);
+            Ok(())
+        }
+    }
+
+    #[derive(Debug)]
+    struct FixedClock;
+
+    impl RuntimeServicePort for FixedClock {
+        fn capability(&self) -> RuntimeServiceCapability {
+            RuntimeServiceCapability::Clock
+        }
+    }
+
+    impl ClockPort for FixedClock {
+        fn now_unix_millis(&self) -> i64 {
+            42
+        }
+    }
+
+    struct Fixture {
+        state: FixtureState,
+        runtime: AgentRuntime,
+        workspace: PathBuf,
+        queue: Arc<EventQueue>,
+        permission_manager: Arc<PermissionRequestManager>,
+    }
+
+    impl Fixture {
+        fn new(workspace: &Path) -> Self {
+            let workspace = dunce::canonicalize(workspace).expect("canonical workspace");
+            let state = FixtureState::new(workspace.clone());
+            let queue = state.event_queue.clone();
+            let event_source = AgentEventSource::new(queue.clone());
+            let store = Arc::new(MemoryPermissionStore::default());
+            let permission_manager = Arc::new(PermissionRequestManager::new(
+                store.clone(),
+                store,
+                Arc::new(FixedClock),
+            ));
+            let runtime = AgentRuntimeBuilder::new()
+                .with_submission_port(Arc::new(FixtureSubmission {
+                    state: state.clone(),
+                }))
+                .with_session_management_port(Arc::new(FixtureSessionManagement {
+                    state: state.clone(),
+                }))
+                .with_session_restore_port(Arc::new(FixtureRestore {
+                    state: state.clone(),
+                }))
+                .with_session_transcript_reader(Arc::new(FixtureTranscript {
+                    state: state.clone(),
+                }))
+                .with_dialog_turn_port(Arc::new(FixtureDialogTurn {
+                    state: state.clone(),
+                }))
+                .with_cancellation_port(Arc::new(FixtureCancellation {
+                    state: state.clone(),
+                }))
+                .with_turn_settlement_port(Arc::new(FixtureSettlement {
+                    state: state.clone(),
+                }))
+                .with_mode_catalog(Arc::new(FixtureModeCatalog(embedded_modes())))
+                .with_permission_request_manager(permission_manager.clone())
+                .with_event_source(event_source)
+                .build()
+                .expect("fixture runtime should build");
+            Self {
+                state,
+                runtime,
+                workspace,
+                queue,
+                permission_manager,
+            }
+        }
+
+        fn embedded_client(&self) -> CliAgentRuntimeClient {
+            CliAgentRuntimeClient::new_embedded_for_test(
+                self.runtime.clone(),
+                Some(self.workspace.clone()),
+            )
+        }
+    }
+
+    async fn shared_backend(
+        fixture: &Fixture,
+    ) -> (
+        tempfile::TempDir,
+        RuntimeIpcClient,
+        tokio::task::JoinHandle<()>,
+    ) {
+        let root = tempfile::tempdir().expect("runtime root");
+        let identity = fixture_identity();
+
+        let handler = Arc::new(
+            SharedRuntimeHandler::build_for_test(fixture.runtime.clone(), &fixture.workspace)
+                .expect("shared runtime handler"),
+        );
+        let server = RuntimeIpcServer::bind_with_handler(
+            root.path(),
+            identity,
+            RuntimeIpcServerConfig {
+                server_version: "fixture".to_string(),
+                idle_timeout: Duration::from_secs(5),
+                handshake_timeout: Duration::from_secs(2),
+                request_timeout: Duration::from_secs(2),
+                max_connections: 8,
+            },
+            handler,
+        )
+        .await
+        .expect("shared runtime server");
+        let discovery = server.discovery_record().clone();
+        let server_task = tokio::spawn(async move {
+            let _ = server.serve().await;
+        });
+        let client = RuntimeIpcClient::connect(
+            root.path(),
+            &discovery,
+            "fixture-client",
+            "1",
+            Duration::from_secs(2),
+            Duration::from_secs(2),
+        )
+        .await
+        .expect("shared runtime client");
+        (root, client, server_task)
+    }
+
+    async fn shared_client(
+        fixture: &Fixture,
+    ) -> (
+        tempfile::TempDir,
+        CliAgentRuntimeClient,
+        tokio::task::JoinHandle<()>,
+    ) {
+        let (root, client, server_task) = shared_backend(fixture).await;
+        (
+            root,
+            CliAgentRuntimeClient::new_shared(client, Some(fixture.workspace.clone())),
+            server_task,
+        )
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct ScenarioSnapshot {
+        mode_ids: Vec<String>,
+        created_session_agent_type: String,
+        listed_session_count: usize,
+        renamed_session_name: Option<String>,
+        turn_has_id: bool,
+        settlement_ok: bool,
+        cancellation_requested: bool,
+        permission_seen: bool,
+        permission_cleared: bool,
+        restore_session_agent_type: Option<String>,
+        restore_transcript_messages: usize,
+        event_states: Vec<String>,
+        remaining_session_count: usize,
+    }
+
+    async fn wait_until<F>(mut predicate: F)
+    where
+        F: FnMut() -> bool,
+    {
+        for _ in 0..50 {
+            if predicate() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        panic!("condition was not satisfied before timeout");
+    }
+
+    fn fixture_permission_request(session_id: &str) -> PermissionRequest {
+        PermissionRequest {
+            request_id: "permission-1".to_string(),
+            round_id: "round-1".to_string(),
+            order: 0,
+            tool_call_id: None,
+            project_path: None,
+            project_id: "project-1".to_string(),
+            session_id: session_id.to_string(),
+            agent_id: "agentic".to_string(),
+            action: "edit".to_string(),
+            resources: vec!["src/main.rs".to_string()],
+            save_resources: vec!["src/main.rs".to_string()],
+            source: PermissionRequestSource {
+                kind: PermissionRequestSourceKind::ToolCall,
+                identity: "write_file".to_string(),
+            },
+            delegation: None,
+            display_metadata: serde_json::Map::new(),
+        }
+    }
+
+    async fn observe_backend(
+        client: &CliAgentRuntimeClient,
+        fixture: &Fixture,
+    ) -> ScenarioSnapshot {
+        let modes = client.available_agent_modes().await.expect("modes");
+        let created_id = client
+            .create_new_session("agentic")
+            .await
+            .expect("create session");
+        let listed = client.list_sessions().await.expect("list sessions");
+        let created_session = listed
+            .iter()
+            .find(|session| session.session_id == created_id)
+            .expect("created session should be listed");
+        client
+            .rename_session(&created_id, "renamed-session")
+            .await
+            .expect("rename session");
+        let renamed_session = client
+            .list_sessions()
+            .await
+            .expect("list renamed sessions")
+            .into_iter()
+            .find(|session| session.session_id == created_id);
+
+        let turn_id = client
+            .send_message("hello".to_string(), "agentic")
+            .await
+            .expect("send message");
+        client
+            .wait_for_turn_settlement(&created_id, &turn_id, 100)
+            .await
+            .expect("turn settlement");
+        client.cancel_current_turn().await.expect("cancel turn");
+        let cancellation_requested = fixture
+            .state
+            .cancellation_requests
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|request| {
+                request.session_id == created_id && request.turn_id.as_deref() == Some(&turn_id)
+            });
+
+        let mut events = client.subscribe_events().expect("agent events");
+        fixture
+            .queue
+            .enqueue(
+                AgenticEvent::SessionStateChanged {
+                    session_id: created_id.clone(),
+                    new_state: "first".to_string(),
+                },
+                None,
+            )
+            .await
+            .expect("enqueue first event");
+        fixture
+            .queue
+            .enqueue(
+                AgenticEvent::SessionStateChanged {
+                    session_id: created_id.clone(),
+                    new_state: "second".to_string(),
+                },
+                None,
+            )
+            .await
+            .expect("enqueue second event");
+        let mut event_states = Vec::new();
+        for _ in 0..2 {
+            let envelope = tokio::time::timeout(Duration::from_secs(2), events.recv())
+                .await
+                .expect("event timeout")
+                .expect("event received");
+            match envelope.event {
+                AgenticEvent::SessionStateChanged { new_state, .. } => event_states.push(new_state),
+                _ => panic!("unexpected event kind"),
+            }
+        }
+
+        let request = fixture_permission_request(&created_id);
+        fixture
+            .permission_manager
+            .register(request.clone())
+            .await
+            .expect("register permission");
+        wait_until(|| {
+            client
+                .pending_permission_requests()
+                .expect("pending permissions")
+                .iter()
+                .any(|pending| pending.request_id == request.request_id)
+        })
+        .await;
+        let permission_seen = true;
+        client
+            .respond_permission(&request.request_id, PermissionReply::Once)
+            .await
+            .expect("respond permission");
+        wait_until(|| {
+            client
+                .pending_permission_requests()
+                .expect("pending permissions")
+                .iter()
+                .all(|pending| pending.request_id != request.request_id)
+        })
+        .await;
+        let permission_cleared = true;
+
+        let (restored, _binding, _notices, transcript) = client
+            .restore_session_in_current_workspace(&created_id)
+            .await
+            .expect("restore session");
+
+        fixture.state.insert_session(
+            "orphan-session".to_string(),
+            "orphan".to_string(),
+            "agentic".to_string(),
+        );
+        client
+            .delete_session("orphan-session")
+            .await
+            .expect("delete uncontrolled session");
+        let remaining_session_count = client
+            .list_sessions()
+            .await
+            .expect("list after delete")
+            .len();
+
+        ScenarioSnapshot {
+            mode_ids: modes.into_iter().map(|mode| mode.id).collect(),
+            created_session_agent_type: created_session.agent_type.clone(),
+            listed_session_count: 1,
+            renamed_session_name: renamed_session.map(|session| session.session_name),
+            turn_has_id: !turn_id.is_empty(),
+            settlement_ok: true,
+            cancellation_requested,
+            permission_seen,
+            permission_cleared,
+            restore_session_agent_type: Some(restored.agent_type),
+            restore_transcript_messages: transcript.messages.len(),
+            event_states,
+            remaining_session_count,
+        }
+    }
+
+    #[tokio::test]
+    async fn embedded_and_shared_clients_are_behaviorally_equivalent() {
+        let root = tempfile::tempdir().expect("workspace root");
+        let workspace = dunce::canonicalize(root.path()).expect("canonical workspace");
+
+        let embedded_fixture = Fixture::new(&workspace);
+        let embedded_client = embedded_fixture.embedded_client();
+        let embedded = observe_backend(&embedded_client, &embedded_fixture).await;
+
+        let shared_fixture = Fixture::new(&workspace);
+        let (_root, shared_client, _server_task) = shared_client(&shared_fixture).await;
+        let shared = observe_backend(&shared_client, &shared_fixture).await;
+
+        assert_eq!(embedded, shared);
+        assert_eq!(
+            embedded.mode_ids,
+            ["agentic".to_string(), "workspace-plan".to_string()]
+        );
+        assert_eq!(embedded.created_session_agent_type, "agentic");
+        assert_eq!(embedded.listed_session_count, 1);
+        assert_eq!(
+            embedded.renamed_session_name.as_deref(),
+            Some("renamed-session")
+        );
+        assert!(embedded.turn_has_id);
+        assert!(embedded.settlement_ok);
+        assert!(embedded.cancellation_requested);
+        assert!(embedded.permission_seen);
+        assert!(embedded.permission_cleared);
+        assert_eq!(
+            embedded.restore_session_agent_type.as_deref(),
+            Some("agentic")
+        );
+        assert_eq!(embedded.restore_transcript_messages, 0);
+        assert_eq!(embedded.event_states, ["first", "second"]);
+        assert_eq!(embedded.remaining_session_count, 1);
+    }
+
+    #[tokio::test]
+    async fn embedded_and_shared_clients_preserve_outcome_unknown() {
+        let root = tempfile::tempdir().expect("workspace root");
+        let workspace = dunce::canonicalize(root.path()).expect("canonical workspace");
+
+        for shared in [false, true] {
+            let fixture = Fixture::new(&workspace);
+            let (_root, client, _server_task);
+            if shared {
+                let tuple = shared_client(&fixture).await;
+                _root = tuple.0;
+                client = tuple.1;
+                _server_task = tuple.2;
+            } else {
+                _root = tempfile::tempdir().expect("unused root");
+                client = fixture.embedded_client();
+                _server_task = tokio::spawn(async {});
+            }
+
+            let session_id = client
+                .create_new_session("agentic")
+                .await
+                .expect("create session");
+            let turn_id = client
+                .send_message("hello".to_string(), "agentic")
+                .await
+                .expect("send message");
+            fixture.state.settlement_outcomes.lock().unwrap().insert(
+                turn_id.clone(),
+                Some(PortError::new(
+                    PortErrorKind::OutcomeUnknown,
+                    "fixture settlement outcome is unknown",
+                )),
+            );
+
+            let error = client
+                .wait_for_turn_settlement(&session_id, &turn_id, 100)
+                .await
+                .expect_err("unknown settlement must surface");
+            assert!(matches!(
+                error,
+                RuntimeError::Port(PortError {
+                    kind: PortErrorKind::OutcomeUnknown,
+                    ..
+                })
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_handler_rejects_remote_lineage_scope() {
+        let root = tempfile::tempdir().expect("workspace root");
+        let workspace = dunce::canonicalize(root.path()).expect("canonical workspace");
+        let fixture = Fixture::new(&workspace);
+        let (_root, client, _server_task) = shared_backend(&fixture).await;
+
+        let create_request = AgentSessionCreateRequest {
+            session_name: "remote-unsupported-session".to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),
+            project_workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),
+            execution_target: Some(SessionExecutionTarget::local(
+                fixture.workspace.to_string_lossy().into_owned(),
+            )),
+            workspace_id: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            model_id: None,
+            metadata: serde_json::Map::new(),
+        };
+        let created = client
+            .request(RuntimeIpcOperation::CreateSession {
+                request: create_request,
+            })
+            .await
+            .expect("create session over shared handler");
+        let RuntimeIpcOperationResult::SessionCreated { session } = created else {
+            panic!("unexpected create session result");
+        };
+
+        let response = client
+            .request(RuntimeIpcOperation::GetSessionLineage {
+                request: bitfun_agent_runtime::sdk::AgentSessionLineageRequest {
+                    workspace_path: fixture.workspace.to_string_lossy().into_owned(),
+                    anchor_session_id: session.session_id,
+                    remote_connection_id: Some("remote-connection".to_string()),
+                    remote_ssh_host: None,
+                },
+            })
+            .await;
+        match response {
+            Err(RuntimeIpcClientError::Remote(error))
+                if error.code == RuntimeIpcErrorCode::SessionMismatch => {}
+            other => panic!("remote lineage scope must fail closed, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_disconnect_projects_system_error_event() {
+        let root = tempfile::tempdir().expect("workspace root");
+        let workspace = dunce::canonicalize(root.path()).expect("canonical workspace");
+        let fixture = Fixture::new(&workspace);
+        let (_root, client, server_task) = shared_client(&fixture).await;
+        let mut events = client
+            .subscribe_events()
+            .expect("shared event subscription");
+
+        server_task.abort();
+
+        let envelope = tokio::time::timeout(Duration::from_secs(2), events.recv())
+            .await
+            .expect("disconnect event timeout")
+            .expect("disconnect event received");
+        assert!(matches!(
+            envelope.event,
+            AgenticEvent::SystemError {
+                recoverable: false,
+                ..
+            }
+        ));
     }
 }

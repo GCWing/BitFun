@@ -1,12 +1,12 @@
-use bitfun_app_server_protocol::model::{ListModelsResponse, ModelSummary};
-use bitfun_core::service::config::AIConfig;
+use std::collections::HashMap;
 
-fn resolve_model_selector(ai_config: &AIConfig, selector: &str) -> Option<String> {
-    match selector.trim() {
-        "" | "auto" | "default" => ai_config.resolve_model_selection("primary"),
-        selector => ai_config.resolve_model_selection(selector),
-    }
-}
+use anyhow::{anyhow, Result};
+use bitfun_core::service::config::AIConfig;
+use bitfun_core_types::model::{ModelListProjection, ModelMutation, ModelSummary, SecretUpdate};
+
+pub(crate) use bitfun_core::service::config::model_projection::{
+    model_catalog_projection, model_edit_projection, model_list_projection, resolve_model_selector,
+};
 
 /// Resolve the shared future-mode selector to the concrete enabled model shown
 /// by CLI model pickers and status surfaces.
@@ -29,7 +29,7 @@ pub(crate) fn resolve_session_model_display_id(
 }
 
 pub(crate) fn resolve_tui_model_id(
-    catalog: &ListModelsResponse,
+    catalog: &ModelListProjection,
     session_selector: Option<&str>,
 ) -> Option<String> {
     let selector = session_selector
@@ -68,6 +68,72 @@ pub(crate) fn tui_model_display_name(model: &ModelSummary) -> String {
         raw_name
     };
     format!("{} / {}", model.model_name, provider)
+}
+
+pub(crate) fn model_from_mutation(
+    mutation: ModelMutation,
+    existing: Option<bitfun_core::service::config::AIModelConfig>,
+) -> Result<bitfun_core::service::config::AIModelConfig> {
+    let current = existing.unwrap_or_default();
+    let api_key = secret_update_value(mutation.api_key, Some(current.api_key));
+    let custom_headers = headers_update(mutation.custom_headers, current.custom_headers)?;
+    let custom_request_body =
+        string_update(mutation.custom_request_body, current.custom_request_body);
+    Ok(bitfun_core::service::config::AIModelConfig {
+        id: mutation.id,
+        name: mutation.name,
+        provider: mutation.provider,
+        model_name: mutation.model_name,
+        base_url: mutation.base_url,
+        request_url: current.request_url,
+        api_key,
+        context_window: mutation.context_window,
+        max_tokens: mutation.max_tokens,
+        temperature: current.temperature,
+        top_p: current.top_p,
+        enabled: mutation.enabled,
+        category: current.category,
+        capabilities: current.capabilities,
+        recommended_for: current.recommended_for,
+        metadata: current.metadata,
+        reasoning: mutation.reasoning,
+        inline_think_in_text: mutation.inline_think_in_text,
+        custom_headers,
+        custom_headers_mode: mutation.custom_headers_mode.or(current.custom_headers_mode),
+        skip_ssl_verify: mutation.skip_ssl_verify,
+        custom_request_body,
+        custom_request_body_mode: current.custom_request_body_mode,
+        auth: current.auth,
+    })
+}
+
+fn secret_update_value(update: Option<SecretUpdate>, existing: Option<String>) -> String {
+    match update.unwrap_or(SecretUpdate::Preserve) {
+        SecretUpdate::Preserve => existing.unwrap_or_default(),
+        SecretUpdate::Replace(value) => value,
+        SecretUpdate::Clear => String::new(),
+    }
+}
+
+fn headers_update(
+    update: Option<SecretUpdate>,
+    existing: Option<HashMap<String, String>>,
+) -> Result<Option<HashMap<String, String>>> {
+    match update.unwrap_or(SecretUpdate::Preserve) {
+        SecretUpdate::Preserve => Ok(existing),
+        SecretUpdate::Clear => Ok(None),
+        SecretUpdate::Replace(value) => serde_json::from_str(&value)
+            .map(Some)
+            .map_err(|_| anyhow!("Custom headers must be valid JSON")),
+    }
+}
+
+fn string_update(update: Option<SecretUpdate>, existing: Option<String>) -> Option<String> {
+    match update.unwrap_or(SecretUpdate::Preserve) {
+        SecretUpdate::Preserve => existing,
+        SecretUpdate::Clear => None,
+        SecretUpdate::Replace(value) => (!value.is_empty()).then_some(value),
+    }
 }
 
 #[cfg(test)]

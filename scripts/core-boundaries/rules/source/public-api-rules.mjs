@@ -807,6 +807,7 @@ export const externalSourceContractPublicApiEntries = [
   'ExternalPromptCommandDefinitionSummary',
   'ExternalPromptCommandSummary',
   'ExternalSourcePublicSnapshot',
+  'ExternalSourceConflictPreferences',
   'ExternalSourceHostCapabilities',
 ].map((symbol) =>
   externalSourceEntry(

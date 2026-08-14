@@ -4268,25 +4268,11 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/interfaces/app-server/src/management/service.rs',
+      path: 'src/apps/cli/src/modes/chat/worktree.rs',
       contracts: [
-        'pub struct AppManagementService',
-        'impl AppManagementService',
-        'AppManagementCapabilities::available\\(\\)',
-      ],
-    },
-    {
-      path: 'src/apps/cli/src/shared_tui_backend.rs',
-      contracts: [
-        'management: Arc<AppManagementService>',
-        'fn management_service',
-        'fn set_management_scope_from_binding',
-        '\\.list_models\\(ListModelsRequest \\{\\}\\)',
-        '\\.list_skills\\(request\\)',
-        '\\.list_subagents\\(request\\)',
-        '\\.list_mcp_servers\\(request\\)',
-        'shared_management_capabilities_follow_the_local_management_service',
-        'remote_workspace_cannot_use_the_local_management_service',
+        'WorktreeService::bind_session',
+        'is_remote_workspace',
+        'does not fall back to controller-local services',
       ],
     },
     {
@@ -4294,9 +4280,9 @@ export function runManifestParserSelfTest({
       contracts: [
         'show_available_subagent_list',
         'show_subagent_config_selector',
-        'agent.list_subagents',
+        'get_subagents_for_query',
         'SubagentSummary',
-        'agent\\s*\\.set_subagent_enabled',
+        'update_subagent_override',
       ],
     },
     {
@@ -5592,6 +5578,20 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
   const runtimeIpcOperationRule = forbiddenContentRules.find(
     (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/src/operation.rs',
   );
+  const cliManifestRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/apps/cli/Cargo.toml',
+  );
+  const cliManifestPattern = cliManifestRule?.patterns[0]?.regex;
+  if (
+    !cliManifestPattern ||
+    !cliManifestPattern.test('bitfun-app-server = { path = "..." }') ||
+    !cliManifestPattern.test('bitfun-app-server-client = { path = "..." }') ||
+    !cliManifestPattern.test('bitfun-tui-management = { path = "..." }') ||
+    !cliManifestPattern.test('bitfun-app-server-protocol = { path = "..." }') ||
+    cliManifestPattern.test('bitfun-agent-runtime-ipc = { path = "..." }')
+  ) {
+    throw new Error('CLI manifest guard must forbid App Server, wire DTOs, and shared TUI management implementations while allowing contracts and Runtime IPC');
+  }
   const runtimeIpcOperationPattern = runtimeIpcOperationRule?.patterns[0]?.regex;
   if (
     !runtimeIpcOperationPattern ||

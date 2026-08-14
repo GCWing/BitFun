@@ -68,22 +68,23 @@ pub use bitfun_runtime_ports::{
     AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest, AgentInputAttachment,
     AgentInteractionResponsePort, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
     AgentLocalCommandTurnRecordRequest, AgentLocalCommandTurnRecordResult,
-    AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
-    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
-    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionComposerUpdate,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
-    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLifecycleStatus,
-    AgentSessionLineageCancellationRequest, AgentSessionLineageEntry,
-    AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
-    AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
-    AgentSessionModelPort, AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertPort,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome,
-    AgentSessionRollbackToTurnRequest, AgentSessionSummary, AgentSessionUsagePort,
-    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
-    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentMessageWorkspaceReferencesRequest, AgentModeCatalogEntry, AgentModeCatalogPort,
+    AgentModeCatalogQuery, AgentSessionArchiveRequest, AgentSessionArchiveStateRequest,
+    AgentSessionClosePort, AgentSessionCompactionPort, AgentSessionCompactionRequest,
+    AgentSessionCompactionResult, AgentSessionComposerUpdate, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
+    AgentSessionForkResult, AgentSessionLifecycleStatus, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageEntry, AgentSessionLineageInspection, AgentSessionLineagePort,
+    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
+    AgentSessionListRequest, AgentSessionManagementPort, AgentSessionModePort,
+    AgentSessionModeUpdateRequest, AgentSessionModelPort, AgentSessionModelSelection,
+    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
+    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
+    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
@@ -310,6 +311,11 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_mode_catalog(mut self, port: Arc<dyn AgentModeCatalogPort>) -> Self {
+        self.inner = self.inner.with_mode_catalog(port);
+        self
+    }
+
     pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError> {
         self.inner.build().map(|inner| AgentRuntime { inner })
     }
@@ -425,6 +431,13 @@ impl AgentRuntime {
 
     pub fn registered_agent_ids(&self, query: RuntimeAgentRegistryQuery<'_>) -> Vec<String> {
         self.inner.registered_agent_ids(query)
+    }
+
+    pub async fn list_agent_modes(
+        &self,
+        query: AgentModeCatalogQuery,
+    ) -> Result<Vec<AgentModeCatalogEntry>, RuntimeError> {
+        self.inner.list_agent_modes(query).await
     }
 
     pub async fn create_session(

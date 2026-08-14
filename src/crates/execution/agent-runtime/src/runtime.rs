@@ -15,15 +15,16 @@ use bitfun_runtime_ports::{
     AgentInputAttachment, AgentInteractionResponsePort, AgentLifecycleDeliveryPort,
     AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
     AgentLocalCommandTurnRecordResult, AgentMessageWorkspaceReferencesRequest,
-    AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
-    AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
-    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
-    AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
-    AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
-    AgentSessionModelPort, AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentModeCatalogEntry, AgentModeCatalogPort, AgentModeCatalogQuery, AgentSessionArchiveRequest,
+    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
+    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
+    AgentSessionForkResult, AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
+    AgentSessionLineagePort, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionManagementPort,
+    AgentSessionModePort, AgentSessionModeUpdateRequest, AgentSessionModelPort,
+    AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
     AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
     AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
     AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
@@ -211,6 +212,7 @@ pub struct AgentRuntime {
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
+    mode_catalog: Option<Arc<dyn AgentModeCatalogPort>>,
     plugin_runtime: PluginRuntimeBinding,
 }
 
@@ -435,6 +437,7 @@ pub struct AgentRuntimeBuilder {
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
+    mode_catalog: Option<Arc<dyn AgentModeCatalogPort>>,
     plugin_runtime: PluginRuntimeBinding,
 }
 
@@ -618,6 +621,11 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_mode_catalog(mut self, port: Arc<dyn AgentModeCatalogPort>) -> Self {
+        self.mode_catalog = Some(port);
+        self
+    }
+
     pub fn with_plugin_runtime(mut self, binding: PluginRuntimeBinding) -> Self {
         self.plugin_runtime = binding;
         self
@@ -654,6 +662,7 @@ impl AgentRuntimeBuilder {
             harness_registry,
             hook_registry,
             agent_registry,
+            mode_catalog,
             plugin_runtime,
         } = self;
 
@@ -691,6 +700,7 @@ impl AgentRuntimeBuilder {
             harness_registry,
             hook_registry,
             agent_registry,
+            mode_catalog,
             plugin_runtime,
         })
     }
@@ -973,6 +983,23 @@ impl AgentRuntime {
             .as_ref()
             .map(|registry| registry.agent_ids(query))
             .unwrap_or_default()
+    }
+
+    pub async fn list_agent_modes(
+        &self,
+        query: AgentModeCatalogQuery,
+    ) -> Result<Vec<AgentModeCatalogEntry>, RuntimeError> {
+        self.mode_catalog
+            .as_ref()
+            .ok_or_else(|| {
+                RuntimeError::Port(PortError::new(
+                    PortErrorKind::NotAvailable,
+                    "agent mode catalog port is not registered",
+                ))
+            })?
+            .list_modes(query)
+            .await
+            .map_err(RuntimeError::from)
     }
 
     pub async fn create_session(

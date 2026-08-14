@@ -6,10 +6,11 @@
 //! implementations until a reviewed port/provider migration proves equivalence.
 
 use bitfun_agent_runtime::sdk::{
-    AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort,
-    AgentSessionModePort, AgentSessionModelPort, AgentSessionRestorePort, AgentSessionRevertPort,
-    AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
+    AgentEventSource, AgentInteractionResponsePort, AgentModeCatalogEntry, AgentModeCatalogPort,
+    AgentModeCatalogQuery, AgentRuntime, AgentRuntimeBuilder, AgentSessionCompactionPort,
+    AgentSessionForkPort, AgentSessionLineagePort, AgentSessionModePort, AgentSessionModelPort,
+    AgentSessionRestorePort, AgentSessionRevertPort, AgentSessionUsagePort,
+    AgentTurnSettlementPort, RuntimeError,
 };
 #[cfg(feature = "remote-connect")]
 use bitfun_agent_runtime::sdk::{
@@ -55,6 +56,7 @@ use bitfun_services_integrations::remote_connect::{
 };
 #[cfg(feature = "remote-connect")]
 use log::{debug, info};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -474,6 +476,7 @@ fn core_agent_runtime_builder(
 ) -> Result<AgentRuntimeBuilder, String> {
     let agent_registry: Arc<dyn bitfun_agent_runtime::sdk::RuntimeAgentRegistry> =
         crate::agentic::agents::get_agent_registry();
+    let mode_catalog: Arc<dyn AgentModeCatalogPort> = Arc::new(CoreAgentModeCatalogPort);
     Ok(AgentRuntimeBuilder::new()
         .with_submission_port(submission)
         .with_session_management_port(session_management)
@@ -489,7 +492,55 @@ fn core_agent_runtime_builder(
         .with_cancellation_port(cancellation)
         .with_interaction_response_port(interaction_response)
         .with_permission_request_manager(crate::product_runtime::core_permission_request_manager()?)
-        .with_agent_registry(agent_registry))
+        .with_agent_registry(agent_registry)
+        .with_mode_catalog(mode_catalog))
+}
+
+struct CoreAgentModeCatalogPort;
+
+#[async_trait::async_trait]
+impl AgentModeCatalogPort for CoreAgentModeCatalogPort {
+    async fn list_modes(
+        &self,
+        query: AgentModeCatalogQuery,
+    ) -> bitfun_runtime_ports::PortResult<Vec<AgentModeCatalogEntry>> {
+        let workspace = query.workspace_root.as_deref().map(Path::new);
+        #[cfg(feature = "external-sources")]
+        let external_supported = if query.include_external {
+            if let Some(workspace) = workspace {
+                !crate::service::remote_ssh::workspace_state::is_remote_path(
+                    &workspace.to_string_lossy(),
+                )
+                .await
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        #[cfg(not(feature = "external-sources"))]
+        let external_supported = false;
+        #[cfg(feature = "external-sources")]
+        if external_supported {
+            if let Err(error) =
+                crate::external_sources::ensure_external_source_workspace_snapshot(workspace).await
+            {
+                log::warn!("Failed to initialize external agent sources for mode catalog: {error}");
+            }
+        }
+        let modes = crate::agentic::agents::get_agent_registry()
+            .get_modes_info_for_workspace(workspace, external_supported)
+            .await;
+        Ok(modes
+            .into_iter()
+            .map(|mode| AgentModeCatalogEntry {
+                id: mode.id,
+                description: mode.description,
+                model_id: mode.model,
+                is_external: mode.source == crate::agentic::agents::AgentSource::External,
+            })
+            .collect())
+    }
 }
 
 #[derive(Clone)]

@@ -174,13 +174,12 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
         "account state must live in the shared owner while CLI keeps narrow Host adapters"
     );
     assert!(
-        STARTUP_PAGE.contains("self.agent.account_snapshot()")
-            && STARTUP_PAGE.contains("self.agent.account_login(")
-            && STARTUP_PAGE.contains("self.agent.account_finalize_login(")
-            && STARTUP_PAGE.contains("self.agent.settings_sync_start(")
-            && STARTUP_PAGE.contains("self.agent.settings_sync_snapshot()")
-            && STARTUP_PAGE.contains("self.agent.settings_sync_cancel()"),
-        "startup account and settings-sync operations must use the typed TUI client"
+        STARTUP_PAGE.contains("self.account_runtime")
+            && STARTUP_PAGE.contains("login_with_credentials")
+            && STARTUP_PAGE.contains("finalize_login_after_sync_choice")
+            && STARTUP_PAGE.contains("start_auto_sync_background")
+            && STARTUP_PAGE.contains("account_snapshot_projection"),
+        "startup account and settings-sync operations must call AccountRuntime directly"
     );
     assert!(
         !CORE_RUNTIME_SERVICES.contains("pub fn persistence_manager"),
@@ -211,22 +210,22 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
 }
 
 #[test]
-fn embedded_account_management_adapts_the_shared_runtime_directly() {
-    const EMBEDDED_APP_SERVER: &str = include_str!("../../src/embedded_app_server.rs");
+fn embedded_account_management_uses_the_account_owner_directly() {
     const CLI_MAIN: &str = include_str!("../../src/main.rs");
-    const MANAGEMENT: &str =
+    const STARTUP_PAGE: &str = include_str!("../../src/ui/startup.rs");
+    const APP_SERVER_MANAGEMENT: &str =
         include_str!("../../../../crates/interfaces/app-server/src/management.rs");
-    const MANAGEMENT_SERVICE: &str =
-        include_str!("../../../../crates/interfaces/app-server/src/management/service.rs");
 
     assert!(
-        EMBEDDED_APP_SERVER.contains("runtime.account_runtime().clone()")
-            && MANAGEMENT_SERVICE.contains("Option<Arc<AccountRuntime>>")
-            && MANAGEMENT_SERVICE.contains("login_with_credentials")
-            && !MANAGEMENT.contains("AccountManagementHost")
-            && !CLI_MAIN.contains("mod tui_account_management")
-            && !CLI_MAIN.contains("mod account_sync"),
-        "Embedded account management must adapt AccountRuntime without a management Host trait"
+        !CLI_MAIN.contains("surface_services")
+            && CLI_MAIN.contains("runtime.account_runtime().clone()")
+            && STARTUP_PAGE.contains("Option<Arc<AccountRuntime>>")
+            && STARTUP_PAGE.contains("login_with_credentials")
+            && STARTUP_PAGE.contains("finalize_login_after_sync_choice")
+            && APP_SERVER_MANAGEMENT.contains("pub use owner::AppManagementService")
+            && !CLI_MAIN.contains("mod tui_host")
+            && !CLI_MAIN.contains("mod embedded_tui_backend"),
+        "Embedded TUI must use AccountRuntime directly without surface service or App Server wiring"
     );
 }
 
@@ -296,55 +295,70 @@ fn local_workspace_snapshot_port_does_not_expand_the_agent_runtime_sdk() {
 }
 
 #[test]
-fn interactive_tui_session_client_uses_only_the_app_server_boundary() {
+fn interactive_tui_separates_runtime_deployment_from_domain_services() {
     const AGENT_MODULE: &str = include_str!("../../src/agent/mod.rs");
-    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
-    const TUI_BACKEND: &str = include_str!("../../src/tui_backend.rs");
+    const CLI_MANIFEST: &str = include_str!("../../Cargo.toml");
+    const CHAT_MODE: &str = include_str!("../../src/modes/chat.rs");
+    const RUNTIME_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
 
     assert!(
         !AGENT_MODULE.contains("trait Agent"),
-        "a one-implementation private trait must not obscure the TUI backend boundary"
+        "a one-implementation private trait must not obscure the Runtime boundary"
     );
     assert!(
-        TUI_CLIENT.contains("backend: Arc<dyn TuiBackend>")
-            && !TUI_CLIENT.contains("bitfun_agent_runtime::")
-            && !TUI_CLIENT.contains("bitfun_agent_runtime_ipc")
-            && !TUI_CLIENT.contains("CoreAgentRuntimeCompatibility"),
-        "the interactive TUI session client must depend only on TuiBackend contracts"
+        CHAT_MODE.contains("agent: Arc<CliAgentRuntimeClient>")
+            && CHAT_MODE.contains("account_runtime: Option<Arc<AccountRuntime>>")
+            && !CHAT_MODE.contains("Arc<dyn")
+            && !CHAT_MODE.contains("TuiAgentClient")
+            && !CHAT_MODE.contains("surface_services"),
+        "interactive controllers must depend on the Runtime client and call existing owners directly"
     );
     assert!(
-        TUI_BACKEND.contains("pub(crate) trait TuiBackend")
-            && TUI_BACKEND.contains("AppServerClient")
-            && !TUI_BACKEND.contains("bitfun_agent_runtime")
-            && !TUI_BACKEND.contains("use bitfun_core::")
-            && TUI_CLIENT.contains("use crate::tui_backend::{TuiBackend, TuiBackendError"),
-        "TuiBackend must remain CLI-local and depend only on App Server client contracts"
+        RUNTIME_CLIENT.contains("pub(crate) struct CliAgentRuntimeClient")
+            && RUNTIME_CLIENT.contains("enum CliAgentRuntimeBackend")
+            && RUNTIME_CLIENT.contains("Embedded(AgentRuntime)")
+            && RUNTIME_CLIENT.contains("Shared(RuntimeIpcClient)")
+            && RUNTIME_CLIENT.contains("fn is_remote_workspace"),
+        "CliAgentRuntimeClient must own Embedded/Shared deployment and expose Remote workspace scope"
     );
-    for backend_operation in [
-        ".sync_session(",
-        ".submit_dialog_turn(",
-        ".respond_permission(",
-        ".fork_session(",
-        ".session_usage(",
-        ".wait_for_settlement(",
+    assert!(
+        !CLI_MANIFEST.contains("bitfun-app-server =")
+            && !CLI_MANIFEST.contains("bitfun-app-server-client =")
+            && !CLI_MANIFEST.contains("bitfun-app-server-protocol")
+            && !CLI_MANIFEST.contains("bitfun-tui-management =")
+            && !CHAT_MODE.contains("trait ModelService")
+            && !CHAT_MODE.contains("trait ExternalSourceService"),
+        "CLI must consume stable contracts and must not depend on App Server wire DTOs or a shared TUI management crate"
+    );
+    for runtime_operation in [
+        "pub(crate) async fn list_sessions(",
+        "pub(crate) async fn respond_permission(",
+        "pub(crate) async fn fork_current_session(",
+        "pub(crate) async fn generate_session_usage_report(",
+        "pub(crate) async fn wait_for_turn_settlement(",
     ] {
         assert!(
-            TUI_CLIENT.contains(backend_operation),
-            "interactive session client must route {backend_operation} through TuiBackend"
+            RUNTIME_CLIENT.contains(runtime_operation),
+            "interactive Runtime operation must remain on CliAgentRuntimeClient: {runtime_operation}"
         );
     }
+    assert!(
+        RUNTIME_CLIENT.contains("CliAgentRuntimeBackend::Embedded(runtime)")
+            && RUNTIME_CLIENT.contains("CliAgentRuntimeBackend::Shared(client)"),
+        "Runtime operations must retain explicit Embedded and Shared deployment mappings"
+    );
 }
 
 #[test]
-fn chat_context_reload_uses_the_same_tui_backend_as_session_operations() {
+fn chat_context_reload_uses_the_same_runtime_client_as_session_operations() {
     const CHAT_MODE: &str = include_str!("../../src/modes/chat.rs");
     const CHAT_CAPABILITIES: &str = include_str!("../../src/modes/chat/capabilities.rs");
-    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
+    const RUNTIME_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
 
     assert!(
         !CHAT_MODE.contains("context_reload")
             && CHAT_CAPABILITIES.contains("self.agent.reload_context(request)"),
-        "ChatMode must submit context reload through its existing TUI session client"
+        "ChatMode must submit context reload through CliAgentRuntimeClient"
     );
     assert!(
         !CHAT_CAPABILITIES.contains("is_shared()")
@@ -353,14 +367,14 @@ fn chat_context_reload_uses_the_same_tui_backend_as_session_operations() {
         "TUI capability code must not branch context reload by Runtime deployment"
     );
     assert!(
-        TUI_CLIENT.contains(".reload_context(ReloadContextRequest(request))"),
-        "the TUI session client must delegate reload to TuiBackend"
+        RUNTIME_CLIENT.contains("pub(crate) async fn reload_context"),
+        "CliAgentRuntimeClient must own context reload"
     );
 }
 
 #[test]
-fn tui_client_covers_interactive_permission_operations() {
-    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
+fn runtime_client_covers_interactive_permission_operations() {
+    const RUNTIME_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
 
     for sdk_operation in [
         "subscribe_permission_requests",
@@ -368,23 +382,22 @@ fn tui_client_covers_interactive_permission_operations() {
         "respond_permission",
     ] {
         assert!(
-            TUI_CLIENT.contains(sdk_operation),
-            "interactive TUI operation {sdk_operation} must stay behind TuiAgentClient"
+            RUNTIME_CLIENT.contains(sdk_operation),
+            "interactive TUI operation {sdk_operation} must stay on CliAgentRuntimeClient"
         );
     }
 }
 
 #[test]
-fn interactive_tui_agent_operations_stay_behind_app_server_backend() {
+fn interactive_tui_operations_use_runtime_and_domain_services() {
     const STARTUP_PAGE: &str = include_str!("../../src/ui/startup.rs");
     const CHAT_MODE: &str = include_str!("../../src/modes/chat.rs");
     const CHAT_RUN: &str = include_str!("../../src/modes/chat/run.rs");
     const CHAT_COMMANDS: &str = include_str!("../../src/modes/chat/commands.rs");
     const CHAT_INPUT: &str = include_str!("../../src/modes/chat/input.rs");
     const CHAT_SELECTION: &str = include_str!("../../src/modes/chat/selection.rs");
-    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
-    const SHARED_TUI_BACKEND: &str = include_str!("../../src/shared_tui_backend.rs");
-    const EMBEDDED_APP_SERVER: &str = include_str!("../../src/embedded_app_server.rs");
+    const CHAT_EXTERNAL_SOURCES: &str = include_str!("../../src/modes/chat/external_sources.rs");
+    const RUNTIME_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
     const SHARED_RUNTIME: &str = include_str!("../../src/shared_runtime.rs");
     const CLI_MAIN: &str = include_str!("../../src/main.rs");
     const CLI_CARGO: &str = include_str!("../../Cargo.toml");
@@ -404,52 +417,59 @@ fn interactive_tui_agent_operations_stay_behind_app_server_backend() {
     ] {
         assert!(
             !source.contains(".agent_runtime()"),
-            "{path} must route Agent operations through TuiAgentClient"
+            "{path} must route Agent operations through CliAgentRuntimeClient"
         );
     }
     assert!(
-        CHAT_MODE.contains("Arc<TuiAgentClient>") && STARTUP_PAGE.contains("Arc<TuiAgentClient>"),
-        "interactive chat and startup must use the backend-neutral TUI session client"
+        CHAT_MODE.contains("Arc<CliAgentRuntimeClient>")
+            && STARTUP_PAGE.contains("Arc<CliAgentRuntimeClient>")
+            && !CHAT_MODE.contains("Arc<dyn")
+            && !STARTUP_PAGE.contains("Arc<dyn"),
+        "interactive chat and startup must use Runtime plus existing owners without service wrappers"
     );
     assert!(
         !CLI_CARGO.contains("bitfun-sdk-host") && CLI_CARGO.contains("bitfun-agent-runtime-ipc"),
         "Shared TUI must use the private Runtime IPC adapter without making CLI depend on SDK Host"
     );
     assert!(
-        SHARED_TUI_BACKEND.contains("RuntimeIpcClient")
-            && !TUI_CLIENT.contains("RuntimeIpcClient")
+        RUNTIME_CLIENT.contains("RuntimeIpcClient")
+            && RUNTIME_CLIENT.contains("CliAgentRuntimeBackend::Shared(client)")
             && !STARTUP_PAGE.contains("RuntimeIpcClient")
             && !CHAT_MODE.contains("RuntimeIpcClient"),
-        "Shared IPC must remain in the CLI Host adapter instead of leaking into TUI clients or controllers"
+        "Shared IPC must remain in the common CLI Runtime client instead of leaking into TUI controllers"
     );
     assert!(
-        SHARED_TUI_BACKEND
-            .contains("RuntimeIpcOperation::UpdateSessionMode { request: request.0 }")
+        RUNTIME_CLIENT.contains("RuntimeIpcOperation::UpdateSessionMode { request }")
             && SHARED_RUNTIME.contains("RuntimeIpcOperation::UpdateSessionMode { request }")
             && SHARED_RUNTIME.contains(".update_session_mode(request)"),
-        "Shared Agent mode updates must reuse the Runtime port through the private IPC adapter"
+        "Shared Agent mode updates must reuse CliAgentRuntimeClient through private Runtime IPC"
     );
     assert!(
-        SHARED_TUI_BACKEND
-            .contains("RuntimeIpcOperation::UpdateSessionModel { request: request.0 }")
+        RUNTIME_CLIENT.contains("RuntimeIpcOperation::UpdateSessionModel { request }")
             && SHARED_RUNTIME.contains("RuntimeIpcOperation::UpdateSessionModel { request }")
             && SHARED_RUNTIME.contains(".update_session_model(request)"),
-        "Shared model updates must reuse the Runtime port through the private IPC adapter"
+        "Shared model updates must reuse CliAgentRuntimeClient through private Runtime IPC"
     );
     assert!(
-        TUI_CLIENT.contains(".external_source_snapshot(ExternalSourceSnapshotRequest")
-            && TUI_CLIENT.contains(".external_source_control(ExternalSourceControlRequest")
-            && TUI_CLIENT.contains(".external_source_review(ExternalSourceReviewRequest")
-            && CHAT_COMMANDS.contains("self.agent.external_source_snapshot(false)")
-            && !CHAT_COMMANDS.contains("bitfun_core::external_sources"),
-        "TUI external-source controllers must route reads and mutations through the typed backend"
+        CHAT_EXTERNAL_SOURCES.contains("apply_external_source_control_action")
+            && CHAT_EXTERNAL_SOURCES.contains("set_external_tool_target_decision")
+            && CHAT_RUN.contains("subscribe_external_source_updates")
+            && CHAT_COMMANDS.contains("bitfun_core::external_sources")
+            && !CHAT_COMMANDS.contains("external_source_service"),
+        "TUI external-source controllers must call the existing owner API directly"
     );
     assert!(
         CHAT_COMMANDS.matches("if self.agent.is_shared()").count() >= 3
-            && EMBEDDED_APP_SERVER.contains("AppServerTuiBackend::new(client)")
+            && !CLI_MAIN.contains("surface_services")
+            && CLI_MAIN.contains("CliAgentRuntimeClient::new(")
+            && CLI_MAIN.contains("CliAgentRuntimeClient::new_shared(")
+            && !CLI_MAIN.contains("mod tui_backend")
+            && !CLI_MAIN.contains("mod shared_tui_backend")
+            && !CLI_MAIN.contains("mod embedded_tui_backend")
+            && !CLI_MAIN.contains("mod tui_runtime")
             && SHARED_RUNTIME.contains("RuntimeDeployment::Shared")
             && SHARED_RUNTIME.contains("process_manager::contain_current_process_tree"),
-        "Shared controls must stay terminal-safe while preserving Embedded recovery and one process Job owner"
+        "Embedded and Shared TUI must share CliAgentRuntimeClient while preserving the Shared v17 owner"
     );
     assert!(
         CLI_MAIN.contains("Cli::command()") && CLI_MAIN.contains("McpAction::Import"),
@@ -458,156 +478,89 @@ fn interactive_tui_agent_operations_stay_behind_app_server_backend() {
 }
 
 #[test]
-fn interactive_tui_hook_management_stays_behind_the_typed_backend() {
+fn interactive_tui_hook_management_calls_existing_owners_directly() {
     const CHAT_HOOKS: &str = include_str!("../../src/modes/chat/external_hooks.rs");
     const CHAT_NATIVE_HOOKS: &str = include_str!("../../src/modes/chat/native_hooks.rs");
-    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
-    const SHARED_TUI_BACKEND: &str = include_str!("../../src/shared_tui_backend.rs");
 
     for operation in [
-        "external_hook_snapshot",
-        "external_hook_plan",
-        "external_hook_apply",
-        "external_hook_mutate",
-        "native_hook_overview",
+        "external_hook_import_snapshot",
+        "plan_external_hook_import",
+        "apply_external_hook_import",
+        "mutate_external_hook_import",
+        "native_hooks::overview",
     ] {
         assert!(
-            TUI_CLIENT.contains(operation) && CHAT_HOOKS.contains(&format!(".{operation}(")),
-            "TUI Hook operation {operation} must route through TuiAgentClient"
-        );
-    }
-    for direct_owner in [
-        "bitfun_core::external_hooks",
-        "bitfun_core::native_hooks",
-        "bitfun_core::external_hook_import",
-        "crate::hook_import::mutate",
-    ] {
-        assert!(
-            !CHAT_HOOKS.contains(direct_owner) && !CHAT_NATIVE_HOOKS.contains(direct_owner),
-            "TUI Hook controllers must not reference {direct_owner}"
+            CHAT_HOOKS.contains(operation),
+            "TUI Hook operation {operation} must call its existing owner"
         );
     }
     assert!(
         CHAT_HOOKS.contains("expected_revision")
-            && SHARED_TUI_BACKEND.contains("NATIVE_HOOKS_CAPABILITY")
-            && SHARED_TUI_BACKEND.contains("EXTERNAL_HOOKS_CAPABILITY")
-            && SHARED_TUI_BACKEND.contains("does not fall back"),
+            && CHAT_NATIVE_HOOKS.contains("project_native_hook_overview")
+            && CHAT_HOOKS.contains("is_remote_workspace"),
         "Hook mutations must preserve stale-revision fencing and remote fail-closed routing"
     );
     assert!(
-        !CHAT_HOOKS.contains("post_call_hooks")
-            && !CHAT_NATIVE_HOOKS.contains("post_call_hooks")
-            && !TUI_CLIENT.contains("post_call_hooks"),
+        !CHAT_HOOKS.contains("post_call_hooks") && !CHAT_NATIVE_HOOKS.contains("post_call_hooks"),
         "compiled-in post-call Hooks must not enter the TUI management API"
     );
 }
 
 #[test]
-fn interactive_tui_worktrees_stay_behind_the_typed_backend() {
+fn interactive_tui_worktrees_call_existing_owners_directly() {
     const WORKTREE_CONTROLLER: &str = include_str!("../../src/modes/chat/worktree.rs");
-    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
-    const TUI_BACKEND: &str = include_str!("../../src/tui_backend.rs");
-    const SHARED_BACKEND: &str = include_str!("../../src/shared_tui_backend.rs");
-    const WORKTREE_MANAGEMENT: &str =
-        include_str!("../../../../crates/interfaces/app-server/src/management/worktree.rs");
-    const EMBEDDED_APP_SERVER: &str = include_str!("../../src/embedded_app_server.rs");
     const CLI_MAIN: &str = include_str!("../../src/main.rs");
 
     for direct_owner in [
         "GitService",
         "WorktreeService",
         "WorktreeSessionBindingRequest",
-        "bitfun_core::",
-        "self.agent.is_shared()",
     ] {
         assert!(
-            !WORKTREE_CONTROLLER.contains(direct_owner),
-            "Worktree controller must not reference {direct_owner}"
-        );
-    }
-    for operation in [
-        "worktree_repository_status",
-        "worktree_bind_session",
-        "worktree_release_session",
-    ] {
-        assert!(
-            WORKTREE_CONTROLLER.contains(operation)
-                && TUI_CLIENT.contains(operation)
-                && TUI_BACKEND.contains(operation)
-                && SHARED_BACKEND.contains(operation),
-            "Worktree operation {operation} must stay behind the typed TUI backend"
+            WORKTREE_CONTROLLER.contains(direct_owner),
+            "Worktree controller must call {direct_owner} directly"
         );
     }
     assert!(
-        WORKTREE_MANAGEMENT.contains("WorktreeService::bind_session")
-            && EMBEDDED_APP_SERVER.contains("load_for_local_host")
-            && !EMBEDDED_APP_SERVER.contains("LocalWorktreeManagement")
-            && !EMBEDDED_APP_SERVER.contains("tui_worktree_management"),
-        "the Embedded Host must enable the App Server's built-in local Worktree management"
+        WORKTREE_CONTROLLER.contains("WorktreeService::bind_session")
+            && WORKTREE_CONTROLLER.contains("GitService::resolve_worktree_repository")
+            && !CLI_MAIN.contains("mod tui_host"),
+        "the Embedded Host must call the Worktree and Git owners directly"
     );
     assert!(
-        SHARED_BACKEND.contains("WORKTREES_CAPABILITY")
-            && SHARED_BACKEND.contains("does not fall back")
-            && CLI_MAIN.contains("AppManagementService::load().await?"),
-        "Shared Worktree management must fail closed"
+        WORKTREE_CONTROLLER.contains("is_remote_workspace")
+            && WORKTREE_CONTROLLER.contains("does not fall back to controller-local services")
+            && !CLI_MAIN.contains("surface_services"),
+        "Worktree management must depend on Remote workspace scope instead of Runtime deployment"
     );
 }
 
 #[test]
-fn phase4_tui_management_boundaries_have_zero_legacy_owner_budget() {
-    const CHAT_ACCOUNT: &str = include_str!("../../src/modes/chat/account.rs");
-    const CHAT_HOOKS: &str = include_str!("../../src/modes/chat/external_hooks.rs");
-    const CHAT_HOOK_REVIEW: &str = include_str!("../../src/modes/chat/external_review.rs");
-    const CHAT_PROVIDER_MODELS: &str = include_str!("../../src/modes/chat/provider_models.rs");
-    const CHAT_WORKTREE: &str = include_str!("../../src/modes/chat/worktree.rs");
+fn tui_controllers_do_not_recreate_surface_service_wrappers() {
+    const CLI_MAIN: &str = include_str!("../../src/main.rs");
+    const CHAT_MODE: &str = include_str!("../../src/modes/chat.rs");
     const STARTUP: &str = include_str!("../../src/ui/startup.rs");
-    const BOUNDARY_RULES: &str =
-        include_str!("../../../../../scripts/core-boundaries/rules/tui-boundary-rules.mjs");
 
-    for (path, source, marker) in [
-        ("chat/account.rs", CHAT_ACCOUNT, "crate::account::"),
-        ("chat/account.rs", CHAT_ACCOUNT, "crate::account_sync::"),
-        ("chat/external_hooks.rs", CHAT_HOOKS, "bitfun_core::"),
-        ("chat/external_review.rs", CHAT_HOOK_REVIEW, "bitfun_core::"),
-        (
-            "chat/provider_models.rs",
-            CHAT_PROVIDER_MODELS,
-            "crate::account_sync::",
-        ),
-        ("chat/worktree.rs", CHAT_WORKTREE, "bitfun_core::"),
-        ("ui/startup.rs", STARTUP, "bitfun_core::"),
-        ("ui/startup.rs", STARTUP, "CoreAgentRuntimeCompatibility"),
-        ("ui/startup.rs", STARTUP, "crate::account::"),
-        ("ui/startup.rs", STARTUP, "crate::account_sync::"),
+    for (path, source) in [
+        ("main.rs", CLI_MAIN),
+        ("modes/chat.rs", CHAT_MODE),
+        ("ui/startup.rs", STARTUP),
     ] {
         assert!(
-            !source.contains(marker),
-            "{path} must not reference {marker}"
+            !source.contains("surface_services"),
+            "{path} must not restore surface_services"
         );
-    }
-
-    for budget in [
-        "'src/apps/cli/src/modes/chat/account.rs': {",
-        "'src/apps/cli/src/modes/chat/external_hooks.rs': { 'bitfun_core::': 0 }",
-        "'src/apps/cli/src/modes/chat/external_review.rs': { 'bitfun_core::': 0 }",
-        "'src/apps/cli/src/modes/chat/provider_models.rs': {",
-        "'src/apps/cli/src/modes/chat/worktree.rs': { 'bitfun_core::': 0 },",
-        "'src/apps/cli/src/ui/startup.rs': {",
-    ] {
         assert!(
-            BOUNDARY_RULES.contains(budget),
-            "missing zero-budget rule: {budget}"
+            !source.contains("Arc<dyn ModelService>"),
+            "{path} must not wrap model owners"
         );
-    }
-    for zero_budget in [
-        "'crate::account::': 0",
-        "'crate::account_sync::': 0",
-        "'bitfun_core::': 0",
-        "CoreAgentRuntimeCompatibility: 0",
-    ] {
         assert!(
-            BOUNDARY_RULES.contains(zero_budget),
-            "Phase 4 migrated owner budget must stay at zero: {zero_budget}"
+            !source.contains("Arc<dyn AccountService>"),
+            "{path} must not wrap account owners"
+        );
+        assert!(
+            !source.contains("Arc<dyn ExternalSourceService>"),
+            "{path} must not wrap external-source owners"
         );
     }
 }

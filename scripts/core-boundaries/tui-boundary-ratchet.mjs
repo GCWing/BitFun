@@ -4,6 +4,7 @@ import { join, relative } from 'path';
 import {
   tuiLegacyBackendBudgets,
   tuiLegacyBackendMarkers,
+  tuiForbiddenSurfaceServiceMarkers,
 } from './rules/tui-boundary-rules.mjs';
 
 const scanRoots = [
@@ -46,6 +47,17 @@ export function checkTuiLegacyBackendRatchet(root) {
       seenPaths.add(repoPath);
       const text = readFileSync(filePath, 'utf8');
 
+      for (const marker of tuiForbiddenSurfaceServiceMarkers) {
+        if (text.includes(marker)) {
+          failures.push({
+            path: filePath,
+            line: 1,
+            message:
+              `TUI controllers must call existing owner/service APIs directly; remove forbidden surface-service wrapper marker ${marker}`,
+          });
+        }
+      }
+
       for (const marker of tuiLegacyBackendMarkers) {
         const actual = countLiteral(text, marker);
         const allowed = tuiLegacyBackendBudgets[repoPath]?.[marker] ?? 0;
@@ -54,7 +66,7 @@ export function checkTuiLegacyBackendRatchet(root) {
             path: filePath,
             line: 1,
             message:
-              `TUI backend direct-call debt must only decrease; marker ${marker} has ${actual} occurrences, budget ${allowed}. Route new backend work through the CLI-local TuiBackend and App Server`,
+              `TUI backend direct-call debt must only decrease; marker ${marker} has ${actual} occurrences, budget ${allowed}. Route Runtime work through CliAgentRuntimeClient and non-Runtime work through the existing owner/service API`,
           });
         }
       }

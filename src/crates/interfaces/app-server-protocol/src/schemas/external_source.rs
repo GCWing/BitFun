@@ -3,8 +3,6 @@
 //! These DTOs reuse the stable product-domain projections. Executable source
 //! definitions and provider-private configuration never cross this boundary.
 
-use std::collections::{BTreeMap, BTreeSet};
-
 use agent_client_protocol::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use bitfun_product_domains::external_source_control::{
     ExternalSourceControlRequestV1, ExternalSourceControlSnapshotV1,
@@ -18,13 +16,7 @@ use bitfun_product_domains::external_sources::{
 use bitfun_product_domains::external_subagents::ExternalSubagentModelBindingTarget;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExternalSourceConflictPreferences {
-    pub choices: BTreeMap<String, String>,
-    pub lineage_current_keys: BTreeMap<String, String>,
-    pub conflicted_candidate_ids: BTreeSet<String>,
-}
+pub use bitfun_product_domains::external_sources::ExternalSourceConflictPreferences;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "externalSource/snapshot", response = ExternalSourceSnapshotResponse)]
