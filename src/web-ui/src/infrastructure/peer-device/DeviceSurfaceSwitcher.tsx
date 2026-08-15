@@ -159,10 +159,18 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
         ) : (
           <Monitor size={13} className="bitfun-device-switcher__icon" aria-hidden="true" />
         )}
-        <span className="bitfun-device-switcher__label">{currentLabel}</span>
+        <span
+          className="bitfun-device-switcher__label"
+          data-bf-component="peer-device"
+          data-bf-part="switcherLabel"
+        >
+          {currentLabel}
+        </span>
         {busyElsewhereCount > 0 && (
           <span
             className="bitfun-device-switcher__elsewhere"
+            data-bf-component="peer-device"
+            data-bf-part="switcherElsewhere"
             title={t('accountLogin.deviceSwitcher.othersRunning', { count: busyElsewhereCount })}
           >
             <MonitorSmartphone size={11} aria-hidden="true" />
@@ -224,6 +232,12 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
                         busy && 'is-busy',
                         !device.online && 'is-offline',
                       ].filter(Boolean).join(' ')}
+                      data-bf-component="peer-device"
+                      data-bf-part="switcherStatusDot"
+                      data-bf-state={[
+                        busy && 'busy',
+                        !device.online && 'offline',
+                      ].filter(Boolean).join(' ') || undefined}
                       aria-hidden="true"
                     />
                     <span className="bitfun-device-switcher__item-label">{device.deviceName}</span>
@@ -248,6 +262,8 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
                     <button
                       type="button"
                       className="bitfun-device-switcher__item-disconnect"
+                      data-bf-component="peer-device"
+                      data-bf-part="switcherDisconnect"
                       disabled={switching}
                       title={t('accountLogin.deviceSwitcher.disconnectHint')}
                       onClick={(event) => { void handleDisconnect(event, device); }}

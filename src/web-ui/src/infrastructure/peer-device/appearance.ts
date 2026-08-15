@@ -21,8 +21,12 @@ export const peerDeviceAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'selection' },
     { id: 'actions' },
     { id: 'switcher' },
+    { id: 'switcherLabel' },
+    { id: 'switcherElsewhere' },
     { id: 'switcherMenu' },
     { id: 'switcherItem' },
+    { id: 'switcherStatusDot' },
+    { id: 'switcherDisconnect' },
   ],
   states: [
     { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
@@ -32,5 +36,7 @@ export const peerDeviceAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'disabled', selector: { kind: 'self', suffix: ':disabled' } },
     { id: 'remote', selector: { kind: 'self', suffix: '[data-bf-state~="remote"]' } },
     { id: 'local', selector: { kind: 'self', suffix: '[data-bf-state~="local"]' } },
+    { id: 'busy', selector: { kind: 'self', suffix: '[data-bf-state~="busy"]' } },
+    { id: 'offline', selector: { kind: 'self', suffix: '[data-bf-state~="offline"]' } },
   ],
 };
