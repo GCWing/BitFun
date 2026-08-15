@@ -279,6 +279,9 @@ pub(crate) fn build_tool_description_context(
     agent_type: &str,
     workspace: Option<&WorkspaceBinding>,
     workspace_services: Option<&WorkspaceServices>,
+    session_id: Option<&str>,
+    terminal_port: Option<&Arc<dyn TerminalPort>>,
+    remote_exec_port: Option<&Arc<dyn RemoteExecPort>>,
     primary_model_facts: Option<&PrimaryModelFacts>,
     context_vars: &HashMap<String, String>,
     runtime_tool_restrictions: &ToolRuntimeRestrictions,
@@ -292,7 +295,7 @@ pub(crate) fn build_tool_description_context(
     ToolUseContext {
         tool_call_id: None,
         agent_type: Some(agent_type.to_string()),
-        session_id: None,
+        session_id: session_id.map(str::to_string),
         dialog_turn_id: None,
         workspace: workspace.cloned(),
         loaded_deferred_tool_specs: Vec::new(),
@@ -300,7 +303,12 @@ pub(crate) fn build_tool_description_context(
         custom_data,
         computer_use_host: None,
         runtime_tool_restrictions: runtime_tool_restrictions.clone(),
-        runtime_handles: core_tool_runtime_handles(workspace_services.cloned(), None, None, None),
+        runtime_handles: core_tool_runtime_handles(
+            workspace_services.cloned(),
+            None,
+            terminal_port.cloned(),
+            remote_exec_port.cloned(),
+        ),
     }
 }
 
@@ -1408,6 +1416,9 @@ mod context_builder_tests {
 
         let context = build_tool_description_context(
             "coding",
+            None,
+            None,
+            None,
             None,
             None,
             Some(&PrimaryModelFacts::new(

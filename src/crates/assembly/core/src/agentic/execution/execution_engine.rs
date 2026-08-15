@@ -8,9 +8,10 @@ use super::model_exchange_trace::{
 use super::round_executor::{ModelRoundLifecycle, RoundExecutor};
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    build_prompt_context_for_workspace, get_agent_registry, PrependedPromptReminders,
-    PromptBuilder, PromptBuilderContext, RuntimeContextNeeds, ToolListingSections,
-    UserContextPolicy, UserContextSection,
+    build_prompt_context_for_workspace, get_agent_registry, get_embedded_prompt,
+    minimal_harness_tool_policy, PrependedPromptReminders, PromptBuilder, PromptBuilderContext,
+    RuntimeContextNeeds, ToolListingSections, UserContextPolicy, UserContextSection,
+    MINIMAL_HARNESS_REQUIRED_TOOLS,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::coordination::scheduler::agent_dialog_turn_image_contexts;
@@ -30,7 +31,8 @@ use crate::agentic::image_analysis::{
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{
-    ContextCompressor, SessionManager, TokenAnchor, TokenAnchorInput, UserContextCacheIdentity,
+    ContextCompressor, SessionManager, SystemPromptCacheIdentity, TokenAnchor, TokenAnchorInput,
+    UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
@@ -57,11 +59,12 @@ use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
+use bitfun_agent_runtime::harness_profile::{resolve_harness_profile, MINIMAL_PROMPT_POLICY_ID};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
-use bitfun_core_types::SessionModelBindingPolicy;
+use bitfun_core_types::{SessionModelBindingPolicy, MINIMAL_HARNESS_PROFILE_ID};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -75,6 +78,43 @@ fn ensure_primary_session_goal_tools(allowed_tools: &mut Vec<String>, is_subagen
     if !is_subagent {
         ensure_thread_goal_tools(allowed_tools);
     }
+}
+
+fn is_root_minimal_harness(context: &ExecutionContext) -> bool {
+    context.subagent_parent_info.is_none()
+        && context.execution_profile.harness_profile_id.as_str() == MINIMAL_HARNESS_PROFILE_ID
+}
+
+fn validate_minimal_harness_manifest(
+    context: &ExecutionContext,
+    manifest: &ResolvedToolManifest,
+) -> BitFunResult<()> {
+    if !is_root_minimal_harness(context) {
+        return Ok(());
+    }
+    let missing: Vec<_> = MINIMAL_HARNESS_REQUIRED_TOOLS
+        .iter()
+        .filter(|required| {
+            !manifest
+                .allowed_tool_names
+                .iter()
+                .any(|available| available == **required)
+        })
+        .copied()
+        .collect();
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(BitFunError::Agent(format!(
+            "Minimal harness is unavailable because required tools are missing: {}",
+            missing.join(", ")
+        )))
+    }
+}
+
+fn tool_manifest_fingerprint(tool_definitions: Option<&[ToolDefinition]>) -> String {
+    let serialized = serde_json::to_vec(&tool_definitions).unwrap_or_default();
+    format!("{:x}", Sha256::digest(serialized))
 }
 
 /// Execution engine configuration
@@ -1319,12 +1359,16 @@ impl ExecutionEngine {
         session_id: &str,
         current_agent: &dyn crate::agentic::agents::Agent,
         prompt_context: Option<&PromptBuilderContext>,
+        prompt_policy_id: Option<&str>,
     ) -> BitFunResult<String> {
-        let identity = prompt_context
-            .map(|context| {
-                current_agent.system_prompt_cache_identity(context.model_name.as_deref())
-            })
-            .unwrap_or_else(|| current_agent.system_prompt_cache_identity(None));
+        let identity = match prompt_policy_id {
+            Some(policy_id) => SystemPromptCacheIdentity::new(format!("harness:{policy_id}")),
+            None => prompt_context
+                .map(|context| {
+                    current_agent.system_prompt_cache_identity(context.model_name.as_deref())
+                })
+                .unwrap_or_else(|| current_agent.system_prompt_cache_identity(None)),
+        };
 
         if let Some(cached_system_prompt) = self
             .session_manager
@@ -1342,7 +1386,19 @@ impl ExecutionEngine {
             "System prompt cache miss: session_id={}, scope_key={}",
             session_id, identity.scope_key
         );
-        let system_prompt = current_agent.get_system_prompt(prompt_context).await?;
+        let system_prompt = if let Some(policy_id) = prompt_policy_id {
+            let context = prompt_context.ok_or_else(|| {
+                BitFunError::Agent("Prompt build context is required".to_string())
+            })?;
+            let template = get_embedded_prompt(policy_id).ok_or_else(|| {
+                BitFunError::Agent(format!("{policy_id} not found in embedded files"))
+            })?;
+            PromptBuilder::new(context.clone())
+                .build_prompt_from_template(template)
+                .await?
+        } else {
+            current_agent.get_system_prompt(prompt_context).await?
+        };
         self.session_manager
             .remember_system_prompt(session_id, identity, system_prompt.clone())
             .await;
@@ -1382,6 +1438,7 @@ impl ExecutionEngine {
                 &input.context.session_id,
                 input.current_agent,
                 prompt_context.as_ref(),
+                is_root_minimal_harness(input.context).then_some(MINIMAL_PROMPT_POLICY_ID),
             )
             .await?;
 
@@ -1653,6 +1710,7 @@ impl ExecutionEngine {
             effective_model_name: input.ai_client.config.model.clone(),
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
+            execution_profile: input.context.execution_profile.clone(),
             context_vars: input.execution_context_vars.clone(),
             permission_constraints: input.permission_constraints,
             permission_runtime_ceiling: input.context.permission_runtime_ceiling.clone(),
@@ -2256,44 +2314,62 @@ impl ExecutionEngine {
             model_capability_profile,
         );
 
-        let tool_policy = agent_registry
-            .get_agent_tool_policy(
-                &context.agent_type,
-                context
-                    .workspace
-                    .as_ref()
-                    .map(|workspace| workspace.root_path()),
-            )
-            .await;
+        let minimal_harness = is_root_minimal_harness(context);
+        let tool_policy = if minimal_harness {
+            minimal_harness_tool_policy()
+        } else {
+            agent_registry
+                .get_agent_tool_policy(
+                    &context.agent_type,
+                    context
+                        .workspace
+                        .as_ref()
+                        .map(|workspace| workspace.root_path()),
+                )
+                .await
+        };
         let mut allowed_tools = tool_policy.allowed_tools.clone();
-        ensure_primary_session_goal_tools(
-            &mut allowed_tools,
-            context.subagent_parent_info.is_some(),
-        );
+        if !minimal_harness {
+            ensure_primary_session_goal_tools(
+                &mut allowed_tools,
+                context.subagent_parent_info.is_some(),
+            );
+        }
         let enable_tools = context
             .context
             .get("enable_tools")
             .and_then(|value| value.parse::<bool>().ok())
             .unwrap_or(true);
-        let tool_manifest_context_vars = context.context.clone();
+        let mut tool_manifest_context_vars = context.context.clone();
+        tool_manifest_context_vars.insert(
+            "harness_profile_id".to_string(),
+            context
+                .execution_profile
+                .harness_profile_id
+                .as_str()
+                .to_string(),
+        );
 
         let tool_description_context = tool_context_runtime::build_tool_description_context(
             &context.agent_type,
             context.workspace.as_ref(),
             context.workspace_services.as_ref(),
+            Some(&context.session_id),
+            context.terminal_port.as_ref(),
+            context.remote_exec_port.as_ref(),
             Some(&primary_model_facts),
             &tool_manifest_context_vars,
             &context.runtime_tool_restrictions,
         );
         let tool_manifest = if enable_tools {
-            Some(
-                resolve_tool_manifest(
-                    &allowed_tools,
-                    &tool_policy.exposure_overrides,
-                    &tool_description_context,
-                )
-                .await,
+            let manifest = resolve_tool_manifest(
+                &allowed_tools,
+                &tool_policy.exposure_overrides,
+                &tool_description_context,
             )
+            .await;
+            validate_minimal_harness_manifest(context, &manifest)?;
+            Some(manifest)
         } else {
             None
         };
@@ -3185,20 +3261,27 @@ impl ExecutionEngine {
         );
 
         // 3. Get available tools list (read tool configuration for current mode from global config)
-        let tool_policy = agent_registry
-            .get_agent_tool_policy(
-                &agent_type,
-                context
-                    .workspace
-                    .as_ref()
-                    .map(|workspace| workspace.root_path()),
-            )
-            .await;
+        let minimal_harness = is_root_minimal_harness(&context);
+        let tool_policy = if minimal_harness {
+            minimal_harness_tool_policy()
+        } else {
+            agent_registry
+                .get_agent_tool_policy(
+                    &agent_type,
+                    context
+                        .workspace
+                        .as_ref()
+                        .map(|workspace| workspace.root_path()),
+                )
+                .await
+        };
         let mut allowed_tools = tool_policy.allowed_tools.clone();
-        ensure_primary_session_goal_tools(
-            &mut allowed_tools,
-            context.subagent_parent_info.is_some(),
-        );
+        if !minimal_harness {
+            ensure_primary_session_goal_tools(
+                &mut allowed_tools,
+                context.subagent_parent_info.is_some(),
+            );
+        }
         let enable_tools = context
             .context
             .get("enable_tools")
@@ -3217,12 +3300,23 @@ impl ExecutionEngine {
             deferred_tool_loading_enabled.to_string(),
         );
         execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
+        execution_context_vars.insert(
+            "harness_profile_id".to_string(),
+            context
+                .execution_profile
+                .harness_profile_id
+                .as_str()
+                .to_string(),
+        );
         let tool_manifest_context_vars = execution_context_vars.clone();
 
         let tool_description_context = tool_context_runtime::build_tool_description_context(
             &agent_type,
             context.workspace.as_ref(),
             context.workspace_services.as_ref(),
+            Some(&context.session_id),
+            context.terminal_port.as_ref(),
+            context.remote_exec_port.as_ref(),
             Some(&primary_model_facts),
             &tool_manifest_context_vars,
             &context.runtime_tool_restrictions,
@@ -3234,27 +3328,27 @@ impl ExecutionEngine {
                 agent_type,
                 allowed_tools.len()
             );
-            Some(
-                resolve_tool_manifest(
-                    &allowed_tools,
-                    &tool_policy.exposure_overrides,
-                    &tool_description_context,
-                )
-                .await,
+            let manifest = resolve_tool_manifest(
+                &allowed_tools,
+                &tool_policy.exposure_overrides,
+                &tool_description_context,
             )
+            .await;
+            validate_minimal_harness_manifest(&context, &manifest)?;
+            Some(manifest)
         } else {
             None
         };
-        let deferred_tools = tool_manifest
+        let mut deferred_tools = tool_manifest
             .as_ref()
             .map(|manifest| manifest.deferred_tool_names.clone())
             .unwrap_or_default();
-        let tool_listing_sections = if let Some(manifest) = tool_manifest.as_ref() {
+        let mut tool_listing_sections = if let Some(manifest) = tool_manifest.as_ref() {
             Self::build_tool_listing_sections(manifest, &tool_description_context).await
         } else {
             ToolListingSections::default()
         };
-        let runtime_context_needs = tool_manifest
+        let mut runtime_context_needs = tool_manifest
             .as_ref()
             .map(|manifest| {
                 RuntimeContextNeeds::from_tool_names(manifest.allowed_tool_names.iter())
@@ -3273,12 +3367,14 @@ impl ExecutionEngine {
         // across the session. Avoid introducing extra turn-to-turn variation:
         // it changes the request prefix and causes provider prefix/KV cache
         // misses.
-        let (available_tools, tool_definitions) = if let Some(manifest) = tool_manifest {
+        let (mut available_tools, mut tool_definitions) = if let Some(manifest) = tool_manifest {
             (manifest.allowed_tool_names, Some(manifest.tool_definitions))
         } else {
             (vec![], None)
         };
         let final_tool_names = Self::finalize_tool_names(tool_definitions.as_deref());
+        let mut active_tool_manifest_fingerprint =
+            tool_manifest_fingerprint(tool_definitions.as_deref());
         debug!(
             "Primary model and tool manifest resolved: session_id={}, turn_id={}, resolved_primary_model_id={}, primary_model_api_format={}, primary_model_supports_image_inputs={}, final_tool_count={}, final_tool_names={:?}, deferred_tool_names={:?}",
             context.session_id,
@@ -3305,6 +3401,13 @@ impl ExecutionEngine {
                 stage: "turn_start",
             })
             .await?;
+
+        let max_model_rounds = resolve_harness_profile(
+            &context.execution_profile.harness_profile_id,
+            self.config.max_rounds,
+        )
+        .map_err(BitFunError::Agent)?
+        .max_model_rounds;
 
         // Add System Prompt to the beginning of message list (only for this execution, not persisted)
         let mut messages = vec![turn_prompt_scaffold.system_prompt_message.clone()];
@@ -3385,13 +3488,79 @@ impl ExecutionEngine {
 
         // Loop to execute model rounds
         loop {
-            if completed_rounds >= self.config.max_rounds {
-                warn!(
-                    "Reached max rounds limit: {}, stopping execution",
-                    self.config.max_rounds
-                );
+            if max_model_rounds.is_some_and(|limit| completed_rounds >= limit) {
+                let limit = max_model_rounds.expect("checked above");
+                warn!("Reached max rounds limit: {}, stopping execution", limit);
                 finalization_reason = Some("max_rounds");
                 break;
+            }
+
+            // Minimal is the only profile whose direct schema intentionally
+            // changes within a Turn: command controls appear while the current
+            // root session owns a live ExecCommand and disappear after exit.
+            // Re-resolve immediately before every model request so a stale
+            // transcript can never expose control capability.
+            if minimal_harness && enable_tools {
+                let manifest = resolve_tool_manifest(
+                    &allowed_tools,
+                    &tool_policy.exposure_overrides,
+                    &tool_description_context,
+                )
+                .await;
+                validate_minimal_harness_manifest(&context, &manifest)?;
+                let next_tool_listing_sections =
+                    Self::build_tool_listing_sections(&manifest, &tool_description_context).await;
+                let next_runtime_context_needs =
+                    RuntimeContextNeeds::from_tool_names(manifest.allowed_tool_names.iter());
+                let next_available_tools = manifest.allowed_tool_names;
+                let next_deferred_tools = manifest.deferred_tool_names;
+                let next_tool_definitions = Some(manifest.tool_definitions);
+                let next_fingerprint = tool_manifest_fingerprint(next_tool_definitions.as_deref());
+
+                if next_fingerprint != active_tool_manifest_fingerprint {
+                    info!(
+                        "Minimal harness request manifest changed: session_id={}, turn_id={}, round_index={}, previous_fingerprint={}, next_fingerprint={}, tools={:?}",
+                        context.session_id,
+                        context.dialog_turn_id,
+                        round_index,
+                        active_tool_manifest_fingerprint,
+                        next_fingerprint,
+                        Self::finalize_tool_names(next_tool_definitions.as_deref()),
+                    );
+                    available_tools = next_available_tools;
+                    deferred_tools = next_deferred_tools;
+                    tool_definitions = next_tool_definitions;
+                    tool_listing_sections = next_tool_listing_sections;
+                    runtime_context_needs = next_runtime_context_needs;
+                    active_tool_manifest_fingerprint = next_fingerprint;
+                    turn_prompt_scaffold = self
+                        .resolve_turn_prompt_scaffold(TurnPromptScaffoldInput {
+                            context: &context,
+                            current_agent: current_agent.as_ref(),
+                            model_name: &ai_client.config.model,
+                            supports_image_understanding: primary_supports_image_understanding,
+                            tool_listing_sections: tool_listing_sections.clone(),
+                            runtime_context_needs,
+                            stage: "minimal_request_manifest_transition",
+                        })
+                        .await?;
+                    Self::apply_turn_prompt_scaffold_to_messages(
+                        &mut messages,
+                        &turn_prompt_scaffold,
+                    );
+                }
+            }
+
+            if minimal_harness {
+                debug!(
+                    "Minimal harness model request manifest: session_id={}, turn_id={}, round_index={}, fingerprint={}, tools={:?}, fixed_model_round_limit={:?}",
+                    context.session_id,
+                    context.dialog_turn_id,
+                    round_index,
+                    active_tool_manifest_fingerprint,
+                    Self::finalize_tool_names(tool_definitions.as_deref()),
+                    max_model_rounds,
+                );
             }
 
             // Check and compress before sending AI request
@@ -3690,6 +3859,7 @@ impl ExecutionEngine {
                 effective_model_name: ai_client.config.model.clone(),
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
+                execution_profile: context.execution_profile.clone(),
                 context_vars: round_context_vars,
                 permission_constraints: tool_policy.permission_constraints.clone(),
                 permission_runtime_ceiling: context.permission_runtime_ceiling.clone(),
@@ -5050,6 +5220,7 @@ mod tests {
             dialog_turn_id: "turn".to_string(),
             turn_index: 0,
             agent_type: "agentic".to_string(),
+            execution_profile: Default::default(),
             workspace: Some(workspace),
             context: HashMap::new(),
             subagent_parent_info: None,
@@ -5581,6 +5752,7 @@ mod tests {
             dialog_turn_id: "turn".to_string(),
             turn_index: 0,
             agent_type: "agentic".to_string(),
+            execution_profile: Default::default(),
             workspace: None,
             context: HashMap::new(),
             subagent_parent_info: None,

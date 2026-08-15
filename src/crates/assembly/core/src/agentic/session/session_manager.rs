@@ -3724,6 +3724,62 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Update the Harness Profile that will be resolved for the next turn.
+    ///
+    /// This mutation is admitted only while the Session is idle so an in-flight
+    /// turn keeps one immutable profile policy. The request-level tool manifest
+    /// may still transition between the profile's four- and six-tool states.
+    pub async fn update_session_execution_profile(
+        &self,
+        session_id: &str,
+        execution_profile: bitfun_core_types::SessionExecutionProfile,
+    ) -> BitFunResult<()> {
+        bitfun_agent_runtime::harness_profile::resolve_harness_profile(
+            &execution_profile.harness_profile_id,
+            crate::service::config::types::DEFAULT_MAX_ROUNDS,
+        )
+        .map_err(BitFunError::Validation)?;
+
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        let original_session = self
+            .sessions
+            .get(session_id)
+            .map(|session| session.clone())
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        if !matches!(original_session.state, SessionState::Idle) {
+            return Err(BitFunError::Validation(format!(
+                "Session Harness Profile can only be updated while idle: {session_id}"
+            )));
+        }
+        if original_session.config.execution_profile == execution_profile {
+            return Ok(());
+        }
+
+        let mut updated_session = original_session.clone();
+        let now = SystemTime::now();
+        updated_session.config.execution_profile = execution_profile;
+        updated_session.updated_at = now;
+        updated_session.last_activity_at = now;
+
+        if self.should_persist_session_id(session_id) {
+            if let Some(workspace_path) = self.effective_session_storage_path(session_id).await {
+                self.persistence_manager
+                    .save_session(&workspace_path, &updated_session)
+                    .await?;
+            }
+        }
+
+        let Some(mut active_session) = self.sessions.get_mut(session_id) else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {session_id}"
+            )));
+        };
+        active_session.config.execution_profile = updated_session.config.execution_profile;
+        active_session.updated_at = now;
+        active_session.last_activity_at = now;
+        Ok(())
+    }
+
     /// Update the most recent scheduler-accepted user submission mode.
     ///
     /// This state is intentionally independent from rollback-sensitive history
@@ -6156,6 +6212,7 @@ impl SessionManager {
                         session_id: session.session_id.clone(),
                         session_name: session.session_name.clone(),
                         agent_type: session.agent_type.clone(),
+                        execution_profile: session.config.execution_profile.clone(),
                         model_id: session.config.model_id.clone(),
                         reasoning_preset: session.config.reasoning_preset.clone(),
                         last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),

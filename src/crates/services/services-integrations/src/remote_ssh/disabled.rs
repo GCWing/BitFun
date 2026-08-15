@@ -258,6 +258,10 @@ pub struct RemoteExecProcessLifecycleEvent {
 pub struct RemoteExecProcessManager;
 
 impl RemoteExecProcessManager {
+    pub async fn is_session_active(&self, _session_id: i32) -> bool {
+        false
+    }
+
     pub async fn exec_command(
         &self,
         _request: RemoteExecCommandRequest,

@@ -75,6 +75,32 @@ pub fn get_all_embedded_prompt_names() -> Vec<&'static str> {
 
 pub type AgentToolPolicyOverrides = IndexMap<String, ToolExposure>;
 
+pub const MINIMAL_HARNESS_REQUIRED_TOOLS: [&str; 4] = ["Read", "Edit", "Write", "ExecCommand"];
+pub const MINIMAL_HARNESS_ALLOWED_TOOLS: [&str; 6] = [
+    "Read",
+    "Edit",
+    "Write",
+    "ExecCommand",
+    "WriteStdin",
+    "ExecControl",
+];
+
+pub fn minimal_harness_tool_policy() -> AgentToolPolicy {
+    let allowed_tools = MINIMAL_HARNESS_ALLOWED_TOOLS
+        .iter()
+        .map(|tool| (*tool).to_string())
+        .collect();
+    let exposure_overrides = MINIMAL_HARNESS_ALLOWED_TOOLS
+        .iter()
+        .map(|tool| ((*tool).to_string(), ToolExposure::Direct))
+        .collect();
+    AgentToolPolicy {
+        allowed_tools,
+        exposure_overrides,
+        permission_constraints: PermissionConstraintLayer::default(),
+    }
+}
+
 static EMPTY_AGENT_TOOL_POLICY_OVERRIDES: std::sync::LazyLock<AgentToolPolicyOverrides> =
     std::sync::LazyLock::new(AgentToolPolicyOverrides::default);
 static EMPTY_PERMISSION_CONSTRAINTS: std::sync::LazyLock<PermissionConstraintLayer> =
@@ -279,7 +305,8 @@ mod tests {
     use super::{
         get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
         shared_coding_mode_user_context_policy, Agent, AgenticMode, DebugMode, MultitaskMode,
-        PlanMode, EMBEDDED_PROMPTS,
+        PlanMode, ToolExposure, EMBEDDED_PROMPTS, MINIMAL_HARNESS_ALLOWED_TOOLS,
+        minimal_harness_tool_policy,
     };
 
     #[test]
@@ -382,5 +409,23 @@ mod tests {
         assert_eq!(multitask.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(plan.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(debug.tool_exposure_overrides(), &shared_overrides);
+    }
+
+    #[test]
+    fn minimal_harness_policy_is_closed_direct_and_stably_ordered() {
+        let policy = minimal_harness_tool_policy();
+        let expected: Vec<String> = MINIMAL_HARNESS_ALLOWED_TOOLS
+            .iter()
+            .map(|tool| (*tool).to_string())
+            .collect();
+
+        assert_eq!(policy.allowed_tools, expected);
+        assert_eq!(policy.exposure_overrides.len(), expected.len());
+        for tool in expected {
+            assert_eq!(
+                policy.exposure_overrides.get(&tool),
+                Some(&ToolExposure::Direct)
+            );
+        }
     }
 }

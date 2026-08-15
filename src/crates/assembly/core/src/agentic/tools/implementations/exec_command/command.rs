@@ -78,6 +78,24 @@ impl ExecCommandTool {
         }
     }
 
+    async fn description_for_context(context: Option<&ToolUseContext>) -> BitFunResult<String> {
+        let mut description = Self::new().description().await?;
+        if context.is_some() && !super::command_controls_available(context).await {
+            description = description.replace(
+                "- While that session remains active, WriteStdin and ExecControl are available on the next model request. Use WriteStdin to poll for more output or send input to tty=true sessions, and ExecControl to interrupt or kill it.",
+                "- If the process remains active, command controls will be included in the next model request. Use only the controls that are present there.",
+            );
+        }
+        if context.map(ToolUseContext::is_remote).unwrap_or(false) {
+            description = format!(
+                r#"**Remote workspace:** Commands run on the **SSH server** in the remote user's default POSIX shell, invoked as `<shell> -lc <cmd>`. Use **Unix** syntax and POSIX paths — not PowerShell, `cmd.exe`, or Windows paths.
+
+{description}"#
+            );
+        }
+        Ok(description)
+    }
+
     fn command_env() -> HashMap<String, String> {
         exec_command_noninteractive_env()
     }
@@ -551,7 +569,7 @@ TTY modes:
 Waiting and continuation:
 - yield_time_ms waits for output until the process exits or the deadline is reached. It does not stop the process.
 - If the process is still running after `yield_time_ms`, the result includes a numeric session_id.
-- Use WriteStdin to poll for more output or send input to tty=true sessions, and ExecControl to interrupt or kill it.
+- While that session remains active, WriteStdin and ExecControl are available on the next model request. Use WriteStdin to poll for more output or send input to tty=true sessions, and ExecControl to interrupt or kill it.
 
 Output:
 - Output is only what was produced during this tool call's wait window.
@@ -564,16 +582,7 @@ Output:
         &self,
         context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        let mut base = self.description().await?;
-        if context.map(|c| c.is_remote()).unwrap_or(false) {
-            base = format!(
-                r#"**Remote workspace:** Commands run on the **SSH server** in the remote user's default POSIX shell, invoked as `<shell> -lc <cmd>`. Use **Unix** syntax and POSIX paths — not PowerShell, `cmd.exe`, or Windows paths.
-
-{base}"#,
-                base = base
-            );
-        }
-        Ok(base)
+        Self::description_for_context(context).await
     }
 
     fn short_description(&self) -> String {
@@ -643,9 +652,7 @@ Output:
                 meta: None,
             };
         }
-        if let (Some(context), Some(parsed)) =
-            (context, exec_command_run_input_from_input(input))
-        {
+        if let (Some(context), Some(parsed)) = (context, exec_command_run_input_from_input(input)) {
             if let Some(rejection) =
                 crate::agentic::execution::edit_constraint_guard::check_bash_command(
                     context, parsed.cmd,

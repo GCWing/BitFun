@@ -1832,6 +1832,7 @@ mod tests {
         ) -> PortResult<Vec<AgentSessionSummary>> {
             self.listed_sessions.lock().unwrap().push(request.clone());
             Ok(vec![AgentSessionSummary {
+                execution_profile: Default::default(),
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
                 agent_type: "agentic".to_string(),
@@ -2004,6 +2005,7 @@ mod tests {
             self.restored_sessions.lock().unwrap().push(request);
             Ok(AgentSessionRestoreResult {
                 session: AgentSessionSummary {
+                    execution_profile: Default::default(),
                     session_id: "session_1".to_string(),
                     session_name: "Main".to_string(),
                     agent_type: "agentic".to_string(),
@@ -3146,6 +3148,7 @@ mod tests {
         };
         let result = AgentSessionRestoreResult {
             session: AgentSessionSummary {
+                execution_profile: Default::default(),
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
                 agent_type: "agentic".to_string(),

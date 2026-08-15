@@ -273,6 +273,20 @@ struct HeadTailText {
 }
 
 impl RemoteExecProcessManager {
+    pub async fn is_session_active(&self, session_id: i32) -> bool {
+        let process = self
+            .sessions
+            .lock()
+            .await
+            .get(&session_id)
+            .map(|entry| Arc::clone(&entry.process));
+
+        match process {
+            Some(process) => !process.output.is_closed().await,
+            None => false,
+        }
+    }
+
     pub async fn exec_command(
         &self,
         request: RemoteExecCommandRequest,

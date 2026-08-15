@@ -5003,6 +5003,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: turn_id.clone(),
             turn_index,
             agent_type: runtime_agent_type,
+            execution_profile: session.config.execution_profile.clone(),
             workspace: manual_workspace,
             context: HashMap::new(),
             subagent_parent_info: None,
@@ -5849,6 +5850,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: turn_id.clone(),
             turn_index,
             agent_type: effective_agent_type.clone(),
+            execution_profile: session.config.execution_profile.clone(),
             workspace: session_workspace,
             context: context_vars,
             subagent_parent_info: persisted_subagent_context.subagent_parent_info,
@@ -8306,6 +8308,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: dialog_turn_id.clone(),
             turn_index,
             agent_type: agent_type.clone(),
+            execution_profile: session.config.execution_profile.clone(),
             workspace: subagent_workspace,
             context,
             subagent_parent_info: subagent_parent_info.clone(),
@@ -10633,6 +10636,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn update_session_harness_profile(
+        &self,
+        session_id: &str,
+        execution_profile: bitfun_core_types::SessionExecutionProfile,
+    ) -> BitFunResult<()> {
+        self.ensure_session_runtime_ownership(session_id, None)?;
+        self.session_manager
+            .update_session_execution_profile(session_id, execution_profile)
+            .await
+    }
+
     /// Update the session-level prompt-cache guard mode for the latest
     /// scheduler-accepted user submission.
     pub async fn update_last_submitted_agent_type(
@@ -10785,12 +10799,30 @@ async fn create_agent_session_from_runtime_request(
         )
     })?;
     let created_by = resolve_agent_session_create_created_by(&request.metadata);
+    let execution_profile = request.execution_profile.unwrap_or_else(|| {
+        bitfun_core_types::SessionExecutionProfile::balanced(
+            bitfun_core_types::HarnessSelectionSource::new(
+                bitfun_core_types::HARNESS_SELECTION_DEFAULT,
+            ),
+        )
+    });
+    bitfun_agent_runtime::harness_profile::resolve_harness_profile(
+        &execution_profile.harness_profile_id,
+        crate::service::config::types::DEFAULT_MAX_ROUNDS,
+    )
+    .map_err(|message| {
+        bitfun_runtime_ports::PortError::new(
+            bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+            message,
+        )
+    })?;
     let session = coordinator
         .create_session_with_workspace_and_creator_internal(
             session_id,
             request.session_name,
             request.agent_type,
             SessionConfig {
+                execution_profile,
                 workspace_path: Some(workspace_path.clone()),
                 project_workspace_path: request.project_workspace_path,
                 execution_target: request.execution_target,
@@ -11139,6 +11171,7 @@ fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::Age
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
+        execution_profile: session.execution_profile,
         model_id: session.model_id,
         reasoning_preset: session.reasoning_preset,
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
@@ -11656,6 +11689,18 @@ impl bitfun_runtime_ports::AgentSessionModePort for ConversationCoordinator {
 }
 
 #[async_trait::async_trait]
+impl bitfun_runtime_ports::AgentSessionHarnessProfilePort for ConversationCoordinator {
+    async fn update_session_harness_profile(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionHarnessProfileUpdateRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        self.update_session_harness_profile(&request.session_id, request.execution_profile)
+            .await
+            .map_err(runtime_port_error_preserving_message)
+    }
+}
+
+#[async_trait::async_trait]
 impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordinator {
     async fn restore_session(
         &self,
@@ -11687,6 +11732,7 @@ impl bitfun_agent_runtime::sdk::AgentSessionRestorePort for ConversationCoordina
                 session_id: session.session_id,
                 session_name: session.session_name,
                 agent_type: session.agent_type,
+                execution_profile: session.config.execution_profile,
                 model_id: session.config.model_id,
                 reasoning_preset: session.config.reasoning_preset,
                 last_user_dialog_agent_type: session.last_user_dialog_agent_type,
@@ -13133,6 +13179,7 @@ mod tests {
             session_id: "session".to_string(),
             session_name: "Session".to_string(),
             agent_type: "agentic".to_string(),
+            execution_profile: Default::default(),
             model_id: Some("fast".to_string()),
             reasoning_preset: Some("high".to_string()),
             last_user_dialog_agent_type: None,
@@ -15971,6 +16018,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Worker".to_string(),
                 agent_type: "agentic".to_string(),
+                execution_profile: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -16010,6 +16058,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Original".to_string(),
                 agent_type: "agentic".to_string(),
+                execution_profile: None,
                 workspace_path: Some(workspace.clone()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -16107,6 +16156,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Over capacity".to_string(),
                 agent_type: "agentic".to_string(),
+                execution_profile: None,
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -16138,6 +16188,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Fixed worker".to_string(),
                 agent_type: "agentic".to_string(),
+                execution_profile: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -16172,6 +16223,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Duplicate worker".to_string(),
                 agent_type: "agentic".to_string(),
+                execution_profile: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -16586,6 +16638,7 @@ mod tests {
         let request = |name: &str| AgentSessionCreateRequest {
             session_name: name.to_string(),
             agent_type: "agentic".to_string(),
+            execution_profile: None,
             workspace_path: Some(workspace.clone()),
             project_workspace_path: None,
             execution_target: None,
@@ -16719,6 +16772,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Invalid worker".to_string(),
                 agent_type: "agentic".to_string(),
+                execution_profile: None,
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
