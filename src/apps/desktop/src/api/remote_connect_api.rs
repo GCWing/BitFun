@@ -370,6 +370,37 @@ fn emit_account_event(event: &str, payload: serde_json::Value) {
     }
 }
 
+/// Payload key carrying the device that produced a re-emitted Peer DeviceEvent.
+///
+/// The controller re-emits peer events under their original event name so the
+/// existing listeners keep working, which means a controller that is also
+/// running its own local work would otherwise see two indistinguishable
+/// streams on one bus. The frontend routes on this key and delivers an event
+/// only to the device surface it belongs to. Keep in sync with
+/// `src/web-ui/src/infrastructure/peer-device/deviceSurfaceRouting.ts`.
+pub const PEER_EVENT_SOURCE_KEY: &str = "__bitfunSourceDeviceId";
+
+/// Wrapper key used when a peer payload is not a JSON object and therefore
+/// cannot carry `PEER_EVENT_SOURCE_KEY` inline.
+pub const PEER_EVENT_WRAPPED_PAYLOAD_KEY: &str = "__bitfunSourcePayload";
+
+/// Tag a peer-originated event payload with the device that produced it.
+fn tag_peer_event_source(payload: serde_json::Value, source_device_id: &str) -> serde_json::Value {
+    let source = serde_json::Value::String(source_device_id.to_string());
+    match payload {
+        serde_json::Value::Object(mut map) => {
+            map.insert(PEER_EVENT_SOURCE_KEY.to_string(), source);
+            serde_json::Value::Object(map)
+        }
+        other => {
+            let mut map = serde_json::Map::new();
+            map.insert(PEER_EVENT_SOURCE_KEY.to_string(), source);
+            map.insert(PEER_EVENT_WRAPPED_PAYLOAD_KEY.to_string(), other);
+            serde_json::Value::Object(map)
+        }
+    }
+}
+
 fn emit_device_presence(devices: &[(String, String)]) {
     let payload = serde_json::json!({
         "devices": devices
@@ -2795,9 +2826,15 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                         break 'routing_events;
                                     };
                                     // Controller receiving peer UI events — re-emit locally
-                                    // under the same event name so PeerDeviceTransport listen works.
+                                    // under the same event name so PeerDeviceTransport listen
+                                    // works. The source device is tagged onto the payload so a
+                                    // controller that is also running local work can route each
+                                    // stream to the right device surface.
                                     log::debug!("DeviceEvent from {source_device_id}: {event}");
-                                    emit_account_event(&event, payload);
+                                    emit_account_event(
+                                        &event,
+                                        tag_peer_event_source(payload, &source_device_id),
+                                    );
                                 }
                                 Ok(RemoteCommand::ExecuteOnDevice {
                                     session_id,

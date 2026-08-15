@@ -5,6 +5,29 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
 
 ## Invariants (do not regress)
 
+0. **A surface switch is a view change, not a teardown.** Attachments and the
+   rendered surface are independent: peers stay attached (and keep running our
+   work) after the UI moves elsewhere, and `switchToLocal` is a switch, not a
+   disconnect. Two consequences:
+
+   - Everything in `resetProductSurface()` must be **frontend-only**.
+     `resetProductSurface` runs before the transport swap, so any backend call
+     it makes lands on the device being *left*. `terminal_shutdown_all` and
+     `lsp_close_workspace` were exactly that bug: switching away killed the
+     PTYs and language servers an agent turn there was still using
+     (regression: 2026-08-14 multi-device switch). Use
+     `TerminalService.disconnect()` and
+     `WorkspaceLspManager.detachAllForSurfaceSwitch()`.
+   - **Surface-scoped events must stay routed by source device.** Background
+     attachments mean several agent streams share one event bus. The
+     controller tags re-emitted peer payloads with `__bitfunSourceDeviceId`
+     and `deviceSurfaceRouting.ts` (applied inside
+     `TauriTransportAdapter.listen`) drops anything not produced by the
+     rendered device. Adding a fanned-out event on the Rust side means adding
+     it to `SURFACE_SCOPED_EVENTS`/prefixes too, or local and peer streams will
+     interleave in one store. Never route control-plane events (`account://…`)
+     — they must always pass.
+
 1. **Cloud session/turn APIs stay on the controller** (`LOCAL_ONLY` in
    `peer-device-adapter.ts`). Peer history comes from HostInvoke
    (`restore_session_view`, list sessions, …), not from
@@ -63,8 +86,12 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     succeeding without affecting the process.
 
 12. **Active chat has snapshot self-healing.** DeviceEvent has no ACK/replay, so
-    FlowChat reconciles the active Peer session from `restore_session_view`
-    every 3s and immediately after a detected event gap. The Peer Host must
+    FlowChat reconciles the active session from `restore_session_view`
+    every 3s and immediately after a detected event gap. This is gated on
+    `isSurfaceReconcileEnabled()`, **not** on Peer Mode: once a window has
+    switched surface, a turn left running on the local device also needs the
+    repair, because its events were dropped by surface routing while another
+    device was rendered. The Peer Host must
     overlay its live in-memory session state on the persisted view; otherwise
     an in-progress turn is normalized as interrupted history and later chunks
     are dropped by the controller state machine. Reconciliation must not

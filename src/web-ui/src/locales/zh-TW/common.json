@@ -614,6 +614,18 @@
     "peerRemoteLabel": "{{name}}",
     "peerRemoteBadgeTitle": "遠端裝置：{{name}}",
     "disconnectPeer": "中斷連線",
+    "deviceSwitcher": {
+      "title": "裝置",
+      "open": "切換裝置",
+      "running": "$t(shared:statuses.running)",
+      "noDevices": "此帳號目前沒有其他已登入的裝置。",
+      "hint": "切換只會改變此視窗顯示的裝置，各裝置的工作都會繼續執行。",
+      "othersRunning": "其他裝置仍在執行工作（{{count}}）",
+      "switched": "已切換至 {{name}}",
+      "switchedLocal": "已切換回本機",
+      "disconnected": "已中斷 {{name}} 的連線",
+      "disconnectHint": "結束對該裝置的控制，並取消它正在為你執行的工作"
+    },
     "peerAutoExitOffline": "遠端裝置「{{name}}」已離線 — 已中斷連線",
     "peerAutoExitRpc": "與遠端裝置「{{name}}」連線遺失 — 已中斷連線",
     "syncInProgressHint": "雲端同步仍在進行，請稍後再開啟遠端裝置。",

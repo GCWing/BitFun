@@ -12,6 +12,45 @@ A's workspace list, sessions, assistants, chat, and tools behave like using
 BitFun on B's machine. The authority is **B's live local BitFun state** via
 HostInvoke / DeviceEvent fan-out — not a merged cloud session history.
 
+## Attachment vs rendered surface
+
+Two concepts, deliberately independent:
+
+| | Attachment | Rendered surface |
+|---|---|---|
+| What it is | A live control link to a peer | The one device this window draws |
+| How many | Any number, concurrently | Exactly one |
+| Ends when | Explicit disconnect, peer offline, logout | Replaced by the next switch |
+| Effect on the peer's agent | Keeps it running and fanning out | None |
+
+This split is what makes several devices usable at once: dispatch a turn on B,
+switch the UI back to A, dispatch another turn on A, and both keep running.
+The frontend entry points are `switchToDevice` / `switchToLocal` /
+`disconnectDevice` on `PeerDeviceContext`; the sidebar `DeviceSurfaceSwitcher`
+lists this machine plus every online peer.
+
+Two rules follow, and both are load-bearing:
+
+- **A surface switch never mutates the device being left.** Everything in
+  `resetProductSurface()` is frontend-only. Sending `terminal_shutdown_all` or
+  `lsp_close_workspace` during a switch lands on the *previous* transport and
+  kills work an agent there still depends on.
+- **Product events are routed by their source device.** The controller re-emits
+  peer DeviceEvents under their original event name, so with peers attached in
+  the background one bus carries several agent streams. The desktop controller
+  tags each re-emitted payload with `__bitfunSourceDeviceId`
+  (`remote_connect_api::PEER_EVENT_SOURCE_KEY`; non-object payloads are wrapped
+  under `__bitfunSourcePayload`), and `deviceSurfaceRouting.ts` — applied inside
+  `TauriTransportAdapter.listen` — delivers a surface-scoped event only when its
+  producing device is the rendered one. Untagged events are local by definition.
+  Control-plane events (`account://…`, window chrome, updater) are never scoped
+  and always pass.
+
+Because the local surface can now miss its own events while another device is
+rendered, snapshot reconciliation is no longer Peer-only: after this window's
+first surface switch, `isSurfaceReconcileEnabled()` keeps the repair loop
+running for whichever surface is rendered, local included.
+
 ## Cloud account sync vs Peer Remote
 
 | Concern | Account cloud sync | Peer Device Mode |
@@ -38,8 +77,12 @@ FS) and must not be mixed with Peer Device Mode.
 ## Boundaries
 
 - Not SSH `WorkspaceKind.Remote` (local session mirror + remote FS).
-- Enter via Account Login → Online Devices → click peer.
-- Exit via sidebar Peer Remote status row `Disconnect` (device name + disconnect).
+- Switch via the sidebar device switcher, or Account Login → Online Devices →
+  click a device. Both list this machine, so returning to it is a switch like
+  any other.
+- Selecting this machine only changes what is rendered; peers stay attached and
+  keep working. `Disconnect` in the switcher is the separate, explicit action
+  that ends a peer's control link and cancels the work it runs for us.
 - Local-only commands (window chrome, updater, account login/logout, peer
   control plane) never execute on the peer on behalf of a controller.
 - Unsupported or denied commands fail loudly; they must not fall back to the
@@ -171,6 +214,9 @@ and may represent a different operating system.
   `src/apps/cli/src/account_sync.rs`.
 - Frontend mode + transport: `src/web-ui/src/infrastructure/peer-device/`,
   `adapters/peer-device-adapter.ts`
+- Surface routing / switcher: `deviceSurfaceRouting.ts`,
+  `deviceSurfaceReconcile.ts`, `deviceActivity.ts`,
+  `DeviceSurfaceSwitcher.tsx`, `useAccountDeviceRoster.ts`
 - Peer directory picker: `pickWorkspaceDirectory.ts`, `PeerDirectoryBrowser.tsx`,
   `PeerDirectoryPickerHost.tsx`
 

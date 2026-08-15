@@ -102,10 +102,19 @@ export class WorkspaceLspManager {
     }
   }
 
-  /** Drop all workspace LSP managers when entering/exiting Peer Device Mode. */
-  static async clearAllForPeerSwitch(): Promise<void> {
-    const paths = Array.from(this.instances.keys());
-    await Promise.all(paths.map((path) => this.remove(path)));
+  /**
+   * Drop all workspace LSP managers when the rendered device surface changes.
+   *
+   * Deliberately does **not** call `lsp_close_workspace`: that request would be
+   * sent to the device being left, shutting down language servers an agent
+   * turn there may still be using. Managers are recreated against the new
+   * transport on the next workspace bootstrap.
+   */
+  static detachAllForSurfaceSwitch(): void {
+    for (const manager of this.instances.values()) {
+      manager.detachForSurfaceSwitch();
+    }
+    this.instances.clear();
   }
   
   
@@ -834,10 +843,23 @@ export class WorkspaceLspManager {
       await api.invoke('lsp_close_workspace', {
         request: { workspacePath: this.workspacePath }
       });
-      
+
       this.isInitialized = false;
     } catch (error) {
       log.error('Error during dispose', { workspacePath: this.workspacePath, error });
     }
+  }
+
+  /**
+   * Release this manager's frontend state without touching the host. Used when
+   * the rendered device surface changes: the language servers belong to the
+   * device we are leaving and must keep running for its agent.
+   */
+  detachForSurfaceSwitch(): void {
+    if (this.eventUnlisten) {
+      this.eventUnlisten();
+      this.eventUnlisten = undefined;
+    }
+    this.isInitialized = false;
   }
 }

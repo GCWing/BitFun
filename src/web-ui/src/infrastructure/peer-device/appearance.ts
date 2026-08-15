@@ -20,10 +20,9 @@ export const peerDeviceAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'footer' },
     { id: 'selection' },
     { id: 'actions' },
-    { id: 'badge' },
-    { id: 'badgeIcon' },
-    { id: 'badgeLabel' },
-    { id: 'disconnectButton' },
+    { id: 'switcher' },
+    { id: 'switcherMenu' },
+    { id: 'switcherItem' },
   ],
   states: [
     { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
@@ -31,5 +30,7 @@ export const peerDeviceAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
     { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
     { id: 'disabled', selector: { kind: 'self', suffix: ':disabled' } },
+    { id: 'remote', selector: { kind: 'self', suffix: '[data-bf-state~="remote"]' } },
+    { id: 'local', selector: { kind: 'self', suffix: '[data-bf-state~="local"]' } },
   ],
 };

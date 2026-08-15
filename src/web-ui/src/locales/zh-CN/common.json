@@ -614,6 +614,18 @@
     "peerRemoteLabel": "{{name}}",
     "peerRemoteBadgeTitle": "远程设备：{{name}}",
     "disconnectPeer": "断开",
+    "deviceSwitcher": {
+      "title": "设备",
+      "open": "切换设备",
+      "running": "$t(shared:statuses.running)",
+      "noDevices": "该账号下暂无其他已登录设备。",
+      "hint": "切换只改变当前窗口显示的设备，各设备的任务都会继续执行。",
+      "othersRunning": "其他设备仍在执行任务（{{count}}）",
+      "switched": "已切换到 {{name}}",
+      "switchedLocal": "已切换回本机",
+      "disconnected": "已断开 {{name}}",
+      "disconnectHint": "结束对该设备的控制，并取消它正在为你执行的任务"
+    },
     "peerAutoExitOffline": "远程设备「{{name}}」已离线 — 已断开",
     "peerAutoExitRpc": "与远程设备「{{name}}」连接丢失 — 已断开",
     "syncInProgressHint": "云端同步仍在进行，请稍后再打开远程设备。",

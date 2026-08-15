@@ -1,14 +1,17 @@
 /**
- * Peer Device active-session snapshot reconciliation.
+ * Active-session snapshot reconciliation for the rendered device surface.
  *
  * DeviceEvent fan-out is the real-time path, but the relay protocol has no
  * ACK/replay recovery. A controller that attaches mid-turn can therefore miss
- * lifecycle events required by the local FlowChat state machine. This module
- * periodically reconciles a small host snapshot and also supports immediate
- * refresh requests when an event gap is detected.
+ * lifecycle events required by the local FlowChat state machine. The same gap
+ * exists on the **local** surface: a turn that keeps running on this machine
+ * while the UI renders another device produces events that surface routing
+ * drops, so returning to it needs the same repair. This module periodically
+ * reconciles a small host snapshot and also supports immediate refresh
+ * requests when an event gap is detected.
  */
 
-import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import { isSurfaceReconcileEnabled } from '@/infrastructure/peer-device/deviceSurfaceReconcile';
 import { createLogger } from '@/shared/utils/logger';
 import {
   isBackendSessionActivelyProcessing,
@@ -30,7 +33,7 @@ type RefreshRequester = (sessionId?: string) => void;
 let installedRefreshRequester: RefreshRequester | null = null;
 
 export function requestPeerSessionRefresh(sessionId?: string): void {
-  if (!isPeerDeviceModeActive()) {
+  if (!isSurfaceReconcileEnabled()) {
     return;
   }
   installedRefreshRequester?.(sessionId);
@@ -122,7 +125,7 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
   let immediateTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function runRefresh(requestedSessionId?: string): Promise<void> {
-    if (disposed || inFlight || !isPeerDeviceModeActive()) {
+    if (disposed || inFlight || !isSurfaceReconcileEnabled()) {
       if (inFlight) {
         queued = true;
       }
@@ -171,7 +174,7 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
           replaceRunningSnapshot,
           requireActiveSession: true,
           shouldApply: () => {
-            if (!isPeerDeviceModeActive()) {
+            if (!isSurfaceReconcileEnabled()) {
               return false;
             }
             const currentMachine = stateMachineManager.get(sessionId);
