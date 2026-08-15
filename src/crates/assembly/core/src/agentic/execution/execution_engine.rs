@@ -92,6 +92,19 @@ fn reached_fixed_model_round_limit(
     max_model_rounds.is_some_and(|limit| completed_rounds >= limit)
 }
 
+fn missing_required_minimal_tool_definitions(manifest: &ResolvedToolManifest) -> Vec<&'static str> {
+    MINIMAL_HARNESS_REQUIRED_TOOLS
+        .iter()
+        .filter(|required| {
+            !manifest
+                .tool_definitions
+                .iter()
+                .any(|definition| definition.name == **required)
+        })
+        .copied()
+        .collect()
+}
+
 fn validate_minimal_harness_manifest(
     context: &ExecutionContext,
     manifest: &ResolvedToolManifest,
@@ -99,16 +112,7 @@ fn validate_minimal_harness_manifest(
     if !is_root_minimal_harness(context) {
         return Ok(());
     }
-    let missing: Vec<_> = MINIMAL_HARNESS_REQUIRED_TOOLS
-        .iter()
-        .filter(|required| {
-            !manifest
-                .allowed_tool_names
-                .iter()
-                .any(|available| available == **required)
-        })
-        .copied()
-        .collect();
+    let missing = missing_required_minimal_tool_definitions(manifest);
     if missing.is_empty() {
         Ok(())
     } else {
@@ -117,6 +121,15 @@ fn validate_minimal_harness_manifest(
             missing.join(", ")
         )))
     }
+}
+
+fn runtime_context_needs_for_manifest(manifest: &ResolvedToolManifest) -> RuntimeContextNeeds {
+    RuntimeContextNeeds::from_tool_names(
+        manifest
+            .tool_definitions
+            .iter()
+            .map(|definition| definition.name.as_str()),
+    )
 }
 
 fn tool_manifest_fingerprint(tool_definitions: Option<&[ToolDefinition]>) -> String {
@@ -3369,9 +3382,7 @@ impl ExecutionEngine {
         };
         let mut runtime_context_needs = tool_manifest
             .as_ref()
-            .map(|manifest| {
-                RuntimeContextNeeds::from_tool_names(manifest.allowed_tool_names.iter())
-            })
+            .map(runtime_context_needs_for_manifest)
             .unwrap_or_default();
         // We do not currently keep a session-level cache of resolved tool
         // definitions; each turn re-resolves them from the current manifest.
@@ -3529,8 +3540,7 @@ impl ExecutionEngine {
                 validate_minimal_harness_manifest(&context, &manifest)?;
                 let next_tool_listing_sections =
                     Self::build_tool_listing_sections(&manifest, &tool_description_context).await;
-                let next_runtime_context_needs =
-                    RuntimeContextNeeds::from_tool_names(manifest.allowed_tool_names.iter());
+                let next_runtime_context_needs = runtime_context_needs_for_manifest(&manifest);
                 let next_available_tools = manifest.allowed_tool_names;
                 let next_deferred_tools = manifest.deferred_tool_names;
                 let next_tool_definitions = Some(manifest.tool_definitions);
@@ -4856,7 +4866,8 @@ impl ExecutionEngine {
 mod tests {
     use super::{
         activate_conditional_instructions_after_round, ensure_primary_session_goal_tools,
-        manual_compaction_terminal_error, ContextHealthSnapshot, ExecutionEngine, RoundResult,
+        manual_compaction_terminal_error, missing_required_minimal_tool_definitions,
+        runtime_context_needs_for_manifest, ContextHealthSnapshot, ExecutionEngine, RoundResult,
         TurnPromptScaffold,
     };
     use crate::agentic::agents::{
@@ -4868,6 +4879,7 @@ mod tests {
         ContextCompressor, PromptCachePolicy, SessionContextStore, SessionManager,
         SessionManagerConfig, TokenAnchor, TokenAnchorInput,
     };
+    use crate::agentic::tools::ResolvedToolManifest;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::workspace::{local_workspace_services, WorkspaceBinding};
     use crate::infrastructure::PathManager;
@@ -4886,6 +4898,78 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
+
+    fn resolved_tool_manifest(
+        allowed_tool_names: &[&str],
+        tool_definition_names: &[&str],
+    ) -> ResolvedToolManifest {
+        ResolvedToolManifest {
+            allowed_tool_names: allowed_tool_names
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect(),
+            tool_definitions: tool_definition_names
+                .iter()
+                .map(|name| ToolDefinition {
+                    name: (*name).to_string(),
+                    description: format!("{name} description"),
+                    parameters: json!({"type": "object"}),
+                })
+                .collect(),
+            deferred_tool_names: Vec::new(),
+            deferred_tool_summaries: Vec::new(),
+            catalog_generation: 0,
+        }
+    }
+
+    #[test]
+    fn minimal_required_tools_are_checked_against_model_visible_definitions() {
+        let manifest = resolved_tool_manifest(
+            &["Read", "Edit", "Write", "ExecCommand"],
+            &["Read", "Write", "ExecCommand"],
+        );
+
+        assert_eq!(
+            missing_required_minimal_tool_definitions(&manifest),
+            vec!["Edit"]
+        );
+    }
+
+    #[test]
+    fn runtime_context_tracks_model_visible_command_controls() {
+        let base = resolved_tool_manifest(
+            &[
+                "Read",
+                "Edit",
+                "Write",
+                "ExecCommand",
+                "WriteStdin",
+                "ExecControl",
+            ],
+            &["Read", "Write", "Edit", "ExecCommand"],
+        );
+        let active = resolved_tool_manifest(
+            &[
+                "Read",
+                "Edit",
+                "Write",
+                "ExecCommand",
+                "WriteStdin",
+                "ExecControl",
+            ],
+            &[
+                "Read",
+                "Write",
+                "Edit",
+                "ExecCommand",
+                "WriteStdin",
+                "ExecControl",
+            ],
+        );
+
+        assert!(!runtime_context_needs_for_manifest(&base).exec_control);
+        assert!(runtime_context_needs_for_manifest(&active).exec_control);
+    }
 
     #[test]
     fn primary_session_tool_policy_restores_goal_tools_but_subagents_stay_scoped() {
@@ -6065,9 +6149,9 @@ mod tests {
         })
     }
 }
-    #[test]
-    fn unlimited_profile_never_reaches_a_fixed_model_round_limit() {
-        assert!(!reached_fixed_model_round_limit(None, 0));
-        assert!(!reached_fixed_model_round_limit(None, 10_000));
-        assert!(reached_fixed_model_round_limit(Some(200), 200));
-    }
+#[test]
+fn unlimited_profile_never_reaches_a_fixed_model_round_limit() {
+    assert!(!reached_fixed_model_round_limit(None, 0));
+    assert!(!reached_fixed_model_round_limit(None, 10_000));
+    assert!(reached_fixed_model_round_limit(Some(200), 200));
+}
