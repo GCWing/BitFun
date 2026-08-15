@@ -475,6 +475,8 @@ pub(crate) struct ExecMode {
     agent: Arc<ExecAgentRuntimeClient>,
     runtime: Arc<CliRuntimeContext>,
     pub(super) workspace_path: Option<PathBuf>,
+    /// Explicit CLI override. Omitted means preserve the resumed Session profile.
+    harness_profile: Option<String>,
     /// Git tree captured before execution so committed agent changes remain
     /// visible to patch export and final verification.
     pub(super) initial_diff_base: Option<String>,
@@ -498,6 +500,7 @@ impl ExecMode {
         agent_type: String,
         runtime: Arc<CliRuntimeContext>,
         workspace_path: Option<PathBuf>,
+        harness_profile: Option<String>,
         output_patch: Option<String>,
         verify_final_changes: bool,
         output_format: ExecOutputFormat,
@@ -533,6 +536,7 @@ impl ExecMode {
             agent,
             runtime,
             workspace_path,
+            harness_profile,
             initial_diff_base,
             initial_untracked_files,
             output_patch,
@@ -1143,6 +1147,7 @@ impl ExecMode {
                         self.agent_type.clone(),
                         self.runtime.clone(),
                         self.workspace_path.clone(),
+                        self.harness_profile.clone(),
                         self.output_patch.clone(),
                         self.verify_final_changes,
                         self.output_format,
@@ -1411,22 +1416,39 @@ impl ExecMode {
                 .branch_session_at_latest_turn(&source_session_id)
                 .await?;
             self.agent.restore_session(&result.session_id).await?;
+            self.apply_requested_harness_profile(&result.session_id)
+                .await?;
             return Ok(result.session_id);
         }
 
         if let Some(session_id) = resolved_resume.as_deref() {
             self.agent.restore_session(session_id).await?;
+            self.apply_requested_harness_profile(session_id).await?;
             return Ok(session_id.to_string());
         }
 
         if let Some(session_id) = &self.session_options.session_id {
-            return self
+            let session_id = self
                 .agent
                 .create_session_with_id(session_id.clone(), &self.agent_type)
-                .await;
+                .await?;
+            self.apply_requested_harness_profile(&session_id).await?;
+            return Ok(session_id);
         }
 
-        self.agent.ensure_session(&self.agent_type).await
+        let session_id = self.agent.ensure_session(&self.agent_type).await?;
+        self.apply_requested_harness_profile(&session_id).await?;
+        Ok(session_id)
+    }
+
+    async fn apply_requested_harness_profile(&self, session_id: &str) -> Result<()> {
+        let Some(profile_id) = self.harness_profile.as_deref() else {
+            return Ok(());
+        };
+        self.agent
+            .update_session_harness_profile(session_id, profile_id)
+            .await
+            .map_err(anyhow::Error::new)
     }
 
     fn emit_stream_envelope(&self, envelope: &bitfun_events::AgenticEventEnvelope) -> Result<()> {

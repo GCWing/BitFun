@@ -34,7 +34,7 @@ use bitfun_runtime_ports::{
     put_agent_workspace_references, AgentContextReloadRequest, AgentDialogSteerRequest,
     AgentDialogTurnExecution, AgentDialogTurnRequest, AgentInputAttachment,
     AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
-    AgentSessionCreateRequest, AgentSessionDeleteRequest,
+    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionHarnessProfileUpdateRequest,
     AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
     AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
     AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
@@ -1050,6 +1050,28 @@ impl TuiAgentClient {
             .map_err(SessionOperationError::backend)
     }
 
+    pub(crate) async fn update_session_harness_profile(
+        &self,
+        session_id: &str,
+        harness_profile_id: &str,
+    ) -> std::result::Result<(), SessionOperationError> {
+        self.backend
+            .update_session_harness_profile(UpdateSessionHarnessProfileRequest(
+                AgentSessionHarnessProfileUpdateRequest {
+                    session_id: session_id.to_string(),
+                    execution_profile: bitfun_core_types::SessionExecutionProfile::new(
+                        bitfun_core_types::HarnessProfileId::new(harness_profile_id),
+                        bitfun_core_types::HarnessSelectionSource::new(
+                            bitfun_core_types::HARNESS_SELECTION_CLI,
+                        ),
+                    ),
+                },
+            ))
+            .await
+            .map(|_| ())
+            .map_err(SessionOperationError::backend)
+    }
+
     pub(crate) async fn rename_session(
         &self,
         session_id: &str,
@@ -1241,6 +1263,7 @@ impl TuiAgentClient {
             .create_session(CreateSessionRequest(AgentSessionCreateRequest {
                 session_name: default_session_name(),
                 agent_type: agent_type.to_string(),
+                execution_profile: None,
                 workspace_path: Some(workspace.to_string_lossy().to_string()),
                 project_workspace_path: Some(project.clone()),
                 execution_target: Some(SessionExecutionTarget::local(

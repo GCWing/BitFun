@@ -164,6 +164,10 @@ struct Cli {
     /// Specify the agent type for this session
     #[arg(long)]
     agent: Option<String>,
+
+    /// Select the Harness Profile for an interactive session (minimal or balanced)
+    #[arg(long, value_parser = ["minimal", "balanced"])]
+    harness_profile: Option<String>,
 }
 
 fn shared_tui_requested(shared: bool, command: &Option<Commands>) -> Result<bool> {
@@ -186,6 +190,10 @@ enum Commands {
         /// Use the opt-in Shared Runtime for this interactive TUI
         #[arg(long)]
         shared: bool,
+
+        /// Harness Profile for this interactive session (minimal or balanced)
+        #[arg(long, value_parser = ["minimal", "balanced"])]
+        harness_profile: Option<String>,
     },
 
     #[command(name = "__shared-runtime", hide = true)]
@@ -204,6 +212,10 @@ enum Commands {
         /// Agent type
         #[arg(short, long, default_value = "agentic")]
         agent: String,
+
+        /// Harness profile for this session (minimal or balanced)
+        #[arg(long, value_parser = ["minimal", "balanced"])]
+        harness_profile: Option<String>,
 
         /// Continue the most recent session in the current workspace
         #[arg(short = 'c', long = "continue")]
@@ -908,9 +920,16 @@ async fn run_interactive(
     shared: bool,
     agent_override: Option<String>,
     model_id: Option<String>,
+    harness_profile: Option<String>,
     session_override: Option<String>,
 ) -> Result<()> {
     use ui::startup::{StartupPage, StartupResult};
+
+    if shared && harness_profile.is_some() {
+        anyhow::bail!(
+            "--harness-profile is not supported by the current Shared Runtime protocol; use embedded TUI"
+        );
+    }
 
     // 1. Initialize terminal and show loading screen
     let mut terminal = ui::init_terminal()?;
@@ -1034,6 +1053,12 @@ async fn run_interactive(
     // to chat with the resolved session.
     if let Some(ref session_spec) = session_override {
         let restore_session_id = resolve_startup_session_override(&agent, session_spec).await?;
+        apply_tui_harness_profile(
+            agent.as_ref(),
+            &restore_session_id,
+            harness_profile.as_deref(),
+        )
+        .await?;
 
         let mut chat_mode = ChatMode::new(config, effective_agent, workspace, agent)
             .with_restore_session(restore_session_id);
@@ -1076,11 +1101,16 @@ async fn run_interactive(
 
     let agent_type = startup_page.agent_type().to_string();
     if matches!(startup_result, StartupResult::NewSession { .. }) {
-        if let Some(model_id) = startup_page.selected_model_id().map(str::to_string) {
-            agent
-                .ensure_session_with_model(&agent_type, Some(model_id))
+        let selected_model_id = startup_page.selected_model_id().map(str::to_string);
+        if selected_model_id.is_some() || harness_profile.is_some() {
+            let session_id = agent
+                .ensure_session_with_model(&agent_type, selected_model_id)
+                .await?;
+            apply_tui_harness_profile(agent.as_ref(), &session_id, harness_profile.as_deref())
                 .await?;
         }
+    } else if let Some(session_id) = restore_session_id.as_deref() {
+        apply_tui_harness_profile(agent.as_ref(), session_id, harness_profile.as_deref()).await?;
     }
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
@@ -1103,6 +1133,20 @@ async fn run_interactive(
     println!("Goodbye!");
 
     Ok(())
+}
+
+async fn apply_tui_harness_profile(
+    agent: &TuiAgentClient,
+    session_id: &str,
+    harness_profile: Option<&str>,
+) -> Result<()> {
+    let Some(harness_profile) = harness_profile else {
+        return Ok(());
+    };
+    agent
+        .update_session_harness_profile(session_id, harness_profile)
+        .await
+        .map_err(anyhow::Error::new)
 }
 
 /// Resolve a `--session` / `--continue` override to a concrete session ID.
@@ -1243,7 +1287,11 @@ async fn run_cli() -> Result<()> {
     }
 
     match cli.command {
-        Some(Commands::Chat { agent, .. }) => {
+        Some(Commands::Chat {
+            agent,
+            harness_profile,
+            ..
+        }) => {
             // Interactive mode with startup page, scoped to the current directory.
             run_interactive(
                 config,
@@ -1252,6 +1300,7 @@ async fn run_cli() -> Result<()> {
                 use_shared_runtime,
                 cli.agent.clone(),
                 cli.model.clone(),
+                harness_profile.or_else(|| cli.harness_profile.clone()),
                 None,
             )
             .await?;
@@ -1265,6 +1314,7 @@ async fn run_cli() -> Result<()> {
         Some(Commands::Exec {
             message,
             agent,
+            harness_profile,
             continue_last,
             resume,
             session,
@@ -1292,6 +1342,7 @@ async fn run_cli() -> Result<()> {
                 root_handlers::ExecCommandArgs {
                     message,
                     agent,
+                    harness_profile,
                     continue_last,
                     resume,
                     session,
@@ -1530,6 +1581,7 @@ async fn run_cli() -> Result<()> {
                 use_shared_runtime,
                 cli.agent.clone(),
                 cli.model.clone(),
+                cli.harness_profile.clone(),
                 session_override,
             )
             .await?;

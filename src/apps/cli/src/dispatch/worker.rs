@@ -181,6 +181,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                 AgentSessionCreateRequest {
                     session_name: job.title.clone(),
                     agent_type: job.request.agent_type.clone(),
+                    execution_profile: None,
                     workspace_path: Some(workspace_path.clone()),
                     project_workspace_path: Some(workspace_path.clone()),
                     execution_target: Some(SessionExecutionTarget::local(workspace_path.clone())),
