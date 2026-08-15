@@ -169,6 +169,22 @@ describe('HarnessProfileSelector', () => {
     expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
   });
 
+  it('does not present a persisted ultimate profile as active', async () => {
+    await act(async () => {
+      root.render(<HarnessProfileSelector selectedProfile="ultimate" onSelectProfile={vi.fn()} />);
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const ultimate = document.querySelector<HTMLButtonElement>(
+      '[data-testid="harness-profile-ultimate"]',
+    );
+    expect(ultimate?.dataset.bfState).toBe('coming-soon');
+    expect(ultimate?.getAttribute('aria-checked')).toBe('false');
+  });
+
   it('keeps a legacy session on its own mode and explains why instead of switching', async () => {
     const onSelectProfile = vi.fn();
     await act(async () => {

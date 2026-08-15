@@ -10,7 +10,8 @@ import type { HarnessProfileId as RuntimeHarnessProfileId } from '@/infrastructu
 import './HarnessProfileSelector.scss';
 
 export type HarnessProfileId = RuntimeHarnessProfileId;
-export type SelectableHarnessProfileId = 'minimal' | 'balanced' | 'ultimate';
+export type KnownHarnessProfileId = 'minimal' | 'balanced' | 'ultimate';
+export type SelectableHarnessProfileId = 'minimal' | 'balanced';
 
 interface HarnessProfileSelectorProps {
   /** Session still runs the legacy agent mode and cannot switch. */
@@ -20,14 +21,14 @@ interface HarnessProfileSelectorProps {
   onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
 }
 
-const PROFILE_IDS: SelectableHarnessProfileId[] = ['minimal', 'balanced', 'ultimate'];
+const PROFILE_IDS: KnownHarnessProfileId[] = ['minimal', 'balanced', 'ultimate'];
 
 /**
  * How many of the three gauge segments a gear fills. The gauge is the primary
  * reading of the control: intensity is expressed by shape, so the label only
  * names what the shape already says and can be dropped on a narrow composer.
  */
-const PROFILE_GEARS: Record<SelectableHarnessProfileId, 1 | 2 | 3> = {
+const PROFILE_GEARS: Record<KnownHarnessProfileId, 1 | 2 | 3> = {
   minimal: 1,
   balanced: 2,
   ultimate: 3,
@@ -100,7 +101,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     };
   }, [close, open]);
 
-  const handleSelect = useCallback((profileId: SelectableHarnessProfileId) => {
+  const handleSelect = useCallback((profileId: KnownHarnessProfileId) => {
     if (profileId === 'ultimate') {
       const name = t(`chatInput.harness.profiles.${profileId}.name`);
       notificationService.info(t('chatInput.harness.comingSoonNotice', { name }), {
@@ -119,6 +120,8 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   }, [close, legacySession, onSelectProfile, t]);
 
   const knownSelectedProfile = PROFILE_IDS.find(id => id === selectedProfile);
+  const selectedProfileAvailable =
+    knownSelectedProfile === 'minimal' || knownSelectedProfile === 'balanced';
   const gear = knownSelectedProfile ? PROFILE_GEARS[knownSelectedProfile] : 0;
   const triggerLabel = legacySession
     ? t('chatInput.harness.compatibilityShort')
@@ -127,7 +130,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       : t('chatInput.harness.unsupportedProfile', { id: selectedProfile });
   const triggerTooltip = legacySession
     ? t('chatInput.harness.legacySessionNotice')
-    : knownSelectedProfile
+    : selectedProfileAvailable
       ? t('chatInput.harness.selectorTooltip', { name: triggerLabel })
       : t('chatInput.harness.unsupportedProfileNotice', { id: selectedProfile });
 
@@ -178,7 +181,8 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
         >
           {PROFILE_IDS.map((id) => {
             const name = t(`chatInput.harness.profiles.${id}.name`);
-            const connected = id === selectedProfile && !legacySession;
+            const connected =
+              id !== 'ultimate' && id === selectedProfile && !legacySession;
             return (
               <button
                 key={id}
