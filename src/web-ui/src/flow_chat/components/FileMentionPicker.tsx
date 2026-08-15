@@ -22,7 +22,7 @@ import {
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import type {
   ExplorerNodeDto,
-  FileSearchResult,
+  FileSearchResultGroup,
 } from '@/infrastructure/api/service-api/tauri-commands';
 import type { SessionReferenceCandidate } from '@/infrastructure/api/service-api/SessionAPI';
 import type {
@@ -49,6 +49,8 @@ export interface FileMentionPickerProps {
   searchQuery: string;
   workspacePath?: string;
   workspaceId?: string;
+  /** Disambiguates identical POSIX workspace paths on different remote hosts. */
+  remoteConnectionId?: string;
   /** The composing session itself must not appear as a reference candidate. */
   excludeSessionId?: string;
   onSelect: (context: FileContext | DirectoryContext | SessionReferenceContext) => void;
@@ -63,11 +65,37 @@ type MentionItem =
   | { kind: 'file'; item: FileItem }
   | { kind: 'session'; item: SessionReferenceCandidate };
 
+function mergeFileSearchResults(
+  previous: FileItem[],
+  groups: FileSearchResultGroup[],
+  getRelativePath: (path: string) => string,
+): FileItem[] {
+  const byPath = new Map(previous.map(item => [item.path, item]));
+  for (const group of groups) {
+    const result = group.fileNameMatch;
+    if (!result) continue;
+    byPath.set(result.path, {
+      path: result.path,
+      name: result.name,
+      isDirectory: result.isDirectory || false,
+      relativePath: getRelativePath(result.path),
+    });
+  }
+
+  return Array.from(byPath.values())
+    .sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, FILE_MENTION_MAX_RESULTS);
+}
+
 export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   isOpen,
   searchQuery,
   workspacePath,
   workspaceId,
+  remoteConnectionId,
   excludeSessionId,
   onSelect,
   onClose,
@@ -79,8 +107,11 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const [sessionResults, setSessionResults] = useState<SessionReferenceCandidate[]>([]);
   const [workspaceReferences, setWorkspaceReferences] = useState<WorkspaceReferenceEntry[]>([]);
   const [currentFiles, setCurrentFiles] = useState<FileItem[]>([]);
-  const [isFileLoading, setIsFileLoading] = useState(false);
+  const [isDirectoryLoading, setIsDirectoryLoading] = useState(false);
+  const [isFileSearchLoading, setIsFileSearchLoading] = useState(false);
   const [isSessionLoading, setIsSessionLoading] = useState(false);
+  const [directoryLoadError, setDirectoryLoadError] = useState(false);
+  const [fileSearchError, setFileSearchError] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [currentPath, setCurrentPath] = useState<string>('');
   const [pathHistory, setPathHistory] = useState<string[]>([]);
@@ -110,13 +141,19 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const loadDirectory = useCallback(async (dirPath: string, targetSelectedPath?: string | null) => {
     if (!workspacePath) {
       setCurrentFiles([]);
+      setIsDirectoryLoading(false);
+      setDirectoryLoadError(false);
       return;
     }
 
     const requestId = ++directoryLoadRequestIdRef.current;
-    setIsFileLoading(true);
+    setIsDirectoryLoading(true);
+    setDirectoryLoadError(false);
     try {
-      const children = await workspaceAPI.getDirectoryChildren(dirPath || workspacePath);
+      const children = await workspaceAPI.getDirectoryChildren(
+        dirPath || workspacePath,
+        remoteConnectionId,
+      );
       const items: FileItem[] = children
         .filter((entry: ExplorerNodeDto) => {
           const name = entry.name || '';
@@ -141,11 +178,14 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       setSelectedIndex(targetIndex >= 0 ? targetIndex : 0);
     } catch (error) {
       log.error('Failed to load directory', error);
-      if (requestId === directoryLoadRequestIdRef.current) setCurrentFiles([]);
+      if (requestId === directoryLoadRequestIdRef.current) {
+        setCurrentFiles([]);
+        setDirectoryLoadError(true);
+      }
     } finally {
-      if (requestId === directoryLoadRequestIdRef.current) setIsFileLoading(false);
+      if (requestId === directoryLoadRequestIdRef.current) setIsDirectoryLoading(false);
     }
-  }, [workspacePath, getRelativePath]);
+  }, [workspacePath, remoteConnectionId, getRelativePath]);
 
   const enterDirectory = useCallback((item: FileItem) => {
     if (!item.isDirectory) return;
@@ -173,11 +213,13 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     setCurrentFiles([]);
     setResults([]);
     setSessionResults([]);
+    setDirectoryLoadError(false);
+    setFileSearchError(false);
     setSelectedIndex(0);
     selectedItemHistoryRef.current = [];
     targetSelectedPathRef.current = null;
     loadDirectory('', null);
-  }, [isOpen, workspacePath, loadDirectory]);
+  }, [isOpen, workspacePath, remoteConnectionId, loadDirectory]);
 
   useEffect(() => {
     if (!isOpen || !workspacePath) {
@@ -218,37 +260,44 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   ) => {
     if (!workspacePath) {
       setResults([]);
+      setIsFileSearchLoading(false);
       return;
     }
     try {
-      const searchResults = await workspaceAPI.searchFilenamesOnly(
-        workspacePath, query, false, false, false, controller.signal,
+      await workspaceAPI.searchFilenamesOnlyStreamDetailed(
+        workspacePath,
+        query,
+        false,
+        false,
+        false,
+        undefined,
+        FILE_MENTION_MAX_RESULTS,
+        true,
+        {
+          onProgress: (event) => {
+            if (
+              requestId !== fileSearchRequestIdRef.current
+              || controller.signal.aborted
+            ) return;
+
+            setResults(previous => mergeFileSearchResults(previous, event.results, getRelativePath));
+          },
+        },
+        controller.signal,
+        remoteConnectionId,
       );
-      if (requestId !== fileSearchRequestIdRef.current || controller.signal.aborted) return;
-      const items = searchResults.map((result: FileSearchResult) => ({
-        path: result.path,
-        name: result.name,
-        isDirectory: result.isDirectory || false,
-        relativePath: getRelativePath(result.path),
-      }));
-      items.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-      setResults(items.slice(0, FILE_MENTION_MAX_RESULTS));
-      setSelectedIndex(0);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
         log.error('File mention search failed', error);
+        if (requestId === fileSearchRequestIdRef.current) setFileSearchError(true);
       }
-      if (requestId === fileSearchRequestIdRef.current) setResults([]);
     } finally {
       if (requestId === fileSearchRequestIdRef.current && fileAbortControllerRef.current === controller) {
         fileAbortControllerRef.current = null;
-        setIsFileLoading(false);
+        setIsFileSearchLoading(false);
       }
     }
-  }, [workspacePath, getRelativePath]);
+  }, [workspacePath, remoteConnectionId, getRelativePath]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -264,14 +313,18 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       fileSearchRequestIdRef.current += 1;
       setResults([]);
       setSelectedIndex(0);
-      setIsFileLoading(false);
+      setIsFileSearchLoading(false);
+      setFileSearchError(false);
       return;
     }
 
     const requestId = ++fileSearchRequestIdRef.current;
     const controller = new AbortController();
     fileAbortControllerRef.current = controller;
-    setIsFileLoading(true);
+    setResults([]);
+    setSelectedIndex(0);
+    setIsFileSearchLoading(true);
+    setFileSearchError(false);
     fileSearchDebounceTimerRef.current = window.setTimeout(() => {
       fileSearchDebounceTimerRef.current = null;
       void searchFiles(query, controller, requestId);
@@ -325,6 +378,10 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   }, [excludeSessionId, isOpen, searchQuery]);
 
   const isSearchMode = searchQuery.trim().length > 0;
+  const isFileLoading = isSearchMode ? isFileSearchLoading : isDirectoryLoading;
+  const fileLoadError = isSearchMode
+    ? (fileSearchError ? 'search' : null)
+    : (directoryLoadError ? 'directory' : null);
   const referenceItems = useMemo(
     () => workspaceReferenceItems(workspaceReferences, isSearchMode ? searchQuery : ''),
     [isSearchMode, searchQuery, workspaceReferences],
@@ -509,7 +566,13 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         )}
       </div>
       <div data-bf-component="file-mention-picker" data-bf-part="content" className="file-mention-picker__content">
-        {displayItems.length === 0 && isLoading ? (
+        {displayItems.length === 0 && fileLoadError ? (
+          <div data-bf-component="file-mention-picker" data-bf-part="empty" data-bf-state="error" className="file-mention-picker__empty">
+            <span>{t(fileLoadError === 'search'
+              ? 'fileMention.searchUnavailable'
+              : 'fileMention.browseUnavailable')}</span>
+          </div>
+        ) : displayItems.length === 0 && isLoading ? (
           <div data-bf-component="file-mention-picker" data-bf-part="loading" className="file-mention-picker__loading"><Loader2 size={14} className="file-mention-picker__spinner" /><span>{t('fileMention.loading')}</span></div>
         ) : displayItems.length === 0 ? (
           <div data-bf-component="file-mention-picker" data-bf-part="empty" className="file-mention-picker__empty"><span>{isSearchMode ? t('fileMention.noMatchingFiles') : t('fileMention.emptyDirectory')}</span></div>
@@ -563,6 +626,19 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
                 </div>
               );
             })}
+            {isLoading && (
+              <div data-bf-component="file-mention-picker" data-bf-part="loading" className="file-mention-picker__loading">
+                <Loader2 size={14} className="file-mention-picker__spinner" />
+                <span>{t('fileMention.loading')}</span>
+              </div>
+            )}
+            {fileLoadError && (
+              <div data-bf-component="file-mention-picker" data-bf-part="empty" data-bf-state="error" className="file-mention-picker__empty">
+                <span>{t(fileLoadError === 'search'
+                  ? 'fileMention.searchUnavailable'
+                  : 'fileMention.browseUnavailable')}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

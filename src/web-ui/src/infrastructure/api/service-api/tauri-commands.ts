@@ -155,6 +155,7 @@ export interface SearchFilesRequest {
 export interface SearchFilenamesRequest {
   rootPath: string;
   pattern: string;
+  remoteConnectionId?: string;
   searchId?: string;
   caseSensitive?: boolean;
   useRegex?: boolean;

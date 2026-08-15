@@ -461,13 +461,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "expand_external_prompt_command_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
-    (
-        "explorer_get_children",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
+    ("explorer_get_children", RemoteWorkspacePolicy::RemoteRouted),
     (
         "explorer_get_children_paginated",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     (
         "explorer_get_file_tree",
@@ -572,11 +569,11 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "get_directory_children",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     (
         "get_directory_children_paginated",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     (
         "get_external_hook_catalog",
@@ -1687,7 +1684,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "search_file_contents",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    ("search_filenames", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("search_filenames", RemoteWorkspacePolicy::RemoteRouted),
     ("search_files", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "search_referenceable_sessions",
@@ -1903,7 +1900,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "start_search_filenames_stream",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     ("start_subscription_login", RemoteWorkspacePolicy::LocalOnly),
     ("startup_window_control", RemoteWorkspacePolicy::LocalOnly),
@@ -2299,8 +2296,6 @@ mod tests {
         "editor_ai_stream",
         "ensure_coordinator_session",
         "execute_tool",
-        "explorer_get_children",
-        "explorer_get_children_paginated",
         "explorer_get_file_tree",
         "export_config",
         "export_diagnostics_bundle",
@@ -2326,8 +2321,6 @@ mod tests {
         "get_current_workspace",
         "get_custom_agent_detail",
         "get_default_review_team_definition",
-        "get_directory_children",
-        "get_directory_children_paginated",
         "get_file_change_history",
         "get_file_diff",
         "get_file_editor_sync_hash",
@@ -2525,7 +2518,6 @@ mod tests {
         "save_session_turn",
         "scan_workspace_info",
         "search_file_contents",
-        "search_filenames",
         "search_files",
         "search_skill_market",
         "send_background_command_input",
@@ -2546,7 +2538,6 @@ mod tests {
         "start_mcp_remote_oauth",
         "start_mcp_server",
         "start_search_file_contents_stream",
-        "start_search_filenames_stream",
         "steer_dialog_turn",
         "stop_acp_client",
         "stop_file_watch",

@@ -122,12 +122,15 @@ async fn lookup_remote_entry_for_path(
     }
 
     let manager = get_remote_workspace_manager()?;
+    if let Some(connection_id) = request_preferred {
+        return manager.lookup_scoped_connection(path, connection_id).await;
+    }
+
     let legacy = app_state
         .get_remote_workspace_async()
         .await
         .map(|workspace| workspace.connection_id);
-    let preferred = request_preferred.map(|s| s.to_string()).or(legacy);
-    manager.lookup_connection(path, preferred.as_deref()).await
+    manager.lookup_connection(path, legacy.as_deref()).await
 }
 
 fn should_force_local_assistant_path(
@@ -151,13 +154,23 @@ pub async fn resolve_desktop_path_target(
         });
     }
 
+    let explicit_connection_id = preferred_remote_connection_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     if let Some(entry) =
-        lookup_remote_entry_for_path(app_state, raw_path, preferred_remote_connection_id).await
+        lookup_remote_entry_for_path(app_state, raw_path, explicit_connection_id).await
     {
         return Ok(DesktopPathTarget::Remote {
             requested_path: raw_path.to_string(),
             entry,
         });
+    }
+
+    if let Some(connection_id) = explicit_connection_id {
+        return Err(format!(
+            "Remote workspace connection '{}' is unavailable or does not own path '{}'; local filesystem fallback was not attempted",
+            connection_id, raw_path
+        ));
     }
 
     Ok(DesktopPathTarget::Local {

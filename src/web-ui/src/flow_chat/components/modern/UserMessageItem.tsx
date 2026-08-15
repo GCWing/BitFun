@@ -530,6 +530,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
             presentation={composerPresentation}
             workspacePath={currentSession?.workspacePath}
             workspaceId={currentSession?.workspaceId}
+            remoteConnectionId={
+              currentSession?.remoteConnectionId
+              || currentSession?.config?.remoteConnectionId
+            }
             excludeSessionId={resolvedSessionId}
           />
         ) : (

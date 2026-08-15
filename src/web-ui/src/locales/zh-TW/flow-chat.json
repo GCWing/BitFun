@@ -889,6 +889,8 @@
   "fileMention": {
     "searchResults": "搜尋結果",
     "loading": "載入中...",
+    "browseUnavailable": "無法載入工作區檔案，請檢查連線後重試。",
+    "searchUnavailable": "無法搜尋工作區，請檢查連線後重試。",
     "noMatchingFiles": "沒有找到匹配的檔案",
     "emptyDirectory": "空目錄",
     "rootDirectory": "根目錄",

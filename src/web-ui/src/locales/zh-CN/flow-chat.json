@@ -889,6 +889,8 @@
   "fileMention": {
     "searchResults": "搜索结果",
     "loading": "加载中...",
+    "browseUnavailable": "无法加载工作区文件，请检查连接后重试。",
+    "searchUnavailable": "无法搜索工作区，请检查连接后重试。",
     "noMatchingFiles": "没有找到匹配的文件",
     "emptyDirectory": "空目录",
     "rootDirectory": "根目录",

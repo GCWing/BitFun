@@ -105,6 +105,7 @@ import {
   sessionWorktreeBindingSubscriptionKey,
 } from '../utils/sessionWorktree';
 import { isRemoteWorkspaceSession, sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
+import { findWorkspaceForSession } from '../utils/workspaceScope';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { Tooltip, IconButton, confirmDanger, confirmWarning } from '@/component-library';
 import { PendingQueuePanel } from './PendingQueuePanel';
@@ -952,6 +953,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const workspacePathRef = useRef(sessionBoundWorkspacePath);
   workspacePathRef.current = sessionBoundWorkspacePath;
   const { openedWorkspaces } = useWorkspaceContext();
+  const mentionWorkspace = useMemo(() => (
+    effectiveTargetSession
+      ? findWorkspaceForSession(effectiveTargetSession, openedWorkspaces.values())
+      : workspace ?? undefined
+  ), [effectiveTargetSession, openedWorkspaces, workspace]);
+  const sessionBoundRemoteConnectionId = (
+    hasRegisteredWorkspace
+      ? registration?.remoteConnectionId
+      : (
+          effectiveTargetSession?.remoteConnectionId
+          || effectiveTargetSession?.config?.remoteConnectionId
+          || mentionWorkspace?.connectionId
+        )
+  )?.trim() || undefined;
 
   const chatStripRepositoryPath = useMemo(() => {
     const fromSession = hasRegisteredWorkspace
@@ -5636,9 +5651,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 isOpen={mentionState.isActive}
                 searchQuery={mentionState.query}
                 workspacePath={sessionBoundWorkspacePath}
+                remoteConnectionId={sessionBoundRemoteConnectionId}
                 workspaceId={hasRegisteredWorkspace
                   ? undefined
-                  : effectiveTargetSession?.workspaceId || workspace?.id}
+                  : effectiveTargetSession?.workspaceId || mentionWorkspace?.id}
                 excludeSessionId={effectiveTargetSessionId || undefined}
                 anchorRef={mentionAnchorRef}
                 onSelect={(context: FileContext | DirectoryContext | SessionReferenceContext) => {

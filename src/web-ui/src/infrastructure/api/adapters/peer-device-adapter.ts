@@ -454,6 +454,15 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     this.surfaceId = surfaceIdForDevice(targetDeviceId);
   }
 
+  /**
+   * Search progress is not part of the negotiated Peer DeviceEvent contract.
+   * Use the response-based search command so older peers remain compatible and
+   * results never fall back to the controller's filesystem.
+   */
+  supportsSearchStreamEvents(): boolean {
+    return false;
+  }
+
   getTargetDeviceId(): string {
     return this.targetDeviceId;
   }

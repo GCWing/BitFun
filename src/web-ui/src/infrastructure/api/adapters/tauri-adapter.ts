@@ -35,6 +35,10 @@ export class TauriTransportAdapter implements ITransportAdapter {
   private initPromise: Promise<void> | null = null;
   private listenerRegistrationPromises = new Set<Promise<void>>();
 
+  supportsSearchStreamEvents(): boolean {
+    return true;
+  }
+
   // Lazy initialize Tauri API
   private async ensureInitialized() {
     if (this.invokeFn) return;

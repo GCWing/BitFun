@@ -10,5 +10,6 @@ export const fileMentionPickerAppearanceDescriptor: AppearanceSurfaceDescriptor 
   states: [
     { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
     { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
   ],
 };
