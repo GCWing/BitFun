@@ -20,10 +20,10 @@
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "每個 Turn 的根 Agent 策略。均衡已接入目前 agentic Runtime；其他策略會在執行時契約完成後開放。",
+    "subtitle": "每個 Turn 的根 Agent 策略。極簡與均衡已接入目前 agentic Runtime；不可用策略會明確標示。",
     "connected": "已接入",
     "comingSoon": "開發中",
-    "balancedConnectedNotice": "均衡已作為新會話的預設 Harness。",
+    "connectedNotice": "「{{name}}」Harness 已可用於 Session 選擇。",
     "comingSoonNotice": "「{{name}}」Harness 正在開發中。",
     "profiles": {
       "minimal": {

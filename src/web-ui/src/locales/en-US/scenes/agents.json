@@ -20,10 +20,10 @@
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "The root Agent strategy for each turn. Balanced is connected to the current agentic runtime; other profiles stay explicit until their runtime policies exist.",
+    "subtitle": "The root Agent strategy for each turn. Minimal and Balanced are connected to the current agentic runtime; unavailable profiles remain explicit.",
     "connected": "Connected",
     "comingSoon": "In development",
-    "balancedConnectedNotice": "Balanced is already the default Harness for new sessions.",
+    "connectedNotice": "{{name}} Harness is available for session selection.",
     "comingSoonNotice": "{{name}} Harness is in development.",
     "profiles": {
       "minimal": {
