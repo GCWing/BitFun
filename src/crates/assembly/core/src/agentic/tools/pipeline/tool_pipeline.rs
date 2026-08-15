@@ -3828,7 +3828,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deferred_gateway_executes_effective_target_and_preserves_wire_identity() {
+    async fn deferred_gateway_normalizes_arguments_and_executes_effective_target() {
         let pipeline = test_tool_pipeline();
         let received_arguments = Arc::new(Mutex::new(None));
         register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
@@ -3848,7 +3848,8 @@ mod tests {
         let mut call = test_tool_call("deferred_1", CALL_DEFERRED_TOOL_NAME);
         call.arguments = json!({
             "tool_name": "get_weather",
-            "args": { "city": "Shanghai" }
+            "args": { "city": "Shanghai" },
+            "city": "Beijing"
         });
 
         let results = pipeline
@@ -3875,6 +3876,15 @@ mod tests {
         assert_eq!(task.tool_call.tool_name, CALL_DEFERRED_TOOL_NAME);
         assert_eq!(task.effective_tool_name(), "get_weather");
         assert_eq!(task.effective_arguments(), &json!({ "city": "Shanghai" }));
+        assert_eq!(
+            task.invocation.wire_arguments,
+            json!({
+                "tool_name": "get_weather",
+                "args": {
+                    "city": "Shanghai"
+                }
+            })
+        );
     }
 
     #[tokio::test]

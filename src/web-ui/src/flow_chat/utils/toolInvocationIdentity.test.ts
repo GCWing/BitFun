@@ -32,6 +32,46 @@ describe('toolInvocationIdentity', () => {
     });
   });
 
+  it('normalizes missing args and overflow fields without changing the wire input', () => {
+    const wireInput = {
+      tool_name: 'CreatePlan',
+      name: 'Plan',
+      overview: 'Overview',
+    };
+
+    expect(effectiveToolInvocation('CallDeferredTool', wireInput)).toEqual({
+      toolName: 'CreatePlan',
+      input: {
+        name: 'Plan',
+        overview: 'Overview',
+      },
+      isDeferred: true,
+    });
+    expect(wireInput).toEqual({
+      tool_name: 'CreatePlan',
+      name: 'Plan',
+      overview: 'Overview',
+    });
+  });
+
+  it('keeps args values when overflow fields conflict', () => {
+    expect(effectiveToolInvocation('CallDeferredTool', {
+      tool_name: 'CreatePlan',
+      args: {
+        overview: 'inside',
+      },
+      overview: 'outside',
+      plan: '# Plan',
+    })).toEqual({
+      toolName: 'CreatePlan',
+      input: {
+        overview: 'inside',
+        plan: '# Plan',
+      },
+      isDeferred: true,
+    });
+  });
+
   it('projects an effective card view while retaining the canonical item', () => {
     const item = {
       id: 'tool-1',

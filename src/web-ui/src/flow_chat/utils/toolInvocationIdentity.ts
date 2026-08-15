@@ -22,22 +22,38 @@ export function effectiveToolInvocation(
   }
 
   const input = wireInput as Record<string, unknown>;
-  const keys = Object.keys(input);
   if (
-    keys.some(key => key !== 'tool_name' && key !== 'args')
-    || typeof input.tool_name !== 'string'
+    typeof input.tool_name !== 'string'
     || input.tool_name.trim().length === 0
-    || !Object.prototype.hasOwnProperty.call(input, 'args')
-    || input.args === null
-    || typeof input.args !== 'object'
-    || Array.isArray(input.args)
   ) {
     return { toolName: wireToolName, input: wireInput, isDeferred: false };
   }
 
+  const hasArgs = Object.prototype.hasOwnProperty.call(input, 'args');
+  if (
+    hasArgs
+    && (
+      input.args === null
+      || typeof input.args !== 'object'
+      || Array.isArray(input.args)
+    )
+  ) {
+    return { toolName: wireToolName, input: wireInput, isDeferred: false };
+  }
+
+  const args = hasArgs ? input.args as Record<string, unknown> : {};
+  const overflowEntries = Object.entries(input)
+    .filter(([key]) => key !== 'tool_name' && key !== 'args');
+  const effectiveInput = overflowEntries.length === 0
+    ? args
+    : Object.fromEntries([
+        ...overflowEntries,
+        ...Object.entries(args),
+      ]);
+
   return {
     toolName: input.tool_name,
-    input: input.args,
+    input: effectiveInput,
     isDeferred: true,
   };
 }

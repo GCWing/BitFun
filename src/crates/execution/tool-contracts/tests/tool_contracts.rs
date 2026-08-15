@@ -137,20 +137,56 @@ fn effective_tool_invocation_borrows_deferred_identity_from_wire_call() {
 }
 
 #[test]
-fn call_deferred_tool_contract_rejects_flat_or_string_arguments() {
-    let flat = ResolvedToolInvocation::from_wire_call(
+fn call_deferred_tool_contract_normalizes_overflow_and_missing_args() {
+    let overflow = ResolvedToolInvocation::from_wire_call(
+        CALL_DEFERRED_TOOL_NAME,
+        json!({
+            "tool_name": "get_weather",
+            "args": {
+                "city": "Shanghai",
+                "unit": "celsius"
+            },
+            "city": "Beijing",
+            "language": "zh-CN"
+        }),
+    )
+    .expect("overflow target arguments should be normalized");
+    assert_eq!(
+        overflow.effective_arguments,
+        json!({
+            "city": "Shanghai",
+            "unit": "celsius",
+            "language": "zh-CN"
+        })
+    );
+    assert_eq!(
+        overflow.wire_arguments,
+        json!({
+            "tool_name": "get_weather",
+            "args": {
+                "city": "Shanghai",
+                "unit": "celsius",
+                "language": "zh-CN"
+            }
+        })
+    );
+
+    let missing_args = ResolvedToolInvocation::from_wire_call(
         CALL_DEFERRED_TOOL_NAME,
         json!({
             "tool_name": "get_weather",
             "city": "Shanghai"
         }),
     )
-    .expect_err("flat target arguments must be rejected");
+    .expect("missing args should be treated as an empty object");
     assert_eq!(
-        flat,
-        CallDeferredToolInputError::UnexpectedField("city".to_string())
+        missing_args.effective_arguments,
+        json!({ "city": "Shanghai" })
     );
+}
 
+#[test]
+fn call_deferred_tool_contract_rejects_non_object_arguments() {
     let encoded = ResolvedToolInvocation::from_wire_call(
         CALL_DEFERRED_TOOL_NAME,
         json!({
@@ -160,6 +196,34 @@ fn call_deferred_tool_contract_rejects_flat_or_string_arguments() {
     )
     .expect_err("JSON-encoded string arguments must be rejected");
     assert_eq!(encoded, CallDeferredToolInputError::ArgsMustBeObject);
+}
+
+#[test]
+fn call_deferred_tool_input_serializes_canonical_wire_shape() {
+    let parsed = bitfun_agent_tools::parse_call_deferred_tool_input(&json!({
+        "tool_name": "CreatePlan",
+        "overview": "outside",
+        "args": {
+            "overview": "inside",
+            "plan": "# Plan"
+        }
+    }))
+    .expect("overflow arguments should normalize");
+
+    assert_eq!(
+        parsed.canonical_wire_arguments(),
+        json!({
+            "tool_name": "CreatePlan",
+            "args": {
+                "overview": "inside",
+                "plan": "# Plan"
+            }
+        })
+    );
+    assert_eq!(
+        parsed.canonical_wire_json().expect("canonical JSON"),
+        r##"{"tool_name":"CreatePlan","args":{"overview":"inside","plan":"# Plan"}}"##
+    );
 }
 
 #[test]

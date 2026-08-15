@@ -37,6 +37,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
+use bitfun_agent_tools::{parse_call_deferred_tool_input, CALL_DEFERRED_TOOL_NAME};
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
 };
@@ -53,6 +54,24 @@ pub struct RoundExecutor {
     tool_pipeline: Option<Arc<ToolPipeline>>,
     event_queue: Arc<EventQueue>,
     cancellation_tokens: DialogTurnCancellationTokenStore,
+}
+
+fn normalize_deferred_tool_calls_for_replay(tool_calls: &mut [ToolCall]) {
+    for tool_call in tool_calls {
+        if tool_call.tool_name != CALL_DEFERRED_TOOL_NAME {
+            continue;
+        }
+
+        let Ok(parsed) = parse_call_deferred_tool_input(&tool_call.arguments) else {
+            continue;
+        };
+        let Ok(canonical_raw_arguments) = parsed.canonical_wire_json() else {
+            continue;
+        };
+
+        tool_call.arguments = parsed.canonical_wire_arguments();
+        tool_call.raw_arguments = Some(canonical_raw_arguments);
+    }
 }
 
 /// Mutable lifecycle shared by all provider attempts that belong to one
@@ -991,7 +1010,8 @@ impl RoundExecutor {
             return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
         }
 
-        let tool_calls = stream_result.tool_calls.clone();
+        let mut tool_calls = stream_result.tool_calls.clone();
+        normalize_deferred_tool_calls_for_replay(&mut tool_calls);
 
         // Execute tool calls
         debug!(
@@ -1537,7 +1557,10 @@ fn token_details_from_usage(
 
 #[cfg(test)]
 mod tests {
-    use super::{ModelRoundLifecycle, RoundExecutor, StreamProcessor};
+    use super::{
+        normalize_deferred_tool_calls_for_replay, ModelRoundLifecycle, RoundExecutor,
+        StreamProcessor,
+    };
     use crate::agentic::core::ToolCall;
     use crate::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig};
     use crate::agentic::execution::stream_processor::StreamResult;
@@ -1581,6 +1604,47 @@ mod tests {
         assert_eq!(lifecycle.begin_attempt(), 2);
         assert_eq!(lifecycle.attempts_started(), 2);
         assert_eq!(lifecycle.round_id, round_id);
+    }
+
+    #[test]
+    fn deferred_tool_replay_uses_canonical_gateway_arguments() {
+        let mut tool_calls = vec![ToolCall {
+            tool_id: "call-1".to_string(),
+            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+            arguments: json!({
+                "tool_name": "CreatePlan",
+                "overview": "outside",
+                "args": {
+                    "overview": "inside",
+                    "plan": "# Plan"
+                }
+            }),
+            raw_arguments: Some(
+                r##"{"tool_name":"CreatePlan","overview":"outside","args":{"overview":"inside","plan":"# Plan"}}"##
+                    .to_string(),
+            ),
+            is_error: false,
+            parse_error: None,
+            recovered_from_truncation: false,
+            repair_kind: Default::default(),
+        }];
+
+        normalize_deferred_tool_calls_for_replay(&mut tool_calls);
+
+        assert_eq!(
+            tool_calls[0].arguments,
+            json!({
+                "tool_name": "CreatePlan",
+                "args": {
+                    "overview": "inside",
+                    "plan": "# Plan"
+                }
+            })
+        );
+        assert_eq!(
+            tool_calls[0].raw_arguments.as_deref(),
+            Some(r##"{"tool_name":"CreatePlan","args":{"overview":"inside","plan":"# Plan"}}"##)
+        );
     }
 
     #[tokio::test]
