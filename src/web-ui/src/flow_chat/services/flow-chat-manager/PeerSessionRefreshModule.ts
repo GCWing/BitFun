@@ -183,6 +183,29 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         },
       );
       if (!result.applied) {
+        // A snapshot that changed nothing — or that was refused because it
+        // would have dropped projected content — still reports whether the
+        // host is executing. After a device-surface switch the rebuilt
+        // projection has no state machine, so an executing turn would render
+        // as static history and later chunks would be dropped. Re-attach on
+        // that narrow case only: while a turn really is streaming the machine
+        // is already processing, so this cannot churn it every tick.
+        const machine = stateMachineManager.get(sessionId);
+        const machineIsIdle =
+          (machine?.getCurrentState() ?? SessionExecutionState.IDLE)
+            === SessionExecutionState.IDLE;
+        if (machineIsIdle && isBackendSessionActivelyProcessing(result.backendState)) {
+          await alignStateMachineWithSnapshot(
+            context,
+            sessionId,
+            result.backendState,
+            result.latestTurnId,
+          );
+          log.debug('Re-attached an executing session after a surface switch', {
+            sessionId,
+            backendState: result.backendState,
+          });
+        }
         return;
       }
       await alignStateMachineWithSnapshot(

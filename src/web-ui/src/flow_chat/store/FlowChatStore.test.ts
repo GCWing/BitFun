@@ -5937,3 +5937,152 @@ describe('FlowChatStore historical session hydration state', () => {
     expect(flowChatStore.getState().sessions.get('history-1')?.currentTokenUsage).toBeUndefined();
   });
 });
+
+describe('FlowChatStore reconcile snapshot content safety', () => {
+  const HYDRATED_ROUND = {
+    id: 'round-0',
+    turnId: 'turn-0',
+    roundIndex: 0,
+    timestamp: 2,
+    textItems: [{ id: 'text-0', content: 'BitFun is an agentic IDE…', timestamp: 2 }],
+    toolItems: [],
+    thinkingItems: [],
+    startTime: 2,
+    status: 'completed',
+  };
+
+  const hostSession = (state = 'Idle') => ({
+    sessionId: 'history-1',
+    sessionName: 'History 1',
+    agentType: 'agentic',
+    state,
+    turnCount: 1,
+    createdAt: 1,
+  });
+
+  beforeEach(() => {
+    peerModeFlagMock.active = false;
+    apiMocks.restoreSessionView.mockReset();
+    apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
+    vi.stubGlobal('CustomEvent', class {
+      type: string;
+      detail: unknown;
+
+      constructor(type: string, init?: { detail?: unknown }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() });
+  });
+
+  afterEach(() => {
+    resetStore();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  async function hydrateSessionWithContent(): Promise<void> {
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          workspacePath: '/repo/BitFun',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{ ...createPersistedTurn(0), modelRounds: [HYDRATED_ROUND], endTime: 3 }],
+      contextRestoreState: 'ready',
+    });
+    await flowChatStore.loadSessionHistory('history-1', '/repo/BitFun');
+  }
+
+  it('keeps a hydrated turn when a wholesale replace snapshot carries none of its work', async () => {
+    // The reported failure: after switching device away and back, the rebuilt
+    // projection has no state machines, so every turn reads as idle and every
+    // snapshot qualifies for wholesale replacement. A windowed snapshot names
+    // the turn but carries no rounds, so replacing it left the user prompt on
+    // screen with the whole response gone.
+    await hydrateSessionWithContent();
+    expect(
+      flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0].modelRounds,
+    ).toHaveLength(1);
+
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{ ...createPersistedTurn(0), modelRounds: [] }],
+      contextRestoreState: 'ready',
+    });
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/repo/BitFun',
+      { replaceRunningSnapshot: true, requireActiveSession: true },
+    );
+
+    expect(result.applied).toBe(false);
+    const turn = flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0];
+    expect(turn?.modelRounds).toHaveLength(1);
+    expect(turn?.modelRounds[0].items).toHaveLength(1);
+  });
+
+  it('refuses a replace that would drop a round the projection already shows', async () => {
+    await hydrateSessionWithContent();
+
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{
+        ...createPersistedTurn(0),
+        modelRounds: [{ ...HYDRATED_ROUND, id: 'round-other' }],
+      }],
+      contextRestoreState: 'ready',
+    });
+
+    await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/repo/BitFun',
+      { replaceRunningSnapshot: true, requireActiveSession: true },
+    );
+
+    expect(
+      flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0].modelRounds[0].id,
+    ).toBe('round-0');
+  });
+
+  it('still adopts the host copy when the snapshot carries the projected work', async () => {
+    // The guard must not disable wholesale replacement, which is how a settled
+    // turn picks up the host's authoritative copy.
+    await hydrateSessionWithContent();
+
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{
+        ...createPersistedTurn(0),
+        modelRounds: [{
+          ...HYDRATED_ROUND,
+          textItems: [
+            { id: 'text-0', content: 'BitFun is an agentic IDE…', timestamp: 2 },
+            { id: 'text-1', content: '…with multi-device control.', timestamp: 3 },
+          ],
+        }],
+      }],
+      contextRestoreState: 'ready',
+    });
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/repo/BitFun',
+      { replaceRunningSnapshot: true, requireActiveSession: true },
+    );
+
+    expect(result.applied).toBe(true);
+    expect(
+      flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0].modelRounds[0].items,
+    ).toHaveLength(2);
+  });
+});

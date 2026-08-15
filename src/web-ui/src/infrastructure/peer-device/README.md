@@ -29,6 +29,18 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
      `getSurfaceGeneration()` across the submission: on a change it re-queues
      the message instead of reporting a turn failure. Any new await added
      inside a driver's `startTurn` widens that window — keep the guard.
+   - **Reconciliation repairs a projection, never guts it.** The wholesale
+     replace path (`replaceRunningSnapshot`) skips the forward-progress
+     comparator so a settled turn can adopt the host's copy. A turn keeps its
+     identity and user message independently of its rounds, so a windowed or
+     not-yet-checkpointed snapshot can name the turn while carrying none of its
+     work — and after a surface switch the rebuilt projection has no state
+     machines, so *every* turn reads as idle and qualifies for replacement.
+     That combination erased the whole response and left only the prompt on
+     screen (regression: 2026-08-15). `snapshotDropsProjectedTurnContent` gates
+     the replace; the refresh loop still re-attaches an executing turn when a
+     snapshot is refused, or a rebuilt surface would render it as static
+     history.
    - **Surface-scoped events must stay routed by source device.** Background
      attachments mean several agent streams share one event bus. The
      controller tags re-emitted peer payloads with `__bitfunSourceDeviceId`

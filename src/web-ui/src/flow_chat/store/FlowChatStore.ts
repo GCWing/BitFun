@@ -634,6 +634,45 @@ function isRunningSnapshotForwardProgress(
   return advanced;
 }
 
+/**
+ * Whether replacing `current` with `snapshot` would erase projected content.
+ *
+ * Reconciliation repairs a projection; it must never gut one. The wholesale
+ * replace path exists so a settled turn can adopt the host's authoritative
+ * copy, and it skips the forward-progress comparator to do that. But a turn
+ * carries its identity and user message independently of its rounds, so a
+ * windowed or not-yet-checkpointed snapshot can name the same turn while
+ * carrying none of its work. Replacing then leaves the user prompt on screen
+ * with the entire response gone.
+ *
+ * This is reachable on any surface, and guaranteed right after a device-surface
+ * switch: the rebuilt projection has no state machines, so every turn reads as
+ * idle and every snapshot qualifies for replacement.
+ */
+function snapshotDropsProjectedTurnContent(
+  current: DialogTurn,
+  snapshot: DialogTurn,
+): boolean {
+  if (snapshot.modelRounds.length < current.modelRounds.length) {
+    return true;
+  }
+
+  for (const currentRound of current.modelRounds) {
+    const snapshotRound = snapshot.modelRounds.find(round => round.id === currentRound.id);
+    if (!snapshotRound) {
+      return true;
+    }
+    if (streamProgressEntries(snapshotRound).size < streamProgressEntries(currentRound).size) {
+      return true;
+    }
+    if (toolProgressEntries(snapshotRound).size < toolProgressEntries(currentRound).size) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function itemMatchesIdentity(item: AnyFlowItem, itemId: string): boolean {
   if (item.id === itemId) {
     return true;
@@ -6822,8 +6861,9 @@ export class FlowChatStore {
           mergedTurns.push(snapshotTurn);
           turnsChanged = true;
         } else if (
-          replaceExistingTurns ||
-          isRunningSnapshotForwardProgress(mergedTurns[existingIndex], snapshotTurn)
+          replaceExistingTurns
+            ? !snapshotDropsProjectedTurnContent(mergedTurns[existingIndex], snapshotTurn)
+            : isRunningSnapshotForwardProgress(mergedTurns[existingIndex], snapshotTurn)
         ) {
           mergedTurns[existingIndex] = snapshotTurn;
           turnsChanged = true;
