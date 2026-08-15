@@ -9,6 +9,8 @@ import React, { useCallback, memo, useEffect, useRef } from 'react';
 import { ModernFlowChatContainer as FlowChatContainer } from '../../../flow_chat/components/modern/ModernFlowChatContainer';
 import { ChatInput } from '../../../flow_chat/components/ChatInput';
 import type { ChatInputRegistration } from '../../../flow_chat/components/chatInputRegistration';
+import { QuoteSelect } from '../../../flow_chat/components/QuoteSelect/QuoteSelect';
+import { QuoteDock } from '../../../flow_chat/components/QuoteSelect/QuoteDock';
 import { useCanvasStore } from '../../components/panels/content-canvas/stores/canvasStore';
 import type { LineRange } from '@/component-library';
 import path from 'path-browserify';
@@ -178,8 +180,10 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
           isSceneActive={isSceneActive}
           onSendMessage={(_message: string) => {}}
           registration={chatInputRegistration}
+          composerDock={(draft) => <QuoteDock draft={draft} />}
         />
       )}
+      <QuoteSelect />
     </div>
   );
 };
