@@ -160,7 +160,7 @@ pub struct SessionConfig {
     pub max_turns: usize,
     /// Harness policy selected for the next accepted turn. Legacy persisted
     /// sessions omit this field and project to Balanced compatibility mode.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_compatibility_execution_profile")]
     pub execution_profile: bitfun_core_types::SessionExecutionProfile,
     pub enable_context_compression: bool,
     /// Workspace path bound to this session. Used to run AI in the correct workspace
@@ -221,6 +221,12 @@ pub struct SessionConfig {
     /// revalidated for every turn and never falls back by name alone.
     #[serde(default, skip_serializing_if = "is_local_agent_route_owner")]
     pub agent_route_owner: SessionAgentRouteOwner,
+}
+
+fn is_compatibility_execution_profile(
+    profile: &bitfun_core_types::SessionExecutionProfile,
+) -> bool {
+    profile == &bitfun_core_types::SessionExecutionProfile::default()
 }
 
 fn is_reusable_continuation_policy(policy: &SessionContinuationPolicy) -> bool {
@@ -588,5 +594,36 @@ mod tests {
                 "runtime_state": "Idle"
             })
         );
+    }
+
+    #[test]
+    fn explicit_and_unknown_execution_profiles_survive_session_config_round_trip() {
+        let profiles = [
+            bitfun_core_types::SessionExecutionProfile::minimal(
+                bitfun_core_types::HarnessSelectionSource::new(
+                    bitfun_core_types::HARNESS_SELECTION_USER,
+                ),
+            ),
+            bitfun_core_types::SessionExecutionProfile::new(
+                bitfun_core_types::HarnessProfileId::new("future-profile"),
+                bitfun_core_types::HarnessSelectionSource::new("future-client"),
+            ),
+        ];
+
+        for execution_profile in profiles {
+            let config = SessionConfig {
+                execution_profile: execution_profile.clone(),
+                ..SessionConfig::default()
+            };
+            let serialized =
+                serde_json::to_value(&config).expect("session config should serialize");
+            assert_eq!(
+                serialized["execution_profile"]["harnessProfileId"],
+                execution_profile.harness_profile_id.as_str()
+            );
+            let restored: SessionConfig =
+                serde_json::from_value(serialized).expect("session config should deserialize");
+            assert_eq!(restored.execution_profile, execution_profile);
+        }
     }
 }
