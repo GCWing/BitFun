@@ -10,7 +10,6 @@ pub struct ToolExecutionAdmissionRequest<'a> {
     pub tool_name: &'a str,
     pub allowed_tools: &'a [String],
     pub runtime_tool_restrictions: &'a ToolRuntimeRestrictions,
-    pub invocation_is_deferred: bool,
     pub deferred_tools: &'a [String],
     pub loaded_deferred_tool_specs: &'a [LoadedDeferredToolSpec],
     pub current_catalog_generation: u64,
@@ -47,7 +46,6 @@ pub fn validate_tool_execution_admission(
         .map_err(ToolExecutionAdmissionRejection::RuntimeRestriction)?;
     validate_deferred_tool_usage(
         request.tool_name,
-        request.invocation_is_deferred,
         request.deferred_tools,
         request.loaded_deferred_tool_specs,
         request.current_catalog_generation,

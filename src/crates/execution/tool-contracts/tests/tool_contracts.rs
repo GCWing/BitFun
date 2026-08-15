@@ -1462,7 +1462,6 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
 
     let err = validate_deferred_tool_usage(
         "WebFetch",
-        true,
         &deferred_tools,
         &loaded_deferred_tool_specs,
         0,
@@ -1471,7 +1470,7 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
     .expect_err("deferred tool should require GetToolSpec unlock");
     assert_eq!(
         err.to_string(),
-        "Tool 'WebFetch' is deferred. Call GetToolSpec first with {\"tool_name\":\"WebFetch\"} to read its full usage instructions and input schema, then call it through CallDeferredTool."
+        "Tool 'WebFetch' is deferred. Call GetToolSpec first with {\"tool_name\":\"WebFetch\"} to read its full usage instructions and input schema before invoking it."
     );
 
     let loaded_deferred_tool_specs = vec![LoadedDeferredToolSpec {
@@ -1480,7 +1479,6 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
     }];
     validate_deferred_tool_usage(
         "WebFetch",
-        true,
         &deferred_tools,
         &loaded_deferred_tool_specs,
         0,
@@ -1490,7 +1488,6 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
 
     let stale = validate_deferred_tool_usage(
         "WebFetch",
-        true,
         &deferred_tools,
         &[LoadedDeferredToolSpec {
             tool_name: "WebFetch".to_string(),
@@ -1504,22 +1501,8 @@ fn deferred_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
         .to_string()
         .contains("loaded catalog generation 41, current generation 42"));
 
-    let direct = validate_deferred_tool_usage(
-        "WebFetch",
-        false,
-        &deferred_tools,
-        &loaded_deferred_tool_specs,
-        0,
-        GET_TOOL_SPEC_TOOL_NAME,
-    )
-    .expect_err("deferred tools must not be called directly");
-    assert!(direct
-        .to_string()
-        .contains("deferred and cannot be called directly"));
-
     validate_deferred_tool_usage(
         GET_TOOL_SPEC_TOOL_NAME,
-        false,
         &deferred_tools,
         &[],
         0,
@@ -1555,7 +1538,6 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["Read".to_string()],
         runtime_tool_restrictions: &restrictions,
-        invocation_is_deferred: true,
         deferred_tools: &["WebFetch".to_string()],
         loaded_deferred_tool_specs: &[],
         current_catalog_generation: 0,
@@ -1578,7 +1560,6 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["WebFetch".to_string()],
         runtime_tool_restrictions: &restrictions,
-        invocation_is_deferred: true,
         deferred_tools: &["WebFetch".to_string()],
         loaded_deferred_tool_specs: &[],
         current_catalog_generation: 0,
@@ -1601,7 +1582,6 @@ fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
         tool_name: "WebFetch",
         allowed_tools: &["WebFetch".to_string()],
         runtime_tool_restrictions: &ToolRuntimeRestrictions::default(),
-        invocation_is_deferred: true,
         deferred_tools: &["WebFetch".to_string()],
         loaded_deferred_tool_specs: &[],
         current_catalog_generation: 0,

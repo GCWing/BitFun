@@ -932,7 +932,6 @@ impl ToolPipeline {
                     tool_name: &tool_name,
                     allowed_tools: &task.context.allowed_tools,
                     runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-                    invocation_is_deferred: task.invocation.is_deferred(),
                     deferred_tools: &task.context.deferred_tools,
                     loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
                     current_catalog_generation: registry.current_snapshot_generation(),
@@ -1636,7 +1635,6 @@ impl ToolPipeline {
                 tool_name: &tool_name,
                 allowed_tools: &task.context.allowed_tools,
                 runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-                invocation_is_deferred: task.invocation.is_deferred(),
                 deferred_tools: &task.context.deferred_tools,
                 loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
                 current_catalog_generation: registry.current_snapshot_generation(),
@@ -4188,7 +4186,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn pipeline_admission_deferred_tool_rejection_updates_failed_state_before_validation() {
+    async fn pipeline_admission_direct_deferred_tool_requires_get_tool_spec() {
         let pipeline = test_tool_pipeline();
         let mut context = test_tool_execution_context();
         context.deferred_tools = vec!["WebFetch".to_string()];
@@ -4207,7 +4205,41 @@ mod tests {
         assert_failed_task_contains(
             &pipeline,
             "tool_1",
-            "Tool 'WebFetch' is deferred and cannot be called directly",
+            "Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}",
+        );
+    }
+
+    #[tokio::test]
+    async fn pipeline_admission_allows_direct_deferred_tool_after_get_tool_spec() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+
+        let mut context = test_tool_execution_context();
+        context.allowed_tools = vec!["get_weather".to_string()];
+        context.deferred_tools = vec!["get_weather".to_string()];
+        context.loaded_deferred_tool_specs = vec![loaded_spec(
+            "get_weather",
+            current_registry_generation(&pipeline).await,
+        )];
+
+        let mut call = test_tool_call("direct_deferred", "get_weather");
+        call.arguments = json!({ "city": "Shanghai" });
+
+        let results = pipeline
+            .execute_tools(vec![call], context, ToolExecutionOptions::default())
+            .await
+            .expect("loaded deferred tool should support direct invocation");
+
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].result.is_error);
+        assert_eq!(
+            received_arguments
+                .lock()
+                .expect("captured arguments lock")
+                .as_ref(),
+            Some(&json!({ "city": "Shanghai" }))
         );
     }
 
@@ -4436,7 +4468,6 @@ mod tests {
             tool_name: &task.tool_call.tool_name,
             allowed_tools: &task.context.allowed_tools,
             runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-            invocation_is_deferred: true,
             deferred_tools: &task.context.deferred_tools,
             loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
             current_catalog_generation: 0,
@@ -4459,7 +4490,6 @@ mod tests {
             tool_name: &task.tool_call.tool_name,
             allowed_tools: &task.context.allowed_tools,
             runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
-            invocation_is_deferred: false,
             deferred_tools: &task.context.deferred_tools,
             loaded_deferred_tool_specs: &task.context.loaded_deferred_tool_specs,
             current_catalog_generation: 0,

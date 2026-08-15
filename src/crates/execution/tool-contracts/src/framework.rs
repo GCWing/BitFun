@@ -75,10 +75,6 @@ pub enum DeferredToolUsageError {
         tool_name: String,
         get_tool_spec_tool_name: String,
     },
-    RequiresGateway {
-        tool_name: String,
-        gateway_tool_name: String,
-    },
     StaleSpec {
         tool_name: String,
         loaded_generation: u64,
@@ -95,14 +91,7 @@ impl fmt::Display for DeferredToolUsageError {
                 get_tool_spec_tool_name,
             } => write!(
                 formatter,
-                "Tool '{tool_name}' is deferred. Call {get_tool_spec_tool_name} first with {{\"tool_name\":\"{tool_name}\"}} to read its full usage instructions and input schema, then call it through CallDeferredTool."
-            ),
-            Self::RequiresGateway {
-                tool_name,
-                gateway_tool_name,
-            } => write!(
-                formatter,
-                "Tool '{tool_name}' is deferred and cannot be called directly. Use {gateway_tool_name} with {{\"tool_name\":\"{tool_name}\",\"args\":{{...}}}}."
+                "Tool '{tool_name}' is deferred. Call {get_tool_spec_tool_name} first with {{\"tool_name\":\"{tool_name}\"}} to read its full usage instructions and input schema before invoking it."
             ),
             Self::StaleSpec {
                 tool_name,
@@ -111,7 +100,7 @@ impl fmt::Display for DeferredToolUsageError {
                 get_tool_spec_tool_name,
             } => write!(
                 formatter,
-                "The loaded spec for deferred tool '{tool_name}' is stale (loaded catalog generation {loaded_generation}, current generation {current_generation}). Call {get_tool_spec_tool_name} again before using CallDeferredTool."
+                "The loaded spec for deferred tool '{tool_name}' is stale (loaded catalog generation {loaded_generation}, current generation {current_generation}). Call {get_tool_spec_tool_name} again before invoking it."
             ),
         }
     }
@@ -159,7 +148,6 @@ pub fn validate_tool_allowed_by_list(
 
 pub fn validate_deferred_tool_usage(
     tool_name: &str,
-    invocation_is_deferred: bool,
     deferred_tools: &[String],
     loaded_deferred_tool_specs: &[LoadedDeferredToolSpec],
     current_catalog_generation: u64,
@@ -174,13 +162,6 @@ pub fn validate_deferred_tool_usage(
         .any(|deferred_tool| deferred_tool == tool_name)
     {
         return Ok(());
-    }
-
-    if !invocation_is_deferred {
-        return Err(DeferredToolUsageError::RequiresGateway {
-            tool_name: tool_name.to_string(),
-            gateway_tool_name: CALL_DEFERRED_TOOL_NAME.to_string(),
-        });
     }
 
     if let Some(loaded) = loaded_deferred_tool_specs
