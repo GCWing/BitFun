@@ -213,7 +213,7 @@ export const FloatingMiniChat: React.FC = () => {
       workspacePath: displayedSession?.workspacePath || '',
       remoteConnectionId:
         displayedSession?.remoteConnectionId
-        || displayedSession?.config.remoteConnectionId,
+        || displayedSession?.config?.remoteConnectionId,
       draft: composerPrefill
         ? { id: composerPrefill.id, text: composerPrefill.text }
         : undefined,
@@ -225,7 +225,7 @@ export const FloatingMiniChat: React.FC = () => {
     activeMiniAppName,
     bubbleCustomization?.composer?.placeholder,
     composerPrefill,
-    displayedSession?.config.remoteConnectionId,
+    displayedSession?.config?.remoteConnectionId,
     displayedSession?.remoteConnectionId,
     displayedSession?.workspacePath,
     handleMiniAppDraftConsumed,

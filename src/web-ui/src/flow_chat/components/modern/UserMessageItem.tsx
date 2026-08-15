@@ -532,7 +532,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
             workspaceId={currentSession?.workspaceId}
             remoteConnectionId={
               currentSession?.remoteConnectionId
-              || currentSession?.config.remoteConnectionId
+              || currentSession?.config?.remoteConnectionId
             }
             excludeSessionId={resolvedSessionId}
           />

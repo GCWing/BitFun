@@ -961,7 +961,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       ? registration?.remoteConnectionId
       : (
           effectiveTargetSession?.remoteConnectionId
-          || effectiveTargetSession?.config.remoteConnectionId
+          || effectiveTargetSession?.config?.remoteConnectionId
           || mentionWorkspace?.connectionId
         )
   )?.trim() || undefined;
