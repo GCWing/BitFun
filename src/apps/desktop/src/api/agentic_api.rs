@@ -21,7 +21,7 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionModeUpdateRequest, AgentSessionModelSelection,
     AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest, AgentSubmissionSource,
     AgentTurnCancellationRequest, DialogSteerOutcome, PermissionAuditRecord, PermissionGrant,
-    PermissionGrantKey, PermissionReply, PermissionRequest,
+    PermissionGrantKey, PermissionReply, PermissionRequest, RuntimeError,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -65,7 +65,7 @@ use bitfun_core_types::{
     WorktreeError, WorktreeErrorCode,
 };
 use bitfun_product_domains::tool_permissions::PermissionRule;
-use bitfun_runtime_ports::{PermissionMode, SessionTurnWindowRequest};
+use bitfun_runtime_ports::{PermissionMode, PortErrorKind, SessionTurnWindowRequest};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -1845,12 +1845,25 @@ pub async fn update_session_harness_profile(
             ),
         })
         .await
-        .map_err(|error| {
-            format!(
+        .map_err(desktop_update_session_harness_profile_error)
+}
+
+fn desktop_update_session_harness_profile_error(error: RuntimeError) -> String {
+    match error {
+        RuntimeError::Port(port_error) => match port_error.kind {
+            PortErrorKind::SessionInUse => format!("session_in_use: {}", port_error.message),
+            PortErrorKind::OutcomeUnknown => format!("outcome_unknown: {}", port_error.message),
+            PortErrorKind::NotAvailable => format!("not_available: {}", port_error.message),
+            _ => format!(
                 "Failed to update session Harness Profile: {}",
-                error.into_message()
-            )
-        })
+                port_error.message
+            ),
+        },
+        other => format!(
+            "Failed to update session Harness Profile: {}",
+            other.into_message()
+        ),
+    }
 }
 
 #[tauri::command]
@@ -3805,6 +3818,35 @@ mod tests {
     }
 
     #[test]
+    fn harness_profile_update_errors_keep_stable_transport_codes() {
+        for (kind, expected) in [
+            (
+                PortErrorKind::SessionInUse,
+                "session_in_use: session is processing",
+            ),
+            (
+                PortErrorKind::OutcomeUnknown,
+                "outcome_unknown: inspect authoritative state",
+            ),
+            (
+                PortErrorKind::NotAvailable,
+                "not_available: future profile is unsupported",
+            ),
+        ] {
+            let message = match kind {
+                PortErrorKind::SessionInUse => "session is processing",
+                PortErrorKind::OutcomeUnknown => "inspect authoritative state",
+                PortErrorKind::NotAvailable => "future profile is unsupported",
+                _ => unreachable!(),
+            };
+            let encoded = desktop_update_session_harness_profile_error(RuntimeError::Port(
+                bitfun_runtime_ports::PortError::new(kind, message),
+            ));
+            assert_eq!(encoded, expected);
+        }
+    }
+
+    #[test]
     fn project_permission_rule_revisions_distinguish_missing_and_present_files() {
         assert_eq!(
             project_permission_rules_revision(Some("{\"rules\":[]}")),
@@ -3989,6 +4031,7 @@ mod tests {
             session_id: Some("review_child_request-1".to_string()),
             session_name: "Review fixes".to_string(),
             agent_type: "CodeReview".to_string(),
+            execution_profile: None,
             workspace_path: "/workspace".to_string(),
             project_workspace_path: None,
             execution_target: None,

@@ -3436,7 +3436,7 @@ impl ExecutionEngine {
             &context.execution_profile.harness_profile_id,
             self.config.max_rounds,
         )
-        .map_err(BitFunError::Agent)?
+        .map_err(BitFunError::NotImplemented)?
         .max_model_rounds;
 
         // Add System Prompt to the beginning of message list (only for this execution, not persisted)

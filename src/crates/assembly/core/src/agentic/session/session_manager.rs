@@ -3738,7 +3738,7 @@ impl SessionManager {
             &execution_profile.harness_profile_id,
             crate::service::config::types::DEFAULT_MAX_ROUNDS,
         )
-        .map_err(BitFunError::Validation)?;
+        .map_err(BitFunError::NotImplemented)?;
 
         let _mutation_guard = self.acquire_session_mutation(session_id).await?;
         let original_session = self
@@ -3747,9 +3747,9 @@ impl SessionManager {
             .map(|session| session.clone())
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
         if !matches!(original_session.state, SessionState::Idle) {
-            return Err(BitFunError::Validation(format!(
-                "Session Harness Profile can only be updated while idle: {session_id}"
-            )));
+            return Err(BitFunError::SessionInUse {
+                session_id: session_id.to_string(),
+            });
         }
         if original_session.config.execution_profile == execution_profile {
             return Ok(());
@@ -10374,6 +10374,56 @@ mod tests {
             restored.config.agent_route_owner,
             SessionAgentRouteOwner::External,
             "a same-name local mode must not capture a persisted external route"
+        );
+    }
+
+    #[tokio::test]
+    async fn processing_session_rejects_harness_profile_updates_as_session_in_use() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session = manager
+            .create_session(
+                "Busy profile".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("active session")
+            .state = SessionState::Processing {
+            current_turn_id: "turn-active".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+
+        let error = manager
+            .update_session_execution_profile(
+                &session.session_id,
+                bitfun_core_types::SessionExecutionProfile::minimal(
+                    bitfun_core_types::HarnessSelectionSource::new(
+                        bitfun_core_types::HARNESS_SELECTION_USER,
+                    ),
+                ),
+            )
+            .await
+            .expect_err("processing session must reject profile mutation");
+
+        assert!(matches!(
+            error,
+            BitFunError::SessionInUse { ref session_id } if session_id == &session.session_id
+        ));
+        assert_eq!(
+            manager
+                .get_session(&session.session_id)
+                .expect("session")
+                .config
+                .execution_profile,
+            bitfun_core_types::SessionExecutionProfile::default()
         );
     }
 

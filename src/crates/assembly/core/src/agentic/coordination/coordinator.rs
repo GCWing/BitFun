@@ -10812,7 +10812,7 @@ async fn create_agent_session_from_runtime_request(
     )
     .map_err(|message| {
         bitfun_runtime_ports::PortError::new(
-            bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+            bitfun_runtime_ports::PortErrorKind::NotAvailable,
             message,
         )
     })?;
