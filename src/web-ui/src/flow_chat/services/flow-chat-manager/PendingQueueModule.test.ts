@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { pendingQueueManager } from './PendingQueueModule';
+import {
+  LOCAL_SURFACE_ID,
+  activateSurface,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const sessions: string[] = [];
 
@@ -11,7 +15,12 @@ function testSession(): string {
   return sessionId;
 }
 
+beforeEach(() => {
+  activateSurface(LOCAL_SURFACE_ID);
+});
+
 afterEach(() => {
+  activateSurface(LOCAL_SURFACE_ID);
   for (const sessionId of sessions.splice(0)) {
     pendingQueueManager.clear(sessionId);
   }
@@ -52,5 +61,26 @@ describe('PendingQueueModule', () => {
     expect(items[0]).toMatchObject(payload);
     expect(items[0].status).toBe('queued');
     expect(items[0].retryCount).toBe(0);
+  });
+
+  it('keeps equal session ids isolated across device surfaces', () => {
+    const sessionId = testSession();
+    pendingQueueManager.enqueue({ sessionId, content: 'local draft' });
+
+    activateSurface('peer-b');
+    expect(pendingQueueManager.list(sessionId)).toEqual([]);
+    pendingQueueManager.enqueue({ sessionId, content: 'peer draft' });
+
+    activateSurface(LOCAL_SURFACE_ID);
+    expect(pendingQueueManager.list(sessionId).map(item => item.content)).toEqual([
+      'local draft',
+    ]);
+    activateSurface('peer-b');
+    expect(pendingQueueManager.list(sessionId).map(item => item.content)).toEqual([
+      'peer draft',
+    ]);
+
+    pendingQueueManager.clearSurface('peer-b');
+    activateSurface(LOCAL_SURFACE_ID);
   });
 });

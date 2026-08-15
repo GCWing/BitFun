@@ -10,6 +10,11 @@ import { notificationService } from '../../../shared/notification-system';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+  type DeviceSurfaceId,
+} from '@/infrastructure/peer-device/deviceSurface';
 import type { FlowChatContext } from './types';
 import { isProjectedSessionEmpty } from '../../utils/flowChatTurnIdentity';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
@@ -36,29 +41,29 @@ interface SessionConflictRetry {
 const sessionConflictRetries = new Map<string, SessionConflictRetry>();
 const latestSendBySession = new Map<string, symbol>();
 
-function clearSessionConflictRetry(sessionId: string): void {
-  const current = sessionConflictRetries.get(sessionId);
+function clearSessionConflictRetry(sendKey: string): void {
+  const current = sessionConflictRetries.get(sendKey);
   if (!current) return;
   current.active = false;
-  sessionConflictRetries.delete(sessionId);
+  sessionConflictRetries.delete(sendKey);
   notificationService.dismiss(current.notificationId);
 }
 
-function beginSessionSend(sessionId: string): symbol {
+function beginSessionSend(sendKey: string, sessionId: string): symbol {
   const attempt = Symbol(sessionId);
-  latestSendBySession.set(sessionId, attempt);
-  clearSessionConflictRetry(sessionId);
+  latestSendBySession.set(sendKey, attempt);
+  clearSessionConflictRetry(sendKey);
   return attempt;
 }
 
 function completeSessionSend(
-  sessionId: string,
+  sendKey: string,
   attempt: symbol,
   retrySuccess?: () => void,
 ): void {
-  if (latestSendBySession.get(sessionId) !== attempt) return;
-  latestSendBySession.delete(sessionId);
-  clearSessionConflictRetry(sessionId);
+  if (latestSendBySession.get(sendKey) !== attempt) return;
+  latestSendBySession.delete(sendKey);
+  clearSessionConflictRetry(sendKey);
   retrySuccess?.();
 }
 
@@ -66,11 +71,10 @@ function completeSessionSend(
  * Submissions that have created a projection turn but have not yet handed the
  * turn to a host.
  *
- * Switching the rendered device surface clears every session projection. A
- * submission caught mid-flight would resume against a store that no longer
- * holds its session — and because the throw lands before `start_dialog_turn`,
- * the user's message would never reach any host. The surface switch therefore
- * waits for this to drain first.
+ * Switching the rendered device surface selects another projection. A
+ * submission caught mid-flight must not resume through that new projection —
+ * and because the throw may land before `start_dialog_turn`, the surface switch
+ * waits for submissions to drain first.
  */
 let inFlightSubmissions = 0;
 const inFlightSubmissionWaiters = new Set<() => void>();
@@ -97,11 +101,13 @@ export function inFlightSubmissionCount(): number {
  * Salvage a submission that lost the race against a device-surface switch.
  *
  * When the host never accepted the turn the message exists nowhere, so it goes
- * back onto the session's pending queue — queues are keyed by session id and
- * survive a surface switch, so returning to that device drains it. When the
+ * back onto the session's pending queue — queues are keyed by surface and
+ * session id, so returning to that device drains it. When the
  * host did accept it, the turn is already running there and nothing is owed.
  */
 function recoverSubmissionAfterSurfaceSwitch(
+  context: FlowChatContext,
+  surfaceId: DeviceSurfaceId,
   sessionId: string,
   turnTracker: TurnTracker,
   draft: {
@@ -117,8 +123,17 @@ function recoverSubmissionAfterSurfaceSwitch(
     });
     return;
   }
+  if (turnTracker.createdLocalTurnId) {
+    context.flowChatStore.abandonOptimisticDialogTurn(
+      surfaceId,
+      sessionId,
+      turnTracker.createdLocalTurnId,
+    );
+    stateMachineManager.resetForSurface(surfaceId, sessionId);
+    context.processingManager.clearSessionStatusForSurface(surfaceId, sessionId);
+  }
   try {
-    pendingQueueManager.enqueue({
+    pendingQueueManager.enqueueForSurface(surfaceId, {
       sessionId,
       content: draft.message,
       displayMessage: draft.displayMessage,
@@ -202,11 +217,17 @@ export async function sendMessage(
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
   }
+  const surfaceScopeAtSend = getActiveSurfaceScope();
+  const sendCoordinationKey = surfaceScopeAtSend.key(
+    'session-send',
+    surfaceScopeAtSend.epoch,
+    sessionId,
+  );
   if (interruptedTurnRecoveryGate.isSessionInFlight(sessionId)) {
     throw new Error('Interrupted turn recovery is in flight');
   }
   assertSessionSubmissionAllowed(sessionId, options?.sessionMutationLeaseId);
-  const sendAttempt = beginSessionSend(sessionId);
+  const sendAttempt = beginSessionSend(sendCoordinationKey, sessionId);
   const draft: SubmissionDraft = {
     message,
     displayMessage,
@@ -263,7 +284,7 @@ export async function sendMessage(
         throw error;
       }
       completeSessionSend(
-        sessionId,
+        sendCoordinationKey,
         sendAttempt,
         options?.fromSessionConflictRetry
           ? options.onSessionConflictRetrySuccess
@@ -282,9 +303,10 @@ export async function sendMessage(
   }
 
   const turnTracker: TurnTracker = { createdLocalTurnId: null, hostAcceptedTurn: false };
-  // A device-surface switch clears every projection. Anything this submission
-  // reads back after an await belongs to the surface captured here.
+  // A device-surface switch swaps the projection this submission reads through.
+  // Anything read back after an await belongs to the surface captured here.
   const surfaceGenerationAtSend = context.flowChatStore.getSurfaceGeneration();
+  const surfaceIdAtSend = surfaceScopeAtSend.surfaceId;
   beginSubmission();
 
   try {
@@ -307,7 +329,11 @@ export async function sendMessage(
       context.flowChatStore.updateSessionMode(sessionId, currentAgentType);
     }
 
-    if (context.pendingHistoryLoads.has(sessionId)) {
+    if (
+      context.pendingHistoryLoads.has(
+        surfaceScopeAtSend.key('history-load', surfaceScopeAtSend.epoch, sessionId),
+      )
+    ) {
       throw new Error('Session history is still restoring, please retry once loading finishes');
     }
 
@@ -318,6 +344,7 @@ export async function sendMessage(
       const readiness = driver.ensureReady(context, sessionId);
       if (readiness) {
         await readiness;
+        surfaceScopeAtSend.assertCurrent('prepare session submission');
       }
     }
 
@@ -332,6 +359,7 @@ export async function sendMessage(
     const outcome = await driver.startTurn(
       context,
       {
+        surfaceScope: surfaceScopeAtSend,
         sessionId,
         message,
         displayMessage,
@@ -350,7 +378,7 @@ export async function sendMessage(
     }
 
     completeSessionSend(
-      sessionId,
+      sendCoordinationKey,
       sendAttempt,
       options?.fromSessionConflictRetry
         ? options.onSessionConflictRetrySuccess
@@ -358,19 +386,22 @@ export async function sendMessage(
     );
 
   } catch (error) {
-    // A device-surface switch tore this projection down mid-submission. That is
-    // not a turn failure: the session still exists on its own device, and the
-    // state machine and turn we would "clean up" no longer belong to the
-    // rendered surface. Recover the message instead of reporting an error.
-    if (context.flowChatStore.getSurfaceGeneration() !== surfaceGenerationAtSend) {
-      recoverSubmissionAfterSurfaceSwitch(sessionId, turnTracker, {
+    // The window moved to another device mid-submission. That is not a turn
+    // failure: the session still exists on its own device, and the state
+    // machine and turn we would "clean up" no longer belong to the rendered
+    // surface. Recover the message instead of reporting an error.
+    if (
+      isSurfaceChangedError(error)
+      || context.flowChatStore.getSurfaceGeneration() !== surfaceGenerationAtSend
+    ) {
+      recoverSubmissionAfterSurfaceSwitch(context, surfaceIdAtSend, sessionId, turnTracker, {
         message,
         displayMessage,
         agentType,
         options,
       });
-      if (latestSendBySession.get(sessionId) === sendAttempt) {
-        latestSendBySession.delete(sessionId);
+      if (latestSendBySession.get(sendCoordinationKey) === sendAttempt) {
+        latestSendBySession.delete(sendCoordinationKey);
       }
       return;
     }
@@ -401,10 +432,10 @@ export async function sendMessage(
 
     if (!options?.preserveTurnOnStartError) {
       if (isSessionInUseError(error)) {
-        if (latestSendBySession.get(sessionId) !== sendAttempt) {
+        if (latestSendBySession.get(sendCoordinationKey) !== sendAttempt) {
           throw error;
         }
-        clearSessionConflictRetry(sessionId);
+        clearSessionConflictRetry(sendCoordinationKey);
         const retry: SessionConflictRetry = {
           notificationId: '',
           active: true,
@@ -421,7 +452,8 @@ export async function sendMessage(
               if (
                 !retry.active ||
                 retry.inFlight ||
-                sessionConflictRetries.get(sessionId) !== retry
+                !surfaceScopeAtSend.isCurrent() ||
+                sessionConflictRetries.get(sendCoordinationKey) !== retry
               ) {
                 return;
               }
@@ -440,18 +472,18 @@ export async function sendMessage(
             },
           }],
         });
-        sessionConflictRetries.set(sessionId, retry);
+        sessionConflictRetries.set(sendCoordinationKey, retry);
       } else {
-        if (latestSendBySession.get(sessionId) === sendAttempt) {
-          latestSendBySession.delete(sessionId);
+        if (latestSendBySession.get(sendCoordinationKey) === sendAttempt) {
+          latestSendBySession.delete(sendCoordinationKey);
           notificationService.error(errorMessage, {
             title: 'Thinking process error',
             duration: 5000
           });
         }
       }
-    } else if (latestSendBySession.get(sessionId) === sendAttempt) {
-      latestSendBySession.delete(sessionId);
+    } else if (latestSendBySession.get(sendCoordinationKey) === sendAttempt) {
+      latestSendBySession.delete(sendCoordinationKey);
     }
 
     throw error;

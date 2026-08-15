@@ -18,6 +18,7 @@ import type { Session } from '../types/flow-chat';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import type { SessionDriverId } from './resolve';
+import type { SurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 
 export type { SessionDriverId } from './resolve';
 
@@ -71,6 +72,8 @@ export type SubmissionPlan =
   | { kind: 'reject'; reason: string };
 
 export interface StartTurnInput {
+  /** Device activation that owns every projection write in this submission. */
+  surfaceScope: SurfaceScope;
   sessionId: string;
   message: string;
   displayMessage?: string;
@@ -142,6 +145,8 @@ export type PermissionReplyKindLike = 'once' | 'always' | 'reject';
  * driver takes over: workspace identity, agent type, and the initial title.
  */
 export interface SessionCreationSeed {
+  /** Device activation that owns the created session projection. */
+  surfaceScope: SurfaceScope;
   config: SessionConfig;
   agentType: string;
   sessionName: string;

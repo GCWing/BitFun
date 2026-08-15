@@ -67,6 +67,7 @@ import {
   sessionComposerStore,
   type PendingLargePasteMap,
 } from '../store/sessionComposerStore';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import {
   failedSubmissionRecoveryTarget,
   shouldRecordContextMutation,
@@ -424,6 +425,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isSceneActive = true,
   registration,
 }) => {
+  const deviceSurfaceScope = getActiveSurfaceScope();
   const { t } = useTranslation('flow-chat');
   const { t: tWorktrees } = useI18n('worktrees');
   const canLaunchReview = isTauriRuntime();
@@ -1631,15 +1633,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [canUseSkillsForTarget, inlineTriggerState, isAcpInputSession]);
 
   const previousComposerSessionIdRef = useRef<string | null>(null);
+  const previousComposerSurfaceEpochRef = useRef(deviceSurfaceScope.epoch);
 
   React.useLayoutEffect(() => {
     const previousSessionId = previousComposerSessionIdRef.current;
+    const surfaceChanged = previousComposerSurfaceEpochRef.current !== deviceSurfaceScope.epoch;
     const draft = sessionComposerStore.getState().activateDraft(
       previousSessionId,
       effectiveTargetSessionId,
       useContextStore.getState().contexts,
+      !surfaceChanged,
     );
     previousComposerSessionIdRef.current = effectiveTargetSessionId;
+    previousComposerSurfaceEpochRef.current = deviceSurfaceScope.epoch;
 
     const nextValue = draft.value;
     const nextContexts = draft.contexts;
@@ -1669,7 +1675,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       query: '',
       selectedIndex: 0,
     });
-  }, [effectiveTargetSessionId, replaceContexts]);
+  }, [deviceSurfaceScope.epoch, effectiveTargetSessionId, replaceContexts]);
 
   useEffect(() => {
     let previousContexts = useContextStore.getState().contexts;

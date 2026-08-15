@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiClient } from './ApiClient';
+import { ApiClient, createRetryMiddleware } from './ApiClient';
+import {
+  LOCAL_SURFACE_ID,
+  SurfaceChangedError,
+  activateSurface,
+  isSurfaceChangedError,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const adapterMocks = vi.hoisted(() => ({
   request: vi.fn(),
@@ -22,6 +28,7 @@ const loggerMocks = vi.hoisted(() => ({
 
 vi.mock('../adapters', () => ({
   getTransportAdapter: () => adapterMocks,
+  isPeerLocalOnlyCommand: (command: string) => command === 'account_status',
 }));
 
 vi.mock('@/shared/utils/logger', () => ({
@@ -36,6 +43,7 @@ vi.mock('@/shared/utils/startupTrace', () => ({
 
 describe('ApiClient startup trace classification', () => {
   beforeEach(() => {
+    activateSurface(LOCAL_SURFACE_ID);
     vi.clearAllMocks();
     delete globalThis.__BITFUN_PERF_TRACE_ENABLED__;
   });
@@ -120,6 +128,96 @@ describe('ApiClient startup trace classification', () => {
         },
       },
     });
+  });
+
+  it('preserves a surface change as control flow and never retries it', async () => {
+    adapterMocks.request.mockRejectedValue(
+      new SurfaceChangedError('peer-b', 7, 'load sessions'),
+    );
+    const client = new ApiClient({ enableLogging: true, retries: 3 });
+
+    const error = await client.invoke('list_persisted_sessions_page', {
+      request: { workspacePath: '/repo' },
+    }).catch((caught: unknown) => caught);
+
+    expect(isSurfaceChangedError(error)).toBe(true);
+    expect(adapterMocks.request).toHaveBeenCalledTimes(1);
+    expect(loggerMocks.warn).not.toHaveBeenCalledWith(
+      'Retrying request',
+      expect.anything(),
+    );
+  });
+
+  it('does not let retry middleware replay a stale request on another surface', async () => {
+    adapterMocks.request.mockRejectedValue(
+      new SurfaceChangedError('peer-b', 7, 'load sessions'),
+    );
+    const client = new ApiClient({
+      enableLogging: false,
+      retries: 0,
+      middleware: [createRetryMiddleware(3, 0)],
+    });
+
+    const error = await client.invoke('list_persisted_sessions_page', {
+      request: { workspacePath: '/repo' },
+    }).catch((caught: unknown) => caught);
+
+    expect(isSurfaceChangedError(error)).toBe(true);
+    expect(adapterMocks.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks the surface again when delayed middleware reaches the transport', async () => {
+    let continueRequest!: () => void;
+    const middlewareGate = new Promise<void>(resolve => {
+      continueRequest = resolve;
+    });
+    const client = new ApiClient({
+      enableLogging: false,
+      retries: 0,
+      middleware: [async (request, next) => {
+        await middlewareGate;
+        return next(request);
+      }],
+    });
+
+    const pending = client.invoke('list_persisted_sessions_page', {
+      request: { workspacePath: '/repo' },
+    });
+    activateSurface('peer-b');
+    continueRequest();
+
+    await expect(pending).rejects.toSatisfy(isSurfaceChangedError);
+    expect(adapterMocks.request).not.toHaveBeenCalled();
+  });
+
+  it('rejects a product response that lands after the device activation changed', async () => {
+    let resolveRequest!: (value: unknown) => void;
+    adapterMocks.request.mockReturnValueOnce(new Promise(resolve => {
+      resolveRequest = resolve;
+    }));
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    const pending = client.invoke('list_persisted_sessions_page', {
+      request: { workspacePath: '/repo' },
+    });
+    activateSurface('peer-b');
+    resolveRequest({ sessions: [] });
+
+    await expect(pending).rejects.toSatisfy(isSurfaceChangedError);
+  });
+
+  it('allows controller-plane responses to survive a rendered surface change', async () => {
+    let resolveRequest!: (value: unknown) => void;
+    adapterMocks.request.mockReturnValueOnce(new Promise(resolve => {
+      resolveRequest = resolve;
+    }));
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    const pending = client.invoke('account_status', {});
+    activateSurface('peer-b');
+    resolveRequest({ loggedIn: true });
+
+    await expect(pending).resolves.toEqual({ loggedIn: true });
   });
 
   it('uses the message from plain structured Tauri errors', async () => {

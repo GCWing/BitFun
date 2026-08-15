@@ -5,6 +5,7 @@ import {
   deleteChatSession,
   ensureBackendSession,
   hydrateSessionHistoryForDetail,
+  pendingHistoryLoadKey,
   preloadHistoricalSessionForOpen,
   reloadSessionTitle,
   retryCreateBackendSession,
@@ -12,6 +13,10 @@ import {
   SESSION_ACTIVITY_TOUCH_DELAY_MS,
   switchChatSession,
 } from './SessionModule';
+import {
+  activateSurface,
+  LOCAL_SURFACE_ID,
+} from '@/infrastructure/peer-device/deviceSurface';
 import {
   clearRecentHistorySessionOpenIntent,
   dispatchHistorySessionOpenIntent,
@@ -342,6 +347,53 @@ describe('createChatSession', () => {
     expect(agentApiMocks.createSession).toHaveBeenCalledTimes(1);
   });
 
+  it('does not reuse or project a session creation from a superseded device activation', async () => {
+    const firstResponse = createDeferred<{ sessionId: string }>();
+    const secondResponse = createDeferred<{ sessionId: string }>();
+    agentApiMocks.createSession
+      .mockReturnValueOnce(firstResponse.promise)
+      .mockReturnValueOnce(secondResponse.promise);
+    const first = createContext(createSession({ workspacePath: '/shared/repo' }));
+    const second = createContext(createSession({ workspacePath: '/shared/repo' }));
+    let firstCreate: Promise<string> | undefined;
+    let secondCreate: Promise<string> | undefined;
+
+    try {
+      activateSurface('peer-a');
+      firstCreate = createChatSession(
+        first.context,
+        { workspacePath: '/shared/repo' },
+        'agentic',
+      );
+      await vi.waitFor(() => {
+        expect(agentApiMocks.createSession).toHaveBeenCalledTimes(1);
+      });
+
+      activateSurface('peer-b');
+      secondCreate = createChatSession(
+        second.context,
+        { workspacePath: '/shared/repo' },
+        'agentic',
+      );
+      await vi.waitFor(() => {
+        expect(agentApiMocks.createSession).toHaveBeenCalledTimes(2);
+      });
+
+      secondResponse.resolve({ sessionId: 'peer-b-created' });
+      await expect(secondCreate).resolves.toBe('peer-b-created');
+      expect(second.flowChatStore.createSession).toHaveBeenCalledTimes(1);
+
+      firstResponse.resolve({ sessionId: 'peer-a-created' });
+      await expect(firstCreate).rejects.toMatchObject({ isSurfaceChangedError: true });
+      expect(first.flowChatStore.createSession).not.toHaveBeenCalled();
+    } finally {
+      firstResponse.resolve({ sessionId: 'peer-a-created' });
+      secondResponse.resolve({ sessionId: 'peer-b-created' });
+      activateSurface(LOCAL_SURFACE_ID);
+      await Promise.allSettled([firstCreate, secondCreate].filter(Boolean) as Promise<string>[]);
+    }
+  });
+
   it('projects the runtime-resolved model for a newly created session', async () => {
     configManagerMocks.getConfigs.mockImplementation(async (paths: string[]) => {
       if (paths.length === 1 && paths[0] === 'ai.agent_model_defaults') {
@@ -571,7 +623,7 @@ describe('SessionModule historical session coordination', () => {
   it('keeps metadata-only historical sessions out of the active render path until hydrated', async () => {
     const load = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession());
-    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    context.pendingHistoryLoads.set(pendingHistoryLoadKey('history-other'), Promise.resolve());
     flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
     persistenceMocks.touchSessionActivity.mockResolvedValueOnce(undefined);
 
@@ -696,6 +748,27 @@ describe('SessionModule historical session coordination', () => {
     expect(persistenceMocks.touchSessionActivity).not.toHaveBeenCalled();
   });
 
+  it('does not touch activity on the device activated after the delay was scheduled', async () => {
+    const session = createSession({
+      historyState: 'ready',
+      dialogTurns: [{ id: 'turn-1', userMessage: { content: 'one' } } as any],
+    });
+    const { context } = createContext(session);
+    persistenceMocks.touchSessionActivity.mockResolvedValue(undefined);
+
+    try {
+      activateSurface('peer-a');
+      await switchChatSession(context, 'history-1');
+
+      activateSurface('peer-b');
+      await vi.advanceTimersByTimeAsync(SESSION_ACTIVITY_TOUCH_DELAY_MS);
+
+      expect(persistenceMocks.touchSessionActivity).not.toHaveBeenCalled();
+    } finally {
+      activateSurface(LOCAL_SURFACE_ID);
+    }
+  });
+
   it('does not block remote metadata-only historical sessions on local pre-hydration before switching', async () => {
     const load = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession({
@@ -717,7 +790,7 @@ describe('SessionModule historical session coordination', () => {
   it('preloads a local metadata-only historical session during a competing history load without switching', async () => {
     const load = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession());
-    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    context.pendingHistoryLoads.set(pendingHistoryLoadKey('history-other'), Promise.resolve());
     flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
 
     preloadHistoricalSessionForOpen(context, 'history-1');
@@ -755,6 +828,46 @@ describe('SessionModule historical session coordination', () => {
 
     load.resolve();
     await Promise.all([first, second]);
+  });
+
+  it('does not reuse a same-id history load from another device activation', async () => {
+    const firstLoad = createDeferred<void>();
+    const secondLoad = createDeferred<void>();
+    const first = createContext(createSession());
+    const second = createContext(createSession());
+    const sharedPendingLoads = new Map<string, Promise<void>>();
+    const sharedCapabilities = new Map();
+    first.context.pendingHistoryLoads = sharedPendingLoads;
+    second.context.pendingHistoryLoads = sharedPendingLoads;
+    first.context.pendingHistoryLoadCapabilities = sharedCapabilities;
+    second.context.pendingHistoryLoadCapabilities = sharedCapabilities;
+    first.flowChatStore.loadSessionHistory.mockReturnValueOnce(firstLoad.promise);
+    second.flowChatStore.loadSessionHistory.mockReturnValueOnce(secondLoad.promise);
+    let firstHydrate: Promise<void> | undefined;
+    let secondHydrate: Promise<void> | undefined;
+
+    try {
+      activateSurface('peer-a');
+      firstHydrate = hydrateSessionHistoryForDetail(first.context, 'history-1');
+      expect(first.flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+
+      activateSurface('peer-b');
+      secondHydrate = hydrateSessionHistoryForDetail(second.context, 'history-1');
+      expect(second.flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+      expect(sharedPendingLoads.size).toBe(2);
+
+      secondLoad.resolve();
+      await expect(secondHydrate).resolves.toBeUndefined();
+
+      firstLoad.resolve();
+      await expect(firstHydrate).rejects.toMatchObject({ isSurfaceChangedError: true });
+      expect(sharedPendingLoads.size).toBe(0);
+    } finally {
+      firstLoad.resolve();
+      secondLoad.resolve();
+      activateSurface(LOCAL_SURFACE_ID);
+      await Promise.allSettled([firstHydrate, secondHydrate].filter(Boolean) as Promise<void>[]);
+    }
   });
 
   it('uses the owning panel scope when a legacy child is missing its workspace location', async () => {
@@ -814,7 +927,7 @@ describe('SessionModule historical session coordination', () => {
     const { context, flowChatStore } = createContext(createSession({
       sessionKind: 'subagent',
     }));
-    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    context.pendingHistoryLoads.set(pendingHistoryLoadKey('history-other'), Promise.resolve());
     flowChatStore.loadSessionHistory
       .mockReturnValueOnce(preload.promise)
       .mockResolvedValueOnce(undefined);
@@ -844,7 +957,7 @@ describe('SessionModule historical session coordination', () => {
     const stalePreload = createDeferred<void>();
     const retryLoad = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession());
-    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    context.pendingHistoryLoads.set(pendingHistoryLoadKey('history-other'), Promise.resolve());
     persistenceMocks.touchSessionActivity.mockResolvedValue(undefined);
     flowChatStore.loadSessionHistory
       .mockReturnValueOnce(stalePreload.promise)
@@ -899,7 +1012,7 @@ describe('SessionModule historical session coordination', () => {
     const stalePreload = createDeferred<void>();
     const newerSwitchLoad = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession());
-    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    context.pendingHistoryLoads.set(pendingHistoryLoadKey('history-other'), Promise.resolve());
     flowChatStore.setState((prev: any) => ({
       ...prev,
       sessions: new Map(prev.sessions).set('history-2', createSession({
@@ -970,7 +1083,7 @@ describe('SessionModule historical session coordination', () => {
       remoteSshHost: 'remote-host',
     });
     const { context, flowChatStore } = createContext(remoteSession);
-    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    context.pendingHistoryLoads.set(pendingHistoryLoadKey('history-other'), Promise.resolve());
 
     preloadHistoricalSessionForOpen(context, 'history-1');
 
@@ -1196,7 +1309,7 @@ describe('SessionModule historical session coordination', () => {
   it('reuses pending historical hydration before ensuring the backend session', async () => {
     const pendingHydrate = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession());
-    context.pendingHistoryLoads.set('history-1', pendingHydrate.promise);
+    context.pendingHistoryLoads.set(pendingHistoryLoadKey('history-1'), pendingHydrate.promise);
     agentApiMocks.ensureCoordinatorSession.mockResolvedValueOnce(undefined);
 
     const ensure = ensureBackendSession(context, 'history-1');
@@ -1280,6 +1393,56 @@ describe('SessionModule historical session coordination', () => {
     expect(context.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
       contextRestoreState: 'ready',
     });
+  });
+
+  it('does not reuse or commit a same-id context restore across device activations', async () => {
+    const createRestoringContext = () => createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [{ id: 'turn-1' } as any],
+    } as any));
+    const first = createRestoringContext();
+    const second = createRestoringContext();
+    const sharedRestores = new Map<string, Promise<void>>();
+    first.context.pendingContextRestores = sharedRestores;
+    second.context.pendingContextRestores = sharedRestores;
+    const firstRestore = createDeferred<void>();
+    const secondRestore = createDeferred<void>();
+    agentApiMocks.ensureCoordinatorSession
+      .mockReturnValueOnce(firstRestore.promise)
+      .mockReturnValueOnce(secondRestore.promise);
+    let firstEnsure: Promise<void> | undefined;
+    let secondEnsure: Promise<void> | undefined;
+
+    try {
+      activateSurface('peer-a');
+      firstEnsure = ensureBackendSession(first.context, 'history-1');
+      expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledTimes(1);
+
+      activateSurface('peer-b');
+      secondEnsure = ensureBackendSession(second.context, 'history-1');
+      expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledTimes(2);
+      expect(sharedRestores.size).toBe(2);
+
+      secondRestore.resolve();
+      await expect(secondEnsure).resolves.toBeUndefined();
+      expect(second.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+        contextRestoreState: 'ready',
+      });
+
+      firstRestore.resolve();
+      await expect(firstEnsure).rejects.toMatchObject({ isSurfaceChangedError: true });
+      expect(first.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+        contextRestoreState: 'pending',
+      });
+      expect(sharedRestores.size).toBe(0);
+    } finally {
+      firstRestore.resolve();
+      secondRestore.resolve();
+      activateSurface(LOCAL_SURFACE_ID);
+      await Promise.allSettled([firstEnsure, secondEnsure].filter(Boolean) as Promise<void>[]);
+    }
   });
 
   it('does not recreate a view-restored session with loaded turns when context restore fails', async () => {

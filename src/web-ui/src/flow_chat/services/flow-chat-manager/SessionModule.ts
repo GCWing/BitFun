@@ -14,6 +14,11 @@ import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import {
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+  type SurfaceScope,
+} from '@/infrastructure/peer-device/deviceSurface';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { isRemoteWorkspace, WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type {
@@ -70,12 +75,15 @@ export const SESSION_ACTIVITY_TOUCH_DELAY_MS = 350;
 let latestSwitchRequestId = 0;
 let pendingActivityTouchTimer: ReturnType<typeof setTimeout> | null = null;
 
-function scheduleSessionActivityTouch(task: () => void): void {
+function scheduleSessionActivityTouch(scope: SurfaceScope, task: () => void): void {
   if (pendingActivityTouchTimer !== null) {
     clearTimeout(pendingActivityTouchTimer);
   }
   pendingActivityTouchTimer = setTimeout(() => {
     pendingActivityTouchTimer = null;
+    if (!scope.isCurrent()) {
+      return;
+    }
     task();
   }, SESSION_ACTIVITY_TOUCH_DELAY_MS);
 }
@@ -85,9 +93,43 @@ const normalizeOptional = (value: string | undefined): string | undefined => {
   return trimmed ? trimmed : undefined;
 };
 
-function hasCompetingHistoryLoad(context: FlowChatContext, sessionId: string): boolean {
-  return Array.from(context.pendingHistoryLoads.keys())
-    .some(pendingSessionId => pendingSessionId !== sessionId);
+export function pendingHistoryLoadKey(
+  sessionId: string,
+  scope: SurfaceScope = getActiveSurfaceScope(),
+): string {
+  return scope.key('history-load', scope.epoch, sessionId);
+}
+
+function pendingHistoryLoadSessionId(
+  key: string,
+  scope: SurfaceScope,
+): string | null {
+  try {
+    const parsed = JSON.parse(key) as unknown;
+    if (
+      Array.isArray(parsed)
+      && parsed[0] === scope.surfaceId
+      && parsed[1] === 'history-load'
+      && parsed[2] === scope.epoch
+      && typeof parsed[3] === 'string'
+    ) {
+      return parsed[3];
+    }
+  } catch {
+    // In-flight keys are internal and non-persistent; unknown keys are ignored.
+  }
+  return null;
+}
+
+function hasCompetingHistoryLoad(
+  context: FlowChatContext,
+  sessionId: string,
+  scope: SurfaceScope = getActiveSurfaceScope(),
+): boolean {
+  return Array.from(context.pendingHistoryLoads.keys()).some(key => {
+    const pendingSessionId = pendingHistoryLoadSessionId(key, scope);
+    return pendingSessionId !== null && pendingSessionId !== sessionId;
+  });
 }
 
 const hostFromSshConnectionId = (connectionId: string | undefined): string | undefined => {
@@ -172,9 +214,11 @@ async function hydrateHistoricalSession(
     location?: SessionHistoryHydrationLocation;
   },
 ): Promise<void> {
-  const existing = context.pendingHistoryLoads.get(sessionId);
+  const surfaceScope = getActiveSurfaceScope();
+  const pendingKey = pendingHistoryLoadKey(sessionId, surfaceScope);
+  const existing = context.pendingHistoryLoads.get(pendingKey);
   if (existing) {
-    const existingCapabilities = context.pendingHistoryLoadCapabilities?.get(sessionId);
+    const existingCapabilities = context.pendingHistoryLoadCapabilities?.get(pendingKey);
     const requestedLocationKey = getHydrationLocationKey(options?.location);
     const requiresStrongerHydrate =
       (options?.includeInternal === true && existingCapabilities?.includeInternal !== true) ||
@@ -190,16 +234,18 @@ async function hydrateHistoricalSession(
     let existingError: unknown;
     try {
       await existing;
+      surfaceScope.assertCurrent('reuse historical session hydration');
     } catch (error) {
       existingFailed = true;
       existingError = error;
     }
     if (requiresStrongerHydrate) {
-      if (context.pendingHistoryLoads.get(sessionId) === existing) {
-        context.pendingHistoryLoads.delete(sessionId);
+      surfaceScope.assertCurrent('upgrade historical session hydration');
+      if (context.pendingHistoryLoads.get(pendingKey) === existing) {
+        context.pendingHistoryLoads.delete(pendingKey);
       }
-      if (context.pendingHistoryLoadCapabilities?.get(sessionId)?.promise === existing) {
-        context.pendingHistoryLoadCapabilities.delete(sessionId);
+      if (context.pendingHistoryLoadCapabilities?.get(pendingKey)?.promise === existing) {
+        context.pendingHistoryLoadCapabilities.delete(pendingKey);
       }
       await hydrateHistoricalSession(context, sessionId, notifyOnError, options);
       return;
@@ -219,8 +265,8 @@ async function hydrateHistoricalSession(
       retryStillRelevant &&
       shouldRetryActiveStale
     ) {
-      if (context.pendingHistoryLoads.get(sessionId) === existing) {
-        context.pendingHistoryLoads.delete(sessionId);
+      if (context.pendingHistoryLoads.get(pendingKey) === existing) {
+        context.pendingHistoryLoads.delete(pendingKey);
       }
       startupTrace.markPhase('historical_session_hydrate_retry_active_stale_reuse', {
         sessionId,
@@ -237,6 +283,7 @@ async function hydrateHistoricalSession(
   const traceStartedAt = nowMs();
 
   const loadPromise = (async () => {
+    surfaceScope.assertCurrent('start historical session hydration');
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session || (!session.isHistorical && options?.allowNonHistorical !== true)) {
       recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_skipped', {
@@ -291,12 +338,13 @@ async function hydrateHistoricalSession(
         deferFullHistoryUntilActive,
       },
     );
+    surfaceScope.assertCurrent('finish historical session hydration');
   })();
 
-  context.pendingHistoryLoads.set(sessionId, loadPromise);
+  context.pendingHistoryLoads.set(pendingKey, loadPromise);
   const pendingHistoryLoadCapabilities =
     context.pendingHistoryLoadCapabilities ??= new Map();
-  pendingHistoryLoadCapabilities.set(sessionId, {
+  pendingHistoryLoadCapabilities.set(pendingKey, {
     promise: loadPromise,
     includeInternal: options?.includeInternal === true,
     deferFullHistoryUntilActive: options?.deferFullHistoryUntilActive ?? true,
@@ -310,6 +358,9 @@ async function hydrateHistoricalSession(
       durationMs: elapsedMs(traceStartedAt),
     });
   } catch (error) {
+    if (isSurfaceChangedError(error)) {
+      throw error;
+    }
     recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_failed');
     startupTrace.markPhase('historical_session_hydrate_request_failed', {
       durationMs: elapsedMs(traceStartedAt),
@@ -322,14 +373,16 @@ async function hydrateHistoricalSession(
     }
     throw error;
   } finally {
-    clearHistorySessionHydratePending(sessionId, 'settled', {
-      pendingStillCurrent: context.pendingHistoryLoads.get(sessionId) === loadPromise,
-    });
-    if (context.pendingHistoryLoads.get(sessionId) === loadPromise) {
-      context.pendingHistoryLoads.delete(sessionId);
+    if (surfaceScope.isCurrent()) {
+      clearHistorySessionHydratePending(sessionId, 'settled', {
+        pendingStillCurrent: context.pendingHistoryLoads.get(pendingKey) === loadPromise,
+      });
     }
-    if (context.pendingHistoryLoadCapabilities?.get(sessionId)?.promise === loadPromise) {
-      context.pendingHistoryLoadCapabilities.delete(sessionId);
+    if (context.pendingHistoryLoads.get(pendingKey) === loadPromise) {
+      context.pendingHistoryLoads.delete(pendingKey);
+    }
+    if (context.pendingHistoryLoadCapabilities?.get(pendingKey)?.promise === loadPromise) {
+      context.pendingHistoryLoadCapabilities.delete(pendingKey);
     }
   }
 }
@@ -386,6 +439,9 @@ export function preloadHistoricalSessionForOpen(
   }
 
   void hydrateHistoricalSession(context, sessionId, false).catch(error => {
+    if (isSurfaceChangedError(error)) {
+      return;
+    }
     log.debug('Historical session preload failed', { sessionId, error });
   });
 }
@@ -524,6 +580,9 @@ export const resolveAgentTypeForSessionCreation = async (
       modeId: configuredDefaultMode,
     });
   } catch (error) {
+    if (isSurfaceChangedError(error)) {
+      throw error;
+    }
     log.warn('Failed to resolve default chat input mode preference during session creation', {
       error,
     });
@@ -552,6 +611,7 @@ export async function createChatSession(
   config: SessionConfig,
   mode?: string
 ): Promise<string> {
+  const surfaceScope = getActiveSurfaceScope();
   try {
     const workspacePath = resolveSessionWorkspacePath(context, config);
     const workspace = resolveSessionWorkspace(context, config);
@@ -567,6 +627,7 @@ export async function createChatSession(
         ? workspace.sshHost?.trim() || undefined
         : undefined;
     const agentType = await resolveAgentTypeForSessionCreation(mode, workspace);
+    surfaceScope.assertCurrent('resolve session creation mode');
     const sessionMode = normalizeSessionDisplayMode(agentType, workspace);
     const workspaceCreationKey =
       workspace?.id?.trim()
@@ -574,12 +635,14 @@ export async function createChatSession(
         : remoteConnectionId != null && remoteConnectionId !== ''
           ? `${remoteConnectionId}\n${workspacePath}`
           : workspacePath;
-    const creationKey = JSON.stringify([
+    const creationKey = surfaceScope.key(
+      'session-create',
+      surfaceScope.epoch,
       workspaceCreationKey,
       agentType,
-      config.executionTargetRequest ?? { kind: 'local' },
-      config.dispatchTargetRequest ?? { kind: 'local' },
-    ]);
+      JSON.stringify(config.executionTargetRequest ?? { kind: 'local' }),
+      JSON.stringify(config.dispatchTargetRequest ?? { kind: 'local' }),
+    );
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
     if (pendingCreation) {
@@ -589,6 +652,7 @@ export async function createChatSession(
     // Register the pending promise before any async work below. Remote workspace
     // activation can rerun initialization while model config is still loading.
     const createPromise = Promise.resolve().then(async () => {
+      surfaceScope.assertCurrent('start session creation');
       const sameModeCount = getNextDefaultSessionTitleCount(
         context.flowChatStore.getState().sessions.values(),
         {
@@ -606,7 +670,8 @@ export async function createChatSession(
       );
       const sessionName = titleDescriptor.text;
 
-      return driverForCreation(config).createSession(context, {
+      const sessionId = await driverForCreation(config).createSession(context, {
+        surfaceScope,
         config,
         agentType,
         sessionName,
@@ -617,6 +682,8 @@ export async function createChatSession(
         remoteConnectionId,
         remoteSshHost,
       });
+      surfaceScope.assertCurrent('finish session creation');
+      return sessionId;
     });
 
     pendingSessionCreations.set(creationKey, createPromise);
@@ -628,6 +695,9 @@ export async function createChatSession(
       }
     }
   } catch (error) {
+    if (isSurfaceChangedError(error)) {
+      throw error;
+    }
     log.error('Failed to create chat session', { config, error });
     
     notificationService.error('Failed to create chat session', {
@@ -644,6 +714,7 @@ export async function switchChatSession(
   context: FlowChatContext,
   sessionId: string
 ): Promise<void> {
+  const surfaceScope = getActiveSurfaceScope();
   try {
     const switchRequestId = ++latestSwitchRequestId;
     const session = context.flowChatStore.getState().sessions.get(sessionId);
@@ -666,7 +737,7 @@ export async function switchChatSession(
       if (driverForSession(sessionId, session).id === 'dispatch') {
         return;
       }
-      scheduleSessionActivityTouch(() => {
+      scheduleSessionActivityTouch(surfaceScope, () => {
         const latestState = context.flowChatStore.getState();
         const latestSession = latestState.sessions.get(sessionId);
         if (switchRequestId !== latestSwitchRequestId || latestState.activeSessionId !== sessionId || !latestSession) {
@@ -678,6 +749,9 @@ export async function switchChatSession(
           latestSession.remoteConnectionId,
           latestSession.remoteSshHost
         ).catch(error => {
+          if (isSurfaceChangedError(error)) {
+            return;
+          }
           log.debug('Failed to touch session activity', { sessionId, error });
         });
       });
@@ -699,10 +773,16 @@ export async function switchChatSession(
     if (shouldHydrateBeforeSwitch) {
       try {
         await hydrateHistoricalSession(context, sessionId, true, {
-          isRetryStillRelevant: () => switchRequestId === latestSwitchRequestId,
+          isRetryStillRelevant: () => (
+            surfaceScope.isCurrent() && switchRequestId === latestSwitchRequestId
+          ),
           retryActiveStaleReuse: shouldActivateBeforeHydrate,
         });
-      } catch {
+        surfaceScope.assertCurrent('hydrate session before switch');
+      } catch (error) {
+        if (isSurfaceChangedError(error)) {
+          throw error;
+        }
         // The hydrate path already marks the session failed and notifies the user.
         // Continue with activation so the failed state is visible.
       }
@@ -725,6 +805,7 @@ export async function switchChatSession(
     // In that explicit path the intent shield keeps metadata-only content from
     // flashing while the old large session is unmounted immediately.
     if (!shouldActivateBeforeHydrate) {
+      surfaceScope.assertCurrent('activate switched session');
       context.flowChatStore.switchSession(sessionId);
       recordHistorySessionDiagnosticEvent(sessionId, 'switch_activated_after_hydrate', {
         switchRequestId,
@@ -743,9 +824,16 @@ export async function switchChatSession(
       recordHistorySessionDiagnosticEvent(sessionId, 'switch_background_hydrate_started', {
         switchRequestId,
       });
-      void hydrateHistoricalSession(context, sessionId, true);
+      void hydrateHistoricalSession(context, sessionId, true).catch(error => {
+        if (!isSurfaceChangedError(error)) {
+          log.debug('Historical session background hydrate failed', { sessionId, error });
+        }
+      });
     }
   } catch (error) {
+    if (isSurfaceChangedError(error)) {
+      throw error;
+    }
     log.error('Failed to switch chat session', { sessionId, error });
     notificationService.error('Failed to switch session', {
       duration: 3000
@@ -940,6 +1028,7 @@ export async function ensureBackendSession(
   context: FlowChatContext,
   sessionId: string
 ): Promise<void> {
+  const surfaceScope = getActiveSurfaceScope();
   const session = context.flowChatStore.getState().sessions.get(sessionId);
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
@@ -953,6 +1042,7 @@ export async function ensureBackendSession(
 
   if (session.isHistorical) {
     await hydrateHistoricalSession(context, sessionId, false);
+    surfaceScope.assertCurrent('hydrate session before backend readiness');
   }
 
   const latestSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
@@ -988,6 +1078,7 @@ export async function ensureBackendSession(
 
   const markBackendContextReady = () => {
     if (!isHistoricalSession && !requiresContextRestore) return;
+    if (!surfaceScope.isCurrent()) return;
     context.flowChatStore.setState(prev => {
       const newSessions = new Map(prev.sessions);
       const sess = newSessions.get(sessionId);
@@ -1005,6 +1096,7 @@ export async function ensureBackendSession(
 
   const markBackendContextFailed = () => {
     if (!requiresContextRestore) return;
+    if (!surfaceScope.isCurrent()) return;
     context.flowChatStore.setState(prev => {
       const newSessions = new Map(prev.sessions);
       const sess = newSessions.get(sessionId);
@@ -1016,6 +1108,7 @@ export async function ensureBackendSession(
   };
 
   const ensureCoordinator = async () => {
+    surfaceScope.assertCurrent('ensure coordinator session');
     await agentAPI.ensureCoordinatorSession({
       sessionId,
       workspacePath: projectWorkspacePath,
@@ -1023,6 +1116,7 @@ export async function ensureBackendSession(
       remoteSshHost: effectiveSshHost,
       includeInternal: latestSession.sessionKind === 'subagent',
     });
+    surfaceScope.assertCurrent('ensure coordinator session');
     markBackendContextReady();
   };
 
@@ -1030,20 +1124,25 @@ export async function ensureBackendSession(
     if (!context.pendingContextRestores) {
       context.pendingContextRestores = new Map();
     }
-    const restoreKey = [
+    const restoreKey = surfaceScope.key(
+      'context-restore',
+      surfaceScope.epoch,
       sessionId,
       projectWorkspacePath,
-      effectiveConnectionId ?? '',
-      effectiveSshHost ?? '',
-    ].join('\u001f');
+      effectiveConnectionId,
+      effectiveSshHost,
+    );
     const existingRestore = context.pendingContextRestores.get(restoreKey);
     if (existingRestore) {
       await existingRestore;
+      surfaceScope.assertCurrent('reuse backend context restore');
       return;
     }
 
     const restorePromise = ensureCoordinator().catch(error => {
-      markBackendContextFailed();
+      if (!isSurfaceChangedError(error)) {
+        markBackendContextFailed();
+      }
       throw error;
     }).finally(() => {
       if (context.pendingContextRestores?.get(restoreKey) === restorePromise) {
@@ -1062,6 +1161,10 @@ export async function ensureBackendSession(
 
     await ensureCoordinator();
   } catch (e: any) {
+    if (isSurfaceChangedError(e)) {
+      throw e;
+    }
+    surfaceScope.assertCurrent('handle coordinator session failure');
     if (isSessionInUseError(e)) {
       throw e;
     }
@@ -1075,6 +1178,7 @@ export async function ensureBackendSession(
     }
 
     log.debug('Coordinator session missing, creating backend session', { sessionId, error: e });
+    surfaceScope.assertCurrent('recreate backend session');
     await agentAPI.createSession({
       sessionId: sessionId,
       sessionName:
@@ -1104,6 +1208,7 @@ export async function ensureBackendSession(
         remoteSshHost: effectiveSshHost,
       }
     });
+    surfaceScope.assertCurrent('recreate backend session');
     markBackendContextReady();
   }
 }

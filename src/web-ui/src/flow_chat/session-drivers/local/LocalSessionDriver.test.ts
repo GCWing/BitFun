@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { localSessionDriver } from './LocalSessionDriver';
 import type { DialogTurn } from '../../types/flow-chat';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 
 const { mockStartAcpDialogTurn, mockStartAgenticDialogTurn, mockTransition } = vi.hoisted(() => ({
   mockStartAcpDialogTurn: vi.fn(),
@@ -82,6 +83,7 @@ function createHarness(existingTurns: DialogTurn[]) {
 
 function startTurnInput(session: any) {
   return {
+    surfaceScope: getActiveSurfaceScope(),
     sessionId: SESSION_ID,
     message: 'hello',
     displayMessage: 'hello',

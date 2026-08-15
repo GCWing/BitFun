@@ -49,6 +49,7 @@ export const localSessionDriver: SessionDriver = {
 
   async createSession(context: FlowChatContext, seed: SessionCreationSeed): Promise<string> {
     const {
+      surfaceScope,
       config,
       agentType,
       sessionName,
@@ -59,12 +60,14 @@ export const localSessionDriver: SessionDriver = {
       remoteConnectionId,
       remoteSshHost,
     } = seed;
+    surfaceScope.assertCurrent('start local session creation');
 
     const explicitModelName = config.modelName?.trim() || undefined;
     const reasoningPreset = config.reasoningPreset
       ?? (explicitModelName
         ? await resolveReasoningPresetForSessionCreation(explicitModelName)
         : undefined);
+    surfaceScope.assertCurrent('resolve session creation reasoning preset');
 
     const response = await agentAPI.createSession({
       sessionName,
@@ -87,9 +90,11 @@ export const localSessionDriver: SessionDriver = {
         remoteSshHost,
       }
     });
+    surfaceScope.assertCurrent('create local backend session');
 
     const sessionModelName = response.modelId ?? explicitModelName;
     const maxContextTokens = await getModelMaxTokens(sessionModelName, agentType);
+    surfaceScope.assertCurrent('resolve created session model');
     const mergedConfig: SessionConfig = {
       ...config,
       modelName: sessionModelName,
@@ -295,6 +300,7 @@ export const localSessionDriver: SessionDriver = {
     tracker: TurnTracker,
   ): Promise<StartTurnResult> {
     const {
+      surfaceScope,
       sessionId,
       message,
       displayMessage,
@@ -346,7 +352,10 @@ export const localSessionDriver: SessionDriver = {
     context.flowChatStore.addDialogTurn(sessionId, dialogTurn);
     tracker.createdLocalTurnId = dialogTurnId;
     const isRestoringHistoricalSession =
-      readySession.isHistorical || context.pendingHistoryLoads.has(sessionId);
+      readySession.isHistorical
+      || context.pendingHistoryLoads.has(
+        surfaceScope.key('history-load', surfaceScope.epoch, sessionId),
+      );
     if (isRestoringHistoricalSession) {
       context.processingManager.clearSessionStatus(sessionId);
       context.flowChatStore.deleteDialogTurn(sessionId, dialogTurnId);
@@ -357,6 +366,7 @@ export const localSessionDriver: SessionDriver = {
       taskId: sessionId,
       dialogTurnId,
     });
+    surfaceScope.assertCurrent('start session state machine');
     if (!startOk) {
       const currentState = stateMachineManager.getCurrentState(sessionId);
       throw new Error(`Session is still busy finishing the previous turn (current state: ${currentState})`);
@@ -383,6 +393,7 @@ export const localSessionDriver: SessionDriver = {
           globalThis.crypto?.randomUUID?.() ?? `worktree-first-turn-${Date.now()}`,
           materialization.projectWorkspacePath,
         );
+        surfaceScope.assertCurrent('bind session worktree');
         context.flowChatStore.updateSessionExecutionTarget(sessionId, {
           workspacePath: result.workspacePath,
           projectWorkspacePath: result.projectWorkspacePath,
@@ -404,7 +415,7 @@ export const localSessionDriver: SessionDriver = {
     }
 
     if (!acpClientId) {
-      await syncSessionModelSelection(context, sessionId, currentAgentType);
+      await syncSessionModelSelection(context, sessionId, currentAgentType, surfaceScope);
     }
 
     const updatedSession = context.flowChatStore.getState().sessions.get(sessionId);
@@ -432,6 +443,7 @@ export const localSessionDriver: SessionDriver = {
         remoteSshHost: updatedSession.remoteSshHost,
       });
       tracker.hostAcceptedTurn = true;
+      surfaceScope.assertCurrent('start ACP dialog turn');
       context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
     } else {
       try {
@@ -450,6 +462,7 @@ export const localSessionDriver: SessionDriver = {
           execution: options?.execution,
         });
         tracker.hostAcceptedTurn = true;
+        surfaceScope.assertCurrent('start dialog turn');
         context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
       } catch (error: any) {
         if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
@@ -462,7 +475,9 @@ export const localSessionDriver: SessionDriver = {
           // driver registry, so a static import would create a module cycle.
           const { retryCreateBackendSession } =
             await import('../../services/flow-chat-manager/SessionModule');
+          surfaceScope.assertCurrent('load backend session retry');
           await retryCreateBackendSession(context, sessionId);
+          surfaceScope.assertCurrent('retry backend session creation');
 
           await agentAPI.startDialogTurn({
             sessionId: sessionId,
@@ -479,6 +494,7 @@ export const localSessionDriver: SessionDriver = {
             execution: options?.execution,
           });
           tracker.hostAcceptedTurn = true;
+          surfaceScope.assertCurrent('retry dialog turn submission');
           context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
         } else {
           throw error;

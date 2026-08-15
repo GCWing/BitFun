@@ -46,6 +46,33 @@ Two rules follow, and both are load-bearing:
   Control-plane events (`account://…`, window chrome, updater) are never scoped
   and always pass.
 
+### Surface identity and activation
+
+The rendered device is a first-class `DeviceSurfaceId` (`local` or a peer
+device id), not an implicit property of one mutable global transport. Cache,
+request, capability, workspace, session-state-machine, processing-status,
+pending-message, and composer-draft identity includes that surface. FlowChat
+and workspace state are stored in per-surface containers: switching selects a
+container immediately, then reconciles it with its host; it does not erase the
+container belonging to the device being left.
+
+Every surface activation creates a monotonic epoch and `AbortSignal`.
+Product invokes capture that epoch, including through `ApiClient`; a response
+or retry that outlives it raises `SurfaceChangedError` and is abandoned as
+control flow. Controller-plane commands are exempt because their authority
+remains the controller regardless of the rendered surface. Transport/event
+routing and container selection commit synchronously in `activateSurface` so
+no observer can see B's state while requests still target A.
+
+`PeerDeviceSurfaceController` serializes activation outside React. Rapid
+requests coalesce to the last target, a committed-but-superseded hydrate is
+invalidated before the next target proceeds, and a real activation failure
+rolls back to the previously rendered reachable surface. Separately,
+`PeerConnectionManager` owns each attachment's
+`connecting`/`ready`/`degraded`/`lost` lifecycle, keepalive and bounded backoff;
+React only subscribes to snapshots. Attachment disposal is the only operation
+that discards a peer's cached surface state.
+
 Because the local surface can now miss its own events while another device is
 rendered, snapshot reconciliation is no longer Peer-only: after this window's
 first surface switch, `isSurfaceReconcileEnabled()` keeps the repair loop

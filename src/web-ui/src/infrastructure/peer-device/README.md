@@ -18,6 +18,14 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
      (regression: 2026-08-14 multi-device switch). Use
      `TerminalService.disconnect()` and
      `WorkspaceLspManager.detachAllForSurfaceSwitch()`.
+   - **Identity includes the device surface.** Workspace paths and session ids
+     can be equal on different machines. FlowChat/workspace containers,
+     state machines, processing status, pending messages, composer drafts,
+     request dedup and capability caches must therefore use
+     `(DeviceSurfaceId, local identity)`. `activateSurface` commits transport,
+     event routing and container selection before notifying observers. A normal
+     switch preserves every container; only explicit/lost attachment disposal
+     may call `discardSurfaceState`.
    - **In-flight submissions must survive the switch.** `startTurn` has an
      async window between adding the projection turn and re-reading the
      session (state transition, worktree bind, model sync). Clearing the store
@@ -25,17 +33,18 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
      and throw `Session lost after adding dialog turn` — before
      `start_dialog_turn`, so the message reached no host at all (regression:
      2026-08-15). `resetProductSurface` therefore awaits
-     `waitForInFlightSubmissions` first, and `sendMessage` compares
-     `getSurfaceGeneration()` across the submission: on a change it re-queues
-     the message instead of reporting a turn failure. Any new await added
-     inside a driver's `startTurn` widens that window — keep the guard.
+     `waitForInFlightSubmissions` first. `sendMessage` and its driver carry one
+     `SurfaceScope`; after every host await, a stale epoch abandons without
+     writing into the newly selected container, and an unaccepted message is
+     re-queued onto its original surface. Any new await inside `startTurn`
+     widens that window and must keep the same scope checkpoint.
    - **Reconciliation repairs a projection, never guts it.** The wholesale
      replace path (`replaceRunningSnapshot`) skips the forward-progress
      comparator so a settled turn can adopt the host's copy. A turn keeps its
      identity and user message independently of its rounds, so a windowed or
      not-yet-checkpointed snapshot can name the turn while carrying none of its
-     work — and after a surface switch the rebuilt projection has no state
-     machines, so *every* turn reads as idle and qualifies for replacement.
+     work — and a first-time surface projection has no state machines, so
+     *every* turn reads as idle and qualifies for replacement.
      That combination erased the whole response and left only the prompt on
      screen (regression: 2026-08-15). `snapshotDropsProjectedTurnContent` gates
      the replace; the refresh loop still re-attaches an executing turn when a
@@ -90,9 +99,12 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
 8. **`relay_deploy_*` is LOCAL_ONLY.** One-click deploy SSHes from the
    controller to a user-owned host; do not HostInvoke it onto the peer.
 
-9. **Clear workspace before peer flag emit.** `resetProductSurface` must call
-   `workspaceManager.clearForPeerModeSwitch()` so SessionModule cannot prefer
-   a stale controller path while rebootstrap is in flight. Never pass `{}` to
+9. **Select workspace state atomically with transport.** Before commit,
+   `workspaceManager.clearForPeerModeSwitch()` invalidates work still in flight
+   but deliberately preserves the device being left. `activateSurface` then
+   selects the target's cached workspace container in the same synchronous
+   commit that swaps transport, before the peer-mode event. SessionModule must
+   never observe A's path with B's transport. Never pass `{}` to
    `createChatSession` when a live workspace exists — use
    `flowChatSessionConfigForCurrentWorkspace`.
 

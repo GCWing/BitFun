@@ -35,6 +35,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
 
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const latestSwitchRequestRef = useRef(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const layout = useAnchoredPopoverPosition({
@@ -78,26 +79,38 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
     : currentDevice?.deviceName ?? t('accountLogin.thisDevice');
 
   const handleSelect = useCallback(async (device: DeviceRosterEntry) => {
-    if (!peerDevice || switching) {
+    if (!peerDevice) {
       return;
     }
     setOpen(false);
-    if (device.deviceId === activeDeviceId) {
+    // While another target is still activating, selecting the rendered device
+    // is meaningful: it supersedes that activation (A -> B -> A).
+    if (device.deviceId === activeDeviceId && !switching) {
       return;
     }
+    const requestId = ++latestSwitchRequestRef.current;
     setSwitching(true);
     try {
+      let outcome: 'activated' | 'superseded';
       if (device.isLocal) {
-        await peerDevice.switchToLocal();
-        success(t('accountLogin.deviceSwitcher.switchedLocal'));
+        outcome = await peerDevice.switchToLocal();
+        if (outcome === 'activated' && latestSwitchRequestRef.current === requestId) {
+          success(t('accountLogin.deviceSwitcher.switchedLocal'));
+        }
       } else {
-        await peerDevice.switchToDevice(device.deviceId, device.deviceName);
-        success(t('accountLogin.deviceSwitcher.switched', { name: device.deviceName }));
+        outcome = await peerDevice.switchToDevice(device.deviceId, device.deviceName);
+        if (outcome === 'activated' && latestSwitchRequestRef.current === requestId) {
+          success(t('accountLogin.deviceSwitcher.switched', { name: device.deviceName }));
+        }
       }
     } catch (error) {
-      warning(error instanceof Error ? error.message : String(error));
+      if (latestSwitchRequestRef.current === requestId) {
+        warning(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      setSwitching(false);
+      if (latestSwitchRequestRef.current === requestId) {
+        setSwitching(false);
+      }
     }
   }, [peerDevice, switching, activeDeviceId, success, warning, t]);
 
@@ -207,7 +220,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
               const isCurrent = device.deviceId === activeDeviceId;
               const busy = isDeviceBusy(activityKeyFor(device));
               const attached = attachedIds.has(device.deviceId);
-              const selectable = device.online && !isCurrent;
+              const selectable = device.online && (!isCurrent || switching);
               return (
                 <div
                   key={device.deviceId}
@@ -223,7 +236,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
                     type="button"
                     role="menuitem"
                     className="bitfun-device-switcher__item-main"
-                    disabled={!selectable || switching}
+                    disabled={!selectable}
                     onClick={() => { void handleSelect(device); }}
                   >
                     <span

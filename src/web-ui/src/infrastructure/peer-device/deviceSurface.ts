@@ -137,16 +137,25 @@ export function getActiveSurfaceId(): DeviceSurfaceId {
 /**
  * Begin rendering `surfaceId`. Aborts the previous activation first, so work
  * belonging to it fails fast instead of completing into a surface that no
- * longer wants it.
+ * longer wants it. Re-activating the same surface still produces a new epoch.
  *
- * Re-activating the same surface still produces a new epoch: a switch away and
- * back must invalidate everything the first activation had in flight.
+ * `beforeNotify` is the synchronous commit seam for the transport and event
+ * router. The new scope is already current while it runs, but subscribers are
+ * notified only after it returns. This keeps observers from ever seeing a new
+ * state container while product requests still use the previous device.
+ *
+ * The callback must be synchronous and non-throwing: it is the small atomic
+ * assignment portion of a switch, never asynchronous activation work.
  */
-export function activateSurface(surfaceId: DeviceSurfaceId): SurfaceScope {
+export function activateSurface(
+  surfaceId: DeviceSurfaceId,
+  beforeNotify?: (scope: SurfaceScope) => void,
+): SurfaceScope {
   const previous = activeScope;
   const next = createScope(surfaceId);
   activeScope = next;
   previous.abort();
+  beforeNotify?.(next);
   for (const listener of Array.from(listeners)) {
     try {
       listener(next);

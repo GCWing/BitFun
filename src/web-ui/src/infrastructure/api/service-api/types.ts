@@ -68,6 +68,9 @@ export interface ApiRequest {
   config: TauriCommandConfig | HttpRequestConfig;
   timestamp: Date;
   retryCount: number;
+  /** Device activation that owns this request; set only for product invokes. */
+  surfaceId?: string;
+  surfaceEpoch?: number;
 }
 
 
@@ -88,4 +91,3 @@ export interface ApiConfig {
   enableLogging: boolean;
   middleware: ApiMiddleware[];
 }
-

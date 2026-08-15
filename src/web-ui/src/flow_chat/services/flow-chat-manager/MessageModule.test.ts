@@ -15,10 +15,15 @@ import {
   useSessionMutationStore,
 } from '../../store/sessionMutationStore';
 import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
+import {
+  LOCAL_SURFACE_ID,
+  activateSurface,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const mockTransition = vi.fn();
 const mockGetCurrentState = vi.fn(() => 'processing');
 const mockGetStateMachine = vi.fn(() => null);
+const mockResetForSurface = vi.fn();
 const mockUpdateSessionModel = vi.fn();
 const mockStartDialogTurn = vi.fn();
 const mockGetConfigs = vi.fn();
@@ -32,6 +37,7 @@ const mockNotificationError = vi.fn();
 const mockNotificationDismiss = vi.fn();
 const mockPendingList = vi.fn((): unknown[] => []);
 const mockPendingEnqueue = vi.fn();
+const mockPendingEnqueueForSurface = vi.fn();
 const mockPendingSetStatus = vi.fn();
 const mockPendingRemove = vi.fn();
 
@@ -49,6 +55,7 @@ vi.mock('../../state-machine', () => ({
     getCurrentState: (...args: unknown[]) => mockGetCurrentState(...args),
     get: (...args: unknown[]) => mockGetStateMachine(...args),
     transition: (...args: any[]) => mockTransition(...args),
+    resetForSurface: (...args: unknown[]) => mockResetForSurface(...args),
   },
 }));
 
@@ -111,6 +118,7 @@ vi.mock('./PendingQueueModule', () => ({
   pendingQueueManager: {
     list: (...args: unknown[]) => mockPendingList(...args),
     enqueue: (...args: unknown[]) => mockPendingEnqueue(...args),
+    enqueueForSurface: (...args: unknown[]) => mockPendingEnqueueForSurface(...args),
     setStatus: (...args: unknown[]) => mockPendingSetStatus(...args),
     remove: (...args: unknown[]) => mockPendingRemove(...args),
   },
@@ -1009,6 +1017,7 @@ describe('MessageModule device surface switch', () => {
     const switchSurface = () => {
       surfaceGeneration += 1;
       sessions.clear();
+      activateSurface('peer-switch-target');
     };
 
     if (options?.switchAfterTransition) {
@@ -1029,6 +1038,7 @@ describe('MessageModule device surface switch', () => {
           getState: () => ({ sessions }),
           addDialogTurn: vi.fn((_id: string, turn: any) => session.dialogTurns.push(turn)),
           deleteDialogTurn: vi.fn(),
+          abandonOptimisticDialogTurn: vi.fn(),
           updateSessionLastSubmittedMode: vi.fn(),
           updateSessionMode: vi.fn(),
           updateSessionModelName: vi.fn(),
@@ -1037,6 +1047,7 @@ describe('MessageModule device surface switch', () => {
         processingManager: {
           registerStatus: vi.fn(),
           clearSessionStatus: vi.fn(),
+          clearSessionStatusForSurface: vi.fn(),
         },
         pendingHistoryLoads: new Map(),
         contentBuffers: new Map(),
@@ -1046,6 +1057,7 @@ describe('MessageModule device surface switch', () => {
   }
 
   beforeEach(() => {
+    activateSurface(LOCAL_SURFACE_ID);
     vi.resetAllMocks();
     mockGetCurrentState.mockReturnValue('idle');
     mockGetStateMachine.mockReturnValue(null);
@@ -1054,6 +1066,7 @@ describe('MessageModule device surface switch', () => {
     mockStartDialogTurn.mockResolvedValue(undefined);
     mockPendingList.mockReturnValue([]);
     mockPendingEnqueue.mockReturnValue({ id: 'requeued' });
+    mockPendingEnqueueForSurface.mockReturnValue({ id: 'requeued' });
     mockEnsureBackendSession.mockResolvedValue(undefined);
   });
 
@@ -1073,8 +1086,20 @@ describe('MessageModule device surface switch', () => {
     await sendMessage(context, 'keep working', 'session-switch');
 
     expect(mockStartDialogTurn).not.toHaveBeenCalled();
-    expect(mockPendingEnqueue).toHaveBeenCalledWith(
+    expect(mockPendingEnqueueForSurface).toHaveBeenCalledWith(
+      'local',
       expect.objectContaining({ sessionId: 'session-switch', content: 'keep working' }),
+    );
+    expect(context.processingManager.registerStatus).not.toHaveBeenCalled();
+    expect(context.flowChatStore.abandonOptimisticDialogTurn).toHaveBeenCalledWith(
+      'local',
+      'session-switch',
+      expect.any(String),
+    );
+    expect(mockResetForSurface).toHaveBeenCalledWith('local', 'session-switch');
+    expect(context.processingManager.clearSessionStatusForSurface).toHaveBeenCalledWith(
+      'local',
+      'session-switch',
     );
   });
 
@@ -1088,7 +1113,7 @@ describe('MessageModule device surface switch', () => {
     await sendMessage(context, 'already running', 'session-accepted');
 
     expect(mockStartDialogTurn).toHaveBeenCalledTimes(1);
-    expect(mockPendingEnqueue).not.toHaveBeenCalled();
+    expect(mockPendingEnqueueForSurface).not.toHaveBeenCalled();
     expect(mockNotificationError).not.toHaveBeenCalled();
   });
 

@@ -11,6 +11,7 @@
  * requests when an event gap is detected.
  */
 
+import { isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
 import { isSurfaceReconcileEnabled } from '@/infrastructure/peer-device/deviceSurfaceReconcile';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -220,6 +221,13 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         latestTurnId: result.latestTurnId,
       });
     } catch (error) {
+      if (isSurfaceChangedError(error)) {
+        // The snapshot belongs to a device this window stopped rendering. Its
+        // own container keeps the projection; the surface now on screen
+        // reconciles itself on the next tick.
+        log.debug('Discarded a snapshot for a device surface we left', { sessionId });
+        return;
+      }
       // Realtime DeviceEvents remain usable when a background refresh fails.
       // The next interval or gap-triggered request retries without forcing an
       // auto-exit from Peer Mode.

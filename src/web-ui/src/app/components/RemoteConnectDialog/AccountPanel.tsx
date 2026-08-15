@@ -1035,14 +1035,21 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     setLoading(true);
     setError(null);
     try {
+      let outcome: 'activated' | 'superseded';
       if (isLocalDevice) {
-        await switchToLocal();
-        success(t('accountLogin.deviceSwitcher.switchedLocal'));
+        outcome = await switchToLocal();
+        if (outcome === 'activated') {
+          success(t('accountLogin.deviceSwitcher.switchedLocal'));
+        }
       } else {
-        await switchToDevice(device.device_id, device.device_name);
-        success(t('accountLogin.enteredPeerMode', { name: device.device_name }));
+        outcome = await switchToDevice(device.device_id, device.device_name);
+        if (outcome === 'activated') {
+          success(t('accountLogin.enteredPeerMode', { name: device.device_name }));
+        }
       }
-      onCloseDialog();
+      if (outcome === 'activated') {
+        onCloseDialog();
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

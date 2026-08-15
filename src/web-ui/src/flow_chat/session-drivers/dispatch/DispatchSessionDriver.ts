@@ -300,6 +300,7 @@ export const dispatchSessionDriver: SessionDriver = {
 
   async createSession(context: FlowChatContext, seed: SessionCreationSeed): Promise<string> {
     const {
+      surfaceScope,
       config,
       agentType,
       sessionName,
@@ -310,6 +311,7 @@ export const dispatchSessionDriver: SessionDriver = {
       remoteConnectionId,
       remoteSshHost,
     } = seed;
+    surfaceScope.assertCurrent('start dispatch session creation');
 
     if (!isNonLocalDispatchTarget(config.dispatchTargetRequest)) {
       throw new Error(
@@ -361,6 +363,7 @@ export const dispatchSessionDriver: SessionDriver = {
 
     // This is an observer projection only. In particular, do not call
     // agentAPI.createSession: the target CLI owns the durable session.
+    surfaceScope.assertCurrent('create dispatch session projection');
     context.flowChatStore.createSession(
       sessionId,
       resolvedConfig,
