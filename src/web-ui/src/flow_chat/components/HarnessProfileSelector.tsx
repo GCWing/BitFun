@@ -13,9 +13,9 @@ export type HarnessProfileId = 'minimal' | 'balanced' | 'ultimate';
 interface HarnessProfileSelectorProps {
   /** Session still runs the legacy agent mode and cannot switch. */
   legacySession?: boolean;
-  /** The Balanced harness is already the session's active mode. */
-  active?: boolean;
-  onActivateBalanced: () => void;
+  selectedProfile: HarnessProfileId;
+  disabled?: boolean;
+  onSelectProfile: (profileId: HarnessProfileId) => void | Promise<void>;
 }
 
 const PROFILE_IDS: HarnessProfileId[] = ['minimal', 'balanced', 'ultimate'];
@@ -56,8 +56,9 @@ function HarnessGauge({ gear }: { gear: 1 | 2 | 3 }): React.ReactElement {
  */
 export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   legacySession = false,
-  active = false,
-  onActivateBalanced,
+  selectedProfile,
+  disabled = false,
+  onSelectProfile,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [open, setOpen] = useState(false);
@@ -98,7 +99,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   }, [close, open]);
 
   const handleSelect = useCallback((profileId: HarnessProfileId) => {
-    if (profileId !== 'balanced') {
+    if (profileId === 'ultimate') {
       const name = t(`chatInput.harness.profiles.${profileId}.name`);
       notificationService.info(t('chatInput.harness.comingSoonNotice', { name }), {
         duration: 3200,
@@ -111,23 +112,17 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       close();
       return;
     }
-    onActivateBalanced();
+    void onSelectProfile(profileId);
     close();
-  }, [close, legacySession, onActivateBalanced, t]);
+  }, [close, legacySession, onSelectProfile, t]);
 
-  const selectedProfile: HarnessProfileId = 'balanced';
   const gear = PROFILE_GEARS[selectedProfile];
-  // A gear that is not yet the session's own is a pending contract, not a lie
-  // about how the last turn ran, so the gauge stays quiet until it applies.
-  const pending = !legacySession && !active;
   const triggerLabel = legacySession
     ? t('chatInput.harness.compatibilityShort')
     : t(`chatInput.harness.profiles.${selectedProfile}.name`);
   const triggerTooltip = legacySession
     ? t('chatInput.harness.legacySessionNotice')
-    : pending
-      ? t('chatInput.harness.activateBalanced')
-      : t('chatInput.harness.selectorTooltip');
+    : t('chatInput.harness.selectorTooltip');
 
   return (
     <div className="bitfun-harness-selector" data-bf-component="harness-selector" data-bf-part="root">
@@ -138,13 +133,13 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           className="bitfun-harness-selector__trigger"
           data-bf-component="harness-selector"
           data-bf-part="trigger"
-          data-bf-state={open ? 'open' : pending ? 'pending' : undefined}
+          data-bf-state={open ? 'open' : undefined}
           data-harness-gear={gear}
-          data-harness-pending={pending ? 'true' : undefined}
           data-harness-legacy={legacySession ? 'true' : undefined}
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={triggerTooltip}
+          disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
             setOpen(value => !value);
@@ -155,13 +150,6 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           <span className="bitfun-harness-selector__trigger-value">
             {triggerLabel}
           </span>
-          {pending ? (
-            <span
-              className="bitfun-harness-selector__pending-dot"
-              data-testid="harness-profile-pending-dot"
-              aria-hidden
-            />
-          ) : null}
         </button>
       </Tooltip>
 
@@ -194,7 +182,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                 data-bf-component="harness-selector"
                 data-bf-part="profile"
                 data-bf-profile={id}
-                data-bf-state={connected ? 'current' : id === 'balanced' ? 'new-session' : 'coming-soon'}
+                data-bf-state={connected ? 'current' : id === 'ultimate' ? 'coming-soon' : 'available'}
                 onClick={() => handleSelect(id)}
                 data-testid={`harness-profile-${id}`}
               >
@@ -208,8 +196,8 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                 <span className="bitfun-harness-selector__profile-status">
                   {connected ? (
                     <Check size={13} strokeWidth={2.4} aria-hidden />
-                  ) : id === 'balanced' ? (
-                    t('chatInput.harness.newSessionOnly')
+                  ) : id !== 'ultimate' ? (
+                    null
                   ) : (
                     t('chatInput.harness.comingSoon')
                   )}

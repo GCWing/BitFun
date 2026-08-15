@@ -3762,6 +3762,23 @@ export class FlowChatStore {
     });
   }
 
+  public updateSessionHarnessProfile(
+    sessionId: string,
+    executionProfile: import('@/infrastructure/api/service-api/AgentAPI').SessionExecutionProfile,
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        config: { ...session.config, executionProfile },
+        lastActiveAt: Date.now(),
+      });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
   /**
    * Record the mode used by the most recent user submission accepted by the runtime.
    * Unlike `lastUserDialogMode`, this does not rewind when history is rolled back.

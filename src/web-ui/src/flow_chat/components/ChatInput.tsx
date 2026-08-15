@@ -143,7 +143,7 @@ import {
   ChatInputWorkspaceStrip,
   type ChatInputPermissionMode,
 } from './ChatInputWorkspaceStrip';
-import { HarnessProfileSelector } from './HarnessProfileSelector';
+import { HarnessProfileSelector, type HarnessProfileId } from './HarnessProfileSelector';
 import { ChatInputApprovalBand } from './ChatInputApprovalBand';
 import { usePermissionRequests } from './modern/usePermissionRequests';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
@@ -1033,6 +1033,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [activeSessionMode, currentMode, isAcpTargetSession, isAssistantWorkspace],
   );
   const canSwitchModes = chatInputModePolicy.canSwitchModes && !isSubagentInputTarget;
+  const [isHarnessProfileChangePending, setHarnessProfileChangePending] = useState(false);
+  const selectedHarnessProfile = (
+    effectiveTargetSession?.config.executionProfile?.harnessProfileId ?? 'balanced'
+  ) as HarnessProfileId;
 
   // Session-level mode policy: fixed collaboration modes are not selectable boosts.
   const switchableModes = useMemo(
@@ -4116,6 +4120,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     publishSessionModeSelection,
     reportModeSelectionFailure,
   );
+
+  const requestHarnessProfileChange = useCallback(async (profileId: HarnessProfileId) => {
+    if (isHarnessProfileChangePending) return;
+    if (!sessionModeSelectionTarget) {
+      notificationService.error(t('chatInput.harness.legacySessionNotice'));
+      return;
+    }
+    setHarnessProfileChangePending(true);
+    try {
+      await agentAPI.updateSessionHarnessProfile({
+        ...sessionModeSelectionTarget,
+        harnessProfileId: profileId,
+      });
+      FlowChatStore.getInstance().updateSessionHarnessProfile(
+        sessionModeSelectionTarget.sessionId,
+        { harnessProfileId: profileId, schemaVersion: 1, selectedBy: 'user' },
+      );
+    } catch (error) {
+      log.error('Failed to update Session Harness Profile', { error, profileId });
+      notificationService.error(t('error.unknown'));
+    } finally {
+      setHarnessProfileChangePending(false);
+    }
+  }, [isHarnessProfileChangePending, sessionModeSelectionTarget, t]);
   
   const handleSendOrCancel = useCallback(async (messageOverride?: string) => {
     if (!derivedState) return;
@@ -4133,7 +4161,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     // Block sending while model switch IPC is in-flight — the backend session may
     // not yet reflect the newly selected model.
-    if (isModelSwitching || isModeChangePending) return;
+    if (isModelSwitching || isModeChangePending || isHarnessProfileChangePending) return;
     
     if (sendButtonMode === 'retry') {
       await transition(SessionExecutionEvent.RESET);
@@ -4330,6 +4358,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     isModelSwitching,
     isModeChangePending,
+    isHarnessProfileChangePending,
     caps.transferInFlight,
     inputState.value,
     derivedState,
@@ -5202,11 +5231,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     if (sendButtonMode === 'retry') {
       return (
-        <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="retry" data-bf-state={isModelSwitching || isModeChangePending || caps.transferInFlight ? 'disabled' : undefined}>
+        <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="retry" data-bf-state={isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight ? 'disabled' : undefined}>
           <IconButton
             className="bitfun-chat-input__send-button bitfun-chat-input__send-button--retry"
             onClick={() => void handleSendOrCancel()}
-            disabled={isModelSwitching || isModeChangePending || caps.transferInFlight}
+            disabled={isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight}
             tooltip={t('input.retry')}
             size="small"
           >
@@ -5232,11 +5261,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </div>
             </Tooltip>
           </span>
-          <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight ? 'disabled' : undefined}>
+          <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight ? 'disabled' : undefined}>
             <IconButton
               className="bitfun-chat-input__send-button"
               onClick={() => void handleSendOrCancel()}
-              disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight}
+              disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight}
               data-testid="chat-input-send-btn"
               tooltip={t('input.sendShortcut')}
               size="small"
@@ -5249,11 +5278,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     
     return (
-      <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight ? 'disabled' : undefined}>
+      <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state={!inputState.value.trim() || isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight ? 'disabled' : undefined}>
         <IconButton
           className="bitfun-chat-input__send-button"
           onClick={() => void handleSendOrCancel()}
-          disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || caps.transferInFlight}
+          disabled={!inputState.value.trim() || isModelSwitching || isModeChangePending || isHarnessProfileChangePending || caps.transferInFlight}
           data-testid="chat-input-send-btn"
           tooltip={t('input.sendShortcut')}
           size="small"
@@ -6180,12 +6209,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 {!isAcpTargetSession && !isSubagentInputTarget && !isAssistantWorkspace ? (
                   <HarnessProfileSelector
                     legacySession={!canSwitchModes}
-                    active={currentMode === 'agentic'}
-                    onActivateBalanced={() => {
-                      if (currentMode !== 'agentic') {
-                        requestSessionModeChange('agentic');
-                      }
-                    }}
+                    selectedProfile={selectedHarnessProfile}
+                    disabled={isHarnessProfileChangePending}
+                    onSelectProfile={requestHarnessProfileChange}
                   />
                 ) : null}
               </div>
