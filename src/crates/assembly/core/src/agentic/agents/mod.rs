@@ -302,11 +302,13 @@ pub trait Agent: Send + Sync + 'static {
 
 #[cfg(test)]
 mod tests {
+    use bitfun_agent_runtime::harness_profile::MINIMAL_PROMPT_POLICY_ID;
+
     use super::{
-        get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+        get_embedded_prompt, minimal_harness_tool_policy,
+        shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
         shared_coding_mode_user_context_policy, Agent, AgenticMode, DebugMode, MultitaskMode,
         PlanMode, ToolExposure, EMBEDDED_PROMPTS, MINIMAL_HARNESS_ALLOWED_TOOLS,
-        minimal_harness_tool_policy,
     };
 
     #[test]
@@ -314,6 +316,14 @@ mod tests {
         assert_eq!(
             EMBEDDED_PROMPTS.get("agentic_mode").copied(),
             get_embedded_prompt("agentic_mode")
+        );
+    }
+
+    #[test]
+    fn minimal_harness_prompt_policy_resolves_to_embedded_prompt() {
+        assert!(
+            get_embedded_prompt(MINIMAL_PROMPT_POLICY_ID).is_some(),
+            "minimal Harness prompt policy must resolve through the embedded prompt catalog"
         );
     }
 

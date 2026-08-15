@@ -5,7 +5,7 @@ use bitfun_core_types::{
 
 pub const BALANCED_PROMPT_POLICY_ID: &str = "agentic-mode-v1";
 pub const BALANCED_TOOL_PROFILE_ID: &str = "coding-balanced-v1";
-pub const MINIMAL_PROMPT_POLICY_ID: &str = "minimal-harness-v1";
+pub const MINIMAL_PROMPT_POLICY_ID: &str = "minimal_harness_v1";
 pub const MINIMAL_TOOL_PROFILE_ID: &str = "coding-minimal-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,21 +76,17 @@ mod tests {
 
     #[test]
     fn minimal_has_no_fixed_model_round_limit() {
-        let profile = resolve_harness_profile(
-            &HarnessProfileId::new(MINIMAL_HARNESS_PROFILE_ID),
-            200,
-        )
-        .unwrap();
+        let profile =
+            resolve_harness_profile(&HarnessProfileId::new(MINIMAL_HARNESS_PROFILE_ID), 200)
+                .unwrap();
         assert_eq!(profile.max_model_rounds, None);
     }
 
     #[test]
     fn balanced_keeps_configured_model_round_limit() {
-        let profile = resolve_harness_profile(
-            &HarnessProfileId::new(BALANCED_HARNESS_PROFILE_ID),
-            123,
-        )
-        .unwrap();
+        let profile =
+            resolve_harness_profile(&HarnessProfileId::new(BALANCED_HARNESS_PROFILE_ID), 123)
+                .unwrap();
         assert_eq!(profile.max_model_rounds, Some(123));
     }
 }
