@@ -85,6 +85,13 @@ fn is_root_minimal_harness(context: &ExecutionContext) -> bool {
         && context.execution_profile.harness_profile_id.as_str() == MINIMAL_HARNESS_PROFILE_ID
 }
 
+fn reached_fixed_model_round_limit(
+    max_model_rounds: Option<usize>,
+    completed_rounds: usize,
+) -> bool {
+    max_model_rounds.is_some_and(|limit| completed_rounds >= limit)
+}
+
 fn validate_minimal_harness_manifest(
     context: &ExecutionContext,
     manifest: &ResolvedToolManifest,
@@ -2340,6 +2347,12 @@ impl ExecutionEngine {
             .get("enable_tools")
             .and_then(|value| value.parse::<bool>().ok())
             .unwrap_or(true);
+        if minimal_harness && !enable_tools {
+            return Err(BitFunError::Agent(
+                "Minimal Harness Profile requires its baseline tool contract, but tools are disabled for this Session"
+                    .to_string(),
+            ));
+        }
         let mut tool_manifest_context_vars = context.context.clone();
         tool_manifest_context_vars.insert(
             "harness_profile_id".to_string(),
@@ -3287,6 +3300,12 @@ impl ExecutionEngine {
             .get("enable_tools")
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(true);
+        if minimal_harness && !enable_tools {
+            return Err(BitFunError::Agent(
+                "Minimal Harness Profile requires its baseline tool contract, but tools are disabled for this Session"
+                    .to_string(),
+            ));
+        }
         let deferred_tool_loading_enabled = match get_global_config_service().await {
             Ok(service) => service
                 .get_config::<bool>(Some("ai.enable_deferred_tool_loading"))
@@ -3488,7 +3507,7 @@ impl ExecutionEngine {
 
         // Loop to execute model rounds
         loop {
-            if max_model_rounds.is_some_and(|limit| completed_rounds >= limit) {
+            if reached_fixed_model_round_limit(max_model_rounds, completed_rounds) {
                 let limit = max_model_rounds.expect("checked above");
                 warn!("Reached max rounds limit: {}, stopping execution", limit);
                 finalization_reason = Some("max_rounds");
@@ -6046,3 +6065,9 @@ mod tests {
         })
     }
 }
+    #[test]
+    fn unlimited_profile_never_reaches_a_fixed_model_round_limit() {
+        assert!(!reached_fixed_model_round_limit(None, 0));
+        assert!(!reached_fixed_model_round_limit(None, 10_000));
+        assert!(reached_fixed_model_round_limit(Some(200), 200));
+    }

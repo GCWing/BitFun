@@ -2122,6 +2122,7 @@ mod tests {
         let request = AgentSessionCreateRequest {
             session_name: "Generated session".to_string(),
             agent_type: "agentic".to_string(),
+            execution_profile: None,
             workspace_path: Some("/workspace/project".to_string()),
             project_workspace_path: None,
             execution_target: None,
@@ -2995,6 +2996,7 @@ mod tests {
             session_id: "session_1".to_string(),
             session_name: "Main".to_string(),
             agent_type: "agentic".to_string(),
+            execution_profile: Default::default(),
             model_id: Some("provider/model".to_string()),
             reasoning_preset: Some("high".to_string()),
             last_user_dialog_agent_type: Some("plan".to_string()),
