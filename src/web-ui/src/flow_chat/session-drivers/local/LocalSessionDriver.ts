@@ -431,6 +431,7 @@ export const localSessionDriver: SessionDriver = {
         remoteConnectionId: updatedSession.remoteConnectionId,
         remoteSshHost: updatedSession.remoteSshHost,
       });
+      tracker.hostAcceptedTurn = true;
       context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
     } else {
       try {
@@ -448,6 +449,7 @@ export const localSessionDriver: SessionDriver = {
           userMessageMetadata: options?.userMessageMetadata,
           execution: options?.execution,
         });
+        tracker.hostAcceptedTurn = true;
         context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
       } catch (error: any) {
         if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
@@ -476,6 +478,7 @@ export const localSessionDriver: SessionDriver = {
             userMessageMetadata: options?.userMessageMetadata,
             execution: options?.execution,
           });
+          tracker.hostAcceptedTurn = true;
           context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
         } else {
           throw error;

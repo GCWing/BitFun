@@ -90,6 +90,12 @@ export interface StartTurnInput {
  */
 export interface TurnTracker {
   createdLocalTurnId: string | null;
+  /**
+   * Set once a host has accepted the turn. Until then the turn exists only as a
+   * local projection, so a submission interrupted by a device-surface switch
+   * must recover the message rather than assume it is running somewhere.
+   */
+  hostAcceptedTurn: boolean;
 }
 
 /**

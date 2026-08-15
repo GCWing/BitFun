@@ -105,6 +105,7 @@ describe('localSessionDriver.startTurn on an ACP session', () => {
 
     await localSessionDriver.startTurn(context, startTurnInput(session), {
       createdLocalTurnId: null,
+      hostAcceptedTurn: false,
     });
 
     expect(mockStartAcpDialogTurn).toHaveBeenCalledTimes(1);
@@ -120,6 +121,7 @@ describe('localSessionDriver.startTurn on an ACP session', () => {
 
     await localSessionDriver.startTurn(context, startTurnInput(session), {
       createdLocalTurnId: null,
+      hostAcceptedTurn: false,
     });
 
     expect(addedTurns[0].storageTurnIndex).toBe(2);
@@ -132,7 +134,7 @@ describe('localSessionDriver.startTurn on an ACP session', () => {
     await localSessionDriver.startTurn(
       context,
       { ...startTurnInput(session), acpClientId: undefined, currentAgentType: 'agentic' },
-      { createdLocalTurnId: null },
+      { createdLocalTurnId: null, hostAcceptedTurn: false },
     );
 
     expect(mockStartAgenticDialogTurn).toHaveBeenCalledTimes(1);

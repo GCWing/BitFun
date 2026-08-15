@@ -455,6 +455,8 @@
     "restoreMain": "恢復主視窗",
     "inUseTitle": "會話已在其他執行個體中開啟",
     "inUseMessage": "此會話已在另一個 BitFun 執行個體中開啟。請先在該處關閉，然後重試。",
+    "surfaceSwitchDroppedTitle": "訊息未送出",
+    "surfaceSwitchDropped": "訊息尚未送出時裝置已切換，且該會話的佇列已滿。請重新傳送。",
     "retry": "重試"
   },
   "scroll": {

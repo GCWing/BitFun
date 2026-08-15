@@ -18,6 +18,17 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
      (regression: 2026-08-14 multi-device switch). Use
      `TerminalService.disconnect()` and
      `WorkspaceLspManager.detachAllForSurfaceSwitch()`.
+   - **In-flight submissions must survive the switch.** `startTurn` has an
+     async window between adding the projection turn and re-reading the
+     session (state transition, worktree bind, model sync). Clearing the store
+     inside that window made the submission resume against a missing session
+     and throw `Session lost after adding dialog turn` — before
+     `start_dialog_turn`, so the message reached no host at all (regression:
+     2026-08-15). `resetProductSurface` therefore awaits
+     `waitForInFlightSubmissions` first, and `sendMessage` compares
+     `getSurfaceGeneration()` across the submission: on a change it re-queues
+     the message instead of reporting a turn failure. Any new await added
+     inside a driver's `startTurn` widens that window — keep the guard.
    - **Surface-scoped events must stay routed by source device.** Background
      attachments mean several agent streams share one event bus. The
      controller tags re-emitted peer payloads with `__bitfunSourceDeviceId`

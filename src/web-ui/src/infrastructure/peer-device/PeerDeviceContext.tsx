@@ -60,6 +60,13 @@ const log = createLogger('PeerDeviceMode');
 const PEER_PING_INTERVAL_MS = 20_000;
 const PEER_CONTROL_RPC_TIMEOUT_MS = 15_000;
 
+/**
+ * Upper bound on how long a switch waits for in-flight submissions. Long
+ * enough for a worktree bind plus a model-selection sync, short enough that a
+ * wedged submission cannot make the UI feel stuck.
+ */
+const SUBMIT_DRAIN_TIMEOUT_MS = 8_000;
+
 interface PeerAttachment {
   deviceId: string;
   deviceName: string;
@@ -81,6 +88,20 @@ function emitPeerModeChanged(detail: { active: boolean; deviceId?: string }): vo
  * agent work depending on them.
  */
 async function resetProductSurface(): Promise<void> {
+  // A submission that has created its projection turn but not yet reached a
+  // host would otherwise resume against a cleared store and be lost before
+  // `start_dialog_turn` runs. Let it land first; on timeout the submission
+  // recovers its message onto the pending queue instead.
+  try {
+    const drained = await FlowChatManager.getInstance()
+      .waitForInFlightSubmissions(SUBMIT_DRAIN_TIMEOUT_MS);
+    if (!drained) {
+      log.warn('Device surface switch proceeded with a submission still in flight');
+    }
+  } catch (error) {
+    log.warn('Failed to await in-flight submissions before surface switch', error);
+  }
+
   try {
     FlowChatManager.getInstance().resetForPeerModeSwitch();
   } catch (error) {

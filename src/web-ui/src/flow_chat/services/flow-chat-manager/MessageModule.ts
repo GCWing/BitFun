@@ -62,6 +62,118 @@ function completeSessionSend(
   retrySuccess?.();
 }
 
+/**
+ * Submissions that have created a projection turn but have not yet handed the
+ * turn to a host.
+ *
+ * Switching the rendered device surface clears every session projection. A
+ * submission caught mid-flight would resume against a store that no longer
+ * holds its session — and because the throw lands before `start_dialog_turn`,
+ * the user's message would never reach any host. The surface switch therefore
+ * waits for this to drain first.
+ */
+let inFlightSubmissions = 0;
+const inFlightSubmissionWaiters = new Set<() => void>();
+
+function beginSubmission(): void {
+  inFlightSubmissions += 1;
+}
+
+function endSubmission(): void {
+  inFlightSubmissions = Math.max(0, inFlightSubmissions - 1);
+  if (inFlightSubmissions === 0 && inFlightSubmissionWaiters.size > 0) {
+    for (const notify of Array.from(inFlightSubmissionWaiters)) {
+      notify();
+    }
+    inFlightSubmissionWaiters.clear();
+  }
+}
+
+export function inFlightSubmissionCount(): number {
+  return inFlightSubmissions;
+}
+
+/**
+ * Salvage a submission that lost the race against a device-surface switch.
+ *
+ * When the host never accepted the turn the message exists nowhere, so it goes
+ * back onto the session's pending queue — queues are keyed by session id and
+ * survive a surface switch, so returning to that device drains it. When the
+ * host did accept it, the turn is already running there and nothing is owed.
+ */
+function recoverSubmissionAfterSurfaceSwitch(
+  sessionId: string,
+  turnTracker: TurnTracker,
+  draft: {
+    message: string;
+    displayMessage?: string;
+    agentType?: string;
+    options?: SendMessageOptions;
+  },
+): void {
+  if (turnTracker.hostAcceptedTurn) {
+    log.info('Device surface switched after the host accepted the turn; it keeps running there', {
+      sessionId,
+    });
+    return;
+  }
+  try {
+    pendingQueueManager.enqueue({
+      sessionId,
+      content: draft.message,
+      displayMessage: draft.displayMessage,
+      agentType: draft.agentType,
+      imageContexts: draft.options?.imageContexts,
+      imageDisplayData: draft.options?.imageDisplayData,
+      userMessageMetadata: draft.options?.userMessageMetadata,
+    });
+    log.info('Device surface switched before submit reached the host; message re-queued', {
+      sessionId,
+    });
+  } catch (error) {
+    // A full queue is the only expected failure, and dropping the message
+    // silently would be worse than the original error toast.
+    log.error('Failed to re-queue a message after a device surface switch', {
+      sessionId,
+      error,
+    });
+    notificationService.error(
+      i18nService.t('flow-chat:session.surfaceSwitchDropped'),
+      { title: i18nService.t('flow-chat:session.surfaceSwitchDroppedTitle'), duration: 6000 },
+    );
+  }
+}
+
+/**
+ * Wait until no submission is mid-flight, or until `timeoutMs` elapses.
+ *
+ * Returns whether the wait drained. A timeout is not fatal: `sendMessage`
+ * detects the surface change and recovers the message onto the pending queue.
+ */
+export function waitForInFlightSubmissions(timeoutMs: number): Promise<boolean> {
+  if (inFlightSubmissions === 0) {
+    return Promise.resolve(true);
+  }
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    // `endSubmission` clears the waiter set before notifying, so the drained
+    // path does not have to unregister itself; only a timeout leaves a stale
+    // waiter behind.
+    const notify = (): void => {
+      if (settled) return;
+      settled = true;
+      resolve(true);
+    };
+    inFlightSubmissionWaiters.add(notify);
+    setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      inFlightSubmissionWaiters.delete(notify);
+      resolve(false);
+    }, timeoutMs);
+  });
+}
+
 function acpClientIdFromMode(mode: string | undefined): string | null {
   const value = mode?.trim();
   if (!value?.startsWith('acp:')) return null;
@@ -169,7 +281,11 @@ export async function sendMessage(
     }));
   }
 
-  const turnTracker: TurnTracker = { createdLocalTurnId: null };
+  const turnTracker: TurnTracker = { createdLocalTurnId: null, hostAcceptedTurn: false };
+  // A device-surface switch clears every projection. Anything this submission
+  // reads back after an await belongs to the surface captured here.
+  const surfaceGenerationAtSend = context.flowChatStore.getSurfaceGeneration();
+  beginSubmission();
 
   try {
     const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
@@ -242,6 +358,23 @@ export async function sendMessage(
     );
 
   } catch (error) {
+    // A device-surface switch tore this projection down mid-submission. That is
+    // not a turn failure: the session still exists on its own device, and the
+    // state machine and turn we would "clean up" no longer belong to the
+    // rendered surface. Recover the message instead of reporting an error.
+    if (context.flowChatStore.getSurfaceGeneration() !== surfaceGenerationAtSend) {
+      recoverSubmissionAfterSurfaceSwitch(sessionId, turnTracker, {
+        message,
+        displayMessage,
+        agentType,
+        options,
+      });
+      if (latestSendBySession.get(sessionId) === sendAttempt) {
+        latestSendBySession.delete(sessionId);
+      }
+      return;
+    }
+
     log.error('Failed to send message', { sessionId: sessionId, error });
 
     const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
@@ -322,6 +455,8 @@ export async function sendMessage(
     }
 
     throw error;
+  } finally {
+    endSubmission();
   }
 }
 

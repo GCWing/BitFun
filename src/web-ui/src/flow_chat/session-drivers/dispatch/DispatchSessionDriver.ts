@@ -768,6 +768,7 @@ export const dispatchSessionDriver: SessionDriver = {
         i18nService.t('flow-chat:chatInput.dispatch.errors.submissionUnconfirmed'),
       );
     }
+    tracker.hostAcceptedTurn = true;
     context.flowChatStore.applyDispatchSnapshot(sessionId, {
       jobId,
       state: response.state,

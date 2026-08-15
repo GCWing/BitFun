@@ -48,6 +48,7 @@ import {
   cancelSessionTask as cancelSessionTaskModule,
   installPendingQueueDrainListener,
   drainPendingQueue,
+  waitForInFlightSubmissions,
   initializeEventListeners,
   processBatchedEvents,
   addDialogTurn as addDialogTurnModule,
@@ -461,6 +462,20 @@ export class FlowChatManager {
       this.eventListenerInitialized = false;
     }
     this.eventListenerInitializationPromise = null;
+  }
+
+  /**
+   * Let submissions that already created a projection turn hand it to their
+   * host before the surface is cleared.
+   *
+   * Without this, a switch during the async window in `startTurn` (state
+   * transition, worktree binding, model sync) resumes against a store that no
+   * longer holds the session, and the turn is lost before `start_dialog_turn`
+   * ever runs. A timeout is safe: `sendMessage` detects the surface change and
+   * re-queues the message.
+   */
+  public async waitForInFlightSubmissions(timeoutMs: number): Promise<boolean> {
+    return waitForInFlightSubmissions(timeoutMs);
   }
 
   /**

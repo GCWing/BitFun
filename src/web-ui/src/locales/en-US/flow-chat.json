@@ -455,6 +455,8 @@
     "restoreMain": "Restore Main Window",
     "inUseTitle": "Session open elsewhere",
     "inUseMessage": "This session is open in another BitFun instance. Close it there, then retry.",
+    "surfaceSwitchDroppedTitle": "Message not sent",
+    "surfaceSwitchDropped": "The device switched before this message was sent, and its queue is full. Send it again.",
     "retry": "Retry"
   },
   "scroll": {

@@ -48,7 +48,9 @@ export {
   cancelSessionTask,
   markCurrentTurnItemsAsCancelled,
   drainPendingQueue,
-  installPendingQueueDrainListener
+  installPendingQueueDrainListener,
+  inFlightSubmissionCount,
+  waitForInFlightSubmissions
 } from './MessageModule';
 
 export { pendingQueueManager } from './PendingQueueModule';

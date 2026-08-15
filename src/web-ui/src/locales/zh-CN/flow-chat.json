@@ -455,6 +455,8 @@
     "restoreMain": "恢复主窗口",
     "inUseTitle": "会话已在其他实例中打开",
     "inUseMessage": "该会话已在另一个 BitFun 实例中打开。请先在那里关闭，然后重试。",
+    "surfaceSwitchDroppedTitle": "消息未发送",
+    "surfaceSwitchDropped": "消息尚未发出时设备已切换，且该会话的队列已满。请重新发送。",
     "retry": "重试"
   },
   "scroll": {

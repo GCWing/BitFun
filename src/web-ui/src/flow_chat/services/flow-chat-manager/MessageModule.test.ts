@@ -140,6 +140,7 @@ describe('MessageModule Session mutation admission', () => {
     };
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
       },
     };
@@ -176,6 +177,7 @@ describe('MessageModule session writer conflict', () => {
       session,
       context: {
         flowChatStore: {
+          getSurfaceGeneration: () => 0,
           getState: () => ({ sessions: new Map([[sessionId, session]]) }),
           addDialogTurn: vi.fn((_id: string, turn: any) => session.dialogTurns.push(turn)),
           deleteDialogTurn: vi.fn((_id: string, turnId: string) => {
@@ -225,6 +227,7 @@ describe('MessageModule session writer conflict', () => {
     };
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({ sessions: new Map([['session-1', session]]) }),
         deleteDialogTurn: vi.fn(),
       },
@@ -444,6 +447,7 @@ describe('MessageModule cancellation', () => {
     const activeTextItems = new Map([['btw-child', new Map([['round-1', 'item-1']])]]);
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({
           activeSessionId: 'parent',
           sessions: new Map([['btw-child', session]]),
@@ -486,6 +490,7 @@ describe('MessageModule cancellation', () => {
     const activeTextItems = new Map([[session.sessionId, new Map([['round-1', 'item-1']])]]);
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
       },
       userCancelledSessionIds: new Set<string>(),
@@ -516,6 +521,7 @@ describe('MessageModule cancellation', () => {
     };
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
       },
       userCancelledSessionIds: new Set([session.sessionId]),
@@ -541,6 +547,7 @@ describe('MessageModule cancellation', () => {
     }]);
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({
           sessions: new Map([['session-1', {
             sessionId: 'session-1',
@@ -567,6 +574,7 @@ describe('MessageModule cancellation', () => {
     };
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
       },
     };
@@ -615,6 +623,7 @@ describe('MessageModule cancellation', () => {
     };
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
         addDialogTurn: vi.fn((_sessionId: string, turn: any) => session.dialogTurns.push(turn)),
         deleteDialogTurn: vi.fn((_sessionId: string, turnId: string) => {
@@ -667,6 +676,7 @@ describe('MessageModule cancellation', () => {
     };
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({ sessions: new Map([[session.sessionId, session]]) }),
       },
       userCancelledSessionIds: new Set<string>(),
@@ -739,6 +749,7 @@ describe('MessageModule detached dispatch', () => {
       session,
       context: {
         flowChatStore: {
+          getSurfaceGeneration: () => 0,
           getState: () => ({
             activeSessionId: session.sessionId,
             sessions: new Map([[session.sessionId, session]]),
@@ -920,6 +931,7 @@ describe('MessageModule model synchronization', () => {
     const updateSessionMaxContextTokens = vi.fn();
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({ sessions: new Map([['session-auto', session]]) }),
         updateSessionModelName,
         updateSessionMaxContextTokens,
@@ -951,6 +963,7 @@ describe('MessageModule model synchronization', () => {
     const updateSessionMaxContextTokens = vi.fn();
     const context: any = {
       flowChatStore: {
+        getSurfaceGeneration: () => 0,
         getState: () => ({ sessions: new Map([['legacy-session', session]]) }),
         updateSessionModelName,
         updateSessionMaxContextTokens,
@@ -970,5 +983,123 @@ describe('MessageModule model synchronization', () => {
       remoteSshHost: undefined,
       includeInternal: false,
     });
+  });
+});
+
+describe('MessageModule device surface switch', () => {
+  /**
+   * A device-surface switch clears every session projection. A submission
+   * caught in `startTurn`'s async window (state transition, worktree bind,
+   * model sync) used to resume against an empty store and throw
+   * "Session lost after adding dialog turn" — reported as a turn failure even
+   * though the turn had never reached a host, so the message was lost.
+   */
+  function switchingContext(sessionId: string, options?: { switchAfterTransition?: boolean }) {
+    const session = {
+      sessionId,
+      mode: 'agentic',
+      dialogTurns: [] as any[],
+      config: { modelName: 'auto', workspacePath: '/repo' },
+      titleStatus: 'generated',
+      maxContextTokens: 32000,
+    };
+    const sessions = new Map<string, any>([[sessionId, session]]);
+    let surfaceGeneration = 0;
+
+    const switchSurface = () => {
+      surfaceGeneration += 1;
+      sessions.clear();
+    };
+
+    if (options?.switchAfterTransition) {
+      // The switch lands while the state machine transition is awaited, which
+      // is exactly where the reported failure happened.
+      mockTransition.mockImplementation(async () => {
+        switchSurface();
+        return true;
+      });
+    }
+
+    return {
+      session,
+      switchSurface,
+      context: {
+        flowChatStore: {
+          getSurfaceGeneration: () => surfaceGeneration,
+          getState: () => ({ sessions }),
+          addDialogTurn: vi.fn((_id: string, turn: any) => session.dialogTurns.push(turn)),
+          deleteDialogTurn: vi.fn(),
+          updateSessionLastSubmittedMode: vi.fn(),
+          updateSessionMode: vi.fn(),
+          updateSessionModelName: vi.fn(),
+          updateSessionMaxContextTokens: vi.fn(),
+        },
+        processingManager: {
+          registerStatus: vi.fn(),
+          clearSessionStatus: vi.fn(),
+        },
+        pendingHistoryLoads: new Map(),
+        contentBuffers: new Map(),
+        activeTextItems: new Map(),
+      } as any,
+    };
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockGetCurrentState.mockReturnValue('idle');
+    mockGetStateMachine.mockReturnValue(null);
+    mockTransition.mockResolvedValue(true);
+    mockUpdateSessionModel.mockResolvedValue(undefined);
+    mockStartDialogTurn.mockResolvedValue(undefined);
+    mockPendingList.mockReturnValue([]);
+    mockPendingEnqueue.mockReturnValue({ id: 'requeued' });
+    mockEnsureBackendSession.mockResolvedValue(undefined);
+  });
+
+  it('does not report a turn failure when the surface switched mid-submission', async () => {
+    const { context } = switchingContext('session-switch', { switchAfterTransition: true });
+
+    await expect(
+      sendMessage(context, 'keep working', 'session-switch'),
+    ).resolves.toBeUndefined();
+
+    expect(mockNotificationError).not.toHaveBeenCalled();
+  });
+
+  it('re-queues the message when the host never accepted the turn', async () => {
+    const { context } = switchingContext('session-switch', { switchAfterTransition: true });
+
+    await sendMessage(context, 'keep working', 'session-switch');
+
+    expect(mockStartDialogTurn).not.toHaveBeenCalled();
+    expect(mockPendingEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-switch', content: 'keep working' }),
+    );
+  });
+
+  it('leaves an accepted turn alone when the surface switches after submission', async () => {
+    const { context, switchSurface } = switchingContext('session-accepted');
+    // The host takes the turn, and only then does the user switch device.
+    mockStartDialogTurn.mockImplementation(async () => {
+      switchSurface();
+    });
+
+    await sendMessage(context, 'already running', 'session-accepted');
+
+    expect(mockStartDialogTurn).toHaveBeenCalledTimes(1);
+    expect(mockPendingEnqueue).not.toHaveBeenCalled();
+    expect(mockNotificationError).not.toHaveBeenCalled();
+  });
+
+  it('still reports ordinary failures when the surface did not change', async () => {
+    const { context } = switchingContext('session-normal');
+    mockStartDialogTurn.mockRejectedValue(new Error('backend exploded'));
+
+    await expect(
+      sendMessage(context, 'boom', 'session-normal'),
+    ).rejects.toThrow('backend exploded');
+
+    expect(mockNotificationError).toHaveBeenCalled();
   });
 });
