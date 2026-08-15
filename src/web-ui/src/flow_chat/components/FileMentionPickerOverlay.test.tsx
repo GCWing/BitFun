@@ -126,9 +126,9 @@ describe('FileMentionPicker overlay', () => {
       await Promise.resolve();
     });
 
-    expect(document.querySelector('[data-bf-part="error"]')?.textContent)
+    expect(document.querySelector('[data-bf-part="empty"][data-bf-state~="error"]')?.textContent)
       .toBe('fileMention.browseUnavailable');
-    expect(document.querySelector('[data-bf-part="empty"]')).toBeNull();
+    expect(document.querySelector('[data-bf-part="empty"]:not([data-bf-state~="error"])')).toBeNull();
   });
 
   it('shows streamed remote matches before the recursive search completes', async () => {

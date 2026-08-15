@@ -567,7 +567,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       </div>
       <div data-bf-component="file-mention-picker" data-bf-part="content" className="file-mention-picker__content">
         {displayItems.length === 0 && fileLoadError ? (
-          <div data-bf-component="file-mention-picker" data-bf-part="error" className="file-mention-picker__empty">
+          <div data-bf-component="file-mention-picker" data-bf-part="empty" data-bf-state="error" className="file-mention-picker__empty">
             <span>{t(fileLoadError === 'search'
               ? 'fileMention.searchUnavailable'
               : 'fileMention.browseUnavailable')}</span>
@@ -633,7 +633,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
               </div>
             )}
             {fileLoadError && (
-              <div data-bf-component="file-mention-picker" data-bf-part="error" className="file-mention-picker__empty">
+              <div data-bf-component="file-mention-picker" data-bf-part="empty" data-bf-state="error" className="file-mention-picker__empty">
                 <span>{t(fileLoadError === 'search'
                   ? 'fileMention.searchUnavailable'
                   : 'fileMention.browseUnavailable')}</span>
