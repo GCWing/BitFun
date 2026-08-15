@@ -70,8 +70,8 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../prompts/shared/init_agents_md.md"),
     ),
     (
-        "minimal_harness_v1",
-        include_bytes!("../prompts/agents/minimal_harness_v1.md"),
+        "minimal-harness-v1",
+        include_bytes!("../prompts/agents/minimal-harness-v1.md"),
     ),
     (
         "multitask_mode_first_entry_reminder",
@@ -219,7 +219,7 @@ fn memory_phase1_prompt_preserves_direct_include_bytes() {
 
 #[test]
 fn minimal_harness_prompt_names_only_its_stable_baseline_tools() {
-    let prompt = agent_prompt("minimal_harness_v1").expect("minimal prompt");
+    let prompt = agent_prompt("minimal-harness-v1").expect("minimal prompt");
     for required in ["`Read`", "`Edit`", "`Write`", "`ExecCommand`"] {
         assert!(prompt.contains(required), "missing {required}");
     }

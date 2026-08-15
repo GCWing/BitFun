@@ -5,7 +5,7 @@ use bitfun_core_types::{
 
 pub const BALANCED_PROMPT_POLICY_ID: &str = "agentic-mode-v1";
 pub const BALANCED_TOOL_PROFILE_ID: &str = "coding-balanced-v1";
-pub const MINIMAL_PROMPT_POLICY_ID: &str = "minimal_harness_v1";
+pub const MINIMAL_PROMPT_POLICY_ID: &str = "minimal-harness-v1";
 pub const MINIMAL_TOOL_PROFILE_ID: &str = "coding-minimal-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
