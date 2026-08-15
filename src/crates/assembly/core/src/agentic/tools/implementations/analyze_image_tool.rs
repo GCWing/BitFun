@@ -1,6 +1,6 @@
 use crate::agentic::image_analysis::{
-    build_multimodal_message, detect_mime_type_from_bytes, optimize_image_with_size_limit,
-    resolve_vision_model_from_global_config,
+    build_multimodal_message, detect_mime_type_from_bytes, optimize_image_for_budget,
+    optimize_image_with_size_limit, resolve_vision_model_from_global_config, ImageBudget,
 };
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -56,6 +56,56 @@ impl AnalyzeImageTool {
             .filter(|prompt| !prompt.is_empty())
             .unwrap_or("Analyze this image in detail. Describe visible content, text, layout, and any details relevant to the user's task.")
             .to_string()
+    }
+
+    fn budget_from_input(input: &Value) -> Option<ImageBudget> {
+        match input.get("budget").and_then(Value::as_str) {
+            Some("small") => Some(ImageBudget::Small),
+            Some("normal") => Some(ImageBudget::Normal),
+            Some("large") => Some(ImageBudget::Large),
+            _ => None,
+        }
+    }
+
+    fn validate_budget(input: &Value) -> BitFunResult<()> {
+        match input.get("budget") {
+            None | Some(Value::Null) => Ok(()),
+            Some(Value::String(value)) => match value.as_str() {
+                "small" | "normal" | "large" => Ok(()),
+                other => Err(BitFunError::tool(format!(
+                    "analyze_image.budget must be one of `small`, `normal`, or `large`; got `{}`",
+                    other
+                ))),
+            },
+            Some(_) => Err(BitFunError::tool(
+                "analyze_image.budget must be a string when provided".to_string(),
+            )),
+        }
+    }
+
+    /// Input schema. Carries the optional `budget` resolution preset; omitting
+    /// it keeps the legacy provider-fit behavior.
+    fn schema() -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the image file. Use an absolute local path, a workspace-relative path, or an exact bitfun:// URI."
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Optional question or instruction for the image understanding model."
+                },
+                "budget": {
+                    "type": "string",
+                    "enum": ["small", "normal", "large"],
+                    "description": "Optional resolution preset: small (~512x512, cheap preview), normal (~1024x1024, default), large (~1448x1448, fine detail). Omit for provider-fit behavior."
+                }
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        })
     }
 
     fn resolve_path(
@@ -177,21 +227,7 @@ impl Tool for AnalyzeImageTool {
     }
 
     fn input_schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Path to the image file. Use an absolute local path, a workspace-relative path, or an exact bitfun:// URI."
-                },
-                "prompt": {
-                    "type": "string",
-                    "description": "Optional question or instruction for the image understanding model."
-                }
-            },
-            "required": ["path"],
-            "additionalProperties": false
-        })
+        Self::schema()
     }
 
     fn is_readonly(&self) -> bool {
@@ -207,6 +243,15 @@ impl Tool for AnalyzeImageTool {
         input: &Value,
         context: Option<&ToolUseContext>,
     ) -> ValidationResult {
+        if let Err(err) = Self::validate_budget(input) {
+            return ValidationResult {
+                result: false,
+                message: Some(err.to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
         let input_path = match Self::path_from_input(input) {
             Ok(path) => path,
             Err(err) => {
@@ -322,6 +367,7 @@ impl Tool for AnalyzeImageTool {
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        Self::validate_budget(input)?;
         let input_path = Self::path_from_input(input)?;
         let prompt = Self::prompt_from_input(input);
         let resolved = Self::resolve_path(input_path, Some(context))?;
@@ -330,13 +376,23 @@ impl Tool for AnalyzeImageTool {
             .map_err(|err| BitFunError::tool(format!("unsupported image file: {}", err)))?;
 
         let vision_model = resolve_vision_model_from_global_config().await?;
-        let processed = optimize_image_with_size_limit(
-            bytes,
-            &vision_model.provider,
-            Some(&original_mime_type),
-            Some(1024 * 1024),
-        )
-        .map_err(|err| BitFunError::tool(format!("unable to prepare image: {}", err)))?;
+        let processed = match Self::budget_from_input(input) {
+            Some(budget) => optimize_image_for_budget(
+                bytes,
+                &vision_model.provider,
+                Some(&original_mime_type),
+                budget,
+                Some(1024 * 1024),
+            )
+            .map_err(|err| BitFunError::tool(format!("unable to prepare image: {}", err)))?,
+            None => optimize_image_with_size_limit(
+                bytes,
+                &vision_model.provider,
+                Some(&original_mime_type),
+                Some(1024 * 1024),
+            )
+            .map_err(|err| BitFunError::tool(format!("unable to prepare image: {}", err)))?,
+        };
 
         let messages = build_multimodal_message(
             &prompt,
@@ -419,5 +475,22 @@ Divide by that factor to map anything in `analysis` back to source pixels — bu
                 analysis
             )),
         )])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AnalyzeImageTool;
+    use crate::agentic::tools::framework::Tool;
+    use serde_json::json;
+
+    #[test]
+    fn analyze_image_schema_carries_the_optional_budget_preset() {
+        let schema = AnalyzeImageTool::new().input_schema();
+        assert_eq!(
+            schema["properties"]["budget"]["enum"],
+            json!(["small", "normal", "large"])
+        );
+        assert_eq!(schema["required"], json!(["path"]));
     }
 }

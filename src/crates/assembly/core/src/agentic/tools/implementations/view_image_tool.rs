@@ -1,4 +1,6 @@
-use crate::agentic::image_analysis::{optimize_image_for_provider, ImageLimits};
+use crate::agentic::image_analysis::{
+    optimize_image_for_budget, optimize_image_for_provider, ImageBudget, ImageLimits,
+};
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -110,6 +112,57 @@ impl ViewImageTool {
                 "view_image.detail must be the string `original` when provided".to_string(),
             )),
         }
+    }
+
+    fn validate_budget(input: &Value) -> BitFunResult<()> {
+        match input.get("budget") {
+            None | Some(Value::Null) => Ok(()),
+            Some(Value::String(value)) => match value.as_str() {
+                "small" | "normal" | "large" => Ok(()),
+                other => Err(BitFunError::tool(format!(
+                    "view_image.budget must be one of `small`, `normal`, or `large`; got `{}`",
+                    other
+                ))),
+            },
+            Some(_) => Err(BitFunError::tool(
+                "view_image.budget must be a string when provided".to_string(),
+            )),
+        }
+    }
+
+    fn budget_from_input(input: &Value) -> Option<ImageBudget> {
+        match input.get("budget").and_then(Value::as_str) {
+            Some("small") => Some(ImageBudget::Small),
+            Some("normal") => Some(ImageBudget::Normal),
+            Some("large") => Some(ImageBudget::Large),
+            _ => None,
+        }
+    }
+
+    /// Input schema. Carries the optional `budget` resolution preset; omitting
+    /// it keeps the legacy provider-fit behavior.
+    fn schema() -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to an image file. Use an absolute local path, a workspace-relative path, or an exact bitfun:// URI returned by another tool."
+                },
+                "detail": {
+                    "type": "string",
+                    "enum": ["original"],
+                    "description": "Optional detail override. Supported value: original. BitFun preserves image detail when possible and may optimize bytes to fit the active provider limits."
+                },
+                "budget": {
+                    "type": "string",
+                    "enum": ["small", "normal", "large"],
+                    "description": "Optional resolution preset: small (~512x512, cheap preview), normal (~1024x1024, default), large (~1448x1448, fine detail). Omit for provider-fit behavior."
+                }
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        })
     }
 
     fn resolve_path(
@@ -231,22 +284,7 @@ impl Tool for ViewImageTool {
     }
 
     fn input_schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Path to an image file. Use an absolute local path, a workspace-relative path, or an exact bitfun:// URI returned by another tool."
-                },
-                "detail": {
-                    "type": "string",
-                    "enum": ["original"],
-                    "description": "Optional detail override. Supported value: original. BitFun preserves image detail when possible and may optimize bytes to fit the active provider limits."
-                }
-            },
-            "required": ["path"],
-            "additionalProperties": false
-        })
+        Self::schema()
     }
 
     async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
@@ -269,6 +307,15 @@ impl Tool for ViewImageTool {
         context: Option<&ToolUseContext>,
     ) -> ValidationResult {
         if let Err(err) = Self::validate_detail(input) {
+            return ValidationResult {
+                result: false,
+                message: Some(err.to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
+        if let Err(err) = Self::validate_budget(input) {
             return ValidationResult {
                 result: false,
                 message: Some(err.to_string()),
@@ -382,16 +429,27 @@ impl Tool for ViewImageTool {
     ) -> BitFunResult<Vec<ToolResult>> {
         Self::require_multimodal_tool_output(context)?;
         Self::validate_detail(input)?;
+        Self::validate_budget(input)?;
 
         let input_path = Self::path_from_input(input)?;
         let path = Self::resolve_path(input_path, Some(context))?;
         let bytes = Self::read_image_bytes(&path, Some(context)).await?;
         let original_mime_type = Self::mime_type_for_image(&bytes)?;
         let provider = Self::primary_api_format(context);
-        let processed = optimize_image_for_provider(bytes, &provider, Some(original_mime_type))
-            .map_err(|err| {
-                BitFunError::tool(format!("unable to prepare image for model vision: {}", err))
-            })?;
+        let processed = match Self::budget_from_input(input) {
+            Some(budget) => {
+                optimize_image_for_budget(bytes, &provider, Some(original_mime_type), budget, None)
+                    .map_err(|err| {
+                        BitFunError::tool(format!(
+                            "unable to prepare image for model vision: {err}"
+                        ))
+                    })?
+            }
+            None => optimize_image_for_provider(bytes, &provider, Some(original_mime_type))
+                .map_err(|err| {
+                    BitFunError::tool(format!("unable to prepare image for model vision: {err}"))
+                })?,
+        };
         let limits = ImageLimits::for_provider(&provider);
         if processed.data.len() > limits.max_size {
             return Err(BitFunError::tool(format!(
@@ -771,5 +829,71 @@ mod tests {
             panic!("expected result");
         };
         assert_eq!(data["mime_type"], "image/png");
+    }
+
+    #[test]
+    fn view_image_schema_carries_the_optional_budget_preset() {
+        let schema = ViewImageTool::new().input_schema();
+        assert_eq!(
+            schema["properties"]["budget"]["enum"],
+            json!(["small", "normal", "large"])
+        );
+        assert_eq!(schema["required"], json!(["path"]));
+    }
+
+    #[tokio::test]
+    async fn view_image_budget_downscales_a_large_image_to_the_preset_target() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("big.png");
+        fs::write(&path, png_bytes(3000, 2000)).expect("write png");
+
+        let results = ViewImageTool::new()
+            .call_impl(
+                &json!({ "path": path, "budget": "small" }),
+                &local_workspace_context("openai", true, dir.path().to_path_buf()),
+            )
+            .await
+            .expect("budgeted view result");
+
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected result");
+        };
+        assert_eq!(data["original_width"], 3000);
+        assert_eq!(data["original_height"], 2000);
+        assert_eq!(data["was_resized"], true);
+        let area = data["width"].as_u64().unwrap() * data["height"].as_u64().unwrap();
+        assert!(
+            area <= 256 * 32 * 32
+                + data["width"].as_u64().unwrap()
+                + data["height"].as_u64().unwrap(),
+            "small budget sent a {area}-pixel image"
+        );
+    }
+
+    #[tokio::test]
+    async fn view_image_budget_does_not_upscale_a_tiny_image() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tiny.png");
+        fs::write(&path, png_bytes(64, 64)).expect("write png");
+
+        let results = ViewImageTool::new()
+            .call_impl(
+                &json!({ "path": path, "budget": "normal" }),
+                &local_workspace_context("openai", true, dir.path().to_path_buf()),
+            )
+            .await
+            .expect("budgeted view result");
+
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected result");
+        };
+        assert_eq!(
+            (
+                data["width"].as_u64().unwrap(),
+                data["height"].as_u64().unwrap()
+            ),
+            (64, 64)
+        );
+        assert_eq!(data["was_resized"], false);
     }
 }

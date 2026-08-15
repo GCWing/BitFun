@@ -216,12 +216,165 @@ pub fn optimize_image_with_size_limit(
         });
     }
 
-    let mut working = if needs_resize {
+    let working = if needs_resize {
         dynamic.resize(limits.max_width, limits.max_height, FilterType::Triangle)
     } else {
         dynamic
     };
 
+    let (data, mime_type, width, height) =
+        encode_within_size_budget(working, guessed_format, effective_max)?;
+
+    Ok(ProcessedImage {
+        data,
+        mime_type,
+        width,
+        height,
+        original_width: orig_width,
+        original_height: orig_height,
+    })
+}
+
+/// Resolution presets for the image-workflow budget path.
+///
+/// Following the Qwen-VL dynamic-resolution convention, each preset maps to a
+/// visual-token budget and one token covers a 32x32 patch, so a preset's pixel
+/// budget is `tokens * 32^2` (~512^2 / ~1024^2 / ~1448^2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageBudget {
+    /// Cheap preview (~512x512).
+    Small,
+    /// Default (~1024x1024).
+    Normal,
+    /// Fine detail (~1448x1448).
+    Large,
+}
+
+impl ImageBudget {
+    /// Visual-token budget for this preset.
+    pub const fn tokens(self) -> u32 {
+        match self {
+            Self::Small => 256,
+            Self::Normal => 1024,
+            Self::Large => 2048,
+        }
+    }
+
+    /// Pixel budget for this preset (tokens x 32^2).
+    pub const fn target_pixels(self) -> u64 {
+        (self.tokens() as u64) * (TOKEN_SIZE as u64) * (TOKEN_SIZE as u64)
+    }
+}
+
+const TOKEN_SIZE: u32 = 32;
+
+/// Budget-aware image optimization.
+///
+/// `budget` picks the pixel target; sources larger than the target are
+/// downscaled to it (downscale only — small images pass through untouched).
+/// Provider `ImageLimits` remain a hard ceiling on top of the budget target,
+/// including the per-dimension width/height caps. Images that already fit the
+/// budget, the provider dimensions, and the byte cap are returned unchanged so
+/// their original format (including animation) is preserved; anything that must
+/// change is re-encoded through the shared encoder, which emits PNG or JPEG.
+pub fn optimize_image_for_budget(
+    image_data: Vec<u8>,
+    provider: &str,
+    fallback_mime: Option<&str>,
+    budget: ImageBudget,
+    max_output_size: Option<usize>,
+) -> BitFunResult<ProcessedImage> {
+    let limits = ImageLimits::for_provider(provider);
+    let effective_max = match max_output_size {
+        Some(cap) => cap.min(limits.max_size),
+        None => limits.max_size,
+    };
+
+    let guessed_format = image::guess_format(&image_data).ok();
+    let dynamic = image::load_from_memory(&image_data)
+        .map_err(|e| BitFunError::validation(format!("Failed to decode image data: {}", e)))?;
+
+    let (orig_width, orig_height) = (dynamic.width(), dynamic.height());
+    let orig_area = u64::from(orig_width) * u64::from(orig_height);
+
+    // The budget target never overrides the provider's dimension ceiling.
+    let provider_cap_pixels = u64::from(limits.max_width) * u64::from(limits.max_height);
+    let target_pixels = budget.target_pixels().min(provider_cap_pixels);
+
+    // Preserve untouched images byte-for-byte instead of needlessly
+    // re-encoding, mirroring the legacy fast path. This also keeps animated or
+    // non-PNG/JPEG sources from being flattened into a static PNG.
+    if orig_area <= target_pixels
+        && orig_width <= limits.max_width
+        && orig_height <= limits.max_height
+        && image_data.len() <= effective_max
+    {
+        let mime_type = detect_mime_type_from_bytes(&image_data, fallback_mime)?;
+        return Ok(ProcessedImage {
+            data: image_data,
+            mime_type,
+            width: orig_width,
+            height: orig_height,
+            original_width: orig_width,
+            original_height: orig_height,
+        });
+    }
+
+    let mut working = dynamic;
+    if orig_area > target_pixels {
+        working = fit_within_area(working, target_pixels);
+    }
+    // The area fit preserves aspect ratio but can still leave one edge longer
+    // than the provider allows (for example wide panoramas). Enforce the
+    // per-dimension ceiling the same way the legacy provider-fit path does.
+    working = fit_within_dimensions(working, limits.max_width, limits.max_height);
+
+    let (data, mime_type, width, height) =
+        encode_within_size_budget(working, guessed_format, effective_max)?;
+
+    Ok(ProcessedImage {
+        data,
+        mime_type,
+        width,
+        height,
+        original_width: orig_width,
+        original_height: orig_height,
+    })
+}
+
+/// Aspect-preserving fit within a pixel budget (downscale only).
+fn fit_within_area(img: DynamicImage, max_pixels: u64) -> DynamicImage {
+    let area = u64::from(img.width()) * u64::from(img.height());
+    if area <= max_pixels {
+        return img;
+    }
+
+    let scale = (max_pixels as f64 / area as f64).sqrt();
+    let width = ((img.width() as f64) * scale).round().max(1.0) as u32;
+    let height = ((img.height() as f64) * scale).round().max(1.0) as u32;
+    img.resize(width, height, FilterType::Triangle)
+}
+
+/// Aspect-preserving fit within per-dimension limits (downscale only).
+///
+/// The pixel-area budget alone does not bound either edge, so an elongated
+/// source can still exceed `max_width` or `max_height` after the area fit.
+fn fit_within_dimensions(img: DynamicImage, max_width: u32, max_height: u32) -> DynamicImage {
+    if img.width() <= max_width && img.height() <= max_height {
+        return img;
+    }
+    img.resize(max_width, max_height, FilterType::Triangle)
+}
+
+/// Encode `working` within `effective_max` bytes using the shared quality
+/// ladder (85 -> 80/65/50/35) and, when still oversized, repeated 0.75x
+/// downscales (70/55/40/25). Returns the encoded bytes, mime type, and the
+/// final dimensions the model actually sees.
+fn encode_within_size_budget(
+    mut working: DynamicImage,
+    guessed_format: Option<ImageFormat>,
+    effective_max: usize,
+) -> BitFunResult<(Vec<u8>, String, u32, u32)> {
     let preferred_format = match guessed_format {
         Some(ImageFormat::Jpeg) => ImageFormat::Jpeg,
         _ => ImageFormat::Png,
@@ -261,14 +414,7 @@ pub fn optimize_image_with_size_limit(
         }
     }
 
-    Ok(ProcessedImage {
-        data: encoded.0,
-        mime_type: encoded.1,
-        width: working.width(),
-        height: working.height(),
-        original_width: orig_width,
-        original_height: orig_height,
-    })
+    Ok((encoded.0, encoded.1, working.width(), working.height()))
 }
 
 pub fn build_multimodal_message(
@@ -594,5 +740,141 @@ mod resize_reporting_tests {
         );
         assert!(!processed.was_resized());
         assert!((processed.scale() - 1.0).abs() < f64::EPSILON);
+    }
+}
+
+/// Budget-preset semantics: token budgets map to pixel targets, small images
+/// pass through untouched (downscale-only), and the provider's dimension
+/// ceiling never yields to the budget.
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+
+    fn png_of(width: u32, height: u32) -> Vec<u8> {
+        let img =
+            image::DynamicImage::ImageRgb8(image::RgbImage::from_fn(width, height, |x, y| {
+                image::Rgb([(x % 251) as u8, (y % 253) as u8, ((x ^ y) % 247) as u8])
+            }));
+        let mut out = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut out, ImageFormat::Png)
+            .expect("encode test png");
+        out.into_inner()
+    }
+
+    /// Each preset maps to a visual-token budget (32x32 patches per token):
+    /// 256/1024/2048 tokens ~ 512^2 / 1024^2 / 1448^2 pixels.
+    #[test]
+    fn budget_presets_map_to_token_budgets() {
+        assert_eq!(ImageBudget::Small.tokens(), 256);
+        assert_eq!(ImageBudget::Normal.tokens(), 1024);
+        assert_eq!(ImageBudget::Large.tokens(), 2048);
+
+        assert_eq!(ImageBudget::Small.target_pixels(), 256 * 32 * 32);
+        assert_eq!(ImageBudget::Normal.target_pixels(), 1024 * 32 * 32);
+        assert_eq!(ImageBudget::Large.target_pixels(), 2048 * 32 * 32);
+    }
+
+    /// A source larger than the preset target is downscaled to roughly the
+    /// target area, keeping the aspect ratio.
+    #[test]
+    fn a_large_image_is_downscaled_to_the_budget_target() {
+        let processed = optimize_image_for_budget(
+            png_of(3000, 2000),
+            "openai",
+            Some("image/png"),
+            ImageBudget::Small,
+            Some(1024 * 1024),
+        )
+        .expect("optimize");
+
+        assert_eq!(
+            (processed.original_width, processed.original_height),
+            (3000, 2000)
+        );
+        assert!(processed.was_resized());
+        assert!(processed.scale() < 1.0);
+        let area = u64::from(processed.width) * u64::from(processed.height);
+        assert!(
+            area <= ImageBudget::Small.target_pixels()
+                + u64::from(processed.width + processed.height),
+            "{}x{} exceeds the small budget",
+            processed.width,
+            processed.height
+        );
+        // Aspect ratio preserved (1.5).
+        let ratio = f64::from(processed.width) / f64::from(processed.height);
+        assert!((ratio - 1.5).abs() < 0.01, "ratio drifted to {ratio}");
+    }
+
+    /// The budget path is downscale-only: a small image passes through
+    /// untouched, never upscaled to fill the budget.
+    #[test]
+    fn a_small_image_is_not_upscaled_to_fill_the_budget() {
+        let processed = optimize_image_for_budget(
+            png_of(64, 64),
+            "openai",
+            Some("image/png"),
+            ImageBudget::Normal,
+            None,
+        )
+        .expect("optimize");
+
+        assert_eq!((processed.width, processed.height), (64, 64));
+        assert!(!processed.was_resized());
+        assert!((processed.scale() - 1.0).abs() < f64::EPSILON);
+    }
+
+    /// The budget target never exceeds the provider's dimension ceiling. All
+    /// current providers cap above even the large budget (2048^2 pixels), so
+    /// this asserts the large budget is honored without the ceiling yielding
+    /// first; the min() guard stays as defense for tighter future providers.
+    #[test]
+    fn the_budget_target_never_exceeds_the_provider_ceiling() {
+        let processed = optimize_image_for_budget(
+            png_of(5000, 5000),
+            "openai",
+            Some("image/png"),
+            ImageBudget::Large,
+            None,
+        )
+        .expect("optimize");
+
+        let provider_cap = u64::from(ImageLimits::for_provider("openai").max_width)
+            * u64::from(ImageLimits::for_provider("openai").max_height);
+        let area = u64::from(processed.width) * u64::from(processed.height);
+        assert!(
+            area <= ImageBudget::Large.target_pixels().min(provider_cap)
+                + u64::from(processed.width + processed.height)
+        );
+        assert!(processed.was_resized());
+    }
+
+    /// A wide source can fit the pixel budget yet still exceed the provider's
+    /// per-dimension ceiling; the budget path must bound the long edge too.
+    #[test]
+    fn a_wide_image_is_also_capped_by_the_provider_dimensions() {
+        let processed = optimize_image_for_budget(
+            png_of(10000, 500),
+            "anthropic",
+            Some("image/png"),
+            ImageBudget::Normal,
+            None,
+        )
+        .expect("optimize");
+
+        let limits = ImageLimits::for_provider("anthropic");
+        assert!(
+            processed.width <= limits.max_width,
+            "width {} exceeds provider max_width {}",
+            processed.width,
+            limits.max_width
+        );
+        assert!(
+            processed.height <= limits.max_height,
+            "height {} exceeds provider max_height {}",
+            processed.height,
+            limits.max_height
+        );
+        assert!(processed.was_resized());
     }
 }
