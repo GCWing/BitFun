@@ -85,6 +85,21 @@ describe('HarnessProfileSelector', () => {
     ).toBeNull();
   });
 
+  it('preserves an unknown future profile without pretending it is balanced', async () => {
+    await act(async () => {
+      root.render(
+        <HarnessProfileSelector selectedProfile="future-profile" onSelectProfile={vi.fn()} />,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="harness-profile-selector"]',
+    );
+    expect(trigger?.dataset.harnessGear).toBe('0');
+    expect(filledBars(trigger!)).toBe(0);
+    expect(trigger?.textContent).toContain('chatInput.harness.unsupportedProfile');
+  });
+
   it('disables profile selection while the authoritative update is in flight', async () => {
     await act(async () => {
       root.render(

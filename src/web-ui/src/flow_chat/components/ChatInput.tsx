@@ -56,6 +56,11 @@ import {
 import { parseReloadCommand, supportsLocalReloadContext } from '../utils/reloadCommand';
 import { reviewPromptCommandShell } from '../utils/promptCommandShellReview';
 import { notificationService } from '@/shared/notification-system';
+import {
+  isNotAvailableError,
+  isOutcomeUnknownError,
+  isSessionInUseError,
+} from '@/infrastructure/api/errors/TauriCommandError';
 import { useI18n } from '@/infrastructure/i18n';
 import { inputReducer, initialInputState, type InputAction } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -143,7 +148,11 @@ import {
   ChatInputWorkspaceStrip,
   type ChatInputPermissionMode,
 } from './ChatInputWorkspaceStrip';
-import { HarnessProfileSelector, type HarnessProfileId } from './HarnessProfileSelector';
+import {
+  HarnessProfileSelector,
+  type HarnessProfileId,
+  type SelectableHarnessProfileId,
+} from './HarnessProfileSelector';
 import { ChatInputApprovalBand } from './ChatInputApprovalBand';
 import { usePermissionRequests } from './modern/usePermissionRequests';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
@@ -1034,9 +1043,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const canSwitchModes = chatInputModePolicy.canSwitchModes && !isSubagentInputTarget;
   const [isHarnessProfileChangePending, setHarnessProfileChangePending] = useState(false);
-  const selectedHarnessProfile = (
-    effectiveTargetSession?.config.executionProfile?.harnessProfileId ?? 'balanced'
-  ) as HarnessProfileId;
+  const selectedHarnessProfile: HarnessProfileId =
+    effectiveTargetSession?.config.executionProfile?.harnessProfileId ?? 'balanced';
 
   // Session-level mode policy: fixed collaboration modes are not selectable boosts.
   const switchableModes = useMemo(
@@ -4121,7 +4129,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     reportModeSelectionFailure,
   );
 
-  const requestHarnessProfileChange = useCallback(async (profileId: HarnessProfileId) => {
+  const requestHarnessProfileChange = useCallback(async (profileId: SelectableHarnessProfileId) => {
     if (isHarnessProfileChangePending) return;
     if (!sessionModeSelectionTarget) {
       notificationService.error(t('chatInput.harness.legacySessionNotice'));
@@ -4139,7 +4147,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       );
     } catch (error) {
       log.error('Failed to update Session Harness Profile', { error, profileId });
-      notificationService.error(t('error.unknown'));
+      if (isSessionInUseError(error)) {
+        notificationService.info(t('chatInput.harness.profileChangeBusy'));
+      } else if (isOutcomeUnknownError(error)) {
+        notificationService.error(t('chatInput.harness.profileChangeOutcomeUnknown'));
+      } else if (isNotAvailableError(error)) {
+        notificationService.error(t('chatInput.harness.profileUnavailable'));
+      } else {
+        notificationService.error(t('chatInput.harness.profileChangeFailed'));
+      }
     } finally {
       setHarnessProfileChangePending(false);
     }
