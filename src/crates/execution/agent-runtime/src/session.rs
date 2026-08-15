@@ -140,6 +140,7 @@ impl Session {
 impl From<Session> for bitfun_runtime_ports::AgentSessionCreateResult {
     fn from(session: Session) -> Self {
         let mut result = Self::new(session.session_id, session.session_name, session.agent_type);
+        result.execution_profile = session.config.execution_profile.clone();
         result.model_id = session.config.model_id;
         result.workspace_path = session.config.workspace_path;
         result.workspace_id = session.config.workspace_id;
@@ -157,6 +158,10 @@ pub struct SessionConfig {
     pub enable_tools: bool,
     pub safe_mode: bool,
     pub max_turns: usize,
+    /// Harness policy selected for the next accepted turn. Legacy persisted
+    /// sessions omit this field and project to Balanced compatibility mode.
+    #[serde(default)]
+    pub execution_profile: bitfun_core_types::SessionExecutionProfile,
     pub enable_context_compression: bool,
     /// Workspace path bound to this session. Used to run AI in the correct workspace
     /// without changing the desktop's foreground workspace.
@@ -238,6 +243,7 @@ impl Default for SessionConfig {
             enable_tools: true,
             safe_mode: true,
             max_turns: 200,
+            execution_profile: bitfun_core_types::SessionExecutionProfile::default(),
             enable_context_compression: true,
             workspace_path: None,
             project_workspace_path: None,
@@ -263,6 +269,8 @@ pub struct SessionSummary {
     pub session_name: String,
     /// Current/default mode selection for the session.
     pub agent_type: String,
+    #[serde(default)]
+    pub execution_profile: bitfun_core_types::SessionExecutionProfile,
     /// Runtime-owned model selector currently bound to the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,

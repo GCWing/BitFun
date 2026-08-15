@@ -5,6 +5,7 @@
 
 pub mod ai;
 pub mod errors;
+pub mod harness_profile;
 pub mod lsp;
 pub mod session;
 pub mod session_usage;
@@ -26,6 +27,12 @@ pub use ai::{
     ToolCallConfirmationDetails, ToolCallRequestInfo, ToolCallResponseInfo, ToolDefinition,
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
+pub use harness_profile::{
+    HarnessProfileId, HarnessSelectionSource, SessionExecutionProfile,
+    BALANCED_HARNESS_PROFILE_ID, HARNESS_SELECTION_ADAPTER, HARNESS_SELECTION_CLI,
+    HARNESS_SELECTION_COMPATIBILITY, HARNESS_SELECTION_DEFAULT, HARNESS_SELECTION_USER,
+    MINIMAL_HARNESS_PROFILE_ID, ULTIMATE_HARNESS_PROFILE_ID,
+};
 pub use session::{
     validate_session_id, SessionAgentRouteOwner, SessionContinuationPolicy, SessionKind,
     SessionModelBindingPolicy,
