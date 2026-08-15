@@ -1592,6 +1592,7 @@ dependencies = [
  "oxc",
  "qrcode",
  "rand 0.8.7",
+ "regex",
  "reqwest",
  "rmcp",
  "russh",

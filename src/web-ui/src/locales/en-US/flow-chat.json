@@ -889,6 +889,8 @@
   "fileMention": {
     "searchResults": "Search Results",
     "loading": "Loading...",
+    "browseUnavailable": "Workspace files are unavailable. Check the connection and try again.",
+    "searchUnavailable": "Workspace search is unavailable. Check the connection and try again.",
     "noMatchingFiles": "No matching files found",
     "emptyDirectory": "Empty directory",
     "rootDirectory": "Root",

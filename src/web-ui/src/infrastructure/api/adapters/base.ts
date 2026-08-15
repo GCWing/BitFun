@@ -16,6 +16,9 @@ export interface ITransportAdapter {
    * transport have settled. Synchronous transports can keep the default no-op.
    */
   waitForListenerRegistrations?(): Promise<void>;
+
+  /** Whether command-scoped file-search progress events reach this surface. */
+  supportsSearchStreamEvents?(): boolean;
   
    
   disconnect(): Promise<void>;
@@ -57,5 +60,4 @@ export interface ToolEvent extends StreamEvent {
     data?: any;
   };
 }
-
 

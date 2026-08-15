@@ -13,6 +13,12 @@ import {
 } from './peer-device-adapter';
 
 describe('isPeerLocalOnlyCommand', () => {
+  it('keeps file-search streaming on the negotiated response path', () => {
+    const adapter = new PeerDeviceTransportAdapter('peer-1', vi.fn());
+    expect(adapter.supportsSearchStreamEvents()).toBe(false);
+    expect(isPeerLocalOnlyCommand('search_filenames')).toBe(false);
+  });
+
   it('keeps local speech capture and model events on the controller device', () => {
     expect(isPeerLocalOnlyCommand('speech_list_models')).toBe(true);
     expect(isPeerLocalOnlyCommand('speech_start_input_session')).toBe(true);

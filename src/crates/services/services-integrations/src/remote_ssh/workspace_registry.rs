@@ -128,12 +128,11 @@ impl RemoteWorkspaceRegistry {
             .filter(|r| registration_matches_path(r, &path_norm))
             .collect();
 
-        // Only use preferred_connection_id to disambiguate when multiple
-        // path-matching candidates exist. When there is exactly one match,
-        // the path is unambiguous and the preferred hint must not override it.
+        // Keep the legacy hint semantics for existing callers: only use the
+        // preferred id to disambiguate multiple path-matching registrations.
         if candidates.len() > 1 {
-            if let Some(pref) = preferred_connection_id {
-                candidates.retain(|r| r.connection_id == pref);
+            if let Some(preferred) = preferred_connection_id {
+                candidates.retain(|registration| registration.connection_id == preferred);
             }
         }
 
@@ -154,6 +153,32 @@ impl RemoteWorkspaceRegistry {
         }
 
         None
+    }
+
+    /// Looks up one exact `(connection_id, path)` scope.
+    ///
+    /// Unlike [`Self::lookup_connection`], this never treats the connection id
+    /// as a best-effort hint and never selects another registered host.
+    pub async fn lookup_scoped_connection(
+        &self,
+        path: &str,
+        connection_id: &str,
+    ) -> Option<RemoteWorkspaceEntry> {
+        let connection_id = connection_id.trim();
+        if connection_id.is_empty() {
+            return None;
+        }
+
+        let path_norm = normalize_remote_workspace_path(path);
+        let guard = self.registrations.read().await;
+        guard
+            .iter()
+            .filter(|registration| {
+                registration.connection_id == connection_id
+                    && registration_matches_path(registration, &path_norm)
+            })
+            .max_by_key(|registration| registration.remote_root.len())
+            .map(entry_from_registration)
     }
 
     /// True if `path` could belong to any registered remote root before disambiguation.

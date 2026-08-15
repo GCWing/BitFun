@@ -409,6 +409,15 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     private readonly maxConcurrent: number = PEER_HOST_INVOKE_MAX_CONCURRENT,
   ) {}
 
+  /**
+   * Search progress is not part of the negotiated Peer DeviceEvent contract.
+   * Use the response-based search command so older peers remain compatible and
+   * results never fall back to the controller's filesystem.
+   */
+  supportsSearchStreamEvents(): boolean {
+    return false;
+  }
+
   getTargetDeviceId(): string {
     return this.targetDeviceId;
   }

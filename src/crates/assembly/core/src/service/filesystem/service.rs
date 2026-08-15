@@ -23,11 +23,30 @@ async fn read_remote_directory_contents(
     path: &str,
     preferred_remote_connection_id: Option<&str>,
 ) -> Option<BitFunResult<Vec<FileTreeNode>>> {
-    let entry = crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
-        path,
-        preferred_remote_connection_id,
-    )
-    .await?;
+    let explicit_connection_id = preferred_remote_connection_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let remote_entry = if let Some(connection_id) = explicit_connection_id {
+        crate::service::remote_ssh::workspace_state::lookup_remote_connection_scoped(
+            path,
+            connection_id,
+        )
+        .await
+    } else {
+        crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(path, None)
+            .await
+    };
+    let entry = match remote_entry {
+        Some(entry) => entry,
+        None if explicit_connection_id.is_some() => {
+            return Some(Err(BitFunError::service(format!(
+                "Remote workspace connection '{}' is unavailable or does not own path '{}'; local filesystem fallback was not attempted",
+                explicit_connection_id.unwrap_or_default(),
+                path
+            ))));
+        }
+        None => return None,
+    };
 
     let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()
     else {
@@ -516,6 +535,41 @@ mod tests {
                 .to_string()
                 .contains("Remote file service is unavailable"),
             "unexpected error: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn explicit_remote_scope_never_falls_back_to_a_local_directory() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let remote_root = temp.path().to_string_lossy().to_string();
+        let registered_connection_id = "filesystem-exact-scope-registered";
+        let requested_connection_id = "filesystem-exact-scope-requested";
+        let manager = init_remote_workspace_manager();
+        manager
+            .register_remote_workspace(
+                remote_root.clone(),
+                registered_connection_id.to_string(),
+                "Other remote".to_string(),
+                "other-remote-host".to_string(),
+            )
+            .await;
+
+        let error = FileSystemService::default()
+            .get_directory_contents_with_remote_hint(&remote_root, Some(requested_connection_id))
+            .await
+            .expect_err("an explicit remote scope must not read the controller filesystem");
+
+        manager
+            .unregister_remote_workspace(registered_connection_id, &remote_root)
+            .await;
+        let message = error.to_string();
+        assert!(
+            message.contains(requested_connection_id),
+            "unexpected error: {message}"
+        );
+        assert!(
+            message.contains("local filesystem fallback was not attempted"),
+            "unexpected error: {message}"
         );
     }
 }
