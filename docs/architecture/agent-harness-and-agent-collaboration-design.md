@@ -5,6 +5,8 @@
 > 范围：统一 Code / Cowork 会话，定义用户可感知的三种 Agent Harness，重构 Plan、Review、Cowork、Computer Use 等 Agent 的角色与协作方式，并给出运行时边界、兼容迁移和远程场景约束。
 >
 > 上位约束：[`product-architecture.md`](product-architecture.md)、[`agent-runtime-services-design.md`](agent-runtime-services-design.md)、[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md) 和 [`rust-build-dependency-boundaries.md`](rust-build-dependency-boundaries.md)。若本提案通过评审，实施时再把稳定结论回填上位文档；在此之前，以现有上位文档和代码为准。
+>
+> `minimal` Profile 的首个可交付垂直切片见 [`minimal-agent-harness-profile-design.md`](minimal-agent-harness-profile-design.md)。
 
 ## 0. 结论先行
 
