@@ -1970,8 +1970,15 @@ fn get_tool_spec_contract_escapes_assistant_detail_for_xml_sections() {
     );
 
     assert!(detail.contains("<description>\nUse &lt;danger&gt; &amp; keep output valid."));
-    assert!(detail.contains("\"description\":\"Match &lt;tag&gt; &amp; symbols\""));
-    assert!(detail.contains("CallDeferredTool({\"tool_name\":\"Git\",\"args\":{...}})"));
+    assert!(
+        detail.contains("<calling>\nCall `CallDeferredTool` with arguments matching this schema:")
+    );
+    assert!(detail.contains("\"required\": [\"tool_name\", \"args\"]"));
+    assert!(detail.contains("\"tool_name\": {\n      \"const\": \"Git\"\n    }"));
+    assert!(detail.contains("\"args\": {"));
+    assert!(detail.contains("\"description\": \"Match &lt;tag&gt; &amp; symbols\""));
+    assert!(!detail.contains("<input_schema>"));
+    assert!(!detail.contains("<execution>"));
     assert!(!detail.contains("Use <danger> & keep output valid."));
 }
 
@@ -2042,6 +2049,10 @@ fn get_tool_spec_contract_builds_detail_result() {
     let assistant = result_for_assistant.expect("assistant detail");
     assert!(assistant.contains("Use &lt;repo&gt; &amp; inspect changes."));
     assert!(assistant.contains("Run &lt;safe&gt; git commands"));
+    assert!(assistant.contains("\"tool_name\": {\n      \"const\": \"Git\"\n    }"));
+    assert!(assistant.contains("\"args\": {"));
+    assert!(!assistant.contains("<input_schema>"));
+    assert!(!assistant.contains("<execution>"));
     assert_eq!(image_attachments, None);
 }
 

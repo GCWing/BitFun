@@ -37,9 +37,9 @@ pub use definitions::subagents::{
 };
 use indexmap::IndexMap;
 pub use prompt_builder::{
-    build_prompt_context_for_workspace, PrependedPromptReminders, PromptBuilder,
-    PromptBuilderContext, RemoteExecutionHints, RuntimeContextNeeds, ToolListingSections,
-    UserContextPolicy, UserContextSection,
+    build_prompt_context_for_workspace, render_direct_tool_listing_body, PrependedPromptReminders,
+    PromptBuilder, PromptBuilderContext, RemoteExecutionHints, RuntimeContextNeeds,
+    ToolListingSections, UserContextPolicy, UserContextSection,
 };
 pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
 #[cfg(feature = "external-sources")]

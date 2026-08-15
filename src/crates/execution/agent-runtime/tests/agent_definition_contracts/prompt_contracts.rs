@@ -43,6 +43,10 @@ fn tool_listing_sections_render_only_present_sections() {
     let sections = ToolListingSections {
         skill_listing: Some("skill-a\nskill-b".to_string()),
         agent_listing: None,
+        direct_tool_listing: Some(
+            "<direct_tools>\n- Read\n- GetToolSpec\n- CallDeferredTool\n</direct_tools>"
+                .to_string(),
+        ),
         deferred_tool_listing: Some("Search: summary".to_string()),
     };
 
@@ -56,19 +60,27 @@ fn tool_listing_sections_render_only_present_sections() {
         .render_deferred_tool_listing_reminder()
         .expect("deferred tool listing should render");
     assert!(deferred_tool_listing.starts_with("# Tool Calling Guide\n"));
-    assert!(deferred_tool_listing.contains("Direct tools: tools in the available tool list"));
-    assert!(deferred_tool_listing.contains("Deferred tools: call them through `CallDeferredTool`"));
+    assert!(deferred_tool_listing.contains("You can access two types of tools."));
+    assert!(deferred_tool_listing.contains("## Direct tools\n"));
+    assert!(deferred_tool_listing
+        .contains("Their definitions are already available. You can call them directly."));
+    assert!(deferred_tool_listing.contains("## Deferred tools\n"));
+    assert!(deferred_tool_listing
+        .contains("Their definitions are not loaded at the start of the conversation."));
+    assert!(deferred_tool_listing
+        .contains("You must obtain the tool definition using GetToolSpec before you first invoke a deferred tool."));
     assert!(deferred_tool_listing.contains(
-        "Before the first call for a deferred tool whose full spec is not already available"
+        "Once its definition is available in the conversation, you can call it through CallDeferredTool."
     ));
     assert!(deferred_tool_listing
-        .contains("Once its spec is available, call `CallDeferredTool` directly"));
-    assert!(deferred_tool_listing
-        .contains("unless the system reports that the spec is stale or unavailable"));
-    assert!(deferred_tool_listing.contains("tool_name[: optional short description]"));
+        .contains("Each entry below is a deferred tool name with an optional short description."));
     assert!(deferred_tool_listing.contains(
-        "## Deferred Tool Listing\nEach entry has the form `tool_name[: optional short description]`.\n\nSearch: summary"
+        "## Direct tools\nTheir definitions are already available. You can call them directly.\nEach entry below is a directly callable tool name.\n\n<direct_tools>\n- Read\n- GetToolSpec\n- CallDeferredTool\n</direct_tools>"
     ));
+    assert!(deferred_tool_listing.contains(
+        "## Deferred tools\nTheir definitions are not loaded at the start of the conversation.\nYou must obtain the tool definition using GetToolSpec before you first invoke a deferred tool. Once its definition is available in the conversation, you can call it through CallDeferredTool."
+    ));
+    assert!(deferred_tool_listing.ends_with("Search: summary"));
 }
 
 #[test]

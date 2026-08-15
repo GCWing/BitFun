@@ -584,12 +584,37 @@ pub fn build_get_tool_spec_assistant_detail(
     description: &str,
     input_schema: &Value,
 ) -> String {
+    let calling_schema = build_deferred_tool_calling_schema(tool_name, input_schema);
     format!(
-        "<description>\n{}\n</description>\n<input_schema>\n{}\n</input_schema>\n<execution>\nCallDeferredTool({{\"tool_name\":\"{}\",\"args\":{{...}}}})\n</execution>",
+        "<description>\n{}\n</description>\n<calling>\nCall `CallDeferredTool` with arguments matching this schema:\n{}\n</calling>",
         escape_get_tool_spec_xml_text(description),
-        escape_get_tool_spec_xml_text(&input_schema.to_string()),
-        escape_get_tool_spec_xml_text(tool_name),
+        escape_get_tool_spec_xml_text(&calling_schema),
     )
+}
+
+fn build_deferred_tool_calling_schema(tool_name: &str, input_schema: &Value) -> String {
+    let tool_name = serde_json::to_string(tool_name).unwrap_or_else(|_| "\"\"".to_string());
+    let input_schema =
+        serde_json::to_string_pretty(input_schema).unwrap_or_else(|_| input_schema.to_string());
+    let input_schema = indent_following_lines(&input_schema, "    ");
+
+    format!(
+        "{{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\"tool_name\", \"args\"],\n  \"properties\": {{\n    \"tool_name\": {{\n      \"const\": {tool_name}\n    }},\n    \"args\": {input_schema}\n  }}\n}}"
+    )
+}
+
+fn indent_following_lines(value: &str, indentation: &str) -> String {
+    let mut lines = value.lines();
+    let Some(first) = lines.next() else {
+        return String::new();
+    };
+    let mut indented = first.to_string();
+    for line in lines {
+        indented.push('\n');
+        indented.push_str(indentation);
+        indented.push_str(line);
+    }
+    indented
 }
 
 pub fn build_get_tool_spec_detail_result(detail: &GetToolSpecDetail) -> ToolResult {

@@ -8,9 +8,9 @@ use super::model_exchange_trace::{
 use super::round_executor::{ModelRoundLifecycle, RoundExecutor};
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    build_prompt_context_for_workspace, get_agent_registry, PrependedPromptReminders,
-    PromptBuilder, PromptBuilderContext, RuntimeContextNeeds, ToolListingSections,
-    UserContextPolicy, UserContextSection,
+    build_prompt_context_for_workspace, get_agent_registry, render_direct_tool_listing_body,
+    PrependedPromptReminders, PromptBuilder, PromptBuilderContext, RuntimeContextNeeds,
+    ToolListingSections, UserContextPolicy, UserContextSection,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::coordination::scheduler::agent_dialog_turn_image_contexts;
@@ -1340,6 +1340,14 @@ impl ExecutionEngine {
             } else {
                 None
             },
+            direct_tool_listing: (!manifest.deferred_tool_names.is_empty()).then(|| {
+                render_direct_tool_listing_body(
+                    manifest
+                        .tool_definitions
+                        .iter()
+                        .map(|definition| definition.name.as_str()),
+                )
+            }),
             deferred_tool_listing: if has_tool_definition("GetToolSpec") {
                 GetToolSpecTool::build_deferred_tools_context_section(
                     &manifest.deferred_tool_summaries,
