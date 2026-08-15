@@ -1,6 +1,6 @@
 # Minimal Agent Harness Profile 实施设计
 
-> 状态：待实现设计，面向 `1.0.0-explore`。
+> 状态：已实现，待真实模型 request trace 与远程场景发布验收；面向 `1.0.0-explore`。
 >
 > 范围：只交付 `minimal` Harness Profile 的封闭四工具基线，以及运行中命令控制工具的条件暴露；不包含文件工具合并、持久 Shell 或其他后续工具界面。
 >
@@ -8,7 +8,7 @@
 
 ## 0. 结论
 
-`1.0.0-explore` 已经在 Web UI 中展示 `minimal / balanced / ultimate` 三个 Harness 选项，但当前只有 `balanced` 接入现有 `agentic` Runtime；`minimal` 仍是 `coming-soon` 占位。
+`1.0.0-explore` 的 Web UI 展示 `minimal / balanced / ultimate` 三个 Harness 选项。现在 `minimal` 与 `balanced` 都通过 Session execution profile 接入现有 `agentic` Runtime；`ultimate` 仍是 `coming-soon` 占位。
 
 本设计把已有评测分支中经过实现验证的 Coding Minimal 行为接入该产品入口，但采用 1.0.0 的 Harness 领域模型：
 
@@ -65,7 +65,8 @@
 4. 保留长命令轮询、TTY 输入、中断和终止能力，同时避免在没有活动命令时发送控制工具 schema。
 5. 保持 local 与 Remote workspace 的命令控制语义一致；其他远程场景要么代理到权威 Host，要么明确返回 unsupported。
 6. 保留旧 Session、旧 Client 和旧 Host 的可读性及明确降级路径。
-7. 记录足够的 Profile、prompt、工具 manifest、模型和执行环境事实，支持 matched A/B。
+7. Minimal 不设置固定 model-round / max-turn 上限；取消、上下文压缩、权限、Provider 资源约束和通用无进展保护继续生效。
+8. 记录足够的 Profile、prompt、工具 manifest、模型和执行环境事实，支持 matched A/B。
 
 ### 2.2 非目标
 
@@ -74,7 +75,8 @@
 - 不合并 `Read / Edit / Write`，不引入新的 FileEditor 模型接口。
 - 不把 `ExecCommand` 替换为持久 Shell，不改变 fresh-process、TTY、远端 shell 或进程组语义。
 - 不删除 `Grep`、`Glob`、Git、Web、MCP、Canvas、MiniApp、Agent、Goal 或其他工具实现。
-- 不改变模型供应商、模型 ID、reasoning preset、temperature、`top_p`、最大输出 token 或最大轮数。
+- 不改变模型供应商、模型 ID、reasoning preset、temperature、`top_p` 或最大输出 token。
+- 不改变 Balanced 及其他 Agent 的固定最大轮数；仅 Minimal 将固定 model-round ceiling 解析为 `None`。
 - 不放宽 Permission、workspace path、Read-before-edit、新鲜度、原子写、Edit Constraint、Hook 或 sandbox 约束。
 - 不在本范围内交付 `ultimate`，也不把未实现能力伪装为可用。
 - 不预设评测分数、成本或速度一定改善；Smoke 只证明链路可运行。
@@ -143,7 +145,6 @@ struct ResolvedTurnHarnessSnapshot {
     root_agent_identity: ResolvedAgentDefinitionRef,
     prompt_policy_id: String,
     tool_profile_id: String,
-    tool_manifest_fingerprint: String,
     model_id: String,
     reasoning_preset: Option<String>,
     permission_policy_version: String,
@@ -153,7 +154,9 @@ struct ResolvedTurnHarnessSnapshot {
 }
 ```
 
-Session 中的 Profile 后续变化不能改变在途或历史 Turn 的 prompt、工具集合、执行 Host 或解释方式。迟到的模型/工具结果继续归属于创建它的 Turn snapshot。
+Turn snapshot 固定 Profile、prompt policy、工具能力上界、模型和执行 Host，但不固定一次性的最终工具 fingerprint。Minimal 的命令控制状态会在同一个 Turn 内合法变化，因此每次模型请求另外记录不可变的 `ResolvedModelRequestManifestSnapshot`，至少包含请求序号、实际工具名、顺序、schema fingerprint 和控制工具可见原因。
+
+Session 中的 Profile 后续变化不能改变在途或历史 Turn 的策略、能力上界、执行 Host 或解释方式。迟到的模型/工具结果继续归属于创建它的 Turn snapshot；工具存活状态只影响尚未发出的下一次模型请求。
 
 ### 3.4 Capability 协商
 
@@ -282,6 +285,18 @@ Terminal 和 RemoteExec 的稳定 port 增加只读、权威的会话存活查�
 
 控制工具进入 manifest 后，其名称、参数和现有 TTY/非 TTY 语义可以正常出现在工具定义中。该上下文描述由 Tool owner 生成，不能由前端或 adapter 拼接。
 
+### 4.7 Minimal 轮次策略
+
+Minimal 不应用 `ai.max_rounds` 或 CLI 的固定 model-round ceiling。这里的“无限”仅指一个用户 Turn 内不因固定计数触发 `max_rounds` finalization；它不等于无限资源，也不绕过以下现有终止和恢复机制：
+
+- 用户取消、Host shutdown、断连后的权威取消；
+- Provider context window、最大输出 token、配额、超时和错误；
+- 上下文压缩及压缩失败恢复；
+- 权限拒绝、sandbox、路径和工具 runtime restriction；
+- 通用的重复失败、无进展和不可恢复错误保护。
+
+Balanced 和所有未选择 Minimal 的执行继续读取原 `max_rounds` 配置。观测数据必须同时记录 `fixed_model_round_limit = none` 与实际完成轮数，避免把“未触发固定上限”误报成“没有任何停止条件”。
+
 ## 5. Prompt 与上下文
 
 ### 5.1 Prompt policy
@@ -323,12 +338,12 @@ Minimal 不向模型暴露 Task/Subagent 或结构化提问工具，因此模型
 
 - `selectedProfile` 来自 Session execution profile 或新会话 draft，而不是硬编码 `balanced`；
 - 使用统一的 `onSelectProfile(profileId)`，不保留仅支持 `onActivateBalanced` 的特殊回调；
-- `minimal` 的状态来自 Host capability catalog；可用时不再显示 `coming-soon`；
+- `minimal` 的选择由 Runtime Profile catalog 校验；UI 显示不是可用性的权威来源；
 - 活动 Turn 中切换返回 busy/unsupported，不做乐观成功；
-- update 结果未知时重新同步权威 Session，不自动重放；
+- update 成功后才发布本地状态；失败时保留原值，具备 outcome-unknown 语义的跨进程 transport 必须重新同步权威 Session 且不自动重放；
 - legacy Session 显示兼容状态，不静默改写。
 
-Agents 页面中的 Profile 卡片读取同一 catalog 和当前默认选择，不维护第二套 `connected` 布尔常量。
+Agents 页面与 Composer 使用同一组稳定 Profile ID 和 availability 映射，不再把 `minimal` 标为 `coming-soon`。
 
 UI 只能通过 infrastructure adapter 调用 typed API，不直接调用 Tauri 或拼写 Runtime mode ID。
 
@@ -336,7 +351,7 @@ UI 只能通过 infrastructure adapter 调用 typed API，不直接调用 Tauri 
 
 CLI 只拥有入口和展示：
 
-- TUI selector 从 Runtime catalog 读取 Profile，并通过 typed Session operation 更新；
+- TUI 启动参数通过 typed Session operation 更新 Profile；后续交互式 selector 必须复用同一 operation；
 - `exec` 提供显式 `--harness-profile minimal`（或等价的既有配置入口），未指定时保持 `balanced`；
 - stdout 的 text/json/stream-json 合同不改变，诊断和 profile 不混入最终文本；
 - Embedded 与 Shared TUI 复用同一 owner 语义；Shared capability 未接线时明确 unsupported，不在客户端本地改 Session 文件；
@@ -348,10 +363,11 @@ DeepSWE/Pier adapter 只负责在 CLI 启动参数/配置中明确选择 `minima
 
 只为真实 consumer 增加最小操作：
 
-- list available Harness Profiles；
 - create Session with Profile；
 - update idle Session Profile；
 - query current Session execution profile。
+
+第一阶段不增加独立的 catalog list wire；稳定产品 ID 和 availability 由 Runtime catalog 拥有，入口提交选择后以 typed success/unsupported 为准。未来若 UI 需要在点击前展示不同 Host 的动态 capability，再新增协商后的只读 catalog operation，不能从本地 UI 常量推断远端 Host 能力。
 
 DTO 和方法属于 `app-server-protocol`，typed client 行为属于 `app-server-client`，server handler 只做校验、类型映射和 owner 调用。不得把 Session/Profile 状态复制到 App Server。
 
@@ -379,7 +395,7 @@ Embedded Rich Client 和 Shared compatibility adapter 必须最终表现一致�
 - `tool_profile_id = coding-minimal-v1`；
 - 每次模型请求的实际工具名称、稳定顺序和 manifest fingerprint；
 - command controls 的可见性及原因：`no_active_session / active_local / active_remote / runtime_unavailable / query_failed / restricted`；
-- model ID、provider model name、reasoning preset、temperature、`top_p`、max output token 和 Agent 最大轮数；
+- model ID、provider model name、reasoning preset、temperature、`top_p`、max output token、固定 model-round limit（Minimal 为 `none`）和实际完成轮数；
 - execution target、workspace identity 和 permission policy version。
 
 若 request trace 已保存完整工具定义，不重复记录完整 schema；日志和事件不得包含 API key、原始凭据、隐藏思维链或未脱敏工具输入。
@@ -418,7 +434,7 @@ Smoke 只验证选择、请求工具、命令控制、artifact 和 verifier 链�
 
 ### AC-1：Profile 与兼容
 
-- `minimal` 可从真实 Runtime catalog 查询并通过 Web/Desktop、Embedded CLI 和 headless 入口显式选择。
+- `minimal` 由真实 Runtime catalog 校验，并可通过 Web/Desktop、Embedded CLI 和 headless 入口显式选择。
 - Session 保存下一 Turn 的 Profile，Turn 保存不可变 resolved snapshot。
 - legacy `agent_type` 继续写 `agentic`；旧 Session 可读且不被重写。
 - 旧 Host、Shared、Remote、Peer 或 Dispatch 不支持时返回 typed unsupported，不静默降级。
@@ -455,11 +471,12 @@ Smoke 只验证选择、请求工具、命令控制、artifact 和 verifier 链�
 - Balanced 与现有 Mode 的 allowlist、Direct/Deferred、prompt 和 provider 行为保持现有快照。
 - 全局 deferred loading 在其他 Profile/Mode 中保持原行为。
 - Minimal 的加入不改变模型默认值、权限默认值、Delivery Profile 或 Cargo capability union。
+- Minimal 不会因固定 `max_rounds` 结束；Balanced 仍在配置上限处走原有 finalization。
 
 ### AC-7：产品入口真实接线
 
 - 前端不再硬编码 Minimal `coming-soon` 或 Balanced `selectedProfile`。
-- Agents 页面与 Composer 使用同一 owner catalog。
+- Agents 页面与 Composer 对 `minimal / balanced / ultimate` 使用一致的可用状态。
 - CLI/TUI 不复制工具或 Session 业务逻辑。
 - 各远程场景已验证真实代理路径，或入口明确 gated；报告分别列出覆盖结果。
 
@@ -468,11 +485,11 @@ Smoke 只验证选择、请求工具、命令控制、artifact 和 verifier 链�
 | 范围 | 最小验证 |
 |---|---|
 | Contract/持久化 | 新旧 payload round-trip、未知 Profile 保留、缺字段恢复为 compatibility Balanced |
-| Agent Runtime | Profile catalog、idle update、Turn snapshot immutability、legacy projection focused contracts |
+| Agent Runtime | Profile catalog、idle update、Turn snapshot immutability、Minimal 无固定轮次上限、Balanced 上限不变、legacy projection focused contracts |
 | Prompt catalog | stable key、bytes、无不可见工具标识符、cache identity |
 | Tool policy | 四/六工具精确 manifest、顺序、无 deferred gateway、现有模式快照 |
 | Terminal/RemoteExec | active/exit/interrupt/kill liveness，provider 缺失与查询失败 fail closed |
-| Web UI | selector 状态、create/update、busy/outcome-unknown、legacy/unsupported、Agents 页面一致性 |
+| Web UI | selector 状态、create/update、busy/outcome-unknown、legacy/unsupported、Agents 页面状态一致性 |
 | CLI | Embedded/TUI/headless 选择、stdout/stderr 合同、Shared unsupported 或等价路径 |
 | App Server | typed DTO/handler/client round-trip、controller/idle、timeout/outcome-unknown |
 | Remote | Remote workspace、Remote control、Peer、Dispatch 的代理或 gated 证据 |
@@ -502,5 +519,6 @@ Rust、Web 和协议实现分别执行最近 `AGENTS.md` 指定的 focused tests
 7. 现有 Balanced/Mode 快照无回归；
 8. provenance 足以复现 smoke 和后续 matched A/B；
 9. 文档、代码、测试和用户可见状态使用同一稳定 ID 与版本事实。
+10. Minimal 的长运行 focused test 证明越过原固定轮次阈值时不会产生 `max_rounds` finalization，同时取消和无进展保护仍可终止。
 
 完成上述工程验收不等于证明 Minimal 提高评测分数、速度或成本效率。效果结论只能来自冻结完整系统身份后的 matched evaluation。
