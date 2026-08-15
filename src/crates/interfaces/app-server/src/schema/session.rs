@@ -2,7 +2,8 @@ use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use bitfun_agent_runtime::sdk::{
     AgentSessionArchiveStateRequest, AgentSessionForkAtTurnRequest,
     AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentSessionHarnessProfileUpdateRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +42,16 @@ empty_response!(UpdateSessionModelResponse);
 pub struct UpdateSessionModeMessage(pub AgentSessionModeUpdateRequest);
 
 empty_response!(UpdateSessionModeResponse);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[request(
+    method = "session/updateHarnessProfile",
+    response = UpdateSessionHarnessProfileResponse
+)]
+pub struct UpdateSessionHarnessProfileMessage(pub AgentSessionHarnessProfileUpdateRequest);
+
+empty_response!(UpdateSessionHarnessProfileResponse);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]

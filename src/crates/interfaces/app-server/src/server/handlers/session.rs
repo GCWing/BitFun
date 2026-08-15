@@ -5,11 +5,11 @@ use bitfun_agent_runtime::sdk::{AgentSessionRestoreRequest, ProcessingPhase, Ses
 use bitfun_app_server_protocol::session::{
     CancelLineageRequest, CancelLineageResponse, CompactSessionRequest, CompactSessionResponse,
     InspectLineageRequest, InspectLineageResponse, ReadTranscriptRequest, ReadTranscriptResponse,
-    RedoSessionRequest,
-    ReloadContextRequest, ReloadContextResponse, ResolveWorkspaceRequest, ResolveWorkspaceResponse,
-    RevertSessionResponse, SessionLineageRequest, SessionLineageResponse, SessionProcessingPhase,
-    SessionRuntimeState, SessionUsageRequest, SessionUsageResponse, SyncSessionRequest,
-    SyncSessionResponse, UndoSessionRequest, WaitForSettlementRequest, WaitForSettlementResponse,
+    RedoSessionRequest, ReloadContextRequest, ReloadContextResponse, ResolveWorkspaceRequest,
+    ResolveWorkspaceResponse, RevertSessionResponse, SessionLineageRequest, SessionLineageResponse,
+    SessionProcessingPhase, SessionRuntimeState, SessionUsageRequest, SessionUsageResponse,
+    SyncSessionRequest, SyncSessionResponse, UndoSessionRequest, WaitForSettlementRequest,
+    WaitForSettlementResponse,
 };
 use bitfun_runtime_ports::{AgentSessionWorkspaceBinding, SessionExecutionTarget};
 
@@ -34,6 +34,25 @@ pub(in crate::server) fn builder(
                             .rename_session(request.0)
                             .await
                             .map(|()| RenameSessionResponse {})
+                            .map_err(|error| {
+                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                            }),
+                    )
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let runtime = runtime.clone();
+                async move |request: UpdateSessionHarnessProfileMessage, responder, _cx| {
+                    let session_id = request.0.session_id.clone();
+                    responder.respond_with_result(
+                        runtime
+                            .runtime()
+                            .update_session_harness_profile(request.0)
+                            .await
+                            .map(|()| UpdateSessionHarnessProfileResponse {})
                             .map_err(|error| {
                                 BitfunAppRuntime::session_runtime_error(&session_id, error)
                             }),
@@ -223,7 +242,6 @@ pub(in crate::server) fn builder(
             },
             agent_client_protocol::on_receive_request!(),
         )
-
         .on_receive_request(
             {
                 let runtime = runtime.clone();

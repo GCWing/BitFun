@@ -1209,6 +1209,7 @@ pub async fn run() {
             hide_main_window_after_close_request,
             api::agentic_api::create_session,
             api::agentic_api::update_session_mode,
+            api::agentic_api::update_session_harness_profile,
             api::agentic_api::update_session_model,
             api::agentic_api::update_session_permission_mode,
             api::agentic_api::get_session_permission_mode,
