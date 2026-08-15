@@ -179,6 +179,30 @@ fn shared_tui_requested(shared: bool, command: &Option<Commands>) -> Result<bool
     Ok(shared || matches!(command, Some(Commands::Chat { shared: true, .. })))
 }
 
+fn validate_global_harness_profile_scope(
+    harness_profile: Option<&str>,
+    command: &Option<Commands>,
+) -> Result<()> {
+    if harness_profile.is_none()
+        || matches!(
+            command,
+            None | Some(Commands::Chat { .. } | Commands::Exec { .. })
+        )
+    {
+        return Ok(());
+    }
+    Err(anyhow!(
+        "--harness-profile is supported only by interactive chat and headless exec; this command cannot silently fall back to Balanced"
+    ))
+}
+
+fn resolved_command_harness_profile(
+    global: &Option<String>,
+    command: Option<String>,
+) -> Option<String> {
+    command.or_else(|| global.clone())
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Start interactive chat (TUI)
@@ -1245,6 +1269,7 @@ async fn run_cli() -> Result<()> {
         }
         Err(error) => return Err(error),
     };
+    validate_global_harness_profile_scope(cli.harness_profile.as_deref(), &cli.command)?;
     let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
     let is_dispatch_mode = is_dispatch_command(&cli.command);
     let is_daemon_run = matches!(
@@ -1300,7 +1325,7 @@ async fn run_cli() -> Result<()> {
                 use_shared_runtime,
                 cli.agent.clone(),
                 cli.model.clone(),
-                harness_profile.or_else(|| cli.harness_profile.clone()),
+                resolved_command_harness_profile(&cli.harness_profile, harness_profile),
                 None,
             )
             .await?;
@@ -1342,7 +1367,10 @@ async fn run_cli() -> Result<()> {
                 root_handlers::ExecCommandArgs {
                     message,
                     agent,
-                    harness_profile,
+                    harness_profile: resolved_command_harness_profile(
+                        &cli.harness_profile,
+                        harness_profile,
+                    ),
                     continue_last,
                     resume,
                     session,
@@ -2082,7 +2110,9 @@ mod shared_tui_command_tests {
 
 #[cfg(test)]
 mod dispatch_command_tests {
-    use super::{is_dispatch_command, Cli, Commands, DispatchAction};
+    use super::{
+        is_dispatch_command, validate_global_harness_profile_scope, Cli, Commands, DispatchAction,
+    };
     use clap::{CommandFactory, Parser};
 
     #[test]
@@ -2126,6 +2156,68 @@ mod dispatch_command_tests {
             .render_long_help()
             .to_string();
         assert!(!dispatch_help.contains("__run"));
+    }
+
+    #[test]
+    fn dispatch_rejects_a_global_harness_profile_instead_of_ignoring_it() {
+        let cli = Cli::try_parse_from([
+            "bitfun",
+            "--harness-profile",
+            "minimal",
+            "dispatch",
+            "status",
+        ])
+        .expect("global Harness Profile should parse before scope validation");
+
+        let error =
+            validate_global_harness_profile_scope(cli.harness_profile.as_deref(), &cli.command)
+                .expect_err("Detached Dispatch must not silently use Balanced");
+        assert!(error.to_string().contains("cannot silently fall back"));
+    }
+}
+
+#[cfg(test)]
+mod harness_profile_command_tests {
+    use super::{
+        resolved_command_harness_profile, validate_global_harness_profile_scope, Cli, Commands,
+    };
+    use clap::Parser;
+
+    #[test]
+    fn exec_honors_a_global_harness_profile_before_the_subcommand() {
+        let cli = Cli::try_parse_from([
+            "bitfun",
+            "--harness-profile",
+            "minimal",
+            "exec",
+            "fix the tests",
+        ])
+        .expect("parse headless exec");
+        validate_global_harness_profile_scope(cli.harness_profile.as_deref(), &cli.command)
+            .expect("exec supports Harness Profile selection");
+        let Some(Commands::Exec {
+            harness_profile, ..
+        }) = cli.command
+        else {
+            panic!("expected exec command");
+        };
+
+        assert_eq!(
+            resolved_command_harness_profile(&cli.harness_profile, harness_profile).as_deref(),
+            Some("minimal")
+        );
+    }
+
+    #[test]
+    fn subcommand_harness_profile_overrides_the_global_value() {
+        assert_eq!(
+            resolved_command_harness_profile(
+                &Some("balanced".to_string()),
+                Some("minimal".to_string()),
+            )
+            .as_deref(),
+            Some("minimal")
+        );
     }
 }
 
