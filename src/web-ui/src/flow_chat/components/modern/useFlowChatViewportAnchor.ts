@@ -143,7 +143,7 @@ export interface FlowChatViewportAnchorApi {
    *   delivered after the intent window closed.
    * - **Left alone**, when a registered writer owns the viewport. That
    *   movement is theirs and crediting it to the reader would drag the anchor
-   *   along with every follow, snap back and aim.
+   *   along with every follow and aim.
    */
   captureAnchorForScroll: () => void;
   /** The user did something that scrolls, by their own hand. */
@@ -454,7 +454,7 @@ export function useFlowChatViewportAnchor({
      * Owned elsewhere is the case this must not touch. A registered writer
      * moving the viewport is the one other thing that changes `scrollTop`
      * without the reader, and crediting *that* to them would carry the anchor
-     * along with every follow, snap back and aim.
+     * along with every follow and aim.
      */
     if (!isViewportOwnedElsewhereRef.current()) {
       carryAnchorThroughScroll(scroller, 'unclaimed-scroll');

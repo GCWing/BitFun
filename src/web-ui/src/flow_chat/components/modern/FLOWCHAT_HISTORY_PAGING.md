@@ -92,10 +92,8 @@ range inside the reserved blank:
 
 - at the bottom of that range no row intersects the viewport at all, so
   `getVisibleItemRange` returns nothing and there is no position to judge;
-- the snap back returns the reader to offset 0 and hands the viewport to
-  follow-output, so the one evaluation that does land at the head is refused as
-  our own placement — four times in the log, each three milliseconds after a
-  `followOutput.enter`;
+- at offset 0, an evaluation may still be refused while follow-output owns the
+  opening placement;
 - and at offset 0 the reader's own gestures produced twenty `user-gesture`
   claims over seven seconds with no scroll event, no anchor capture, and not
   one evaluation.
@@ -169,8 +167,8 @@ compensation, and the viewport anchor. Both are `viewportOwner.shift`, which
 asks a different question — content moving under the reader changes what their
 offset *means*, and restoring that meaning is not competing with anyone over
 where the viewport should be. So they are refused only by an owner that holds a
-target and will re-assert it: follow-output, a navigation still reaching its
-Turn, a snap back mid-animation.
+target and will re-assert it: follow-output or a navigation still reaching its
+Turn.
 
 The two are not redundant. The compensation is a pixel delta applied in the
 commit that prepends, and it is the only thing that can act when the reader's
@@ -215,11 +213,8 @@ over-states and they do so for different reasons:
 | `contentEndPx - scrollTop` — what the range can absorb | never; content arriving above the reader cannot push them past the end |
 
 Overshooting is the expensive direction. It puts the reader below the content
-end, where the snap back correctly reads them as parked in the reserved blank
-and returns them to the tail — and since paging happens only while scrolling up,
-it then does that on every attempt, which is what "scrolling up loops back to
-the end" was. Undershooting leaves them looking at slightly earlier content,
-which the anchor removes.
+end inside the reserved blank. Undershooting leaves them looking at slightly
+earlier content, which the anchor removes.
 
 **The cache is measured before it is read.** Left alone it is not close:
 measured twice in one session, 2174px reserved against 670px of real growth,
@@ -574,8 +569,8 @@ itself through `FLOWCHAT_TURNS_ROLLED_BACK_EVENT`, exactly as a submission does,
 and the transcript settles on the new tail — the Turn it was pinning is one of
 the ones that stopped existing.
 
-It takes the viewport whether or not follow owned it, on the same asymmetry that
-licenses the snap back. A rollback at Turn N removes N *and everything after
+It takes the viewport whether or not follow owned it. A rollback at Turn N
+removes N *and everything after
 it*, and the reader had N on screen — they clicked its own button. So the new
 tail is always within a Turn of where they already are, and there is no history
 below them to be pulled out of. Gating it on ownership instead — the first
@@ -586,11 +581,6 @@ answered a different question: it holds the reader's Turn at its offset from the
 viewport top, so an 8-Turn session rolled back at Turn 7 came to rest showing
 Turns 2..6, with the new last Turn's answer below the fold. Nothing was wrong
 with the anchor. It was the only thing still running.
-
-The snap back cannot cover this either, and for two reasons worth keeping: it
-runs only from a gesture coming to rest, and a truncation is not a gesture; and
-`tailSnapBackScrollTop` returns nothing unless the viewport is *below* the
-follow target, where a rollback leaves it above.
 
 The event fires a frame after the truncation, because the answer is a scroll to
 the end of *real content* and that has to be read from a DOM the truncation has

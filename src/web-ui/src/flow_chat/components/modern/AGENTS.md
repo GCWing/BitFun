@@ -11,7 +11,7 @@ Also follow the repository and Web UI instructions in the parent guides.
 
 | Changing | Read |
 |---|---|
-| the tail spacer, the follow target, pinning, holding, the snap back, resizing, the footer, the reveal | `FLOWCHAT_SCROLL_STABILITY.md` |
+| the tail spacer, the follow target, pinning, holding, resizing, the footer, the reveal | `FLOWCHAT_SCROLL_STABILITY.md` |
 | history paging, the prepend, the viewport anchor, history presentation | `FLOWCHAT_HISTORY_PAGING.md` |
 | anything that writes `scrollTop`, one-shot navigation, the diagnostic trail | `FLOWCHAT_VIEWPORT_REGISTER.md` |
 | the virtualizer, item measurement, item keys, anything a row renders | `FLOWCHAT_VIRTUALIZATION.md` |
@@ -34,7 +34,7 @@ before reporting a defect as new.
   what keeps a collapse from moving the viewport.
 - `useFlowChatFollowOutput` is the only continuous outer viewport writer.
 - The follow's **write** may be eased; its **target** may not. Everything that
-  reads the follow — the settle budget, the at-tail band, the snap back — reads
+  reads the follow — the settle budget and the at-tail band — reads
   the offset the rule owns, never how far behind the ease is riding. The ease
   stands down while the transcript is opening, where the target is
   authoritative.

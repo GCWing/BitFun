@@ -184,7 +184,6 @@ vi.mock('./useFlowChatFollowOutput', () => ({
       },
       handleTurnsRolledBack: vi.fn(),
       handleScroll: vi.fn(),
-      handleScrollSettled: vi.fn(),
       handleViewportResize: vi.fn(),
       // Follow owns nothing here, which is what the real hook returns when
       // `isFollowingOutput` is false.
@@ -610,7 +609,7 @@ describe('VirtualMessageList natural scroll contract', () => {
        * Content arriving above the reader cannot push them past the end of the
        * transcript, so needing more than the range can absorb is proof the
        * amount is wrong. Overshooting leaves them inside the reserved blank,
-       * where the snap back correctly returns them to the tail — which, since
+       * where the reserved blank begins — which, since
        * paging happens only while scrolling up, it then does every time.
        */
       const contentEndPx = 1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600;
@@ -779,7 +778,7 @@ describe('VirtualMessageList natural scroll contract', () => {
        * event and the evaluation that hangs off it never runs. The log shows
        * twenty `user-gesture` claims across seven seconds with no scroll event,
        * no anchor capture and not one boundary evaluation; the only evaluations
-       * in that session landed in the three milliseconds after a snap back
+       * in that session landed in the three milliseconds after follow-output
        * handed the viewport to follow-output, and were refused for exactly that
        * reason. Scrolling up did nothing, permanently.
        */
@@ -839,8 +838,8 @@ describe('VirtualMessageList natural scroll contract', () => {
       mocks.items = Array.from({ length: 20 }, (_unused, index) => (
         userMessage(`turn-${index}`, `message-${index}`, 'Body')
       ));
-      // Follow owns the viewport as of the last render — a snap back has just
-      // landed — and the gesture below releases it without a render in between.
+      // Follow owns the viewport as of the last render, and the gesture below
+      // releases it without a render in between.
       mocks.isFollowingOutput = true;
       mocks.followsNow = true;
       const restoreLayout = fakeLayout({

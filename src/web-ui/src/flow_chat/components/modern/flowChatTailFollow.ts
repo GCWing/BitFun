@@ -204,30 +204,6 @@ export function memorylessFollowState(
   return nextTailFollowState({ mode, target: input.desiredScrollTop }, input);
 }
 
-export interface TailSnapBackInput {
-  scrollTop: number;
-  /** Offset the follow rule owns, from `memorylessFollowTarget`. */
-  followTargetScrollTop: number;
-  thresholdPx: number;
-}
-
-/**
- * Offset to snap back to once a gesture has come to rest below the follow
- * target, or `null` when it has not.
- *
- * Only the region *below* the target qualifies, and that region is the reserved
- * tail spacer. It carries no content, so a gesture ending there can only mean
- * "take me to the end" — the one direction in which reading intent from
- * geometry is unambiguous. Scrolling up to read history can never satisfy this,
- * and neither can a pinned Turn or a held collapse gap, because both are the
- * target rather than a departure from it.
- */
-export function tailSnapBackScrollTop(input: TailSnapBackInput): number | null {
-  return input.scrollTop - input.followTargetScrollTop > input.thresholdPx
-    ? input.followTargetScrollTop
-    : null;
-}
-
 export type TailDepartureCrossing =
   /** The blank is still on screen; nothing has been crossed. */
   | 'watching'
@@ -247,10 +223,9 @@ export type TailDepartureCrossing =
  * below the newest output — nothing hidden from them yet — until output grows
  * past the bottom edge and they silently stop seeing it.
  *
- * Note this is deliberately *not* the predicate `tailSnapBackScrollTop` uses.
- * That one is relative to the follow target, and under a pin the target sits
- * inside the blank, so a reader above it is reported as having nothing to snap
- * back from. These are the two edges of the same region.
+ * The follow target may sit inside the blank while a new Turn is pinned, but
+ * this watch deliberately uses the real content end: it only observes output
+ * catching up with a reader, never a user's resting position.
  *
  * `watching` is a *position*, not a pending outcome: the blank is on screen
  * right now. It says nothing about whether the reader has ever left it, and the

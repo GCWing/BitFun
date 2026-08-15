@@ -11,7 +11,6 @@ import {
   resolveTailDepartureCrossing,
   shouldResumeFollowAfterDeparture,
   tailHoldMaxGapPx,
-  tailSnapBackScrollTop,
   tailSpacerPxForViewport,
   turnTopAlignmentEntersReservedBlank,
   type TailFollowState,
@@ -248,44 +247,6 @@ describe('memorylessFollowState', () => {
       pinScrollTop: 5000,
       maxGapPx: MAX_GAP,
     })).toEqual({ mode: 'hold-tail', target: 5200 });
-  });
-});
-
-describe('tailSnapBackScrollTop', () => {
-  it('returns the follow target when the viewport rests below it', () => {
-    expect(tailSnapBackScrollTop({
-      scrollTop: 4000 + SPACER,
-      followTargetScrollTop: 4000,
-      thresholdPx: THRESHOLD,
-    })).toBe(4000);
-  });
-
-  it('ignores an overshoot inside the tolerance', () => {
-    expect(tailSnapBackScrollTop({
-      scrollTop: 4000 + THRESHOLD,
-      followTargetScrollTop: 4000,
-      thresholdPx: THRESHOLD,
-    })).toBeNull();
-  });
-
-  it('never fires while the user reads history above the target', () => {
-    // Reading upwards is the case the whole rule must stay away from: the
-    // region below the target carries no content, the region above is the
-    // transcript.
-    expect(tailSnapBackScrollTop({
-      scrollTop: 100,
-      followTargetScrollTop: 4000,
-      thresholdPx: THRESHOLD,
-    })).toBeNull();
-  });
-
-  it('leaves a pinned Turn alone even though it sits past the content end', () => {
-    // The pin *is* the target here, so the blank below it is not an overshoot.
-    expect(tailSnapBackScrollTop({
-      scrollTop: 5000,
-      followTargetScrollTop: 5000,
-      thresholdPx: THRESHOLD,
-    })).toBeNull();
   });
 });
 

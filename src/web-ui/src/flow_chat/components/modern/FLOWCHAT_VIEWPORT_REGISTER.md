@@ -23,15 +23,13 @@ design:
 |---|---|---|
 | 1 | `user-gesture` | 200ms from the last wheel, touch, key, or scrollbar press |
 | 2 | `one-shot-navigation` | a Turn, search hit, or focus request is being reached |
-| 3 | `snap-back` | the return from the reserved blank is animating |
-| 4 | `follow-output` | the continuous writer owns the viewport |
-| 5 | `layout-correction` | the scroller's box changed and a resting viewport is re-aligned |
+| 3 | `follow-output` | the continuous writer owns the viewport |
+| 4 | `layout-correction` | the scroller's box changed and a resting viewport is re-aligned |
 
 The register decides **whether**, never **where** — targets stay with the writer
 that owns them, and the anchor's correction stays idempotent. Ordering answers
 what idempotency cannot: whether a movement was ours on purpose or something to
-be undone. The anchor is idempotent and still destroyed the snap back, because
-it restored a relationship we had deliberately changed.
+be undone.
 
 **Repairing a displacement is not on this list**, and putting it there was a
 mistake worth keeping recorded. The prepend compensation and the viewport anchor
@@ -39,14 +37,9 @@ both use `viewportOwner.shift` — see *A Displacement Is Not a Movement* in
 `FLOWCHAT_HISTORY_PAGING.md`.
 
 **Taking ownership and writing are one call.** Adding a writer without declaring
-it means not using the helper, which is visible in review — where the previous
-scheme needed the new writer added by hand to every other writer's private
-predicate, and a single missed pair was a bug. The failure that made this
-explicit: a snap back was missing from the hand-written predicate that preceded
-the register, so it belonged to nobody while it animated. The snap travelled
-0.7px, the anchor wrote it back, the write cancelled the animation, the
-cancellation read as a gesture coming to rest, and the snap was issued again —
-**958 times over 20 seconds, arriving nowhere**.
+it means not using the helper, which is visible in review — the register keeps
+the deliberate movement owners explicit and leaves user-controlled positions
+alone until another explicit action takes the viewport.
 
 **Only an owner that releases may hold the viewport indefinitely**, and
 follow-output is the only one — a claim with no expiry and no release is a
@@ -71,17 +64,15 @@ at once, so the reveal remains an explicit condition beside the register.
 
 Not everything collapsed into it, and the difference is worth keeping straight.
 `smoothScrollFramesRef` is follow-output yielding to *its own* animation, which
-is intra-owner; `settleFramesRef` is a frame budget; `pendingSnapBackTargetRef`
-still answers "did our snap land here"; `boundaryArmedRef` is paging policy.
+is intra-owner; `settleFramesRef` is a frame budget; `boundaryArmedRef` is paging policy.
 Only the parts that were really answering "is someone else moving the viewport"
 are gone.
 
 ## What Counts as a Gesture
 
 Ordinary `scroll` events do not transfer viewport ownership; only explicit
-wheel, touch, or keyboard navigation exits follow-output. A gesture that comes
-to rest inside the reserved blank hands it back — see *Snapping Back Out of the
-Reserved Blank* in `FLOWCHAT_SCROLL_STABILITY.md`.
+wheel, touch, or keyboard navigation exits follow-output. Once a reader takes
+the viewport, resting inside the reserved blank does not hand it back.
 
 A scrollbar drag is the one exception, and the press is what makes it one: a
 pointer held past the content box's trailing edge is on the bar, so the
@@ -89,9 +80,8 @@ scrolling it causes *is* intent. The press only arms it — `scrollbar-gutter:
 stable` keeps the gutter reserved whether or not a bar is drawn there, so a
 press that scrolls nothing changes nothing. Unqualified, a drag never released
 the viewport: measured on WebView2, follow-output rewrote its target against the
-thumb every frame for a 100px oscillation, and a drag that came to rest in the
-reserved blank was skipped by the snap back because follow still nominally owned
-it — with the frame loop long since asleep, so nothing corrected it.
+thumb every frame for a 100px oscillation. Recognising the drag transfers
+ownership to the reader, and their resting position is preserved.
 
 ## Reaching a Turn Is One Shot
 
@@ -216,8 +206,8 @@ the same switch history paging uses — and tagged `viewport`.
 The second half is the one that pays. A write that never happened leaves nothing
 at the register to find, and "nothing happened" has been the report more often
 than a wrong move has: a deferred new Turn, an anchor whose Turn left the
-rendered window, a snap back declined because the settle belonged to the opening
-reveal, a boundary that never re-armed. Each of those is now one line saying
+rendered window, a boundary declined because the transcript was opening, or a
+boundary that never re-armed. Each of those is now one line saying
 which.
 
 **A placement is recorded with what became of it.** `traceViewportPlacement`
@@ -297,9 +287,8 @@ pnpm run flowchat:log:analyze -- <path-to-flowchat.log> [--around <sequence>]
 `scripts/diagnostics/analyze-flowchat-log.mjs` reports, in this order:
 
 1. **Episodes** of viewport activity, worst *churn* first — travel per pixel of
-   progress. A clean move is 1. The snap back that never arrived would be
-   hundreds, and that number is the difference between "it moved wrongly" and
-   "it fought".
+   progress. A clean move is 1; a much larger number distinguishes "it moved
+   wrongly" from "two writers fought".
 2. **Placements that did not stick**, ranked by drift. A placement with no
    outcome sampled is listed separately rather than counted as clean.
 3. **Refusals**, as owner × who outranked them.

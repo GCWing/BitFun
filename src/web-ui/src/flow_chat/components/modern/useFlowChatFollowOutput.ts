@@ -15,8 +15,6 @@ import {
 } from '../../utils/flowChatTailEase';
 import { getMotionAwareScrollBehavior } from '../../utils/motionPreference';
 import type { FlowChatViewportOwnerApi } from './useFlowChatViewportOwner';
-import { USER_DRIVEN_SCROLL_WINDOW_MS } from './flowChatViewportAnchor';
-import { SNAP_BACK_HOLD_MS } from './flowChatViewportOwnership';
 import {
   contentEndScrollTop,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
@@ -27,7 +25,6 @@ import {
   resolveTailDepartureCrossing,
   shouldResumeFollowAfterDeparture,
   tailHoldMaxGapPx,
-  tailSnapBackScrollTop,
   type TailFollowState,
 } from './flowChatTailFollow';
 
@@ -37,7 +34,6 @@ export type FollowOutputEnterReason =
   | 'session-open'
   | 'streaming-resumed'
   | 'tail-caught-up'
-  | 'tail-snap-back'
   | 'turns-rolled-back';
 export type FollowOutputExitReason =
   | 'session-changed'
@@ -130,8 +126,6 @@ interface UseFlowChatFollowOutputResult {
   /** Turns were rolled back out of the session; end on the new tail. */
   handleTurnsRolledBack: () => void;
   handleScroll: () => void;
-  /** A scroll gesture has come to rest; snap out of the reserved blank if in it. */
-  handleScrollSettled: () => void;
   /**
    * The viewport was resized; keep whatever was on the bottom edge there.
    */
@@ -204,27 +198,6 @@ export const SMOOTH_SCROLL_STALL_MS = 120;
  */
 const SETTLE_FRAMES = 90;
 
-/**
- * How long after a refused snap back it is asked for again.
- *
- * One gesture window plus a frame, because the gesture is what refuses it: the
- * claim `notifyUserScrollIntent` takes lapses after `USER_DRIVEN_SCROLL_WINDOW_MS`,
- * and asking before then can only be refused a second time.
- */
-const SNAP_BACK_RETRY_DELAY_MS = USER_DRIVEN_SCROLL_WINDOW_MS + 20;
-
-/**
- * Times a refused snap back is re-asked before it is left to the next settle.
- *
- * A reader who is still scrolling refuses every one of these and does not need
- * them — their own next settle asks again with a fresh budget. This is for the
- * reader who has *stopped* while something else was still moving the transcript
- * under them, where no further scroll event is coming and this is the only
- * thing left that will ask. A second of cover is enough for that; more would
- * just be a timer chasing a viewport nobody is touching.
- */
-const SNAP_BACK_RETRY_ATTEMPTS = 5;
-
 export function useFlowChatFollowOutput({
   activeSessionId,
   latestTurnId,
@@ -276,12 +249,6 @@ export function useFlowChatFollowOutput({
   const smoothScrollLastMoveAtMsRef = useRef(0);
   /** Where the animation started, so the trace can say how far it got. */
   const smoothScrollFromPxRef = useRef(0);
-  const pendingSnapBackTargetRef = useRef<number | null>(null);
-  /** A refused snap back waiting for the hold that refused it to lapse. */
-  const snapBackRetryTimerRef = useRef<number | null>(null);
-  const snapBackRetryAttemptsRef = useRef(0);
-  /** Assigned below, so a retry can re-enter the evaluation that scheduled it. */
-  const evaluateSnapBackRef = useRef<() => void>(() => {});
 
   /*
    * Deliberately *not* mirrored from `isFollowingOutput` here.
@@ -309,13 +276,6 @@ export function useFlowChatFollowOutput({
   isStreamingRef.current = isStreaming;
   isViewportActiveRef.current = isViewportActive;
   latestTurnIdRef.current = latestTurnId;
-
-  const clearSnapBackRetry = useCallback(() => {
-    if (snapBackRetryTimerRef.current !== null) {
-      window.clearTimeout(snapBackRetryTimerRef.current);
-      snapBackRetryTimerRef.current = null;
-    }
-  }, []);
 
   const stopFollowFrame = useCallback(() => {
     if (followFrameRef.current !== null) {
@@ -349,14 +309,13 @@ export function useFlowChatFollowOutput({
   /**
    * Forget which Turn is pinned.
    *
-   * This is the pin's *identity*, not its activity. A user takeover only
-   * suspends the pin — it must survive so that a snap back out of the reserved
-   * blank returns a short new Turn to the viewport top instead of yanking it
-   * into the middle. Only three things retire a pin: the crossover to
-   * `hold-tail`, a newer Turn replacing it, and the session changing. The
-   * crossover is one-way by construction, since nothing re-pins a Turn whose
-   * identity has been dropped; a card collapse that pulls content back under one
-   * viewport must not resurrect the pin.
+   * This is the pin's *identity*, not its activity. A user takeover suspends
+   * the pin, while an explicit jump to latest may still return to it. Only
+   * three things retire a pin: the crossover to `hold-tail`, a newer Turn
+   * replacing it, and the session changing. The crossover is one-way by
+   * construction, since nothing re-pins a Turn whose identity has been
+   * dropped; a card collapse that pulls content back under one viewport must
+   * not resurrect the pin.
    */
   const retirePin = useCallback(() => {
     pinTurnIdRef.current = null;
@@ -393,9 +352,8 @@ export function useFlowChatFollowOutput({
 
   /**
    * The state the follow rule would hold for the current geometry, ignoring any
-   * offset it was holding. Used to decide and to aim a snap back — both of
-   * which happen while the viewport belongs to nobody — and to resume on one
-   * that has landed.
+   * offset it was holding. Used to resolve explicit follow targets and to
+   * resume on the live content end.
    *
    * Retires a pin that has crossed over on the way past: with no frame loop
    * running, this is the only place that crossover can be noticed.
@@ -433,13 +391,9 @@ export function useFlowChatFollowOutput({
    *
    * "Still looking at the blank" is `scrollTop > contentEnd`, because
    * `contentEnd` is by definition the offset that puts the end of real content
-   * on the viewport's bottom edge. Note this is *not* the predicate the snap
-   * back uses: that one is relative to the follow target, and under a pin the
-   * target sits inside the blank, so a reader above it is reported as having
-   * nothing to snap back from. These are the two edges of the same region, and
-   * between them they cover it: the snap back returns a reader who came to rest
-   * *below* the follow target, and this returns one whom output caught up with
-   * from above.
+   * on the viewport's bottom edge. This watch only handles output catching up
+   * with a stationary reader; it never turns a user's resting position into a
+   * follow target.
    *
    * The watch therefore runs for as long as the reader holds the viewport, not
    * for one crossing. `blankWasVisible` is the whole state it keeps between
@@ -786,7 +740,7 @@ export function useFlowChatFollowOutput({
        * converges on the content's growth per frame whatever the fraction is.
        *
        * Only the *write* is eased. `followStateRef` still holds the true
-       * target, so the settle budget, the at-tail band and the snap back all
+       * target, so the settle budget and the at-tail band both
        * keep reading the offset the follow rule owns rather than how far
        * behind its own ease is riding.
        *
@@ -981,33 +935,6 @@ export function useFlowChatFollowOutput({
     const contentEnd = scroller ? readContentEndScrollTop(scroller) : 0;
 
     /*
-     * A snap back has already placed the viewport, so resume ownership without
-     * a second move — but on the offset the follow rule owns *now*, not on the
-     * one the animation stopped at.
-     *
-     * The two are the same only if nothing moved while it travelled, and the
-     * one thing that reliably does is the reason the snap was needed: a history
-     * page whose items are still measuring. Taking `scrollTop` instead adopts
-     * the stale offset as the hold rule's memory, and the hold rule then
-     * defends it — it tolerates a gap below the content end of up to 60% of the
-     * viewport, so the difference is not corrected, it is *kept*.
-     *
-     * Measured on a 43-Turn session paged from a three-Turn tail: the snap was
-     * issued for 12336 while the content end was there, landed 608ms later
-     * against a content end of 11972, and the first follow frame afterwards
-     * read `desired 11972, target 12336, onTarget true` and never moved again.
-     * The reader was left with 364px of reserved blank under the transcript and
-     * the fourth-from-last Turn cut off at the top of the viewport.
-     */
-    if (reason === 'tail-snap-back') {
-      followStateRef.current = scroller
-        ? resolveFollowState(scroller)
-        : { mode: pinTurnIdRef.current ? 'pin-turn-top' : 'hold-tail', target: contentEnd };
-      startFollowFrame();
-      return;
-    }
-
-    /*
      * A pin on the newest Turn already satisfies "show me the latest output".
      * The mode only holds while that Turn's answer is shorter than one
      * viewport, so everything it has produced is on screen; re-aiming at the
@@ -1093,7 +1020,6 @@ export function useFlowChatFollowOutput({
     endSmoothScrollYield,
     readContentEndScrollTop,
     readPinScrollTop,
-    resolveFollowState,
     resolveJumpBehavior,
     retirePin,
     runContentEndScroll,
@@ -1105,8 +1031,8 @@ export function useFlowChatFollowOutput({
 
   /**
    * Release the viewport without forgetting the pin. The user owns it from
-   * here; the pin stays on record so a snap back can restore the mode rather
-   * than fall through to the tail.
+   * here; the pin stays on record so an explicit jump to latest can restore
+   * the mode rather than fall through to the tail.
    */
   const exitFollowOutput = useCallback((reason: FollowOutputExitReason) => {
     /*
@@ -1131,9 +1057,7 @@ export function useFlowChatFollowOutput({
     isFollowingOutputRef.current = false;
     setIsFollowingOutput(false);
     endSmoothScrollYield('superseded');
-    pendingSnapBackTargetRef.current = null;
     viewportOwner.release('follow-output');
-    viewportOwner.release('snap-back');
     stopFollowFrame();
 
     /*
@@ -1213,18 +1137,6 @@ export function useFlowChatFollowOutput({
       contentDeltaPx,
       scrollDeltaPx,
     });
-    /*
-     * A snap back of ours is travelling, so the viewport is moving under a rule
-     * rather than under the reader — and it is travelling *down* through the
-     * blank, which crosses this line from the wrong side. The latch and the
-     * offsets are kept current so the next real sample compares against
-     * something recent; no verdict is taken, because the snap hands the viewport
-     * to follow by its own route the moment it lands.
-     */
-    if (pendingSnapBackTargetRef.current !== null) {
-      watch.blankWasVisible = crossing === 'watching';
-      return;
-    }
     if (crossing === 'watching') {
       watch.blankWasVisible = true;
       return;
@@ -1307,7 +1219,6 @@ export function useFlowChatFollowOutput({
   }, [applyFollowTarget, sampleTailWatch, startFollowFrame]);
 
   const handleUserScrollIntent = useCallback(() => {
-    pendingSnapBackTargetRef.current = null;
     exitFollowOutput('user-scroll');
   }, [exitFollowOutput]);
 
@@ -1320,8 +1231,7 @@ export function useFlowChatFollowOutput({
    * *absence* of the pin: the Turn that was pinned is one of the ones that just
    * stopped existing, and the transcript now ends somewhere else.
    *
-   * This takes the viewport whether or not follow owned it, which is the same
-   * licence the snap back has and rests on the same asymmetry. A rollback at
+   * This takes the viewport whether or not follow owned it. A rollback at
    * Turn N removes N and everything after it, and the reader had N on screen —
    * they clicked its own button. So the new tail is always within a Turn of
    * where they already are, and there is no history below them to be pulled out
@@ -1350,176 +1260,6 @@ export function useFlowChatFollowOutput({
     // handing the viewport back to a reader who is still climbing out of it.
     sampleTailWatch();
   }, [sampleTailWatch]);
-
-  /**
-   * A scroll gesture has come to rest.
-   *
-   * The reserved tail spacer is a full viewport of blank that the user can park
-   * in, and during slow streaming it can take a long time for output to push it
-   * away — with nothing on screen and, until the viewport is back in the tail
-   * band, no jump-to-latest affordance either. So resting below the follow
-   * target snaps back to it and hands the viewport to follow, whether or not
-   * follow owned it before.
-   *
-   * Acting on rest rather than on every scroll event is what keeps this from
-   * fighting momentum: the correction runs after the gesture is over, never
-   * during it.
-   */
-  const evaluateSnapBack = useCallback(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller || !isViewportActiveRef.current) {
-      return;
-    }
-
-    const pendingTarget = pendingSnapBackTargetRef.current;
-    if (pendingTarget !== null) {
-      pendingSnapBackTargetRef.current = null;
-      // The animation is over either way, so the hold ends here rather than
-      // waiting out its backstop.
-      viewportOwner.release('snap-back');
-      // Take the viewport back only if our own snap is what landed it here. A
-      // gesture that overrode the animation mid-flight belongs to the user.
-      const arrived = Math.abs(scroller.scrollTop - pendingTarget)
-        <= FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX;
-      traceViewportRepeating(`snapBack|settled|${arrived}`, {
-        location: 'snapBack.settled',
-        message: arrived
-          ? 'snap back arrived and handed the viewport to follow'
-          : 'snap back was overridden before it arrived',
-        data: () => ({
-          targetPx: roundViewportPx(pendingTarget),
-          scrollTopPx: roundViewportPx(scroller.scrollTop),
-        }),
-      });
-      if (arrived) {
-        enterFollowOutput('tail-snap-back');
-        return;
-      }
-    }
-
-    /*
-     * Ownership is not correction, and the difference is deliberate — see
-     * `isFollowCorrectingViewport`.
-     *
-     * A live loop still gets the viewport to itself. It converges on its target
-     * within a few frames, so a snap back would only be racing it.
-     */
-    const isCorrecting = isFollowCorrectingViewport();
-    if (isCorrecting || isOpeningViewport()) {
-      // "The wheel went down and nothing brought me back" is this line or the
-      // one below it, and they are not the same fault.
-      traceViewportRepeating(
-        `snapBack|declined|${isCorrecting ? 'follow-correcting' : 'opening'}`,
-        {
-          location: 'snapBack.declined',
-          message: 'gesture came to rest, but the snap back is not this settle\'s business',
-          data: () => ({
-            reason: isCorrecting ? 'follow-correcting' : 'opening-reveal',
-            scrollTopPx: roundViewportPx(scroller.scrollTop),
-          }),
-        },
-      );
-      return;
-    }
-
-    const followTarget = resolveFollowTargetScrollTop(scroller);
-    const snapTo = tailSnapBackScrollTop({
-      scrollTop: scroller.scrollTop,
-      followTargetScrollTop: followTarget,
-      thresholdPx: FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
-    });
-    if (snapTo === null) {
-      traceViewportRepeating('snapBack|not-in-blank', {
-        location: 'snapBack.notNeeded',
-        message: 'gesture came to rest above the follow target, so nothing to snap back from',
-        data: () => ({
-          scrollTopPx: roundViewportPx(scroller.scrollTop),
-          followTargetPx: roundViewportPx(followTarget),
-        }),
-      });
-      return;
-    }
-
-    /*
-     * Held for the animation, not just the write. Ownership passing to
-     * follow-output only on landing is what left the snap belonging to nobody
-     * while it travelled, and the anchor undid its first 0.7px 958 times.
-     */
-    const issued = viewportOwner.write({
-      owner: 'snap-back',
-      topPx: snapTo,
-      behavior: getMotionAwareScrollBehavior('smooth'),
-      holdForMs: SNAP_BACK_HOLD_MS,
-    });
-    traceViewportRepeating(`snapBack|issued|${issued}`, {
-      location: 'snapBack.issued',
-      message: issued ? 'snap back is on its way' : 'snap back was refused the viewport',
-      data: () => ({
-        fromPx: roundViewportPx(scroller.scrollTop),
-        targetPx: roundViewportPx(snapTo),
-        followTargetPx: roundViewportPx(followTarget),
-        // Who refused it. The gesture is the one that lapses on a timer, and
-        // the retry below is aimed at exactly that.
-        heldBy: viewportOwner.currentOwner(),
-        attempt: snapBackRetryAttemptsRef.current,
-      }),
-    });
-    if (issued) {
-      pendingSnapBackTargetRef.current = snapTo;
-      return;
-    }
-
-    /*
-     * A refused snap back is still owed, so ask again rather than give up.
-     *
-     * What refuses it is almost always the reader's own gesture, and that claim
-     * is a lapse timer — a wheel has no end of its own, so the register goes on
-     * answering with them for a window after each notch. This correction is the
-     * one writer that asks from inside that window, because coming to rest is
-     * what triggers it.
-     *
-     * Which is also why the hold must not simply be released here. Tried, and
-     * measured: a settle lands between two wheel notches, so releasing put the
-     * snap back in the middle of a gesture that was still going — the reader
-     * scrolled down into the reserved blank and was dragged back out of it
-     * every 800ms, a dozen times, which is the transcript stuttering under
-     * their hands. The hold was doing its job; what was missing was a second
-     * ask once it had done it.
-     *
-     * So the ask repeats while the refusal is the kind that expires. A reader
-     * still scrolling keeps re-taking the viewport and keeps being answered
-     * with a refusal that moves nothing, and their next settle re-arms the
-     * whole thing anyway; a reader who has stopped is snapped back one window
-     * after their last notch.
-     */
-    if (snapBackRetryAttemptsRef.current >= SNAP_BACK_RETRY_ATTEMPTS) {
-      return;
-    }
-    snapBackRetryAttemptsRef.current += 1;
-    clearSnapBackRetry();
-    snapBackRetryTimerRef.current = window.setTimeout(() => {
-      snapBackRetryTimerRef.current = null;
-      evaluateSnapBackRef.current();
-    }, SNAP_BACK_RETRY_DELAY_MS);
-  }, [
-    clearSnapBackRetry,
-    viewportOwner,
-    enterFollowOutput,
-    isFollowCorrectingViewport,
-    isOpeningViewport,
-    resolveFollowTargetScrollTop,
-    scrollerRef,
-  ]);
-  evaluateSnapBackRef.current = evaluateSnapBack;
-
-  const handleScrollSettled = useCallback(() => {
-    // A settle of the reader's own is a fresh ask, not a continuation of the
-    // last one: it gets the full retry budget, and supersedes what is left of
-    // the previous one.
-    snapBackRetryAttemptsRef.current = 0;
-    clearSnapBackRetry();
-    evaluateSnapBack();
-  }, [clearSnapBackRetry, evaluateSnapBack]);
 
   const getFollowTargetScrollTop = useCallback(() => (
     isFollowingOutputRef.current ? followStateRef.current.target : null
@@ -1604,16 +1344,6 @@ export function useFlowChatFollowOutput({
       return;
     }
 
-    // Whatever left the viewport below the target — a reflow, or a gesture that
-    // never settled — it must not stay there.
-    const snapTo = tailSnapBackScrollTop({
-      scrollTop: scroller.scrollTop,
-      followTargetScrollTop: followTarget,
-      thresholdPx: FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX,
-    });
-    if (snapTo !== null) {
-      viewportOwner.write({ owner: 'layout-correction', topPx: snapTo });
-    }
   }, [resolveFollowTargetScrollTop, scrollerRef, viewportOwner]);
 
   useEffect(() => {
@@ -1730,7 +1460,6 @@ export function useFlowChatFollowOutput({
   }, [scheduleFollowToLatest]);
 
   useEffect(() => stopFollowFrame, [stopFollowFrame]);
-  useEffect(() => clearSnapBackRetry, [clearSnapBackRetry]);
   // A watch the transcript outlived is not an outcome, and leaving it open
   // would drop it from the trail entirely.
   useEffect(() => () => closeTailWatchRef.current('unmounted'), []);
@@ -1745,7 +1474,6 @@ export function useFlowChatFollowOutput({
     handleUserScrollIntent,
     handleTurnsRolledBack,
     handleScroll,
-    handleScrollSettled,
     handleViewportResize,
     getFollowTargetScrollTop,
   };

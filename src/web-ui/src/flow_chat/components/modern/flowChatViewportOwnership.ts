@@ -3,10 +3,8 @@
  *
  * Several things move it, and each of them has to know not to fight the
  * others. That was a hand-written predicate per writer, which is O(n²) pairs
- * and fails the moment one is forgotten: a snap back was missing from the
- * anchor's copy, so the anchor undid the snap's own 0.7px of travel, the write
- * cancelled the animation, the cancellation read as a gesture coming to rest,
- * and the snap was re-issued 958 times over 20 seconds without arriving.
+ * and fails the moment one is forgotten: two otherwise valid movements can
+ * fight because one writer was missing from another writer's predicate.
  *
  * The pairs collapse into one register. A writer claims the viewport for as
  * long as it is moving it, and everything else asks the register rather than
@@ -25,7 +23,6 @@
  *
  * - `user-gesture` — the reader's own hands, which nothing overrides.
  * - `one-shot-navigation` — a Turn, search hit, or focus request being reached.
- * - `snap-back` — returning from the reserved blank to the follow target.
  * - `follow-output` — the continuous writer that follows streaming output.
  * - `layout-correction` — the scroller's own box changed and a viewport nobody
  *   was following has to be re-aligned to the end it was resting against.
@@ -49,7 +46,6 @@
 export const FLOWCHAT_VIEWPORT_OWNERS = [
   'user-gesture',
   'one-shot-navigation',
-  'snap-back',
   'follow-output',
   'layout-correction',
 ] as const;
@@ -71,15 +67,6 @@ function priorityOf(owner: FlowChatViewportOwner): number {
  * ends it immediately regardless, which is the rule that matters.
  */
 export const ONE_SHOT_NAVIGATION_HOLD_MS = 600;
-
-/**
- * How long a snap back holds the viewport while it animates.
- *
- * Released on the settle that follows; this is only the backstop for a
- * `scrollend` that never comes, because a snap that is never released would
- * leave the viewport unwritable by everything below it.
- */
-export const SNAP_BACK_HOLD_MS = 1_200;
 
 /**
  * The owners that give the viewport back.
@@ -191,16 +178,10 @@ export function claimViewport(
 /**
  * The owners that hold a target and re-assert it.
  *
- * `follow-output` recomputes its target every frame, a navigation's aim is
- * re-taken by the virtualizer while the measurements under it settle, and a
- * snap back is animating towards a resolved offset. All three already say where
- * the reader belongs, so a displacement applied underneath them is either
- * redundant or a fight.
- *
- * `snap-back` is deliberately not one of them either: a late measurement of
- * history above the reader invalidates the snap target's coordinate. Letting
- * that displacement through cancels the stale animation by changing the real
- * scroll position; the next settle re-evaluates the target from fresh geometry.
+ * `follow-output` recomputes its target every frame, and a navigation's aim is
+ * re-taken by the virtualizer while the measurements under it settle. Both
+ * already say where the reader belongs, so a displacement applied underneath
+ * them is either redundant or a fight.
  * `user-gesture` is deliberately not one of them, and that is the whole point
  * of this being a separate question.
  */

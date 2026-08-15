@@ -37,7 +37,7 @@ export interface ViewportWriteRequest {
    * Omitted holds it for the frame the write happens in, which is what a
    * correction wants. An animated write has to outlast its own animation, or
    * the first frame of travel is read as a displacement by whatever corrects
-   * next — see the snap back in `FLOWCHAT_SCROLL_STABILITY.md`.
+ * next — see the follow and viewport rules in `FLOWCHAT_SCROLL_STABILITY.md`.
    */
   holdForMs?: number;
 }
