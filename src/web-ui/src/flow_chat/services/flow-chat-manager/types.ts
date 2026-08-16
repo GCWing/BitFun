@@ -61,6 +61,12 @@ export interface FlowChatContext {
    */
   handledTerminalTurnEvents: Set<string>;
   currentWorkspacePath: string | null;
+  /**
+   * Re-arm this window's live agentic subscription. The reconcile loop calls it
+   * when it observes a dead subscription, so recovery does not depend on a
+   * workspace bootstrap that a newer surface switch may have superseded.
+   */
+  ensureLiveSubscription?: () => Promise<void>;
 }
 
 /** Current owner scope used only when a restored child lacks saved location metadata. */

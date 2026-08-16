@@ -148,6 +148,21 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     restore from a device no longer rendered. Older hosts may omit the Runtime
     projection; their persisted snapshot must still never overwrite newer live
     content.
+
+    **The subscription and the attach loop must never be able to disable each
+    other.** The agentic subscription is this window's only live view of a
+    running Turn, and a surface switch tears it down. Rebuilding it used to be
+    a side effect of `FlowChatManager.initialize()`, which a newer switch is
+    allowed to supersede — so a rapid switch could leave the window with no
+    subscription and nothing to retry. The attach loop then *refused to run
+    while the subscription was down*, disabling the only path that could repair
+    it, and the chat froze permanently with no live output and no snapshot
+    repair (regression: 2026-08-16). `FlowChatManager` therefore re-arms on
+    `onSurfaceActivated` and retries a failed start on its own, the attach loop
+    treats a dead subscription as a reason to reconcile **and** re-arm rather
+    than to bail, and callers of `initialize()` must not report a superseded
+    bootstrap as a product failure. Any new gate on subscription readiness has
+    to keep both halves independently recoverable.
     **Controller presence is not Turn ownership.** A controller lease gates
     submission and interaction responses, but once a Peer Host accepts a Turn,
     the Host keeps executing and materializing it through a zero-controller

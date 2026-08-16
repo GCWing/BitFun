@@ -325,3 +325,108 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
     cleanup();
   });
 });
+
+describe('PeerSessionRefreshModule dead subscription recovery', () => {
+  /**
+   * The reported freeze: repeated device switching tore the agentic
+   * subscription down, and the reconcile loop refused to run while it was
+   * down — so the only path that could repair the session view was disabled by
+   * the very condition it existed to repair.
+   */
+  function contextWithDeadSubscription() {
+    const refreshPeerSessionSnapshot = vi.fn(async () => ({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+    }));
+    const ensureLiveSubscription = vi.fn(async () => {});
+    const state = {
+      activeSessionId: 'session-1',
+      sessions: new Map([
+        ['session-1', {
+          sessionId: 'session-1',
+          workspacePath: '/repo/BitFun',
+          historyState: 'ready',
+          isHistorical: false,
+          isTransient: false,
+          dialogTurns: [{ id: 'turn-live', status: 'processing', modelRounds: [] }],
+        }],
+      ]),
+    };
+    return {
+      refreshPeerSessionSnapshot,
+      ensureLiveSubscription,
+      context: {
+        flowChatStore: {
+          getState: () => state,
+          subscribeSelector: vi.fn(() => () => {}),
+          refreshPeerSessionSnapshot,
+        },
+        eventBatcher: { flushNow: vi.fn() },
+        contentBuffers: new Map(),
+        activeTextItems: new Map(),
+        ensureLiveSubscription,
+      } as any,
+    };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    peerModeMock.active = true;
+    resetRuntimeSessionEventGateForTest();
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'idle',
+      getContext: () => ({ lastUpdateTime: 0, version: 0 }),
+    });
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  });
+
+  afterEach(() => {
+    agenticListenerMock.getIsListening.mockReturnValue(true);
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('still reconciles when the subscription is down', async () => {
+    agenticListenerMock.getIsListening.mockReturnValue(false);
+    const { context, refreshPeerSessionSnapshot } = contextWithDeadSubscription();
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(PEER_SESSION_REFRESH_INTERVAL_MS);
+
+    expect(refreshPeerSessionSnapshot).toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('re-arms the subscription it found dead', async () => {
+    agenticListenerMock.getIsListening.mockReturnValue(false);
+    const { context, ensureLiveSubscription } = contextWithDeadSubscription();
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(PEER_SESSION_REFRESH_INTERVAL_MS);
+
+    expect(ensureLiveSubscription).toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('does not re-arm a subscription that is already live', async () => {
+    agenticListenerMock.getIsListening.mockReturnValue(true);
+    const { context, ensureLiveSubscription } = contextWithDeadSubscription();
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(PEER_SESSION_REFRESH_INTERVAL_MS);
+
+    expect(ensureLiveSubscription).not.toHaveBeenCalled();
+    cleanup();
+  });
+});

@@ -151,8 +151,13 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
       return;
     }
+    // A dead subscription is the strongest reason to reconcile, not a reason to
+    // skip: bailing here meant a switch that tore the listener down disabled
+    // the only path that could repair it, and the chat froze for good. Re-arm
+    // and continue — the runtime cursor fence already covers the snapshot/live
+    // race while the subscription is coming back up.
     if (!agenticEventListener.getIsListening()) {
-      return;
+      void context.ensureLiveSubscription?.();
     }
 
     const state = context.flowChatStore.getState();

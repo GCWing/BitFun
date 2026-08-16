@@ -613,3 +613,59 @@ describe('FlowChatManager initialization', () => {
     expect(storeMocks.store.switchSession).not.toHaveBeenCalled();
   });
 });
+
+describe('FlowChatManager live subscription self-healing', () => {
+  beforeEach(() => {
+    resetDeviceSurfaceForTest();
+    (FlowChatManager as any).instance = undefined;
+    vi.clearAllMocks();
+    storeMocks.eventBatchers.length = 0;
+    storeMocks.store = {};
+    storeMocks.initializeEventListeners.mockResolvedValue(() => {});
+  });
+
+  it('re-arms the subscription on every surface activation', async () => {
+    // A switch tears the subscription down and the workspace bootstrap that
+    // used to rebuild it may legitimately be superseded. Activation itself must
+    // therefore restore the only live view of a running Turn.
+    const manager = FlowChatManager.getInstance();
+    await (manager as any).ensureEventListeners();
+    expect(storeMocks.initializeEventListeners).toHaveBeenCalledTimes(1);
+
+    manager.cleanupEventListeners();
+    activateSurface('device-b');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(storeMocks.initializeEventListeners).toHaveBeenCalledTimes(2);
+    manager.destroy();
+  });
+
+  it('retries a subscription that failed to start', async () => {
+    vi.useFakeTimers();
+    try {
+      storeMocks.initializeEventListeners.mockRejectedValueOnce(new Error('bridge not ready'));
+      const manager = FlowChatManager.getInstance();
+
+      await (manager as any).ensureEventListeners();
+      expect(storeMocks.initializeEventListeners).toHaveBeenCalledTimes(1);
+
+      storeMocks.initializeEventListeners.mockResolvedValue(() => {});
+      await vi.advanceTimersByTimeAsync(2500);
+
+      expect(storeMocks.initializeEventListeners).toHaveBeenCalledTimes(2);
+      manager.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves a healthy subscription alone', async () => {
+    const manager = FlowChatManager.getInstance();
+    await (manager as any).ensureEventListeners();
+    await (manager as any).ensureEventListeners();
+
+    expect(storeMocks.initializeEventListeners).toHaveBeenCalledTimes(1);
+    manager.destroy();
+  });
+});

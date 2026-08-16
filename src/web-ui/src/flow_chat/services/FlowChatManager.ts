@@ -19,6 +19,7 @@ import {
   getActiveSurfaceId,
   getActiveSurfaceScope,
   isSurfaceChangedError,
+  onSurfaceActivated,
   type DeviceSurfaceId,
 } from '@/infrastructure/peer-device/deviceSurface';
 import type { WorkspaceInfo } from '@/shared/types';
@@ -72,6 +73,9 @@ import { registerDriverSessionLookup } from '../session-drivers/resolve';
 
 const log = createLogger('FlowChatManager');
 
+/** Backstop cadence for re-establishing a subscription that failed to start. */
+const EVENT_LISTENER_RETRY_MS = 2000;
+
 export class FlowChatManager {
   private static instance: FlowChatManager | null = null;
   private context: FlowChatContext;
@@ -83,6 +87,8 @@ export class FlowChatManager {
   private latestInitializationRequestKey: string | null = null;
   private peerSessionRefreshCleanup: (() => void) | null = null;
   private dispatchJobObserverCleanup: (() => void) | null = null;
+  private surfaceActivationCleanup: (() => void) | null = null;
+  private eventListenerRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
   private constructor() {
@@ -107,7 +113,8 @@ export class FlowChatManager {
       runtimeStatusTimers: new Map(),
       userCancelledSessionIds: new Set(),
       handledTerminalTurnEvents: new Set(),
-      currentWorkspacePath: null
+      currentWorkspacePath: null,
+      ensureLiveSubscription: () => this.ensureEventListeners(),
     };
     
     this.agentService = AgentService.getInstance();
@@ -117,6 +124,12 @@ export class FlowChatManager {
     installPendingQueueDrainListener(this.context);
     this.peerSessionRefreshCleanup = installPeerSessionRefresh(this.context);
     this.dispatchJobObserverCleanup = installDispatchJobObserver(this.context);
+    // The agentic subscription is this window's only live view of a running
+    // Turn, so its lifetime must not depend on a workspace bootstrap that a
+    // rapid switch is allowed to abandon. Re-arm on every activation instead.
+    this.surfaceActivationCleanup = onSurfaceActivated(() => {
+      void this.ensureEventListeners();
+    });
   }
 
   /** Public hook used by the queue panel "send now" fallback to drain head item. */
@@ -417,6 +430,45 @@ export class FlowChatManager {
     }
   }
 
+  /**
+   * Guarantee this window has a live agentic subscription.
+   *
+   * Idempotent and safe to call from anywhere. It exists because the
+   * subscription used to be re-established only as a side effect of a
+   * successful workspace bootstrap: a switch tore it down, and a bootstrap that
+   * a newer switch legitimately superseded left the window with no live Turn
+   * events and nothing to retry — a permanently frozen chat.
+   */
+  public async ensureEventListeners(): Promise<void> {
+    try {
+      await this.initializeEventListeners();
+    } catch (error) {
+      if (isSurfaceChangedError(error)) {
+        return;
+      }
+      log.warn('Failed to establish the agentic subscription; retrying', { error });
+      this.scheduleEventListenerRetry();
+    }
+  }
+
+  /**
+   * A failed subscription cannot repair itself from the event path, so recovery
+   * is time-based. The reconcile loop also calls `ensureEventListeners` when it
+   * observes a dead subscription, so this is the backstop, not the only path.
+   */
+  private scheduleEventListenerRetry(): void {
+    if (this.disposed || this.eventListenerRetryTimer !== null) {
+      return;
+    }
+    this.eventListenerRetryTimer = setTimeout(() => {
+      this.eventListenerRetryTimer = null;
+      if (this.disposed || this.eventListenerInitialized) {
+        return;
+      }
+      void this.ensureEventListeners();
+    }, EVENT_LISTENER_RETRY_MS);
+  }
+
   private async initializeEventListeners(): Promise<void> {
     if (this.disposed) {
       return;
@@ -536,6 +588,12 @@ export class FlowChatManager {
     this.initializationRequests.clear();
     this.latestInitializationRequestKey = null;
     this.cleanupEventListeners();
+    if (this.eventListenerRetryTimer !== null) {
+      clearTimeout(this.eventListenerRetryTimer);
+      this.eventListenerRetryTimer = null;
+    }
+    this.surfaceActivationCleanup?.();
+    this.surfaceActivationCleanup = null;
     this.peerSessionRefreshCleanup?.();
     this.peerSessionRefreshCleanup = null;
     this.dispatchJobObserverCleanup?.();
