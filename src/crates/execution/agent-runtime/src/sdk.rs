@@ -46,8 +46,8 @@ pub use crate::post_call_hooks::{
 };
 pub use crate::runtime::{
     attach_session_event_cursor, SessionEventCursor, SessionEventJournal,
-    SessionEventProjectionSnapshot, SessionEventProjectionStore, RUNTIME_EVENT_CURSOR_KEY,
-    RUNTIME_EVENT_STREAM_ID_KEY,
+    SessionEventProjectionSnapshot, SessionEventProjectionStore, StoredSessionEvents,
+    RUNTIME_EVENT_CURSOR_KEY, RUNTIME_EVENT_STREAM_ID_KEY,
 };
 pub use crate::runtime::{
     AgentEventStream, AgentRunHandle, AgentRunRequest, AgentSessionRestorePort,

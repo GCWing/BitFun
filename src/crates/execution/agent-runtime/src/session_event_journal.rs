@@ -83,21 +83,29 @@ struct JournalState {
     sessions: HashMap<String, SessionProjection>,
 }
 
-/// Durable sink for the materialized projection.
+/// Recorded events of one Session, restored in their original order.
+pub struct StoredSessionEvents {
+    pub stream_id: String,
+    pub events: Vec<AgenticEvent>,
+}
+
+/// Durable, append-only log of the executing Turn.
 ///
-/// This projection is the only complete record of a Turn while it runs: client
-/// persistence lags it by a coalescing window, and the persisted Session view
-/// deliberately stores an executing Turn as idle so a restart cannot revive
-/// work. Keeping the projection in memory alone therefore means a Host restart
-/// loses the live state of work that is still running, and a client returning
-/// to that Session sees a Turn frozen at the last checkpoint.
+/// This log is the authority for work in flight. Everything else durable lags
+/// it: client persistence is debounced into coalescing windows, and the
+/// persisted Session view deliberately stores an executing Turn as idle so a
+/// restart never revives work. Without this log the only complete record of a
+/// running Turn dies with the Host process, and a returning client is served a
+/// Turn frozen at the last checkpoint.
 ///
-/// Implementations own their write policy. `save` is called for every
-/// materialized event, so a store is expected to coalesce writes rather than
-/// touch the filesystem per token.
+/// `append` is called for each event as it enters the ordered delivery stream —
+/// one atomic event, written when it happens, not a periodic snapshot. Reload
+/// replays the log through the same materialization used live, so a restored
+/// projection and a live one are produced by one implementation rather than
+/// two that can disagree.
 pub trait SessionEventProjectionStore: Send + Sync {
-    fn save(&self, snapshot: &SessionEventProjectionSnapshot);
-    fn load(&self, session_id: &str) -> Option<SessionEventProjectionSnapshot>;
+    fn append(&self, session_id: &str, stream_id: &str, cursor: u64, event: &AgenticEvent);
+    fn load(&self, session_id: &str) -> Option<StoredSessionEvents>;
     /// The Turn reached a terminal state; the persisted Session view owns it now.
     fn discard(&self, session_id: &str);
 }
@@ -191,16 +199,17 @@ impl SessionEventJournal {
         if materialized {
             if let Some(store) = self.store.as_ref() {
                 let session_id = event.session_id().unwrap_or_default().to_string();
-                let projection = state.sessions.get(&session_id);
-                let terminal = projection.is_some_and(|projection| projection.terminal);
-                let snapshot = projection_snapshot(&state, &session_id);
-                // Release the lock before touching the store: a slow flush must
+                let terminal = state
+                    .sessions
+                    .get(&session_id)
+                    .is_some_and(|projection| projection.terminal);
+                // Release the lock before touching the store: an append must
                 // never stall the delivery stream it is recording.
                 drop(state);
                 if terminal {
                     store.discard(&session_id);
                 } else {
-                    store.save(&snapshot);
+                    store.append(&session_id, &stream_id, cursor, event);
                 }
                 return Some(SessionEventCursor { stream_id, cursor });
             }
@@ -213,23 +222,38 @@ impl SessionEventJournal {
         if state.sessions.contains_key(session_id) {
             return projection_snapshot(&state, session_id);
         }
+        let live_stream_id = state.stream_id.clone();
         drop(state);
 
-        // Nothing in memory. Either this Session never ran here, or this Host
-        // restarted while its Turn was executing. A stored projection keeps its
-        // original `stream_id`, so a client correctly treats it as a different
-        // Runtime process and replays it whole instead of comparing cursors
-        // across processes.
-        self.store
-            .as_ref()
-            .and_then(|store| store.load(session_id))
-            .unwrap_or_else(|| SessionEventProjectionSnapshot {
+        // Nothing in memory: either this Session never ran here, or this Host
+        // restarted while its Turn was executing. Replay the log through the
+        // same materialization used live, so a restored projection cannot
+        // disagree with one built from events as they arrived. The stored
+        // stream_id is preserved, so a client reads it as a different Runtime
+        // process and replays it instead of comparing cursors across processes.
+        let Some(stored) = self.store.as_ref().and_then(|store| store.load(session_id)) else {
+            return SessionEventProjectionSnapshot {
                 session_id: session_id.to_string(),
-                stream_id: lock_state(&self.state).stream_id.clone(),
+                stream_id: live_stream_id,
                 cursor: 0,
                 active_turn_id: None,
                 events: Vec::new(),
-            })
+            };
+        };
+
+        let mut projection = SessionProjection::default();
+        for event in &stored.events {
+            if apply_event(&mut projection, event) {
+                projection.cursor = projection.cursor.saturating_add(1);
+            }
+        }
+        SessionEventProjectionSnapshot {
+            session_id: session_id.to_string(),
+            stream_id: stored.stream_id,
+            cursor: projection.cursor,
+            active_turn_id: projection.active_turn_id,
+            events: projection.events,
+        }
     }
 }
 
@@ -545,36 +569,43 @@ fn compact_projection(projection: &mut SessionProjection) {
 mod tests {
     use super::{
         attach_session_event_cursor, lock_state, SessionEventCursor, SessionEventJournal,
-        SessionEventProjectionSnapshot, SessionEventProjectionStore,
+        SessionEventProjectionStore, StoredSessionEvents,
         MAX_RETAINED_TERMINAL_SESSION_PROJECTIONS,
     };
     use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
-    /// In-memory stand-in for a durable store; records the calls a real one
-    /// would turn into filesystem writes.
+    /// In-memory stand-in for the append-only log a real store writes to disk.
     #[derive(Default)]
     struct RecordingStore {
-        saved: Mutex<HashMap<String, SessionEventProjectionSnapshot>>,
+        appended: Mutex<HashMap<String, (String, Vec<AgenticEvent>)>>,
         discarded: Mutex<Vec<String>>,
     }
 
     impl SessionEventProjectionStore for RecordingStore {
-        fn save(&self, snapshot: &SessionEventProjectionSnapshot) {
-            self.saved
-                .lock()
-                .unwrap()
-                .insert(snapshot.session_id.clone(), snapshot.clone());
+        fn append(&self, session_id: &str, stream_id: &str, _cursor: u64, event: &AgenticEvent) {
+            let mut appended = self.appended.lock().unwrap();
+            let entry = appended
+                .entry(session_id.to_string())
+                .or_insert_with(|| (stream_id.to_string(), Vec::new()));
+            entry.1.push(event.clone());
         }
 
-        fn load(&self, session_id: &str) -> Option<SessionEventProjectionSnapshot> {
-            self.saved.lock().unwrap().get(session_id).cloned()
+        fn load(&self, session_id: &str) -> Option<StoredSessionEvents> {
+            self.appended
+                .lock()
+                .unwrap()
+                .get(session_id)
+                .map(|(stream_id, events)| StoredSessionEvents {
+                    stream_id: stream_id.clone(),
+                    events: events.clone(),
+                })
         }
 
         fn discard(&self, session_id: &str) {
             self.discarded.lock().unwrap().push(session_id.to_string());
-            self.saved.lock().unwrap().remove(session_id);
+            self.appended.lock().unwrap().remove(session_id);
         }
     }
 
@@ -800,9 +831,9 @@ mod tests {
         journal.record(&turn_started("session-1", "turn-1"));
         journal.record(&text("session-1", "turn-1", "hello"));
 
-        let saved = store.load("session-1").expect("running turn is persisted");
-        assert_eq!(saved.active_turn_id.as_deref(), Some("turn-1"));
-        assert!(saved.cursor > 0);
+        let stored = store.load("session-1").expect("running turn is persisted");
+        // Every atomic event is written when it happens, not summarized later.
+        assert_eq!(stored.events.len(), 2);
     }
 
     #[test]
