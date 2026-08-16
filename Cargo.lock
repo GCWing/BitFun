@@ -1504,6 +1504,7 @@ dependencies = [
  "base64 0.22.1",
  "bitfun-core-types",
  "bitfun-events",
+ "bitfun-product-domains",
  "bitfun-runtime-ports",
  "chrono",
  "dunce",

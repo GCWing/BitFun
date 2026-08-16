@@ -1,0 +1,27 @@
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
+
+describe('global search ownership', () => {
+  it('mounts one shell-owned root and routes the nav trigger into its store', () => {
+    expect(source('src/app/App.tsx')).toContain('<LazyGlobalSearchRoot />');
+    expect(source('src/app/components/NavPanel/MainNav.tsx')).toContain('openGlobalSearch()');
+    expect(source('src/app/components/NavPanel/MainNav.tsx')).not.toContain('NavSearchDialog');
+  });
+
+  it('keeps browser and terminal capabilities on the shared product activator without footer shortcuts', () => {
+    const footer = source('src/app/components/NavPanel/components/PersistentFooterActions.tsx');
+    const activator = source('src/app/global-search/productActionActivator.ts');
+
+    expect(footer).not.toContain('data-testid="browser-panel-entry"');
+    expect(footer).not.toContain('data-testid="shell-panel-entry"');
+    expect(activator).toContain("case 'surface.browser.open':");
+    expect(activator).toContain("case 'surface.terminal.open':");
+  });
+
+  it('removes the superseded navigation-owned dialog', () => {
+    expect(existsSync(resolve(process.cwd(), 'src/app/components/NavPanel/NavSearchDialog.tsx'))).toBe(false);
+  });
+});

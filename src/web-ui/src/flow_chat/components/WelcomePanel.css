@@ -46,44 +46,6 @@
   min-width: 0;
 }
 
-/* ── Panda mascot ── */
-
-.welcome-panel__panda {
-  position: relative;
-  flex-shrink: 0;
-  width: 72px;
-  user-select: none;
-  image-rendering: pixelated;
-  cursor: default;
-}
-
-.welcome-panel__panda-frame {
-  display: block;
-  width: 100%;
-  height: auto;
-  image-rendering: pixelated;
-  transition: opacity 0.12s steps(1, end);
-}
-
-.welcome-panel__panda-frame--1 {
-  opacity: 1;
-}
-
-.welcome-panel__panda-frame--2 {
-  position: absolute;
-  top: 0;
-  left: 0;
-  opacity: 0;
-}
-
-.welcome-panel__panda:hover .welcome-panel__panda-frame--1 {
-  opacity: 0;
-}
-
-.welcome-panel__panda:hover .welcome-panel__panda-frame--2 {
-  opacity: 1;
-}
-
 .welcome-panel__heading {
   margin: 0;
   font-size: calc(var(--bf-appearance-token-flowchat-font-size-3xl) + 4px);

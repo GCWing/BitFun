@@ -19,8 +19,14 @@ mod local_workspace_snapshot;
 mod permission;
 #[cfg(feature = "plugin-runtime")]
 mod plugin;
+#[cfg(feature = "product-search")]
+mod product_search;
 #[cfg(feature = "script-tool-runtime")]
 mod script_tool;
+#[cfg(feature = "product-search")]
+pub use bitfun_product_domains::product_search::{
+    SessionContentSearchRequest, SessionContentSearchResponse,
+};
 #[cfg(feature = "permission")]
 pub use bitfun_product_domains::tool_permissions::{
     deserialize_optional_permission_mode, resolve_child_permission_policy, resolve_permission_mode,
@@ -60,6 +66,8 @@ pub use plugin::{
     PluginRuntimeUnavailableReason, PluginSourceKind, PluginSourceRef, PluginStatusKind,
     PluginStatusSnapshot, PluginTargetRef, PluginTrustLevel, ProjectionOnlyPluginRuntimeClient,
 };
+#[cfg(feature = "product-search")]
+pub use product_search::ProductSearchPort;
 #[cfg(feature = "script-tool-runtime")]
 pub use script_tool::{
     ScriptToolDescriptor, ScriptToolExpectedExport, ScriptToolInvokeRequest,

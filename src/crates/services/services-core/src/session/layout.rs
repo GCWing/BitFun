@@ -27,6 +27,11 @@ impl SessionStorageLayout {
         self.sessions_root.join("index.json")
     }
 
+    /// Versioned, fully rebuildable search sidecar for presentation-safe facts.
+    pub fn product_search_index_path(&self) -> PathBuf {
+        self.sessions_root.join("product-search-v1.sqlite")
+    }
+
     pub fn session_dir(&self, session_id: &str) -> PathBuf {
         self.sessions_root.join(session_id)
     }

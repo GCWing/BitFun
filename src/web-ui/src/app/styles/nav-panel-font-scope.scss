@@ -1,17 +1,73 @@
 /**
- * Remaps `--bf-appearance-token-font-size-*` inside nav UI to the flow-chat typographic scale minus one
- * baseline step, keeping the old minimums without a separate root `--nav-font-size-*` family.
+ * Keeps navigation typography on the product type scale while preserving the
+ * smaller metadata steps needed by dense session and workspace rows.
  */
 
 @mixin nav-panel-font-token-scope {
-  --bf-appearance-token-font-size-xxs: max(8px, calc(var(--bf-appearance-token-flowchat-font-size-xs) - 3px));
-  --bf-appearance-token-font-size-2xs: max(9px, calc(var(--bf-appearance-token-flowchat-font-size-xs) - 2px));
-  --bf-appearance-token-font-size-xs: max(10px, calc(var(--bf-appearance-token-flowchat-font-size-xs) - 1px));
-  --bf-appearance-token-font-size-sm: max(11px, calc(var(--bf-appearance-token-flowchat-font-size-sm) - 1px));
-  --bf-appearance-token-font-size-base: max(12px, calc(var(--bf-appearance-token-flowchat-font-size-base) - 1px));
-  --bf-appearance-token-font-size-lg: max(13px, calc(var(--bf-appearance-token-flowchat-font-size-lg) - 1px));
-  --bf-appearance-token-font-size-xl: max(14px, calc(var(--bf-appearance-token-flowchat-font-size-xl) - 1px));
-  --bf-appearance-token-font-size-2xl: max(16px, calc(var(--bf-appearance-token-flowchat-font-size-2xl) - 1px));
-  --bf-appearance-token-font-size-3xl: max(20px, calc(var(--bf-appearance-token-flowchat-font-size-3xl) - 1px));
-  --bf-appearance-token-font-size-4xl: max(24px, calc(var(--bf-appearance-token-flowchat-font-size-3xl) + 3px));
+  --bf-appearance-token-font-size-xxs: max(9px, calc(var(--bf-appearance-token-flowchat-font-size-xs) - 2px));
+  --bf-appearance-token-font-size-2xs: max(10px, calc(var(--bf-appearance-token-flowchat-font-size-xs) - 1px));
+  --bf-appearance-token-font-size-xs: max(11px, var(--bf-appearance-token-flowchat-font-size-xs));
+  --bf-appearance-token-font-size-sm: max(12px, var(--bf-appearance-token-flowchat-font-size-sm));
+  --bf-appearance-token-font-size-base: max(13px, var(--bf-appearance-token-flowchat-font-size-base));
+  --bf-appearance-token-font-size-lg: max(14px, var(--bf-appearance-token-flowchat-font-size-lg));
+  --bf-appearance-token-font-size-xl: max(15px, var(--bf-appearance-token-flowchat-font-size-xl));
+  --bf-appearance-token-font-size-2xl: max(17px, var(--bf-appearance-token-flowchat-font-size-2xl));
+  --bf-appearance-token-font-size-3xl: max(21px, var(--bf-appearance-token-flowchat-font-size-3xl));
+  --bf-appearance-token-font-size-4xl: max(25px, calc(var(--bf-appearance-token-flowchat-font-size-3xl) + 4px));
+}
+
+@mixin nav-panel-text-heading {
+  color: var(--bf-appearance-token-color-text-primary);
+
+  :root[data-bf-appearance-mode='light'] & {
+    color: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-static-black) 92%,
+      transparent
+    );
+  }
+}
+
+@mixin nav-panel-text-body {
+  color: color-mix(
+    in srgb,
+    var(--bf-appearance-token-color-text-primary) 88%,
+    var(--bf-appearance-token-color-text-secondary)
+  );
+
+  :root[data-bf-appearance-mode='light'] & {
+    color: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-static-black) 86%,
+      transparent
+    );
+  }
+}
+
+@mixin nav-panel-text-meta {
+  color: var(--bf-appearance-token-color-text-muted);
+
+  :root[data-bf-appearance-mode='light'] & {
+    color: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-static-black) 48%,
+      transparent
+    );
+  }
+}
+
+@mixin nav-panel-text-icon {
+  color: color-mix(
+    in srgb,
+    var(--bf-appearance-token-color-text-secondary) 78%,
+    var(--bf-appearance-token-color-text-muted)
+  );
+
+  :root[data-bf-appearance-mode='light'] & {
+    color: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-static-black) 70%,
+      transparent
+    );
+  }
 }

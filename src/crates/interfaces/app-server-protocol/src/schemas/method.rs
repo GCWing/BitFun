@@ -2,6 +2,7 @@
 
 pub const INITIALIZE: &str = "app/initialize";
 pub const HEALTH: &str = "app/health";
+pub const SEARCH_SESSION_CONTENT: &str = "search/sessionContent";
 
 /// Validate the App Server `domain/lowerCamelCaseOperation` convention.
 pub fn is_valid_method_name(method: &str) -> bool {

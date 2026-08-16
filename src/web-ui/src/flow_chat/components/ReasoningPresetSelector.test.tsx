@@ -5,6 +5,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import zhCnFlowChat from '@/locales/zh-CN/flow-chat.json';
 import { ReasoningPresetSelector } from './ReasoningPresetSelector';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -13,8 +14,21 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string } & Record<string, string>) => {
       const template = ({
-        'chatInput.reasoningStatus.levels.medium': 'Standard',
-        'chatInput.reasoningStatus.levels.high': 'High',
+        'reasoningSelector.levels.off': 'Off',
+        'reasoningSelector.levels.on': 'On',
+        'reasoningSelector.levels.low': 'Low',
+        'reasoningSelector.levels.medium': 'Medium',
+        'reasoningSelector.levels.high': 'High',
+        'reasoningSelector.levels.xhigh': 'Extra high',
+        'reasoningSelector.levels.max': 'Maximum',
+        'reasoningSelector.modes.off': 'Thinking off',
+        'reasoningSelector.modes.on': 'Thinking on',
+        'reasoningSelector.modes.low': 'Fast mode',
+        'reasoningSelector.modes.medium': 'Balanced mode',
+        'reasoningSelector.modes.high': 'Deep mode',
+        'reasoningSelector.modes.xhigh': 'Intensive mode',
+        'reasoningSelector.modes.max': 'Maximum mode',
+        'reasoningSelector.modes.custom': 'Model preset',
         'reasoningSelector.current': 'Thinking: {{preset}}',
         'reasoningSelector.currentAuto': 'Thinking: auto ({{preset}})',
       } as Record<string, string>)[key] ?? options?.defaultValue ?? key;
@@ -127,10 +141,11 @@ describe('ReasoningPresetSelector', () => {
       .toBe('reasoningSelector.source.models_dev');
     expect(document.body.querySelector('[data-preset-id="custom-low"] small')?.textContent)
       .toBe('reasoningSelector.source.model_config');
-    expect(document.body.querySelector('[data-preset-id="high"] small')).toBeNull();
+    expect(document.body.querySelector('[data-preset-id="high"] small')?.textContent)
+      .toBe('Deep mode');
   });
 
-  it('says the level with the meter alone and keeps it in the accessible name', async () => {
+  it('uses the concentric series in the compact trigger and accessible name', async () => {
     const projection = {
       status: 'known' as const,
       default_preset: 'medium',
@@ -154,22 +169,23 @@ describe('ReasoningPresetSelector', () => {
     const trigger = container.querySelector<HTMLElement>(
       '[data-testid="chat-reasoning-preset-selector-btn"]',
     );
-    // No word beside the bars: the shape is the reading, and the level survives
+    // No word beside the mark: the shape is the reading, and the level survives
     // for anyone who cannot see it as the control's own name.
     expect(trigger?.textContent).toBe('');
-    expect(trigger?.getAttribute('aria-label')).toBe('Thinking: auto (Standard)');
-    const meter = trigger?.querySelector<SVGElement>(
+    expect(trigger?.getAttribute('aria-label')).toBe('Thinking: auto (Medium)');
+    const meter = trigger?.querySelector<HTMLElement>(
       '.bitfun-reasoning-preset-selector__status-meter',
     );
-    expect(meter?.classList.contains('lucide-tally-4')).toBe(true);
-    expect(meter?.dataset.activeBars).toBe('2');
+    expect(meter?.dataset.intensity).toBe('2');
+    expect(meter?.querySelectorAll('.bitfun-reasoning-preset-selector__status-ring'))
+      .toHaveLength(2);
     expect(trigger?.querySelectorAll('.bitfun-reasoning-preset-selector__status-meter')).toHaveLength(1);
     expect(trigger?.querySelector('.bitfun-reasoning-preset-selector__label')).toBeNull();
 
-    for (const [presetId, expectedBars] of [
-      ['low', '1'],
-      ['high', '3'],
-      ['xhigh', '4'],
+    for (const [presetId, expectedIntensity, expectedRings, hasPeak] of [
+      ['low', '1', 1, false],
+      ['high', '3', 3, false],
+      ['xhigh', '4', 3, true],
     ] as const) {
       await act(async () => {
         root.render(
@@ -180,18 +196,121 @@ describe('ReasoningPresetSelector', () => {
           />,
         );
       });
-      expect(
-        container.querySelector<SVGElement>(
-          '.bitfun-reasoning-preset-selector__status-meter',
-        )?.dataset.activeBars,
-      ).toBe(expectedBars);
+      const updatedMeter = container.querySelector<HTMLElement>(
+        '.bitfun-reasoning-preset-selector__status-meter',
+      );
+      expect(updatedMeter?.dataset.intensity).toBe(expectedIntensity);
+      expect(updatedMeter?.querySelectorAll('.bitfun-reasoning-preset-selector__status-ring'))
+        .toHaveLength(expectedRings);
+      expect(Boolean(updatedMeter?.querySelector('.bitfun-reasoning-preset-selector__status-peak')))
+        .toBe(hasPeak);
     }
 
     expect(
       container
         .querySelector('[data-testid="chat-reasoning-preset-selector-btn"]')
         ?.getAttribute('aria-label'),
-    ).toBe('Thinking: Extra High');
+    ).toBe('Thinking: Extra high');
+  });
+
+  it('renders the common four levels as a low-to-high visual list', async () => {
+    await act(async () => {
+      root.render(
+        <ReasoningPresetSelector
+          projection={{
+            status: 'known',
+            default_preset: 'medium',
+            presets: [
+              { id: 'xhigh', label: 'Extra High', order: 40, source: 'models_dev', actions: [{ type: 'effort', value: 'xhigh' }] },
+              { id: 'low', label: 'Low', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'low' }] },
+              { id: 'high', label: 'High', order: 30, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+              { id: 'medium', label: 'Medium', order: 20, source: 'models_dev', actions: [{ type: 'effort', value: 'medium' }] },
+            ],
+          }}
+          selectedPreset="high"
+          onSelect={vi.fn()}
+        />,
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="chat-reasoning-preset-selector-btn"]')?.click();
+    });
+
+    const options = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(
+        '.bitfun-reasoning-preset-selector__options [data-preset-id]',
+      ),
+    );
+    expect(options.map(option => option.dataset.presetId))
+      .toEqual(['low', 'medium', 'high', 'xhigh']);
+    expect(options.map(option => option.querySelector<HTMLElement>(
+      '.bitfun-reasoning-preset-selector__status-meter',
+    )?.dataset.intensity)).toEqual(['1', '2', '3', '4']);
+    expect(options.map(option => option.querySelector('strong')?.textContent))
+      .toEqual(['Low', 'Medium', 'High', 'Extra high']);
+    expect(options.map(option => option.querySelector('small')?.textContent))
+      .toEqual(['Fast mode', 'Balanced mode', 'Deep mode', 'Intensive mode']);
+    expect(options[2]?.querySelector('.bitfun-reasoning-preset-selector__option-check'))
+      .not.toBeNull();
+    expect(options[3]?.querySelector('.bitfun-reasoning-preset-selector__status-peak'))
+      .not.toBeNull();
+  });
+
+  it('presents a merged off/on/effort catalog as four user-facing intensity levels', async () => {
+    await act(async () => {
+      root.render(
+        <ReasoningPresetSelector
+          projection={{
+            status: 'known',
+            default_preset: 'low',
+            presets: [
+              { id: 'max', label: 'Max', order: 40, source: 'models_dev', actions: [{ type: 'effort', value: 'max' }] },
+              { id: 'off', label: 'Off', order: 0, source: 'models_dev', actions: [{ type: 'toggle', enabled: false }] },
+              { id: 'high', label: 'High', order: 30, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+              { id: 'on', label: 'On', order: 1, source: 'models_dev', actions: [{ type: 'toggle', enabled: true }] },
+              { id: 'low', label: 'Low', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'low' }] },
+            ],
+          }}
+          selectedPreset="low"
+          onSelect={vi.fn()}
+        />,
+      );
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-reasoning-preset-selector-btn"]',
+      )?.click();
+    });
+
+    const options = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(
+        '.bitfun-reasoning-preset-selector__options [data-preset-id]',
+      ),
+    );
+    expect(options.map(option => option.dataset.presetId))
+      .toEqual(['off', 'on', 'low', 'high', 'max']);
+    expect(options.map(option => option.querySelector<HTMLElement>(
+      '.bitfun-reasoning-preset-selector__status-meter',
+    )?.dataset.intensity)).toEqual(['0', '1', '2', '3', '4']);
+    expect(options.map(option => option.querySelector('strong')?.textContent))
+      .toEqual(['Off', 'Low', 'Medium', 'High', 'Maximum']);
+    expect(options.map(option => option.querySelector('small')?.textContent))
+      .toEqual(['Thinking off', 'Fast mode', 'Balanced mode', 'Deep mode', 'Maximum mode']);
+    expect(options.map(option => option.textContent).join(' '))
+      .not.toContain('reasoningSelector.source.models_dev');
+
+    expect(zhCnFlowChat.reasoningSelector.levels)
+      .toMatchObject({ off: '关闭', low: '低', medium: '中', high: '高', max: '最高' });
+    expect(zhCnFlowChat.reasoningSelector.modes)
+      .toMatchObject({
+        off: '关闭思考',
+        on: '开启思考',
+        low: '快速模式',
+        high: '深度模式',
+        max: '最高强度',
+      });
   });
 
   it('returns focus to the trigger and keeps keyboard motion suppressed while exiting', async () => {

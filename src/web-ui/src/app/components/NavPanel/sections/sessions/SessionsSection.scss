@@ -865,3 +865,66 @@
     animation: none;
   }
 }
+
+// Match the primary navigation's readable text scale and 32px row rhythm while
+// retaining the existing nested/flat session geometry.
+.bitfun-nav-panel {
+  &__inline-list {
+    padding-block: 3px;
+  }
+
+  &__inline-item {
+    height: 32px;
+    @include nav-font.nav-panel-text-body;
+
+    font-size: var(--bf-appearance-token-font-size-sm);
+    line-height: 1.25;
+
+    &:hover,
+    &:focus-visible,
+    &.is-active,
+    &.is-menu-open {
+      @include nav-font.nav-panel-text-heading;
+    }
+
+    &.is-child {
+      height: 28px;
+      font-size: var(--bf-appearance-token-font-size-xs);
+    }
+
+    &.is-assistant-session {
+      height: 42px;
+    }
+  }
+
+  &__inline-item-label {
+    font-weight: 400;
+    line-height: 1.25;
+  }
+
+  &__inline-item-assistant-name,
+  &__inline-item-workspace-name {
+    @include nav-font.nav-panel-text-meta;
+
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    line-height: 1.2;
+  }
+
+  &__inline-toggle {
+    height: 28px;
+    @include nav-font.nav-panel-text-meta;
+
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: 1.25;
+
+    &:hover,
+    &:focus-visible {
+      @include nav-font.nav-panel-text-body;
+    }
+  }
+
+  &__inline-item-action-btn,
+  &__inline-item-edit-btn {
+    @include nav-font.nav-panel-text-icon;
+  }
+}

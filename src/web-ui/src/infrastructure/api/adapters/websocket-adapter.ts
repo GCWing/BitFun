@@ -16,6 +16,8 @@ import type {
   ResetAgentProfileConfigMessage,
   ResetAgentProfileConfigResponse,
   RunResponse,
+  SearchSessionContentMessage,
+  SearchSessionContentResponse,
   SetAgentProfileConfigMessage,
   SetAgentProfileConfigResponse,
   SubmitDialogTurnBody,
@@ -90,6 +92,11 @@ export const AGENT_COMMAND_SCHEMA = {
   cancel_dialog_turn: {
     method: 'agent/cancelTurn',
     response: null as unknown as RunResponse,
+  },
+  search_session_content: {
+    method: 'search/sessionContent',
+    request: null as unknown as SearchSessionContentMessage,
+    response: null as unknown as SearchSessionContentResponse,
   },
   // Permission surface: the reply/list/grants operations map to the app-server
   // permission methods. `subscribe_permission_requests` has no direct

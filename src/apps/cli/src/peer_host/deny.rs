@@ -129,6 +129,9 @@ pub(crate) fn is_local_only_command(command: &str) -> bool {
 }
 
 pub(crate) fn is_cli_unsupported_command(command: &str) -> bool {
+    if command == "search_session_content" {
+        return false;
+    }
     if CLI_UNSUPPORTED_EXACT.contains(&command) {
         return true;
     }
@@ -148,7 +151,13 @@ pub(crate) fn is_cli_unsupported_command(command: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_local_only_command;
+    use super::{is_cli_unsupported_command, is_local_only_command};
+
+    #[test]
+    fn session_content_search_executes_on_the_peer_host() {
+        assert!(!is_cli_unsupported_command("search_session_content"));
+        assert!(is_cli_unsupported_command("search_files"));
+    }
 
     #[test]
     fn outbound_dispatch_control_plane_stays_local_only() {

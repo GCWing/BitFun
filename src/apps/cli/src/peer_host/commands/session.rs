@@ -12,6 +12,7 @@ use bitfun_agent_runtime::sdk::{
 use bitfun_core::agentic::core::Session;
 use bitfun_core::agentic::get_agent_registry;
 use bitfun_core::util::errors::BitFunError;
+use bitfun_product_domains::product_search::SessionContentSearchRequest;
 use bitfun_runtime_ports::{
     AgentSessionArchiveRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
     AgentSessionModeUpdateRequest, AgentSessionRenameRequest, AgentThreadGoalGetRequest,
@@ -182,6 +183,27 @@ pub(crate) async fn list_persisted_sessions_count(
         .await
         .map_err(|e| format!("Failed to count persisted sessions: {e}"))?;
     Ok(json!(list.len()))
+}
+
+pub(crate) async fn search_session_content(
+    state: &PeerHostState,
+    args: &Value,
+) -> Result<Value, String> {
+    let request = request_value(args);
+    let search_request: SessionContentSearchRequest = serde_json::from_value(request.clone())
+        .map_err(|error| format!("Invalid session content search request: {error}"))?;
+    let workspace_path = resolved_session_storage_path(state, request).await?;
+    let response = state
+        .compatibility
+        .search_persisted_session_content(
+            &workspace_path,
+            &search_request.query,
+            search_request.normalized_limit(),
+            search_request.include_archived,
+        )
+        .await
+        .map_err(|error| format!("Failed to search persisted session content: {error}"))?;
+    serde_json::to_value(response).map_err(|error| format!("serialize search response: {error}"))
 }
 
 pub(crate) async fn load_session_turns(

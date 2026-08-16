@@ -5,7 +5,6 @@ export const welcomePanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'root', propertyProfile: 'layout', visualRole: 'workspace' },
     { id: 'content', visualRole: 'card' },
     { id: 'greeting', visualRole: 'content' },
-    { id: 'mascot', propertyProfile: 'paint', visualRole: 'decoration' },
     { id: 'heading', propertyProfile: 'paint', visualRole: 'content' },
     { id: 'tagline', propertyProfile: 'paint', visualRole: 'content' },
     { id: 'divider', propertyProfile: 'paint', visualRole: 'divider' },

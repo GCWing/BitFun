@@ -7,7 +7,9 @@ import {
   deriveWorkspaceSessionSource,
   deriveWorkspaceSessionStatus,
   deriveWorkspaceSessionWorktree,
+  getNextWorkspaceSessionGrouping,
   matchesWorkspaceSessionView,
+  normalizeWorkspaceSessionGrouping,
 } from './workspaceSessionView';
 
 const session = (overrides: Partial<Session>): Session => ({
@@ -26,6 +28,18 @@ const session = (overrides: Partial<Session>): Session => ({
 } as Session);
 
 describe('workspace session view model', () => {
+  it('toggles between unified groups and the flat all-session view', () => {
+    expect(getNextWorkspaceSessionGrouping('grouped')).toBe('all');
+    expect(getNextWorkspaceSessionGrouping('all')).toBe('grouped');
+  });
+
+  it('migrates legacy workspace grouping to the unified grouped view', () => {
+    expect(normalizeWorkspaceSessionGrouping('workspace')).toBe('grouped');
+    expect(normalizeWorkspaceSessionGrouping('grouped')).toBe('grouped');
+    expect(normalizeWorkspaceSessionGrouping('all')).toBe('all');
+    expect(normalizeWorkspaceSessionGrouping(undefined)).toBe('grouped');
+  });
+
   it('sorts by update time, status, creation time, and title', () => {
     const running = session({ sessionId: 'running', title: 'Zulu', createdAt: 10, updatedAt: 40 });
     const newer = session({ sessionId: 'newer', title: 'Alpha', createdAt: 20, updatedAt: 30 });

@@ -11,6 +11,7 @@ mod events;
 mod git;
 mod i18n;
 mod permission;
+mod search;
 mod session;
 
 pub use agent::*;
@@ -20,4 +21,5 @@ pub use events::*;
 pub use git::*;
 pub use i18n::*;
 pub use permission::*;
+pub use search::*;
 pub use session::*;

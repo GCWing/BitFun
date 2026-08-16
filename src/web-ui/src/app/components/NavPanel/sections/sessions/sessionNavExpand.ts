@@ -19,6 +19,34 @@ export interface SessionExpandToggleState {
   shouldRender: boolean;
 }
 
+export function getSessionDisplayLimit(params: {
+  loadedTopLevelCount: number;
+  expandLevel: SessionExpandLevel;
+  level2DisplayCount: number;
+  showAllWithoutLimit: boolean;
+}): number {
+  const {
+    loadedTopLevelCount,
+    expandLevel,
+    level2DisplayCount,
+    showAllWithoutLimit,
+  } = params;
+
+  if (showAllWithoutLimit) {
+    return loadedTopLevelCount;
+  }
+  if (expandLevel === 2) {
+    return Math.min(loadedTopLevelCount, level2DisplayCount);
+  }
+  if (loadedTopLevelCount <= SESSIONS_LEVEL_0) {
+    return loadedTopLevelCount;
+  }
+  if (expandLevel === 1) {
+    return Math.min(loadedTopLevelCount, SESSIONS_LEVEL_1);
+  }
+  return SESSIONS_LEVEL_0;
+}
+
 export function getEffectiveTopLevelSessionCount(
   metadataTotalTopLevelCount: number | null,
   syncedTopLevelCount: number | null,

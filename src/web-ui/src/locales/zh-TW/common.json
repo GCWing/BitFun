@@ -35,13 +35,13 @@
     "clarificationBatchCompleted": "批量澄清處理完成"
   },
   "header": {
-    "openProject": "開啟工作區",
-    "newProject": "新增工作區",
+    "openProject": "開啟項目",
+    "newProject": "新增項目",
     "goHome": "返回首頁",
     "about": "關於",
     "openMenu": "開啟菜單",
     "closeMenu": "關閉菜單",
-    "selectProjectDirectory": "選擇要開啟的工作區目錄",
+    "selectProjectDirectory": "選擇要開啟的項目目錄",
     "configCenter": "設定中心",
     "expandLeftPanel": "展開左側面板",
     "collapseLeftPanel": "收起左側面板",
@@ -59,8 +59,8 @@
     "hideAgentic": "隱藏 Agentic",
     "activateAgentic": "激活 Agentic",
     "switchWorkspace": "切換工作區",
-    "recentWorkspaces": "最近工作區",
-    "noRecentWorkspaces": "暫無最近工作區",
+    "recentWorkspaces": "最近項目",
+    "noRecentWorkspaces": "暫無最近項目",
     "noWorkspaceOpen": "選擇工作區",
     "remoteConnectRequiresWorkspace": "請先開啟工作區再使用遠端控制。"
   },
@@ -75,8 +75,9 @@
     "forwardShortcut": "前進 (Alt+→)",
     "items": {
       "sessions": "會話",
-      "project": "目錄",
+      "project": "項目",
       "persona": "智能成員",
+      "assistant": "智能助理",
       "longTermTracking": "長期跟蹤",
       "agents": "專業智能體",
       "skills": "技能",
@@ -95,7 +96,8 @@
       "skills": "它懂什麼專項知識 — 技能知識檔案",
       "ecosystemCompatibility": "生態兼容 — 管理其他 AI 應用的兼容能力與擴展",
       "tools": "它能用什麼工具 — 內置工具與 MCP 服務",
-      "addWorkspace": "新增工作區"
+      "addWorkspace": "新增工作區",
+      "addSessionGroup": "新增項目或個人助理"
     },
     "sections": {
       "extensions": "擴展與兼容",
@@ -106,15 +108,88 @@
       "longTermTrackingComingSoon": "長期跟蹤正在開發中"
     },
     "search": {
-      "triggerPlaceholder": "搜尋...",
+      "triggerPlaceholder": "搜尋一切",
       "triggerTooltip": "搜尋 (Ctrl+K、Alt+F)",
-      "inputPlaceholder": "搜尋工作區、助理、會話...",
-      "groupWorkspaces": "已開啟工作區",
+      "dialogLabel": "全域搜尋",
+      "inputLabel": "搜尋 BitFun",
+      "inputPlaceholder": "搜尋任何內容，或輸入 > 尋找命令",
+      "resultsLabel": "搜尋結果",
+      "clear": "清除搜尋",
+      "groupWorkspaces": "項目",
       "groupAssistants": "助理",
       "groupSessions": "所有會話",
       "empty": "未找到相關結果",
-      "sessionSearchHintDefault": "輸入關鍵詞，搜尋已開啟工作區內的會話",
-      "sessionWorkspaceHint": "位於 {{workspace}}"
+      "searching": "正在搜尋…",
+      "partialUnavailable": "部分搜尋來源目前不可用",
+      "typeMoreForContent": "至少輸入兩個字元以搜尋檔案與內容",
+      "sessionSearchHintDefault": "輸入關鍵詞，搜尋所有會話",
+      "sessionWorkspaceHint": "位於 {{workspace}}",
+      "resultCount": "{{count}} 個",
+      "back": "返回",
+      "backToOverview": "返回搜尋概覽",
+      "openGroup": "查看全部{{group}}，共 {{count}} 個",
+      "scopes": {
+        "all": "全部",
+        "actions": "命令",
+        "content": "內容"
+      },
+      "groups": {
+        "actions": "命令",
+        "frequentActions": "常用命令",
+        "messages": "訊息",
+        "sessions": "會話",
+        "files": "檔案",
+        "workspaces": "項目",
+        "assistants": "助理",
+        "settings": "$t(shared:features.settings)"
+      },
+      "actions": {
+        "newSession": "新增會話",
+        "openBrowser": "開啟瀏覽器",
+        "openTerminal": "開啟終端機",
+        "openProject": "開啟項目",
+        "newProject": "新增項目",
+        "openFiles": "開啟檔案",
+        "openAgents": "開啟智能體",
+        "openSkills": "開啟技能",
+        "openMiniApps": "開啟 Mini Apps",
+        "openTodos": "開啟待辦",
+        "openInsights": "開啟洞察",
+        "openSettings": "開啟設定",
+        "openKeyboardShortcuts": "開啟鍵盤快速鍵",
+        "openExternalSources": "開啟擴展與兼容"
+      },
+      "actionDescriptions": {
+        "newSession": "透過統一會話流程開始新對話",
+        "openBrowser": "在目前工作上下文中開啟瀏覽器",
+        "openTerminal": "開啟項目的持久化 Shell",
+        "openProject": "選擇並開啟本機或對端裝置上的項目",
+        "newProject": "從範本或空白工作區建立項目",
+        "openFiles": "瀏覽和編輯目前項目檔案",
+        "openAgents": "管理已安裝和自訂智能體",
+        "openSkills": "瀏覽和管理可重用技能",
+        "openMiniApps": "開啟 Mini App 庫",
+        "openTodos": "查看任務與後續工作",
+        "openInsights": "查看活動與使用洞察",
+        "openSettings": "設定 BitFun",
+        "openKeyboardShortcuts": "查看和自訂鍵盤快速鍵",
+        "openExternalSources": "管理外部 AI 應用與兼容能力"
+      },
+      "badges": {
+        "userMessage": "你",
+        "assistantMessage": "助理"
+      },
+      "footer": {
+        "navigate": "選擇",
+        "open": "開啟",
+        "back": "返回",
+        "close": "關閉"
+      },
+      "errors": {
+        "activationFailed": "無法開啟該結果",
+        "remoteFileSearchUnavailable": "遠端項目 {{workspace}} 暫不支援檔案搜尋",
+        "sessionUnavailable": "該會話已不可用"
+      }
     },
     "githubStar": {
       "label": "Star",
@@ -191,12 +266,19 @@
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "noSessions": "暫無會話",
+      "viewToggle": {
+        "label": "會話顯示方式",
+        "all": "全部",
+        "grouped": "分組",
+        "allTooltip": "將所有會話顯示為一個列表",
+        "groupedTooltip": "按項目和助理組織會話"
+      },
       "viewMenu": {
         "title": "會話檢視",
         "tooltip": "組織與篩選會話",
         "grouping": {
           "label": "分組",
-          "workspace": "$t(shared:features.workspace)",
+          "grouped": "項目與助理",
           "all": "全部會話"
         },
         "ordering": {
@@ -258,6 +340,7 @@
       "cancelEdit": "取消",
       "loading": "載入中...",
       "loadFailedRetry": "會話載入失敗 — 重試",
+      "partialLoadFailedRetry": "部分工作區的會話未載入 — 重試",
       "showMore": "還有 {{count}} 個會話",
       "showAll": "還有 {{count}} 個（展開全部）",
       "showLess": "收起",
@@ -431,8 +514,9 @@
     },
     "workspaces": {
       "empty": "暫無已開啟工作區",
-      "emptyProjects": "暫無普通工作區",
+      "emptyProjects": "暫無項目",
       "emptyAssistants": "暫無個人助理",
+      "emptySessionGroups": "暫無項目或助理",
       "primaryAssistant": "主助理",
       "closeFailed": "關閉工作區失敗",
       "createAssistantFailed": "新增個人助理失敗",
@@ -440,7 +524,7 @@
       "assistantDeleted": "已刪除個人助理",
       "resetWorkspaceFailed": "重設工作區失敗",
       "workspaceReset": "已重設工作區",
-      "reorderFailed": "調整工作區順序失敗",
+      "reorderFailed": "調整會話分組順序失敗",
       "dropBefore": "鬆開後插入到此項前",
       "dropAfter": "鬆開後插入到此項後",
       "revealFailed": "開啟工作區目錄失敗",
@@ -455,11 +539,11 @@
       "expandSessions": "展開會話列表",
       "collapseSessions": "收起會話列表",
       "groups": {
-        "projects": "普通工作區",
-        "assistants": "個人助理"
+        "projects": "項目",
+        "assistants": "助理"
       },
       "remote": {
-        "tooltip": "遠端工作區 · {{connection}}（{{host}}）\n連線狀態：{{status}}",
+        "tooltip": "遠端項目 · {{connection}}（{{host}}）\n連線狀態：{{status}}",
         "ariaLabel": "遠端連線 {{connection}}，{{status}}",
         "status": {
           "connected": "已連線",
@@ -481,7 +565,7 @@
         "rename": "重新命名專案",
         "copyPath": "複製路徑",
         "reveal": "在資源管理器中開啟",
-        "close": "關閉工作區"
+        "close": "關閉項目"
       },
       "renameDialog": {
         "title": "重新命名專案",
@@ -1406,7 +1490,7 @@
   "ssh": {
     "remote": {
       "title": "遠程 SSH",
-      "connect": "連接遠程工作區",
+      "connect": "連接遠程項目",
       "connecting": "連接中...",
       "connected": "已連接",
       "disconnect": "斷開連接",

@@ -31,6 +31,7 @@ describe('resolveWsMethod', () => {
     // `policy` -- see `agentic_api.rs::start_dialog_turn` for the desktop path.
     expect(resolveWsMethod('start_dialog_turn')).toBe('agent/submitDialogTurn');
     expect(resolveWsMethod('cancel_dialog_turn')).toBe('agent/cancelTurn');
+    expect(resolveWsMethod('search_session_content')).toBe('search/sessionContent');
     // Permission surface: reply/list/grants map to the app-server permission
     // methods. `subscribe_permission_requests` is satisfied by the
     // `permission://event` push in web mode; mapping it to list fetches the
@@ -146,7 +147,7 @@ describe('resolveWsMethod', () => {
     expect(AGENT_COMMAND_SCHEMA.start_dialog_turn.method).toBe(
       'agent/submitDialogTurn'
     );
-    expect(Object.keys(AGENT_COMMAND_SCHEMA).length).toBe(34);
+    expect(Object.keys(AGENT_COMMAND_SCHEMA).length).toBe(35);
 
     // Touch the locals so noUnusedLocals does not flag them under vitest's
     // transformed build (tsc --noEmit is the real gate; this is belt-and-suspenders).

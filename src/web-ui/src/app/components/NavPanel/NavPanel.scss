@@ -555,6 +555,7 @@ $_section-header-height: 24px;
     max-width: 100%;
     overflow-y: auto;
     overflow-x: hidden;
+    overscroll-behavior: contain;
     // No padding-top: separation from top-actions is only .bitfun-nav-panel__top-actions padding-bottom.
     // Top padding here stacked with that and read as “extra” gap above the first section header.
     padding: 0 0 $size-gap-3 0;
@@ -575,6 +576,40 @@ $_section-header-height: 24px;
   // ──────────────────────────────────────────────
   // Section
   // ──────────────────────────────────────────────
+
+  &__sticky-section-sentinel {
+    display: block;
+    width: 1px;
+    height: 1px;
+    margin-bottom: -1px;
+    pointer-events: none;
+  }
+
+  &__sticky-section-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    isolation: isolate;
+    width: 100%;
+    min-width: 0;
+    background: var(--bf-appearance-token-color-bg-primary);
+
+    &::after {
+      content: '';
+      position: absolute;
+      right: 6px;
+      bottom: 0;
+      left: 6px;
+      height: 0;
+      border-bottom: 1px dashed var(--bf-appearance-token-border-subtle);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    &.is-stuck::after {
+      opacity: 1;
+    }
+  }
 
   &__section-header {
     display: flex;
@@ -641,10 +676,9 @@ $_section-header-height: 24px;
     padding: $size-gap-1 $size-gap-2 $size-gap-1;
   }
 
-  &__miniapp-footer {
-    flex: 1;
+  &__miniapp-navigation {
+    width: 100%;
     min-width: 0;
-    padding: 0;
   }
 
   &__pages-entry {
@@ -758,7 +792,7 @@ $_section-header-height: 24px;
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    padding: 8px 10px 8px 12px;
+    padding: 8px 10px 8px $size-gap-2;
     border: 1px solid transparent;
     border-radius: 10px;
     background: transparent;
@@ -817,23 +851,24 @@ $_section-header-height: 24px;
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: $size-gap-2;
     flex: 1;
+  }
+
+  &__miniapp-entry-icon {
+    // Share the top-action icon column so Mini App and Extensions stay aligned.
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    color: inherit;
   }
 
   &__miniapp-entry-copy {
     min-width: 0;
     display: inline;
-    position: relative;
-  }
-
-  &__miniapp-badge {
-    position: absolute;
-    top: 0;
-    right: -36px;
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    padding: 1px 5px;
-    border-radius: 4px;
   }
 
   &__miniapp-entry-title {
@@ -1666,6 +1701,8 @@ $_section-header-height: 24px;
   display: flex;
   align-items: center;
   gap: $size-gap-1;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .bitfun-nav-panel__footer-right {
@@ -1677,6 +1714,63 @@ $_section-header-height: 24px;
 
 .bitfun-nav-panel__footer-btn {
   flex-shrink: 0;
+}
+
+.bitfun-nav-panel__footer-device-status {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-1;
+  flex: 1 1 72px;
+  min-width: 28px;
+  max-width: 112px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-muted);
+  cursor: pointer;
+  font-size: var(--bf-appearance-token-font-size-xs);
+  transition: color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard;
+
+  > svg {
+    flex-shrink: 0;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-soft);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline-offset: -1px;
+  }
+}
+
+.bitfun-nav-panel__footer-device-status-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bitfun-nav-panel__footer-device-status-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--bf-appearance-token-border-medium);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.bitfun-nav-panel__footer-device-status.is-connected {
+  .bitfun-nav-panel__footer-device-status-dot {
+    border-color: var(--bf-appearance-token-color-success);
+    background: var(--bf-appearance-token-color-success);
+  }
 }
 
 // Footer notification: yellow only when there are unread messages (BellDot)
@@ -2191,10 +2285,13 @@ $_section-header-height: 24px;
 // ── Nav workspace search ─────────────────────────
 
 .bitfun-nav-panel__brand-header {
+  position: relative;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   padding: 0 $size-gap-2 $size-gap-1;
   flex-shrink: 0;
+  background: var(--bf-appearance-token-color-bg-primary);
 }
 
 .bitfun-nav-panel__brand-search {
@@ -2211,7 +2308,7 @@ $_section-header-height: 24px;
   min-width: 0;
 }
 
-.bitfun-nav-panel__todo-entry {
+.bitfun-nav-panel__utility-action {
   flex: 0 0 auto;
   width: 34px;
   min-width: 34px;
@@ -2229,8 +2326,7 @@ $_section-header-height: 24px;
               border-color $motion-fast $easing-standard,
               color $motion-fast $easing-standard;
 
-  &:hover,
-  &.is-active {
+  &:hover {
     background: var(--bf-appearance-token-element-bg-medium);
     border-color: var(--bf-appearance-token-border-medium);
     color: var(--bf-appearance-token-color-text-primary);
@@ -2263,21 +2359,30 @@ $_section-header-height: 24px;
 // ── Top action strip ─────────────────────────────
 
 .bitfun-nav-panel__top-actions {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 1px;
   padding: $size-gap-2 $size-gap-2 calc(#{$size-gap-4} * 0.75);
   flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100vw;
+    border-bottom: 1px dashed var(--bf-appearance-token-border-subtle);
+    pointer-events: none;
+  }
 }
 
 .bitfun-nav-panel__top-action-expand {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  // Divider below 扩展 (main row + optional Agents / Skills sublist) → scrollable sections
-  padding-bottom: $size-gap-2;
-  margin-bottom: $size-gap-1;
-  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  width: 100%;
+  min-width: 0;
 }
 
 .bitfun-nav-panel__top-action-sublist {
@@ -2291,8 +2396,15 @@ $_section-header-height: 24px;
               opacity 0.15s $easing-standard;
 
   &.is-open {
-    max-height: 72px;
+    max-height: 104px;
     opacity: 1;
+  }
+}
+
+.bitfun-nav-panel__session-view-toggle {
+  > svg {
+    display: block;
+    flex: 0 0 auto;
   }
 }
 
@@ -2460,7 +2572,6 @@ $_section-header-height: 24px;
     gap: 2px;
     padding: 5px 6px $size-gap-3;
     margin-bottom: $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &__smart-members-content {
@@ -2621,8 +2732,6 @@ $_section-header-height: 24px;
 
   &__top-action-expand {
     gap: 2px;
-    margin-bottom: $size-gap-1;
-    padding-bottom: $size-gap-2;
   }
 
   &__top-action-sublist {
@@ -2789,14 +2898,6 @@ $_section-header-height: 24px;
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
-  &__bottom-extension {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    width: 100%;
-    min-width: 0;
-  }
-
   &__pages-entry,
   &__assistant-entry,
   &__miniapp-entry {
@@ -2879,7 +2980,6 @@ $_section-header-height: 24px;
 .bitfun-nav-panel__footer {
   min-height: 36px;
   padding: 4px 6px 0;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .bitfun-nav-panel__footer-btn--icon,
@@ -3006,5 +3106,130 @@ $_section-header-height: 24px;
   .bitfun-nav-panel__footer-menu,
   .bitfun-nav-panel__footer-multimodal-menu {
     animation: none;
+  }
+}
+
+// ──────────────────────────────────────────────
+// Navigation typography, tone, and reading rhythm
+// ──────────────────────────────────────────────
+// These are component-owned semantic roles. They keep custom appearances on
+// their own palette while giving the light navigation the neutral ink hierarchy
+// used by the product's reading surfaces.
+
+.bitfun-nav-panel {
+  @include nav-font.nav-panel-text-body;
+
+  line-height: 1.35;
+
+  &__search-trigger {
+    @include nav-font.nav-panel-text-meta;
+
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    min-width: 0;
+    height: 34px;
+    padding: 0 $size-gap-2;
+    border: 0;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: 400;
+    line-height: 1.25;
+    text-align: left;
+  }
+
+  &__search-trigger__label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__search-trigger__shortcut {
+    @include nav-font.nav-panel-text-meta;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-height: 18px;
+    padding: 0 5px;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-sm;
+    background: var(--bf-appearance-token-element-bg-subtle);
+    font-family: inherit;
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  &__search-trigger__icon,
+  &__utility-action,
+  &__section-indicator,
+  &__section-action,
+  &__item-action,
+  &__footer-btn--icon {
+    @include nav-font.nav-panel-text-icon;
+  }
+
+  &__section-header {
+    height: 28px;
+  }
+
+  &__section-label {
+    @include nav-font.nav-panel-text-meta;
+
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: 500;
+    letter-spacing: 0.015em;
+    line-height: 1.25;
+  }
+
+  &__section-header--bf-appearance-token-scene-entry &__section-label {
+    @include nav-font.nav-panel-text-heading;
+
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: 600;
+  }
+
+  &__top-action-btn,
+  &__item,
+  &__pages-entry,
+  &__assistant-entry,
+  &__miniapp-entry {
+    @include nav-font.nav-panel-text-body;
+
+    font-size: var(--bf-appearance-token-font-size-sm);
+    line-height: 1.25;
+  }
+
+  &__top-action-btn:hover,
+  &__top-action-btn:focus-visible,
+  &__top-action-btn.is-active,
+  &__item:hover,
+  &__item:focus-visible,
+  &__item.is-active,
+  &__pages-entry:hover,
+  &__pages-entry.is-active,
+  &__assistant-entry:hover,
+  &__assistant-entry.is-active,
+  &__miniapp-entry:hover,
+  &__miniapp-entry.is-active {
+    @include nav-font.nav-panel-text-heading;
+  }
+
+  &__assistant-entry-label,
+  &__miniapp-entry-title {
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: 500;
+    line-height: 1.25;
+  }
+
+  &__count-badge,
+  &__item-badge,
+  &__remote-disclaimer-text {
+    @include nav-font.nav-panel-text-meta;
   }
 }

@@ -16,6 +16,7 @@ async-trait = { workspace = true, optional = true }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 bitfun-events = { path = "../../contracts/events", optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
+bitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
 tokio = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -145,6 +146,12 @@ permission = [
     "dep:rusqlite",
     "dep:tokio",
     "bitfun-runtime-ports/permission",
+    "tokio/rt",
+]
+session-search = [
+    "dep:bitfun-product-domains",
+    "dep:rusqlite",
+    "dep:tokio",
     "tokio/rt",
 ]
 dispatch-workspace = ["dep:anyhow", "dep:sha2"]

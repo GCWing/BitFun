@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { Session } from '@/flow_chat/types/flow-chat';
 
-export type WorkspaceSessionGrouping = 'workspace' | 'all';
+export type WorkspaceSessionGrouping = 'grouped' | 'all';
 export type WorkspaceSessionOrdering = 'updated' | 'status' | 'created' | 'name';
 export type WorkspaceSessionShow = 'all' | 'unread' | 'attention';
 export type WorkspaceSessionStatus = 'running' | 'attention' | 'error' | 'completed' | 'idle';
@@ -48,11 +48,18 @@ export const DEFAULT_WORKSPACE_SESSION_FILTERS: WorkspaceSessionFilters = {
 };
 
 export const DEFAULT_WORKSPACE_SESSION_VIEW: WorkspaceSessionViewPreferences = {
-  grouping: 'workspace',
+  grouping: 'grouped',
   ordering: 'updated',
   show: 'all',
   filters: DEFAULT_WORKSPACE_SESSION_FILTERS,
 };
+
+export const getNextWorkspaceSessionGrouping = (
+  grouping: WorkspaceSessionGrouping,
+): WorkspaceSessionGrouping => grouping === 'grouped' ? 'all' : 'grouped';
+
+export const normalizeWorkspaceSessionGrouping = (value: unknown): WorkspaceSessionGrouping =>
+  value === 'all' ? 'all' : 'grouped';
 
 const toggleArrayValue = <T extends string>(values: T[], value: T): T[] =>
   values.includes(value) ? values.filter(item => item !== value) : [...values, value];
@@ -85,9 +92,18 @@ export const useWorkspaceSessionViewStore = create<WorkspaceSessionViewState>()(
     }),
     {
       name: 'bitfun.workspace-session-view.v2',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: ({ grouping, ordering, show, filters }) => ({ grouping, ordering, show, filters }),
+      migrate: (persistedState: unknown) => {
+        const state = persistedState && typeof persistedState === 'object'
+          ? persistedState as Partial<WorkspaceSessionViewState> & { grouping?: unknown }
+          : {};
+        return {
+          ...state,
+          grouping: normalizeWorkspaceSessionGrouping(state.grouping),
+        } as WorkspaceSessionViewState;
+      },
     },
   ),
 );

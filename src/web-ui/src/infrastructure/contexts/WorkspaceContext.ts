@@ -1,6 +1,11 @@
  
 import { createContext, useContext, useEffect } from 'react';
-import { workspaceManager, WorkspaceState, WorkspaceEvent } from '../services/business/workspaceManager';
+import {
+  workspaceManager,
+  WorkspaceState,
+  WorkspaceEvent,
+  type WorkspaceSection,
+} from '../services/business/workspaceManager';
 import { WorkspaceInfo, WorkspaceKind } from '../../shared/types';
 
 export const getWorkspaceDisplayName = (workspace: WorkspaceInfo | null): string => {
@@ -30,7 +35,7 @@ export interface WorkspaceContextValue extends WorkspaceState {
   switchWorkspace: (workspace: WorkspaceInfo) => Promise<WorkspaceInfo>;
   setActiveWorkspace: (workspaceId: string) => Promise<WorkspaceInfo>;
   reorderOpenedWorkspacesInSection: (
-    section: 'assistants' | 'projects',
+    section: WorkspaceSection,
     sourceWorkspaceId: string,
     targetWorkspaceId: string,
     position: 'before' | 'after'

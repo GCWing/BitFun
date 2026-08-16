@@ -133,7 +133,13 @@ async fn main() -> Result<()> {
     // runtime events to the frontend shape before pushing them to the browser.
     let event_source =
         bitfun_agent_runtime::sdk::AgentEventSource::new(server_state.event_queue.clone());
-    let bitfun_app_server = app_server::build(agent_runtime, event_source);
+    let product_search = Arc::new(
+        bitfun_core::product_runtime::CoreAgentRuntimeCompatibility::build(
+            server_state.coordinator.clone(),
+            server_state.scheduler.clone(),
+        ),
+    );
+    let bitfun_app_server = app_server::build(agent_runtime, event_source, product_search);
 
     tracing::info!(
         "App-server ready; each WebSocket connection drives one in-process serve over native JSON-RPC"

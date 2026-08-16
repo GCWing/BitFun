@@ -32,6 +32,7 @@ path = "tests/terminal_process_contracts.rs"
 # Internal crates
 bitfun-core = { path = "../../crates/assembly/core", features = [
     "agent-runtime",
+    "product-search",
     "document-read",
     "subscription-auth",
     "remote-connect",

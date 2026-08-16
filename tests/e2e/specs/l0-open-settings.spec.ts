@@ -38,42 +38,12 @@ describe('L0 Settings Panel', () => {
 
       await browser.pause(1500);
 
-      // Settings is now in NavPanel footer menu (not header)
-      const moreBtn = await $('.bitfun-nav-panel__footer-btn--icon');
-      const moreBtnExists = await moreBtn.isExisting();
+      const settingsButton = await $('[data-testid="nav-footer-settings-item"]');
+      const settingsButtonVisible = await settingsButton.isDisplayed();
 
-      console.log('[L0] More options button found:', moreBtnExists);
-      expect(moreBtnExists).toBe(true);
-
-      // Click to open menu
-      await moreBtn.click();
-      await browser.pause(500);
-      await saveStepScreenshot('l0-settings-menu-opened');
-
-      // Find settings menu item
-      const menuItems = await $$('.bitfun-nav-panel__footer-menu-item');
-      console.log(`[L0] Found ${menuItems.length} menu items`);
-      expect(menuItems.length).toBeGreaterThan(0);
-
-      // Find the settings item (has Settings icon)
-      let settingsItem = null;
-      for (const item of menuItems) {
-        const html = await item.getHTML();
-        if (html.includes('Settings') || html.includes('settings')) {
-          settingsItem = item;
-          break;
-        }
-      }
-
-      expect(settingsItem).not.toBeNull();
-      console.log('[L0] Settings menu item found');
-
-      // Close menu
-      const backdrop = await $('.bitfun-nav-panel__footer-backdrop');
-      if (await backdrop.isExisting()) {
-        await backdrop.click();
-        await browser.pause(500);
-      }
+      console.log('[L0] Persistent settings button visible:', settingsButtonVisible);
+      expect(settingsButtonVisible).toBe(true);
+      await saveStepScreenshot('l0-settings-footer-entry');
     });
   });
 
@@ -81,26 +51,9 @@ describe('L0 Settings Panel', () => {
     it('should open and close settings panel', async function () {
       expect(hasWorkspace).toBe(true);
 
-      // Open more options menu
-      const moreBtn = await $('.bitfun-nav-panel__footer-btn--icon');
-      await moreBtn.click();
-      await browser.pause(500);
-
-      // Click settings menu item
-      const menuItems = await $$('.bitfun-nav-panel__footer-menu-item');
-      let settingsItem = null;
-      for (const item of menuItems) {
-        const html = await item.getHTML();
-        if (html.includes('Settings') || html.includes('settings')) {
-          settingsItem = item;
-          break;
-        }
-      }
-
-      expect(settingsItem).not.toBeNull();
-
       console.log('[L0] Opening settings...');
-      await settingsItem!.click();
+      const settingsButton = await $('[data-testid="nav-footer-settings-item"]');
+      await settingsButton.click();
       await browser.pause(2000);
 
       // Check for settings scene

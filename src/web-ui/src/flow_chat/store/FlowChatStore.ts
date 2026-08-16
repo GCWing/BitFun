@@ -6340,6 +6340,42 @@ export class FlowChatStore {
     );
   }
 
+  /**
+   * Ensure a search/deep-link target has a metadata projection before the
+   * canonical session activation flow runs. This deliberately loads one
+   * authoritative record instead of teaching callers how to synthesize a
+   * FlowChat Session from persistence DTOs.
+   */
+  public async ensurePersistedSessionMetadata(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+  ): Promise<boolean> {
+    if (this.state.sessions.has(sessionId)) {
+      return true;
+    }
+
+    const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
+    const metadata = await sessionAPI.loadSessionMetadata(
+      sessionId,
+      workspacePath,
+      remoteConnectionId,
+      remoteSshHost,
+    );
+    if (!metadata || metadata.status === 'archived') {
+      return false;
+    }
+
+    await this.processPersistedSessionMetadataList(
+      [metadata],
+      workspacePath,
+      remoteConnectionId,
+      remoteSshHost,
+    );
+    return this.state.sessions.has(sessionId);
+  }
+
   public async loadSessionMetadataPage(
     workspacePath: string,
     limit: number,

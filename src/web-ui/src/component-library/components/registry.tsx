@@ -40,6 +40,7 @@ import type { FlowToolItem, FlowThinkingItem } from '@/flow_chat/types/flow-chat
 import { TOOL_CARD_CONFIGS } from '@/flow_chat/tool-cards/toolCardMetadata';
 import { ModelThinkingDisplay } from '@/flow_chat/tool-cards/ModelThinkingDisplay';
 import { ReproductionStepsBlock } from '@components/Markdown/ReproductionStepsBlock';
+import { IconCatalogPreview } from '../preview/IconCatalogPreview';
 
 const previewTextSubtle = 'color-mix(in srgb, var(--bf-appearance-token-color-static-white) 60%, var(--bf-appearance-token-color-static-black))';
 const previewTextDisabled = 'color-mix(in srgb, var(--bf-appearance-token-color-static-white) 40%, var(--bf-appearance-token-color-static-black))';
@@ -266,6 +267,21 @@ export const componentRegistry: ComponentCategory[] = [
             </div>
           </div>
         ),
+      },
+    ],
+  },
+  {
+    id: 'iconography',
+    name: 'Iconography',
+    description: 'BitFun semantic icon catalog and actual navigation-size samples',
+    layoutType: 'large-card',
+    components: [
+      {
+        id: 'session-group-icons',
+        name: 'Session group icons',
+        description: 'Assistant, remote workspace, workspace and global-task group semantics',
+        category: 'iconography',
+        component: () => <IconCatalogPreview />,
       },
     ],
   },

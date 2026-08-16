@@ -29,6 +29,7 @@ import {
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
 import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
+import { shouldBlockBrowserShortcut } from './browserShortcutPolicy';
 
 const log = createLogger('App');
 
@@ -60,6 +61,8 @@ const LazyAppLayout = lazy(async () => {
     throw error;
   }
 });
+
+const LazyGlobalSearchRoot = lazy(() => import('./global-search/GlobalSearchRoot'));
 
 /**
  * BitFun main application component.
@@ -730,14 +733,14 @@ function App() {
     };
   }, []);
 
-  // Block browser-native Ctrl+F (find bar) and Ctrl+R (hard reload).
-  // On macOS the equivalent modifiers are Cmd+F / Cmd+R.
+  // Always block browser-native find. Page reload remains available while the
+  // frontend runs in dev mode and is blocked in release builds. The desktop
+  // host independently applies the matching Rust build-profile policy.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const primary = e.ctrlKey || e.metaKey;
       if (!primary) return;
-      const key = e.key.toLowerCase();
-      if (key === 'f' || key === 'r') {
+      if (shouldBlockBrowserShortcut(e.key, import.meta.env.DEV)) {
         e.preventDefault();
         e.stopPropagation();
       }
@@ -884,6 +887,11 @@ function App() {
       <ViewModeProvider defaultMode="coder">
         <SSHRemoteProvider>
           <ToolbarModeProvider>
+            {/* One shell-owned command/search surface for every scene and nav mode. */}
+            <Suspense fallback={null}>
+              <LazyGlobalSearchRoot />
+            </Suspense>
+
             {/* Unified app layout with startup/workspace modes */}
             <Suspense fallback={null}>
               <LazyAppLayout onReady={handleAppLayoutReady} />

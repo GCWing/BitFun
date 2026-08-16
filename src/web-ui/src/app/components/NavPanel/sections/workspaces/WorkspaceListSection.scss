@@ -218,7 +218,7 @@
   }
 
   &__workspace-item:not(.is-active) &__workspace-item-icon {
-    opacity: 0.65;
+    opacity: 1;
   }
 
   &__workspace-item.is-active &__workspace-item-icon {
@@ -393,11 +393,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
     color: inherit;
-    opacity: 0.85;
+    /* The row color already communicates inactive, hover, and active states.
+     * Compact one-pixel icon strokes must not be attenuated a second time. */
+    opacity: 1;
   }
 
   &__workspace-item-icon-default,
@@ -1152,8 +1154,9 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    min-height: 30px;
     border-radius: 6px;
-    color: var(--bf-appearance-token-color-text-secondary);
+    color: var(--bf-appearance-token-color-text-primary);
     background: var(--bf-appearance-token-color-bg-primary);
     overflow: hidden;
     transition: color $motion-fast $easing-standard,
@@ -1161,9 +1164,9 @@
                 box-shadow $motion-fast $easing-standard;
 
     &:hover {
-      .bitfun-nav-panel__assistant-item-avatar-letter {
+      .bitfun-nav-panel__assistant-item-group-icon {
         opacity: 0;
-        transform: scale(0.6);
+        transform: scale(0.7);
       }
 
       .bitfun-nav-panel__assistant-item-icon-toggle {
@@ -1175,6 +1178,7 @@
 
   &__assistant-item:not(.is-active) &__assistant-item-card {
     color: var(--bf-appearance-token-color-text-muted);
+    gap: 1px;
 
     &:hover {
       color: var(--bf-appearance-token-color-text-secondary);
@@ -1194,9 +1198,9 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: 44px;
-    min-height: 44px;
-    padding: 0;
+    width: 26px;
+    min-height: 30px;
+    padding: 0 0 0 4px;
     border: none;
     border-radius: 6px 0 0 6px;
     background: transparent;
@@ -1206,10 +1210,9 @@
     &:hover {
       background: color-mix(in srgb, var(--bf-appearance-token-element-bg-medium) 60%, transparent);
 
-      .bitfun-nav-panel__assistant-item-avatar-letter,
-      .bitfun-nav-panel__assistant-item-active-icon {
+      .bitfun-nav-panel__assistant-item-group-icon {
         opacity: 0;
-        transform: scale(0.6);
+        transform: scale(0.7);
       }
 
       .bitfun-nav-panel__assistant-item-icon-toggle {
@@ -1228,20 +1231,34 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 22%, transparent);
-    color: var(--bf-appearance-token-color-text-primary);
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    /* Match the compact workspace icons: semantic row color owns contrast. */
+    opacity: 1;
     overflow: hidden;
+
+    &.is-group-icon {
+      border-radius: 0;
+      background: transparent;
+    }
   }
 
-  &__assistant-item-avatar-letter {
-    font-size: var(--bf-appearance-token-font-size-base);
-    font-weight: 700;
-    line-height: 1;
-    text-transform: uppercase;
+  &__assistant-item:not(.is-active) &__assistant-item-avatar {
+    opacity: 1;
+  }
+
+  &__assistant-item.is-active &__assistant-item-avatar {
+    opacity: 1;
+  }
+
+  &__assistant-item-group-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: opacity $motion-fast $easing-standard,
                 transform $motion-fast $easing-standard;
     opacity: 1;
@@ -1275,8 +1292,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    min-height: 44px;
-    padding: 0 6px;
+    min-height: 30px;
+    padding: 0 4px;
     border: none;
     border-radius: 0 6px 6px 0;
     background: transparent;
@@ -1555,5 +1572,62 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-nav-panel__workspace-item-menu-popover {
     animation: none;
+  }
+}
+
+// Workspace and assistant rows follow the same hierarchy as session titles:
+// stronger names, quieter metadata, and a consistent 32px primary row.
+.bitfun-nav-panel {
+  &__workspace-group-title {
+    @include nav-font.nav-panel-text-meta;
+
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: 500;
+    letter-spacing: 0.015em;
+    line-height: 1.25;
+  }
+
+  &__workspace-item-card,
+  &__assistant-item-card,
+  &__workspace-item-collapse-btn,
+  &__assistant-item-collapse-btn,
+  &__workspace-item-name-btn,
+  &__assistant-item-name-btn {
+    min-height: 32px;
+  }
+
+  &__workspace-item:not(.is-active) &__workspace-item-card,
+  &__assistant-item:not(.is-active) &__assistant-item-card {
+    @include nav-font.nav-panel-text-icon;
+  }
+
+  &__workspace-item-label,
+  &__assistant-item-label {
+    @include nav-font.nav-panel-text-body;
+
+    font-size: var(--bf-appearance-token-font-size-sm);
+    font-weight: 500;
+    line-height: 1.25;
+  }
+
+  &__workspace-item.is-active &__workspace-item-label,
+  &__assistant-item.is-active &__assistant-item-label {
+    @include nav-font.nav-panel-text-heading;
+
+    font-weight: 600;
+  }
+
+  &__workspace-item-subtitle,
+  &__workspace-item-remote,
+  &__workspace-item-badge,
+  &__assistant-item-badge {
+    @include nav-font.nav-panel-text-meta;
+
+    font-size: var(--bf-appearance-token-font-size-2xs);
+  }
+
+  &__workspace-item-menu-trigger,
+  &__assistant-item-menu-trigger {
+    @include nav-font.nav-panel-text-icon;
   }
 }

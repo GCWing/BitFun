@@ -29,10 +29,11 @@ vi.mock('@/shared/notification-system', () => ({
   notificationService: notify,
 }));
 
-function filledBars(scope: ParentNode): number {
-  return scope.querySelectorAll(
-    '.bitfun-harness-selector__gauge-bar[data-filled="true"]',
-  ).length;
+function density(scope: ParentNode): number {
+  const mark = scope.querySelector<HTMLElement>(
+    '.bitfun-harness-selector__density-mark',
+  );
+  return Number(mark?.dataset.harnessDensity ?? 0);
 }
 
 describe('HarnessProfileSelector', () => {
@@ -54,7 +55,7 @@ describe('HarnessProfileSelector', () => {
     vi.clearAllMocks();
   });
 
-  it('reads the active gear from the gauge rather than from a color alone', async () => {
+  it('reads the active gear from a progressively denser mark rather than from color alone', async () => {
     await act(async () => {
       root.render(<HarnessProfileSelector selectedProfile="balanced" onSelectProfile={vi.fn()} />);
     });
@@ -63,7 +64,11 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(trigger?.dataset.harnessGear).toBe('2');
-    expect(filledBars(trigger!)).toBe(2);
+    expect(density(trigger!)).toBe(2);
+    expect(
+      trigger?.querySelector<HTMLElement>('.bitfun-harness-selector__density-mark')
+        ?.dataset.harnessProfile,
+    ).toBe('balanced');
     expect(trigger?.dataset.harnessPending).toBeUndefined();
     expect(
       container.querySelector('[data-testid="harness-profile-pending-dot"]'),
@@ -79,6 +84,7 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(trigger?.dataset.harnessGear).toBe('1');
+    expect(density(trigger!)).toBe(1);
     expect(trigger?.dataset.harnessPending).toBeUndefined();
     expect(
       container.querySelector('[data-testid="harness-profile-pending-dot"]'),
@@ -96,7 +102,11 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(trigger?.dataset.harnessGear).toBe('0');
-    expect(filledBars(trigger!)).toBe(0);
+    expect(density(trigger!)).toBe(0);
+    expect(
+      trigger?.querySelector<HTMLElement>('.bitfun-harness-selector__density-mark')
+        ?.dataset.harnessProfile,
+    ).toBe('unknown');
     expect(trigger?.textContent).toContain('chatInput.harness.unsupportedProfile');
   });
 
@@ -117,7 +127,7 @@ describe('HarnessProfileSelector', () => {
     ).toBe(true);
   });
 
-  it('offers the three gears with an ascending gauge and the promise each makes', async () => {
+  it('offers the three gears with ascending density and the promise each makes', async () => {
     await act(async () => {
       root.render(<HarnessProfileSelector selectedProfile="balanced" onSelectProfile={vi.fn()} />);
     });
@@ -134,9 +144,10 @@ describe('HarnessProfileSelector', () => {
       'balanced',
       'ultimate',
     ]);
-    expect(rows.map(row => filledBars(row))).toEqual([1, 2, 3]);
+    expect(rows.map(row => density(row))).toEqual([1, 2, 3]);
     for (const row of rows) {
       expect(row.querySelector('.bitfun-harness-selector__profile-promise')).not.toBeNull();
+      expect(row.querySelector('.bitfun-harness-selector__density-core')).not.toBeNull();
     }
     expect(rows[1]?.dataset.bfState).toBe('current');
   });
@@ -166,6 +177,50 @@ describe('HarnessProfileSelector', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectProfile).toHaveBeenCalledWith('minimal');
+    expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
+  });
+
+  it('keeps the menu inspectable after the Session starts but explains why another profile cannot be selected', async () => {
+    const onSelectProfile = vi.fn();
+    await act(async () => {
+      root.render(
+        <HarnessProfileSelector
+          sessionStarted
+          selectedProfile="balanced"
+          onSelectProfile={onSelectProfile}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="harness-profile-selector"]',
+    );
+    expect(trigger?.dataset.harnessLocked).toBe('true');
+    expect(trigger?.disabled).toBe(false);
+
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const menu = document.querySelector('.bitfun-harness-selector__menu');
+    expect(menu).not.toBeNull();
+    expect(
+      menu?.querySelector<HTMLElement>('[data-testid="harness-profile-minimal"]')
+        ?.dataset.bfState,
+    ).toBe('new-session-only');
+    expect(
+      menu?.querySelector<HTMLElement>('[data-testid="harness-profile-minimal"]')
+        ?.textContent,
+    ).toContain('chatInput.harness.newSessionOnly');
+
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelectProfile).not.toHaveBeenCalled();
+    expect(notify.info).toHaveBeenCalledWith(
+      'chatInput.harness.sessionStartedNotice',
+      { duration: 3800 },
+    );
     expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
   });
 

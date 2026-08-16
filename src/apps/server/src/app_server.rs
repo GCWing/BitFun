@@ -15,6 +15,7 @@
 
 use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
 use bitfun_app_server::{BitfunAppRuntime, BitfunAppServer};
+use std::sync::Arc;
 
 /// Build the in-process `BitfunAppServer` for the Server Host.
 ///
@@ -26,7 +27,12 @@ use bitfun_app_server::{BitfunAppRuntime, BitfunAppServer};
 /// The caller must keep the runtime services (coordinator, scheduler, ...) and
 /// the `EventQueue` the `event_source` was built from alive for as long as the
 /// [`BitfunAppServer`] is in use.
-pub(crate) fn build(runtime: AgentRuntime, event_source: AgentEventSource) -> BitfunAppServer {
-    let app_runtime = BitfunAppRuntime::new(runtime, event_source);
+pub(crate) fn build(
+    runtime: AgentRuntime,
+    event_source: AgentEventSource,
+    product_search: Arc<bitfun_core::product_runtime::CoreAgentRuntimeCompatibility>,
+) -> BitfunAppServer {
+    let app_runtime =
+        BitfunAppRuntime::new(runtime, event_source).with_product_search(product_search);
     BitfunAppServer::new(app_runtime)
 }

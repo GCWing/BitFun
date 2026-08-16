@@ -7,6 +7,8 @@ export const reasoningPresetSelectorAppearanceDescriptor: AppearanceSurfaceDescr
     { id: 'trigger' },
     { id: 'menu' },
     { id: 'header' },
+    { id: 'auto' },
+    { id: 'options' },
     { id: 'option' },
   ],
   states: [

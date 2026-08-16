@@ -54,8 +54,6 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   const sessionModeLower = (sessionMode || '').toLowerCase();
   const isCoworkSession = sessionModeLower === 'cowork';
   const isClawSession = sessionModeLower === 'claw';
-  // code sessions use mode='agentic'; cowork sessions use mode='cowork'
-  const showPanda = sessionModeLower !== 'code' && sessionModeLower !== 'agentic' && sessionModeLower !== 'cowork';
 
   const { document: identityDoc } = useAgentIdentityDocument(isClawSession ? workspacePath : '');
   const assistantName = isClawSession ? (identityDoc.name || '') : '';
@@ -225,12 +223,6 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
         {/* Greeting */}
         <div data-bf-component="welcome-panel" data-bf-part="greeting" className="welcome-panel__greeting">
           <div className="welcome-panel__greeting-inner">
-            {showPanda && (
-              <div data-bf-component="welcome-panel" data-bf-part="mascot" className="welcome-panel__panda" aria-hidden="true">
-                <img src="/panda_full_1.png" className="welcome-panel__panda-frame welcome-panel__panda-frame--1" alt="" />
-                <img src="/panda_full_2.png" className="welcome-panel__panda-frame welcome-panel__panda-frame--2" alt="" />
-              </div>
-            )}
             <div className="welcome-panel__greeting-text">
               <h1 data-bf-component="welcome-panel" data-bf-part="heading" className="welcome-panel__heading">
                 {greeting.title}，{t(aiPartnerKey)}{isClawSession && assistantName ? `，${assistantName}` : ''}

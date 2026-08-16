@@ -30,6 +30,7 @@ import {
 } from '../utils/composerPresentation';
 import type {
   AgentDialogTurnExecution,
+  SessionExecutionProfile,
   SessionPermissionMode,
 } from '@/infrastructure/api/service-api/AgentAPI';
 
@@ -38,6 +39,8 @@ const log = createLogger('FlowChat');
 interface UseMessageSenderProps {
   /** Current session ID */
   currentSessionId?: string;
+  /** Harness selection staged before the first Session exists. */
+  newSessionExecutionProfile?: SessionExecutionProfile;
   /** Context items */
   contexts: ContextItem[];
   /** Clear contexts callback */
@@ -87,6 +90,7 @@ interface UseMessageSenderReturn {
 export function useMessageSender(props: UseMessageSenderProps): UseMessageSenderReturn {
   const {
     currentSessionId,
+    newSessionExecutionProfile,
     contexts,
     onClearContexts,
     onSuccess,
@@ -141,9 +145,12 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
 
       if (!sessionId) {
         const agentType = currentAgentType || 'agentic';
+        const sessionConfig = flowChatSessionConfigForCurrentWorkspace();
 
         sessionId = await flowChatManager.createChatSession(
-          flowChatSessionConfigForCurrentWorkspace(),
+          newSessionExecutionProfile
+            ? { ...sessionConfig, executionProfile: newSessionExecutionProfile }
+            : sessionConfig,
           agentType,
         );
         agentTypeForSend =
@@ -279,6 +286,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     }
   }, [
     currentSessionId,
+    newSessionExecutionProfile,
     contexts,
     onClearContexts,
     onSuccess,

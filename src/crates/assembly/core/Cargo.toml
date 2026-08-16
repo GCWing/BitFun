@@ -144,6 +144,7 @@ ts = [
 ]
 product-full = [
     "agent-runtime",
+    "product-search",
     "document-read",
     "diagnostics",
     "diff",
@@ -243,6 +244,12 @@ agent-runtime = [
     "tokio/macros",
     "tokio/rt",
     "tokio/time",
+]
+product-search = [
+    "agent-runtime",
+    "dep:bitfun-product-domains",
+    "bitfun-runtime-ports/product-search",
+    "bitfun-services-core/session-search",
 ]
 # Backend Fluent translation state. Locale contracts and model-facing language
 # facts remain available without this runtime implementation.

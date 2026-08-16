@@ -112,7 +112,7 @@ fn external_management_error(capability: &str, error: ExternalSourceOperationErr
     )
 }
 
-fn error_with_data(
+pub(super) fn error_with_data(
     kind: AppServerErrorKind,
     capability: &str,
     message: impl Into<String>,

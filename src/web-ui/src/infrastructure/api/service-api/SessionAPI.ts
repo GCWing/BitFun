@@ -7,6 +7,13 @@ import type {
 } from '@/shared/types/session-history';
 import { normalizeRemoteSessionScope } from '@/shared/utils/remoteSessionScope';
 
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'name' in error
+    && error.name === 'AbortError';
+}
+
 export type UiSessionMetadataField =
   | 'sessionName'
   | 'tags'
@@ -69,6 +76,49 @@ export interface SessionReferenceCandidate {
   remoteSshHost?: string;
   workspaceLabel: string;
   lastActivityAt: number;
+}
+
+export type SessionSearchHitKind = 'session' | 'message';
+
+export type SessionSearchMatchField =
+  | 'title'
+  | 'tags'
+  | 'user_message'
+  | 'assistant_message';
+
+export interface SessionSearchHit {
+  kind: SessionSearchHitKind;
+  matchedField: SessionSearchMatchField;
+  sessionId: string;
+  sessionTitle: string;
+  turnId?: string;
+  /** Zero-based visible Turn ordinal returned by the product-search service. */
+  turnIndex?: number;
+  snippet: string;
+  archived: boolean;
+  updatedAtMs: number;
+  score: number;
+}
+
+export interface SessionSearchDiagnostic {
+  code: 'session_unreadable' | 'session_index_stale';
+  sessionId?: string;
+  message: string;
+}
+
+export interface SessionContentSearchRequest {
+  workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  query: string;
+  limit?: number;
+  includeArchived?: boolean;
+}
+
+export interface SessionContentSearchResponse {
+  hits: SessionSearchHit[];
+  truncated: boolean;
+  diagnostics?: SessionSearchDiagnostic[];
 }
 
 export interface SessionUsageReportRequest {
@@ -237,6 +287,35 @@ function remoteSessionFields(
 }
 
 export class SessionAPI {
+  async searchSessionContent(
+    request: SessionContentSearchRequest,
+    signal?: AbortSignal,
+  ): Promise<SessionContentSearchResponse> {
+    try {
+      return await api.invoke('search_session_content', {
+        request: {
+          workspacePath: request.workspacePath,
+          ...(request.remoteConnectionId
+            ? { remoteConnectionId: request.remoteConnectionId }
+            : {}),
+          ...(request.remoteSshHost ? { remoteSshHost: request.remoteSshHost } : {}),
+          query: request.query,
+          limit: request.limit ?? 40,
+          includeArchived: request.includeArchived ?? false,
+        },
+      }, { signal });
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      throw createTauriCommandError('search_session_content', error, {
+        queryLength: Array.from(request.query).length,
+        remote: Boolean(request.remoteConnectionId || request.remoteSshHost),
+        includeArchived: request.includeArchived ?? false,
+      });
+    }
+  }
+
   async searchReferenceableSessions(
     query: string,
     limit = 30,

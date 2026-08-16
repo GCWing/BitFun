@@ -1,55 +1,53 @@
 /**
- * MainNav — default workspace navigation sidebar.
+ * MainNav — primary product navigation sidebar.
  *
  * Layout (top to bottom):
- *   1. Search and Todo
- *   2. New Session, Smart Members, and Long-term Tracking
- *   3. Workspace
- *   4. Bottom: Extensions & Compatibility, MiniApp
+ *   1. Search and New Session
+ *   2. AI Assistant, Mini Apps, then Extensions & Compatibility
+ *   3. Unified Sessions (all or grouped by project / assistant)
  *
  * When a scene-nav transition is active (`isDeparting=true`), items receive
  * positional CSS classes for the split-open animation effect.
  */
 
-import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, CalendarClock, ChevronDown, Goal, Network, Search } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, ChevronDown, Network, Search } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
-import { Tooltip } from '@/component-library';
+import {
+  BITFUN_ICON_SIZE,
+  NavigationExtensionsCompatibilityIcon,
+  NavigationSessionContextAddIcon,
+  Tooltip,
+} from '@/component-library';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { SceneTabId } from '../SceneBar/types';
 import SectionHeader from './components/SectionHeader';
-import AssistantSessionCreateMenu from './components/AssistantSessionCreateMenu';
+import StickySectionHeader from './components/StickySectionHeader';
+import WorkspaceSessionGroupingToggle from './components/WorkspaceSessionGroupingToggle';
 import WorkspaceSessionFilterMenu from './components/WorkspaceSessionFilterMenu';
 import MiniAppEntry from './components/MiniAppEntry';
 import WorkspaceListSection from './sections/workspaces/WorkspaceListSection';
-import SessionsSection from './sections/sessions/SessionsSection';
 import { useSceneStore } from '../../stores/sceneStore';
 import { useSettingsStore } from '../../scenes/settings/settingsStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
-import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
-import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
-import { notificationService } from '@/shared/notification-system';
-import { WorkspaceKind, isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
-import {
-  flowChatSessionConfigForWorkspace,
-  pickPrimaryAssistantWorkspace,
-} from '@/app/utils/projectSessionWorkspace';
+import { isRemoteWorkspace } from '@/shared/types';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { useSSHRemoteContext, SSHConnectionDialog, RemoteFileBrowser } from '@/features/ssh-remote';
-import NavSearchDialog from './NavSearchDialog';
-import { useShortcut } from '@/infrastructure/hooks/useShortcut';
-import { ALL_SHORTCUTS } from '@/shared/constants/shortcuts';
+import { openGlobalSearch } from '@/app/global-search/globalSearchStore';
+import { activateProductAction } from '@/app/global-search/productActionActivator';
+import {
+  getGlobalSearchShortcutLabel,
+  subscribeGlobalSearchShortcut,
+} from '@/app/global-search/globalSearchShortcut';
 
 import './NavPanel.scss';
-
-const NAV_TOGGLE_SEARCH_DEF = ALL_SHORTCUTS.find((d) => d.id === 'nav.toggleSearch')!;
 
 const log = createLogger('MainNav');
 
@@ -75,16 +73,18 @@ const MainNav: React.FC<MainNavProps> = ({
   const activeTabId = useSceneStore(s => s.activeTabId);
   const activeSettingsTab = useSettingsStore(s => s.activeTab);
   const { t } = useI18n('common');
+  const searchShortcutLabel = useSyncExternalStore(
+    subscribeGlobalSearchShortcut,
+    getGlobalSearchShortcutLabel,
+    getGlobalSearchShortcutLabel,
+  );
   // const { t: tPages } = useI18n('scenes/pages'); // temporarily hidden: Pages nav entry
   const {
     currentWorkspace,
     loading: workspaceLoading,
     recentWorkspaces,
     openedWorkspacesList,
-    assistantWorkspacesList,
-    primaryAssistantWorkspaceId,
     switchWorkspace,
-    setActiveWorkspace,
   } = useWorkspaceContext();
 
   useMiniAppCatalogSync({
@@ -99,16 +99,16 @@ const MainNav: React.FC<MainNavProps> = ({
 
   // Section expand state
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    () => new Set(['workspace'])
+    () => new Set(['sessions'])
   );
 
   const workspaceMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
+  const sectionsScrollRef = useRef<HTMLDivElement | null>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [workspaceMenuClosing, setWorkspaceMenuClosing] = useState(false);
   const [workspaceMenuPos, setWorkspaceMenuPos] = useState({ top: 0, left: 0 });
   const [isExtensionsOpen, setIsExtensionsOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
 
   const toggleSection = useCallback((id: string) => {
     setExpandedSections(prev => {
@@ -168,97 +168,22 @@ const MainNav: React.FC<MainNavProps> = ({
     void openWorkspaceMenu();
   }, [closeWorkspaceMenu, openWorkspaceMenu, workspaceMenuOpen]);
 
-  const primaryAssistantWorkspace = useMemo(
-    () => pickPrimaryAssistantWorkspace(assistantWorkspacesList, primaryAssistantWorkspaceId),
-    [assistantWorkspacesList, primaryAssistantWorkspaceId]
-  );
-
-  const orderedAssistantWorkspacesList = useMemo(
-    () => primaryAssistantWorkspace
-      ? [
-          primaryAssistantWorkspace,
-          ...assistantWorkspacesList.filter(workspace => workspace.id !== primaryAssistantWorkspace.id),
-        ]
-      : assistantWorkspacesList,
-    [assistantWorkspacesList, primaryAssistantWorkspace]
-  );
-
-  const toggleNavSearch = useCallback(() => {
-    setSearchOpen((v) => !v);
-  }, []);
-
-  useShortcut(
-    NAV_TOGGLE_SEARCH_DEF.id,
-    NAV_TOGGLE_SEARCH_DEF.config,
-    toggleNavSearch,
-    { priority: 5, description: NAV_TOGGLE_SEARCH_DEF.descriptionKey }
-  );
-
-  // Secondary binding (not listed separately in keyboard settings — same action as Mod+K)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        !e.altKey ||
-        e.ctrlKey ||
-        e.metaKey ||
-        e.shiftKey ||
-        e.key.toLowerCase() !== 'f'
-      ) {
-        return;
-      }
-      e.preventDefault();
-      toggleNavSearch();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [toggleNavSearch]);
-
-  const handleCreateAssistantSession = useCallback(async (workspace: WorkspaceInfo) => {
-    try {
-      const sessionId = await flowChatManager.createChatSession(
-        flowChatSessionConfigForWorkspace(workspace),
-        'Claw'
-      );
-      await openMainSession(sessionId, {
-        workspaceId: workspace.id,
-        activateWorkspace: setActiveWorkspace,
-      });
-    } catch (error) {
-      log.error('Failed to create assistant session', { workspaceId: workspace.id, error });
-      notificationService.error(
-        error instanceof Error ? error.message : t('nav.workspaces.createSessionFailed'),
-        { duration: 4000 }
-      );
-    }
-  }, [setActiveWorkspace, t]);
-
-  const handleCreatePrimaryAssistantSession = useCallback(async () => {
-    if (!primaryAssistantWorkspace) {
-      notificationService.warning(t('nav.workspaces.createSessionFailed'), { duration: 4000 });
-      return;
-    }
-    await handleCreateAssistantSession(primaryAssistantWorkspace);
-  }, [handleCreateAssistantSession, primaryAssistantWorkspace, t]);
-
   const handleOpenProject = useCallback(async () => {
     try {
-      const { pickWorkspaceDirectory } = await import(
-        '@/infrastructure/peer-device/pickWorkspaceDirectory'
-      );
-      const selected = await pickWorkspaceDirectory({
-        title: t('header.selectProjectDirectory'),
-      });
-      if (selected) {
-        await workspaceManager.openWorkspace(selected);
-      }
+      await activateProductAction('project.open', { t });
     } catch (err) {
       log.error('Failed to open project', err);
     }
   }, [t]);
 
   const handleNewProject = useCallback(() => {
-    window.dispatchEvent(new Event('nav:new-project'));
+    void activateProductAction('project.new');
   }, []);
+
+  const handleOpenAssistantManager = useCallback(() => {
+    closeWorkspaceMenu();
+    openScene('assistant');
+  }, [closeWorkspaceMenu, openScene]);
 
   const handleSwitchWorkspace = useCallback(async (workspaceId: string) => {
     const targetWorkspace = recentWorkspaces.find(item => item.id === workspaceId);
@@ -317,30 +242,21 @@ const MainNav: React.FC<MainNavProps> = ({
     };
   }, [workspaceMenuOpen, updateWorkspaceMenuPos]);
 
-  const handleOpenTodos = useCallback(() => {
-    openScene('todos');
-  }, [openScene]);
-
   const handleCreateSession = useCallback(() => {
-    window.dispatchEvent(new CustomEvent('toolbar-create-session'));
+    void activateProductAction('session.new');
   }, []);
 
-  const handleOpenLongTermTracking = useCallback(() => {
-    notificationService.info(t('nav.messages.longTermTrackingComingSoon'), { duration: 3200 });
-  }, [t]);
-
   const handleOpenAgents = useCallback(() => {
-    openScene('agents');
-  }, [openScene]);
+    void activateProductAction('surface.agents.open');
+  }, []);
 
   const handleOpenSkills = useCallback(() => {
-    openScene('skills');
-  }, [openScene]);
+    void activateProductAction('surface.skills.open');
+  }, []);
 
   const handleOpenEcosystemCompatibility = useCallback(() => {
-    useSettingsStore.getState().openTab('external-sources');
-    openScene('settings');
-  }, [openScene]);
+    void activateProductAction('settings.external-sources.open');
+  }, []);
 
   const isAgentsActive = activeTabId === 'agents';
   const isSkillsActive = activeTabId === 'skills';
@@ -382,6 +298,18 @@ const MainNav: React.FC<MainNavProps> = ({
       >
         <FolderPlus size={13} />
         <span>{t('header.newProject')}</span>
+      </button>
+      <button
+        type="button"
+        className="bitfun-nav-panel__workspace-menu-item"
+        data-bf-component="nav-panel"
+        data-bf-part="workspaceMenuItem"
+        role="menuitem"
+        onClick={handleOpenAssistantManager}
+        data-testid="nav-session-group-add-assistant"
+      >
+        <User size={13} />
+        <span>{t('nav.workspaces.actions.newAssistant')}</span>
       </button>
       <button
         type="button"
@@ -442,20 +370,18 @@ const MainNav: React.FC<MainNavProps> = ({
     getAppearanceOverlayHost()
   ) : null;
 
-  const assistantTooltip = t('nav.items.persona');
   const createSessionLabel = t('nav.sessions.newSession');
-  const todosTooltip = t('nav.tooltips.todos');
-  const longTermTrackingTooltip = t('nav.tooltips.longTermTracking');
-  const addWorkspaceTooltip = t('nav.tooltips.addWorkspace');
-  const isTodosActive = activeTabId === 'todos';
+  const addSessionGroupTooltip = t('nav.tooltips.addSessionGroup');
   const agentsTooltip = t('nav.tooltips.agents');
   const skillsTooltip = t('nav.tooltips.skills');
   const ecosystemCompatibilityTooltip = t('nav.tooltips.ecosystemCompatibility');
+  const assistantManagerLabel = t('nav.items.assistant');
   const extensionsLabel = t('nav.sections.extensions');
+  const isAssistantManagerActive = activeTabId === 'assistant' || activeTabId === 'profile';
   const isEcosystemCompatibilityActive = activeTabId === 'settings' && activeSettingsTab === 'external-sources';
   return (
     <>
-      {/* ── Search and Todo ────────────────────────── */}
+      {/* ── Search and New Session ─────────────────── */}
       <div data-bf-component="nav-panel" data-bf-part="brandHeader" className="bitfun-nav-panel__brand-header">
         <div className="bitfun-nav-panel__utility-row" data-bf-component="nav-panel" data-bf-part="utilityRow">
           <div className="bitfun-nav-panel__brand-search" data-bf-component="nav-panel" data-bf-part="search">
@@ -465,7 +391,7 @@ const MainNav: React.FC<MainNavProps> = ({
                 className="bitfun-nav-panel__search-trigger"
                 data-bf-component="nav-panel"
                 data-bf-part="searchTrigger"
-                onClick={() => setSearchOpen(true)}
+                onClick={() => openGlobalSearch()}
                 aria-label={t('nav.search.triggerTooltip')}
                 data-testid="nav-search-trigger"
               >
@@ -477,35 +403,20 @@ const MainNav: React.FC<MainNavProps> = ({
                 <span className="bitfun-nav-panel__search-trigger__label">
                   {t('nav.search.triggerPlaceholder')}
                 </span>
+                <kbd
+                  className="bitfun-nav-panel__search-trigger__shortcut"
+                  data-testid="nav-search-shortcut"
+                  aria-hidden="true"
+                >
+                  {searchShortcutLabel}
+                </kbd>
               </button>
             </Tooltip>
-            <NavSearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
           </div>
-          <Tooltip content={todosTooltip} placement="right" followCursor>
-            <button
-              type="button"
-              className={`bitfun-nav-panel__todo-entry${isTodosActive ? ' is-active' : ''}`}
-              data-bf-component="nav-panel"
-              data-bf-part="todoEntry"
-              data-bf-action="todos"
-              data-bf-state={isTodosActive ? 'active' : ''}
-              onClick={handleOpenTodos}
-              aria-label={todosTooltip}
-              data-testid="nav-todos-btn"
-            >
-              <CalendarClock size={15} aria-hidden="true" />
-            </button>
-          </Tooltip>
-        </div>
-      </div>
-
-      {/* ── Long-lived navigation ──────────────────── */}
-      <div data-bf-component="nav-panel" data-bf-part="sections" className="bitfun-nav-panel__sections" data-testid="nav-sections">
-        <div data-bf-component="nav-panel" data-bf-part="topActions" className="bitfun-nav-panel__top-actions">
           <Tooltip content={createSessionLabel} placement="right" followCursor>
             <button
               type="button"
-              className="bitfun-nav-panel__top-action-btn"
+              className="bitfun-nav-panel__utility-action"
               data-bf-component="nav-panel"
               data-bf-part="topAction"
               data-bf-action="new-session"
@@ -513,269 +424,198 @@ const MainNav: React.FC<MainNavProps> = ({
               aria-label={createSessionLabel}
               data-testid="nav-new-session-btn"
             >
-              <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                <Plus size={15} />
-              </span>
-              <span>{createSessionLabel}</span>
+              <Plus size={15} aria-hidden="true" />
             </button>
           </Tooltip>
+        </div>
+      </div>
 
-          <Tooltip content={assistantTooltip} placement="right" followCursor>
+      {/* ── Long-lived navigation ──────────────────── */}
+      <div ref={sectionsScrollRef} data-bf-component="nav-panel" data-bf-part="sections" className="bitfun-nav-panel__sections" data-testid="nav-sections">
+        <div data-bf-component="nav-panel" data-bf-part="topActions" className="bitfun-nav-panel__top-actions">
+          <Tooltip content={assistantManagerLabel} placement="right" followCursor>
             <button
               type="button"
-              className={`bitfun-nav-panel__top-action-btn${expandedSections.has('assistant-sessions') ? ' is-open' : ''}`}
+              className={[
+                'bitfun-nav-panel__top-action-btn',
+                isAssistantManagerActive ? 'is-active' : '',
+              ].filter(Boolean).join(' ')}
               data-bf-component="nav-panel"
               data-bf-part="topAction"
-              data-bf-action="smart-members"
-              data-bf-state={expandedSections.has('assistant-sessions') ? 'open' : ''}
-              onClick={() => toggleSection('assistant-sessions')}
-              aria-expanded={expandedSections.has('assistant-sessions')}
-              aria-label={assistantTooltip}
-              data-testid="nav-smart-members-btn"
+              data-bf-action="assistant-manager"
+              data-bf-state={isAssistantManagerActive ? 'active' : ''}
+              onClick={handleOpenAssistantManager}
+              aria-label={assistantManagerLabel}
+              data-testid="nav-assistant-manager"
             >
               <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                 <User size={15} />
               </span>
-              <span>{t('nav.items.persona')}</span>
-              <span className="bitfun-nav-panel__count-badge">
-                {orderedAssistantWorkspacesList.length}
-              </span>
+              <span>{assistantManagerLabel}</span>
             </button>
           </Tooltip>
 
-        <div
-          className={`bitfun-nav-panel__collapsible bitfun-nav-panel__smart-members-content${expandedSections.has('assistant-sessions') ? '' : ' is-collapsed'}`}
-          data-bf-component="nav-panel"
-          data-bf-part="sectionContent"
-          data-bf-section="smart-members"
-          data-bf-state={expandedSections.has('assistant-sessions') ? 'open' : ''}
-        >
-          <div className="bitfun-nav-panel__collapsible-inner">
-            <div className="bitfun-nav-panel__smart-members-toolbar">
-              <span>{t('nav.sections.assistantSessions')}</span>
-              <AssistantSessionCreateMenu
-                assistants={orderedAssistantWorkspacesList}
-                primaryAssistant={primaryAssistantWorkspace}
-                onCreatePrimary={handleCreatePrimaryAssistantSession}
-                onCreateAssistant={handleCreateAssistantSession}
-              />
-            </div>
-            <div className="bitfun-nav-panel__items bitfun-nav-panel__items--session-blocks bitfun-nav-panel__items--smart-members">
-              {orderedAssistantWorkspacesList.map(workspace => {
-                const assistantDisplayName =
-                  workspace.workspaceKind === WorkspaceKind.Assistant
-                    ? workspace.identity?.name?.trim() || workspace.name
-                    : workspace.name;
-                return (
-                  <SessionsSection
-                    key={workspace.id}
-                    workspaceId={workspace.id}
-                    workspacePath={workspace.rootPath}
-                    remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-                    isActiveWorkspace={workspace.id === currentWorkspace?.id}
-                    presentation={{
-                      kind: 'assistant',
-                      assistant: {
-                        id: workspace.assistantId || workspace.id,
-                        name: assistantDisplayName,
-                        avatar: workspace.identity?.avatar,
-                        emoji: workspace.identity?.emoji,
-                      },
-                    }}
-                    isVisible={expandedSections.has('assistant-sessions')}
+          <div className="bitfun-nav-panel__miniapp-navigation" data-bf-component="nav-panel" data-bf-part="miniAppFooter">
+            <MiniAppEntry
+              isActive={activeTabId === 'miniapps' || !!activeMiniAppId}
+              activeMiniAppId={activeMiniAppId}
+              onOpenMiniApps={() => openScene('miniapps')}
+              onOpenMiniApp={(appId) => openScene(`miniapp:${appId}`)}
+            />
+          </div>
+
+          <div className="bitfun-nav-panel__top-action-expand" data-bf-component="nav-panel" data-bf-part="extensionGroup" data-bf-state={isExtensionsOpen ? 'open' : ''} data-testid="agent-skill-panel">
+            <Tooltip content={extensionsLabel} placement="right" followCursor>
+              <button
+                type="button"
+                className={[
+                  'bitfun-nav-panel__top-action-btn',
+                  'bitfun-nav-panel__top-action-btn--expand',
+                  isExtensionsOpen ? 'is-open' : '',
+                ].filter(Boolean).join(' ')}
+                data-bf-component="nav-panel"
+                data-bf-part="topAction"
+                data-bf-action="extensions"
+                data-bf-state={isExtensionsOpen ? 'open' : ''}
+                onClick={() => setIsExtensionsOpen(v => !v)}
+                aria-expanded={isExtensionsOpen}
+                aria-label={extensionsLabel}
+                data-testid="agent-skill-entry"
+              >
+                <span className="bitfun-nav-panel__top-action-expand-icons" aria-hidden="true">
+                  <NavigationExtensionsCompatibilityIcon
+                    size={BITFUN_ICON_SIZE.navigation}
+                    className="bitfun-nav-panel__top-action-expand-icon-default"
                   />
-                );
-              })}
+                  <ChevronDown
+                    size={15}
+                    className={[
+                      'bitfun-nav-panel__top-action-expand-icon-chevron',
+                      isExtensionsOpen ? 'is-open' : '',
+                    ].filter(Boolean).join(' ')}
+                  />
+                </span>
+                <span>{extensionsLabel}</span>
+              </button>
+            </Tooltip>
+
+            <div
+              className={`bitfun-nav-panel__top-action-sublist${isExtensionsOpen ? ' is-open' : ''}`}
+              data-testid="agent-skill-tabs"
+            >
+              <Tooltip content={agentsTooltip} placement="right" followCursor>
+                <button
+                  type="button"
+                  className={[
+                    'bitfun-nav-panel__top-action-btn',
+                    'bitfun-nav-panel__top-action-btn--sub',
+                    isAgentsActive ? 'is-active' : '',
+                  ].filter(Boolean).join(' ')}
+                  data-bf-component="nav-panel"
+                  data-bf-part="topAction"
+                  data-bf-action="agents"
+                  data-bf-state={isAgentsActive ? 'active' : ''}
+                  onClick={handleOpenAgents}
+                  aria-label={agentsTooltip}
+                  data-testid="agent-tab"
+                >
+                  <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                    <Users size={15} />
+                  </span>
+                  <span>{t('nav.items.agents')}</span>
+                </button>
+              </Tooltip>
+
+              <Tooltip content={skillsTooltip} placement="right" followCursor>
+                <button
+                  type="button"
+                  className={[
+                    'bitfun-nav-panel__top-action-btn',
+                    'bitfun-nav-panel__top-action-btn--sub',
+                    isSkillsActive ? 'is-active' : '',
+                  ].filter(Boolean).join(' ')}
+                  data-bf-component="nav-panel"
+                  data-bf-part="topAction"
+                  data-bf-action="skills"
+                  data-bf-state={isSkillsActive ? 'active' : ''}
+                  onClick={handleOpenSkills}
+                  aria-label={skillsTooltip}
+                  data-testid="skill-tab"
+                >
+                  <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                    <Puzzle size={15} />
+                  </span>
+                  <span>{t('nav.items.skills')}</span>
+                </button>
+              </Tooltip>
+
+              <Tooltip content={ecosystemCompatibilityTooltip} placement="right" followCursor>
+                <button
+                  type="button"
+                  className={[
+                    'bitfun-nav-panel__top-action-btn',
+                    'bitfun-nav-panel__top-action-btn--sub',
+                    isEcosystemCompatibilityActive ? 'is-active' : '',
+                  ].filter(Boolean).join(' ')}
+                  data-bf-component="nav-panel"
+                  data-bf-part="topAction"
+                  data-bf-action="ecosystem-compatibility"
+                  data-bf-state={isEcosystemCompatibilityActive ? 'active' : ''}
+                  onClick={handleOpenEcosystemCompatibility}
+                  aria-label={ecosystemCompatibilityTooltip}
+                  data-testid="ecosystem-compatibility-tab"
+                >
+                  <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                    <Network size={15} />
+                  </span>
+                  <span>{t('nav.items.ecosystemCompatibility')}</span>
+                </button>
+              </Tooltip>
             </div>
           </div>
         </div>
 
-          <Tooltip content={longTermTrackingTooltip} placement="right" followCursor>
-            <button
-              type="button"
-              className="bitfun-nav-panel__top-action-btn"
-              data-bf-component="nav-panel"
-              data-bf-part="topAction"
-              data-bf-action="long-term-tracking"
-              onClick={handleOpenLongTermTracking}
-              aria-label={longTermTrackingTooltip}
-              data-testid="nav-long-term-tracking-btn"
-            >
-              <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                <Goal size={15} />
-              </span>
-              <span>{t('nav.items.longTermTracking')}</span>
-            </button>
-          </Tooltip>
-        </div>
-
-        {/* Workspace */}
-        <div className="bitfun-nav-panel__section" data-bf-component="nav-panel" data-bf-part="section" data-bf-section="workspace">
-          <SectionHeader
-            label={t('shared:features.workspace')}
-            collapsible
-            isOpen={expandedSections.has('workspace')}
-            onToggle={() => toggleSection('workspace')}
-            actions={
-              <>
-                <WorkspaceSessionFilterMenu />
-                <div className="bitfun-nav-panel__workspace-action-wrap">
-                  <Tooltip content={addWorkspaceTooltip} placement="right" followCursor disabled={workspaceMenuOpen}>
-                    <button
-                      ref={workspaceMenuButtonRef}
-                      type="button"
-                      className={`bitfun-nav-panel__section-action${workspaceMenuOpen ? ' is-active' : ''}`}
-                      aria-label={addWorkspaceTooltip}
-                      aria-expanded={workspaceMenuOpen}
-                      onClick={toggleWorkspaceMenu}
-                      data-testid="nav-workspace-add-btn"
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </Tooltip>
-                </div>
-              </>
-            }
-          />
-          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('workspace') ? '' : ' is-collapsed'}`} data-bf-component="nav-panel" data-bf-part="sectionContent" data-bf-state={expandedSections.has('workspace') ? 'open' : ''}>
+        {/* Unified sessions */}
+        <div className="bitfun-nav-panel__section" data-bf-component="nav-panel" data-bf-part="section" data-bf-section="sessions">
+          <StickySectionHeader scrollRootRef={sectionsScrollRef}>
+            <SectionHeader
+              label={t('nav.items.sessions')}
+              collapsible
+              isOpen={expandedSections.has('sessions')}
+              onToggle={() => toggleSection('sessions')}
+              actions={
+                <>
+                  <WorkspaceSessionGroupingToggle />
+                  <WorkspaceSessionFilterMenu />
+                  <div className="bitfun-nav-panel__workspace-action-wrap">
+                    <Tooltip content={addSessionGroupTooltip} placement="right" followCursor disabled={workspaceMenuOpen}>
+                      <button
+                        ref={workspaceMenuButtonRef}
+                        type="button"
+                        className={`bitfun-nav-panel__section-action${workspaceMenuOpen ? ' is-active' : ''}`}
+                        aria-label={addSessionGroupTooltip}
+                        aria-haspopup="menu"
+                        aria-expanded={workspaceMenuOpen}
+                        onClick={toggleWorkspaceMenu}
+                        data-testid="nav-workspace-add-btn"
+                      >
+                        <NavigationSessionContextAddIcon size={BITFUN_ICON_SIZE.compact} />
+                      </button>
+                    </Tooltip>
+                  </div>
+                </>
+              }
+            />
+          </StickySectionHeader>
+          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('sessions') ? '' : ' is-collapsed'}`} data-bf-component="nav-panel" data-bf-part="sectionContent" data-bf-state={expandedSections.has('sessions') ? 'open' : ''}>
             <div className="bitfun-nav-panel__collapsible-inner">
               <div className="bitfun-nav-panel__items">
-                <WorkspaceListSection variant="projects" />
+                <WorkspaceListSection variant="all" />
               </div>
             </div>
           </div>
         </div>
 
-      </div>
-
-      {/* ── Bottom: Extensions and MiniApp ────────── */}
-      <div data-bf-component="nav-panel" data-bf-part="bottomBar" className="bitfun-nav-panel__bottom-bar" data-testid="nav-bottom-bar">
-        {/* Temporarily hide Pages entry
-        <button
-          type="button"
-          className={`bitfun-nav-panel__pages-entry${activeTabId === 'pages' ? ' is-active' : ''}`}
-          onClick={() => openScene('pages')}
-          aria-label={tPages('navLabel')}
-          data-testid="nav-pages-entry"
-        >
-          <PanelsTopLeft size={15} aria-hidden="true" />
-          <span>{tPages('navLabel')}</span>
-        </button>
-        */}
-        <div className="bitfun-nav-panel__bottom-extension" data-bf-component="nav-panel" data-bf-part="extensionGroup" data-bf-state={isExtensionsOpen ? 'open' : ''} data-testid="agent-skill-panel">
-          <Tooltip content={extensionsLabel} placement="right" followCursor>
-            <button
-              type="button"
-              className={[
-                'bitfun-nav-panel__top-action-btn',
-                'bitfun-nav-panel__top-action-btn--expand',
-                isExtensionsOpen ? 'is-open' : '',
-              ].filter(Boolean).join(' ')}
-              data-bf-component="nav-panel"
-              data-bf-part="topAction"
-              data-bf-action="extensions"
-              data-bf-state={isExtensionsOpen ? 'open' : ''}
-              onClick={() => setIsExtensionsOpen(v => !v)}
-              aria-expanded={isExtensionsOpen}
-              aria-label={extensionsLabel}
-              data-testid="agent-skill-entry"
-            >
-              <span className="bitfun-nav-panel__top-action-expand-icons" aria-hidden="true">
-                <Blocks size={15} className="bitfun-nav-panel__top-action-expand-icon-default" />
-                <ChevronDown
-                  size={15}
-                  className={[
-                    'bitfun-nav-panel__top-action-expand-icon-chevron',
-                    isExtensionsOpen ? 'is-open' : '',
-                  ].filter(Boolean).join(' ')}
-                />
-              </span>
-              <span>{extensionsLabel}</span>
-            </button>
-          </Tooltip>
-
-          <div
-            className={`bitfun-nav-panel__top-action-sublist${isExtensionsOpen ? ' is-open' : ''}`}
-            data-testid="agent-skill-tabs"
-          >
-            <Tooltip content={agentsTooltip} placement="right" followCursor>
-              <button
-                type="button"
-                className={[
-                  'bitfun-nav-panel__top-action-btn',
-                  'bitfun-nav-panel__top-action-btn--sub',
-                  isAgentsActive ? 'is-active' : '',
-                ].filter(Boolean).join(' ')}
-                data-bf-component="nav-panel"
-                data-bf-part="topAction"
-                data-bf-action="agents"
-                data-bf-state={isAgentsActive ? 'active' : ''}
-                onClick={handleOpenAgents}
-                aria-label={agentsTooltip}
-                data-testid="agent-tab"
-              >
-                <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                  <Users size={15} />
-                </span>
-                <span>{t('nav.items.agents')}</span>
-              </button>
-            </Tooltip>
-
-            <Tooltip content={skillsTooltip} placement="right" followCursor>
-              <button
-                type="button"
-                className={[
-                  'bitfun-nav-panel__top-action-btn',
-                  'bitfun-nav-panel__top-action-btn--sub',
-                  isSkillsActive ? 'is-active' : '',
-                ].filter(Boolean).join(' ')}
-                data-bf-component="nav-panel"
-                data-bf-part="topAction"
-                data-bf-action="skills"
-                data-bf-state={isSkillsActive ? 'active' : ''}
-                onClick={handleOpenSkills}
-                aria-label={skillsTooltip}
-                data-testid="skill-tab"
-              >
-                <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                  <Puzzle size={15} />
-                </span>
-                <span>{t('nav.items.skills')}</span>
-              </button>
-            </Tooltip>
-
-            <Tooltip content={ecosystemCompatibilityTooltip} placement="right" followCursor>
-              <button
-                type="button"
-                className={[
-                  'bitfun-nav-panel__top-action-btn',
-                  'bitfun-nav-panel__top-action-btn--sub',
-                  isEcosystemCompatibilityActive ? 'is-active' : '',
-                ].filter(Boolean).join(' ')}
-                data-bf-component="nav-panel"
-                data-bf-part="topAction"
-                data-bf-action="ecosystem-compatibility"
-                data-bf-state={isEcosystemCompatibilityActive ? 'active' : ''}
-                onClick={handleOpenEcosystemCompatibility}
-                aria-label={ecosystemCompatibilityTooltip}
-                data-testid="ecosystem-compatibility-tab"
-              >
-                <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                  <Network size={15} />
-                </span>
-                <span>{t('nav.items.ecosystemCompatibility')}</span>
-              </button>
-            </Tooltip>
-          </div>
-        </div>
-        <div className="bitfun-nav-panel__miniapp-footer" data-bf-component="nav-panel" data-bf-part="miniAppFooter">
-          <MiniAppEntry
-            isActive={activeTabId === 'miniapps' || !!activeMiniAppId}
-            activeMiniAppId={activeMiniAppId}
-            onOpenMiniApps={() => openScene('miniapps')}
-            onOpenMiniApp={(appId) => openScene(`miniapp:${appId}`)}
-          />
-        </div>
       </div>
 
       {workspaceMenuPortal}

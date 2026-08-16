@@ -16,6 +16,9 @@ use bitfun_core::service::session::{
 };
 use bitfun_core::service::session_usage::SessionUsageReport;
 use bitfun_core::service::workspace::WorkspaceKind;
+use bitfun_product_domains::product_search::{
+    SessionContentSearchRequest, SessionContentSearchResponse,
+};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::State;
@@ -260,6 +263,33 @@ pub async fn list_persisted_sessions(
         .map_err(|error| {
             format!(
                 "Failed to list persisted sessions: {}",
+                desktop_session_error(error)
+            )
+        })
+}
+
+#[tauri::command]
+pub async fn search_session_content(
+    request: SessionContentSearchRequest,
+    runtime: State<'_, DesktopRuntimeContext>,
+) -> Result<SessionContentSearchResponse, String> {
+    let limit = request.normalized_limit();
+    runtime
+        .session_application()
+        .search_session_content(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            &request.query,
+            limit,
+            request.include_archived,
+        )
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to search persisted session content: {}",
                 desktop_session_error(error)
             )
         })

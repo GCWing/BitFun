@@ -63,6 +63,24 @@
     animation: notif-btn-spin 1s linear infinite;
   }
 
+  &__menu-status,
+  &__menu-count {
+    flex-shrink: 0;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__menu-count {
+    min-width: 18px;
+    padding: 1px 5px;
+    border-radius: $size-radius-full;
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-primary);
+    line-height: 1.2;
+    text-align: center;
+  }
+
   // ── Tooltip ──────────────────────────────────────
   &__tooltip {
     position: absolute;

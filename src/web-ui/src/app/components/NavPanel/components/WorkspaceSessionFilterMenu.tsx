@@ -9,7 +9,6 @@ import {
   DEFAULT_WORKSPACE_SESSION_VIEW,
   hasWorkspaceSessionFilters,
   type WorkspaceSessionEnvironment,
-  type WorkspaceSessionGrouping,
   type WorkspaceSessionOrdering,
   type WorkspaceSessionShow,
   type WorkspaceSessionSource,
@@ -18,7 +17,7 @@ import {
   useWorkspaceSessionViewStore,
 } from '../workspaceSessionView';
 
-type Submenu = 'grouping' | 'ordering' | 'show' | 'status' | 'worktree' | 'environment' | 'source';
+type Submenu = 'ordering' | 'show' | 'status' | 'worktree' | 'environment' | 'source';
 
 interface SingleChoiceMenu<T extends string> {
   kind: 'single';
@@ -55,15 +54,14 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const submenuRef = useRef<HTMLDivElement>(null);
 
-  const isCustomized = view.grouping !== DEFAULT_WORKSPACE_SESSION_VIEW.grouping
-    || view.ordering !== DEFAULT_WORKSPACE_SESSION_VIEW.ordering
+  const isCustomized = view.ordering !== DEFAULT_WORKSPACE_SESSION_VIEW.ordering
     || view.show !== DEFAULT_WORKSPACE_SESSION_VIEW.show
     || hasWorkspaceSessionFilters(view.filters);
 
   const updatePosition = useCallback(() => {
     const anchor = buttonRef.current?.getBoundingClientRect();
     if (!anchor) return;
-    const measuredHeight = menuRef.current?.offsetHeight ?? 456;
+    const measuredHeight = menuRef.current?.offsetHeight ?? 422;
     const preferredRight = anchor.right + MENU_GAP;
     const canOpenRight = preferredRight + MAIN_MENU_WIDTH <= window.innerWidth - VIEWPORT_PADDING;
     setMenuPosition({
@@ -104,9 +102,6 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
   }, [close, open, updatePosition]);
 
   const definitions = useMemo<Record<Submenu, MenuDefinition>>(() => ({
-    grouping: {
-      kind: 'single', value: view.grouping, options: ['workspace', 'all'] as WorkspaceSessionGrouping[], choose: value => view.setGrouping(value as WorkspaceSessionGrouping),
-    },
     ordering: {
       kind: 'single', value: view.ordering, options: ['updated', 'status', 'created', 'name'] as WorkspaceSessionOrdering[], choose: value => view.setOrdering(value as WorkspaceSessionOrdering),
     },
@@ -148,13 +143,12 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
   );
 
   const submenuIndex: Record<Submenu, number> = {
-    grouping: 0,
-    ordering: 1,
-    show: 2,
-    status: 4,
-    worktree: 5,
-    environment: 6,
-    source: 7,
+    ordering: 0,
+    show: 1,
+    status: 3,
+    worktree: 4,
+    environment: 5,
+    source: 6,
   };
   const submenuTop = menuPosition.top + 4 + (activeSubmenu ? submenuIndex[activeSubmenu] * ROW_HEIGHT : 0);
   const preferredSubmenuLeft = menuPosition.left + MAIN_MENU_WIDTH + MENU_GAP;
@@ -173,7 +167,6 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
         aria-label={t('nav.sessions.viewMenu.title')}
         data-testid="nav-session-filter-menu"
       >
-        {row('grouping', view.grouping)}
         {row('ordering', view.ordering)}
         {row('show')}
         <div className="bitfun-nav-panel__session-filter-menu-divider" role="separator" />
@@ -197,9 +190,17 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
           {!view.filters.hideArchived ? <Check size={15} aria-hidden="true" /> : null}
         </button>
         <div className="bitfun-nav-panel__session-filter-menu-divider" role="separator" />
-        <button type="button" role="menuitem" onMouseEnter={() => setActiveSubmenu(null)} onClick={() => { view.requestCollapseAll(); close(); }}>
-          <span>{t('nav.sessions.viewMenu.collapseAll')}</span>
-        </button>
+        {view.grouping === 'grouped' ? (
+          <button
+            type="button"
+            role="menuitem"
+            data-testid="nav-session-collapse-all"
+            onMouseEnter={() => setActiveSubmenu(null)}
+            onClick={() => { view.requestCollapseAll(); close(); }}
+          >
+            <span>{t('nav.sessions.viewMenu.collapseAll')}</span>
+          </button>
+        ) : null}
         <button
           type="button"
           role="menuitem"

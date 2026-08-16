@@ -185,4 +185,37 @@ describe('SessionAPI paged metadata reads', () => {
       },
     });
   });
+
+  it('redacts workspace paths and search text from command-error diagnostics', async () => {
+    invokeMock.mockRejectedValueOnce(new Error('search unavailable'));
+
+    const error = await sessionAPI.searchSessionContent({
+      workspacePath: '/private/customer/repository',
+      remoteConnectionId: 'remote-1',
+      query: 'confidential roadmap',
+      includeArchived: true,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      context: {
+        request: {
+          queryLength: 20,
+          remote: true,
+          includeArchived: true,
+        },
+      },
+    });
+    expect(error.getFormattedMessage()).not.toContain('/private/customer/repository');
+    expect(error.getFormattedMessage()).not.toContain('confidential roadmap');
+  });
+
+  it('preserves AbortError values without wrapping them as command failures', async () => {
+    const abortError = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    invokeMock.mockRejectedValueOnce(abortError);
+
+    await expect(sessionAPI.searchSessionContent({
+      workspacePath: '/repo',
+      query: 'cancelled search',
+    })).rejects.toBe(abortError);
+  });
 });

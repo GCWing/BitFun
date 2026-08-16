@@ -35,6 +35,8 @@ use crate::util::timing::elapsed_ms_u64;
 use bitfun_runtime_ports::{
     SessionTurnLoadRequest, SessionTurnLoadTiming, SessionTurnWindowRequest,
 };
+#[cfg(feature = "product-search")]
+use bitfun_services_core::session_search::SessionSearchSqliteIndex;
 use bitfun_services_core::{
     json_store::{JsonFileStore, JsonFileStoreError},
     session::{
@@ -552,6 +554,31 @@ impl PersistenceManager {
             return workspace_path.to_path_buf();
         }
         self.path_manager.project_sessions_dir(workspace_path)
+    }
+
+    #[cfg(feature = "product-search")]
+    async fn invalidate_session_search(&self, workspace_path: &Path, session_id: &str) {
+        let index = SessionSearchSqliteIndex::new(self.project_sessions_dir(workspace_path));
+        if let Err(error) = index.invalidate_session_if_present(session_id).await {
+            warn!(
+                "Failed to invalidate derived Session search index: session_id={} error={}",
+                session_id, error
+            );
+        }
+    }
+
+    #[cfg(feature = "product-search")]
+    async fn remove_session_from_search(&self, workspace_path: &Path, session_id: &str) {
+        let index = SessionSearchSqliteIndex::new(self.project_sessions_dir(workspace_path));
+        if !index.path().exists() {
+            return;
+        }
+        if let Err(error) = index.remove_session(session_id).await {
+            warn!(
+                "Failed to remove Session from derived search index: session_id={} error={}",
+                session_id, error
+            );
+        }
     }
 
     /// Hold this across a multi-step Session write that is not already owned by
@@ -2486,6 +2513,9 @@ impl PersistenceManager {
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
         let _persistence_guard = persistence_lock.lock().await;
+        #[cfg(feature = "product-search")]
+        self.remove_session_from_search(workspace_path, session_id)
+            .await;
         self.session_metadata_store(workspace_path)
             .delete_session_dir_and_index(session_id)
             .await
@@ -3064,6 +3094,10 @@ impl PersistenceManager {
             }
         }
 
+        #[cfg(feature = "product-search")]
+        self.invalidate_session_search(workspace_path, &turn.session_id)
+            .await;
+
         let file = StoredDialogTurnFile {
             schema_version: SESSION_STORAGE_SCHEMA_VERSION,
             turn: turn.clone(),
@@ -3411,6 +3445,9 @@ impl PersistenceManager {
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
         let _persistence_guard = persistence_lock.lock().await;
+        #[cfg(feature = "product-search")]
+        self.invalidate_session_search(workspace_path, session_id)
+            .await;
         if !self.turns_dir(workspace_path, session_id).exists() {
             if self.turn_catalog_path(workspace_path, session_id).exists() {
                 if let Err(error) = self
@@ -3960,6 +3997,9 @@ impl PersistenceManager {
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
         let _persistence_guard = persistence_lock.lock().await;
+        #[cfg(feature = "product-search")]
+        self.invalidate_session_search(workspace_path, session_id)
+            .await;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let mut deleted = 0usize;
 
@@ -4026,6 +4066,9 @@ impl PersistenceManager {
             .get_session_persistence_lock(workspace_path, session_id)
             .await;
         let _persistence_guard = persistence_lock.lock().await;
+        #[cfg(feature = "product-search")]
+        self.invalidate_session_search(workspace_path, session_id)
+            .await;
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         let mut deleted = 0usize;
 

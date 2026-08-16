@@ -20,7 +20,7 @@ ts-rs = { workspace = true, optional = true }
 
 [features]
 default = []
-ts = ["dep:ts-rs"]
+ts = ["dep:ts-rs", "bitfun-product-domains/ts"]
 
 [lints]
 workspace = true

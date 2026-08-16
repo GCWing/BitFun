@@ -57,7 +57,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'workspace-instructions',
         ],
       },
-      { depName: 'rusqlite', ownerFeatures: ['permission'] },
+      { depName: 'rusqlite', ownerFeatures: ['permission', 'session-search'] },
       { depName: 'serde_yaml', ownerFeatures: ['markdown', 'workspace-instructions'] },
       { depName: 'similar', ownerFeatures: ['diff', 'local-storage'] },
       {
@@ -84,6 +84,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'lsp',
           'permission',
           'process-runtime',
+          'session-search',
           'workspace-instructions',
           'workspace-runtime',
           'workspace-text-runtime',
@@ -99,7 +100,7 @@ export const optionalDependencyFeatureOwnerRules = [
     dependencies: [
       { depName: 'anyhow', ownerFeatures: ['workspace-ports'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['agent-api', 'ts'] },
-      { depName: 'bitfun-product-domains', ownerFeatures: ['permission', 'ts'] },
+      { depName: 'bitfun-product-domains', ownerFeatures: ['permission', 'product-search', 'ts'] },
       { depName: 'tokio', ownerFeatures: ['remote-exec-port', 'terminal-port'] },
       { depName: 'tokio-util', ownerFeatures: ['workspace-ports'] },
       { depName: 'ts-rs', ownerFeatures: ['ts'] },
@@ -133,6 +134,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'canvas-runtime',
           'function-agents',
           'plugin-source',
+          'product-search',
           'tools-miniapp',
           'ts',
         ],
@@ -323,6 +325,7 @@ export const capabilityContractDependencyRules = [
       'git-port': [],
       permission: ['dep:bitfun-product-domains'],
       'plugin-runtime': [],
+      'product-search': ['dep:bitfun-product-domains'],
       'remote-exec-port': ['dep:tokio'],
       'remote-workspace-ports': [],
       'runtime-event-port': [],
@@ -356,7 +359,7 @@ export const capabilityContractDependencyRules = [
       ])],
       ['bitfun-agent-tools', capabilityConsumer([capabilityEdge()])],
       ['bitfun-app-server', capabilityConsumer(
-        [capabilityEdge(['agent-api'])],
+        [capabilityEdge(['agent-api', 'product-search'])],
         [capabilityForwarder('ts', 'ts')],
       )],
       ['bitfun-app-server-protocol', capabilityConsumer([
@@ -377,6 +380,7 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('agent-runtime', 'tool-runtime-handles'),
           capabilityForwarder('agent-runtime', 'workspace-ports'),
           capabilityForwarder('plugin-runtime', 'plugin-runtime'),
+          capabilityForwarder('product-search', 'product-search'),
           capabilityForwarder('script-tool-runtime', 'script-tool-runtime'),
           capabilityForwarder('ts', 'ts'),
         ],
@@ -473,6 +477,7 @@ export const capabilityContractDependencyRules = [
           'dispatch-store',
           'external-sources',
           'plugin-runtime',
+          'product-search',
           'product-full',
           'remote-connect',
           'remote-workspace',
@@ -503,6 +508,7 @@ export const coreProductFullFeatureAssemblyRule = {
   featureName: 'product-full',
   requiredFeatureRefs: [
     'agent-runtime',
+    'product-search',
     'diagnostics',
     'diff',
     'document-read',
@@ -680,6 +686,34 @@ export const coreClosedFeatureProfileRules = [
     exact: true,
     reason:
       'bitfun-core agent-runtime is the reviewed Core Agent Runtime owner closure, not a product-full alias',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'product-search',
+    requiredFeatureRefs: [
+      'agent-runtime',
+      'dep:bitfun-product-domains',
+      'bitfun-runtime-ports/product-search',
+      'bitfun-services-core/session-search',
+    ],
+    allowedTransitiveFeatureRefs: [
+      'ai-adapter-runtime',
+      'filesystem',
+      'local-storage',
+      'process-runtime',
+      'terminal',
+      'workspace-runtime',
+      'product-capabilities',
+      'runtime-services',
+      'tool-packs',
+      'tools-basic',
+      'tools-agent-control',
+      'workspace-search',
+      'scheduled-jobs',
+    ],
+    exact: true,
+    reason:
+      'bitfun-core product-search must layer the derived Session index over the reviewed Agent Runtime baseline',
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
@@ -1101,6 +1135,19 @@ export const coreClosedFeatureProfileRules = [
     requiredFeatureRefs: ['dep:regex'],
     exact: true,
     reason: 'services-core diagnostics must own only deterministic diagnostic-log redaction',
+  },
+  {
+    manifestPath: 'src/crates/services/services-core/Cargo.toml',
+    featureName: 'session-search',
+    requiredFeatureRefs: [
+      'dep:bitfun-product-domains',
+      'dep:rusqlite',
+      'dep:tokio',
+      'tokio/rt',
+    ],
+    exact: true,
+    reason:
+      'services-core session-search must own only the rebuildable SQLite index and its bounded blocking runtime',
   },
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',

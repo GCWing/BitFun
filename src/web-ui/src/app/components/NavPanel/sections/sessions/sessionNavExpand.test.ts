@@ -3,8 +3,41 @@ import { describe, expect, it } from 'vitest';
 import {
   getEffectiveTopLevelSessionCount,
   getSessionBufferPrefetchLimit,
+  getSessionDisplayLimit,
   getSessionExpandToggleState,
 } from './sessionNavExpand';
+
+describe('getSessionDisplayLimit', () => {
+  it('keeps the grouped workspace list on its compact expansion levels', () => {
+    expect(getSessionDisplayLimit({
+      loadedTopLevelCount: 240,
+      expandLevel: 0,
+      level2DisplayCount: 200,
+      showAllWithoutLimit: false,
+    })).toBe(5);
+    expect(getSessionDisplayLimit({
+      loadedTopLevelCount: 240,
+      expandLevel: 1,
+      level2DisplayCount: 200,
+      showAllWithoutLimit: false,
+    })).toBe(10);
+    expect(getSessionDisplayLimit({
+      loadedTopLevelCount: 240,
+      expandLevel: 2,
+      level2DisplayCount: 200,
+      showAllWithoutLimit: false,
+    })).toBe(200);
+  });
+
+  it('shows every loaded aggregate session without a 200-row display cap', () => {
+    expect(getSessionDisplayLimit({
+      loadedTopLevelCount: 1_250,
+      expandLevel: 0,
+      level2DisplayCount: 200,
+      showAllWithoutLimit: true,
+    })).toBe(1_250);
+  });
+});
 
 describe('getSessionExpandToggleState', () => {
   it('hides the toggle when five or fewer top-level sessions are available', () => {

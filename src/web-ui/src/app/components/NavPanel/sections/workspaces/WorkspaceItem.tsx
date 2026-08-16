@@ -1,9 +1,22 @@
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Server } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
-import { Button, ConfirmDialog, InputDialog, Modal, PresenceBoundary, Tooltip } from '@/component-library';
+import {
+  Button,
+  ConfirmDialog,
+  InputDialog,
+  Modal,
+  PresenceBoundary,
+  BITFUN_ICON_SIZE,
+  SessionGroupAssistantIcon,
+  SessionGroupAssistantSelectedIcon,
+  SessionGroupRemoteWorkspaceIcon,
+  SessionGroupRemoteWorkspaceSelectedIcon,
+  SessionGroupWorkspaceIcon,
+  SessionGroupWorkspaceSelectedIcon,
+  Tooltip,
+} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
@@ -803,18 +816,16 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             data-testid="nav-workspace-sessions-toggle"
             data-workspace-id={workspace.id}
           >
-            <span className="bitfun-nav-panel__assistant-item-avatar" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
-              {isActive ? (
-                <span className="bitfun-nav-panel__assistant-item-active-icon">
-                  <DotMatrixArrowRightIcon size={14} />
-                </span>
-              ) : (
-                <span className="bitfun-nav-panel__assistant-item-avatar-letter">
-                  {workspaceDisplayName.charAt(0)}
-                </span>
-              )}
+            <span className="bitfun-nav-panel__assistant-item-avatar is-group-icon" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
+              <span className="bitfun-nav-panel__assistant-item-group-icon">
+                {isActive ? (
+                  <SessionGroupAssistantSelectedIcon size={BITFUN_ICON_SIZE.navigation} />
+                ) : (
+                  <SessionGroupAssistantIcon size={BITFUN_ICON_SIZE.navigation} />
+                )}
+              </span>
               <span className={`bitfun-nav-panel__assistant-item-icon-toggle${sessionsCollapsed ? ' is-collapsed' : ''}`}>
-                <ChevronDown size={12} />
+                <ChevronDown size={14} />
               </span>
             </span>
           </button>
@@ -993,16 +1004,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
             remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
             isActiveWorkspace={isActive}
-            presentation={{
-              kind: 'assistant',
-              assistant: {
-                id: workspace.assistantId || workspace.id,
-                name: workspaceDisplayName,
-                avatar: workspace.identity?.avatar,
-                emoji: workspace.identity?.emoji,
-              },
-            }}
             isVisible={!sessionsCollapsed}
+            useWorkspaceViewPreferences
           />
         </div>
 
@@ -1107,14 +1110,16 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         >
           <span className="bitfun-nav-panel__workspace-item-icon" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
             <span className="bitfun-nav-panel__workspace-item-icon-default">
-              {isActive ? (
-                <span className="bitfun-nav-panel__workspace-item-active-icon">
-                  <DotMatrixArrowRightIcon size={14} />
-                </span>
-              ) : workspaceIsRemote ? (
-                <Server size={14} />
+              {workspaceIsRemote ? (
+                isActive ? (
+                  <SessionGroupRemoteWorkspaceSelectedIcon size={BITFUN_ICON_SIZE.navigation} />
+                ) : (
+                  <SessionGroupRemoteWorkspaceIcon size={BITFUN_ICON_SIZE.navigation} />
+                )
+              ) : isActive ? (
+                <SessionGroupWorkspaceSelectedIcon size={BITFUN_ICON_SIZE.navigation} />
               ) : (
-                <FolderOpen size={14} />
+                <SessionGroupWorkspaceIcon size={BITFUN_ICON_SIZE.navigation} />
               )}
             </span>
             <span className={`bitfun-nav-panel__workspace-item-icon-toggle${sessionsCollapsed ? ' is-collapsed' : ''}`}>
