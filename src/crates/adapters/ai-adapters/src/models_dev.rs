@@ -357,6 +357,27 @@ impl ModelsDevCatalog {
             .collect()
     }
 
+    /// All provider ids present in the catalog.
+    pub fn provider_ids(&self) -> Vec<String> {
+        self.providers.keys().cloned().collect()
+    }
+
+    /// Every text-generation model in the catalog paired with the provider id
+    /// that owns it. Used by catalog-wide scans such as pricing lookup and
+    /// provider inference for historical usage records.
+    pub fn all_models(&self) -> Vec<(String, ModelsDevModelFacts)> {
+        self.providers
+            .iter()
+            .flat_map(|(provider_id, provider)| {
+                provider
+                    .models
+                    .values()
+                    .filter(|model| model.supports_text_generation())
+                    .map(move |model| (provider_id.clone(), model.facts()))
+            })
+            .collect()
+    }
+
     pub fn canonical_model_id(&self, provider_id: &str, model_id: &str) -> Option<String> {
         self.model(provider_id, model_id)
             .map(|model| model.id.clone())

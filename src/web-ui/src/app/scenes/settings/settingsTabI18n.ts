@@ -23,6 +23,7 @@ export const SETTINGS_TAB_I18N_NAMESPACES: Record<ConfigTab, readonly I18nNamesp
   basics: ['settings/basics'],
   appearance: ['settings/appearance', 'settings/basics'],
   models: ['settings/ai-model', 'settings/default-model', 'components'],
+  'usage-statistics': ['settings/usage-statistics'],
   'archived-sessions': ['common'],
   worktrees: ['worktrees'],
   // Both session panels live in the same module and share its sub-sections.
