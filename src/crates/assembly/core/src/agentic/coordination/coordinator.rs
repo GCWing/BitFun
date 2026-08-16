@@ -91,6 +91,7 @@ use bitfun_agent_runtime::remote_file_delivery::{
 };
 use bitfun_agent_runtime::sdk::PermissionReply;
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+use bitfun_core_types::MINIMAL_HARNESS_PROFILE_ID;
 use bitfun_events::{ToolEventData, ToolEventIdentity};
 use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_runtime_ports::{
@@ -3213,6 +3214,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         enable_tools: bool,
         skill_agent_context_vars: &HashMap<String, String>,
         runtime_tool_restrictions: &ToolRuntimeRestrictions,
+        allow_skill_agent_listing_reminders: bool,
     ) -> BitFunResult<WrappedUserInputPayload> {
         let agent_registry = get_agent_registry();
         agent_registry
@@ -3261,18 +3263,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
         {
             let diff = diff_skill_agent_snapshot(&previous_snapshot, &surface_resolution.snapshot);
-            if let Some(skill_update) = diff.render_skill_listing_update() {
-                prepended_messages.push(Message::internal_reminder(
-                    InternalReminderKind::SkillListingDiff,
-                    skill_update,
-                ));
-            }
-            if let Some(agent_update) = diff.render_agent_listing_update() {
-                prepended_messages.push(Message::internal_reminder(
-                    InternalReminderKind::AgentListingDiff,
-                    agent_update,
-                ));
-            }
+            append_skill_agent_listing_diff_reminders(
+                &mut prepended_messages,
+                allow_skill_agent_listing_reminders,
+                diff.render_skill_listing_update(),
+                diff.render_agent_listing_update(),
+            );
             if diff.is_empty() {
                 SkillAgentSnapshotPersistence::None
             } else {
@@ -5576,6 +5572,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session.config.enable_tools,
                 &skill_agent_context_vars,
                 &runtime_tool_restrictions,
+                session.config.execution_profile.harness_profile_id.as_str()
+                    != MINIMAL_HARNESS_PROFILE_ID,
             )
             .await?;
         let effective_user_input = wrapped_user_input_payload.content.clone();
@@ -12792,6 +12790,30 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
     GLOBAL_COORDINATOR.get().cloned()
 }
 
+fn append_skill_agent_listing_diff_reminders(
+    prepended_messages: &mut Vec<Message>,
+    allow_listing_reminders: bool,
+    skill_update: Option<String>,
+    agent_update: Option<String>,
+) {
+    if !allow_listing_reminders {
+        return;
+    }
+
+    if let Some(skill_update) = skill_update {
+        prepended_messages.push(Message::internal_reminder(
+            InternalReminderKind::SkillListingDiff,
+            skill_update,
+        ));
+    }
+    if let Some(agent_update) = agent_update {
+        prepended_messages.push(Message::internal_reminder(
+            InternalReminderKind::AgentListingDiff,
+            agent_update,
+        ));
+    }
+}
+
 fn merge_prepended_messages_for_turn(
     additional_prepended_messages: Vec<Message>,
     wrapped_prepended_messages: Vec<Message>,
@@ -12828,9 +12850,9 @@ fn merge_prepended_messages_for_turn(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_primary_agent_model_default, btw_session_memory_mode,
-        build_subagent_session_relationship, lineage_active_turn_after_transcript,
-        lineage_post_admission_cancellation_error,
+        append_skill_agent_listing_diff_reminders, apply_primary_agent_model_default,
+        btw_session_memory_mode, build_subagent_session_relationship,
+        lineage_active_turn_after_transcript, lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         permission_mode_from_metadata, resolve_agent_session_create_created_by,
@@ -17688,6 +17710,51 @@ mod tests {
         );
         assert_eq!(relationship.parent_turn_index, Some(2));
         assert_eq!(metadata.memory_mode, SessionMemoryMode::Disabled);
+    }
+
+    #[test]
+    fn minimal_harness_omits_skill_and_agent_listing_diff_reminders() {
+        let mut messages = vec![Message::internal_reminder(
+            InternalReminderKind::AgentMode,
+            "mode",
+        )];
+
+        append_skill_agent_listing_diff_reminders(
+            &mut messages,
+            false,
+            Some("skills changed".to_string()),
+            Some("agents changed".to_string()),
+        );
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(
+            messages[0].internal_reminder_kind(),
+            Some(InternalReminderKind::AgentMode)
+        );
+    }
+
+    #[test]
+    fn non_minimal_harness_preserves_skill_and_agent_listing_diff_reminders() {
+        let mut messages = Vec::new();
+
+        append_skill_agent_listing_diff_reminders(
+            &mut messages,
+            true,
+            Some("skills changed".to_string()),
+            Some("agents changed".to_string()),
+        );
+
+        let kinds = messages
+            .iter()
+            .map(Message::internal_reminder_kind)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            kinds,
+            vec![
+                Some(InternalReminderKind::SkillListingDiff),
+                Some(InternalReminderKind::AgentListingDiff),
+            ]
+        );
     }
 
     #[test]

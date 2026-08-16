@@ -85,6 +85,20 @@ fn is_root_minimal_harness(context: &ExecutionContext) -> bool {
         && context.execution_profile.harness_profile_id.as_str() == MINIMAL_HARNESS_PROFILE_ID
 }
 
+fn skill_agent_listing_reminders_for_profile(
+    is_minimal_harness: bool,
+    baseline_tool_sections: Option<&ToolListingSections>,
+) -> (Option<String>, Option<String>) {
+    if is_minimal_harness {
+        return (None, None);
+    }
+
+    (
+        baseline_tool_sections.and_then(ToolListingSections::render_skill_listing_reminder),
+        baseline_tool_sections.and_then(ToolListingSections::render_agent_listing_reminder),
+    )
+}
+
 fn reached_fixed_model_round_limit(
     max_model_rounds: Option<usize>,
     completed_rounds: usize,
@@ -1274,20 +1288,25 @@ impl ExecutionEngine {
             .map(|remote| remote.connection_display_name.replace('|', "/"));
 
         let prompt_builder = PromptBuilder::new(prompt_context.clone());
-        let baseline_snapshot = if let Some(snapshot) = self
-            .session_manager
-            .skill_agent_baseline_override_snapshot(session_id)
-            .await
-        {
-            Some(snapshot)
+        let is_minimal_harness = is_root_minimal_harness(execution_context);
+        let baseline_tool_sections = if is_minimal_harness {
+            None
         } else {
-            self.session_manager
-                .turn_skill_agent_snapshot(session_id, 0)
+            let baseline_snapshot = if let Some(snapshot) = self
+                .session_manager
+                .skill_agent_baseline_override_snapshot(session_id)
                 .await
+            {
+                Some(snapshot)
+            } else {
+                self.session_manager
+                    .turn_skill_agent_snapshot(session_id, 0)
+                    .await
+            };
+            baseline_snapshot
+                .map(|snapshot| build_skill_agent_tool_listing_sections_from_snapshot(&snapshot))
         };
-        let baseline_tool_sections = baseline_snapshot
-            .map(|snapshot| build_skill_agent_tool_listing_sections_from_snapshot(&snapshot));
-        if baseline_tool_sections.is_none() {
+        if !is_minimal_harness && baseline_tool_sections.is_none() {
             warn!(
                 "Listing reminder baseline snapshot unavailable while building prepended reminders: session_id={}",
                 session_id
@@ -1360,15 +1379,17 @@ impl ExecutionEngine {
             built_user_context
         };
         let runtime_context = prompt_builder.build_runtime_context_reminder().await;
+        let (skill_listing, agent_listing) = skill_agent_listing_reminders_for_profile(
+            is_minimal_harness,
+            baseline_tool_sections.as_ref(),
+        );
 
         PrependedPromptReminders {
-            deferred_tool_listing: prompt_builder.build_deferred_tool_listing_reminder(),
-            skill_listing: baseline_tool_sections
-                .as_ref()
-                .and_then(|sections| sections.render_skill_listing_reminder()),
-            agent_listing: baseline_tool_sections
-                .as_ref()
-                .and_then(|sections| sections.render_agent_listing_reminder()),
+            deferred_tool_listing: (!is_minimal_harness)
+                .then(|| prompt_builder.build_deferred_tool_listing_reminder())
+                .flatten(),
+            skill_listing,
+            agent_listing,
             runtime_context,
             user_context,
         }
@@ -4867,11 +4888,11 @@ mod tests {
     use super::{
         activate_conditional_instructions_after_round, ensure_primary_session_goal_tools,
         manual_compaction_terminal_error, missing_required_minimal_tool_definitions,
-        runtime_context_needs_for_manifest, ContextHealthSnapshot, ExecutionEngine, RoundResult,
-        TurnPromptScaffold,
+        runtime_context_needs_for_manifest, skill_agent_listing_reminders_for_profile,
+        ContextHealthSnapshot, ExecutionEngine, RoundResult, TurnPromptScaffold,
     };
     use crate::agentic::agents::{
-        PrependedPromptReminders, PromptBuilderContext, UserContextPolicy,
+        PrependedPromptReminders, PromptBuilderContext, ToolListingSections, UserContextPolicy,
     };
     use crate::agentic::core::{InternalReminderKind, Message, MessageRole, ToolCall, ToolResult};
     use crate::agentic::persistence::PersistenceManager;
@@ -4920,6 +4941,39 @@ mod tests {
             deferred_tool_summaries: Vec::new(),
             catalog_generation: 0,
         }
+    }
+
+    #[test]
+    fn minimal_harness_omits_skill_and_agent_listing_reminders() {
+        let sections = ToolListingSections {
+            skill_listing: Some("<available_skills>pdf</available_skills>".to_string()),
+            agent_listing: Some("<available_agents>Explore</available_agents>".to_string()),
+            deferred_tool_listing: None,
+        };
+
+        assert_eq!(
+            skill_agent_listing_reminders_for_profile(true, Some(&sections)),
+            (None, None)
+        );
+    }
+
+    #[test]
+    fn non_minimal_harness_preserves_skill_and_agent_listing_reminders() {
+        let sections = ToolListingSections {
+            skill_listing: Some("<available_skills>pdf</available_skills>".to_string()),
+            agent_listing: Some("<available_agents>Explore</available_agents>".to_string()),
+            deferred_tool_listing: None,
+        };
+
+        let (skill_listing, agent_listing) =
+            skill_agent_listing_reminders_for_profile(false, Some(&sections));
+
+        assert!(skill_listing
+            .as_deref()
+            .is_some_and(|listing| listing.contains("# Skill Listing")));
+        assert!(agent_listing
+            .as_deref()
+            .is_some_and(|listing| listing.contains("# Agent Listing")));
     }
 
     #[test]
