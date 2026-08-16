@@ -1,6 +1,6 @@
 {
   "title": "调用统计",
-  "subtitle": "历史模型调用情况统计：按模型、分组与端点统计请求数、Token 用量与估算费用。",
+  "subtitle": "历史模型调用情况统计：按模型、分组与端点统计请求数、Token 用量与缓存命中率。",
   "timeRange": {
     "label": "时间范围",
     "last24Hours": "近24小时",
@@ -24,8 +24,8 @@
   "summary": {
     "requests": "请求数",
     "tokens": "Token 总量",
-    "actualCost": "实际费用",
-    "standardCost": "标准费用"
+    "cachedTokens": "缓存命中 Token",
+    "cacheHitRate": "缓存命中率"
   },
   "distributions": {
     "byModel": "模型分布",
@@ -48,8 +48,6 @@
     "endpoint": "端点",
     "requests": "请求",
     "tokens": "Token",
-    "actual": "实际",
-    "standard": "标准"
-  },
-  "footnote": "费用基于 models.dev 目录价估算。BitFun 未提供分组级价格覆盖，因此实际费用与标准费用采用同一目录价。"
+    "cacheHitRate": "缓存命中率"
+  }
 }

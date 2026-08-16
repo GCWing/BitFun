@@ -58,9 +58,9 @@ function formatTokens(value: number): string {
   return String(value);
 }
 
-function formatCost(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '$0.00';
-  return `$${value.toFixed(6).replace(/\.?0+$/, '')}`;
+function formatHitRate(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return '–';
+  return `${Math.round(value * 100)}%`;
 }
 
 function formatBucketLabel(bucket: string, granularity: UsageGranularity): string {
@@ -188,8 +188,7 @@ const DistributionPanel: React.FC<{
             <span>{t(DISTRIBUTION_HEADER_KEY[kind])}</span>
             <span>{t('table.requests')}</span>
             <span>{t('table.tokens')}</span>
-            <span>{t('table.actual')}</span>
-            <span>{t('table.standard')}</span>
+            <span>{t('table.cacheHitRate')}</span>
           </div>
           <div className="bitfun-usage-stats__table-body">
             {entries.map((entry, index) => (
@@ -207,8 +206,9 @@ const DistributionPanel: React.FC<{
                 </span>
                 <span>{entry.requests}</span>
                 <span>{formatTokens(entry.tokens)}</span>
-                <span className="bitfun-usage-stats__cost">{formatCost(entry.cost)}</span>
-                <span className="bitfun-usage-stats__cost">{formatCost(entry.cost)}</span>
+                <span className="bitfun-usage-stats__hit-rate">
+                  {formatHitRate(entry.cacheHitRate)}
+                </span>
               </div>
             ))}
           </div>
@@ -521,11 +521,14 @@ const UsageStatisticsConfig: React.FC = () => {
 
   const summaryCards = useMemo(() => {
     if (!stats) return [];
+    const overallHitRate = stats.totalCacheReportedInputTokens > 0
+      ? stats.totalCachedTokens / stats.totalCacheReportedInputTokens
+      : null;
     return [
       { key: 'summary.requests', value: String(stats.totalRequests) },
       { key: 'summary.tokens', value: formatTokens(stats.totalTokens) },
-      { key: 'summary.actualCost', value: formatCost(stats.totalCost), cost: true },
-      { key: 'summary.standardCost', value: formatCost(stats.totalCost), cost: true },
+      { key: 'summary.cachedTokens', value: formatTokens(stats.totalCachedTokens) },
+      { key: 'summary.cacheHitRate', value: formatHitRate(overallHitRate), highlight: true },
     ];
   }, [stats]);
 
@@ -596,7 +599,7 @@ const UsageStatisticsConfig: React.FC = () => {
                   <span
                     className={[
                       'bitfun-usage-stats__summary-value',
-                      card.cost && 'bitfun-usage-stats__summary-value--cost',
+                      card.highlight && 'bitfun-usage-stats__summary-value--highlight',
                     ].filter(Boolean).join(' ')}
                   >
                     {card.value}
@@ -614,8 +617,6 @@ const UsageStatisticsConfig: React.FC = () => {
                 <TrendChart points={stats.trend} granularity={stats.granularity} />
               </div>
             </div>
-
-            <p className="bitfun-usage-stats__footnote">{t('footnote')}</p>
           </>
         ) : null}
       </ConfigPageContent>

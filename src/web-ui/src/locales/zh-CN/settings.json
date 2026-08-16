@@ -48,7 +48,7 @@
       "basics": "日志、终端 Shell、通知与开机启动。",
       "appearance": "语言、视觉外观与界面字体大小。",
       "models": "AI 模型、API 密钥、供应商、代理与会话标题。",
-      "usageStatistics": "历史模型调用情况统计：按模型、供应商与端点统计请求数、Token 用量与估算费用。",
+      "usageStatistics": "历史模型调用情况统计：按模型、供应商与端点统计请求数、Token 用量与缓存命中率。",
       "worktrees": "隔离 Git Worktree 与并行会话的默认设置。",
       "sessionPersonalization": "Agent 伙伴。",
       "sessionPermissions": "工具权限、运行方式以及桌面和浏览器控制。",
