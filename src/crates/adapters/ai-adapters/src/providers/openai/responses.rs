@@ -4,16 +4,73 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_responses_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::{Message, ReasoningPresetAction, ToolDefinition};
+use crate::types::{Message, ModelRequestContext, ReasoningPresetAction, ToolDefinition};
 use anyhow::{anyhow, Result};
 use log::debug;
+use sha2::{Digest, Sha256};
 
-pub(crate) fn try_build_request_body(
+const TARGET: &str = "ai::responses_stream_request";
+
+fn hash_json(value: &serde_json::Value) -> String {
+    hex::encode(Sha256::digest(
+        serde_json::to_vec(value).unwrap_or_default(),
+    ))
+}
+
+fn hash_text(value: Option<&str>) -> String {
+    hex::encode(Sha256::digest(value.unwrap_or_default().as_bytes()))
+}
+
+fn short_hash(value: &str) -> &str {
+    value.get(..12).unwrap_or(value)
+}
+
+fn prompt_cache_key_hash(request_body: &serde_json::Value) -> Option<String> {
+    request_body
+        .get("prompt_cache_key")
+        .and_then(serde_json::Value::as_str)
+        .map(|key| hex::encode(Sha256::digest(key.as_bytes())))
+}
+
+fn log_prompt_cache_diagnostics(request_body: &serde_json::Value) {
+    let input = request_body
+        .get("input")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let tools = request_body
+        .get("tools")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let instructions = request_body
+        .get("instructions")
+        .and_then(serde_json::Value::as_str);
+    let cache_key_hash = prompt_cache_key_hash(request_body);
+    let input_hash = hash_json(&input);
+    let tools_hash = hash_json(&tools);
+    let instructions_hash = hash_text(instructions);
+
+    debug!(
+        target: TARGET,
+        "Responses prompt cache diagnostics: cache_key_hash={}, instructions_hash={}, input_hash={}, tools_hash={}, input_items={}, tool_count={}",
+        cache_key_hash
+            .as_deref()
+            .map(short_hash)
+            .unwrap_or("none"),
+        short_hash(&instructions_hash),
+        short_hash(&input_hash),
+        short_hash(&tools_hash),
+        input.as_array().map(Vec::len).unwrap_or(0),
+        tools.as_array().map(Vec::len).unwrap_or(0),
+    );
+}
+
+fn try_build_request_body_with_context(
     client: &AIClient,
     instructions: Option<String>,
     response_input: Vec<serde_json::Value>,
     openai_tools: Option<Vec<serde_json::Value>>,
     extra_body: Option<serde_json::Value>,
+    request_context: Option<&ModelRequestContext>,
 ) -> Result<serde_json::Value> {
     let mut request_body = serde_json::json!({
         "model": client.config.model,
@@ -29,6 +86,14 @@ pub(crate) fn try_build_request_body(
         request_body["max_output_tokens"] = serde_json::json!(max_tokens);
     }
 
+    if let Some(prompt_cache_route_key) = request_context
+        .and_then(|context| context.prompt_cache_route_key.as_deref())
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+    {
+        request_body["prompt_cache_key"] = serde_json::Value::String(prompt_cache_route_key.into());
+    }
+
     let base_reasoning_fields =
         shared::capture_reasoning_fields(&request_body, &["reasoning"], &[]);
     let protected_keys = &[
@@ -37,6 +102,7 @@ pub(crate) fn try_build_request_body(
         "instructions",
         "stream",
         "max_output_tokens",
+        "prompt_cache_key",
         "tools",
     ];
     let compile = |action: &ReasoningPresetAction, body: &mut serde_json::Value| -> Result<bool> {
@@ -69,6 +135,7 @@ pub(crate) fn try_build_request_body(
             "instructions",
             "stream",
             "max_output_tokens",
+            "prompt_cache_key",
         ],
         &[],
     );
@@ -76,11 +143,18 @@ pub(crate) fn try_build_request_body(
     if let Some(extra) = extra_body {
         if let Some(extra_obj) = extra.as_object() {
             shared::merge_extra_body(&mut request_body, extra_obj);
-            shared::log_extra_body_keys("ai::responses_stream_request", extra_obj);
+            shared::log_extra_body_keys(TARGET, extra_obj);
         }
     }
 
     shared::restore_protected_body(&mut request_body, protected_body);
+    if let Some(prompt_cache_route_key) = request_context
+        .and_then(|context| context.prompt_cache_route_key.as_deref())
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+    {
+        request_body["prompt_cache_key"] = serde_json::Value::String(prompt_cache_route_key.into());
+    }
     if let Some(preset) = client.selected_reasoning_preset.as_ref() {
         shared::reset_reasoning_fields(
             &mut request_body,
@@ -92,18 +166,32 @@ pub(crate) fn try_build_request_body(
     }
 
     shared::log_request_body(
-        "ai::responses_stream_request",
+        TARGET,
         "Responses stream request body (excluding tools):",
         &request_body,
     );
 
-    common::attach_tools(
-        &mut request_body,
-        openai_tools,
-        "ai::responses_stream_request",
-    );
+    common::attach_tools(&mut request_body, openai_tools, TARGET);
+    log_prompt_cache_diagnostics(&request_body);
 
     Ok(request_body)
+}
+
+pub(crate) fn try_build_request_body(
+    client: &AIClient,
+    instructions: Option<String>,
+    response_input: Vec<serde_json::Value>,
+    openai_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+) -> Result<serde_json::Value> {
+    try_build_request_body_with_context(
+        client,
+        instructions,
+        response_input,
+        openai_tools,
+        extra_body,
+        None,
+    )
 }
 
 #[cfg(test)]
@@ -124,6 +212,26 @@ pub(crate) fn build_request_body(
     .expect("request body should compile")
 }
 
+#[cfg(test)]
+fn build_request_body_with_context(
+    client: &AIClient,
+    instructions: Option<String>,
+    response_input: Vec<serde_json::Value>,
+    openai_tools: Option<Vec<serde_json::Value>>,
+    extra_body: Option<serde_json::Value>,
+    request_context: Option<&ModelRequestContext>,
+) -> serde_json::Value {
+    try_build_request_body_with_context(
+        client,
+        instructions,
+        response_input,
+        openai_tools,
+        extra_body,
+        request_context,
+    )
+    .expect("request body should compile")
+}
+
 pub(crate) async fn send_stream(
     client: &AIClient,
     messages: Vec<Message>,
@@ -131,6 +239,7 @@ pub(crate) async fn send_stream(
     extra_body: Option<serde_json::Value>,
     max_tries: usize,
     trace: Option<ModelExchangeTraceConfig>,
+    request_context: Option<ModelRequestContext>,
 ) -> Result<StreamResponse> {
     // Codex CLI's ChatGPT-login backend (`chatgpt.com/backend-api/codex`)
     // speaks a constrained Responses dialect with several extra
@@ -153,13 +262,15 @@ pub(crate) async fn send_stream(
     let (instructions, response_input) =
         OpenAIMessageConverter::convert_messages_to_responses_input(messages);
     let openai_tools = common::convert_tools_flat(tools);
-    let request_body = try_build_request_body(
+    let request_body = try_build_request_body_with_context(
         client,
         instructions,
         response_input,
         openai_tools,
         extra_body,
+        request_context.as_ref(),
     )?;
+    let expected_prompt_cache_key_hash = prompt_cache_key_hash(&request_body);
     let idle_timeout = client.stream_options.idle_timeout;
     let ttft_timeout = client.stream_options.ttft_timeout;
 
@@ -172,7 +283,14 @@ pub(crate) async fn send_stream(
         trace,
         || common::apply_headers(client, client.client.post(&url)),
         move |response, tx, tx_raw, remaining_ttft_timeout| {
-            handle_responses_stream(response, tx, tx_raw, remaining_ttft_timeout, idle_timeout)
+            handle_responses_stream(
+                response,
+                tx,
+                tx_raw,
+                remaining_ttft_timeout,
+                idle_timeout,
+                expected_prompt_cache_key_hash.clone(),
+            )
         },
     )
     .await
@@ -180,8 +298,8 @@ pub(crate) async fn send_stream(
 
 #[cfg(test)]
 mod tests {
-    use super::build_request_body;
-    use crate::types::ToolDefinition;
+    use super::{build_request_body, build_request_body_with_context};
+    use crate::types::{ModelRequestContext, ToolDefinition};
     use crate::{client::AIClient, types::AIConfig};
     use serde_json::json;
 
@@ -233,5 +351,26 @@ mod tests {
         assert_eq!(request_body["tools"][0]["name"], json!("get_weather"));
         assert_eq!(request_body["tools"][0]["type"], json!("function"));
         assert!(request_body["tools"][0].get("function").is_none());
+    }
+
+    #[test]
+    fn attaches_runtime_prompt_cache_key_after_custom_body_merge() {
+        let client = test_client();
+        let request_context = ModelRequestContext {
+            prompt_cache_route_key: Some("bitfun-pc-v1-stable".to_string()),
+        };
+        let request_body = build_request_body_with_context(
+            &client,
+            Some("stable instructions".to_string()),
+            Vec::new(),
+            None,
+            Some(json!({ "prompt_cache_key": "user-override" })),
+            Some(&request_context),
+        );
+
+        assert_eq!(
+            request_body["prompt_cache_key"],
+            json!("bitfun-pc-v1-stable")
+        );
     }
 }

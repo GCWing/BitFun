@@ -32,7 +32,6 @@ pub struct ResponsesCompleted {
 #[derive(Debug, Deserialize)]
 pub struct ResponsesDone {
     #[serde(default)]
-    #[allow(dead_code)]
     pub id: Option<String>,
     #[serde(default)]
     pub usage: Option<ResponsesUsage>,
@@ -50,19 +49,23 @@ pub struct ResponsesUsage {
 #[derive(Debug, Deserialize)]
 pub struct ResponsesInputTokensDetails {
     pub cached_tokens: u32,
+    #[serde(default)]
+    pub cache_write_tokens: Option<u32>,
 }
 
 impl From<ResponsesUsage> for UnifiedTokenUsage {
     fn from(usage: ResponsesUsage) -> Self {
+        let (cached_content_token_count, cache_creation_token_count) = usage
+            .input_tokens_details
+            .map(|details| (Some(details.cached_tokens), details.cache_write_tokens))
+            .unwrap_or((None, None));
         Self {
             prompt_token_count: usage.input_tokens,
             candidates_token_count: usage.output_tokens,
             total_token_count: usage.total_tokens,
             reasoning_token_count: None,
-            cached_content_token_count: usage
-                .input_tokens_details
-                .map(|details| details.cached_tokens),
-            cache_creation_token_count: None,
+            cached_content_token_count,
+            cache_creation_token_count,
         }
     }
 }
@@ -141,14 +144,14 @@ mod tests {
     fn responses_cached_tokens_maps_to_cached_content() {
         let raw = r#"{
             "input_tokens": 200,
-            "input_tokens_details": { "cached_tokens": 80 },
+            "input_tokens_details": { "cached_tokens": 80, "cache_write_tokens": 64 },
             "output_tokens": 40,
             "total_tokens": 240
         }"#;
         let usage: ResponsesUsage = serde_json::from_str(raw).expect("valid responses usage");
         let unified: UnifiedTokenUsage = usage.into();
         assert_eq!(unified.cached_content_token_count, Some(80));
-        assert_eq!(unified.cache_creation_token_count, None);
+        assert_eq!(unified.cache_creation_token_count, Some(64));
     }
 
     #[test]
@@ -158,6 +161,20 @@ mod tests {
         let unified: UnifiedTokenUsage = usage.into();
         assert_eq!(unified.cached_content_token_count, None);
         assert_eq!(unified.cache_creation_token_count, None);
+    }
+
+    #[test]
+    fn responses_explicit_zero_cache_write_is_preserved() {
+        let raw = r#"{
+            "input_tokens": 200,
+            "input_tokens_details": { "cached_tokens": 80, "cache_write_tokens": 0 },
+            "output_tokens": 40,
+            "total_tokens": 240
+        }"#;
+        let usage: ResponsesUsage = serde_json::from_str(raw).expect("valid responses usage");
+        let unified: UnifiedTokenUsage = usage.into();
+        assert_eq!(unified.cached_content_token_count, Some(80));
+        assert_eq!(unified.cache_creation_token_count, Some(0));
     }
 
     #[test]

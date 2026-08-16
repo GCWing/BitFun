@@ -885,6 +885,7 @@ dependencies = [
  "eventsource-stream",
  "fs2",
  "futures",
+ "hex",
  "keyring-core",
  "libc",
  "log",

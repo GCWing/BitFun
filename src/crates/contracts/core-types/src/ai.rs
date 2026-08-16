@@ -643,6 +643,18 @@ pub struct AIConfig {
     pub custom_request_body_mode: Option<String>,
 }
 
+/// Provider-neutral options that vary per model request rather than per model
+/// configuration.
+///
+/// Adapters may map these opaque facts to provider-specific request fields.
+/// Runtime owners must not place provider field names or raw local identifiers
+/// in this contract.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModelRequestContext {
+    /// Stable, opaque routing identity for provider-side prompt-prefix caches.
+    pub prompt_cache_route_key: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,

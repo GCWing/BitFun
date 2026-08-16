@@ -394,9 +394,10 @@ impl RoundExecutor {
             let request_trace_config = trace_config
                 .clone()
                 .map(|config| config.with_round_attempt(attempt_id.clone(), attempt_number));
-            let send_future = ai_client.send_message_stream_once(
+            let send_future = ai_client.send_message_stream_once_with_request_context(
                 ai_messages.clone(),
                 tool_definitions.clone(),
+                Some(context.model_request_context.clone()),
                 request_trace_config,
             );
             let send_result = tokio::select! {
@@ -1699,6 +1700,7 @@ mod tests {
             loaded_deferred_tool_specs: Vec::new(),
             model_config_id: "model-1".to_string(),
             effective_model_name: "model-1".to_string(),
+            model_request_context: Default::default(),
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::new(
                 "model-1", "model-1", "openai", true,
             ),

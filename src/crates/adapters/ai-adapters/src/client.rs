@@ -245,7 +245,36 @@ impl AIClient {
         tools: Option<Vec<ToolDefinition>>,
         trace: Option<ModelExchangeTraceConfig>,
     ) -> Result<StreamResponse> {
+        self.send_message_stream_once_with_request_context(messages, tools, None, trace)
+            .await
+    }
+
+    /// Open one model stream without an adapter-owned retry loop, carrying
+    /// provider-neutral request-scoped facts to adapters that support them.
+    pub async fn send_message_stream_once_with_request_context(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        request_context: Option<ModelRequestContext>,
+        trace: Option<ModelExchangeTraceConfig>,
+    ) -> Result<StreamResponse> {
         let custom_body = self.config.custom_request_body.clone();
+        if matches!(
+            ApiFormat::parse(&self.config.format)?,
+            ApiFormat::OpenAIResponses
+        ) {
+            return openai::responses::send_stream(
+                self,
+                messages,
+                tools,
+                custom_body,
+                1,
+                trace,
+                request_context,
+            )
+            .await;
+        }
+
         self.send_message_stream_with_extra_body_and_max_attempts(
             messages,
             tools,
@@ -387,8 +416,10 @@ impl AIClient {
                 openai::chat::send_stream(self, messages, tools, extra_body, max_tries, trace).await
             }
             ApiFormat::OpenAIResponses => {
-                openai::responses::send_stream(self, messages, tools, extra_body, max_tries, trace)
-                    .await
+                openai::responses::send_stream(
+                    self, messages, tools, extra_body, max_tries, trace, None,
+                )
+                .await
             }
             ApiFormat::Anthropic => {
                 anthropic::request::send_stream(self, messages, tools, extra_body, max_tries, trace)

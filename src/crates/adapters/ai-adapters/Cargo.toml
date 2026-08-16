@@ -36,7 +36,8 @@ log = { workspace = true }
 reqwest = { workspace = true, features = ["http2", "json", "rustls", "socks", "stream"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true, optional = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
@@ -62,7 +63,6 @@ subscription-auth = [
     "dep:keyring-core",
     "dep:libc",
     "reqwest/form",
-    "dep:sha2",
     "tokio/fs",
     "tokio/io-util",
     "tokio/net",

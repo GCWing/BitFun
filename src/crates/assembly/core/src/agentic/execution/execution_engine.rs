@@ -66,10 +66,11 @@ use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
 use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
-use bitfun_core_types::SessionModelBindingPolicy;
+use bitfun_core_types::{ModelRequestContext, SessionModelBindingPolicy};
 use bitfun_runtime_ports::{resolve_permission_mode, PermissionMode, PermissionModeLayers};
 use dashmap::DashMap;
 use log::{debug, error, info, trace, warn};
@@ -494,6 +495,7 @@ struct FinalizeRoundInput<'a> {
     messages: &'a [Message],
     prepended_reminders: &'a [&'a str],
     primary_model_facts: &'a PrimaryModelFacts,
+    model_request_context: &'a ModelRequestContext,
     execution_context_vars: &'a HashMap<String, String>,
     round_group_id: Option<String>,
     round_number: usize,
@@ -524,6 +526,7 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
+    const PROVIDER_PROMPT_CACHE_ROUTE_SCHEMA: &'static str = "bitfun-provider-prompt-cache-v1";
     const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS: usize = 10_000;
     const MAX_COMPRESSION_OVERFLOW_ATTEMPTS: usize = 4;
     const MAX_MAIN_CONTEXT_OVERFLOW_RECOVERIES: usize = 2;
@@ -533,6 +536,49 @@ impl ExecutionEngine {
         "Tool use is disabled for finalize. Respond with plain text only.";
     const FINALIZE_USER_FOLLOWUP: &'static str =
         "Provide a final answer. You MUST not call any tools.";
+
+    fn model_request_context(
+        session_id: &str,
+        model_binding_fingerprint: &str,
+        effective_model_name: &str,
+        current_agent: &dyn crate::agentic::agents::Agent,
+    ) -> ModelRequestContext {
+        let prompt_scope = prompt_cache_scope_key(
+            &current_agent.system_prompt_cache_identity(Some(effective_model_name)),
+            &current_agent.user_context_cache_identity(),
+        );
+        Self::model_request_context_from_scope_key(
+            session_id,
+            model_binding_fingerprint,
+            effective_model_name,
+            &prompt_scope,
+        )
+    }
+
+    fn model_request_context_from_scope_key(
+        session_id: &str,
+        model_binding_fingerprint: &str,
+        effective_model_name: &str,
+        prompt_scope: &str,
+    ) -> ModelRequestContext {
+        let mut hasher = Sha256::new();
+        for component in [
+            Self::PROVIDER_PROMPT_CACHE_ROUTE_SCHEMA,
+            session_id,
+            model_binding_fingerprint,
+            effective_model_name,
+            prompt_scope,
+        ] {
+            hasher.update(component.as_bytes());
+            hasher.update([0]);
+        }
+        ModelRequestContext {
+            prompt_cache_route_key: Some(format!(
+                "bitfun-pc-v1-{}",
+                hex::encode(hasher.finalize())
+            )),
+        }
+    }
 
     async fn context_vars_for_round(
         &self,
@@ -1946,6 +1992,7 @@ impl ExecutionEngine {
             loaded_deferred_tool_specs: Vec::new(),
             model_config_id: input.primary_model_facts.model_id.clone(),
             effective_model_name: input.ai_client.config.model.clone(),
+            model_request_context: input.model_request_context.clone(),
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
             context_vars: round_context_vars,
@@ -3390,7 +3437,7 @@ impl ExecutionEngine {
             }
         }
 
-        let (model_id, _) = self
+        let (model_id, model_binding_fingerprint) = self
             .resolve_model_id_for_turn(
                 &session,
                 &agent_type,
@@ -3468,6 +3515,12 @@ impl ExecutionEngine {
         };
         Self::validate_frozen_model_contract(&context).await?;
         Self::validate_frozen_reasoning_contract(&context, ai_client.as_ref())?;
+        let model_request_context = Self::model_request_context(
+            &context.session_id,
+            &model_binding_fingerprint,
+            &ai_client.config.model,
+            current_agent.as_ref(),
+        );
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
         let primary_model_facts = Self::resolve_primary_model_context(
@@ -4029,6 +4082,7 @@ impl ExecutionEngine {
                 loaded_deferred_tool_specs,
                 model_config_id: model_id.clone(),
                 effective_model_name: ai_client.config.model.clone(),
+                model_request_context: model_request_context.clone(),
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
@@ -4806,6 +4860,7 @@ impl ExecutionEngine {
                         round_group_id: finalize_round_group_id.clone(),
                         execution_context_vars: &execution_context_vars,
                         primary_model_facts: &primary_model_facts,
+                        model_request_context: &model_request_context,
                         prepended_reminders: &finalize_prepended_reminders,
                         messages: &messages,
                         reminder_text: finalize_reminder,
@@ -4837,6 +4892,7 @@ impl ExecutionEngine {
                             round_group_id: finalize_round_group_id.clone(),
                             execution_context_vars: &execution_context_vars,
                             primary_model_facts: &primary_model_facts,
+                            model_request_context: &model_request_context,
                             prepended_reminders: &finalize_prepended_reminders,
                             messages: &messages,
                             reminder_text: finalize_reminder,
@@ -6396,6 +6452,35 @@ mod tests {
         assert_eq!(snapshot.repeated_tool_signature_count, 0);
         assert_eq!(snapshot.consecutive_failed_commands, 2);
         assert_eq!(snapshot.compression_failure_count, 2);
+    }
+
+    #[test]
+    fn provider_prompt_cache_route_key_is_stable_and_changes_with_scope() {
+        let first = ExecutionEngine::model_request_context_from_scope_key(
+            "session-1",
+            "binding-1",
+            "gpt-5.6-terra",
+            "scope-1",
+        );
+        let retry = ExecutionEngine::model_request_context_from_scope_key(
+            "session-1",
+            "binding-1",
+            "gpt-5.6-terra",
+            "scope-1",
+        );
+        let changed = ExecutionEngine::model_request_context_from_scope_key(
+            "session-1",
+            "binding-2",
+            "gpt-5.6-terra",
+            "scope-1",
+        );
+
+        assert_eq!(first, retry);
+        assert_ne!(first, changed);
+        assert!(first
+            .prompt_cache_route_key
+            .as_deref()
+            .is_some_and(|key| key.starts_with("bitfun-pc-v1-")));
     }
 
     fn command_result(tool_name: &str, success: bool, exit_code: Option<i32>) -> Message {

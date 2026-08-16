@@ -8,14 +8,45 @@ use anyhow::{anyhow, Result};
 use bitfun_agent_stream::ToolCallCompletion;
 use bitfun_core_types::errors::AiProviderError;
 use eventsource_stream::Eventsource;
-use log::{error, trace};
+use log::{debug, error, trace};
 use reqwest::Response;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
 const AI_STREAM_RESPONSE_TARGET: &str = "ai::responses_stream_response";
+
+fn extract_response_prompt_cache_key_hash(response: Option<&Value>) -> Option<String> {
+    response
+        .and_then(|response| response.get("prompt_cache_key"))
+        .and_then(Value::as_str)
+        .map(|cache_key| hex::encode(Sha256::digest(cache_key.as_bytes())))
+}
+
+fn log_cache_stream_diagnostics(
+    response_created_count: usize,
+    completed_response_id: Option<&str>,
+    expected_prompt_cache_key_hash: Option<&str>,
+    response_prompt_cache_key_hash: Option<&str>,
+) {
+    debug!(
+        target: "ai::responses_cache",
+        "Responses cache stream diagnostics: response_created_count={}, completed_response_id={}, request_cache_key_hash={}, response_cache_key_hash={}, cache_key_matches={:?}",
+        response_created_count,
+        completed_response_id.unwrap_or("none"),
+        expected_prompt_cache_key_hash
+            .and_then(|value| value.get(..12))
+            .unwrap_or("none"),
+        response_prompt_cache_key_hash
+            .and_then(|value| value.get(..12))
+            .unwrap_or("none"),
+        expected_prompt_cache_key_hash
+            .zip(response_prompt_cache_key_hash)
+            .map(|(expected, actual)| expected == actual),
+    );
+}
 
 #[derive(Debug, Default, Clone)]
 struct InProgressToolCall {
@@ -291,6 +322,7 @@ pub async fn handle_responses_stream(
     tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
     ttft_timeout: Option<Duration>,
     idle_timeout: Option<Duration>,
+    expected_prompt_cache_key_hash: Option<String>,
 ) {
     let mut stream = response.bytes_stream().eventsource();
     // Some providers close the stream after emitting the terminal event and may not send `[DONE]`.
@@ -301,6 +333,8 @@ pub async fn handle_responses_stream(
     let mut tool_call_index_by_id: HashMap<String, usize> = HashMap::new();
     let mut stats = StreamStats::new("Responses");
     let mut timeout_controller = StreamTimeoutController::new(ttft_timeout, idle_timeout);
+    let mut response_created_count = 0usize;
+    let mut response_prompt_cache_key_hash: Option<String> = None;
 
     loop {
         let sse = match next_stream_item(&mut stream, &timeout_controller).await {
@@ -394,6 +428,24 @@ pub async fn handle_responses_stream(
         stats.increment(format!("event:{}", event.kind));
 
         match event.kind.as_str() {
+            "response.created" => {
+                response_created_count += 1;
+                if let Some(response) = event.response.as_ref() {
+                    if let Some(response_id) = response.get("id").and_then(Value::as_str) {
+                        debug!(
+                            target: "ai::responses_cache",
+                            "Responses response.created observed: count={}, response_id={}",
+                            response_created_count,
+                            response_id
+                        );
+                    }
+                    if let Some(cache_key_hash) =
+                        extract_response_prompt_cache_key_hash(Some(response))
+                    {
+                        response_prompt_cache_key_hash = Some(cache_key_hash);
+                    }
+                }
+            }
             "response.output_item.added" => {
                 // Track tool calls so we can stream arguments via `response.function_call_arguments.delta`.
                 if let Some(item) = event.item.as_ref() {
@@ -503,6 +555,11 @@ pub async fn handle_responses_stream(
                 }
                 // Best-effort: use the final response object to fill any missing tool-call argument tail.
                 if let Some(response_val) = event.response.as_ref() {
+                    if let Some(cache_key_hash) =
+                        extract_response_prompt_cache_key_hash(Some(response_val))
+                    {
+                        response_prompt_cache_key_hash = Some(cache_key_hash);
+                    }
                     if let Some(output) = response_val.get("output").and_then(Value::as_array) {
                         for (idx, item) in output.iter().enumerate() {
                             if item.get("type").and_then(Value::as_str) != Some("function_call") {
@@ -571,6 +628,12 @@ pub async fn handle_responses_stream(
                             &mut stats,
                             unified_response,
                         );
+                        log_cache_stream_diagnostics(
+                            response_created_count,
+                            Some(response.id.as_str()),
+                            expected_prompt_cache_key_hash.as_deref(),
+                            response_prompt_cache_key_hash.as_deref(),
+                        );
                         continue;
                     }
                     Some(Err(e)) => {
@@ -605,6 +668,11 @@ pub async fn handle_responses_stream(
                 if received_finish_reason {
                     continue;
                 }
+                if let Some(cache_key_hash) =
+                    extract_response_prompt_cache_key_hash(event.response.as_ref())
+                {
+                    response_prompt_cache_key_hash = Some(cache_key_hash);
+                }
                 match event.response.map(serde_json::from_value::<ResponsesDone>) {
                     Some(Ok(response)) => {
                         received_finish_reason = true;
@@ -621,6 +689,12 @@ pub async fn handle_responses_stream(
                             &tx_event,
                             &mut stats,
                             unified_response,
+                        );
+                        log_cache_stream_diagnostics(
+                            response_created_count,
+                            response.id.as_deref(),
+                            expected_prompt_cache_key_hash.as_deref(),
+                            response_prompt_cache_key_hash.as_deref(),
                         );
                         continue;
                     }

@@ -171,6 +171,7 @@ pub(crate) async fn run_stream_fixture_with_options(
                 Some(tx_raw_sse),
                 options.ttft_timeout,
                 options.idle_timeout,
+                None,
             ));
         }
     }
