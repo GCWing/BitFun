@@ -159,6 +159,7 @@ test('portable contract crates expose only capability-local feature slices', asy
       'git-port',
       'permission',
       'plugin-runtime',
+      'product-search',
       'remote-exec-port',
       'remote-workspace-ports',
       'runtime-event-port',
@@ -171,6 +172,7 @@ test('portable contract crates expose only capability-local feature slices', asy
   );
   assert.deepEqual(runtimePortFeatures['agent-api'], ['dep:bitfun-core-types']);
   assert.deepEqual(runtimePortFeatures['plugin-runtime'], []);
+  assert.deepEqual(runtimePortFeatures['product-search'], ['dep:bitfun-product-domains']);
   assert.deepEqual(runtimePortFeatures['script-tool-runtime'], []);
   assert.deepEqual(new Set(runtimePortFeatures['workspace-ports']), new Set(['dep:anyhow', 'dep:tokio-util']));
   assert.deepEqual(runtimePortFeatures['terminal-port'], ['dep:tokio']);
@@ -209,6 +211,7 @@ test('runtime-port capability source gates protect modules and public exports', 
     ['remote-workspace-ports', 'remote_workspace_ports'],
     ['runtime-event-port', 'runtime_event_port'],
     ['git-port', 'git_port'],
+    ['product-search', 'product_search'],
     ['tool-runtime-handles', 'tool_runtime_handles'],
   ]) {
     assert.match(patterns, new RegExp(`${feature}.*mod ${moduleName}`));
@@ -293,6 +296,7 @@ test('Services Core feature-free dependencies stay behind exact text and async I
       'lsp',
       'permission',
       'process-runtime',
+      'session-search',
       'workspace-instructions',
       'workspace-runtime',
       'workspace-text-runtime',
@@ -373,6 +377,7 @@ const RUNTIME_PORT_FEATURE_PROFILES = {
   'git-port': [],
   permission: ['dep:bitfun-product-domains'],
   'plugin-runtime': [],
+  'product-search': ['dep:bitfun-product-domains'],
   'remote-exec-port': ['dep:tokio'],
   'remote-workspace-ports': [],
   'runtime-event-port': [],
@@ -1373,6 +1378,7 @@ const ACP_REVIEWED_CORE_FEATURES = [
 
 const CLI_REVIEWED_CORE_FEATURES = [
   ...ACP_REVIEWED_CORE_FEATURES,
+  'product-search',
   'remote-connect',
   'plugin-runtime',
 ];
@@ -3294,6 +3300,7 @@ test('Services Core accepts only the reviewed feature-owned Tokio runtime graph'
         'tokio/time',
       ],
       permission: ['dep:tokio', 'tokio/rt'],
+      'session-search': ['dep:tokio', 'tokio/rt'],
       'process-runtime': [
         'dep:tokio',
         'tokio/io-util',

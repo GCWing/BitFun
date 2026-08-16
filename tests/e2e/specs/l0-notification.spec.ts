@@ -6,6 +6,16 @@
 import { browser, expect, $ } from '@wdio/globals';
 import { openWorkspace } from '../helpers/workspace-helper';
 
+async function openNotificationMenuItem() {
+  const moreButton = await $('[data-testid="nav-footer-more-btn"]');
+  await moreButton.waitForDisplayed({ timeout: 15000 });
+  await moreButton.click();
+
+  const notificationButton = await $('[data-testid="notification-button"]');
+  await notificationButton.waitForDisplayed({ timeout: 10000 });
+  return notificationButton;
+}
+
 describe('L0 Notification', () => {
   let hasWorkspace = false;
 
@@ -42,17 +52,18 @@ describe('L0 Notification', () => {
   });
 
   describe('Notification entry visibility', () => {
-    it('notification entry/button should be visible in header', async function () {
+    it('notification entry should be visible in More options', async function () {
       expect(hasWorkspace).toBe(true);
 
-      await browser.pause(500);
+      const notificationBtn = await openNotificationMenuItem();
+      const btnVisible = await notificationBtn.isDisplayed();
 
-      // Notification button is in NavPanel footer (not header)
-      const notificationBtn = await $('.bitfun-nav-panel__footer-btn.bitfun-notification-btn');
-      const btnExists = await notificationBtn.isExisting();
+      console.log('[L0] Notification menu item visible:', btnVisible);
+      expect(btnVisible).toBe(true);
 
-      console.log('[L0] Notification button found:', btnExists);
-      expect(btnExists).toBe(true);
+      const backdrop = await $('.bitfun-nav-panel__footer-backdrop');
+      await backdrop.click();
+      await backdrop.waitForExist({ reverse: true, timeout: 2000 });
     });
   });
 
@@ -60,38 +71,18 @@ describe('L0 Notification', () => {
     it('notification center should be accessible', async function () {
       expect(hasWorkspace).toBe(true);
 
-      await browser.pause(1000);
+      const notificationBtn = await openNotificationMenuItem();
+      await notificationBtn.click();
 
-      // Use JavaScript to click notification button (bypasses overlay)
-      const clicked = await browser.execute(() => {
-        const btn = document.querySelector('.bitfun-nav-panel__footer-btn.bitfun-notification-btn') as HTMLElement;
-        if (btn) {
-          btn.click();
-          return true;
-        }
-        return false;
-      });
+      const notificationCenter = await $('[data-testid="notification-center"]');
+      await notificationCenter.waitForDisplayed({ timeout: 10000 });
+      const centerVisible = await notificationCenter.isDisplayed();
 
-      console.log('[L0] Notification button clicked via JS:', clicked);
-      expect(clicked).toBe(true);
+      console.log('[L0] Notification center opened:', centerVisible);
+      expect(centerVisible).toBe(true);
 
-      await browser.pause(1000);
-
-      // Check for notification center
-      const notificationCenter = await $('.notification-center');
-      const centerExists = await notificationCenter.isExisting();
-
-      console.log('[L0] Notification center opened:', centerExists);
-      expect(centerExists).toBe(true);
-
-      // Close it
-      if (centerExists) {
-        await browser.execute(() => {
-          const btn = document.querySelector('.bitfun-nav-panel__footer-btn.bitfun-notification-btn') as HTMLElement;
-          if (btn) btn.click();
-        });
-        await browser.pause(500);
-      }
+      const closeButton = await $('[data-testid="notification-center-close-btn"]');
+      await closeButton.click();
     });
 
     it('notification container should exist for toast notifications', async function () {

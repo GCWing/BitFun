@@ -4,7 +4,11 @@
 
 export const FLOWCHAT_FOCUS_ITEM_EVENT = 'flowchat:focus-item';
 
-export type FlowChatFocusItemSource = 'btw-back' | 'usage-report' | 'background-activity';
+export type FlowChatFocusItemSource =
+  | 'btw-back'
+  | 'usage-report'
+  | 'background-activity'
+  | 'global-search';
 
 export interface FlowChatFocusItemRequest {
   sessionId: string;

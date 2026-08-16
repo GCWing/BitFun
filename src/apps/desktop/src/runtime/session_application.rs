@@ -33,6 +33,7 @@ use bitfun_core::service::session_usage::SessionUsageReport;
 use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
 use bitfun_core::util::errors::BitFunError;
+use bitfun_product_domains::product_search::SessionContentSearchResponse;
 use bitfun_runtime_ports::{AgentContextReloadRequest, SessionTurnWindowRequest};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
@@ -391,6 +392,25 @@ impl DesktopSessionApplication {
         let storage_path = self.storage_path(&scope);
         self.compatibility
             .list_persisted_sessions_page(&storage_path, cursor, limit)
+            .await
+            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+    }
+
+    pub(crate) async fn search_session_content(
+        &self,
+        request: DesktopSessionScopeRequest,
+        query: &str,
+        limit: usize,
+        include_archived: bool,
+    ) -> DesktopSessionApplicationResult<SessionContentSearchResponse> {
+        let scope = self.resolved_scope(request).await;
+        self.compatibility
+            .search_persisted_session_content(
+                &self.storage_path(&scope),
+                query,
+                limit,
+                include_archived,
+            )
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }

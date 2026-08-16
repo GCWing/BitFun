@@ -22,6 +22,7 @@ use bitfun_app_server_protocol::external_source::*;
 use bitfun_app_server_protocol::hook::*;
 use bitfun_app_server_protocol::mcp::*;
 use bitfun_app_server_protocol::model::*;
+use bitfun_app_server_protocol::search::*;
 use bitfun_app_server_protocol::session::*;
 use bitfun_app_server_protocol::skill::*;
 use bitfun_app_server_protocol::subagent::*;
@@ -74,6 +75,13 @@ pub struct AppServerClient {
 }
 
 impl AppServerClient {
+    pub async fn search_session_content(
+        &self,
+        request: SearchSessionContentMessage,
+    ) -> agent_client_protocol::Result<SearchSessionContentResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
     pub async fn account_snapshot(
         &self,
         request: AccountSnapshotRequest,

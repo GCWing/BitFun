@@ -35,13 +35,13 @@
     "clarificationBatchCompleted": "批量澄清处理完成"
   },
   "header": {
-    "openProject": "打开工作区",
-    "newProject": "新建工作区",
+    "openProject": "打开项目",
+    "newProject": "新建项目",
     "goHome": "返回首页",
     "about": "关于",
     "openMenu": "打开菜单",
     "closeMenu": "关闭菜单",
-    "selectProjectDirectory": "选择要打开的工作区目录",
+    "selectProjectDirectory": "选择要打开的项目目录",
     "configCenter": "配置中心",
     "expandLeftPanel": "展开左侧面板",
     "collapseLeftPanel": "收起左侧面板",
@@ -59,8 +59,8 @@
     "hideAgentic": "隐藏 Agentic",
     "activateAgentic": "激活 Agentic",
     "switchWorkspace": "切换工作区",
-    "recentWorkspaces": "最近工作区",
-    "noRecentWorkspaces": "暂无最近工作区",
+    "recentWorkspaces": "最近项目",
+    "noRecentWorkspaces": "暂无最近项目",
     "noWorkspaceOpen": "选择工作区",
     "remoteConnectRequiresWorkspace": "请先打开工作区再使用远程控制。"
   },
@@ -75,8 +75,9 @@
     "forwardShortcut": "前进 (Alt+→)",
     "items": {
       "sessions": "会话",
-      "project": "目录",
+      "project": "项目",
       "persona": "智能成员",
+      "assistant": "智能助理",
       "longTermTracking": "长期跟踪",
       "agents": "专业智能体",
       "skills": "技能",
@@ -95,7 +96,8 @@
       "skills": "它懂什么专项知识 — 技能知识文件",
       "ecosystemCompatibility": "生态兼容 — 管理其他 AI 应用的兼容能力与扩展",
       "tools": "它能用什么工具 — 内置工具与 MCP 服务",
-      "addWorkspace": "添加工作区"
+      "addWorkspace": "添加工作区",
+      "addSessionGroup": "添加项目或个人助理"
     },
     "sections": {
       "extensions": "扩展与兼容",
@@ -106,15 +108,88 @@
       "longTermTrackingComingSoon": "长期跟踪正在开发中"
     },
     "search": {
-      "triggerPlaceholder": "搜索",
+      "triggerPlaceholder": "搜索一切",
       "triggerTooltip": "搜索 (Ctrl+K、Alt+F)",
-      "inputPlaceholder": "搜索工作区、助理、会话...",
-      "groupWorkspaces": "已打开工作区",
+      "dialogLabel": "全局搜索",
+      "inputLabel": "搜索 BitFun",
+      "inputPlaceholder": "搜索任何内容，或输入 > 查找命令",
+      "resultsLabel": "搜索结果",
+      "clear": "清空搜索",
+      "groupWorkspaces": "项目",
       "groupAssistants": "助理",
       "groupSessions": "所有会话",
       "empty": "未找到相关结果",
-      "sessionSearchHintDefault": "输入关键词，搜索已打开工作区内的会话",
-      "sessionWorkspaceHint": "位于 {{workspace}}"
+      "searching": "正在搜索…",
+      "partialUnavailable": "部分搜索来源当前不可用",
+      "typeMoreForContent": "至少输入两个字符以搜索文件与内容",
+      "sessionSearchHintDefault": "输入关键词，搜索所有会话",
+      "sessionWorkspaceHint": "位于 {{workspace}}",
+      "resultCount": "{{count}} 个",
+      "back": "返回",
+      "backToOverview": "返回搜索概览",
+      "openGroup": "查看全部{{group}}，共 {{count}} 个",
+      "scopes": {
+        "all": "全部",
+        "actions": "命令",
+        "content": "内容"
+      },
+      "groups": {
+        "actions": "命令",
+        "frequentActions": "常用命令",
+        "messages": "消息",
+        "sessions": "会话",
+        "files": "文件",
+        "workspaces": "项目",
+        "assistants": "助理",
+        "settings": "$t(shared:features.settings)"
+      },
+      "actions": {
+        "newSession": "新建会话",
+        "openBrowser": "打开浏览器",
+        "openTerminal": "打开终端",
+        "openProject": "打开项目",
+        "newProject": "新建项目",
+        "openFiles": "打开文件",
+        "openAgents": "打开智能体",
+        "openSkills": "打开技能",
+        "openMiniApps": "打开 Mini Apps",
+        "openTodos": "打开待办",
+        "openInsights": "打开洞察",
+        "openSettings": "打开设置",
+        "openKeyboardShortcuts": "打开键盘快捷键",
+        "openExternalSources": "打开扩展与兼容"
+      },
+      "actionDescriptions": {
+        "newSession": "通过统一会话流程开始新对话",
+        "openBrowser": "在当前工作上下文中打开浏览器",
+        "openTerminal": "打开项目的持久化 Shell",
+        "openProject": "选择并打开本地或对端设备上的项目",
+        "newProject": "从模板或空工作区创建项目",
+        "openFiles": "浏览和编辑当前项目文件",
+        "openAgents": "管理已安装和自定义智能体",
+        "openSkills": "浏览和管理可复用技能",
+        "openMiniApps": "打开 Mini App 库",
+        "openTodos": "查看任务与后续工作",
+        "openInsights": "查看活动与使用洞察",
+        "openSettings": "配置 BitFun",
+        "openKeyboardShortcuts": "查看和自定义键盘快捷键",
+        "openExternalSources": "管理外部 AI 应用与兼容能力"
+      },
+      "badges": {
+        "userMessage": "你",
+        "assistantMessage": "助理"
+      },
+      "footer": {
+        "navigate": "选择",
+        "open": "打开",
+        "back": "返回",
+        "close": "关闭"
+      },
+      "errors": {
+        "activationFailed": "无法打开该结果",
+        "remoteFileSearchUnavailable": "远程项目 {{workspace}} 暂不支持文件搜索",
+        "sessionUnavailable": "该会话已不可用"
+      }
     },
     "githubStar": {
       "label": "Star",
@@ -191,12 +266,19 @@
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "noSessions": "暂无会话",
+      "viewToggle": {
+        "label": "会话显示方式",
+        "all": "全部",
+        "grouped": "分组",
+        "allTooltip": "将所有会话显示为一个列表",
+        "groupedTooltip": "按项目和助理组织会话"
+      },
       "viewMenu": {
         "title": "会话视图",
         "tooltip": "组织与筛选会话",
         "grouping": {
           "label": "分组",
-          "workspace": "$t(shared:features.workspace)",
+          "grouped": "项目与助理",
           "all": "全部会话"
         },
         "ordering": {
@@ -258,6 +340,7 @@
       "cancelEdit": "取消",
       "loading": "加载中...",
       "loadFailedRetry": "会话加载失败 — 重试",
+      "partialLoadFailedRetry": "部分工作区的会话未加载 — 重试",
       "showMore": "还有 {{count}} 个会话",
       "showAll": "还有 {{count}} 个（展开全部）",
       "showLess": "收起",
@@ -431,8 +514,9 @@
     },
     "workspaces": {
       "empty": "暂无已打开工作区",
-      "emptyProjects": "暂无普通工作区",
+      "emptyProjects": "暂无项目",
       "emptyAssistants": "暂无个人助理",
+      "emptySessionGroups": "暂无项目或助理",
       "primaryAssistant": "主助理",
       "closeFailed": "关闭工作区失败",
       "createAssistantFailed": "新建个人助理失败",
@@ -440,7 +524,7 @@
       "assistantDeleted": "已删除个人助理",
       "resetWorkspaceFailed": "重置工作区失败",
       "workspaceReset": "已重置工作区",
-      "reorderFailed": "调整工作区顺序失败",
+      "reorderFailed": "调整会话分组顺序失败",
       "dropBefore": "松开后插入到此项前",
       "dropAfter": "松开后插入到此项后",
       "revealFailed": "打开工作区目录失败",
@@ -455,11 +539,11 @@
       "expandSessions": "展开会话列表",
       "collapseSessions": "收起会话列表",
       "groups": {
-        "projects": "普通工作区",
-        "assistants": "个人助理"
+        "projects": "项目",
+        "assistants": "助理"
       },
       "remote": {
-        "tooltip": "远程工作区 · {{connection}}（{{host}}）\n连接状态：{{status}}",
+        "tooltip": "远程项目 · {{connection}}（{{host}}）\n连接状态：{{status}}",
         "ariaLabel": "远程连接 {{connection}}，{{status}}",
         "status": {
           "connected": "已连接",
@@ -481,7 +565,7 @@
         "rename": "重命名项目",
         "copyPath": "复制路径",
         "reveal": "在资源管理器中打开",
-        "close": "关闭工作区"
+        "close": "关闭项目"
       },
       "renameDialog": {
         "title": "重命名项目",
@@ -1406,7 +1490,7 @@
   "ssh": {
     "remote": {
       "title": "远程 SSH",
-      "connect": "连接远程工作区",
+      "connect": "连接远程项目",
       "connecting": "连接中...",
       "connected": "已连接",
       "disconnect": "断开连接",

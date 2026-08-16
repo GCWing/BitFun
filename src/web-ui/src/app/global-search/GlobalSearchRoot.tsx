@@ -1,0 +1,578 @@
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import {
+  BarChart3,
+  Blocks,
+  Bot,
+  CheckSquare2,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  FolderOpen,
+  FolderPlus,
+  Globe,
+  Keyboard,
+  MessageSquareText,
+  MessagesSquare,
+  MoreHorizontal,
+  Network,
+  Pin,
+  Plus,
+  Puzzle,
+  Search,
+  Settings,
+  SlidersHorizontal,
+  SquareTerminal,
+  UserRound,
+  Users,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+import { Modal } from '@/component-library';
+import { useShortcut } from '@/infrastructure/hooks/useShortcut';
+import { useI18n } from '@/infrastructure/i18n';
+import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { useMyAgentStore } from '@/app/scenes/my-agent/myAgentStore';
+import { useNurseryStore } from '@/app/scenes/profile/nurseryStore';
+import { notificationService } from '@/shared/notification-system';
+import { createLogger } from '@/shared/utils/logger';
+import { activateGlobalSearchTarget } from './globalSearchActivator';
+import { runFederatedSearch } from './federatedSearchEngine';
+import { globalSearchRegistry } from './globalSearchRegistry';
+import {
+  getGlobalSearchShortcutLabel,
+  GLOBAL_SEARCH_SHORTCUT,
+  subscribeGlobalSearchShortcut,
+} from './globalSearchShortcut';
+import { useGlobalSearchStore } from './globalSearchStore';
+import { PRODUCT_ACTION_CATALOG, type ProductActionIcon } from './productActionCatalog';
+import {
+  buildGlobalSearchResultPresentation,
+  type GlobalSearchDrilldownGroupId,
+} from './globalSearchResultPresentation';
+import { parseGlobalSearchQuery } from './searchMatching';
+import {
+  type GlobalSearchGroupId,
+  type GlobalSearchItem,
+  type GlobalSearchScope,
+  type GlobalSearchSnapshot,
+} from './types';
+import './GlobalSearchRoot.scss';
+
+const log = createLogger('GlobalSearch');
+const SEARCH_DEBOUNCE_MS = 90;
+const SEARCH_LIMIT_PER_GROUP = 20;
+const SEARCH_QUERY_MAX_LENGTH = 512;
+
+const EMPTY_SNAPSHOT: GlobalSearchSnapshot = {
+  items: [],
+  providerStatus: {},
+  diagnostics: [],
+  isSearching: false,
+  truncated: false,
+};
+
+const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
+  plus: Plus,
+  'folder-open': FolderOpen,
+  'folder-plus': FolderPlus,
+  globe: Globe,
+  terminal: SquareTerminal,
+  files: FileText,
+  users: Users,
+  puzzle: Puzzle,
+  blocks: Blocks,
+  'check-square': CheckSquare2,
+  chart: BarChart3,
+  settings: Settings,
+  keyboard: Keyboard,
+  network: Network,
+};
+
+const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, LucideIcon> = {
+  messages: MessageSquareText,
+  sessions: MessagesSquare,
+  files: FileText,
+  workspaces: FolderOpen,
+  assistants: Bot,
+  settings: SlidersHorizontal,
+};
+
+function iconForItem(item: GlobalSearchItem): LucideIcon {
+  if (item.target.kind === 'action') {
+    const actionId = item.target.actionId;
+    const action = PRODUCT_ACTION_CATALOG.find((candidate) => candidate.id === actionId);
+    return action ? ACTION_ICONS[action.icon] : Search;
+  }
+  if (item.target.kind === 'assistant') return UserRound;
+  return GROUP_ICONS[item.group as Exclude<GlobalSearchGroupId, 'actions'>] ?? Search;
+}
+
+function resultVariant(group: GlobalSearchGroupId): 'action' | 'entity' | 'standard' {
+  if (group === 'actions') return 'action';
+  if (group === 'workspaces' || group === 'assistants') return 'entity';
+  return 'standard';
+}
+
+const GlobalSearchRoot: React.FC = () => {
+  const { t: tCommon } = useI18n('common');
+  const { t: tSettings } = useI18n('settings');
+  const {
+    currentWorkspace,
+    openedWorkspacesList,
+    setActiveWorkspace,
+  } = useWorkspaceContext();
+  const selectAssistantWorkspace = useMyAgentStore((state) => state.setSelectedAssistantWorkspaceId);
+  const openAssistant = useNurseryStore((state) => state.openAssistant);
+  const open = useGlobalSearchStore((state) => state.open);
+  const initialQuery = useGlobalSearchStore((state) => state.initialQuery);
+  const closeSearch = useGlobalSearchStore((state) => state.closeSearch);
+  const toggleSearch = useGlobalSearchStore((state) => state.toggleSearch);
+  const [query, setQuery] = useState('');
+  const [scope, setScope] = useState<GlobalSearchScope>('all');
+  const [snapshot, setSnapshot] = useState<GlobalSearchSnapshot>(EMPTY_SNAPSHOT);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [drilldownGroup, setDrilldownGroup] = useState<GlobalSearchDrilldownGroupId | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const providers = useSyncExternalStore(
+    globalSearchRegistry.subscribe,
+    globalSearchRegistry.getSnapshot,
+    globalSearchRegistry.getSnapshot,
+  );
+  const searchShortcutLabel = useSyncExternalStore(
+    subscribeGlobalSearchShortcut,
+    getGlobalSearchShortcutLabel,
+    getGlobalSearchShortcutLabel,
+  );
+
+  useShortcut(
+    GLOBAL_SEARCH_SHORTCUT.id,
+    GLOBAL_SEARCH_SHORTCUT.config,
+    toggleSearch,
+    { priority: 20, description: GLOBAL_SEARCH_SHORTCUT.descriptionKey },
+  );
+
+  useEffect(() => {
+    const handleSecondaryShortcut = (event: KeyboardEvent) => {
+      if (
+        !event.altKey
+        || event.ctrlKey
+        || event.metaKey
+        || event.shiftKey
+        || event.key.toLocaleLowerCase() !== 'f'
+      ) {
+        return;
+      }
+      event.preventDefault();
+      toggleSearch();
+    };
+    document.addEventListener('keydown', handleSecondaryShortcut);
+    return () => document.removeEventListener('keydown', handleSecondaryShortcut);
+  }, [toggleSearch]);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery(initialQuery);
+    setScope('all');
+    setActiveId(null);
+    setDrilldownGroup(null);
+    setSnapshot(EMPTY_SNAPSHOT);
+  }, [initialQuery, open]);
+
+  const parsedQuery = useMemo(() => parseGlobalSearchQuery(query, scope), [query, scope]);
+
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    const delay = parsedQuery.query ? SEARCH_DEBOUNCE_MS : 0;
+    const timer = window.setTimeout(() => {
+      void runFederatedSearch(
+        providers,
+        {
+          rawQuery: query,
+          query: parsedQuery.query,
+          scope: parsedQuery.scope,
+          workspaces: openedWorkspacesList,
+          currentWorkspace,
+          limitPerGroup: SEARCH_LIMIT_PER_GROUP,
+          tCommon,
+          tSettings,
+        },
+        controller.signal,
+        setSnapshot,
+      );
+    }, delay);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    currentWorkspace,
+    open,
+    openedWorkspacesList,
+    parsedQuery.query,
+    parsedQuery.scope,
+    providers,
+    query,
+    tCommon,
+    tSettings,
+  ]);
+
+  const items = snapshot.items;
+  const resultPresentation = useMemo(
+    () => buildGlobalSearchResultPresentation(items, {
+      hasQuery: Boolean(parsedQuery.query),
+      drilldownGroup,
+    }),
+    [drilldownGroup, items, parsedQuery.query],
+  );
+  const navigableItems = resultPresentation.navigableItems;
+  const activeIndex = activeId
+    ? navigableItems.findIndex((item) => item.id === activeId)
+    : -1;
+
+  useEffect(() => {
+    if (navigableItems.length === 0) {
+      setActiveId(null);
+      return;
+    }
+    if (!activeId || !navigableItems.some((item) => item.id === activeId)) {
+      setActiveId(navigableItems[0].id);
+    }
+  }, [activeId, navigableItems]);
+
+  useEffect(() => {
+    if (!activeId) return;
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-search-result-id="${CSS.escape(activeId)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [activeId]);
+
+  const activateItem = useCallback(async (item: GlobalSearchItem) => {
+    closeSearch();
+    try {
+      await activateGlobalSearchTarget(item.target, {
+        setActiveWorkspace,
+        selectAssistantWorkspace,
+        openAssistant,
+        tCommon,
+      });
+    } catch (error) {
+      log.warn('Failed to activate global search target', {
+        providerId: item.providerId,
+        targetKind: item.target.kind,
+        error,
+      });
+      notificationService.error(tCommon('nav.search.errors.activationFailed'), { duration: 5000 });
+    }
+  }, [closeSearch, openAssistant, selectAssistantWorkspace, setActiveWorkspace, tCommon]);
+
+  const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const nextIndex = Math.min(navigableItems.length - 1, Math.max(0, activeIndex + 1));
+      setActiveId(navigableItems[nextIndex]?.id ?? null);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const nextIndex = Math.max(0, activeIndex <= 0 ? 0 : activeIndex - 1);
+      setActiveId(navigableItems[nextIndex]?.id ?? null);
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      setActiveId(navigableItems[0]?.id ?? null);
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      setActiveId(navigableItems.at(-1)?.id ?? null);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const item = navigableItems[activeIndex >= 0 ? activeIndex : 0];
+      if (item) void activateItem(item);
+    }
+  }, [activateItem, activeIndex, navigableItems]);
+
+  const focusSearchInput = useCallback(() => {
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const openGroupDetails = useCallback((groupId: GlobalSearchDrilldownGroupId) => {
+    setDrilldownGroup(groupId);
+    setActiveId(null);
+    listRef.current?.scrollTo({ top: 0 });
+    focusSearchInput();
+  }, [focusSearchInput]);
+
+  const closeGroupDetails = useCallback(() => {
+    setDrilldownGroup(null);
+    setActiveId(null);
+    listRef.current?.scrollTo({ top: 0 });
+    focusSearchInput();
+  }, [focusSearchInput]);
+
+  const handleRootKeyDownCapture = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape' || !drilldownGroup) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeGroupDetails();
+  }, [closeGroupDetails, drilldownGroup]);
+
+  const effectiveScope = parsedQuery.scope;
+  const emptyLabel = effectiveScope === 'content' && parsedQuery.query.length < 2
+    ? tCommon('nav.search.typeMoreForContent')
+    : tCommon('nav.search.empty');
+
+  return (
+    <Modal
+      isOpen={open}
+      onClose={closeSearch}
+      size="xlarge"
+      showCloseButton={false}
+      overlayClassName="global-search-overlay"
+      contentClassName="global-search-modal-content"
+      ariaLabel={tCommon('nav.search.dialogLabel')}
+      testId="global-search-dialog"
+    >
+      <div
+        className="global-search"
+        data-bf-component="global-search"
+        data-bf-part="root"
+        data-search-view={drilldownGroup ?? 'overview'}
+        onKeyDownCapture={handleRootKeyDownCapture}
+      >
+        <header className="global-search__header">
+          <div className="global-search__query" data-bf-component="global-search" data-bf-part="query">
+            <Search size={18} strokeWidth={1.8} aria-hidden="true" className="global-search__query-icon" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setDrilldownGroup(null);
+              }}
+              onKeyDown={handleInputKeyDown}
+              placeholder={tCommon('nav.search.inputPlaceholder')}
+              aria-label={tCommon('nav.search.inputLabel')}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="true"
+              aria-controls="global-search-results"
+              aria-activedescendant={activeId ? `global-search-option-${activeId}` : undefined}
+              maxLength={SEARCH_QUERY_MAX_LENGTH}
+              autoFocus
+            />
+            {query ? (
+              <button
+                type="button"
+                className="global-search__clear"
+                onClick={() => {
+                  setQuery('');
+                  setDrilldownGroup(null);
+                  inputRef.current?.focus();
+                }}
+                aria-label={tCommon('nav.search.clear')}
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            ) : (
+              <kbd className="global-search__shortcut" aria-hidden="true">{searchShortcutLabel}</kbd>
+            )}
+          </div>
+
+          <div className="global-search__scope-bar" data-bf-component="global-search" data-bf-part="scopeBar">
+            <div className="global-search__scopes">
+              {(['all', 'actions', 'content'] as const).map((candidate) => {
+                const selected = effectiveScope === candidate;
+                return (
+                  <button
+                    key={candidate}
+                    type="button"
+                    className={`global-search__scope${selected ? ' is-selected' : ''}`}
+                    aria-pressed={selected}
+                    disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
+                    onClick={() => {
+                      setScope(candidate);
+                      setDrilldownGroup(null);
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    {tCommon(`nav.search.scopes.${candidate}`)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </header>
+
+        <div
+          ref={listRef}
+          id="global-search-results"
+          className="global-search__results"
+          role="listbox"
+          aria-label={tCommon('nav.search.resultsLabel')}
+          data-bf-component="global-search"
+          data-bf-part="results"
+          data-search-state={parsedQuery.query ? 'query' : 'default'}
+          data-search-view={drilldownGroup ?? 'overview'}
+        >
+          {navigableItems.length === 0 ? (
+            <div className="global-search__empty" role="status">
+              {snapshot.isSearching ? tCommon('nav.search.searching') : emptyLabel}
+            </div>
+          ) : resultPresentation.groups.map((groupView) => {
+            const groupId = groupView.id;
+            const groupItems = groupView.items;
+            const labelId = `global-search-group-${groupId}`;
+            const defaultActionGroup = groupId === 'actions' && !parsedQuery.query;
+            const groupLabel = defaultActionGroup
+              ? tCommon('nav.search.groups.frequentActions')
+              : tCommon(`nav.search.groups.${groupId}`);
+            const groupDetailPage = drilldownGroup === groupId;
+            return (
+              <section
+                key={groupId}
+                className={`global-search__group global-search__group--${groupId}${groupDetailPage ? ' global-search__group--detail' : ''}`}
+                role="group"
+                aria-labelledby={labelId}
+                data-bf-component="global-search"
+                data-bf-part="group"
+                data-search-group={groupId}
+                data-testid={groupDetailPage
+                  ? `global-search-group-page-${groupId}`
+                  : `global-search-group-${groupId}`}
+              >
+                {groupDetailPage ? (
+                  <div className="global-search__detail-header">
+                    <button
+                      type="button"
+                      className="global-search__detail-back"
+                      onClick={closeGroupDetails}
+                      aria-label={tCommon('nav.search.backToOverview')}
+                      data-testid="global-search-group-back"
+                    >
+                      <ChevronLeft size={15} strokeWidth={1.8} aria-hidden="true" />
+                      <span>{tCommon('nav.search.back')}</span>
+                    </button>
+                    <div className="global-search__detail-heading">
+                      <span id={labelId} className="global-search__group-title">{groupLabel}</span>
+                      <span className="global-search__group-count">
+                        {tCommon('nav.search.resultCount', { count: groupView.totalCount })}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div id={labelId} className="global-search__group-label">
+                    <span className="global-search__group-title">{groupLabel}</span>
+                    <span className="global-search__group-meta">
+                      {groupView.canOpenDetails ? (
+                        <button
+                          type="button"
+                          className="global-search__group-drilldown"
+                          onClick={() => openGroupDetails(groupId as GlobalSearchDrilldownGroupId)}
+                          aria-label={tCommon('nav.search.openGroup', {
+                            group: groupLabel,
+                            count: groupView.totalCount,
+                          })}
+                          data-testid={`global-search-group-drilldown-${groupId}`}
+                        >
+                          <span>{tCommon('nav.search.resultCount', { count: groupView.totalCount })}</span>
+                          <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <span aria-hidden="true">
+                          {tCommon('nav.search.resultCount', { count: groupView.totalCount })}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                <div className="global-search__group-items">
+                  {groupItems.map((item) => {
+                    const ItemIcon = iconForItem(item);
+                    const selected = item.id === activeId;
+                    const variant = resultVariant(item.group);
+                    const entity = variant === 'entity';
+                    return (
+                      <button
+                        key={item.id}
+                        id={`global-search-option-${item.id}`}
+                        data-search-result-id={item.id}
+                        type="button"
+                        role="option"
+                        aria-selected={selected}
+                        className={`global-search__result global-search__result--${variant}${selected ? ' is-selected' : ''}`}
+                        onMouseEnter={() => setActiveId(item.id)}
+                        onClick={() => void activateItem(item)}
+                        data-bf-component="global-search"
+                        data-bf-part="result"
+                        data-bf-state={selected ? 'selected' : undefined}
+                      >
+                        <span className="global-search__result-icon" aria-hidden="true">
+                          <ItemIcon
+                            size={variant === 'standard' ? 16 : 20}
+                            strokeWidth={variant === 'action' ? 1.75 : 1.65}
+                          />
+                        </span>
+                        <span className="global-search__result-copy">
+                          <span className="global-search__result-title-row">
+                            <span className="global-search__result-title">{item.title}</span>
+                            {item.badge ? <span className="global-search__badge">{item.badge}</span> : null}
+                          </span>
+                          {item.subtitle ? (
+                            <span className="global-search__result-subtitle">{item.subtitle}</span>
+                          ) : null}
+                        </span>
+                        {item.context ? (
+                          <span className="global-search__result-context">{item.context}</span>
+                        ) : null}
+                        {entity ? (
+                          <span className="global-search__result-tools" aria-hidden="true">
+                            <Pin size={14} strokeWidth={1.55} />
+                            <MoreHorizontal size={16} strokeWidth={1.8} />
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
+        <footer className="global-search__footer" data-bf-component="global-search" data-bf-part="footer">
+          {snapshot.diagnostics.length > 0 ? (
+            <span
+              className="global-search__footer-status"
+              role="status"
+              data-testid="global-search-partial-status"
+            >
+              {tCommon('nav.search.partialUnavailable')}
+            </span>
+          ) : null}
+          <span className="global-search__footer-keys" aria-hidden="true">
+            <kbd>↑↓</kbd> {tCommon('nav.search.footer.navigate')}
+            <kbd>↵</kbd> {tCommon('nav.search.footer.open')}
+            <kbd>Esc</kbd> {tCommon(drilldownGroup ? 'nav.search.footer.back' : 'nav.search.footer.close')}
+          </span>
+        </footer>
+      </div>
+    </Modal>
+  );
+};
+
+export default GlobalSearchRoot;

@@ -22,6 +22,14 @@ use bitfun_agent_runtime::sdk::{
     AgentTurnSettlementPort, AgentTurnSettlementRequest, SessionTranscript,
 };
 use bitfun_harness::HarnessRegistry;
+#[cfg(feature = "product-search")]
+use bitfun_product_domains::product_search::{
+    SessionContentSearchRequest, SessionContentSearchResponse, SessionSearchDiagnostic,
+    SessionSearchDiagnosticCode, SessionSearchSessionDocument, SessionSearchTurnDocument,
+    MAX_SESSION_CONTENT_SEARCH_QUERY_CHARS,
+};
+#[cfg(feature = "product-search")]
+use bitfun_runtime_ports::ProductSearchPort;
 use bitfun_runtime_ports::{
     AgentContextReloadPort, AgentContextReloadRequest, ClockPort, LocalWorkspaceSnapshotPort,
     LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
@@ -35,6 +43,8 @@ use bitfun_services_core::session::{
     build_session_lineage_snapshot, normalized_session_relationship, SessionBranchBoundary,
     SessionRelationshipKind,
 };
+#[cfg(feature = "product-search")]
+use bitfun_services_core::session_search::{SessionSearchIndexError, SessionSearchSqliteIndex};
 
 use crate::agentic::coordination::{
     runtime_transcript_messages_from_turns, validate_required_lineage_turns_settled,
@@ -45,12 +55,18 @@ use crate::agentic::events::EventQueue;
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::SessionBranchRequest;
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
+#[cfg(feature = "product-search")]
+use crate::agentic::session::transcript_render::{
+    transcript_display_assistant_content, transcript_display_user_content,
+};
 use crate::agentic::session::{CoreSessionStorePort, PromptCacheScope};
 use crate::agentic::tools::implementations::skills::SkillRegistry;
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
     SessionTurnCatalog, SessionTurnWindowResponse,
 };
+#[cfg(feature = "product-search")]
+use crate::service::session::{DialogTurnKind, SessionStatus};
 use crate::service::session_usage::{
     generate_session_usage_report_from_storage_path, SessionUsageReport,
 };
@@ -914,6 +930,100 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
+    /// Search presentation-safe persisted Session content at an already-resolved
+    /// sessions root. The SQLite sidecar is reconciled against authoritative
+    /// metadata before every query and stale transcript rows are never served.
+    #[cfg(feature = "product-search")]
+    pub async fn search_persisted_session_content(
+        &self,
+        storage_path: &Path,
+        query: &str,
+        limit: usize,
+        include_archived: bool,
+    ) -> BitFunResult<SessionContentSearchResponse> {
+        let query = validated_session_content_search_query(query)?;
+        if query.is_empty() {
+            return Ok(SessionContentSearchResponse::default());
+        }
+        if !storage_path.exists() {
+            return Ok(SessionContentSearchResponse::default());
+        }
+
+        let metadata = self.list_persisted_sessions(storage_path).await?;
+        let documents = metadata
+            .iter()
+            .map(session_search_document)
+            .collect::<Vec<_>>();
+        let revisions = documents
+            .iter()
+            .map(|document| {
+                (
+                    document.session_id.clone(),
+                    document.source_revision.clone(),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        let index = SessionSearchSqliteIndex::new(storage_path);
+        let reconciliation = index
+            .reconcile_sessions(documents)
+            .await
+            .map_err(session_search_index_error)?;
+        let mut diagnostics = Vec::new();
+
+        for session_id in reconciliation.stale_session_ids {
+            let Some(source_revision) = revisions.get(&session_id) else {
+                continue;
+            };
+            let turns = match self
+                .load_persisted_session_turns(storage_path, &session_id, None)
+                .await
+            {
+                Ok(turns) => turns,
+                Err(error) => {
+                    log::warn!(
+                        "Failed to read persisted Session for product search: session_id={session_id}, error={error}"
+                    );
+                    diagnostics.push(SessionSearchDiagnostic {
+                        code: SessionSearchDiagnosticCode::SessionUnreadable,
+                        session_id: Some(session_id),
+                        message: "Session content could not be indexed".to_string(),
+                    });
+                    continue;
+                }
+            };
+            let turn_documents = turns
+                .iter()
+                .filter(|turn| turn.kind == DialogTurnKind::UserDialog)
+                .map(session_search_turn_document)
+                .collect::<Vec<_>>();
+            if let Err(error) = index
+                .replace_session_turns(&session_id, source_revision, turn_documents)
+                .await
+            {
+                match error {
+                    SessionSearchIndexError::InvalidDocument(message) => {
+                        log::warn!(
+                            "Product search rejected a persisted Session document: session_id={session_id}, error={message}"
+                        );
+                        diagnostics.push(SessionSearchDiagnostic {
+                            code: SessionSearchDiagnosticCode::SessionIndexStale,
+                            session_id: Some(session_id),
+                            message: "Session search index remained stale".to_string(),
+                        });
+                    }
+                    error => return Err(session_search_index_error(error)),
+                }
+            }
+        }
+
+        let mut response = index
+            .search(query, limit, include_archived)
+            .await
+            .map_err(session_search_index_error)?;
+        response.diagnostics.extend(diagnostics);
+        Ok(response)
+    }
+
     pub async fn load_persisted_session_metadata(
         &self,
         workspace_path: &Path,
@@ -1285,6 +1395,54 @@ impl CoreAgentRuntimeCompatibility {
     }
 }
 
+#[cfg(feature = "product-search")]
+fn session_search_document(metadata: &SessionMetadata) -> SessionSearchSessionDocument {
+    SessionSearchSessionDocument {
+        session_id: metadata.session_id.clone(),
+        title: metadata.session_name.clone(),
+        tags: metadata.tags.clone(),
+        archived: metadata.status == SessionStatus::Archived,
+        updated_at_ms: i64::try_from(metadata.last_active_at).unwrap_or(i64::MAX),
+        source_revision: format!(
+            "v1:{}:{}:{}:{}:{}",
+            metadata.turn_count,
+            metadata.message_count,
+            metadata.tool_call_count,
+            metadata.last_active_at,
+            metadata.last_finished_at.unwrap_or_default(),
+        ),
+    }
+}
+
+#[cfg(feature = "product-search")]
+fn session_search_turn_document(turn: &DialogTurnData) -> SessionSearchTurnDocument {
+    SessionSearchTurnDocument {
+        session_id: turn.session_id.clone(),
+        turn_id: turn.turn_id.clone(),
+        turn_index: turn.turn_index,
+        user_text: transcript_display_user_content(turn),
+        assistant_text: transcript_display_assistant_content(turn),
+        updated_at_ms: i64::try_from(turn.end_time.unwrap_or(turn.timestamp)).unwrap_or(i64::MAX),
+    }
+}
+
+#[cfg(feature = "product-search")]
+fn session_search_index_error(error: SessionSearchIndexError) -> BitFunError {
+    log::warn!("Product search index operation failed: {error}");
+    BitFunError::Session("Session content search is temporarily unavailable".to_string())
+}
+
+#[cfg(feature = "product-search")]
+fn validated_session_content_search_query(query: &str) -> BitFunResult<&str> {
+    let query = query.trim();
+    if query.chars().count() > MAX_SESSION_CONTENT_SEARCH_QUERY_CHARS {
+        return Err(BitFunError::Validation(format!(
+            "Session content search queries must not exceed {MAX_SESSION_CONTENT_SEARCH_QUERY_CHARS} characters"
+        )));
+    }
+    Ok(query)
+}
+
 #[async_trait::async_trait]
 impl AgentContextReloadPort for CoreAgentRuntimeCompatibility {
     async fn reload_session_context(
@@ -1299,6 +1457,39 @@ impl AgentContextReloadPort for CoreAgentRuntimeCompatibility {
                     error.to_string(),
                 )
             })
+    }
+}
+
+#[cfg(feature = "product-search")]
+#[async_trait::async_trait]
+impl ProductSearchPort for CoreAgentRuntimeCompatibility {
+    async fn search_session_content(
+        &self,
+        request: SessionContentSearchRequest,
+    ) -> PortResult<SessionContentSearchResponse> {
+        if request.workspace_path.trim().is_empty() {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Session content search requires a workspace path",
+            ));
+        }
+        let limit = request.normalized_limit();
+        let storage_path = self
+            .resolve_persisted_session_storage_path(SessionStoragePathRequest {
+                workspace_path: PathBuf::from(request.workspace_path),
+                remote_connection_id: request.remote_connection_id,
+                remote_ssh_host: request.remote_ssh_host,
+            })
+            .await
+            .map_err(runtime_port_error)?;
+        self.search_persisted_session_content(
+            &storage_path,
+            &request.query,
+            limit,
+            request.include_archived,
+        )
+        .await
+        .map_err(runtime_port_error)
     }
 }
 
@@ -1909,6 +2100,8 @@ mod tests {
         CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
         CoreProductEventQueueOwner, CoreSessionOperationsPort,
     };
+    #[cfg(feature = "product-search")]
+    use super::{session_search_index_error, validated_session_content_search_query};
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
@@ -1937,6 +2130,38 @@ mod tests {
     };
     use bitfun_events::AgenticEvent;
     use tokio::sync::RwLock as TokioRwLock;
+
+    #[cfg(feature = "product-search")]
+    #[test]
+    fn product_search_index_errors_do_not_cross_the_runtime_boundary() {
+        let private_backend_detail = "C:\\Users\\private\\product-search-v1.sqlite";
+        let error = session_search_index_error(
+            bitfun_services_core::session_search::SessionSearchIndexError::Backend(
+                private_backend_detail.to_string(),
+            ),
+        );
+        let visible = error.to_string();
+
+        assert!(visible.contains("Session content search is temporarily unavailable"));
+        assert!(!visible.contains(private_backend_detail));
+    }
+
+    #[cfg(feature = "product-search")]
+    #[test]
+    fn product_search_query_length_is_bounded_before_storage_access() {
+        let oversized = "x".repeat(
+            bitfun_product_domains::product_search::MAX_SESSION_CONTENT_SEARCH_QUERY_CHARS + 1,
+        );
+
+        assert_eq!(
+            validated_session_content_search_query("  roadmap  ").expect("valid query"),
+            "roadmap"
+        );
+        assert!(matches!(
+            validated_session_content_search_query(&oversized),
+            Err(BitFunError::Validation(_))
+        ));
+    }
 
     struct TestWorkspace {
         path: PathBuf,

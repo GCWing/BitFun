@@ -3724,11 +3724,11 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Update the Harness Profile that will be resolved for the next turn.
+    /// Set the Harness Profile for a Session that has not started yet.
     ///
-    /// This mutation is admitted only while the Session is idle so an in-flight
-    /// turn keeps one immutable profile policy. The request-level tool manifest
-    /// may still transition between the profile's four- and six-tool states.
+    /// The first scheduler-accepted submission makes this policy immutable for
+    /// the lifetime of the Session, including after rollback. Persisted Turn ids
+    /// retain the same protection for sessions created by older builds.
     pub async fn update_session_execution_profile(
         &self,
         session_id: &str,
@@ -3746,13 +3746,20 @@ impl SessionManager {
             .get(session_id)
             .map(|session| session.clone())
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        if original_session.config.execution_profile == execution_profile {
+            return Ok(());
+        }
+        if original_session.last_submitted_agent_type.is_some()
+            || !original_session.dialog_turn_ids.is_empty()
+        {
+            return Err(BitFunError::Validation(format!(
+                "harness_profile_locked: Harness Profile can only be changed before the Session's first turn: session_id={session_id}"
+            )));
+        }
         if !matches!(original_session.state, SessionState::Idle) {
             return Err(BitFunError::SessionInUse {
                 session_id: session_id.to_string(),
             });
-        }
-        if original_session.config.execution_profile == execution_profile {
-            return Ok(());
         }
 
         let mut updated_session = original_session.clone();
@@ -10375,6 +10382,105 @@ mod tests {
             SessionAgentRouteOwner::External,
             "a same-name local mode must not capture a persisted external route"
         );
+    }
+
+    #[tokio::test]
+    async fn harness_profile_becomes_immutable_after_the_first_accepted_submission() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session = manager
+            .create_session(
+                "Profile lock".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let minimal_profile = bitfun_core_types::SessionExecutionProfile::minimal(
+            bitfun_core_types::HarnessSelectionSource::new(
+                bitfun_core_types::HARNESS_SELECTION_USER,
+            ),
+        );
+
+        manager
+            .update_session_execution_profile(&session.session_id, minimal_profile.clone())
+            .await
+            .expect("a fresh session should accept a Harness Profile");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("active session")
+            .last_submitted_agent_type = Some("agentic".to_string());
+
+        manager
+            .update_session_execution_profile(&session.session_id, minimal_profile.clone())
+            .await
+            .expect("an idempotent retry must remain valid after the Session starts");
+        let error = manager
+            .update_session_execution_profile(
+                &session.session_id,
+                bitfun_core_types::SessionExecutionProfile::default(),
+            )
+            .await
+            .expect_err("a started Session must reject a different Harness Profile");
+
+        assert!(matches!(
+            error,
+            BitFunError::Validation(ref message)
+                if message.starts_with("harness_profile_locked:")
+        ));
+        assert_eq!(
+            manager
+                .get_session(&session.session_id)
+                .expect("session")
+                .config
+                .execution_profile,
+            minimal_profile
+        );
+    }
+
+    #[tokio::test]
+    async fn persisted_turn_ids_lock_harness_profile_for_legacy_session_metadata() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session = manager
+            .create_session(
+                "Legacy profile lock".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("active session")
+            .dialog_turn_ids
+            .push("legacy-turn".to_string());
+
+        let error = manager
+            .update_session_execution_profile(
+                &session.session_id,
+                bitfun_core_types::SessionExecutionProfile::minimal(
+                    bitfun_core_types::HarnessSelectionSource::new(
+                        bitfun_core_types::HARNESS_SELECTION_USER,
+                    ),
+                ),
+            )
+            .await
+            .expect_err("legacy Session turns must keep the existing Harness Profile");
+
+        assert!(matches!(
+            error,
+            BitFunError::Validation(ref message)
+                if message.starts_with("harness_profile_locked:")
+        ));
     }
 
     #[tokio::test]

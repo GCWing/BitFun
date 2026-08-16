@@ -12,6 +12,7 @@ pub(in crate::server) mod i18n;
 pub(in crate::server) mod mcp;
 pub(in crate::server) mod model;
 pub(in crate::server) mod permission;
+pub(in crate::server) mod search;
 pub(in crate::server) mod session;
 pub(in crate::server) mod skill;
 pub(in crate::server) mod subagent;

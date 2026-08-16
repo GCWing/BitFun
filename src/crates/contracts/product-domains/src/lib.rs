@@ -4,6 +4,7 @@
 //! the full BitFun core runtime assembly.
 
 pub mod canvas;
+pub mod product_search;
 pub mod tool_permissions;
 
 #[cfg(feature = "appearance-market")]

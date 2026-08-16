@@ -1689,6 +1689,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("search_build_index", RemoteWorkspacePolicy::RemoteRouted),
     (
+        "search_session_content",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
+    (
         "search_file_contents",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use agent_client_protocol::{Error, Result};
 use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime, PortErrorKind, RuntimeError};
 use bitfun_core::service::git::GitError;
-use bitfun_runtime_ports::AgentContextReloadPort;
+use bitfun_runtime_ports::{AgentContextReloadPort, ProductSearchPort};
 
 /// Host-injected BitFun agent runtime exposed over the app-server surface.
 ///
@@ -25,6 +25,7 @@ pub struct BitfunAppRuntime {
     runtime: Arc<AgentRuntime>,
     event_source: AgentEventSource,
     context_reload: Option<Arc<dyn AgentContextReloadPort>>,
+    product_search: Option<Arc<dyn ProductSearchPort>>,
 }
 
 impl std::fmt::Debug for BitfunAppRuntime {
@@ -44,11 +45,17 @@ impl BitfunAppRuntime {
             runtime: Arc::new(runtime),
             event_source,
             context_reload: None,
+            product_search: None,
         }
     }
 
     pub fn with_context_reload(mut self, context_reload: Arc<dyn AgentContextReloadPort>) -> Self {
         self.context_reload = Some(context_reload);
+        self
+    }
+
+    pub fn with_product_search(mut self, product_search: Arc<dyn ProductSearchPort>) -> Self {
+        self.product_search = Some(product_search);
         self
     }
 
@@ -69,6 +76,10 @@ impl BitfunAppRuntime {
 
     pub fn context_reload(&self) -> Option<&Arc<dyn AgentContextReloadPort>> {
         self.context_reload.as_ref()
+    }
+
+    pub fn product_search(&self) -> Option<&Arc<dyn ProductSearchPort>> {
+        self.product_search.as_ref()
     }
 
     /// Map a `RuntimeError` to a JSON-RPC `Error`, mirroring the ACP runtime

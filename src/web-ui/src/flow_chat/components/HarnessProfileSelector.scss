@@ -51,59 +51,43 @@
   text-overflow: ellipsis;
 }
 
-// Three ascending segments, filled up to the selected gear. Shape carries the
-// intensity so the reading survives the label being dropped on a narrow
-// composer; color only reports whether the gear is already in force.
-.bitfun-harness-selector__gauge {
-  display: inline-flex;
+// The frame grows from focus corners to a 2 x 2 plan and finally a 3 x 3
+// coverage grid. The accent core stays fixed, so density is legible by shape
+// rather than by color alone.
+.bitfun-harness-selector__density-mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
   flex: none;
-  align-items: flex-end;
-  gap: 2px;
-  height: 11px;
-}
+  color: var(--bf-appearance-token-color-text-secondary);
 
-.bitfun-harness-selector__gauge-bar {
-  width: 2px;
-  border-radius: 1px;
-  background: var(--bf-appearance-token-color-text-muted);
-  opacity: 0.24;
-  transition:
-    background-color tokens.$motion-fast tokens.$easing-standard,
-    opacity tokens.$motion-fast tokens.$easing-standard;
+  &[data-size='compact'] {
+    width: 15px;
+    height: 15px;
+  }
 
-  &:nth-child(1) { height: 5px; }
-  &:nth-child(2) { height: 8px; }
-  &:nth-child(3) { height: 11px; }
-
-  &[data-filled='true'] {
-    background: var(--bf-appearance-token-color-accent-500);
-    opacity: 1;
+  &[data-size='option'] {
+    width: 28px;
+    height: 28px;
   }
 }
 
-// A gear armed for the next turn has not shaped any completed turn yet, so its
-// gauge stays unfilled and a dot carries the "pending" fact instead.
-.bitfun-harness-selector__trigger[data-harness-pending='true'] {
-  .bitfun-harness-selector__gauge-bar[data-filled='true'] {
-    background: var(--bf-appearance-token-color-text-muted);
-    opacity: 0.52;
-  }
-}
-
-.bitfun-harness-selector__trigger[data-harness-legacy='true'] .bitfun-harness-selector__gauge {
-  display: none;
-}
-
-.bitfun-harness-selector__pending-dot {
+.bitfun-harness-selector__density-frame,
+.bitfun-harness-selector__density-core {
+  position: absolute;
   flex: none;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--bf-appearance-token-color-accent-500);
 }
 
-// A plain three-row list: gauge, name plus the promise the gear makes, and a
-// trailing state.
+.bitfun-harness-selector__density-frame {
+  color: currentColor;
+}
+
+.bitfun-harness-selector__density-core {
+  color: var(--bf-appearance-token-color-accent-500);
+}
+
+// A plain three-row list: density mark, name plus the promise the gear makes,
+// and a trailing state.
 .bitfun-harness-selector__menu {
   position: fixed;
   z-index: tokens.$z-popover;
@@ -112,8 +96,8 @@
   flex-direction: column;
   gap: 2px;
   width: max-content;
-  min-width: 220px;
-  max-width: min(300px, calc(100vw - 16px));
+  min-width: 252px;
+  max-width: min(320px, calc(100vw - 16px));
   padding: 5px;
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: var(--bf-appearance-token-size-radius-base);
@@ -128,10 +112,10 @@
 .bitfun-harness-selector__profile {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 11px;
   width: 100%;
-  min-height: 38px;
-  padding: 5px 8px;
+  min-height: 46px;
+  padding: 6px 8px;
   border: 0;
   border-radius: var(--bf-appearance-token-size-radius-sm);
   background: transparent;
@@ -149,6 +133,10 @@
 
   &.is-current .bitfun-harness-selector__profile-name {
     color: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &.is-current .bitfun-harness-selector__density-frame {
+    color: var(--bf-appearance-token-color-text-primary);
   }
 }
 
@@ -189,7 +177,7 @@
   }
 }
 
-// The gauge alone still reads the gear once the label no longer fits.
+// The density mark alone still reads the gear once the label no longer fits.
 @media (max-width: 560px) {
   .bitfun-harness-selector__trigger-value {
     display: none;

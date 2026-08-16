@@ -41,6 +41,8 @@ pub mod process_tree;
 pub mod runtime_ownership;
 #[cfg(feature = "local-storage")]
 pub mod session;
+#[cfg(feature = "session-search")]
+pub mod session_search;
 #[cfg(feature = "local-storage")]
 pub mod session_usage;
 #[cfg(feature = "local-storage")]

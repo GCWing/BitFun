@@ -83,6 +83,7 @@ import {
 import {
   getEffectiveTopLevelSessionCount,
   getSessionBufferPrefetchLimit,
+  getSessionDisplayLimit,
   getSessionExpandToggleState,
   SESSIONS_LEVEL_0,
   SESSIONS_LEVEL_1,
@@ -232,6 +233,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     ? storedSessionFilters
     : DEFAULT_WORKSPACE_SESSION_FILTERS;
   const hasActiveSessionFilter = sessionShow !== 'all' || hasWorkspaceSessionFilters(sessionFilters);
+  const showAllWithoutLimit = layout === 'flat' && Boolean(workspaceScopes?.length);
   const sessionListClassName = `bitfun-nav-panel__inline-list${layout === 'flat' ? ' is-flat-workspace-view' : ''}`;
   const { setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
   const activeTabId = useSceneStore(s => s.activeTabId);
@@ -247,8 +249,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
-  // Level-2 ("show all") renders in pages of 200 rows so a huge session
-  // history cannot mount thousands of un-virtualized rows at once.
+  // Grouped workspace history keeps its existing level-2 paging. The flat
+  // aggregate projection bypasses this display cap and streams every page in.
   const [level2DisplayCount, setLevel2DisplayCount] = useState(SESSIONS_LEVEL_2_PAGE);
 
   useEffect(() => {
@@ -271,6 +273,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     isLoading: false,
     loadError: false,
   });
+  const [aggregateLoadState, setAggregateLoadState] = useState<{
+    isLoading: boolean;
+    failedScopeCount: number;
+  }>(() => ({
+    isLoading: showAllWithoutLimit && isVisible,
+    failedScopeCount: 0,
+  }));
+  const [aggregateReloadRequestId, setAggregateReloadRequestId] = useState(0);
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [sessionMenuPosition, setSessionMenuPosition] = useState<{ top: number; left: number } | null>(null);
   /** Second level of the session menu: pick what a Markdown export includes. */
@@ -402,10 +412,16 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   );
 
   useEffect(() => {
-    if (!isVisible || !workspaceScopes?.length) return;
+    if (!isVisible || !workspaceScopes?.length) {
+      setAggregateLoadState({ isLoading: false, failedScopeCount: 0 });
+      return;
+    }
+
     let cancelled = false;
+    setAggregateLoadState({ isLoading: true, failedScopeCount: 0 });
+
     const loadAllScopes = async () => {
-      for (const scope of workspaceScopes) {
+      const results = await Promise.allSettled(workspaceScopes.map(async scope => {
         let cursor: string | undefined;
         do {
           const page = await flowChatStore.loadSessionMetadataPage(
@@ -419,26 +435,57 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           if (cancelled) return;
           cursor = page.hasMore ? page.nextCursor : undefined;
         } while (cursor);
-      }
+
+        if (!sessionFilters.hideArchived && !cancelled) {
+          await flowChatStore.loadArchivedSessionMetadata(
+            scope.workspacePath,
+            scope.remoteConnectionId || undefined,
+            scope.remoteSshHost || undefined,
+          );
+        }
+      }));
+
+      if (cancelled) return;
+
+      let failedScopeCount = 0;
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') return;
+        failedScopeCount += 1;
+        const scope = workspaceScopes[index];
+        log.warn('Failed to load all-session workspace projection', {
+          error: result.reason,
+          workspacePath: scope?.workspacePath,
+          remote: Boolean(scope?.remoteConnectionId || scope?.remoteSshHost),
+        });
+      });
+      setAggregateLoadState({ isLoading: false, failedScopeCount });
     };
+
     void loadAllScopes().catch(error => {
-      if (!cancelled) log.warn('Failed to load all-session workspace projection', { error });
+      if (!cancelled) {
+        log.warn('Failed to coordinate all-session workspace projection', { error });
+        setAggregateLoadState({
+          isLoading: false,
+          failedScopeCount: workspaceScopes.length,
+        });
+      }
     });
     return () => { cancelled = true; };
-  }, [isVisible, workspaceScopes, workspaceScopesKey]);
+  }, [
+    aggregateReloadRequestId,
+    isVisible,
+    sessionFilters.hideArchived,
+    workspaceScopes,
+    workspaceScopesKey,
+  ]);
 
   useEffect(() => {
-    if (!isVisible || sessionFilters.hideArchived) return;
-    const scopes = workspaceScopes?.length
-      ? workspaceScopes
-      : workspacePath
-        ? [{ workspacePath, remoteConnectionId, remoteSshHost }]
-        : [];
-    void Promise.all(scopes.map(scope => flowChatStore.loadArchivedSessionMetadata(
-      scope.workspacePath,
-      scope.remoteConnectionId || undefined,
-      scope.remoteSshHost || undefined,
-    ))).catch(error => {
+    if (!isVisible || sessionFilters.hideArchived || workspaceScopes?.length || !workspacePath) return;
+    void flowChatStore.loadArchivedSessionMetadata(
+      workspacePath,
+      remoteConnectionId || undefined,
+      remoteSshHost || undefined,
+    ).catch(error => {
       log.warn('Failed to load archived session projection', { error });
     });
   }, [
@@ -448,7 +495,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     sessionFilters.hideArchived,
     workspacePath,
     workspaceScopes,
-    workspaceScopesKey,
   ]);
 
   const loadMetadataPage = useCallback(
@@ -827,12 +873,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [childrenByParent, hasActiveSessionFilter, runningSessionIds, sessionFilters, sessionShow]);
 
   const sessionDisplayLimit = useMemo(() => {
-    const total = topLevelSessions.length;
-    if (expandLevel === 2) return Math.min(total, level2DisplayCount);
-    if (total <= SESSIONS_LEVEL_0) return total;
-    if (expandLevel === 1) return Math.min(total, SESSIONS_LEVEL_1);
-    return SESSIONS_LEVEL_0;
-  }, [topLevelSessions.length, expandLevel, level2DisplayCount]);
+    return getSessionDisplayLimit({
+      loadedTopLevelCount: topLevelSessions.length,
+      expandLevel,
+      level2DisplayCount,
+      showAllWithoutLimit,
+    });
+  }, [topLevelSessions.length, expandLevel, level2DisplayCount, showAllWithoutLimit]);
 
   const totalTopLevelSessionCount = !hasActiveSessionFilter && !workspaceScopes?.length
     ? getEffectiveTopLevelSessionCount(
@@ -1326,7 +1373,47 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     totalTopLevelSessionCount,
   ]);
 
+  const aggregateLoadStatus = showAllWithoutLimit
+    ? aggregateLoadState.isLoading
+      ? (
+          <div
+            className="bitfun-nav-panel__inline-loading"
+            data-bf-component="sessions-section"
+            data-bf-part="aggregateLoading"
+            data-bf-state="loading"
+            data-testid="nav-session-aggregate-loading"
+            role="status"
+            aria-live="polite"
+          >
+            <Loader2 size={12} />
+            <span>{t('nav.sessions.loading')}</span>
+          </div>
+        )
+      : aggregateLoadState.failedScopeCount > 0
+        ? (
+            <button
+              type="button"
+              className="bitfun-nav-panel__inline-action"
+              data-bf-component="sessions-section"
+              data-bf-part="aggregateRetry"
+              data-bf-state="partial"
+              data-testid="nav-session-aggregate-retry"
+              onClick={() => setAggregateReloadRequestId(current => current + 1)}
+            >
+              <span>{t('nav.sessions.partialLoadFailedRetry')}</span>
+            </button>
+          )
+        : null
+    : null;
+
   if (allTopLevelSessions.length === 0) {
+    if (aggregateLoadStatus) {
+      return (
+        <div data-bf-component="sessions-section" data-bf-part="root" className={sessionListClassName}>
+          {aggregateLoadStatus}
+        </div>
+      );
+    }
     if (metadataPageState.isLoading) {
       return (
         <div data-bf-component="sessions-section" data-bf-part="root" className={sessionListClassName}>
@@ -1380,11 +1467,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }
 
   if (topLevelSessions.length === 0) {
+    if (aggregateLoadState.isLoading && aggregateLoadStatus) {
+      return (
+        <div className={sessionListClassName}>
+          {aggregateLoadStatus}
+        </div>
+      );
+    }
     return (
       <div className={sessionListClassName}>
         <div className="bitfun-nav-panel__inline-empty" aria-disabled="true">
           {t('nav.sessions.viewMenu.noMatches')}
         </div>
+        {aggregateLoadStatus}
       </div>
     );
   }
@@ -1862,7 +1957,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           );
         })}
 
-      {expandLevel === 2 && topLevelSessions.length > sessionDisplayLimit && (
+      {aggregateLoadStatus}
+
+      {!showAllWithoutLimit && expandLevel === 2 && topLevelSessions.length > sessionDisplayLimit && (
         <button
           type="button"
           className="bitfun-nav-panel__inline-toggle"
@@ -1878,7 +1975,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         </button>
       )}
 
-      {expandToggleState.shouldRender && (
+      {!showAllWithoutLimit && expandToggleState.shouldRender && (
         <button
           type="button"
           className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}

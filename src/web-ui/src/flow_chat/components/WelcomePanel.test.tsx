@@ -122,6 +122,15 @@ describe('WelcomePanel Git summary loading', () => {
     expect(container.querySelector('[data-bf-part="gitAction"]')).not.toBeNull();
   });
 
+  it('does not render the retired panda mascot', async () => {
+    await act(async () => {
+      root.render(<WelcomePanel sessionMode="claw" workspacePath="D:/workspace/Assistant" />);
+    });
+
+    expect(container.querySelector('[data-bf-part="mascot"]')).toBeNull();
+    expect(container.querySelector('img[src^="/panda_full_"]')).toBeNull();
+  });
+
   it('portals the workspace menu outside the scrollable welcome panel', async () => {
     gitApiMock.isGitRepository.mockResolvedValue(false);
     await act(async () => {

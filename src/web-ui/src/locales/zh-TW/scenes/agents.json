@@ -20,7 +20,7 @@
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "每個 Turn 的根 Agent 策略。極簡與均衡已接入目前 agentic Runtime；不可用策略會明確標示。",
+    "subtitle": "每個 Turn 的根 Agent 策略。極簡與標準已接入目前 agentic Runtime；不可用策略會明確標示。",
     "connected": "已接入",
     "comingSoon": "開發中",
     "connectedNotice": "「{{name}}」Harness 已可用於 Session 選擇。",
@@ -32,7 +32,7 @@
         "behavior": "最少規劃與針對性驗證"
       },
       "balanced": {
-        "name": "均衡",
+        "name": "標準",
         "description": "自適應規劃、按需呼叫 Agent，並進行針對性驗證。",
         "behavior": "預設 · 透過 agentic 接入"
       },

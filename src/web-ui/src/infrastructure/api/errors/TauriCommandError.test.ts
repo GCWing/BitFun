@@ -1,10 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isHarnessProfileLockedError,
   isNotAvailableError,
   isOutcomeUnknownError,
   isSessionInUseError,
   TauriCommandError,
 } from './TauriCommandError';
+
+describe('isHarnessProfileLockedError', () => {
+  it('recognizes the stable code from local Desktop and server validation errors', () => {
+    expect(
+      isHarnessProfileLockedError(
+        new TauriCommandError('Command failed', {
+          command: 'update_session_harness_profile',
+          originalError: 'harness_profile_locked: Session already started',
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isHarnessProfileLockedError({
+        message:
+          'Host command failed: Validation error: harness_profile_locked: Session already started',
+      }),
+    ).toBe(true);
+  });
+
+  it('does not infer the lock from similar human prose', () => {
+    expect(
+      isHarnessProfileLockedError(
+        new Error('The Harness profile is locked because this session already started'),
+      ),
+    ).toBe(false);
+  });
+});
 
 describe('isSessionInUseError', () => {
   it('recognizes local Tauri command errors without parsing human prose', () => {

@@ -1,13 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { bitfunCanvasRuntimeBundlePlugin } from "./vite.config.canvas-runtime-plugin";
 
 const webUiRoot = path.resolve(__dirname);
 
 // Vite config for component preview
 export default defineConfig({
   root: webUiRoot,
-  plugins: [react()],
+  plugins: [react(), bitfunCanvasRuntimeBundlePlugin()],
 
   // Path resolution
   resolve: {

@@ -59,8 +59,8 @@
     "hideAgentic": "Hide Agentic",
     "activateAgentic": "Activate Agentic",
     "switchWorkspace": "Switch Workspace",
-    "recentWorkspaces": "Recent Workspaces",
-    "noRecentWorkspaces": "No Recent Workspaces",
+    "recentWorkspaces": "Recent Projects",
+    "noRecentWorkspaces": "No Recent Projects",
     "noWorkspaceOpen": "Select Workspace",
     "remoteConnectRequiresWorkspace": "Open a workspace before using remote control."
   },
@@ -75,8 +75,9 @@
     "forwardShortcut": "Forward (Alt+→)",
     "items": {
       "sessions": "Sessions",
-      "project": "Directory",
+      "project": "Project",
       "persona": "Smart Members",
+      "assistant": "AI Assistant",
       "longTermTracking": "Long-term Tracking",
       "agents": "Agents",
       "skills": "Skills",
@@ -95,7 +96,8 @@
       "skills": "What it knows — specialized knowledge files",
       "ecosystemCompatibility": "Ecosystem Compatibility — manage compatible capabilities and extensions from other AI apps",
       "tools": "What it can use — built-in tools & MCP services",
-      "addWorkspace": "Add workspace"
+      "addWorkspace": "Add workspace",
+      "addSessionGroup": "Add a project or personal assistant"
     },
     "sections": {
       "extensions": "Extensions & Compatibility",
@@ -106,15 +108,88 @@
       "longTermTrackingComingSoon": "Long-term Tracking is in development"
     },
     "search": {
-      "triggerPlaceholder": "Search",
+      "triggerPlaceholder": "Search everything",
       "triggerTooltip": "Search (Ctrl+K, Alt+F)",
-      "inputPlaceholder": "Search workspaces, assistants, sessions...",
-      "groupWorkspaces": "Open Workspaces",
+      "dialogLabel": "Global search",
+      "inputLabel": "Search BitFun",
+      "inputPlaceholder": "Search anything, or type > for commands",
+      "resultsLabel": "Search results",
+      "clear": "Clear search",
+      "groupWorkspaces": "Projects",
       "groupAssistants": "Assistants",
       "groupSessions": "All Sessions",
       "empty": "No results found",
-      "sessionSearchHintDefault": "Type a keyword to search sessions in open workspaces",
-      "sessionWorkspaceHint": "in {{workspace}}"
+      "searching": "Searching...",
+      "partialUnavailable": "Some search sources are unavailable",
+      "typeMoreForContent": "Type at least two characters to search files and content",
+      "sessionSearchHintDefault": "Type a keyword to search all sessions",
+      "sessionWorkspaceHint": "in {{workspace}}",
+      "resultCount": "{{count}} items",
+      "back": "Back",
+      "backToOverview": "Back to search overview",
+      "openGroup": "View all {{count}} {{group}}",
+      "scopes": {
+        "all": "All",
+        "actions": "Commands",
+        "content": "Content"
+      },
+      "groups": {
+        "actions": "Commands",
+        "frequentActions": "Common commands",
+        "messages": "Messages",
+        "sessions": "Sessions",
+        "files": "Files",
+        "workspaces": "Projects",
+        "assistants": "Assistants",
+        "settings": "$t(shared:features.settings)"
+      },
+      "actions": {
+        "newSession": "New session",
+        "openBrowser": "Open browser",
+        "openTerminal": "Open terminal",
+        "openProject": "Open project",
+        "newProject": "New project",
+        "openFiles": "Open files",
+        "openAgents": "Open agents",
+        "openSkills": "Open skills",
+        "openMiniApps": "Open Mini Apps",
+        "openTodos": "Open todos",
+        "openInsights": "Open insights",
+        "openSettings": "Open settings",
+        "openKeyboardShortcuts": "Open keyboard shortcuts",
+        "openExternalSources": "Open extensions and compatibility"
+      },
+      "actionDescriptions": {
+        "newSession": "Start a conversation using the canonical session flow",
+        "openBrowser": "Open the browser in the current working context",
+        "openTerminal": "Open the persistent project shell",
+        "openProject": "Choose and open a local or peer-hosted project",
+        "newProject": "Create a project from a template or empty workspace",
+        "openFiles": "Browse and edit files in the active project",
+        "openAgents": "Manage installed and custom agents",
+        "openSkills": "Browse and manage reusable skills",
+        "openMiniApps": "Open the Mini App gallery",
+        "openTodos": "Review tasks and follow-up work",
+        "openInsights": "Review activity and usage insights",
+        "openSettings": "Configure BitFun",
+        "openKeyboardShortcuts": "Review and customize keyboard shortcuts",
+        "openExternalSources": "Manage external AI apps and compatibility"
+      },
+      "badges": {
+        "userMessage": "You",
+        "assistantMessage": "Assistant"
+      },
+      "footer": {
+        "navigate": "Navigate",
+        "open": "Open",
+        "back": "Back",
+        "close": "Close"
+      },
+      "errors": {
+        "activationFailed": "Could not open that result",
+        "remoteFileSearchUnavailable": "File search is unavailable for remote project {{workspace}}",
+        "sessionUnavailable": "This session is no longer available"
+      }
     },
     "githubStar": {
       "label": "Star",
@@ -191,12 +266,19 @@
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "noSessions": "No sessions",
+      "viewToggle": {
+        "label": "Session display",
+        "all": "All",
+        "grouped": "Grouped",
+        "allTooltip": "Show every session in one list",
+        "groupedTooltip": "Organize sessions by project and assistant"
+      },
       "viewMenu": {
         "title": "Session view",
         "tooltip": "Organize and filter sessions",
         "grouping": {
           "label": "Grouping",
-          "workspace": "$t(shared:features.workspace)",
+          "grouped": "Projects and assistants",
           "all": "All sessions"
         },
         "ordering": {
@@ -258,6 +340,7 @@
       "cancelEdit": "Cancel",
       "loading": "Loading...",
       "loadFailedRetry": "Couldn't load sessions — retry",
+      "partialLoadFailedRetry": "Some workspace sessions couldn't be loaded — retry",
       "showMore": "{{count}} more sessions",
       "showAll": "{{count}} more (show all)",
       "showLess": "Show less",
@@ -431,8 +514,9 @@
     },
     "workspaces": {
       "empty": "No opened workspaces yet",
-      "emptyProjects": "No project workspaces",
+      "emptyProjects": "No projects yet",
       "emptyAssistants": "No personal assistants",
+      "emptySessionGroups": "No projects or assistants yet",
       "primaryAssistant": "Primary",
       "closeFailed": "Failed to close workspace",
       "createAssistantFailed": "Failed to create personal assistant",
@@ -440,7 +524,7 @@
       "assistantDeleted": "Personal assistant deleted",
       "resetWorkspaceFailed": "Failed to reset workspace",
       "workspaceReset": "Workspace reset",
-      "reorderFailed": "Failed to reorder workspaces",
+      "reorderFailed": "Failed to reorder session groups",
       "dropBefore": "Release to insert before",
       "dropAfter": "Release to insert after",
       "revealFailed": "Failed to reveal workspace folder",
@@ -456,10 +540,10 @@
       "collapseSessions": "Collapse sessions",
       "groups": {
         "projects": "Projects",
-        "assistants": "Personal Assistants"
+        "assistants": "Assistants"
       },
       "remote": {
-        "tooltip": "Remote workspace · {{connection}} ({{host}})\nConnection: {{status}}",
+        "tooltip": "Remote project · {{connection}} ({{host}})\nConnection: {{status}}",
         "ariaLabel": "Remote connection {{connection}}, {{status}}",
         "status": {
           "connected": "Connected",
@@ -481,7 +565,7 @@
         "rename": "Rename project",
         "copyPath": "Copy path",
         "reveal": "Reveal in explorer",
-        "close": "Close workspace"
+        "close": "Close project"
       },
       "renameDialog": {
         "title": "Rename project",

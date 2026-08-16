@@ -158,6 +158,7 @@ const SERVICES_CORE_TOKIO_FEATURES = new Map([
   ['local-storage', ['fs', 'rt', 'sync', 'time']],
   ['permission', ['rt']],
   ['process-runtime', ['io-util', 'process', 'rt', 'time']],
+  ['session-search', ['rt']],
   ['workspace-instructions', ['fs', 'io-util', 'rt']],
   ['workspace-text-runtime', ['rt']],
   ['lsp', ['fs', 'io-util', 'process', 'rt', 'sync', 'time']],
@@ -176,6 +177,7 @@ const CORE_TOKIO_FEATURES = new Map([
 const CORE_TOKIO_AGGREGATES = new Set([
   'external-sources',
   'plugin-runtime',
+  'product-search',
   'product-full',
   'remote-connect',
   'tools-browser-web',
@@ -894,6 +896,7 @@ export function findProductEntrypointCoreFeatureViolations(
   const reviewedCoreFeatureClosures = new Map([
     ['bitfun-cli', [
       ...coreCompatibilityReviewedFeatures,
+      'product-search',
       'remote-connect',
       'plugin-runtime',
       'ssh-remote',
@@ -958,6 +961,7 @@ export function findProductEntrypointCoreFeatureViolations(
       ...acpActiveCoreFeatures,
       'i18n-runtime',
       'plugin-runtime',
+      'product-search',
       'remote-connect',
     ]],
     ['bitfun-acp', acpActiveCoreFeatures],

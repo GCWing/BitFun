@@ -58,6 +58,7 @@ remote-workspace-ports = []
 git-port = []
 runtime-event-port = []
 permission = ["dep:bitfun-product-domains"]
+product-search = ["dep:bitfun-product-domains"]
 # Derive `ts_rs::TS` on the wire types so downstream crates (app-server) can
 # export TypeScript bindings. The `permission` feature gates the product
 # types; enabling `ts` requires `permission` so all TS-derivable types are in

@@ -682,12 +682,13 @@
     },
     "harness": {
       "selectorTooltip": "{{name}} Harness is active",
-      "activateBalanced": "Switch to Balanced Harness",
+      "activateBalanced": "Switch to Standard Harness",
       "compatibilityShort": "Legacy",
       "comingSoon": "In development",
       "newSessionOnly": "New sessions",
       "comingSoonNotice": "{{name}} Harness is in development.",
       "legacySessionNotice": "This legacy session keeps its original agent mode. Create a new session to use Agent Harness.",
+      "sessionStartedNotice": "Harness can only be set before the first turn starts. Create a new session to use another profile.",
       "unsupportedProfile": "Unsupported Harness ({{id}})",
       "unsupportedProfileNotice": "This session uses {{id}}, which this version cannot run. Select a supported Harness explicitly.",
       "profileChangeBusy": "Wait for the current turn to finish before changing Harness.",
@@ -696,7 +697,7 @@
       "profileChangeFailed": "Failed to change Harness. Try again.",
       "profiles": {
         "minimal": { "name": "Minimal", "promise": "Acts directly, with the least planning and checking" },
-        "balanced": { "name": "Balanced", "promise": "Plans first, then verifies what matters" },
+        "balanced": { "name": "Standard", "promise": "Plans first, then verifies what matters" },
         "ultimate": { "name": "Ultimate", "promise": "Deep planning, more collaboration, full verification" }
       }
     },
@@ -2451,6 +2452,29 @@
     "current": "Reasoning: {{preset}}",
     "currentAuto": "Reasoning: Auto ({{preset}})",
     "updateFailed": "Failed to update reasoning preset",
+    "levels": {
+      "off": "Off",
+      "on": "On",
+      "none": "Off",
+      "minimal": "Minimal",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "xhigh": "Extra high",
+      "max": "Maximum"
+    },
+    "modes": {
+      "off": "Thinking off",
+      "on": "Thinking on",
+      "none": "Thinking off",
+      "minimal": "Fastest mode",
+      "low": "Fast mode",
+      "medium": "Balanced mode",
+      "high": "Deep mode",
+      "xhigh": "Intensive mode",
+      "max": "Maximum mode",
+      "custom": "Model preset"
+    },
     "source": {
       "models_dev": "models.dev",
       "adapter_fallback": "Built in",

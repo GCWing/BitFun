@@ -5,20 +5,15 @@ import {
   Info,
   MoreVertical,
   PictureInPicture2,
-  SquareTerminal,
-  Terminal,
   Smartphone,
-  Globe,
-  ExternalLink,
   BarChart3,
+  CalendarClock,
   ChevronUp,
 } from 'lucide-react';
 import { Tooltip, Modal, PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
-import { useSceneManager } from '../../../hooks/useSceneManager';
-import { useNavSceneStore } from '../../../stores/navSceneStore';
 import { useSceneStore } from '../../../stores/sceneStore';
-import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
+import { activateProductAction } from '@/app/global-search/productActionActivator';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useNotification } from '@/shared/notification-system';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
@@ -42,18 +37,7 @@ const AboutDialog = lazy(() =>
 
 const PersistentFooterActions: React.FC = () => {
   const { t } = useI18n('common');
-  const { openScene } = useSceneManager();
   const activeTabId = useSceneStore((s) => s.activeTabId);
-  const showSceneNav = useNavSceneStore((s) => s.showSceneNav);
-  const navSceneId = useNavSceneStore((s) => s.navSceneId);
-  const openNavScene = useNavSceneStore((s) => s.openNavScene);
-  const closeNavScene = useNavSceneStore((s) => s.closeNavScene);
-
-  // Check if a browser panel is the active tab in the AuxPane canvas
-  const isBrowserPanelActiveInCanvas = useCanvasStore((s) => {
-    const activeTab = s.primaryGroup.tabs.find((t) => t.id === s.primaryGroup.activeTabId);
-    return activeTab?.content.type === 'browser';
-  });
   const { enableToolbarMode } = useToolbarModeContext();
   const { warning } = useNotification();
   const { loggedIn: accountLoggedIn, deviceName: accountDeviceName } = useAccountLoginState();
@@ -122,39 +106,17 @@ const PersistentFooterActions: React.FC = () => {
   };
 
   const handleOpenSettings = () => {
-    closeMenu();
-    openScene('settings');
+    void activateProductAction('settings.open');
   };
-
-  const handleOpenShell = useCallback(() => {
-    if (showSceneNav && navSceneId === 'shell') {
-      closeNavScene();
-      return;
-    }
-    openNavScene('shell');
-  }, [closeNavScene, navSceneId, openNavScene, showSceneNav]);
-
-  const handleOpenBrowser = useCallback(() => {
-    if (activeTabId === 'session') {
-      // Open browser as a panel in the AuxPane (right side of chat)
-      window.dispatchEvent(new CustomEvent('agent-create-tab', {
-        detail: {
-          type: 'browser',
-          title: t('scenes.browser'),
-          checkDuplicate: true,
-          duplicateCheckKey: 'browser-panel',
-          replaceExisting: false,
-        },
-      }));
-    } else {
-      openScene('browser');
-    }
-  }, [activeTabId, openScene, t]);
 
   const handleOpenInsights = useCallback(() => {
     closeMenu();
-    openScene('insights');
-  }, [closeMenu, openScene]);
+    void activateProductAction('surface.insights.open');
+  }, [closeMenu]);
+
+  const handleOpenTodos = useCallback(() => {
+    void activateProductAction('surface.todos.open');
+  }, []);
 
   const handleShowAbout = () => {
     closeMenu();
@@ -166,9 +128,7 @@ const PersistentFooterActions: React.FC = () => {
     enableToolbarMode();
   };
 
-  const handleRemoteConnect = useCallback(async () => {
-    closeMenu();
-
+  const handleRemoteConnect = useCallback(() => {
     if (hasAgreedRemoteDisclaimer || getRemoteConnectDisclaimerAgreed()) {
       setHasAgreedRemoteDisclaimer(true);
       setRemoteInitialGroup(undefined);
@@ -177,7 +137,7 @@ const PersistentFooterActions: React.FC = () => {
     }
 
     setShowRemoteDisclaimer(true);
-  }, [closeMenu, hasAgreedRemoteDisclaimer]);
+  }, [hasAgreedRemoteDisclaimer]);
 
   const handleAgreeDisclaimer = useCallback(() => {
     setRemoteConnectDisclaimerAgreed();
@@ -187,8 +147,14 @@ const PersistentFooterActions: React.FC = () => {
     setShowRemoteConnect(true);
   }, []);
 
-  const isBrowserActive =
-    activeTabId === 'browser' || (activeTabId === 'session' && isBrowserPanelActiveInCanvas);
+  const isTodosActive = activeTabId === 'todos';
+  const isSettingsActive = activeTabId === 'settings';
+  const deviceStatusLabel = accountLoggedIn
+    ? accountDeviceName || t('accountLogin.thisDevice')
+    : t('accountLogin.connectDevices');
+  const deviceStatusTooltip = accountLoggedIn
+    ? `${deviceStatusLabel} · ${t('accountLogin.online')}`
+    : t('accountLogin.loginValueProp');
 
   return (
     <>
@@ -240,24 +206,7 @@ const PersistentFooterActions: React.FC = () => {
                     visibility: menuLayout ? 'visible' : 'hidden',
                   }}
                 >
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
-                    data-bf-component="nav-panel"
-                    data-bf-part="footerMenuItem"
-                    onClick={handleRemoteConnect}
-                  >
-                    <Smartphone size={14} />
-                    <span className="bitfun-nav-panel__footer-menu-item-label">
-                      {accountLoggedIn && accountDeviceName
-                        ? accountDeviceName
-                        : t('shared:features.remoteControl')}
-                    </span>
-                    {accountLoggedIn && (
-                      <span className="bitfun-nav-panel__footer-menu-item-dot" />
-                    )}
-                  </button>
+                  <NotificationButton menuItem onActivate={closeMenu} />
                   <div className="bitfun-nav-panel__footer-menu-divider" data-bf-component="nav-panel" data-bf-part="footerMenuDivider" />
                   <button
                     type="button"
@@ -286,18 +235,6 @@ const PersistentFooterActions: React.FC = () => {
                     type="button"
                     className="bitfun-nav-panel__footer-menu-item"
                     role="menuitem"
-                    onClick={handleOpenSettings}
-                    data-testid="nav-footer-settings-item"
-                    data-bf-component="nav-panel"
-                    data-bf-part="footerMenuItem"
-                  >
-                    <Settings size={14} />
-                    <span>{t('shared:features.settings')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
                     data-bf-component="nav-panel"
                     data-bf-part="footerMenuItem"
                     onClick={handleShowAbout}
@@ -311,48 +248,60 @@ const PersistentFooterActions: React.FC = () => {
             )}
           </div>
 
-          <Tooltip content={t('scenes.shell')} placement="right">
+          <Tooltip content={t('nav.tooltips.todos')} placement="right" followCursor>
             <button
               type="button"
-              className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${showSceneNav && navSceneId === 'shell' ? ' is-active' : ''}`}
-              aria-label={t('scenes.shell')}
-              aria-pressed={showSceneNav && navSceneId === 'shell'}
-              onClick={handleOpenShell}
-              data-testid="shell-panel-entry"
+              className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isTodosActive ? ' is-active' : ''}`}
+              aria-label={t('nav.tooltips.todos')}
+              aria-pressed={isTodosActive}
+              onClick={handleOpenTodos}
+              data-testid="nav-todos-btn"
               data-bf-component="nav-panel"
-              data-bf-part="footerButton"
-              data-bf-state={showSceneNav && navSceneId === 'shell' ? 'active' : undefined}
+              data-bf-part="todoEntry"
+              data-bf-action="todos"
+              data-bf-state={isTodosActive ? 'active' : undefined}
             >
-              <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-                <SquareTerminal size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-                <Terminal size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
-              </span>
+              <CalendarClock size={15} aria-hidden="true" />
             </button>
           </Tooltip>
 
-          <Tooltip content={t('scenes.browser')} placement="right">
+          <Tooltip content={deviceStatusTooltip} placement="right" followCursor>
             <button
               type="button"
-              className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isBrowserActive ? ' is-active' : ''}`}
-              aria-label={t('scenes.browser')}
-              aria-pressed={isBrowserActive}
-              onClick={handleOpenBrowser}
-              data-testid="browser-panel-entry"
+              className={`bitfun-nav-panel__footer-device-status${accountLoggedIn ? ' is-connected' : ''}`}
+              aria-label={deviceStatusTooltip}
+              onClick={handleRemoteConnect}
+              data-testid="nav-footer-device-status"
               data-bf-component="nav-panel"
-              data-bf-part="footerButton"
-              data-bf-state={isBrowserActive ? 'active' : undefined}
+              data-bf-part="deviceStatus"
+              data-bf-state={accountLoggedIn ? 'connected' : 'disconnected'}
             >
-              <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-                <Globe size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-                <ExternalLink size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
+              <Smartphone size={15} aria-hidden="true" />
+              <span className="bitfun-nav-panel__footer-device-status-label">
+                {deviceStatusLabel}
               </span>
+              <span className="bitfun-nav-panel__footer-device-status-dot" aria-hidden="true" />
             </button>
           </Tooltip>
         </div>
 
         <div className="bitfun-nav-panel__footer-right">
           <GithubStarButton />
-          <NotificationButton className="bitfun-nav-panel__footer-btn" navFooterHoverIconSwap />
+          <Tooltip content={t('shared:features.settings')} placement="right" followCursor>
+            <button
+              type="button"
+              className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isSettingsActive ? ' is-active' : ''}`}
+              aria-label={t('shared:features.settings')}
+              aria-pressed={isSettingsActive}
+              onClick={handleOpenSettings}
+              data-testid="nav-footer-settings-item"
+              data-bf-component="nav-panel"
+              data-bf-part="settingsEntry"
+              data-bf-state={isSettingsActive ? 'active' : undefined}
+            >
+              <Settings size={15} aria-hidden="true" />
+            </button>
+          </Tooltip>
         </div>
       </div>
       <PresenceBoundary active={showAbout}>

@@ -17,9 +17,16 @@ function readWorkspaceItemSource(): string {
   ).replace(/\r\n/g, '\n');
 }
 
+function readWorkspaceListSource(): string {
+  return readFileSync(
+    fileURLToPath(new URL('./WorkspaceListSection.tsx', import.meta.url)),
+    'utf8',
+  ).replace(/\r\n/g, '\n');
+}
+
 function extractBlock(stylesheet: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = stylesheet.match(new RegExp(`${escapedSelector}\\s*\\{(?<body>[\\s\\S]*?)\\n\\s*\\}`));
+  const match = stylesheet.match(new RegExp(`^\\s*${escapedSelector}\\s*\\{(?<body>[\\s\\S]*?)\\n\\s*\\}`, 'm'));
   return match?.groups?.body ?? '';
 }
 
@@ -30,6 +37,7 @@ describe('WorkspaceListSection layout styles', () => {
     const workspaceGroup = extractBlock(stylesheet, '&__workspace-group');
     const workspaceItem = extractBlock(stylesheet, '&__workspace-item');
     const workspaceCard = extractBlock(stylesheet, '&__workspace-item-card');
+    const workspaceIcon = extractBlock(stylesheet, '&__workspace-item-icon');
     const workspaceNameButton = extractBlock(stylesheet, '&__workspace-item-name-btn');
     const workspaceTitle = extractBlock(stylesheet, '&__workspace-item-title');
     const workspaceLabel = extractBlock(stylesheet, '&__workspace-item-label');
@@ -37,6 +45,8 @@ describe('WorkspaceListSection layout styles', () => {
     const workspaceMenu = extractBlock(stylesheet, '&__workspace-item-menu');
     const assistantItem = extractBlock(stylesheet, '&__assistant-item');
     const assistantCard = extractBlock(stylesheet, '&__assistant-item-card');
+    const assistantCollapseButton = extractBlock(stylesheet, '&__assistant-item-collapse-btn');
+    const assistantIcon = extractBlock(stylesheet, '&__assistant-item-avatar');
     const assistantNameButton = extractBlock(stylesheet, '&__assistant-item-name-btn');
     const assistantLabel = extractBlock(stylesheet, '&__assistant-item-label');
     const assistantMenu = extractBlock(stylesheet, '&__assistant-item-menu');
@@ -48,6 +58,8 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceItem).toContain('max-width: 100%;');
     expect(workspaceCard).toContain('max-width: 100%;');
     expect(workspaceCard).toContain('overflow: hidden;');
+    expect(workspaceIcon).toContain('width: 16px;');
+    expect(workspaceIcon).toContain('height: 16px;');
     expect(workspaceNameButton).toContain('flex: 0 1 auto;');
     expect(workspaceNameButton).toContain('overflow: hidden;');
     expect(workspaceNameButton).not.toContain('58px');
@@ -68,8 +80,18 @@ describe('WorkspaceListSection layout styles', () => {
     expect(assistantItem).toContain('min-width: 0;');
     expect(assistantItem).toContain('max-width: 100%;');
     expect(assistantCard).toContain('max-width: 100%;');
+    expect(assistantCard).toContain('min-height: 30px;');
     expect(assistantCard).toContain('overflow: hidden;');
+    expect(assistantCollapseButton).toContain('width: 26px;');
+    expect(assistantCollapseButton).toContain('min-height: 30px;');
+    expect(assistantCollapseButton).toContain('padding: 0 0 0 4px;');
+    expect(assistantIcon).toContain('width: 16px;');
+    expect(assistantIcon).toContain('height: 16px;');
+    expect(assistantIcon).toContain('color: inherit;');
+    expect(assistantIcon).toContain('opacity: 1;');
     expect(assistantNameButton).toContain('flex: 1 1 0;');
+    expect(assistantNameButton).toContain('min-height: 30px;');
+    expect(assistantNameButton).toContain('padding: 0 4px;');
     expect(assistantNameButton).toContain('overflow: hidden;');
     expect(assistantNameButton).not.toContain('58px');
     expect(stylesheet).toContain('&__assistant-item:hover &__assistant-item-name-btn');
@@ -133,5 +155,37 @@ describe('WorkspaceListSection layout styles', () => {
     expect(remoteMetaEnd).toBeGreaterThan(remoteMetaStart);
     expect(remoteMetaMarkup.indexOf('workspace-item-remote-name'))
       .toBeLessThan(remoteMetaMarkup.indexOf('workspace-item-status-dot'));
+  });
+
+  it('uses stable BitFun semantics for grouped entries without a redundant aggregate header', () => {
+    const itemSource = readWorkspaceItemSource();
+    const listSource = readWorkspaceListSource();
+    const stylesheet = readWorkspaceListStylesheet();
+
+    expect(itemSource).toContain('<SessionGroupAssistantIcon size={BITFUN_ICON_SIZE.navigation} />');
+    expect(itemSource).toContain('<SessionGroupRemoteWorkspaceIcon size={BITFUN_ICON_SIZE.navigation} />');
+    expect(itemSource).toContain('<SessionGroupWorkspaceIcon size={BITFUN_ICON_SIZE.navigation} />');
+    expect(listSource).not.toContain('SessionGroupGlobalTaskIcon');
+    expect(listSource).not.toContain('nav.sessions.viewMenu.grouping.all');
+    expect(listSource).not.toContain('workspace-all-sessions-header');
+    expect(stylesheet).not.toContain('&__workspace-all-sessions-header');
+    expect(stylesheet).not.toContain('&__workspace-all-sessions-icon');
+    expect(stylesheet).toContain('&__assistant-item-group-icon');
+    expect(extractBlock(stylesheet, '&__workspace-item:not(.is-active) &__workspace-item-icon'))
+      .toContain('opacity: 1;');
+    expect(extractBlock(stylesheet, '&__assistant-item:not(.is-active) &__assistant-item-avatar'))
+      .toContain('opacity: 1;');
+  });
+
+  it('uses the standard workspace session-row presentation inside assistant groups', () => {
+    const itemSource = readWorkspaceItemSource();
+    const assistantSessionsStart = itemSource.indexOf('bitfun-nav-panel__assistant-item-sessions');
+    const assistantSessionsEnd = itemSource.indexOf('useWorkspaceViewPreferences', assistantSessionsStart);
+    const assistantSessionsMarkup = itemSource.slice(assistantSessionsStart, assistantSessionsEnd);
+
+    expect(assistantSessionsStart).toBeGreaterThanOrEqual(0);
+    expect(assistantSessionsEnd).toBeGreaterThan(assistantSessionsStart);
+    expect(assistantSessionsMarkup).toContain('<SessionsSection');
+    expect(assistantSessionsMarkup).not.toContain('presentation=');
   });
 });

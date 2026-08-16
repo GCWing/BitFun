@@ -163,7 +163,7 @@ import { quickActionsConfigAppearanceDescriptor } from '@/infrastructure/config/
 import { statusBarPopoversAppearanceDescriptor } from '@/tools/editor/components/StatusBarPopovers/StatusBarPopovers.appearance';
 import { mEditorAppearanceDescriptor } from '@/tools/editor/meditor/components/MEditor.appearance';
 import { referencesPanelAppearanceDescriptor } from '@/tools/lsp/components/ReferencesPanel/ReferencesPanel.appearance';
-import { navSearchDialogAppearanceDescriptor } from '@/app/components/NavPanel/NavSearchDialog.appearance';
+import { globalSearchAppearanceDescriptor } from '@/app/global-search/GlobalSearchRoot.appearance';
 import { workspaceRelatedPathsDialogAppearanceDescriptor } from '@/app/components/NavPanel/sections/workspaces/WorkspaceRelatedPathsDialog.appearance';
 import { branchSelectModalAppearanceDescriptor } from '@/app/components/panels/BranchSelectModal.appearance';
 import { floatingMiniChatAppearanceDescriptor } from '@/app/layout/FloatingMiniChat.appearance';
@@ -449,7 +449,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(statusBarPopoversAppearanceDescriptor)
     .registerComponent(mEditorAppearanceDescriptor)
     .registerComponent(referencesPanelAppearanceDescriptor)
-    .registerComponent(navSearchDialogAppearanceDescriptor)
+    .registerComponent(globalSearchAppearanceDescriptor)
     .registerComponent(workspaceRelatedPathsDialogAppearanceDescriptor)
     .registerComponent(branchSelectModalAppearanceDescriptor)
     .registerComponent(floatingMiniChatAppearanceDescriptor)

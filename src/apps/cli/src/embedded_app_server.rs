@@ -23,7 +23,8 @@ impl EmbeddedAppServerHost {
             runtime.agent_runtime().clone(),
             runtime.agent_event_source(),
         )
-        .with_context_reload(Arc::new(runtime.compatibility().clone()));
+        .with_context_reload(Arc::new(runtime.compatibility().clone()))
+        .with_product_search(Arc::new(runtime.compatibility().clone()));
         let management = Arc::new(
             AppManagementService::load_for_local_host(Some(runtime.account_runtime().clone()))
                 .await?,

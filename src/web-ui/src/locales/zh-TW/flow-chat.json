@@ -682,12 +682,13 @@
     },
     "harness": {
       "selectorTooltip": "目前使用「{{name}}」Harness",
-      "activateBalanced": "切換到均衡 Harness",
+      "activateBalanced": "切換到標準 Harness",
       "compatibilityShort": "相容模式",
       "comingSoon": "開發中",
       "newSessionOnly": "僅新會話",
       "comingSoonNotice": "「{{name}}」Harness 正在開發中。",
       "legacySessionNotice": "該舊會話繼續使用原 Agent 模式；請新增會話使用 Agent Harness。",
+      "sessionStartedNotice": "Harness 僅可在首輪開始前設定；如需使用其他檔位，請新增會話。",
       "unsupportedProfile": "不支援的 Harness（{{id}}）",
       "unsupportedProfileNotice": "該工作階段使用目前版本無法執行的 {{id}}。請選擇受支援的 Harness。",
       "profileChangeBusy": "請等待目前回合結束後再切換 Harness。",
@@ -696,7 +697,7 @@
       "profileChangeFailed": "切換 Harness 失敗，請重試。",
       "profiles": {
         "minimal": { "name": "極簡", "promise": "直接執行，最少編排與校驗" },
-        "balanced": { "name": "均衡", "promise": "先規劃再執行，關鍵處校驗" },
+        "balanced": { "name": "標準", "promise": "先規劃再執行，關鍵處校驗" },
         "ultimate": { "name": "極致", "promise": "深度規劃、多方協作、全面校驗" }
       }
     },
@@ -2451,6 +2452,29 @@
     "current": "思考強度：{{preset}}",
     "currentAuto": "思考強度：自動（{{preset}}）",
     "updateFailed": "更新思考預設失敗",
+    "levels": {
+      "off": "關閉",
+      "on": "開啟",
+      "none": "關閉",
+      "minimal": "極低",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "xhigh": "極高",
+      "max": "最高"
+    },
+    "modes": {
+      "off": "關閉思考",
+      "on": "開啟思考",
+      "none": "關閉思考",
+      "minimal": "極速模式",
+      "low": "快速模式",
+      "medium": "常規模式",
+      "high": "深度模式",
+      "xhigh": "極致模式",
+      "max": "最高強度",
+      "custom": "模型預設"
+    },
     "source": {
       "models_dev": "models.dev",
       "adapter_fallback": "內置",

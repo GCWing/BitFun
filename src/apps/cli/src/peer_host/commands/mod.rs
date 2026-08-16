@@ -75,6 +75,7 @@ pub(crate) async fn dispatch(
         "list_persisted_sessions_count" => {
             session::list_persisted_sessions_count(state, args).await
         }
+        "search_session_content" => session::search_session_content(state, args).await,
         "load_session_turn_window" => session::load_session_turn_window(state, args).await,
         "load_session_turns" => session::load_session_turns(state, args).await,
         "restore_session_view" => session::restore_session_view(state, args).await,

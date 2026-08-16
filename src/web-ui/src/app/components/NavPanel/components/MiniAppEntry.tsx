@@ -1,5 +1,9 @@
 import React, { useMemo } from 'react';
-import { Badge, Tooltip } from '@/component-library';
+import {
+  BITFUN_ICON_SIZE,
+  NavigationMiniAppIcon,
+  Tooltip,
+} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
 import { renderMiniAppIcon, getMiniAppIconGradient } from '@/app/scenes/miniapps/utils/miniAppIcons';
@@ -68,9 +72,11 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
         aria-label={t('scenes.miniApps')}
       >
         <span className="bitfun-nav-panel__miniapp-entry-main">
+          <span className="bitfun-nav-panel__miniapp-entry-icon" aria-hidden="true">
+            <NavigationMiniAppIcon size={BITFUN_ICON_SIZE.navigation} />
+          </span>
           <span className="bitfun-nav-panel__miniapp-entry-copy">
             <span className="bitfun-nav-panel__miniapp-entry-title">{t('scenes.miniApps')}</span>
-            <Badge variant="neutral" className="bitfun-nav-panel__miniapp-badge">Beta</Badge>
           </span>
         </span>
 

@@ -6,6 +6,7 @@ use bitfun_app_server_protocol::app::{
 use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use bitfun_app_server_protocol::event::{SyncEventsRequest, SyncEventsResponse};
 use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
+use bitfun_product_domains::product_search::PRODUCT_SEARCH_CAPABILITY_ID;
 
 use crate::management::EXTERNAL_SOURCES_CAPABILITY;
 use crate::role::{AppClient, AppServer};
@@ -18,7 +19,8 @@ pub(in crate::server) fn builder(
     event_state: std::sync::Arc<crate::server::ConnectionEventState>,
     management: Option<std::sync::Arc<crate::management::AppManagementService>>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
-    let capabilities = registered_capabilities(management.as_deref());
+    let capabilities =
+        registered_capabilities(runtime.product_search().is_some(), management.as_deref());
     let external_source_snapshot_available = capabilities.iter().any(|capability| {
         capability.id == EXTERNAL_SOURCES_CAPABILITY
             && matches!(capability.availability, CapabilityAvailability::Available)
@@ -88,6 +90,7 @@ pub(in crate::server) fn builder(
 }
 
 fn registered_capabilities(
+    product_search_available: bool,
     management: Option<&crate::management::AppManagementService>,
 ) -> Vec<CapabilityDescriptor> {
     let mut capabilities = [
@@ -194,6 +197,17 @@ fn registered_capabilities(
         methods: methods.into_iter().map(str::to_string).collect(),
     })
     .collect::<Vec<_>>();
+    capabilities.push(CapabilityDescriptor {
+        id: PRODUCT_SEARCH_CAPABILITY_ID.to_string(),
+        availability: if product_search_available {
+            CapabilityAvailability::Available
+        } else {
+            CapabilityAvailability::Unavailable {
+                reason: "The Host did not provide product search".to_string(),
+            }
+        },
+        methods: vec!["search/sessionContent".to_string()],
+    });
     capabilities.extend(
         management
             .map(|service| service.capabilities())
@@ -213,7 +227,7 @@ mod tests {
 
     #[test]
     fn missing_host_management_service_declares_capabilities_unavailable() {
-        let capabilities = registered_capabilities(None);
+        let capabilities = registered_capabilities(false, None);
         for id in [
             "tui.modes",
             "tui.models",
@@ -233,6 +247,22 @@ mod tests {
                 capability.availability,
                 CapabilityAvailability::Unavailable { .. }
             ));
+        }
+    }
+
+    #[test]
+    fn product_search_capability_reflects_the_injected_port() {
+        for (available, expected_available) in [(false, false), (true, true)] {
+            let capabilities = registered_capabilities(available, None);
+            let search = capabilities
+                .iter()
+                .find(|capability| capability.id == PRODUCT_SEARCH_CAPABILITY_ID)
+                .expect("search capability");
+            assert_eq!(
+                matches!(search.availability, CapabilityAvailability::Available),
+                expected_available
+            );
+            assert_eq!(search.methods, vec!["search/sessionContent"]);
         }
     }
 }

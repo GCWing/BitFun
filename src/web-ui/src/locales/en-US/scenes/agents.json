@@ -20,7 +20,7 @@
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "The root Agent strategy for each turn. Minimal and Balanced are connected to the current agentic runtime; unavailable profiles remain explicit.",
+    "subtitle": "The root Agent strategy for each turn. Minimal and Standard are connected to the current agentic runtime; unavailable profiles remain explicit.",
     "connected": "Connected",
     "comingSoon": "In development",
     "connectedNotice": "{{name}} Harness is available for session selection.",
@@ -32,7 +32,7 @@
         "behavior": "Minimum planning and focused verification"
       },
       "balanced": {
-        "name": "Balanced",
+        "name": "Standard",
         "description": "Adaptive planning, on-demand Agents, and focused verification.",
         "behavior": "Default · connected through agentic"
       },

@@ -18,6 +18,7 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'extensionGroup', visualRole: 'content' },
     { id: 'sections', visualRole: 'content', continuityGroup: 'nav-panel' },
     { id: 'section', visualRole: 'content' },
+    { id: 'stickySectionHeader', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
     { id: 'sectionContent', visualRole: 'content' },
     { id: 'sessionFilterTrigger', propertyProfile: 'control', visualRole: 'control' },
     { id: 'sessionFilterMenu', propertyProfile: 'overlay', visualRole: 'popup' },
@@ -48,5 +49,6 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
     { id: 'closing', selector: { kind: 'self', suffix: '[data-bf-state~="closing"]' } },
     { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
+    { id: 'stuck', selector: { kind: 'self', suffix: '[data-bf-state~="stuck"]' } },
   ],
 };

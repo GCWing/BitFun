@@ -57,6 +57,7 @@ import { parseReloadCommand, supportsLocalReloadContext } from '../utils/reloadC
 import { reviewPromptCommandShell } from '../utils/promptCommandShellReview';
 import { notificationService } from '@/shared/notification-system';
 import {
+  isHarnessProfileLockedError,
   isNotAvailableError,
   isOutcomeUnknownError,
   isSessionInUseError,
@@ -105,8 +106,8 @@ import { isSamePath } from '@/shared/utils/pathUtils';
 import {
   isSessionWorktreeIsolationEnabled,
   isSessionWorktreeBindingLocked,
-  sessionWorktreeBindingSubscriptionKey,
 } from '../utils/sessionWorktree';
+import { chatInputSessionSubscriptionKey } from '../utils/chatInputSessionSubscription';
 import { isRemoteWorkspaceSession, sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { Tooltip, IconButton, confirmDanger, confirmWarning } from '@/component-library';
@@ -192,7 +193,10 @@ import {
   type ContextUsageDisplay,
 } from '../utils/tokenUsageDisplay';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
-import type { SessionPermissionMode } from '@/infrastructure/api/service-api/AgentAPI';
+import type {
+  SessionExecutionProfile,
+  SessionPermissionMode,
+} from '@/infrastructure/api/service-api/AgentAPI';
 import {
   chatInputPermissionMode,
   permissionModeFromConfig,
@@ -1043,8 +1047,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const canSwitchModes = chatInputModePolicy.canSwitchModes && !isSubagentInputTarget;
   const [isHarnessProfileChangePending, setHarnessProfileChangePending] = useState(false);
+  const [pendingNewSessionHarnessProfile, setPendingNewSessionHarnessProfile] =
+    useState<SelectableHarnessProfileId | null>(null);
   const selectedHarnessProfile: HarnessProfileId =
-    effectiveTargetSession?.config.executionProfile?.harnessProfileId ?? 'balanced';
+    effectiveTargetSession?.config.executionProfile?.harnessProfileId
+      ?? pendingNewSessionHarnessProfile
+      ?? 'balanced';
+  const pendingNewSessionExecutionProfile = useMemo<SessionExecutionProfile | undefined>(
+    () => pendingNewSessionHarnessProfile
+      ? {
+          harnessProfileId: pendingNewSessionHarnessProfile,
+          schemaVersion: 1,
+          selectedBy: 'user',
+        }
+      : undefined,
+    [pendingNewSessionHarnessProfile],
+  );
+
+  useEffect(() => {
+    if (effectiveTargetSessionId) {
+      setPendingNewSessionHarnessProfile(null);
+    }
+  }, [effectiveTargetSessionId]);
 
   // Session-level mode policy: fixed collaboration modes are not selectable boosts.
   const switchableModes = useMemo(
@@ -1141,16 +1165,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         for (const id of sessionIds) {
           const s = state.sessions.get(id);
           if (s) {
-            parts.push(
-              `${id}|${s.mode ?? ''}|${s.title ?? ''}|${s.workspacePath ?? ''}|` +
-              `${s.remoteConnectionId ?? ''}|${s.remoteSshHost ?? ''}|${s.lastSubmittedMode ?? ''}|` +
-              `${s.currentAcpContextUsage?.used ?? ''}|${s.currentAcpContextUsage?.size ?? ''}|` +
-              `${s.currentTokenUsage?.inputTokens ?? ''}|${s.maxContextTokens ?? ''}|` +
-              `${s.needsUserAttention ? '1':'0'}|${s.dialogTurns.length}|` +
-              `${JSON.stringify(s.config.dispatchTarget ?? null)}|` +
-              `${s.config.dispatchApprovalPolicy ?? ''}|${s.config.dispatchJobState ?? ''}|` +
-              `${sessionWorktreeBindingSubscriptionKey(s)}`
-            );
+            parts.push(chatInputSessionSubscriptionKey(s));
           }
         }
         return parts.join(';');
@@ -1724,6 +1739,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const { sendMessage } = useMessageSender({
     currentSessionId: effectiveTargetSessionId || undefined,
+    newSessionExecutionProfile: pendingNewSessionExecutionProfile,
     contexts,
     onClearContexts: clearContexts,
     onSuccess: onSendMessage,
@@ -2302,6 +2318,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSessionHasTurns = effectiveTargetSession
     ? !isProjectedSessionEmpty(effectiveTargetSession)
     : false;
+  // Once the runtime accepts the first submission, Harness remains fixed even
+  // if the user later rolls back all surviving Turns.
+  const harnessProfileLocked = effectiveTargetSessionHasTurns
+    || Boolean(effectiveTargetSession?.lastSubmittedMode?.trim());
   const dispatchControl = useMemo(() => {
     if (
       registration ||
@@ -4131,7 +4151,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const requestHarnessProfileChange = useCallback(async (profileId: SelectableHarnessProfileId) => {
     if (isHarnessProfileChangePending) return;
+    if (harnessProfileLocked) {
+      notificationService.info(t('chatInput.harness.sessionStartedNotice'));
+      return;
+    }
     if (!sessionModeSelectionTarget) {
+      if (!effectiveTargetSessionId) {
+        setPendingNewSessionHarnessProfile(profileId);
+        return;
+      }
       notificationService.error(t('chatInput.harness.legacySessionNotice'));
       return;
     }
@@ -4147,7 +4175,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       );
     } catch (error) {
       log.error('Failed to update Session Harness Profile', { error, profileId });
-      if (isSessionInUseError(error)) {
+      if (isHarnessProfileLockedError(error)) {
+        notificationService.info(t('chatInput.harness.sessionStartedNotice'));
+      } else if (isSessionInUseError(error)) {
         notificationService.info(t('chatInput.harness.profileChangeBusy'));
       } else if (isOutcomeUnknownError(error)) {
         notificationService.error(t('chatInput.harness.profileChangeOutcomeUnknown'));
@@ -4159,7 +4189,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setHarnessProfileChangePending(false);
     }
-  }, [isHarnessProfileChangePending, sessionModeSelectionTarget, t]);
+  }, [effectiveTargetSessionId, harnessProfileLocked, isHarnessProfileChangePending, sessionModeSelectionTarget, t]);
   
   const handleSendOrCancel = useCallback(async (messageOverride?: string) => {
     if (!derivedState) return;
@@ -4771,15 +4801,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         const sessionMode = currentSessionId
           ? FlowChatStore.getInstance().getState().sessions.get(currentSessionId)?.mode
           : undefined;
+        const sessionConfig = flowChatSessionConfigForCurrentWorkspace(workspace);
         await FlowChatManager.getInstance().createChatSession(
-          flowChatSessionConfigForCurrentWorkspace(workspace),
+          pendingNewSessionExecutionProfile
+            ? { ...sessionConfig, executionProfile: pendingNewSessionExecutionProfile }
+            : sessionConfig,
           sessionMode,
         );
       } catch (error) {
         log.error('Failed to create new session from boost menu', { error });
       }
     },
-    [currentSessionId, workspace]
+    [currentSessionId, pendingNewSessionExecutionProfile, workspace]
   );
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -6225,6 +6258,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 {!isAcpTargetSession && !isSubagentInputTarget && !isAssistantWorkspace ? (
                   <HarnessProfileSelector
                     legacySession={!canSwitchModes}
+                    sessionStarted={harnessProfileLocked}
                     selectedProfile={selectedHarnessProfile}
                     disabled={isHarnessProfileChangePending}
                     onSelectProfile={requestHarnessProfileChange}

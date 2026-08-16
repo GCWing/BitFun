@@ -5,6 +5,7 @@
 
 import { browser, expect, $ } from '@wdio/globals';
 import { openWorkspace } from '../helpers/workspace-helper';
+import { saveElementScreenshot, saveStepScreenshot } from '../helpers/screenshot-utils';
 
 const NAV_ENTRY_SELECTORS = [
   '.bitfun-nav-panel__item',
@@ -40,7 +41,7 @@ describe('L0 Navigation Panel', () => {
     it('should detect workspace or startup state', async () => {
       await browser.pause(1000);
 
-      hasWorkspace = await openWorkspace();
+      hasWorkspace = await openWorkspace(undefined, { requireWorkspaceLabel: false });
 
       console.log('[L0] Workspace opened:', hasWorkspace);
       expect(hasWorkspace).toBe(true);
@@ -86,6 +87,194 @@ describe('L0 Navigation Panel', () => {
   });
 
   describe('Navigation interactivity', () => {
+    it('should use the native session-context icon for the session group menu', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const sessionGroupMenuButton = await $('[data-testid="nav-workspace-add-btn"]');
+      await sessionGroupMenuButton.waitForDisplayed({ timeout: 10000 });
+
+      const sessionContextIcon = await sessionGroupMenuButton.$(
+        'svg[data-bf-icon="navigation-session-context-add"][data-bf-source="bitfun-svg"]',
+      );
+      const lucideFolderOpenIcon = await sessionGroupMenuButton.$('svg.lucide-folder-open');
+      const plainPlusIcon = await sessionGroupMenuButton.$('svg.lucide-plus');
+      expect(await sessionContextIcon.isDisplayed()).toBe(true);
+      expect(await lucideFolderOpenIcon.isExisting()).toBe(false);
+      expect(await plainPlusIcon.isExisting()).toBe(false);
+      await saveStepScreenshot('l0-navigation-session-context-add-icon');
+    });
+
+    it('should switch the native session-view icon between grouped and all', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const viewToggle = await $('[data-testid="nav-workspace-session-view-toggle"]');
+      await viewToggle.waitForDisplayed({ timeout: 10000 });
+
+      if (await viewToggle.getAttribute('data-view-mode') === 'all') {
+        await viewToggle.click();
+      }
+      await browser.waitUntil(
+        async () => await viewToggle.getAttribute('data-view-mode') === 'grouped',
+        { timeout: 5000, timeoutMsg: 'Session view did not enter grouped mode' },
+      );
+
+      expect(await viewToggle.getAttribute('aria-pressed')).toBe('false');
+      expect(await viewToggle.$('svg[data-bf-icon="navigation-session-view-grouped"]').isDisplayed()).toBe(true);
+      expect(await viewToggle.$('svg[data-bf-icon="navigation-session-view-all"]').isExisting()).toBe(false);
+      await saveElementScreenshot(
+        '[data-testid="nav-workspace-session-view-toggle"]',
+        'l0-navigation-session-view-grouped-icon',
+      );
+
+      await viewToggle.click();
+      await browser.waitUntil(
+        async () => await viewToggle.getAttribute('data-view-mode') === 'all',
+        { timeout: 5000, timeoutMsg: 'Session view did not enter all mode' },
+      );
+
+      expect(await viewToggle.getAttribute('aria-pressed')).toBe('true');
+      expect(await viewToggle.$('svg[data-bf-icon="navigation-session-view-all"]').isDisplayed()).toBe(true);
+      expect(await viewToggle.$('svg[data-bf-icon="navigation-session-view-grouped"]').isExisting()).toBe(false);
+      expect(await $('.bitfun-nav-panel__workspace-all-sessions-header').isExisting()).toBe(false);
+      await saveElementScreenshot(
+        '[data-testid="nav-workspace-session-view-toggle"]',
+        'l0-navigation-session-view-all-icon',
+      );
+      await saveStepScreenshot('l0-navigation-session-view-all-icon');
+
+      await viewToggle.click();
+      await browser.waitUntil(
+        async () => await viewToggle.getAttribute('data-view-mode') === 'grouped',
+        { timeout: 5000, timeoutMsg: 'Session view did not restore grouped mode' },
+      );
+    });
+
+    it('should render the active session group with its filled native selected icon', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const activeGroup = await $('[data-testid="nav-workspace-item"][data-workspace-active="true"]');
+      await activeGroup.waitForDisplayed({ timeout: 10000 });
+
+      const selectedIcon = await activeGroup.$(
+        'svg[data-bf-source="bitfun-svg"][data-bf-icon$="-selected"]',
+      );
+      await selectedIcon.waitForDisplayed({ timeout: 10000 });
+
+      const selectedIconName = await selectedIcon.getAttribute('data-bf-icon');
+      expect([
+        'session-group-assistant-selected',
+        'session-group-remote-workspace-selected',
+        'session-group-workspace-selected',
+      ]).toContain(selectedIconName);
+      expect(await activeGroup.$(
+        'svg[data-bf-icon="session-group-assistant"], '
+        + 'svg[data-bf-icon="session-group-remote-workspace"], '
+        + 'svg[data-bf-icon="session-group-workspace"]',
+      ).isExisting()).toBe(false);
+
+      await saveElementScreenshot(
+        '[data-testid="nav-workspace-item"][data-workspace-active="true"]',
+        'l0-navigation-selected-session-group-icon',
+      );
+    });
+
+    it('should open assistant management from the item above Mini Apps', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const assistantManager = await $('[data-testid="nav-assistant-manager"]');
+      const miniApps = await $('.bitfun-nav-panel__miniapp-entry');
+      await assistantManager.waitForDisplayed({ timeout: 10000 });
+      await miniApps.waitForDisplayed({ timeout: 10000 });
+
+      expect(await assistantManager.getLocation('y')).toBeLessThan(await miniApps.getLocation('y'));
+
+      await assistantManager.click();
+      const assistantScene = await $('[data-bf-scene="assistant"][data-bf-part="root"]');
+      const assistantGallery = await $('[data-bf-component="nursery-gallery"][data-bf-part="root"]');
+      await assistantScene.waitForDisplayed({ timeout: 10000 });
+      await assistantGallery.waitForDisplayed({ timeout: 10000 });
+      expect(await assistantScene.isDisplayed()).toBe(true);
+      expect(await assistantGallery.isDisplayed()).toBe(true);
+      await saveStepScreenshot('l0-navigation-assistant-management');
+    });
+
+    it('should expose the consolidated footer controls', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const deviceStatus = await $('[data-testid="nav-footer-device-status"]');
+      const settingsButton = await $('[data-testid="nav-footer-settings-item"]');
+      expect(await deviceStatus.isDisplayed()).toBe(true);
+      expect(await settingsButton.isDisplayed()).toBe(true);
+      expect(await $('[data-testid="shell-panel-entry"]').isExisting()).toBe(false);
+      expect(await $('[data-testid="browser-panel-entry"]').isExisting()).toBe(false);
+
+      const moreButton = await $('[data-testid="nav-footer-more-btn"]');
+      await moreButton.click();
+      const notificationItem = await $('[data-testid="notification-button"]');
+      await notificationItem.waitForDisplayed({ timeout: 10000 });
+      expect(await notificationItem.isDisplayed()).toBe(true);
+      await saveStepScreenshot('l0-navigation-footer-consolidated');
+
+      const backdrop = await $('.bitfun-nav-panel__footer-backdrop');
+      await backdrop.click();
+      await backdrop.waitForExist({ reverse: true, timeout: 2000 });
+    });
+
+    it('should keep the session divider full-width and remove the footer divider', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const dividerLayout = await browser.execute(() => {
+        const panel = document.querySelector<HTMLElement>('.bitfun-nav-panel');
+        const sections = document.querySelector<HTMLElement>('.bitfun-nav-panel__sections');
+        const topActions = document.querySelector<HTMLElement>('.bitfun-nav-panel__top-actions');
+        const stickyHeader = document.querySelector<HTMLElement>('.bitfun-nav-panel__sticky-section-header');
+        const footer = document.querySelector<HTMLElement>('.bitfun-nav-panel__footer');
+        if (!panel || !sections || !topActions || !stickyHeader || !footer) {
+          return null;
+        }
+
+        const panelRect = panel.getBoundingClientRect();
+        const sectionsRect = sections.getBoundingClientRect();
+        const topActionsRect = topActions.getBoundingClientRect();
+        const dividerStyle = window.getComputedStyle(topActions, '::after');
+        const stickyDividerStyle = window.getComputedStyle(stickyHeader, '::after');
+        const footerStyle = window.getComputedStyle(footer);
+        const dividerLeft = topActionsRect.left + Number.parseFloat(dividerStyle.left);
+        const dividerRight = dividerLeft + Number.parseFloat(dividerStyle.width);
+
+        return {
+          dividerBorderStyle: dividerStyle.borderBottomStyle,
+          dividerBorderWidth: dividerStyle.borderBottomWidth,
+          dividerLeft,
+          dividerRight,
+          panelLeft: panelRect.left,
+          panelRight: panelRect.right,
+          sectionsRight: sectionsRect.right,
+          hasVerticalScrollbar: sections.scrollHeight > sections.clientHeight,
+          stickyDividerBorderStyle: stickyDividerStyle.borderBottomStyle,
+          stickyDividerBorderWidth: stickyDividerStyle.borderBottomWidth,
+          footerBorderStyle: footerStyle.borderTopStyle,
+          footerBorderWidth: footerStyle.borderTopWidth,
+        };
+      });
+
+      expect(dividerLayout).not.toBeNull();
+      if (!dividerLayout) {
+        return;
+      }
+
+      expect(dividerLayout.dividerBorderStyle).toBe('dashed');
+      expect(dividerLayout.dividerBorderWidth).toBe('1px');
+      expect(Math.abs(dividerLayout.dividerLeft - dividerLayout.panelLeft)).toBeLessThanOrEqual(1);
+      expect(dividerLayout.dividerRight).toBeGreaterThanOrEqual(dividerLayout.panelRight - 1);
+      expect(dividerLayout.dividerRight).toBeGreaterThanOrEqual(dividerLayout.sectionsRight - 1);
+      expect(dividerLayout.stickyDividerBorderStyle).toBe('dashed');
+      expect(dividerLayout.stickyDividerBorderWidth).toBe('1px');
+      expect(dividerLayout.footerBorderStyle).toBe('none');
+      expect(dividerLayout.footerBorderWidth).toBe('0px');
+      console.log('[L0] Navigation divider layout:', dividerLayout);
+    });
+
     it('navigation items should be clickable', async function () {
       expect(hasWorkspace).toBe(true);
 

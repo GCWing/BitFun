@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check } from 'lucide-react';
+import {
+  Check,
+  CircleHelp,
+  Grid2X2,
+  Grid3X3,
+  Scan,
+  Square,
+  type LucideIcon,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -16,6 +24,8 @@ export type SelectableHarnessProfileId = 'minimal' | 'balanced';
 interface HarnessProfileSelectorProps {
   /** Session still runs the legacy agent mode and cannot switch. */
   legacySession?: boolean;
+  /** The Session has accepted its first runtime Turn, so its Harness is fixed. */
+  sessionStarted?: boolean;
   selectedProfile: HarnessProfileId;
   disabled?: boolean;
   onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
@@ -23,29 +33,53 @@ interface HarnessProfileSelectorProps {
 
 const PROFILE_IDS: KnownHarnessProfileId[] = ['minimal', 'balanced', 'ultimate'];
 
-/**
- * How many of the three gauge segments a gear fills. The gauge is the primary
- * reading of the control: intensity is expressed by shape, so the label only
- * names what the shape already says and can be dropped on a narrow composer.
- */
+/** The density step represented by each Harness Profile. */
 const PROFILE_GEARS: Record<KnownHarnessProfileId, 1 | 2 | 3> = {
   minimal: 1,
   balanced: 2,
   ultimate: 3,
 };
 
-const GAUGE_SEGMENTS = [1, 2, 3] as const;
+const PROFILE_DENSITY_ICONS: Record<KnownHarnessProfileId, LucideIcon> = {
+  minimal: Scan,
+  balanced: Grid2X2,
+  ultimate: Grid3X3,
+};
 
-function HarnessGauge({ gear }: { gear: 0 | 1 | 2 | 3 }): React.ReactElement {
+/**
+ * A progressively denser frame around the same red Agent core. This mirrors
+ * the Harness promise: direct focus, coordinated planning, then full coverage.
+ */
+function HarnessDensityMark({
+  profile,
+  compact = false,
+}: {
+  profile?: KnownHarnessProfileId;
+  compact?: boolean;
+}): React.ReactElement {
+  const DensityIcon = profile ? PROFILE_DENSITY_ICONS[profile] : CircleHelp;
+
   return (
-    <span className="bitfun-harness-selector__gauge" data-gear={gear} aria-hidden>
-      {GAUGE_SEGMENTS.map(segment => (
-        <span
-          key={segment}
-          className="bitfun-harness-selector__gauge-bar"
-          data-filled={segment <= gear ? 'true' : 'false'}
+    <span
+      className="bitfun-harness-selector__density-mark"
+      data-harness-profile={profile ?? 'unknown'}
+      data-harness-density={profile ? PROFILE_GEARS[profile] : 0}
+      data-size={compact ? 'compact' : 'option'}
+      aria-hidden
+    >
+      <DensityIcon
+        className="bitfun-harness-selector__density-frame"
+        size={compact ? 15 : 26}
+        strokeWidth={compact ? 1.55 : 1.4}
+      />
+      {profile && (
+        <Square
+          className="bitfun-harness-selector__density-core"
+          size={compact ? 5 : 8}
+          strokeWidth={0}
+          fill="currentColor"
         />
-      ))}
+      )}
     </span>
   );
 }
@@ -54,11 +88,12 @@ function HarnessGauge({ gear }: { gear: 0 | 1 | 2 | 3 }): React.ReactElement {
  * Harness picker embedded in the composer capsule.
  *
  * It sits opposite the model control: the left end of the capsule says how the
- * next turn runs, the right end says what runs it. The popup stays a plain
- * three-row list — gauge, name, and the promise the gear makes.
+ * next turn runs, the right end says what runs it. Each profile keeps the same
+ * Agent core while its surrounding frame becomes progressively denser.
  */
 export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   legacySession = false,
+  sessionStarted = false,
   selectedProfile,
   disabled = false,
   onSelectProfile,
@@ -102,6 +137,20 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   }, [close, open]);
 
   const handleSelect = useCallback((profileId: KnownHarnessProfileId) => {
+    if (legacySession) {
+      notificationService.info(t('chatInput.harness.legacySessionNotice'), { duration: 3800 });
+      close();
+      return;
+    }
+    if (profileId === selectedProfile && profileId !== 'ultimate') {
+      close();
+      return;
+    }
+    if (sessionStarted) {
+      notificationService.info(t('chatInput.harness.sessionStartedNotice'), { duration: 3800 });
+      close();
+      return;
+    }
     if (profileId === 'ultimate') {
       const name = t(`chatInput.harness.profiles.${profileId}.name`);
       notificationService.info(t('chatInput.harness.comingSoonNotice', { name }), {
@@ -110,14 +159,9 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       close();
       return;
     }
-    if (legacySession) {
-      notificationService.info(t('chatInput.harness.legacySessionNotice'), { duration: 3800 });
-      close();
-      return;
-    }
     void onSelectProfile(profileId);
     close();
-  }, [close, legacySession, onSelectProfile, t]);
+  }, [close, legacySession, onSelectProfile, selectedProfile, sessionStarted, t]);
 
   const knownSelectedProfile = PROFILE_IDS.find(id => id === selectedProfile);
   const selectedProfileAvailable =
@@ -130,9 +174,11 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       : t('chatInput.harness.unsupportedProfile', { id: selectedProfile });
   const triggerTooltip = legacySession
     ? t('chatInput.harness.legacySessionNotice')
-    : selectedProfileAvailable
-      ? t('chatInput.harness.selectorTooltip', { name: triggerLabel })
-      : t('chatInput.harness.unsupportedProfileNotice', { id: selectedProfile });
+    : sessionStarted
+      ? t('chatInput.harness.sessionStartedNotice')
+      : selectedProfileAvailable
+        ? t('chatInput.harness.selectorTooltip', { name: triggerLabel })
+        : t('chatInput.harness.unsupportedProfileNotice', { id: selectedProfile });
 
   return (
     <div className="bitfun-harness-selector" data-bf-component="harness-selector" data-bf-part="root">
@@ -146,6 +192,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           data-bf-state={open ? 'open' : undefined}
           data-harness-gear={gear}
           data-harness-legacy={legacySession ? 'true' : undefined}
+          data-harness-locked={sessionStarted ? 'true' : undefined}
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={triggerTooltip}
@@ -156,7 +203,9 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           }}
           data-testid="harness-profile-selector"
         >
-          <HarnessGauge gear={gear} />
+          {!legacySession && (
+            <HarnessDensityMark profile={knownSelectedProfile} compact />
+          )}
           <span className="bitfun-harness-selector__trigger-value">
             {triggerLabel}
           </span>
@@ -171,6 +220,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           data-bf-part="menu"
           data-bf-state="open"
           data-bf-placement={menuLayout?.placement ?? 'top'}
+          data-harness-locked={sessionStarted ? 'true' : undefined}
           role="menu"
           style={{
             top: `${menuLayout?.top ?? 0}px`,
@@ -183,6 +233,13 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
             const name = t(`chatInput.harness.profiles.${id}.name`);
             const connected =
               id !== 'ultimate' && id === selectedProfile && !legacySession;
+            const state = connected
+              ? 'current'
+              : id === 'ultimate'
+                ? 'coming-soon'
+                : sessionStarted
+                  ? 'new-session-only'
+                  : 'available';
             return (
               <button
                 key={id}
@@ -193,11 +250,11 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                 data-bf-component="harness-selector"
                 data-bf-part="profile"
                 data-bf-profile={id}
-                data-bf-state={connected ? 'current' : id === 'ultimate' ? 'coming-soon' : 'available'}
+                data-bf-state={state}
                 onClick={() => handleSelect(id)}
                 data-testid={`harness-profile-${id}`}
               >
-                <HarnessGauge gear={PROFILE_GEARS[id]} />
+                <HarnessDensityMark profile={id} />
                 <span className="bitfun-harness-selector__profile-copy">
                   <span className="bitfun-harness-selector__profile-name">{name}</span>
                   <span className="bitfun-harness-selector__profile-promise">
@@ -207,10 +264,12 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                 <span className="bitfun-harness-selector__profile-status">
                   {connected ? (
                     <Check size={13} strokeWidth={2.4} aria-hidden />
-                  ) : id !== 'ultimate' ? (
-                    null
-                  ) : (
+                  ) : id === 'ultimate' ? (
                     t('chatInput.harness.comingSoon')
+                  ) : sessionStarted ? (
+                    t('chatInput.harness.newSessionOnly')
+                  ) : (
+                    null
                   )}
                 </span>
               </button>

@@ -5,9 +5,6 @@
   display: inline-flex;
   align-items: center;
 
-  // One appearance everywhere: the meter alone, sized as a square target so the
-  // control cannot widen with the level it happens to be showing. It sits beside
-  // the model it belongs to rather than being relayed into a status host.
   &__trigger {
     display: inline-flex;
     align-items: center;
@@ -39,32 +36,47 @@
   }
 
   &__status-meter {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
     flex: none;
-    width: 14px;
-    height: 13px;
+    color: var(--bf-appearance-token-color-text-secondary);
 
-    path {
-      stroke: var(--bf-appearance-token-color-text-muted);
-      opacity: 0.22;
-      transition:
-        stroke $motion-fast $easing-standard,
-        opacity $motion-fast $easing-standard;
+    &[data-size='compact'] {
+      width: 14px;
+      height: 14px;
     }
 
-    @for $active-bars from 1 through 4 {
-      &[data-active-bars='#{$active-bars}'] path:nth-of-type(-n + #{$active-bars}) {
-        stroke: var(--bf-appearance-token-color-accent-500);
-        opacity: 1;
-      }
+    &[data-size='option'] {
+      width: 24px;
+      height: 24px;
     }
+  }
+
+  &__status-ring,
+  &__status-peak,
+  &__status-off {
+    position: absolute;
+    flex: none;
+  }
+
+  &__status-ring {
+    stroke: currentColor;
+  }
+
+  &__status-peak {
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &__status-off {
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__menu {
     --reasoning-preset-menu-offset: -4px;
 
-    min-width: clamp(0px, 190px, calc(100vw - 16px));
-    max-width: clamp(0px, 240px, calc(100vw - 16px));
-    padding: 4px;
+    width: min(232px, calc(100vw - 16px));
+    padding: 5px;
     overflow: hidden;
     background: var(--bf-appearance-token-color-bg-elevated);
     border: 1px solid var(--bf-appearance-token-border-subtle);
@@ -100,22 +112,75 @@
   }
 
   &__header {
-    padding: 5px 7px 7px;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 500;
-  }
-
-  &__option {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    min-height: 34px;
-    padding: 6px 8px;
+    gap: 8px;
+    padding: 0 1px 7px;
+  }
+
+  &__title {
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  &__auto {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    min-height: 22px;
+    padding: 2px 5px;
     border: 0;
-    border-radius: 4px;
+    border-radius: var(--bf-appearance-token-size-radius-base);
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
+      outline: none;
+    }
+
+    &[aria-checked='true'] {
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+
+    small {
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: inherit;
+    }
+  }
+
+  &__auto-check {
+    flex: none;
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &__options {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__option {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: var(--bf-appearance-token-size-radius-base);
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
     text-align: left;
@@ -129,36 +194,63 @@
     }
 
     &[aria-checked='true'] {
-      background: var(--bf-appearance-token-element-bg-subtle);
-    }
-
-    > span {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     strong,
     small {
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       letter-spacing: 0;
     }
+  }
+
+  &__option-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    flex: 1;
+    gap: 1px;
+    width: 100%;
+    min-width: 0;
+
+    strong,
+    small {
+      display: block;
+      max-width: 100%;
+    }
 
     strong {
+      color: var(--bf-appearance-token-color-text-primary);
       font-size: var(--bf-appearance-token-flowchat-font-size-xs);
       font-weight: 500;
+      line-height: 1.25;
     }
 
     small {
       color: var(--bf-appearance-token-color-text-muted);
       font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+      line-height: 1.25;
+    }
+  }
+
+  &__option-check {
+    flex: none;
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+}
+
+@media (max-width: 360px) {
+  .bitfun-reasoning-preset-selector {
+    &__menu {
+      padding: 5px;
     }
 
-    svg {
-      flex-shrink: 0;
-      color: var(--bf-appearance-token-color-accent-500);
+    &__option {
+      min-height: 38px;
+      padding-inline: 5px;
     }
   }
 }

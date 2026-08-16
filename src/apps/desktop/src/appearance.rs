@@ -1,6 +1,5 @@
 //! Desktop appearance bootstrap and window creation.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{OnceLock, RwLock};
 use std::time::Instant;
 
@@ -29,13 +28,15 @@ const STARTUP_APPEARANCE_BOOTSTRAP_JSON: &str =
     include_str!("generated/startup_appearance_bootstrap.json");
 
 struct MainWebviewNavigationPolicy {
-    first_page_navigation: AtomicBool,
+    allow_main_page_reload: bool,
+    initial_page_url: RwLock<Option<Url>>,
 }
 
 impl MainWebviewNavigationPolicy {
-    fn new() -> Self {
+    fn new(allow_main_page_reload: bool) -> Self {
         Self {
-            first_page_navigation: AtomicBool::new(true),
+            allow_main_page_reload,
+            initial_page_url: RwLock::new(None),
         }
     }
 
@@ -44,10 +45,23 @@ impl MainWebviewNavigationPolicy {
         // macOS, but it does not expose the target frame here. MiniApps use
         // parent-created Blob documents, while srcdoc/empty iframe documents
         // use the two local about: targets below. Allowing only these local
-        // document URLs keeps network and app reloads behind the one-shot gate.
+        // document URLs keeps them outside the main-page navigation policy.
         let is_embedded_document = url.scheme() == "blob"
             || (url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc"));
-        is_embedded_document || self.first_page_navigation.swap(false, Ordering::SeqCst)
+        if is_embedded_document {
+            return true;
+        }
+
+        let Ok(mut initial_page_url) = self.initial_page_url.write() else {
+            return false;
+        };
+        match initial_page_url.as_ref() {
+            Some(initial_page_url) => self.allow_main_page_reload && initial_page_url == url,
+            None => {
+                *initial_page_url = Some(url.clone());
+                true
+            }
+        }
     }
 }
 
@@ -609,9 +623,10 @@ pub fn create_main_window(
     // Keep HTML5 drag-and-drop working inside the webview for desktop UI drag targets.
     builder = builder.disable_drag_drop_handler();
 
-    // Block top-level webview reloads after the initial page while allowing the
-    // local iframe documents used by sandboxed MiniApps.
-    let navigation_policy = MainWebviewNavigationPolicy::new();
+    // Debug builds may reload the initial page for development. Release builds
+    // keep top-level reloads blocked. Both modes continue to reject navigation
+    // to a different main-page URL and allow local sandboxed MiniApp documents.
+    let navigation_policy = MainWebviewNavigationPolicy::new(cfg!(debug_assertions));
     builder = builder.on_navigation(move |url| navigation_policy.should_allow(url));
 
     #[cfg(target_os = "macos")]
@@ -1039,7 +1054,7 @@ mod tests {
 
     #[test]
     fn main_webview_navigation_allows_only_the_first_page_navigation() {
-        let policy = MainWebviewNavigationPolicy::new();
+        let policy = MainWebviewNavigationPolicy::new(false);
 
         assert!(policy.should_allow(&url("http://localhost:1422/")));
         assert!(!policy.should_allow(&url("http://localhost:1422/")));
@@ -1049,7 +1064,7 @@ mod tests {
 
     #[test]
     fn main_webview_navigation_allows_local_iframe_documents_without_consuming_initial_page() {
-        let policy = MainWebviewNavigationPolicy::new();
+        let policy = MainWebviewNavigationPolicy::new(false);
 
         assert!(policy.should_allow(&url(
             "blob:http://localhost:1422/65b60dd8-a501-47c2-b7fd-aa99af720dc6"
@@ -1062,7 +1077,7 @@ mod tests {
 
     #[test]
     fn main_webview_navigation_keeps_iframe_documents_available_after_initial_page() {
-        let policy = MainWebviewNavigationPolicy::new();
+        let policy = MainWebviewNavigationPolicy::new(false);
 
         assert!(policy.should_allow(&url("tauri://localhost/index.html")));
         assert!(policy.should_allow(&url(
@@ -1070,5 +1085,15 @@ mod tests {
         )));
         assert!(policy.should_allow(&url("about:blank")));
         assert!(!policy.should_allow(&url("tauri://localhost/index.html")));
+    }
+
+    #[test]
+    fn development_navigation_allows_only_reload_of_the_initial_page() {
+        let policy = MainWebviewNavigationPolicy::new(true);
+
+        assert!(policy.should_allow(&url("http://localhost:1422/")));
+        assert!(policy.should_allow(&url("http://localhost:1422/")));
+        assert!(!policy.should_allow(&url("http://localhost:1422/other")));
+        assert!(!policy.should_allow(&url("https://example.com/")));
     }
 }

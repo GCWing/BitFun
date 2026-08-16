@@ -98,22 +98,23 @@ describe('status track layout', () => {
   });
 
   it('expresses Harness intensity by shape so the gauge survives a narrow composer', () => {
+    const component = readLocalFile('HarnessProfileSelector.tsx');
     const stylesheet = readLocalFile('HarnessProfileSelector.scss');
 
-    expect(stylesheet).toContain('&:nth-child(1) { height: 5px; }');
-    expect(stylesheet).toContain('&:nth-child(2) { height: 8px; }');
-    expect(stylesheet).toContain('&:nth-child(3) { height: 11px; }');
+    expect(component).toMatch(/minimal: Scan,[\s\S]*?balanced: Grid2X2,[\s\S]*?ultimate: Grid3X3,/);
+    expect(component).toContain("data-harness-density={profile ? PROFILE_GEARS[profile] : 0}");
+    expect(component).toContain('className="bitfun-harness-selector__density-core"');
     expect(stylesheet).toMatch(
       /@media \(max-width: 560px\)[\s\S]*?__trigger-value \{\n {4}display: none;/,
     );
   });
 
-  it('states thinking strength with the meter alone so the pill cannot widen', () => {
+  it('states thinking strength with a compact concentric mark so the pill cannot widen', () => {
     const component = readLocalFile('ReasoningPresetSelector.tsx');
     const stylesheet = readLocalFile('ReasoningPresetSelector.scss');
 
     expect(component).toContain('__status-meter');
-    // A word beside four bars only repeats them, and it does so where the
+    // A word beside the concentric mark only repeats it, and it does so where the
     // capsule has the least width to spare. The level stays in the name.
     expect(component).not.toContain('__label');
     expect(component).toContain('aria-label={tooltip}');

@@ -18,7 +18,7 @@ bitfun-core = { path = "../../assembly/core", features = ["external-sources", "g
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "product-search"] }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 tokio-util = { workspace = true, features = ["compat"] }
 futures = { workspace = true }

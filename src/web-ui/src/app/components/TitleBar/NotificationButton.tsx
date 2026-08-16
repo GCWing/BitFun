@@ -19,11 +19,15 @@ import './NotificationButton.scss';
 interface NotificationButtonProps {
   className?: string;
   navFooterHoverIconSwap?: boolean;
+  menuItem?: boolean;
+  onActivate?: () => void;
 }
 
 const NotificationButton: React.FC<NotificationButtonProps> = ({
   className = '',
   navFooterHoverIconSwap = false,
+  menuItem = false,
+  onActivate,
 }) => {
   const { t } = useI18n('common');
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -47,6 +51,59 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
     }
   }, [activeNotification]);
 
+  const handleActivate = () => {
+    notificationService.toggleCenter();
+    onActivate?.();
+  };
+
+  if (menuItem) {
+    const progressLabel = activeNotification?.variant === 'loading'
+      ? null
+      : activeNotification
+        ? `${Math.round(activeNotification.progress || 0)}%`
+        : null;
+
+    return (
+      <button
+        type="button"
+        role="menuitem"
+        className={['bitfun-nav-panel__footer-menu-item', className].filter(Boolean).join(' ')}
+        onClick={handleActivate}
+        aria-label={t('nav.notifications')}
+        data-testid="notification-button"
+        data-bf-component="notification-button"
+        data-bf-part="menuItem"
+      >
+        {activeNotification?.variant === 'loading' ? (
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            className="bitfun-notification-btn__spinner"
+            aria-hidden="true"
+          >
+            <path d="M12 2 A 10 10 0 0 1 22 12" strokeLinecap="round" />
+          </svg>
+        ) : unreadCount > 0 ? (
+          <BellDot size={14} className="bitfun-notification-btn__icon--has-message" aria-hidden="true" />
+        ) : (
+          <Bell size={14} aria-hidden="true" />
+        )}
+        <span className="bitfun-nav-panel__footer-menu-item-label">
+          {t('nav.notifications')}
+        </span>
+        {progressLabel ? (
+          <span className="bitfun-notification-btn__menu-status">{progressLabel}</span>
+        ) : unreadCount > 0 ? (
+          <span className="bitfun-notification-btn__menu-count">{unreadCount}</span>
+        ) : null}
+      </button>
+    );
+  }
+
   return (
     <Tooltip content={t('nav.notifications')} placement="right" disabled={!!activeNotification}>
     <button data-bf-component="notification-button" data-bf-part="root"
@@ -58,7 +115,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
         navFooterHoverIconSwap && !activeNotification ? 'bitfun-notification-btn--nav-hover-icon' : '',
         className,
       ].filter(Boolean).join(' ')}
-      onClick={() => notificationService.toggleCenter()}
+      onClick={handleActivate}
       type="button"
       aria-label={t('nav.notifications')}
       data-testid="notification-button"

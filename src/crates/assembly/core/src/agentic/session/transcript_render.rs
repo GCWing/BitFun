@@ -87,6 +87,22 @@ pub(crate) fn transcript_display_user_content(turn: &DialogTurnData) -> String {
         .unwrap_or_else(|| strip_prompt_markup(&turn.user_message.content))
 }
 
+/// Final visible assistant prose for product search and other read-only views.
+/// Thinking, tool inputs/results, superseded attempts, and subagent items are
+/// excluded by the same transcript projection used for exports.
+#[cfg(feature = "product-search")]
+pub(crate) fn transcript_display_assistant_content(turn: &DialogTurnData) -> String {
+    transcript_round_blocks(turn, &SessionTranscriptExportOptions::default())
+        .into_iter()
+        .flat_map(|round| round.blocks)
+        .filter_map(|block| match block {
+            TranscriptRoundBlock::Assistant(content) => Some(content),
+            TranscriptRoundBlock::Thinking(_) | TranscriptRoundBlock::Tool(_) => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 fn effective_attempt_index(round: &ModelRoundData) -> Option<u32> {
     round
         .text_items
@@ -525,5 +541,104 @@ fn transcript_omitted_turns_label(turns: &[DialogTurnData], start: usize, end: u
         format!("(omitted turn {})", start_turn)
     } else {
         format!("(omitted turns {}-{})", start_turn, end_turn)
+    }
+}
+
+#[cfg(all(test, feature = "product-search"))]
+mod search_projection_tests {
+    use super::*;
+    use crate::service::session::{
+        DialogTurnKind, TextItemData, ThinkingItemData, TurnStatus, UserMessageData,
+    };
+
+    fn text(id: &str, content: &str, attempt_index: u32, subagent: bool) -> TextItemData {
+        TextItemData {
+            id: id.to_string(),
+            content: content.to_string(),
+            is_streaming: false,
+            timestamp: 1,
+            is_markdown: true,
+            order_index: None,
+            is_subagent_item: Some(subagent),
+            parent_task_tool_id: None,
+            subagent_session_id: None,
+            status: None,
+            attempt_id: None,
+            attempt_index: Some(attempt_index),
+        }
+    }
+
+    #[test]
+    fn search_projection_contains_only_final_visible_assistant_prose() {
+        let round = ModelRoundData {
+            id: "round_1".to_string(),
+            turn_id: "turn_1".to_string(),
+            round_index: 0,
+            round_group_id: None,
+            timestamp: 1,
+            text_items: vec![
+                text("old", "superseded private draft", 0, false),
+                text("visible", "final visible answer", 1, false),
+                text("subagent", "subagent private output", 1, true),
+            ],
+            tool_items: Vec::new(),
+            thinking_items: vec![ThinkingItemData {
+                id: "thinking".to_string(),
+                content: "private reasoning".to_string(),
+                is_streaming: false,
+                is_collapsed: false,
+                timestamp: 1,
+                order_index: None,
+                is_subagent_item: Some(false),
+                parent_task_tool_id: None,
+                subagent_session_id: None,
+                status: None,
+                attempt_id: None,
+                attempt_index: Some(1),
+            }],
+            start_time: 1,
+            end_time: Some(2),
+            duration_ms: Some(1),
+            provider_id: None,
+            model_config_id: None,
+            effective_model_name: None,
+            first_chunk_ms: None,
+            first_visible_output_ms: None,
+            stream_duration_ms: None,
+            attempt_count: Some(2),
+            attempt_diagnostics: Vec::new(),
+            failure_category: None,
+            token_details: None,
+            status: "completed".to_string(),
+        };
+        let turn = DialogTurnData {
+            turn_id: "turn_1".to_string(),
+            turn_index: 0,
+            session_id: "session_1".to_string(),
+            timestamp: 1,
+            kind: DialogTurnKind::UserDialog,
+            agent_type: Some("agentic".to_string()),
+            user_message: UserMessageData {
+                id: "user_1".to_string(),
+                content: "question".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+            model_rounds: vec![round],
+            start_time: 1,
+            end_time: Some(2),
+            duration_ms: Some(1),
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: Some(true),
+            error: None,
+            error_detail: None,
+            status: TurnStatus::Completed,
+        };
+
+        let content = transcript_display_assistant_content(&turn);
+        assert_eq!(content, "final visible answer");
+        assert!(!content.contains("private"));
+        assert!(!content.contains("subagent"));
     }
 }

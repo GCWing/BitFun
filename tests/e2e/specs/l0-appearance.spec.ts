@@ -16,9 +16,6 @@ async function openAppearanceSettings(): Promise<void> {
     return;
   }
 
-  const moreButton = await waitForDisplayed('[data-testid="nav-footer-more-btn"]');
-  await moreButton.click();
-
   const settingsItem = await waitForDisplayed('[data-testid="nav-footer-settings-item"]');
   await settingsItem.click();
 

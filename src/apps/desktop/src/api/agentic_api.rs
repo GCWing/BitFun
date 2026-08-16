@@ -1849,11 +1849,23 @@ pub async fn update_session_harness_profile(
 }
 
 fn desktop_update_session_harness_profile_error(error: RuntimeError) -> String {
+    const HARNESS_PROFILE_LOCKED_PREFIX: &str = "harness_profile_locked:";
+
     match error {
         RuntimeError::Port(port_error) => match port_error.kind {
             PortErrorKind::SessionInUse => format!("session_in_use: {}", port_error.message),
             PortErrorKind::OutcomeUnknown => format!("outcome_unknown: {}", port_error.message),
             PortErrorKind::NotAvailable => format!("not_available: {}", port_error.message),
+            PortErrorKind::InvalidRequest => {
+                if let Some(offset) = port_error.message.find(HARNESS_PROFILE_LOCKED_PREFIX) {
+                    port_error.message[offset..].to_string()
+                } else {
+                    format!(
+                        "Failed to update session Harness Profile: {}",
+                        port_error.message
+                    )
+                }
+            }
             _ => format!(
                 "Failed to update session Harness Profile: {}",
                 port_error.message
@@ -3832,11 +3844,18 @@ mod tests {
                 PortErrorKind::NotAvailable,
                 "not_available: future profile is unsupported",
             ),
+            (
+                PortErrorKind::InvalidRequest,
+                "harness_profile_locked: Session already started",
+            ),
         ] {
             let message = match kind {
                 PortErrorKind::SessionInUse => "session is processing",
                 PortErrorKind::OutcomeUnknown => "inspect authoritative state",
                 PortErrorKind::NotAvailable => "future profile is unsupported",
+                PortErrorKind::InvalidRequest => {
+                    "Validation error: harness_profile_locked: Session already started"
+                }
                 _ => unreachable!(),
             };
             let encoded = desktop_update_session_harness_profile_error(RuntimeError::Port(
