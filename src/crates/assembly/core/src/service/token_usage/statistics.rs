@@ -1,16 +1,16 @@
 //! Attribution resolution for usage statistics.
 //!
 //! Maps a raw `TokenUsageRecord` to the dimensions shown on the usage
-//! statistics page: the provider group (分组), the endpoint label (端点) and an
-//! estimated USD price. Resolution prefers the model configuration that was in
-//! effect for the request (`model_config_id` -> provider / base URL) and falls
-//! back to the bundled models.dev catalog inferred from the effective model
-//! name, so records whose config was later deleted still render meaningfully.
+//! statistics page: the provider group (分组) and the endpoint label (端点).
+//! Resolution prefers the model configuration that was in effect for the
+//! request (`model_config_id` -> provider / base URL) and falls back to the
+//! bundled models.dev catalog inferred from the effective model name, so
+//! records whose config was later deleted still render meaningfully.
 
 use super::types::TokenUsageRecord;
 use crate::service::config::types::AIModelConfig;
 use bitfun_ai_adapters::models_dev::ModelsDevCatalog;
-use bitfun_services_core::token_usage::{ModelPrice, UsageAttribution};
+use bitfun_services_core::token_usage::UsageAttribution;
 use std::collections::HashMap;
 
 /// Resolver owning every lookup table used while attributing usage records.
@@ -18,8 +18,6 @@ use std::collections::HashMap;
 pub struct UsageAttributionResolver {
     /// Model configs by `AIModelConfig.id`.
     configs: HashMap<String, AIModelConfig>,
-    /// Estimated USD-per-MTok prices by effective model name.
-    prices: HashMap<String, ModelPrice>,
     /// Provider id -> display name from the models.dev catalog.
     provider_names: HashMap<String, String>,
     /// Effective model name -> (provider id, provider api base URL).
@@ -46,9 +44,6 @@ impl UsageAttributionResolver {
                 }
             }
             for (provider_id, model) in catalog.all_models() {
-                if let Some(price) = price_from(&model.pricing) {
-                    resolver.prices.entry(model.id.clone()).or_insert(price);
-                }
                 let api = catalog
                     .provider_facts(&provider_id)
                     .and_then(|facts| facts.api)
@@ -68,7 +63,6 @@ impl UsageAttributionResolver {
         UsageAttribution {
             group: self.resolve_group(record, config),
             endpoint: self.resolve_endpoint(record, config),
-            price: self.prices.get(&record.effective_model_name).copied(),
         }
     }
 
@@ -119,25 +113,6 @@ impl UsageAttributionResolver {
         }
         "/unknown".to_string()
     }
-}
-
-/// Convert a models.dev price row into a numeric per-MTok price.
-fn price_from(
-    pricing: &Option<bitfun_core_types::ProviderCatalogModelPricing>,
-) -> Option<ModelPrice> {
-    let pricing = pricing.as_ref()?;
-    Some(ModelPrice {
-        input: parse_price(pricing.input.as_deref()),
-        output: parse_price(pricing.output.as_deref()),
-        cache_read: parse_price(pricing.cache_read.as_deref()),
-        cache_write: parse_price(pricing.cache_write.as_deref()),
-    })
-}
-
-fn parse_price(value: Option<&str>) -> f64 {
-    value
-        .and_then(|value| value.parse::<f64>().ok())
-        .unwrap_or(0.0)
 }
 
 /// Canonical request path for a provider's API format.
@@ -279,9 +254,6 @@ mod tests {
         let attribution = resolver.attribute(&record("cfg-1", "deepseek-v4-flash"));
         assert_eq!(attribution.group, "DeepSeek");
         assert_eq!(attribution.endpoint, "api.deepseek.com/chat/completions");
-        let price = attribution.price.expect("price");
-        assert!((price.input - 0.27).abs() < 1e-9);
-        assert!((price.cache_write - 0.27).abs() < 1e-9);
     }
 
     #[test]
@@ -313,7 +285,6 @@ mod tests {
         let attribution = resolver.attribute(&record("deleted-config", "custom-model"));
         assert_eq!(attribution.group, "unknown");
         assert_eq!(attribution.endpoint, "/unknown");
-        assert!(attribution.price.is_none());
     }
 
     #[test]
