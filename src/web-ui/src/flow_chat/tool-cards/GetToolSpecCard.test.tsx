@@ -117,7 +117,7 @@ describe('GetToolSpecCard', () => {
     dom.window.close();
   });
 
-  it('renders tool spec detail and expands description plus schema', () => {
+  it('renders a compact summary without expanded detail affordance', () => {
     act(() => {
       root.render(
         <GetToolSpecCard
@@ -130,17 +130,11 @@ describe('GetToolSpecCard', () => {
     expect(container.textContent).toContain('Tool Spec');
     expect(container.textContent).toContain('Loaded spec for Git');
     expect(container.textContent).not.toContain('Inspect and operate on the Git repository.');
+    expect(container.textContent).not.toContain('"command"');
 
     const card = container.querySelector('.compact-tool-card');
     expect(card).not.toBeNull();
-
-    act(() => {
-      card?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain('Description');
-    expect(container.textContent).toContain('Inspect and operate on the Git repository.');
-    expect(container.textContent).toContain('"command"');
+    expect(card?.className).not.toContain('clickable');
   });
 
   it('shows already-loaded summary without expanded detail affordance', () => {
