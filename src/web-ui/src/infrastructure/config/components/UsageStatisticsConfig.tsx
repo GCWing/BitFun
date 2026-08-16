@@ -287,7 +287,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity }) => {
     const count = 6;
     const step = (points.length - 1) / (count - 1);
     return Array.from({ length: count }, (_, index) => Math.round(index * step));
-  }, [points.length]);
+  }, [points]);
 
   if (points.length === 0) return null;
 
