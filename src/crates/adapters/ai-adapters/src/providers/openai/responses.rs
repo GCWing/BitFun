@@ -386,7 +386,7 @@ mod tests {
     fn attaches_runtime_prompt_cache_key_after_custom_body_merge() {
         let client = test_client();
         let request_context = ModelRequestContext {
-            prompt_cache_route_key: Some("bitfun-pc-v1-stable".to_string()),
+            prompt_cache_route_key: Some("lineage-1".to_string()),
             model_binding_fingerprint: Some("binding-1".to_string()),
         };
         let request_body = build_request_body_with_context(
@@ -398,9 +398,6 @@ mod tests {
             Some(&request_context),
         );
 
-        assert_eq!(
-            request_body["prompt_cache_key"],
-            json!("bitfun-pc-v1-stable")
-        );
+        assert_eq!(request_body["prompt_cache_key"], json!("lineage-1"));
     }
 }

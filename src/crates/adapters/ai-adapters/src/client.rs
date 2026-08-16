@@ -230,6 +230,7 @@ impl AIClient {
             extra_body,
             SEND_MESSAGE_STREAM_ATTEMPTS,
             trace,
+            None,
         )
         .await
     }
@@ -281,6 +282,7 @@ impl AIClient {
             custom_body,
             1,
             trace,
+            None,
         )
         .await
     }
@@ -311,9 +313,29 @@ impl AIClient {
         tools: Option<Vec<ToolDefinition>>,
         trace: Option<ModelExchangeTraceConfig>,
     ) -> Result<GeminiResponse> {
-        let custom_body = self.config.custom_request_body.clone();
-        self.send_message_with_extra_body_and_trace(messages, tools, custom_body, trace)
+        self.send_message_with_trace_and_request_context(messages, tools, None, trace)
             .await
+    }
+
+    /// Aggregate one model response while carrying provider-neutral
+    /// request-scoped facts to adapters that support them.
+    pub async fn send_message_with_trace_and_request_context(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        request_context: Option<ModelRequestContext>,
+        trace: Option<ModelExchangeTraceConfig>,
+    ) -> Result<GeminiResponse> {
+        let custom_body = self.config.custom_request_body.clone();
+        self.send_message_with_extra_body_trace_and_max_attempts(
+            messages,
+            tools,
+            custom_body,
+            request_context,
+            trace,
+            SEND_MESSAGE_STREAM_ATTEMPTS,
+        )
+        .await
     }
 
     pub async fn send_message_with_extra_body_and_trace(
@@ -327,6 +349,7 @@ impl AIClient {
             messages,
             tools,
             extra_body,
+            None,
             trace,
             SEND_MESSAGE_STREAM_ATTEMPTS,
         )
@@ -338,6 +361,7 @@ impl AIClient {
         messages: Vec<Message>,
         tools: Option<Vec<ToolDefinition>>,
         extra_body: Option<serde_json::Value>,
+        request_context: Option<ModelRequestContext>,
         trace: Option<ModelExchangeTraceConfig>,
         max_attempts: usize,
     ) -> Result<GeminiResponse> {
@@ -349,6 +373,7 @@ impl AIClient {
                     extra_body.clone(),
                     1,
                     trace.clone(),
+                    request_context.clone(),
                 )
                 .await
             {
@@ -410,6 +435,7 @@ impl AIClient {
         extra_body: Option<serde_json::Value>,
         max_tries: usize,
         trace: Option<ModelExchangeTraceConfig>,
+        request_context: Option<ModelRequestContext>,
     ) -> Result<StreamResponse> {
         match ApiFormat::parse(&self.config.format)? {
             ApiFormat::OpenAIChat => {
@@ -417,7 +443,13 @@ impl AIClient {
             }
             ApiFormat::OpenAIResponses => {
                 openai::responses::send_stream(
-                    self, messages, tools, extra_body, max_tries, trace, None,
+                    self,
+                    messages,
+                    tools,
+                    extra_body,
+                    max_tries,
+                    trace,
+                    request_context,
                 )
                 .await
             }
@@ -457,6 +489,7 @@ impl AIClient {
             messages,
             tools,
             custom_body,
+            None,
             None,
             max_attempts,
         )

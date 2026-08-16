@@ -66,7 +66,6 @@ use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
 use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
-use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
@@ -271,6 +270,7 @@ async fn activate_conditional_instructions_after_round(
 
 struct CompressionRuntimeScaffold {
     ai_client: Arc<crate::infrastructure::ai::AIClient>,
+    model_request_context: ModelRequestContext,
     tool_definitions: Option<Vec<ToolDefinition>>,
     system_prompt_message: Message,
     prepended_prompt_reminders: PrependedPromptReminders,
@@ -506,6 +506,7 @@ struct FinalizeRoundInput<'a> {
 
 struct CompressionModelSummaryInput<'a> {
     trace_config: Option<ModelExchangeTraceConfig>,
+    model_request_context: &'a ModelRequestContext,
     primary_supports_image_understanding: bool,
     prepended_prompt_reminders: &'a PrependedPromptReminders,
     tool_definitions: &'a Option<Vec<ToolDefinition>>,
@@ -526,7 +527,6 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
-    const PROVIDER_PROMPT_CACHE_ROUTE_SCHEMA: &'static str = "bitfun-provider-prompt-cache-v1";
     const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS: usize = 10_000;
     const MAX_COMPRESSION_OVERFLOW_ATTEMPTS: usize = 4;
     const MAX_MAIN_CONTEXT_OVERFLOW_RECOVERIES: usize = 2;
@@ -538,45 +538,11 @@ impl ExecutionEngine {
         "Provide a final answer. You MUST not call any tools.";
 
     fn model_request_context(
-        session_id: &str,
+        prompt_cache_lineage_id: &str,
         model_binding_fingerprint: &str,
-        effective_model_name: &str,
-        current_agent: &dyn crate::agentic::agents::Agent,
     ) -> ModelRequestContext {
-        let prompt_scope = prompt_cache_scope_key(
-            &current_agent.system_prompt_cache_identity(Some(effective_model_name)),
-            &current_agent.user_context_cache_identity(),
-        );
-        Self::model_request_context_from_scope_key(
-            session_id,
-            model_binding_fingerprint,
-            effective_model_name,
-            &prompt_scope,
-        )
-    }
-
-    fn model_request_context_from_scope_key(
-        session_id: &str,
-        model_binding_fingerprint: &str,
-        effective_model_name: &str,
-        prompt_scope: &str,
-    ) -> ModelRequestContext {
-        let mut hasher = Sha256::new();
-        for component in [
-            Self::PROVIDER_PROMPT_CACHE_ROUTE_SCHEMA,
-            session_id,
-            model_binding_fingerprint,
-            effective_model_name,
-            prompt_scope,
-        ] {
-            hasher.update(component.as_bytes());
-            hasher.update([0]);
-        }
         ModelRequestContext {
-            prompt_cache_route_key: Some(format!(
-                "bitfun-pc-v1-{}",
-                hex::encode(hasher.finalize())
-            )),
+            prompt_cache_route_key: Some(prompt_cache_lineage_id.to_string()),
             model_binding_fingerprint: Some(model_binding_fingerprint.to_string()),
         }
     }
@@ -2260,6 +2226,7 @@ impl ExecutionEngine {
         ai_client: Arc<crate::infrastructure::ai::AIClient>,
         request_messages: Vec<AIMessage>,
         tool_definitions: Option<Vec<ToolDefinition>>,
+        model_request_context: &ModelRequestContext,
         trace_config: Option<ModelExchangeTraceConfig>,
         max_tries: usize,
     ) -> BitFunResult<String> {
@@ -2268,9 +2235,10 @@ impl ExecutionEngine {
 
         for attempt in 0..max_tries {
             let result = ai_client
-                .send_message_with_trace(
+                .send_message_with_trace_and_request_context(
                     request_messages.clone(),
                     tool_definitions.clone(),
+                    Some(model_request_context.clone()),
                     trace_config.clone(),
                 )
                 .await;
@@ -2363,6 +2331,7 @@ impl ExecutionEngine {
                 input.ai_client,
                 request_messages,
                 input.tool_definitions.clone(),
+                input.model_request_context,
                 input.trace_config,
                 2,
             )
@@ -2385,6 +2354,7 @@ impl ExecutionEngine {
         context_window: usize,
         compression_contract: Option<crate::agentic::core::CompressionContract>,
         ai_client: Arc<crate::infrastructure::ai::AIClient>,
+        model_request_context: &ModelRequestContext,
         tool_definitions: &Option<Vec<ToolDefinition>>,
         prepended_prompt_reminders: &PrependedPromptReminders,
         primary_supports_image_understanding: bool,
@@ -2426,6 +2396,7 @@ impl ExecutionEngine {
             let summary_result = self
                 .generate_compression_model_summary(CompressionModelSummaryInput {
                     ai_client: ai_client.clone(),
+                    model_request_context,
                     runtime_messages: &plan.summary_request_messages,
                     dialog_turn_id,
                     workspace,
@@ -2523,7 +2494,7 @@ impl ExecutionEngine {
             .get("original_user_input")
             .cloned()
             .unwrap_or_default();
-        let (model_id, _) = self
+        let (model_id, model_binding_fingerprint) = self
             .resolve_model_id_for_turn(
                 session,
                 &context.agent_type,
@@ -2598,6 +2569,10 @@ impl ExecutionEngine {
         };
         Self::validate_frozen_model_contract(context).await?;
         Self::validate_frozen_reasoning_contract(context, ai_client.as_ref())?;
+        let model_request_context = Self::model_request_context(
+            session.effective_prompt_cache_lineage_id(),
+            &model_binding_fingerprint,
+        );
 
         let primary_model_facts = Self::resolve_primary_model_context(
             &model_id,
@@ -2696,6 +2671,7 @@ impl ExecutionEngine {
 
         Ok(CompressionRuntimeScaffold {
             ai_client,
+            model_request_context,
             tool_definitions,
             system_prompt_message: turn_prompt_scaffold.system_prompt_message,
             prepended_prompt_reminders: turn_prompt_scaffold.prepended_prompt_reminders,
@@ -2743,6 +2719,7 @@ impl ExecutionEngine {
         before_pressure: TokenPressureSnapshot,
         context_window: usize,
         ai_client: Arc<crate::infrastructure::ai::AIClient>,
+        model_request_context: &ModelRequestContext,
         tool_definitions: &Option<Vec<ToolDefinition>>,
         system_prompt_message: Message,
         prepended_prompt_reminders: &PrependedPromptReminders,
@@ -2819,6 +2796,7 @@ impl ExecutionEngine {
                 context_window,
                 compression_contract,
                 ai_client,
+                model_request_context,
                 tool_definitions,
                 prepended_prompt_reminders,
                 primary_supports_image_understanding,
@@ -3087,6 +3065,7 @@ impl ExecutionEngine {
                 context_window,
                 compression_contract,
                 scaffold.ai_client.clone(),
+                &scaffold.model_request_context,
                 &scaffold.tool_definitions,
                 &scaffold.prepended_prompt_reminders,
                 scaffold.primary_supports_image_understanding,
@@ -3517,10 +3496,8 @@ impl ExecutionEngine {
         Self::validate_frozen_model_contract(&context).await?;
         Self::validate_frozen_reasoning_contract(&context, ai_client.as_ref())?;
         let model_request_context = Self::model_request_context(
-            &context.session_id,
+            session.effective_prompt_cache_lineage_id(),
             &model_binding_fingerprint,
-            &ai_client.config.model,
-            current_agent.as_ref(),
         );
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
@@ -3934,6 +3911,7 @@ impl ExecutionEngine {
                         token_pressure,
                         context_window,
                         ai_client.clone(),
+                        &model_request_context,
                         &tool_definitions,
                         turn_prompt_scaffold.system_prompt_message.clone(),
                         &turn_prompt_scaffold.prepended_prompt_reminders,
@@ -4165,6 +4143,7 @@ impl ExecutionEngine {
                             send_pressure,
                             context_window,
                             ai_client.clone(),
+                            &model_request_context,
                             &tool_definitions,
                             turn_prompt_scaffold.system_prompt_message.clone(),
                             &turn_prompt_scaffold.prepended_prompt_reminders,
@@ -6456,38 +6435,26 @@ mod tests {
     }
 
     #[test]
-    fn provider_prompt_cache_route_key_is_stable_and_changes_with_scope() {
-        let first = ExecutionEngine::model_request_context_from_scope_key(
-            "session-1",
-            "binding-1",
-            "gpt-5.6-terra",
-            "scope-1",
-        );
-        let retry = ExecutionEngine::model_request_context_from_scope_key(
-            "session-1",
-            "binding-1",
-            "gpt-5.6-terra",
-            "scope-1",
-        );
-        let changed = ExecutionEngine::model_request_context_from_scope_key(
-            "session-1",
-            "binding-2",
-            "gpt-5.6-terra",
-            "scope-1",
-        );
+    fn provider_prompt_cache_route_key_depends_only_on_lineage() {
+        let first = ExecutionEngine::model_request_context("session-1", "binding-1");
+        let changed_binding = ExecutionEngine::model_request_context("session-1", "binding-2");
+        let changed_lineage = ExecutionEngine::model_request_context("session-2", "binding-1");
 
-        assert_eq!(first, retry);
-        assert_ne!(first, changed);
-        assert!(first
-            .prompt_cache_route_key
-            .as_deref()
-            .is_some_and(|key| key.starts_with("bitfun-pc-v1-")));
+        assert_eq!(first.prompt_cache_route_key.as_deref(), Some("session-1"));
+        assert_eq!(
+            first.prompt_cache_route_key,
+            changed_binding.prompt_cache_route_key
+        );
+        assert_ne!(
+            first.prompt_cache_route_key,
+            changed_lineage.prompt_cache_route_key
+        );
         assert_eq!(
             first.model_binding_fingerprint.as_deref(),
             Some("binding-1")
         );
         assert_eq!(
-            changed.model_binding_fingerprint.as_deref(),
+            changed_binding.model_binding_fingerprint.as_deref(),
             Some("binding-2")
         );
     }

@@ -71,10 +71,16 @@ impl PersistenceManager {
             format_branch_session_name(&branch_lineage.base_session_name, branch_lineage.ordinal);
         let target_agent_type = source_session.agent_type.clone();
 
+        let mut target_config = source_session.config.clone();
+        target_config.prompt_cache_lineage_id = Some(
+            source_session
+                .effective_prompt_cache_lineage_id()
+                .to_string(),
+        );
         let mut target_session = Session::new(
             target_session_name.clone(),
             target_agent_type.clone(),
-            source_session.config.clone(),
+            target_config,
         );
         target_session.created_by = None;
         target_session.kind = SessionKind::Standard;
@@ -439,6 +445,14 @@ mod tests {
         assert_ne!(result.session_id, source_session.session_id);
         assert_eq!(result.session_name, "Source Title (1)");
         assert_eq!(result.agent_type, "agentic");
+        let branched_session = manager
+            .load_session(workspace.path(), &result.session_id)
+            .await
+            .expect("branched session should load");
+        assert_eq!(
+            branched_session.config.prompt_cache_lineage_id.as_deref(),
+            Some(source_session.session_id.as_str())
+        );
 
         let branched_turns = manager
             .load_session_turns(workspace.path(), &result.session_id)
