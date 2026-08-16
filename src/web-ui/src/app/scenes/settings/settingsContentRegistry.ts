@@ -17,6 +17,7 @@ const loadArchivedSessionsConfig = () => import('./components/ArchivedSessionsCo
 const loadWorktreesConfig = () => import('../../../infrastructure/config/components/WorktreesConfig');
 const loadKeyboardShortcutsTab = () => import('./components/KeyboardShortcutsTab');
 const loadSessionConfig = () => import('../../../infrastructure/config/components/SessionConfig');
+const loadUsageStatisticsConfig = () => import('../../../infrastructure/config/components/UsageStatisticsConfig');
 
 export const AIModelConfig = lazy(loadAIModelConfig);
 export const McpToolsConfig = lazy(loadMcpToolsConfig);
@@ -42,11 +43,13 @@ export const SessionPermissionsConfig = lazy(() =>
     default: module.SessionPermissionsConfig,
   }))
 );
+export const UsageStatisticsConfig = lazy(loadUsageStatisticsConfig);
 
 const SETTINGS_CONTENT_LOADERS: Partial<Record<ConfigTab, () => Promise<unknown>>> = {
   basics: loadBasicsConfig,
   appearance: loadAppearanceConfig,
   models: loadAIModelConfig,
+  'usage-statistics': loadUsageStatisticsConfig,
   'archived-sessions': loadArchivedSessionsConfig,
   worktrees: loadWorktreesConfig,
   'session-personalization': loadSessionConfig,

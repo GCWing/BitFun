@@ -494,6 +494,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("generate_insights", RemoteWorkspacePolicy::RemoteRouted),
     (
+        "get_token_usage_statistics",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
+    (
         "generate_session_title",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

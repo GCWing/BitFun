@@ -9,6 +9,7 @@ export type ConfigTab =
   | 'basics'
   | 'appearance'
   | 'models'
+  | 'usage-statistics'
   | 'worktrees'
   | 'archived-sessions'
   | 'session-personalization'
@@ -101,6 +102,26 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'session title',
           'auto title',
           'subagent',
+        ],
+      },
+      {
+        id: 'usage-statistics',
+        labelKey: 'configCenter.tabs.usageStatistics',
+        descriptionKey: 'configCenter.tabDescriptions.usageStatistics',
+        keywords: [
+          'usage',
+          'usage statistics',
+          'token',
+          'tokens',
+          'cost',
+          'spend',
+          'spending',
+          'statistics',
+          'stats',
+          'analytics',
+          'model calls',
+          'request count',
+          'billing',
         ],
       },
       {
