@@ -10,6 +10,7 @@ import type { FlowChatState, Session } from '../types/flow-chat';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { resetLiveSessionInteractionStoreForTest } from '../services/liveSessionInteractionStore';
 
 const apiMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
@@ -24,6 +25,9 @@ const apiMocks = vi.hoisted(() => ({
   accountFetchSessionTurns: vi.fn(),
   cancelSession: vi.fn(),
   cancelDispatchJob: vi.fn(),
+  onPermissionRequestEvent: vi.fn(() => () => {}),
+  subscribePermissionRequests: vi.fn(async () => undefined),
+  listPendingPermissionRequests: vi.fn(async () => []),
 }));
 
 const peerModeFlagMock = vi.hoisted(() => ({ active: false }));
@@ -81,6 +85,9 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
     },
     restoreSessionWithTurns: apiMocks.restoreSessionWithTurns,
     loadSessionTurnWindow: apiMocks.loadSessionTurnWindow,
+    onPermissionRequestEvent: apiMocks.onPermissionRequestEvent,
+    subscribePermissionRequests: apiMocks.subscribePermissionRequests,
+    listPendingPermissionRequests: apiMocks.listPendingPermissionRequests,
   },
 }));
 
@@ -151,11 +158,13 @@ const resetStore = () => {
   ((flowChatStore as any).sessionTurnWindowRequests as Map<string, unknown> | undefined)?.clear();
   ((flowChatStore as any).unsupportedRestoreCommands as Set<string> | undefined)?.clear();
   ((flowChatStore as any).pendingRemoveSessionOptions as Map<string, unknown> | undefined)?.clear();
+  ((flowChatStore as any).userQuestionSnapshotRevisions as Map<string, number> | undefined)?.clear();
   flowChatStore.setState((): FlowChatState => ({
     sessions: new Map(),
     activeSessionId: null,
   }));
   dispatchJobStore.getState().clear();
+  resetLiveSessionInteractionStoreForTest();
   flowChatStore.registerPersistUnreadCompletionCallback(() => {});
 };
 
@@ -1646,6 +1655,157 @@ describe('FlowChatStore historical session hydration state', () => {
         dialogTurnId: 'turn-live',
       },
     );
+  });
+
+  it('re-attaches a missed AskUserQuestion mailbox without restarting the running turn', async () => {
+    peerModeFlagMock.active = true;
+    const pendingQuestion = {
+      toolId: 'ask-tool-1',
+      sessionId: 'history-1',
+      dialogTurnId: 'turn-live',
+      modelRoundId: 'round-question',
+      questions: {
+        questions: [{
+          question: 'Which verification should run?',
+          header: 'Verification',
+          options: [
+            { label: 'Focused', description: 'Run the focused checks.' },
+            { label: 'Full', description: 'Run the full suite.' },
+          ],
+        }],
+      },
+      registeredAtMs: 3,
+    };
+    const hostTurn = {
+      turnId: 'turn-live',
+      turnIndex: 0,
+      sessionId: 'history-1',
+      timestamp: 1,
+      userMessage: { id: 'user-live', content: 'ask me first', timestamp: 1 },
+      modelRounds: [],
+      startTime: 1,
+      status: 'inprogress',
+    };
+    const hostSession = {
+      sessionId: 'history-1',
+      sessionName: 'History 1',
+      agentType: 'agentic',
+      state: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
+      turnCount: 1,
+      createdAt: 1,
+    };
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession,
+      turns: [hostTurn],
+      interactionSnapshot: {
+        sessionId: 'history-1',
+        userQuestions: { revision: 7, questions: [pendingQuestion] },
+        permissions: { revision: 2, requests: [] },
+      },
+      contextRestoreState: 'pending',
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          workspacePath: '/Users/host/project',
+          historyState: 'ready',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+
+    const recoveredTurn = flowChatStore
+      .getState()
+      .sessions.get('history-1')
+      ?.dialogTurns[0];
+    expect(recoveredTurn).toMatchObject({
+      id: 'turn-live',
+      status: 'processing',
+      modelRounds: [{
+        id: 'round-question',
+        status: 'streaming',
+        isStreaming: true,
+        items: [{
+          id: 'ask-tool-1',
+          type: 'tool',
+          toolName: 'AskUserQuestion',
+          status: 'waiting',
+          isParamsStreaming: false,
+          toolCall: {
+            id: 'ask-tool-1',
+            input: pendingQuestion.questions,
+          },
+        }],
+      }],
+    });
+
+    // An older Host omits the additive field. Absence means "event-only
+    // compatibility", not an authoritative empty mailbox.
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession,
+      turns: [hostTurn],
+      contextRestoreState: 'pending',
+    });
+    await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items,
+    ).toHaveLength(1);
+
+    // An older snapshot cannot erase a request that a newer Runtime mailbox
+    // already proved is still blocking the turn.
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession,
+      turns: [hostTurn],
+      interactionSnapshot: {
+        sessionId: 'history-1',
+        userQuestions: { revision: 6, questions: [] },
+        permissions: { revision: 2, requests: [] },
+      },
+      contextRestoreState: 'pending',
+    });
+    await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items,
+    ).toHaveLength(1);
+
+    // Once the same Runtime publishes a newer empty mailbox, the recovered
+    // card is removed without cancelling or restarting the Session.
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession,
+      turns: [hostTurn],
+      interactionSnapshot: {
+        sessionId: 'history-1',
+        userQuestions: { revision: 8, questions: [] },
+        permissions: { revision: 3, requests: [] },
+      },
+      contextRestoreState: 'pending',
+    });
+    await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { replaceRunningSnapshot: false },
+    );
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items,
+    ).toEqual([]);
   });
 
   it('reconciles a newly persisted active Peer turn without replacing older history', async () => {
@@ -6314,6 +6474,58 @@ describe('FlowChatStore device surfaces', () => {
     expect(flowChatStore.getState().sessions.get('local-1')).toMatchObject({
       historyState: 'metadata-only',
     });
+  });
+
+  it('never projects a local interaction snapshot into the peer selected mid-refresh', async () => {
+    seedSession('shared-session');
+    const restore = createDeferred<any>();
+    apiMocks.restoreSessionView.mockReturnValueOnce(restore.promise);
+
+    const refresh = flowChatStore.refreshPeerSessionSnapshot(
+      'shared-session',
+      '/repo/BitFun',
+      { requireActiveSession: true },
+    );
+    await flushAsyncWork();
+
+    activateSurface(PEER_SURFACE_ID);
+    seedSession('shared-session');
+    restore.resolve({
+      session: {
+        ...restoredSession('shared-session'),
+        state: 'Processing { current_turn_id: "shared-session-turn-1" }',
+      },
+      turns: [{
+        ...restoredTurn('shared-session'),
+        status: 'inprogress',
+      }],
+      interactionSnapshot: {
+        sessionId: 'shared-session',
+        userQuestions: {
+          revision: 1,
+          questions: [{
+            toolId: 'local-question',
+            sessionId: 'shared-session',
+            dialogTurnId: 'shared-session-turn-1',
+            modelRoundId: 'local-round',
+            questions: { questions: [] },
+            registeredAtMs: 2,
+          }],
+        },
+        permissions: { revision: 1, requests: [] },
+      },
+      contextRestoreState: 'pending',
+    });
+
+    await expect(refresh).rejects.toSatisfy(isSurfaceChangedError);
+    expect(
+      flowChatStore.getState().sessions.get('shared-session')?.dialogTurns,
+    ).toEqual([]);
+
+    activateSurface(LOCAL_SURFACE_ID);
+    expect(
+      flowChatStore.getState().sessions.get('shared-session')?.dialogTurns,
+    ).toEqual([]);
   });
 
   it('does not fall back onto the next device after a typed surface cancellation', async () => {

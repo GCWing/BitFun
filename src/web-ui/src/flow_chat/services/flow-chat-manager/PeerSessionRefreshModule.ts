@@ -23,6 +23,7 @@ import {
   SessionExecutionState,
 } from '../../state-machine/types';
 import type { AnyFlowItem, DialogTurn } from '../../types/flow-chat';
+import { installLiveSessionInteractionMailbox } from '../liveSessionInteractionStore';
 import type { FlowChatContext } from './types';
 
 const log = createLogger('PeerSessionRefresh');
@@ -120,6 +121,10 @@ async function alignStateMachineWithSnapshot(
 }
 
 export function installPeerSessionRefresh(context: FlowChatContext): () => void {
+  // Blocking interactions are Runtime mailboxes, so their event projection
+  // must exist for the whole FlowChat lifetime rather than only while a card
+  // component is mounted.
+  installLiveSessionInteractionMailbox();
   let disposed = false;
   let inFlight = false;
   let queued = false;

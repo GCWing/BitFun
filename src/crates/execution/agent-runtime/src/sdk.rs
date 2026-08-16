@@ -38,7 +38,7 @@ pub use crate::context_profile::{ContextProfile, ContextProfilePolicy, ModelCapa
 pub use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
 pub use crate::permission::{
     PermissionReplyResolution, PermissionRequestEventReceiver, PermissionRequestManager,
-    PermissionRequestManagerError, AUTO_APPROVE_ASK_CONTEXT_KEY,
+    PermissionRequestManagerError, PermissionRequestSnapshot, AUTO_APPROVE_ASK_CONTEXT_KEY,
 };
 pub use crate::post_call_hooks::{
     RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry,
@@ -48,9 +48,10 @@ pub use crate::runtime::{
     AgentEventStream, AgentRunHandle, AgentRunRequest, AgentSessionRestorePort,
     AgentSessionRestoreRequest, AgentSessionRestoreResult, RuntimeAgentRegistry,
     RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError, RuntimeToolRegistry,
-    SessionSelector,
+    SessionInteractionSnapshot, SessionSelector,
 };
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
+pub use crate::user_questions::{PendingUserQuestion, PendingUserQuestionSnapshot};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 pub use bitfun_core_types::SessionUsageReport;
 // Event envelope types re-exported so protocol surfaces (e.g. `bitfun-app-server`)
@@ -742,6 +743,10 @@ impl AgentRuntime {
         request: AgentUserAnswersRequest,
     ) -> Result<(), RuntimeError> {
         self.inner.submit_user_answers(request).await
+    }
+
+    pub fn session_interaction_snapshot(&self, session_id: &str) -> SessionInteractionSnapshot {
+        self.inner.session_interaction_snapshot(session_id)
     }
 
     pub async fn publish_event(&self, event: RuntimeEventEnvelope) -> Result<(), RuntimeError> {

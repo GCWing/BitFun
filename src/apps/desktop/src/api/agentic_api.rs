@@ -22,7 +22,7 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest, AgentSubmissionSource,
     AgentTurnCancellationRequest, AgentTurnInterruptionRequest, DialogSteerOutcome,
     PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PermissionReply, PermissionRequest,
-    RuntimeError,
+    RuntimeError, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -552,6 +552,7 @@ pub struct RestoreSessionWithTurnsResponse {
 pub struct RestoreSessionViewResponse {
     pub session: SessionResponse,
     pub turns: Vec<DialogTurnData>,
+    pub interaction_snapshot: SessionInteractionSnapshot,
     pub current_context_usage: Option<SessionContextUsage>,
     pub turn_catalog: SessionTurnCatalog,
     pub context_restore_state: String,
@@ -3436,6 +3437,7 @@ pub async fn restore_session_view(
             .map_err(|error| format!("Failed to restore session view: {error}"))?;
         let session = restored.session;
         let mut turns = restored.turns;
+        let interaction_snapshot = restored.interaction_snapshot;
         let current_context_usage = restored.current_context_usage;
         let total_turn_count = restored.total_turn_count;
         let turn_catalog = restored.turn_catalog;
@@ -3489,6 +3491,7 @@ pub async fn restore_session_view(
         Ok(RestoreSessionViewResponse {
             session: session_to_response_with_turn_count(session, total_turn_count),
             turns,
+            interaction_snapshot,
             current_context_usage,
             turn_catalog,
             context_restore_state: "pending".to_string(),

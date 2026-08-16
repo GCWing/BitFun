@@ -78,6 +78,30 @@ rendered, snapshot reconciliation is no longer Peer-only: after this window's
 first surface switch, `isSurfaceReconcileEnabled()` keeps the repair loop
 running for whichever surface is rendered, local included.
 
+### Blocking-interaction reattachment
+
+A push event is a notification, not the owner of an interaction that can block
+an Agent turn. The owning Runtime keeps every native `AskUserQuestion` and
+interactive permission request in a live mailbox until it is answered or
+cancelled; an `AskUserQuestion` registration is also removed if its owning Tool
+future is dropped. `restore_session_view` returns an additive
+`interactionSnapshot` containing the Session-filtered mailbox and monotonic
+revisions. Desktop and CLI Peer Hosts expose the same field; older Hosts may
+omit it and remain on the event-only compatibility path.
+
+The frontend projects that mailbox into the active Surface container. Permission
+requests are retained for inactive Surfaces by source device, while missed
+`AskUserQuestion` cards are reconstructed in their exact Dialog Turn and model
+round. Snapshot responses are fenced by the Surface epoch and by event/revision
+ordering, so an old response cannot erase a newer request or revive one that was
+already answered. Reattachment only repairs presentation state: it never
+restarts, cancels, or moves the Session, Dialog Turn, or Tool future.
+
+This is the contract for any new blocking interaction: its execution owner must
+retain replayable request state and expose it through an attach/snapshot path.
+A one-shot frontend event plus an unresolved channel is not a complete
+multi-device implementation.
+
 ## Cloud account sync vs Peer Remote
 
 | Concern | Account cloud sync | Peer Device Mode |
@@ -172,6 +196,9 @@ FS) and must not be mixed with Peer Device Mode.
   per 2s coalescing window. A controller accepts an active snapshot before the
   stale-stream deadline only when its rounds, streams, and tools provably move
   forward; an older persisted snapshot cannot overwrite newer DeviceEvents.
+  Native blocking interactions are reconciled from the Runtime-owned
+  `interactionSnapshot` independently of Turn checkpoints, because a Turn can
+  wait indefinitely and never produce a newer persisted snapshot on its own.
 - CLI Peer Host forwards only turns submitted through Peer Host and linked
   child turns. A background-result follow-up inherits ownership only when its
   Core-internal metadata identifies the exact tracked parent and source child

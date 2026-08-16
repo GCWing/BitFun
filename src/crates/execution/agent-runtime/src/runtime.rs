@@ -44,8 +44,11 @@ use bitfun_runtime_ports::{
 use bitfun_runtime_services::RuntimeServices;
 
 use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
-use crate::permission::{PermissionRequestEventReceiver, PermissionRequestManager};
+use crate::permission::{
+    PermissionRequestEventReceiver, PermissionRequestManager, PermissionRequestSnapshot,
+};
 use crate::post_call_hooks::RuntimeHookRegistry;
+use crate::user_questions::{get_user_input_manager, PendingUserQuestionSnapshot};
 use bitfun_runtime_ports::{PermissionReply, PermissionReplySource, PermissionRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -122,6 +125,18 @@ pub struct AgentSessionRestoreRequest {
 pub struct AgentSessionRestoreResult {
     pub session: AgentSessionSummary,
     pub state: crate::session_state::SessionState,
+}
+
+/// Authoritative live interactions required to re-attach a product Surface to
+/// a running Session after missing push events.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionInteractionSnapshot {
+    pub session_id: String,
+    #[serde(default)]
+    pub user_questions: PendingUserQuestionSnapshot,
+    #[serde(default)]
+    pub permissions: PermissionRequestSnapshot,
 }
 
 #[async_trait::async_trait]
@@ -815,6 +830,32 @@ impl AgentRuntime {
             .as_ref()
             .map(|manager| manager.interactive_pending_requests())
             .ok_or(RuntimeError::MissingPermissionRequestManager)
+    }
+
+    /// Capture every blocking interaction needed to resume rendering one
+    /// Session. Push events remain the low-latency path; this snapshot is the
+    /// gap-recovery contract for reconnecting or device-switching surfaces.
+    pub fn session_interaction_snapshot(&self, session_id: &str) -> SessionInteractionSnapshot {
+        let user_questions = get_user_input_manager().pending_question_snapshot(session_id);
+        let permissions =
+            self.permission_requests
+                .as_ref()
+                .map(|manager| {
+                    let mut snapshot = manager.interactive_pending_snapshot();
+                    snapshot.requests.retain(|request| {
+                        request.session_id == session_id
+                            || request.delegation.as_ref().is_some_and(|delegation| {
+                                delegation.parent_session_id == session_id
+                            })
+                    });
+                    snapshot
+                })
+                .unwrap_or_default();
+        SessionInteractionSnapshot {
+            session_id: session_id.to_string(),
+            user_questions,
+            permissions,
+        }
     }
 
     pub fn permission_request_dialog_turn_id(
@@ -1750,6 +1791,33 @@ mod tests {
         ThreadGoal, ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
     };
     use bitfun_runtime_services::RuntimeServicesBuilder;
+
+    #[test]
+    fn session_interaction_snapshot_wire_is_additive_and_camel_case() {
+        let legacy: SessionInteractionSnapshot = serde_json::from_value(serde_json::json!({
+            "sessionId": "session-1"
+        }))
+        .expect("older payloads may omit additive mailbox fields");
+        assert!(legacy.user_questions.questions.is_empty());
+        assert!(legacy.permissions.requests.is_empty());
+
+        let encoded = serde_json::to_value(SessionInteractionSnapshot {
+            session_id: "session-1".to_string(),
+            user_questions: PendingUserQuestionSnapshot {
+                revision: 4,
+                questions: Vec::new(),
+            },
+            permissions: PermissionRequestSnapshot {
+                revision: 7,
+                requests: Vec::new(),
+            },
+        })
+        .expect("interaction snapshot should serialize");
+        assert_eq!(encoded["sessionId"], "session-1");
+        assert_eq!(encoded["userQuestions"]["revision"], 4);
+        assert_eq!(encoded["permissions"]["revision"], 7);
+        assert!(encoded.get("user_questions").is_none());
+    }
 
     #[derive(Debug)]
     struct TestRuntimePort {

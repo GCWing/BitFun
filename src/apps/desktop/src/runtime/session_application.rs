@@ -13,7 +13,7 @@ use bitfun_agent_runtime::sdk::{
     AgentLocalCommandTurnRecordRequest, AgentRuntime, AgentSessionArchiveStateRequest,
     AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionLineageRequest,
     AgentSessionLineageSnapshot, AgentSessionRenameRequest, AgentSessionUsageRequest,
-    PortErrorKind, RuntimeError,
+    PortErrorKind, RuntimeError, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
 use bitfun_core::agentic::core::Session;
@@ -125,6 +125,7 @@ fn local_command_turn_record_request(
 pub(crate) struct DesktopSessionViewRestore {
     pub session: Session,
     pub turns: Vec<DialogTurnData>,
+    pub interaction_snapshot: SessionInteractionSnapshot,
     pub current_context_usage: Option<SessionContextUsage>,
     pub total_turn_count: usize,
     pub turn_catalog: SessionTurnCatalog,
@@ -787,6 +788,7 @@ impl DesktopSessionApplication {
             .loaded_session_snapshot(session_id)
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?;
         overlay_live_session_state(&mut session, live_session);
+        let interaction_snapshot = self.agent_runtime.session_interaction_snapshot(session_id);
         let current_context_usage = self
             .compatibility
             .load_persisted_session_metadata(&storage_path, session_id)
@@ -797,6 +799,7 @@ impl DesktopSessionApplication {
         Ok(DesktopSessionViewRestore {
             session,
             turns,
+            interaction_snapshot,
             current_context_usage,
             total_turn_count,
             turn_catalog,

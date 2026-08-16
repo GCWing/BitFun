@@ -134,6 +134,16 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     Continuous host output must create a persisted checkpoint within each 2s
     coalescing window, and active snapshots may replace a running projection
     early only when stream/tool content proves forward progress.
+    **Blocking interactions are owner mailboxes, not one-shot UI events.** The
+    Runtime retains native `AskUserQuestion` and interactive permission
+    requests until answer/cancel/drop, and `restore_session_view` returns their
+    additive, revisioned `interactionSnapshot` from both Desktop and CLI Peer
+    Hosts. Keep its frontend projection per Surface, fence it with the captured
+    Surface epoch and newer event state, and use it only to reconstruct UI in
+    the owning Turn/round. Reattachment must never restart or cancel the
+    running Session. Older peers may omit the field; absence is not an empty
+    authoritative mailbox. Any new interaction that can suspend execution is
+    incomplete until its owner exposes equivalent replayable attach state.
 
 13. **Weak links use bounded, idempotency-aware recovery.** Default Peer
     HostInvoke concurrency is four with one slot reserved from normal/low

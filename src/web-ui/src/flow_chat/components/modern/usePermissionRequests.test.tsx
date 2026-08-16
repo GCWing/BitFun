@@ -8,6 +8,11 @@ import type {
   PermissionRequest,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
+import {
+  liveSessionInteractionStore,
+  resetLiveSessionInteractionStoreForTest,
+} from '../../services/liveSessionInteractionStore';
 import { usePermissionRequests } from './usePermissionRequests';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -108,7 +113,9 @@ async function renderHarness(
 }
 
 function emit(event: PermissionRequestEvent) {
-  act(() => agentApiMock.listener?.(event));
+  act(() => {
+    liveSessionInteractionStore.applyPermissionEvent(getActiveSurfaceId(), event);
+  });
 }
 
 describe('usePermissionRequests', () => {
@@ -135,6 +142,7 @@ describe('usePermissionRequests', () => {
     dispatchApiMock.answerPermission.mockResolvedValue({ resolved: true });
     dispatchApiMock.requestRefresh.mockReset();
     dispatchJobStore.getState().clear();
+    resetLiveSessionInteractionStoreForTest();
   });
 
   afterEach(() => {

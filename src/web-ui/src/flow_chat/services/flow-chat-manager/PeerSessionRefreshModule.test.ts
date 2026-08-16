@@ -18,6 +18,10 @@ vi.mock('../../state-machine', () => ({
   stateMachineManager: stateMachineMock,
 }));
 
+vi.mock('../liveSessionInteractionStore', () => ({
+  installLiveSessionInteractionMailbox: vi.fn(),
+}));
+
 import {
   installPeerSessionRefresh,
   PEER_SESSION_REFRESH_INTERVAL_MS,

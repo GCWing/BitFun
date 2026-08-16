@@ -155,6 +155,35 @@ export interface PermissionRequest {
   displayMetadata?: Record<string, unknown>;
 }
 
+export interface PendingUserQuestion {
+  toolId: string;
+  sessionId: string;
+  dialogTurnId?: string;
+  modelRoundId?: string;
+  questions: unknown;
+  registeredAtMs: number;
+}
+
+export interface PendingUserQuestionSnapshot {
+  revision: number;
+  questions: PendingUserQuestion[];
+}
+
+export interface PermissionRequestSnapshot {
+  revision: number;
+  requests: PermissionRequest[];
+}
+
+/**
+ * Runtime-owned blocking interactions required to re-attach a UI Surface to
+ * a Session after push events were missed while another device was rendered.
+ */
+export interface SessionInteractionSnapshot {
+  sessionId: string;
+  userQuestions: PendingUserQuestionSnapshot;
+  permissions: PermissionRequestSnapshot;
+}
+
 export type PermissionRequestEvent =
   | { event: 'asked'; request: PermissionRequest }
   | { event: 'replied'; requestId: string; reply: { reply: PermissionReplyKind }; source: string }
@@ -242,6 +271,8 @@ export interface SessionViewRestoreTiming {
 export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
+  /** Absent when talking to an older Peer Host. */
+  interactionSnapshot?: SessionInteractionSnapshot;
   currentContextUsage?: SessionContextUsage | null;
   turnCatalog?: SessionTurnCatalog;
   contextRestoreState: 'ready' | 'pending';

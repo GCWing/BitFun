@@ -53,6 +53,7 @@ import type {
 import {
   agentAPI,
   type LoadSessionTurnWindowResponse,
+  type PendingUserQuestionSnapshot,
   type SessionInfo as AgentSessionInfo,
   type SessionViewRestoreTiming,
 } from '@/infrastructure/api/service-api/AgentAPI';
@@ -91,6 +92,7 @@ import { useBackgroundSubagentActivityStore } from './backgroundSubagentActivity
 import { sessionComposerStore } from './sessionComposerStore';
 import { completeSessionMutationReconciliation } from './sessionMutationStore';
 import { recordHistorySessionDiagnosticEvent } from '../services/historySessionDiagnostics';
+import { liveSessionInteractionStore } from '../services/liveSessionInteractionStore';
 import {
   isDispatchJobTerminal,
   isNonLocalDispatchTarget,
@@ -680,6 +682,186 @@ function snapshotDropsProjectedTurnContent(
   }
 
   return false;
+}
+
+interface PendingUserQuestionReconcileResult {
+  turns: DialogTurn[];
+  changed: boolean;
+  revisionApplied: boolean;
+}
+
+/**
+ * Rebuild the user-input card from the Runtime mailbox, independently of the
+ * persisted Turn checkpoint. A running Tool can wait indefinitely, so its
+ * push event is not recoverable by waiting for Turn completion.
+ */
+function reconcilePendingUserQuestionSnapshot(
+  turns: DialogTurn[],
+  snapshot: PendingUserQuestionSnapshot | undefined,
+  previousRevision: number,
+): PendingUserQuestionReconcileResult {
+  if (
+    !snapshot ||
+    !Number.isFinite(snapshot.revision) ||
+    snapshot.revision < previousRevision
+  ) {
+    return { turns, changed: false, revisionApplied: false };
+  }
+
+  const nextTurns = turns.map(turn => ({
+    ...turn,
+    modelRounds: turn.modelRounds.map(round => ({
+      ...round,
+      items: [...round.items],
+    })),
+  }));
+  const pendingIds = new Set(snapshot.questions.map(question => question.toolId));
+  let changed = false;
+  let fullyApplied = true;
+
+  // Remove only cards that this reconciliation path previously marked as
+  // mailbox projections. An existing live/persisted item is marked only while
+  // the Runtime says it is pending; after that, the mailbox is authoritative
+  // for whether the blocking card should remain.
+  for (const turn of nextTurns) {
+    for (const round of turn.modelRounds) {
+      const retained: AnyFlowItem[] = [];
+      for (const item of round.items) {
+        if (item.type !== 'tool') {
+          retained.push(item);
+          continue;
+        }
+        const tool = item as FlowToolItem;
+        if (tool._runtimeInteractionProjection?.kind !== 'user_question') {
+          retained.push(tool);
+          continue;
+        }
+        const toolId = tool.toolCall?.id || tool.id;
+        if (pendingIds.has(toolId)) {
+          retained.push(tool);
+          continue;
+        }
+        if (tool.toolResult || runningStatusRank(tool.status) >= 3) {
+          const { _runtimeInteractionProjection: _projection, ...settledTool } = tool;
+          retained.push(settledTool as FlowToolItem);
+          changed = true;
+          continue;
+        }
+        changed = true;
+      }
+      if (retained.length !== round.items.length) {
+        round.items = retained;
+      } else if (retained.some((item, index) => item !== round.items[index])) {
+        round.items = retained;
+      }
+    }
+  }
+
+  for (const pending of snapshot.questions) {
+    if (!pending || pending.sessionId === '') {
+      continue;
+    }
+    const turn = pending.dialogTurnId
+      ? nextTurns.find(candidate => candidate.id === pending.dialogTurnId)
+      : nextTurns[nextTurns.length - 1];
+    if (!turn || turn.sessionId !== pending.sessionId) {
+      // Tail restore should always contain the active Turn. If it does not,
+      // leave the revision uncommitted so the next reconciliation retries
+      // after that Turn is available instead of losing the mailbox entry.
+      fullyApplied = false;
+      continue;
+    }
+
+    let targetRound = turn.modelRounds.find(round =>
+      round.items.some(item =>
+        item.type === 'tool' &&
+        ((item as FlowToolItem).toolCall?.id === pending.toolId || item.id === pending.toolId)
+      )
+    );
+    if (!targetRound && pending.modelRoundId) {
+      targetRound = turn.modelRounds.find(round => round.id === pending.modelRoundId);
+    }
+    if (!targetRound) {
+      targetRound = turn.modelRounds[turn.modelRounds.length - 1];
+    }
+    if (!targetRound) {
+      targetRound = {
+        id: pending.modelRoundId || `runtime-interaction-${pending.toolId}`,
+        index: 0,
+        items: [],
+        isStreaming: true,
+        isComplete: false,
+        status: 'streaming',
+        startTime: pending.registeredAtMs,
+      };
+      turn.modelRounds.push(targetRound);
+      changed = true;
+    }
+
+    const existingIndex = targetRound.items.findIndex(item =>
+      item.type === 'tool' &&
+      ((item as FlowToolItem).toolCall?.id === pending.toolId || item.id === pending.toolId)
+    );
+    const existing = existingIndex >= 0
+      ? targetRound.items[existingIndex] as FlowToolItem
+      : undefined;
+    const alreadyProjected =
+      existing?._runtimeInteractionProjection?.revision === snapshot.revision &&
+      existing.status === 'waiting';
+    if (!alreadyProjected) {
+      const projected: FlowToolItem = {
+        ...(existing || {
+          id: pending.toolId,
+          type: 'tool',
+          timestamp: pending.registeredAtMs,
+          requiresConfirmation: false,
+        }),
+        id: pending.toolId,
+        type: 'tool',
+        toolName: 'AskUserQuestion',
+        toolCall: {
+          id: pending.toolId,
+          input: pending.questions,
+        },
+        toolResult: undefined,
+        status: 'waiting',
+        isParamsStreaming: false,
+        startTime: existing?.startTime ?? pending.registeredAtMs,
+        endTime: undefined,
+        _runtimeInteractionProjection: {
+          kind: 'user_question',
+          revision: snapshot.revision,
+        },
+      };
+      if (existingIndex >= 0) {
+        targetRound.items[existingIndex] = projected;
+      } else {
+        targetRound.items.push(projected);
+      }
+      changed = true;
+    }
+
+    if (
+      targetRound.status !== 'streaming' ||
+      targetRound.isComplete ||
+      !targetRound.isStreaming
+    ) {
+      targetRound.status = 'streaming';
+      targetRound.isComplete = false;
+      targetRound.isStreaming = true;
+      changed = true;
+    }
+    if (turn.status !== 'processing') {
+      turn.status = 'processing';
+      changed = true;
+    }
+  }
+
+  return {
+    turns: changed ? nextTurns : turns,
+    changed,
+    revisionApplied: fullyApplied,
+  };
 }
 
 function itemMatchesIdentity(item: AnyFlowItem, itemId: string): boolean {
@@ -1544,6 +1726,7 @@ interface SurfaceStateContainer {
   readonly deferredFullHistoryProjections: Map<string, DeferredFullHistoryProjection>;
   readonly fullHistoryProjectionApplyRequests: Set<string>;
   readonly pendingRemoveSessionOptions: Map<string, RemoveSessionOptions>;
+  readonly userQuestionSnapshotRevisions: Map<string, number>;
 }
 
 function createSurfaceStateContainer(surfaceId: DeviceSurfaceId): SurfaceStateContainer {
@@ -1558,6 +1741,7 @@ function createSurfaceStateContainer(surfaceId: DeviceSurfaceId): SurfaceStateCo
     deferredFullHistoryProjections: new Map(),
     fullHistoryProjectionApplyRequests: new Set(),
     pendingRemoveSessionOptions: new Map(),
+    userQuestionSnapshotRevisions: new Map(),
   };
 }
 
@@ -1632,6 +1816,10 @@ export class FlowChatStore {
 
   private get pendingRemoveSessionOptions(): Map<string, RemoveSessionOptions> {
     return this.activeSurface.pendingRemoveSessionOptions;
+  }
+
+  private get userQuestionSnapshotRevisions(): Map<string, number> {
+    return this.activeSurface.userQuestionSnapshotRevisions;
   }
 
   /** Key a store-level cache entry to the surface that asked for it. */
@@ -2588,6 +2776,7 @@ export class FlowChatStore {
       this.fullHistoryProjectionApplyRequests.delete(sessionId);
       this.sessionHistoryViews.delete(sessionId);
       this.sessionHistoryTurnAccessTimes.delete(sessionId);
+      this.userQuestionSnapshotRevisions.delete(sessionId);
     }
 
     const activeSurfaceId = getActiveSurfaceId();
@@ -7079,6 +7268,9 @@ export class FlowChatStore {
     },
   ): Promise<PeerSessionSnapshotRefreshResult> {
     const scope = getActiveSurfaceScope();
+    const interactionEventVersion = liveSessionInteractionStore.captureEventVersion(
+      scope.surfaceId,
+    );
     const initialSession = this.state.sessions.get(sessionId);
     if (!initialSession) {
       return {
@@ -7099,11 +7291,23 @@ export class FlowChatStore {
     // This snapshot describes the device it was read from; reconciling it into
     // the surface that is rendered now would merge two devices' turns.
     scope.assertCurrent('refreshPeerSessionSnapshot');
+    if (restored.interactionSnapshot?.sessionId === sessionId) {
+      liveSessionInteractionStore.reconcilePermissionSnapshot(
+        scope.surfaceId,
+        sessionId,
+        restored.interactionSnapshot.permissions,
+        interactionEventVersion,
+      );
+    }
     const backendActive = isBackendSessionActivelyProcessing(restored.session.state);
     const activeTurnId = backendActive
       ? restored.turns[restored.turns.length - 1]?.turnId
       : undefined;
     const snapshotTurns = this.convertToDialogTurns(restored.turns, { activeTurnId });
+    const pendingUserQuestions =
+      restored.interactionSnapshot?.sessionId === sessionId
+        ? restored.interactionSnapshot.userQuestions
+        : undefined;
     const replaceExistingTurns =
       !backendActive || options?.replaceRunningSnapshot === true;
     let applied = false;
@@ -7126,7 +7330,7 @@ export class FlowChatStore {
         return prev;
       }
 
-      const mergedTurns = [...session.dialogTurns];
+      let mergedTurns = [...session.dialogTurns];
       let turnsChanged = false;
       for (const snapshotTurn of snapshotTurns) {
         const existingIndex = mergedTurns.findIndex(turn => turn.id === snapshotTurn.id);
@@ -7144,6 +7348,22 @@ export class FlowChatStore {
       }
 
       mergedTurns.sort(compareDialogTurnOrder);
+      const previousQuestionRevision = this.userQuestionSnapshotRevisions.get(sessionId) ?? -1;
+      const questionReconciliation = reconcilePendingUserQuestionSnapshot(
+        mergedTurns,
+        pendingUserQuestions,
+        previousQuestionRevision,
+      );
+      if (questionReconciliation.changed) {
+        mergedTurns = questionReconciliation.turns;
+        turnsChanged = true;
+      }
+      if (questionReconciliation.revisionApplied && pendingUserQuestions) {
+        this.userQuestionSnapshotRevisions.set(
+          sessionId,
+          pendingUserQuestions.revision,
+        );
+      }
       const turnCatalog = restored.turnCatalog?.sessionId === sessionId
         ? selectPreferredTurnCatalog(session.turnCatalog, restored.turnCatalog)
         : session.turnCatalog;
