@@ -60,6 +60,19 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/ai-model', key: 'proxy.enableHint' },
   ],
 
+  'usage-statistics': [
+    { ns: 'settings/usage-statistics', key: 'title' },
+    { ns: 'settings/usage-statistics', key: 'subtitle' },
+    { ns: 'settings/usage-statistics', key: 'distributions.byModel' },
+    { ns: 'settings/usage-statistics', key: 'distributions.byGroup' },
+    { ns: 'settings/usage-statistics', key: 'distributions.byEndpoint' },
+    { ns: 'settings/usage-statistics', key: 'trend.title' },
+    { ns: 'settings/usage-statistics', key: 'summary.requests' },
+    { ns: 'settings/usage-statistics', key: 'summary.tokens' },
+    { ns: 'settings/usage-statistics', key: 'summary.actualCost' },
+    { ns: 'settings/usage-statistics', key: 'summary.standardCost' },
+  ],
+
   worktrees: [
     { ns: 'worktrees', key: 'settings.title' },
     { ns: 'worktrees', key: 'settings.description' },

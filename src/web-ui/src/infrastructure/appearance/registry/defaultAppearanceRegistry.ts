@@ -272,6 +272,7 @@ import {
 } from '@/features/dispatch/appearance';
 import { voiceInputConfigAppearanceDescriptor } from '@/infrastructure/config/components/VoiceInputConfig.appearance';
 import { worktreesConfigAppearanceDescriptor } from '@/infrastructure/config/components/WorktreesConfig.appearance';
+import { usageStatisticsConfigAppearanceDescriptor } from '@/infrastructure/config/components/UsageStatisticsConfig.appearance';
 import { turnCompletionNoticeAppearanceDescriptor } from '@/flow_chat/components/modern/TurnCompletionNoticeItem.appearance';
 import { turnFailureNoticeAppearanceDescriptor } from '@/flow_chat/components/modern/TurnFailureNoticeItem.appearance';
 import { virtualItemAppearanceDescriptor } from '@/flow_chat/components/modern/VirtualItemRenderer.appearance';
@@ -434,6 +435,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(workspaceProjectPermissionsDialogAppearanceDescriptor)
     .registerComponent(workspaceSessionBatchModalAppearanceDescriptor)
     .registerComponent(archivedSessionsConfigAppearanceDescriptor)
+    .registerComponent(usageStatisticsConfigAppearanceDescriptor)
     .registerComponent(settingsNavAppearanceDescriptor)
     .registerComponent(backgroundCommandOutputPanelAppearanceDescriptor)
     .registerComponent(chatInputPixelPetAppearanceDescriptor)

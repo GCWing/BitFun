@@ -1,0 +1,55 @@
+{
+  "title": "Usage Statistics",
+  "subtitle": "Historical model call statistics: requests, tokens, and estimated cost across your models, providers, and endpoints.",
+  "timeRange": {
+    "label": "Time range",
+    "last24Hours": "Last 24 Hours",
+    "today": "Today",
+    "thisWeek": "This Week",
+    "thisMonth": "This Month",
+    "all": "All Time"
+  },
+  "granularity": {
+    "label": "Granularity",
+    "hour": "By Hour",
+    "day": "By Day"
+  },
+  "refresh": "Refresh",
+  "loading": "Loading usage statistics…",
+  "loadFailed": "Failed to load usage statistics. Please try again.",
+  "empty": {
+    "title": "No usage data yet",
+    "description": "Model call statistics will appear here once you start chatting with a model."
+  },
+  "summary": {
+    "requests": "Requests",
+    "tokens": "Total Tokens",
+    "actualCost": "Actual Cost",
+    "standardCost": "Standard Cost"
+  },
+  "distributions": {
+    "byModel": "Model Distribution",
+    "byGroup": "Group Usage Distribution",
+    "byEndpoint": "Endpoint Distribution"
+  },
+  "trend": {
+    "title": "Token Usage Trend",
+    "legend": {
+      "input": "Input",
+      "output": "Output",
+      "cacheCreation": "Cache Creation",
+      "cacheRead": "Cache Read",
+      "cacheHitRate": "Cache Hit Rate"
+    }
+  },
+  "table": {
+    "model": "Model",
+    "group": "Group",
+    "endpoint": "Endpoint",
+    "requests": "Requests",
+    "tokens": "Token",
+    "actual": "Actual",
+    "standard": "Standard"
+  },
+  "footnote": "Costs are estimates based on the models.dev catalog prices. Actual and standard cost use the same catalog because BitFun does not apply per-group price overrides."
+}
