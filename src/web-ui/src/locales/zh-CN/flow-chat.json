@@ -681,13 +681,19 @@
       }
     },
     "harness": {
-      "selectorTooltip": "当前使用均衡 Harness",
+      "selectorTooltip": "当前使用「{{name}}」Harness",
       "activateBalanced": "切换到均衡 Harness",
       "compatibilityShort": "兼容模式",
       "comingSoon": "开发中",
       "newSessionOnly": "仅新会话",
       "comingSoonNotice": "「{{name}}」Harness 正在开发中。",
       "legacySessionNotice": "该旧会话继续使用原 Agent 模式；请新建会话使用 Agent Harness。",
+      "unsupportedProfile": "不受支持的 Harness（{{id}}）",
+      "unsupportedProfileNotice": "该会话使用当前版本无法运行的 {{id}}。请选择一个受支持的 Harness。",
+      "profileChangeBusy": "请等待当前轮次结束后再切换 Harness。",
+      "profileChangeOutcomeUnknown": "暂时无法确认 Harness 是否已切换，请刷新会话后再重试。",
+      "profileUnavailable": "当前 BitFun Host 不支持该 Harness。",
+      "profileChangeFailed": "切换 Harness 失败，请重试。",
       "profiles": {
         "minimal": { "name": "极简", "promise": "直接执行，最少编排与校验" },
         "balanced": { "name": "均衡", "promise": "先规划再执行，关键处校验" },

@@ -606,6 +606,7 @@ fn summary(session_id: &str) -> AgentSessionSummary {
         session_id: session_id.to_string(),
         session_name: "Shared session".to_string(),
         agent_type: "agentic".to_string(),
+        execution_profile: Default::default(),
         model_id: None,
         reasoning_preset: None,
         last_user_dialog_agent_type: None,
@@ -665,6 +666,7 @@ fn create_operation(workspace: &Path, name: &str) -> RuntimeIpcOperation {
         request: AgentSessionCreateRequest {
             session_name: name.to_string(),
             agent_type: "agentic".to_string(),
+            execution_profile: None,
             workspace_path: Some(workspace.to_string_lossy().to_string()),
             project_workspace_path: None,
             execution_target: None,

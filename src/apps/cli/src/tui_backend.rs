@@ -213,6 +213,10 @@ pub(crate) trait TuiBackend: Send + Sync {
         &self,
         request: UpdateSessionModeRequest,
     ) -> Result<UpdateSessionModeResponse, TuiBackendError>;
+    async fn update_session_harness_profile(
+        &self,
+        request: UpdateSessionHarnessProfileRequest,
+    ) -> Result<UpdateSessionHarnessProfileResponse, TuiBackendError>;
 
     async fn list_agent_modes(
         &self,
@@ -617,6 +621,13 @@ impl TuiBackend for AppServerTuiBackend {
         request: UpdateSessionModeRequest,
     ) -> Result<UpdateSessionModeResponse, TuiBackendError> {
         map_client(self.client.update_session_mode(request).await)
+    }
+
+    async fn update_session_harness_profile(
+        &self,
+        request: UpdateSessionHarnessProfileRequest,
+    ) -> Result<UpdateSessionHarnessProfileResponse, TuiBackendError> {
+        map_client(self.client.update_session_harness_profile(request).await)
     }
 
     async fn list_agent_modes(

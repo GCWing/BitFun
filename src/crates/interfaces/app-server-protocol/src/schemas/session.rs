@@ -6,13 +6,13 @@ use bitfun_product_domains::tool_permissions::PermissionRequest;
 use bitfun_runtime_ports::{
     AgentContextReloadRequest, AgentSessionCompactionRequest, AgentSessionCompactionResult,
     AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
-    AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
-    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
-    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementRequest, SessionTranscript,
-    SessionTranscriptRequest,
+    AgentSessionHarnessProfileUpdateRequest, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentTurnCancellationResult,
+    AgentTurnSettlementRequest, SessionTranscript, SessionTranscriptRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -177,3 +177,12 @@ unit_response!(UpdateSessionModelResponse);
 pub struct UpdateSessionModeRequest(pub AgentSessionModeUpdateRequest);
 
 unit_response!(UpdateSessionModeResponse);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[request(
+    method = "session/updateHarnessProfile",
+    response = UpdateSessionHarnessProfileResponse
+)]
+pub struct UpdateSessionHarnessProfileRequest(pub AgentSessionHarnessProfileUpdateRequest);
+
+unit_response!(UpdateSessionHarnessProfileResponse);

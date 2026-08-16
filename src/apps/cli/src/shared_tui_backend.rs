@@ -741,6 +741,21 @@ impl TuiBackend for SharedTuiBackend {
         Ok(UpdateSessionModeResponse {})
     }
 
+    async fn update_session_harness_profile(
+        &self,
+        _request: UpdateSessionHarnessProfileRequest,
+    ) -> Result<UpdateSessionHarnessProfileResponse, TuiBackendError> {
+        Err(TuiBackendError {
+            message:
+                "Harness Profile selection is not supported by the current Shared Runtime protocol"
+                    .to_string(),
+            outcome_unknown: false,
+            kind: TuiBackendErrorKind::Unsupported {
+                capability: "session/updateHarnessProfile".to_string(),
+            },
+        })
+    }
+
     async fn list_agent_modes(
         &self,
         _request: ListAgentModesRequest,

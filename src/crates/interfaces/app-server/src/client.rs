@@ -71,8 +71,10 @@ use crate::schema::{
     RestoreSessionMessage, RunMessage, RunResponse, SessionEventNotification,
     SetAgentProfileConfigMessage, SetAgentProfileConfigResponse, SetConfigMessage,
     SetConfigResponse, SetSessionArchivedMessage, SetSessionArchivedResponse,
-    SubmitDialogTurnMessage, SubmitTurnMessage, SubmitTurnResponse, UpdateSessionModeMessage,
-    UpdateSessionModeResponse, UpdateSessionModelMessage, UpdateSessionModelResponse,
+    SubmitDialogTurnMessage, SubmitTurnMessage, SubmitTurnResponse,
+    UpdateSessionHarnessProfileMessage, UpdateSessionHarnessProfileResponse,
+    UpdateSessionModeMessage, UpdateSessionModeResponse, UpdateSessionModelMessage,
+    UpdateSessionModelResponse,
 };
 use crate::{AppClient, AppServer};
 
@@ -215,6 +217,16 @@ impl AppServerClient {
     ) -> Result<()> {
         let UpdateSessionModeResponse {} = self
             .rpc(|cx| cx.send_request(UpdateSessionModeMessage(request)))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_session_harness_profile(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionHarnessProfileUpdateRequest,
+    ) -> Result<()> {
+        let UpdateSessionHarnessProfileResponse {} = self
+            .rpc(|cx| cx.send_request(UpdateSessionHarnessProfileMessage(request)))
             .await?;
         Ok(())
     }

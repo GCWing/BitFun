@@ -140,6 +140,7 @@ impl Session {
 impl From<Session> for bitfun_runtime_ports::AgentSessionCreateResult {
     fn from(session: Session) -> Self {
         let mut result = Self::new(session.session_id, session.session_name, session.agent_type);
+        result.execution_profile = session.config.execution_profile.clone();
         result.model_id = session.config.model_id;
         result.workspace_path = session.config.workspace_path;
         result.workspace_id = session.config.workspace_id;
@@ -157,6 +158,10 @@ pub struct SessionConfig {
     pub enable_tools: bool,
     pub safe_mode: bool,
     pub max_turns: usize,
+    /// Harness policy selected for the next accepted turn. Legacy persisted
+    /// sessions omit this field and project to Balanced compatibility mode.
+    #[serde(default, skip_serializing_if = "is_compatibility_execution_profile")]
+    pub execution_profile: bitfun_core_types::SessionExecutionProfile,
     pub enable_context_compression: bool,
     /// Workspace path bound to this session. Used to run AI in the correct workspace
     /// without changing the desktop's foreground workspace.
@@ -218,6 +223,12 @@ pub struct SessionConfig {
     pub agent_route_owner: SessionAgentRouteOwner,
 }
 
+fn is_compatibility_execution_profile(
+    profile: &bitfun_core_types::SessionExecutionProfile,
+) -> bool {
+    profile == &bitfun_core_types::SessionExecutionProfile::default()
+}
+
 fn is_reusable_continuation_policy(policy: &SessionContinuationPolicy) -> bool {
     *policy == SessionContinuationPolicy::Reusable
 }
@@ -238,6 +249,7 @@ impl Default for SessionConfig {
             enable_tools: true,
             safe_mode: true,
             max_turns: 200,
+            execution_profile: bitfun_core_types::SessionExecutionProfile::default(),
             enable_context_compression: true,
             workspace_path: None,
             project_workspace_path: None,
@@ -263,6 +275,8 @@ pub struct SessionSummary {
     pub session_name: String,
     /// Current/default mode selection for the session.
     pub agent_type: String,
+    #[serde(default)]
+    pub execution_profile: bitfun_core_types::SessionExecutionProfile,
     /// Runtime-owned model selector currently bound to the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
@@ -580,5 +594,36 @@ mod tests {
                 "runtime_state": "Idle"
             })
         );
+    }
+
+    #[test]
+    fn explicit_and_unknown_execution_profiles_survive_session_config_round_trip() {
+        let profiles = [
+            bitfun_core_types::SessionExecutionProfile::minimal(
+                bitfun_core_types::HarnessSelectionSource::new(
+                    bitfun_core_types::HARNESS_SELECTION_USER,
+                ),
+            ),
+            bitfun_core_types::SessionExecutionProfile::new(
+                bitfun_core_types::HarnessProfileId::new("future-profile"),
+                bitfun_core_types::HarnessSelectionSource::new("future-client"),
+            ),
+        ];
+
+        for execution_profile in profiles {
+            let config = SessionConfig {
+                execution_profile: execution_profile.clone(),
+                ..SessionConfig::default()
+            };
+            let serialized =
+                serde_json::to_value(&config).expect("session config should serialize");
+            assert_eq!(
+                serialized["execution_profile"]["harnessProfileId"],
+                execution_profile.harness_profile_id.as_str()
+            );
+            let restored: SessionConfig =
+                serde_json::from_value(serialized).expect("session config should deserialize");
+            assert_eq!(restored.execution_profile, execution_profile);
+        }
     }
 }

@@ -164,6 +164,10 @@ struct Cli {
     /// Specify the agent type for this session
     #[arg(long)]
     agent: Option<String>,
+
+    /// Select the Harness Profile for an interactive session (minimal or balanced)
+    #[arg(long, value_parser = ["minimal", "balanced"])]
+    harness_profile: Option<String>,
 }
 
 fn shared_tui_requested(shared: bool, command: &Option<Commands>) -> Result<bool> {
@@ -173,6 +177,30 @@ fn shared_tui_requested(shared: bool, command: &Option<Commands>) -> Result<bool
         ));
     }
     Ok(shared || matches!(command, Some(Commands::Chat { shared: true, .. })))
+}
+
+fn validate_global_harness_profile_scope(
+    harness_profile: Option<&str>,
+    command: &Option<Commands>,
+) -> Result<()> {
+    if harness_profile.is_none()
+        || matches!(
+            command,
+            None | Some(Commands::Chat { .. } | Commands::Exec { .. })
+        )
+    {
+        return Ok(());
+    }
+    Err(anyhow!(
+        "--harness-profile is supported only by interactive chat and headless exec; this command cannot silently fall back to Balanced"
+    ))
+}
+
+fn resolved_command_harness_profile(
+    global: &Option<String>,
+    command: Option<String>,
+) -> Option<String> {
+    command.or_else(|| global.clone())
 }
 
 #[derive(Subcommand)]
@@ -186,6 +214,10 @@ enum Commands {
         /// Use the opt-in Shared Runtime for this interactive TUI
         #[arg(long)]
         shared: bool,
+
+        /// Harness Profile for this interactive session (minimal or balanced)
+        #[arg(long, value_parser = ["minimal", "balanced"])]
+        harness_profile: Option<String>,
     },
 
     #[command(name = "__shared-runtime", hide = true)]
@@ -204,6 +236,10 @@ enum Commands {
         /// Agent type
         #[arg(short, long, default_value = "agentic")]
         agent: String,
+
+        /// Harness profile for this session (minimal or balanced)
+        #[arg(long, value_parser = ["minimal", "balanced"])]
+        harness_profile: Option<String>,
 
         /// Continue the most recent session in the current workspace
         #[arg(short = 'c', long = "continue")]
@@ -908,9 +944,16 @@ async fn run_interactive(
     shared: bool,
     agent_override: Option<String>,
     model_id: Option<String>,
+    harness_profile: Option<String>,
     session_override: Option<String>,
 ) -> Result<()> {
     use ui::startup::{StartupPage, StartupResult};
+
+    if shared && harness_profile.is_some() {
+        anyhow::bail!(
+            "--harness-profile is not supported by the current Shared Runtime protocol; use embedded TUI"
+        );
+    }
 
     // 1. Initialize terminal and show loading screen
     let mut terminal = ui::init_terminal()?;
@@ -1034,6 +1077,12 @@ async fn run_interactive(
     // to chat with the resolved session.
     if let Some(ref session_spec) = session_override {
         let restore_session_id = resolve_startup_session_override(&agent, session_spec).await?;
+        apply_tui_harness_profile(
+            agent.as_ref(),
+            &restore_session_id,
+            harness_profile.as_deref(),
+        )
+        .await?;
 
         let mut chat_mode = ChatMode::new(config, effective_agent, workspace, agent)
             .with_restore_session(restore_session_id);
@@ -1076,11 +1125,16 @@ async fn run_interactive(
 
     let agent_type = startup_page.agent_type().to_string();
     if matches!(startup_result, StartupResult::NewSession { .. }) {
-        if let Some(model_id) = startup_page.selected_model_id().map(str::to_string) {
-            agent
-                .ensure_session_with_model(&agent_type, Some(model_id))
+        let selected_model_id = startup_page.selected_model_id().map(str::to_string);
+        if selected_model_id.is_some() || harness_profile.is_some() {
+            let session_id = agent
+                .ensure_session_with_model(&agent_type, selected_model_id)
+                .await?;
+            apply_tui_harness_profile(agent.as_ref(), &session_id, harness_profile.as_deref())
                 .await?;
         }
+    } else if let Some(session_id) = restore_session_id.as_deref() {
+        apply_tui_harness_profile(agent.as_ref(), session_id, harness_profile.as_deref()).await?;
     }
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
@@ -1103,6 +1157,20 @@ async fn run_interactive(
     println!("Goodbye!");
 
     Ok(())
+}
+
+async fn apply_tui_harness_profile(
+    agent: &TuiAgentClient,
+    session_id: &str,
+    harness_profile: Option<&str>,
+) -> Result<()> {
+    let Some(harness_profile) = harness_profile else {
+        return Ok(());
+    };
+    agent
+        .update_session_harness_profile(session_id, harness_profile)
+        .await
+        .map_err(anyhow::Error::new)
 }
 
 /// Resolve a `--session` / `--continue` override to a concrete session ID.
@@ -1201,6 +1269,7 @@ async fn run_cli() -> Result<()> {
         }
         Err(error) => return Err(error),
     };
+    validate_global_harness_profile_scope(cli.harness_profile.as_deref(), &cli.command)?;
     let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
     let is_dispatch_mode = is_dispatch_command(&cli.command);
     let is_daemon_run = matches!(
@@ -1243,7 +1312,11 @@ async fn run_cli() -> Result<()> {
     }
 
     match cli.command {
-        Some(Commands::Chat { agent, .. }) => {
+        Some(Commands::Chat {
+            agent,
+            harness_profile,
+            ..
+        }) => {
             // Interactive mode with startup page, scoped to the current directory.
             run_interactive(
                 config,
@@ -1252,6 +1325,7 @@ async fn run_cli() -> Result<()> {
                 use_shared_runtime,
                 cli.agent.clone(),
                 cli.model.clone(),
+                resolved_command_harness_profile(&cli.harness_profile, harness_profile),
                 None,
             )
             .await?;
@@ -1265,6 +1339,7 @@ async fn run_cli() -> Result<()> {
         Some(Commands::Exec {
             message,
             agent,
+            harness_profile,
             continue_last,
             resume,
             session,
@@ -1292,6 +1367,10 @@ async fn run_cli() -> Result<()> {
                 root_handlers::ExecCommandArgs {
                     message,
                     agent,
+                    harness_profile: resolved_command_harness_profile(
+                        &cli.harness_profile,
+                        harness_profile,
+                    ),
                     continue_last,
                     resume,
                     session,
@@ -1530,6 +1609,7 @@ async fn run_cli() -> Result<()> {
                 use_shared_runtime,
                 cli.agent.clone(),
                 cli.model.clone(),
+                cli.harness_profile.clone(),
                 session_override,
             )
             .await?;
@@ -2030,7 +2110,9 @@ mod shared_tui_command_tests {
 
 #[cfg(test)]
 mod dispatch_command_tests {
-    use super::{is_dispatch_command, Cli, Commands, DispatchAction};
+    use super::{
+        is_dispatch_command, validate_global_harness_profile_scope, Cli, Commands, DispatchAction,
+    };
     use clap::{CommandFactory, Parser};
 
     #[test]
@@ -2074,6 +2156,68 @@ mod dispatch_command_tests {
             .render_long_help()
             .to_string();
         assert!(!dispatch_help.contains("__run"));
+    }
+
+    #[test]
+    fn dispatch_rejects_a_global_harness_profile_instead_of_ignoring_it() {
+        let cli = Cli::try_parse_from([
+            "bitfun",
+            "--harness-profile",
+            "minimal",
+            "dispatch",
+            "status",
+        ])
+        .expect("global Harness Profile should parse before scope validation");
+
+        let error =
+            validate_global_harness_profile_scope(cli.harness_profile.as_deref(), &cli.command)
+                .expect_err("Detached Dispatch must not silently use Balanced");
+        assert!(error.to_string().contains("cannot silently fall back"));
+    }
+}
+
+#[cfg(test)]
+mod harness_profile_command_tests {
+    use super::{
+        resolved_command_harness_profile, validate_global_harness_profile_scope, Cli, Commands,
+    };
+    use clap::Parser;
+
+    #[test]
+    fn exec_honors_a_global_harness_profile_before_the_subcommand() {
+        let cli = Cli::try_parse_from([
+            "bitfun",
+            "--harness-profile",
+            "minimal",
+            "exec",
+            "fix the tests",
+        ])
+        .expect("parse headless exec");
+        validate_global_harness_profile_scope(cli.harness_profile.as_deref(), &cli.command)
+            .expect("exec supports Harness Profile selection");
+        let Some(Commands::Exec {
+            harness_profile, ..
+        }) = cli.command
+        else {
+            panic!("expected exec command");
+        };
+
+        assert_eq!(
+            resolved_command_harness_profile(&cli.harness_profile, harness_profile).as_deref(),
+            Some("minimal")
+        );
+    }
+
+    #[test]
+    fn subcommand_harness_profile_overrides_the_global_value() {
+        assert_eq!(
+            resolved_command_harness_profile(
+                &Some("balanced".to_string()),
+                Some("minimal".to_string()),
+            )
+            .as_deref(),
+            Some("minimal")
+        );
     }
 }
 

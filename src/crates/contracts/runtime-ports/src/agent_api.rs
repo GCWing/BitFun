@@ -6,6 +6,8 @@ use super::*;
 pub struct AgentSessionCreateRequest {
     pub session_name: String,
     pub agent_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_profile: Option<bitfun_core_types::SessionExecutionProfile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -32,6 +34,8 @@ pub struct AgentSessionCreateResult {
     #[serde(default)]
     pub session_name: String,
     pub agent_type: String,
+    #[serde(default)]
+    pub execution_profile: bitfun_core_types::SessionExecutionProfile,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -54,6 +58,7 @@ impl AgentSessionCreateResult {
             session_id: session_id.into(),
             session_name: session_name.into(),
             agent_type: agent_type.into(),
+            execution_profile: bitfun_core_types::SessionExecutionProfile::default(),
             model_id: None,
             workspace_path: None,
             workspace_id: None,
@@ -81,6 +86,8 @@ pub struct AgentSessionSummary {
     pub session_id: String,
     pub session_name: String,
     pub agent_type: String,
+    #[serde(default)]
+    pub execution_profile: bitfun_core_types::SessionExecutionProfile,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -228,6 +235,14 @@ pub struct AgentSessionModelSelectionUpdateRequest {
 pub struct AgentSessionModeUpdateRequest {
     pub session_id: String,
     pub mode_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionHarnessProfileUpdateRequest {
+    pub session_id: String,
+    pub execution_profile: bitfun_core_types::SessionExecutionProfile,
 }
 
 /// Starts one audited manual context-compaction maintenance turn.
@@ -1518,6 +1533,14 @@ pub trait AgentSessionModePort: Send + Sync {
 }
 
 #[async_trait::async_trait]
+pub trait AgentSessionHarnessProfilePort: Send + Sync {
+    async fn update_session_harness_profile(
+        &self,
+        request: AgentSessionHarnessProfileUpdateRequest,
+    ) -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
 pub trait AgentSessionCompactionPort: Send + Sync {
     async fn start_session_compaction(
         &self,
@@ -2099,6 +2122,7 @@ mod tests {
         let request = AgentSessionCreateRequest {
             session_name: "Generated session".to_string(),
             agent_type: "agentic".to_string(),
+            execution_profile: None,
             workspace_path: Some("/workspace/project".to_string()),
             project_workspace_path: None,
             execution_target: None,
@@ -2972,6 +2996,7 @@ mod tests {
             session_id: "session_1".to_string(),
             session_name: "Main".to_string(),
             agent_type: "agentic".to_string(),
+            execution_profile: Default::default(),
             model_id: Some("provider/model".to_string()),
             reasoning_preset: Some("high".to_string()),
             last_user_dialog_agent_type: Some("plan".to_string()),

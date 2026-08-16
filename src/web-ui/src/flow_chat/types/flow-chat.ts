@@ -570,6 +570,7 @@ export interface SessionConfig {
   /** Explicit reasoning preset for the next turn; omitted means model default. */
   reasoningPreset?: string;
   agentType?: string;
+  executionProfile?: import('@/infrastructure/api/service-api/AgentAPI').SessionExecutionProfile;
   context?: Record<string, string>;
   workspacePath?: string;
   /** Main project scope used for persistence when execution happens in a worktree. */

@@ -7,9 +7,9 @@
 
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort,
-    AgentSessionModePort, AgentSessionModelPort, AgentSessionRestorePort, AgentSessionRevertPort,
-    AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
+    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionHarnessProfilePort,
+    AgentSessionLineagePort, AgentSessionModePort, AgentSessionModelPort, AgentSessionRestorePort,
+    AgentSessionRevertPort, AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
 };
 #[cfg(feature = "remote-connect")]
 use bitfun_agent_runtime::sdk::{
@@ -461,6 +461,7 @@ fn core_agent_runtime_builder(
     session_management: Arc<dyn AgentSessionManagementPort>,
     workspace_references: Arc<dyn AgentWorkspaceReferencePort>,
     session_mode: Arc<dyn AgentSessionModePort>,
+    session_harness_profile: Arc<dyn AgentSessionHarnessProfilePort>,
     session_model: Arc<dyn AgentSessionModelPort>,
     session_compaction: Arc<dyn AgentSessionCompactionPort>,
     session_restore: Arc<dyn AgentSessionRestorePort>,
@@ -478,6 +479,7 @@ fn core_agent_runtime_builder(
         .with_session_management_port(session_management)
         .with_workspace_reference_port(workspace_references)
         .with_session_mode_port(session_mode)
+        .with_session_harness_profile_port(session_harness_profile)
         .with_session_model_port(session_model)
         .with_session_compaction_port(session_compaction)
         .with_session_restore_port(session_restore)
@@ -1231,6 +1233,7 @@ impl CoreServiceAgentRuntime {
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
+        let session_harness_profile: Arc<dyn AgentSessionHarnessProfilePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
@@ -1246,6 +1249,7 @@ impl CoreServiceAgentRuntime {
             session_management,
             workspace_references,
             session_mode,
+            session_harness_profile,
             session_model,
             session_compaction,
             session_restore,
@@ -1271,6 +1275,7 @@ impl CoreServiceAgentRuntime {
         let session_close = scheduled_session_close_port(coordinator.clone(), scheduler.clone());
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
+        let session_harness_profile: Arc<dyn AgentSessionHarnessProfilePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
@@ -1288,6 +1293,7 @@ impl CoreServiceAgentRuntime {
             session_management,
             workspace_references,
             session_mode,
+            session_harness_profile,
             session_model,
             session_compaction,
             session_restore,
@@ -1316,6 +1322,7 @@ impl CoreServiceAgentRuntime {
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
+        let session_harness_profile: Arc<dyn AgentSessionHarnessProfilePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
@@ -1332,6 +1339,7 @@ impl CoreServiceAgentRuntime {
             session_management,
             workspace_references,
             session_mode,
+            session_harness_profile,
             session_model,
             session_compaction,
             session_restore,
@@ -1363,6 +1371,7 @@ impl CoreServiceAgentRuntime {
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
+        let session_harness_profile: Arc<dyn AgentSessionHarnessProfilePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
@@ -1376,6 +1385,7 @@ impl CoreServiceAgentRuntime {
             .with_workspace_reference_port(workspace_references)
             .with_session_revert_port(session_revert)
             .with_session_mode_port(session_mode)
+            .with_session_harness_profile_port(session_harness_profile)
             .with_session_model_port(session_model)
             .with_session_compaction_port(session_compaction)
             .with_local_command_turn_port(local_command_turn)
@@ -1402,6 +1412,7 @@ impl CoreServiceAgentRuntime {
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
+        let session_harness_profile: Arc<dyn AgentSessionHarnessProfilePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
@@ -1419,6 +1430,7 @@ impl CoreServiceAgentRuntime {
             session_management,
             workspace_references,
             session_mode,
+            session_harness_profile,
             session_model,
             session_compaction,
             session_restore,
@@ -1529,6 +1541,7 @@ impl CoreServiceAgentRuntime {
         let session_close = scheduled_session_close_port(coordinator.clone(), scheduler.clone());
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
+        let session_harness_profile: Arc<dyn AgentSessionHarnessProfilePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
@@ -1546,6 +1559,7 @@ impl CoreServiceAgentRuntime {
             session_management,
             workspace_references,
             session_mode,
+            session_harness_profile,
             session_model,
             session_compaction,
             session_restore,

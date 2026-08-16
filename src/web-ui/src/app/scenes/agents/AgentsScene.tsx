@@ -77,7 +77,7 @@ import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 const DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE = '__default_subagent_model__';
 
 const HARNESS_PROFILES = [
-  { id: 'minimal', icon: Zap, connected: false },
+  { id: 'minimal', icon: Zap, connected: true },
   { id: 'balanced', icon: Scale, connected: true },
   { id: 'ultimate', icon: Orbit, connected: false },
 ] as const;
@@ -285,8 +285,8 @@ const AgentsHomeView: React.FC = () => {
 
   const handleHarnessProfileClick = useCallback((profileId: typeof HARNESS_PROFILES[number]['id']) => {
     const name = t(`harnessZone.profiles.${profileId}.name`);
-    if (profileId === 'balanced') {
-      notification.success(t('harnessZone.balancedConnectedNotice'), { duration: 2600 });
+    if (profileId !== 'ultimate') {
+      notification.success(t('harnessZone.connectedNotice', { name }), { duration: 2600 });
       return;
     }
     notification.info(t('harnessZone.comingSoonNotice', { name }), { duration: 3200 });

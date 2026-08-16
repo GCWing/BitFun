@@ -62,6 +62,7 @@ export interface CreateSessionRequest {
   sessionId?: string; 
   sessionName: string;
   agentType: string;
+  executionProfile?: SessionExecutionProfile;
   workspacePath: string;
   projectWorkspacePath?: string;
   executionTarget?: SessionExecutionTargetRequest;
@@ -81,6 +82,7 @@ export interface CreateSessionResponse {
   sessionId: string;
   sessionName: string;
   agentType: string;
+  executionProfile: SessionExecutionProfile;
   modelId?: string;
   workspacePath?: string;
   workspaceId?: string;
@@ -342,6 +344,23 @@ export interface SessionPermissionModeResponse {
 export interface UpdateSessionModeRequest {
   sessionId: string;
   modeId: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  includeInternal?: boolean;
+}
+
+export type HarnessProfileId = 'minimal' | 'balanced' | 'ultimate' | (string & {});
+
+export interface SessionExecutionProfile {
+  harnessProfileId: HarnessProfileId;
+  schemaVersion: number;
+  selectedBy: string;
+}
+
+export interface UpdateSessionHarnessProfileRequest {
+  sessionId: string;
+  harnessProfileId: HarnessProfileId;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -1032,6 +1051,16 @@ export class AgentAPI {
       await api.invoke<void>('update_session_mode', { request });
     } catch (error) {
       throw createTauriCommandError('update_session_mode', error, request);
+    }
+  }
+
+  async updateSessionHarnessProfile(
+    request: UpdateSessionHarnessProfileRequest,
+  ): Promise<void> {
+    try {
+      await api.invoke<void>('update_session_harness_profile', { request });
+    } catch (error) {
+      throw createTauriCommandError('update_session_harness_profile', error, request);
     }
   }
 

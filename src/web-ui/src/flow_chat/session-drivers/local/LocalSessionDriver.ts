@@ -68,6 +68,7 @@ export const localSessionDriver: SessionDriver = {
     const response = await agentAPI.createSession({
       sessionName,
       agentType,
+      executionProfile: config.executionProfile,
       workspacePath,
       projectWorkspacePath,
       executionTarget: config.executionTargetRequest,
@@ -91,6 +92,7 @@ export const localSessionDriver: SessionDriver = {
     const maxContextTokens = await getModelMaxTokens(sessionModelName, agentType);
     const mergedConfig: SessionConfig = {
       ...config,
+      executionProfile: response.executionProfile,
       modelName: sessionModelName,
       reasoningPreset,
       workspaceId: workspaceId ?? config.workspaceId,

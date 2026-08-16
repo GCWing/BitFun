@@ -21,6 +21,7 @@ use bitfun_runtime_ports::{
     AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
     AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
     AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
+    AgentSessionHarnessProfilePort, AgentSessionHarnessProfileUpdateRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
     AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
@@ -186,6 +187,7 @@ pub struct AgentRuntime {
     workspace_references: Option<Arc<dyn AgentWorkspaceReferencePort>>,
     session_close: Option<Arc<dyn AgentSessionClosePort>>,
     session_mode: Option<Arc<dyn AgentSessionModePort>>,
+    session_harness_profile: Option<Arc<dyn AgentSessionHarnessProfilePort>>,
     session_model: Option<Arc<dyn AgentSessionModelPort>>,
     session_compaction: Option<Arc<dyn AgentSessionCompactionPort>>,
     session_revert: Option<Arc<dyn AgentSessionRevertPort>>,
@@ -410,6 +412,7 @@ pub struct AgentRuntimeBuilder {
     workspace_references: Option<Arc<dyn AgentWorkspaceReferencePort>>,
     session_close: Option<Arc<dyn AgentSessionClosePort>>,
     session_mode: Option<Arc<dyn AgentSessionModePort>>,
+    session_harness_profile: Option<Arc<dyn AgentSessionHarnessProfilePort>>,
     session_model: Option<Arc<dyn AgentSessionModelPort>>,
     session_compaction: Option<Arc<dyn AgentSessionCompactionPort>>,
     session_revert: Option<Arc<dyn AgentSessionRevertPort>>,
@@ -479,6 +482,14 @@ impl AgentRuntimeBuilder {
 
     pub fn with_session_mode_port(mut self, port: Arc<dyn AgentSessionModePort>) -> Self {
         self.session_mode = Some(port);
+        self
+    }
+
+    pub fn with_session_harness_profile_port(
+        mut self,
+        port: Arc<dyn AgentSessionHarnessProfilePort>,
+    ) -> Self {
+        self.session_harness_profile = Some(port);
         self
     }
 
@@ -629,6 +640,7 @@ impl AgentRuntimeBuilder {
             workspace_references,
             session_close,
             session_mode,
+            session_harness_profile,
             session_model,
             session_compaction,
             session_revert,
@@ -666,6 +678,7 @@ impl AgentRuntimeBuilder {
             workspace_references,
             session_close,
             session_mode,
+            session_harness_profile,
             session_model,
             session_compaction,
             session_revert,
@@ -1206,6 +1219,21 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)
     }
 
+    pub async fn update_session_harness_profile(
+        &self,
+        request: AgentSessionHarnessProfileUpdateRequest,
+    ) -> Result<(), RuntimeError> {
+        let port = self.session_harness_profile.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session Harness Profile port is not registered",
+            ))
+        })?;
+        port.update_session_harness_profile(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
     pub async fn start_session_compaction(
         &self,
         request: AgentSessionCompactionRequest,
@@ -1631,6 +1659,7 @@ impl AgentRuntime {
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type,
+                        execution_profile: None,
                         workspace_path,
                         project_workspace_path: None,
                         execution_target: None,
@@ -1803,6 +1832,7 @@ mod tests {
         ) -> PortResult<Vec<AgentSessionSummary>> {
             self.listed_sessions.lock().unwrap().push(request.clone());
             Ok(vec![AgentSessionSummary {
+                execution_profile: Default::default(),
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
                 agent_type: "agentic".to_string(),
@@ -1975,6 +2005,7 @@ mod tests {
             self.restored_sessions.lock().unwrap().push(request);
             Ok(AgentSessionRestoreResult {
                 session: AgentSessionSummary {
+                    execution_profile: Default::default(),
                     session_id: "session_1".to_string(),
                     session_name: "Main".to_string(),
                     agent_type: "agentic".to_string(),
@@ -2454,6 +2485,7 @@ mod tests {
             .create_session_with_id(
                 "fixed-session-id".to_string(),
                 AgentSessionCreateRequest {
+                    execution_profile: None,
                     session_name: "Fixed session".to_string(),
                     agent_type: "agentic".to_string(),
                     workspace_path: Some("/workspace/project".to_string()),
@@ -2485,6 +2517,7 @@ mod tests {
             .create_session_with_id(
                 "fixed-session-id".to_string(),
                 AgentSessionCreateRequest {
+                    execution_profile: None,
                     session_name: "Fixed session".to_string(),
                     agent_type: "agentic".to_string(),
                     workspace_path: Some("/workspace/project".to_string()),
@@ -3115,6 +3148,7 @@ mod tests {
         };
         let result = AgentSessionRestoreResult {
             session: AgentSessionSummary {
+                execution_profile: Default::default(),
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
                 agent_type: "agentic".to_string(),

@@ -70,6 +70,10 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../prompts/shared/init_agents_md.md"),
     ),
     (
+        "minimal-harness-v1",
+        include_bytes!("../prompts/agents/minimal-harness-v1.md"),
+    ),
+    (
         "multitask_mode_first_entry_reminder",
         include_bytes!("../prompts/agents/multitask_mode_first_entry_reminder.md"),
     ),
@@ -211,4 +215,15 @@ fn memory_phase1_prompt_preserves_direct_include_bytes() {
         PHASE1_SYSTEM.as_bytes(),
         include_bytes!("../prompts/memories/phase1_system.md")
     );
+}
+
+#[test]
+fn minimal_harness_prompt_names_only_its_stable_baseline_tools() {
+    let prompt = agent_prompt("minimal-harness-v1").expect("minimal prompt");
+    for required in ["`Read`", "`Edit`", "`Write`", "`ExecCommand`"] {
+        assert!(prompt.contains(required), "missing {required}");
+    }
+    for unavailable in ["`Goal`", "`Task`", "`WebSearch`", "`GetToolSpec`"] {
+        assert!(!prompt.contains(unavailable), "unexpected {unavailable}");
+    }
 }

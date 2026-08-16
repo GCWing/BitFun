@@ -56,6 +56,10 @@ impl RuntimeServicePort for TerminalRuntimePort {
 
 #[async_trait::async_trait]
 impl TerminalPort for TerminalRuntimePort {
+    async fn is_session_active(&self, session_id: i32) -> PortResult<bool> {
+        Ok(self.manager.is_session_active(session_id).await)
+    }
+
     async fn exec_command(
         &self,
         request: TerminalExecCommandRequest,

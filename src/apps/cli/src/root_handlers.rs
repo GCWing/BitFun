@@ -34,6 +34,7 @@ const MAX_DISPATCH_STDIN_BYTES: u64 = 24 * 1024 * 1024;
 pub(crate) struct ExecCommandArgs {
     pub message: Option<String>,
     pub agent: String,
+    pub harness_profile: Option<String>,
     pub continue_last: bool,
     pub resume: Option<String>,
     pub session: Option<String>,
@@ -213,6 +214,7 @@ pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs
         args.agent,
         runtime.clone(),
         workspace_path_resolved,
+        args.harness_profile,
         args.output_patch,
         args.verify_final_changes,
         args.output_format,

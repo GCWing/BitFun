@@ -357,6 +357,7 @@ pub(crate) async fn create_session(state: &PeerHostState, args: &Value) -> Resul
     let create_request = AgentSessionCreateRequest {
         session_name,
         agent_type,
+        execution_profile: None,
         workspace_path: Some(workspace_path),
         project_workspace_path: None,
         execution_target: None,
@@ -812,6 +813,7 @@ mod tests {
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
                 agent_type: "agentic".to_string(),
+                execution_profile: Default::default(),
                 model_id: Some("provider/model".to_string()),
                 reasoning_preset: Some("high".to_string()),
                 last_user_dialog_agent_type: Some("plan".to_string()),

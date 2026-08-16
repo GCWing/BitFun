@@ -101,6 +101,7 @@ export const useFlowChat = () => {
       const response = await agentAPI.createSession({
         sessionName,
         agentType: agentTypeForSession,
+        executionProfile: config?.executionProfile,
         workspacePath,
         workspaceId: workspace?.id ?? config?.workspaceId,
         remoteConnectionId,
@@ -126,6 +127,7 @@ export const useFlowChat = () => {
       const sessionConfig: SessionConfig = {
         modelName: config?.modelName || 'default',
         ...config,
+        executionProfile: response.executionProfile,
         workspaceId: workspace?.id ?? config?.workspaceId,
       };
 

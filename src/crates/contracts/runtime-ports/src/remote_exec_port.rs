@@ -117,6 +117,11 @@ pub type RemoteExecOutputSink = mpsc::UnboundedSender<String>;
 pub type RemoteExecStreamingOutputSink = mpsc::Sender<String>;
 #[async_trait::async_trait]
 pub trait RemoteExecPort: RuntimeServicePort + std::fmt::Debug {
+    /// Authoritative liveness query for a remote ExecCommand session.
+    async fn is_session_active(&self, _session_id: i32) -> PortResult<bool> {
+        Ok(false)
+    }
+
     async fn exec_command_once(
         &self,
         request: RemoteExecOneShotCommandRequest,

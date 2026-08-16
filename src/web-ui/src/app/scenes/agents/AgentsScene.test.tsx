@@ -268,6 +268,7 @@ describeWithJsdom('AgentsScene', () => {
     const balanced = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-balanced"]');
     const ultimate = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-ultimate"]');
     expect(minimal).toBeTruthy();
+    expect(minimal?.dataset.bfState).toBe('connected');
     expect(balanced?.dataset.bfState).toBe('connected');
     expect(ultimate?.dataset.bfState).toBe('coming-soon');
 
@@ -276,12 +277,10 @@ describeWithJsdom('AgentsScene', () => {
       balanced?.click();
     });
 
-    expect(notificationInfoMock).toHaveBeenCalledWith(
-      'harnessZone.comingSoonNotice',
-      expect.objectContaining({ duration: 3200 }),
-    );
+    expect(notificationInfoMock).not.toHaveBeenCalled();
+    expect(notificationSuccessMock).toHaveBeenCalledTimes(2);
     expect(notificationSuccessMock).toHaveBeenCalledWith(
-      'harnessZone.balancedConnectedNotice',
+      'harnessZone.connectedNotice',
       expect.objectContaining({ duration: 2600 }),
     );
   });
