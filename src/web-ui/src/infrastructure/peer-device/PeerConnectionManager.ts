@@ -265,9 +265,23 @@ export class PeerConnectionManager {
    */
   reportPresence(onlineDeviceIds: Iterable<string>): void {
     const online = new Set(onlineDeviceIds);
-    for (const entry of this.entries.values()) {
+    for (const entry of Array.from(this.entries.values())) {
       if (!online.has(entry.deviceId)) {
         this.markLost(entry, 'presence');
+        continue;
+      }
+      // The device is back. `lost` is terminal and `connect` refuses a lost
+      // entry, so leaving it in place would keep a reachable device
+      // permanently unselectable — one presence blip during a burst of
+      // switching was enough to strand it for the rest of the session. Drop
+      // the dead entry so the next switch attaches a fresh one.
+      if (entry.health === 'lost' && entry.lostReason === 'presence') {
+        this.entries.delete(entry.deviceId);
+        entry.adapter.disconnect().catch(() => undefined);
+        log.info('Peer device is reachable again; cleared its lost attachment', {
+          deviceId: entry.deviceId,
+        });
+        this.publish();
       }
     }
   }

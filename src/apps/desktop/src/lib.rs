@@ -39,6 +39,9 @@ use bitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc};
 use bitfun_core::service::search::get_global_workspace_search_service;
+use bitfun_core::service::session_projection_store::{
+    runtime_event_log_dir, FileSessionProjectionStore,
+};
 use bitfun_core::service::workspace::get_global_workspace_service;
 use bitfun_core::util::{elapsed_ms, TimingCollector};
 use bitfun_events::AgenticEvent;
@@ -644,7 +647,19 @@ pub async fn run() {
     startup_timings.record_elapsed("initialize_app_state", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
-    let session_event_journal = Arc::new(SessionEventJournal::new());
+    // A Turn that is still executing exists nowhere durable but this log: the
+    // persisted Session record stores a running Turn as idle so a restart never
+    // revives work. Without it, a client returning to this device after the
+    // process restarted is served a Turn frozen at the last checkpoint.
+    let session_event_journal = Arc::new(match try_get_path_manager_arc() {
+        Ok(path_manager) => SessionEventJournal::new().with_store(Arc::new(
+            FileSessionProjectionStore::new(runtime_event_log_dir(&path_manager)),
+        )),
+        Err(error) => {
+            log::warn!("Runtime event log disabled: application paths unavailable: {error}");
+            SessionEventJournal::new()
+        }
+    });
     let step_started = Instant::now();
     let desktop_runtime = match runtime::DesktopRuntimeContext::build(
         coordinator.clone(),

@@ -46,6 +46,17 @@ impl std::fmt::Debug for FileSessionProjectionStore {
     }
 }
 
+/// Where every Host on this machine keeps its in-flight Turn logs.
+///
+/// Shared so Desktop and CLI agree without either hard-coding a path: they can
+/// own the same Session at different times, and a log written by one must be
+/// the log the other replays.
+pub fn runtime_event_log_dir(
+    path_manager: &crate::infrastructure::PathManager,
+) -> std::path::PathBuf {
+    path_manager.bitfun_home_dir().join("runtime-events")
+}
+
 impl FileSessionProjectionStore {
     pub fn new(root: PathBuf) -> Self {
         if let Err(error) = std::fs::create_dir_all(&root) {
