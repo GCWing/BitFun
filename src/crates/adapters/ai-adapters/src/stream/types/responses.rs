@@ -1,6 +1,10 @@
 use super::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+use bitfun_agent_stream::ModelResponseReplayCapture;
+use bitfun_core_types::{ModelReasoningSummaryPart, ModelResponseReplayItem};
 use serde::Deserialize;
 use serde_json::Value;
+
+pub const OPENAI_RESPONSES_REPLAY_PROTOCOL: &str = "openai_responses";
 
 #[derive(Debug, Deserialize)]
 pub struct ResponsesStreamEvent {
@@ -101,6 +105,7 @@ pub fn parse_responses_output_item(
             tool_call_completion: None,
             finish_reason: None,
             provider_metadata: None,
+            model_response_replay: None,
         }),
         "message" => {
             let text = item_value
@@ -126,18 +131,98 @@ pub fn parse_responses_output_item(
                 tool_call_completion: None,
                 finish_reason: None,
                 provider_metadata: None,
+                model_response_replay: None,
             })
         }
         _ => None,
     }
 }
 
+pub fn parse_responses_replay_capture(output: &[Value]) -> Option<ModelResponseReplayCapture> {
+    if output.is_empty() {
+        return None;
+    }
+
+    let mut contains_opaque_reasoning = false;
+    let mut items = Vec::with_capacity(output.len());
+    for item in output {
+        let replay_item = parse_responses_replay_item(item)?;
+        contains_opaque_reasoning |=
+            matches!(replay_item, ModelResponseReplayItem::OpaqueReasoning { .. });
+        items.push(replay_item);
+    }
+
+    contains_opaque_reasoning.then(|| ModelResponseReplayCapture {
+        protocol: OPENAI_RESPONSES_REPLAY_PROTOCOL.to_string(),
+        items,
+    })
+}
+
+fn parse_responses_replay_item(item: &Value) -> Option<ModelResponseReplayItem> {
+    match item.get("type")?.as_str()? {
+        "reasoning" => {
+            let opaque_state = item
+                .get("encrypted_content")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())?
+                .to_string();
+            let item_id = item
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string);
+            let summary = match item.get("summary").filter(|summary| !summary.is_null()) {
+                Some(summary) => parse_reasoning_summary(summary)?,
+                None => Vec::new(),
+            };
+            Some(ModelResponseReplayItem::OpaqueReasoning {
+                item_id,
+                summary,
+                opaque_state,
+            })
+        }
+        "message"
+            if item
+                .get("role")
+                .and_then(Value::as_str)
+                .is_none_or(|role| role == "assistant") =>
+        {
+            Some(ModelResponseReplayItem::AssistantMessage)
+        }
+        "function_call" => item
+            .get("call_id")
+            .and_then(Value::as_str)
+            .filter(|call_id| !call_id.is_empty())
+            .map(|call_id| ModelResponseReplayItem::FunctionCall {
+                call_id: call_id.to_string(),
+            }),
+        _ => None,
+    }
+}
+
+fn parse_reasoning_summary(value: &Value) -> Option<Vec<ModelReasoningSummaryPart>> {
+    value
+        .as_array()?
+        .iter()
+        .map(|part| {
+            (part.get("type").and_then(Value::as_str) == Some("summary_text"))
+                .then(|| part.get("text").and_then(Value::as_str))
+                .flatten()
+                .map(|text| ModelReasoningSummaryPart {
+                    text: text.to_string(),
+                })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_responses_output_item, ResponsesCompleted, ResponsesStreamEvent, ResponsesUsage,
+        parse_responses_output_item, parse_responses_replay_capture, ResponsesCompleted,
+        ResponsesStreamEvent, ResponsesUsage,
     };
     use crate::stream::types::unified::UnifiedTokenUsage;
+    use bitfun_core_types::ModelResponseReplayItem;
     use serde_json::json;
 
     #[test]
@@ -262,5 +347,69 @@ mod tests {
 
         assert_eq!(event.output_index, Some(1));
         assert_eq!(event.delta.as_deref(), Some("{\"a\":"));
+    }
+
+    #[test]
+    fn captures_reasoning_message_and_function_call_in_output_order() {
+        let capture = parse_responses_replay_capture(&[
+            json!({
+                "id": "rs_1",
+                "type": "reasoning",
+                "summary": [{ "type": "summary_text", "text": "summary" }],
+                "encrypted_content": "opaque"
+            }),
+            json!({
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "tool",
+                "arguments": "{}"
+            }),
+            json!({
+                "type": "message",
+                "role": "assistant",
+                "content": [{ "type": "output_text", "text": "done" }]
+            }),
+        ])
+        .expect("replay capture");
+
+        assert_eq!(capture.items.len(), 3);
+        assert!(matches!(
+            &capture.items[0],
+            ModelResponseReplayItem::OpaqueReasoning { item_id, summary, opaque_state }
+                if item_id.as_deref() == Some("rs_1")
+                    && summary.first().map(|part| part.text.as_str()) == Some("summary")
+                    && opaque_state == "opaque"
+        ));
+        assert!(matches!(
+            &capture.items[1],
+            ModelResponseReplayItem::FunctionCall { call_id } if call_id == "call_1"
+        ));
+        assert!(matches!(
+            &capture.items[2],
+            ModelResponseReplayItem::AssistantMessage
+        ));
+    }
+
+    #[test]
+    fn does_not_capture_reasoning_without_opaque_state() {
+        assert!(parse_responses_replay_capture(&[json!({
+            "id": "rs_1",
+            "type": "reasoning",
+            "summary": [{ "type": "summary_text", "text": "summary" }]
+        })])
+        .is_none());
+    }
+
+    #[test]
+    fn capture_is_atomic_when_output_contains_an_unsupported_item() {
+        assert!(parse_responses_replay_capture(&[
+            json!({
+                "type": "reasoning",
+                "encrypted_content": "opaque",
+                "summary": []
+            }),
+            json!({ "type": "computer_call", "id": "computer_1" }),
+        ])
+        .is_none());
     }
 }

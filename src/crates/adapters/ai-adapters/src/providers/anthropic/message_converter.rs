@@ -246,6 +246,7 @@ mod tests {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         };
 
         let (_, messages) = AnthropicMessageConverter::convert_messages(vec![msg]);
@@ -288,6 +289,7 @@ mod tests {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         };
 
         let (_, messages) = AnthropicMessageConverter::convert_messages(vec![

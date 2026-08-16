@@ -1,7 +1,8 @@
 use super::stream_stats::StreamStats;
 use super::{next_stream_item, StreamTimeoutController, StreamTimeoutStage, TimedStreamItem};
 use crate::stream::types::responses::{
-    parse_responses_output_item, ResponsesCompleted, ResponsesDone, ResponsesStreamEvent,
+    parse_responses_output_item, parse_responses_replay_capture, ResponsesCompleted, ResponsesDone,
+    ResponsesStreamEvent,
 };
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
@@ -12,7 +13,7 @@ use log::{debug, error, trace};
 use reqwest::Response;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -46,6 +47,39 @@ fn log_cache_stream_diagnostics(
             .zip(response_prompt_cache_key_hash)
             .map(|(expected, actual)| expected == actual),
     );
+}
+
+fn completed_replay_capture(
+    response: Option<&Value>,
+    done_items: &BTreeMap<usize, Value>,
+    done_items_complete: bool,
+) -> Option<bitfun_agent_stream::ModelResponseReplayCapture> {
+    let terminal_output = response
+        .and_then(|response| response.get("output"))
+        .and_then(Value::as_array)
+        .filter(|output| !output.is_empty());
+    if let Some(capture) = terminal_output.and_then(|output| parse_responses_replay_capture(output))
+    {
+        return Some(capture);
+    }
+
+    if !done_items_complete || done_items.is_empty() {
+        return None;
+    }
+    if terminal_output.is_some_and(|output| output.len() != done_items.len()) {
+        return None;
+    }
+    if done_items
+        .keys()
+        .copied()
+        .enumerate()
+        .any(|(expected, actual)| expected != actual)
+    {
+        return None;
+    }
+
+    let output = done_items.values().cloned().collect::<Vec<_>>();
+    parse_responses_replay_capture(&output)
 }
 
 #[derive(Debug, Default, Clone)]
@@ -331,6 +365,8 @@ pub async fn handle_responses_stream(
     let mut saw_function_call = false;
     let mut tool_calls_by_output_index: HashMap<usize, InProgressToolCall> = HashMap::new();
     let mut tool_call_index_by_id: HashMap<String, usize> = HashMap::new();
+    let mut done_items_by_output_index: BTreeMap<usize, Value> = BTreeMap::new();
+    let mut done_items_complete = true;
     let mut stats = StreamStats::new("Responses");
     let mut timeout_controller = StreamTimeoutController::new(ttft_timeout, idle_timeout);
     let mut response_created_count = 0usize;
@@ -517,6 +553,11 @@ pub async fn handle_responses_stream(
                 let Some(item_value) = event.item else {
                     continue;
                 };
+                if let Some(output_index) = event.output_index {
+                    done_items_by_output_index.insert(output_index, item_value.clone());
+                } else {
+                    done_items_complete = false;
+                }
 
                 // For tool calls, prefer streaming deltas and only use item.done as a tail-filler / fallback.
                 if item_value.get("type").and_then(Value::as_str) == Some("function_call") {
@@ -553,6 +594,11 @@ pub async fn handle_responses_stream(
                 if received_finish_reason {
                     continue;
                 }
+                let model_response_replay = completed_replay_capture(
+                    event.response.as_ref(),
+                    &done_items_by_output_index,
+                    done_items_complete,
+                );
                 // Best-effort: use the final response object to fill any missing tool-call argument tail.
                 if let Some(response_val) = event.response.as_ref() {
                     if let Some(cache_key_hash) =
@@ -620,6 +666,7 @@ pub async fn handle_responses_stream(
                                 saw_function_call,
                             )),
                             finish_reason: Some("stop".to_string()),
+                            model_response_replay,
                             ..Default::default()
                         };
                         emit_unified_response(
@@ -652,6 +699,7 @@ pub async fn handle_responses_stream(
                                 saw_function_call,
                             )),
                             finish_reason: Some("stop".to_string()),
+                            model_response_replay,
                             ..Default::default()
                         };
                         emit_unified_response(
@@ -668,6 +716,11 @@ pub async fn handle_responses_stream(
                 if received_finish_reason {
                     continue;
                 }
+                let model_response_replay = completed_replay_capture(
+                    event.response.as_ref(),
+                    &done_items_by_output_index,
+                    done_items_complete,
+                );
                 if let Some(cache_key_hash) =
                     extract_response_prompt_cache_key_hash(event.response.as_ref())
                 {
@@ -682,6 +735,7 @@ pub async fn handle_responses_stream(
                                 saw_function_call,
                             )),
                             finish_reason: Some("stop".to_string()),
+                            model_response_replay,
                             ..Default::default()
                         };
                         emit_unified_response(
@@ -713,6 +767,7 @@ pub async fn handle_responses_stream(
                                 saw_function_call,
                             )),
                             finish_reason: Some("stop".to_string()),
+                            model_response_replay,
                             ..Default::default()
                         };
                         emit_unified_response(
@@ -796,14 +851,15 @@ pub async fn handle_responses_stream(
 #[cfg(test)]
 mod tests {
     use super::{
-        super::stream_stats::StreamStats, extract_api_error, extract_api_error_message,
-        handle_function_call_arguments_delta, handle_function_call_output_item_done,
-        responses_completed_tool_call_completion, InProgressToolCall, StreamTimeoutController,
+        super::stream_stats::StreamStats, completed_replay_capture, extract_api_error,
+        extract_api_error_message, handle_function_call_arguments_delta,
+        handle_function_call_output_item_done, responses_completed_tool_call_completion,
+        InProgressToolCall, StreamTimeoutController,
     };
     use bitfun_agent_stream::ToolCallCompletion;
     use bitfun_core_types::errors::ErrorCategory;
     use serde_json::json;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
     use tokio::sync::mpsc;
 
     #[test]
@@ -955,5 +1011,105 @@ mod tests {
         .expect_err("untracked output_index should fail");
 
         assert!(err.to_string().contains("untracked output_index 2"));
+    }
+
+    #[test]
+    fn completed_output_is_authoritative_for_replay_layout() {
+        let done_items = BTreeMap::from([(
+            0,
+            json!({ "type": "reasoning", "encrypted_content": "stale", "summary": [] }),
+        )]);
+        let response = json!({
+            "output": [
+                { "type": "reasoning", "encrypted_content": "final", "summary": [] },
+                { "type": "message", "role": "assistant", "content": [] }
+            ]
+        });
+
+        let capture =
+            completed_replay_capture(Some(&response), &done_items, true).expect("terminal capture");
+        assert_eq!(capture.items.len(), 2);
+        assert!(matches!(
+            &capture.items[0],
+            bitfun_core_types::ModelResponseReplayItem::OpaqueReasoning { opaque_state, .. }
+                if opaque_state == "final"
+        ));
+    }
+
+    #[test]
+    fn completed_empty_output_falls_back_to_ordered_done_items() {
+        let done_items = BTreeMap::from([
+            (
+                0,
+                json!({ "type": "reasoning", "encrypted_content": "opaque", "summary": [] }),
+            ),
+            (1, json!({ "type": "function_call", "call_id": "call_1" })),
+        ]);
+        let response = json!({ "output": [] });
+
+        let capture = completed_replay_capture(Some(&response), &done_items, true)
+            .expect("done-item fallback");
+        assert_eq!(capture.items.len(), 2);
+    }
+
+    #[test]
+    fn completed_output_without_opaque_state_falls_back_to_equivalent_done_items() {
+        let done_items = BTreeMap::from([
+            (
+                0,
+                json!({ "type": "reasoning", "encrypted_content": "opaque", "summary": [] }),
+            ),
+            (
+                1,
+                json!({ "type": "message", "role": "assistant", "content": [] }),
+            ),
+        ]);
+        let response = json!({
+            "output": [
+                { "type": "reasoning", "summary": [] },
+                { "type": "message", "role": "assistant", "content": [] }
+            ]
+        });
+
+        let capture = completed_replay_capture(Some(&response), &done_items, true)
+            .expect("equivalent done-item fallback");
+        assert!(matches!(
+            &capture.items[0],
+            bitfun_core_types::ModelResponseReplayItem::OpaqueReasoning { opaque_state, .. }
+                if opaque_state == "opaque"
+        ));
+    }
+
+    #[test]
+    fn completed_output_does_not_fall_back_to_a_shorter_done_item_subset() {
+        let done_items = BTreeMap::from([(
+            0,
+            json!({ "type": "reasoning", "encrypted_content": "opaque", "summary": [] }),
+        )]);
+        let response = json!({
+            "output": [
+                { "type": "reasoning", "summary": [] },
+                { "type": "message", "role": "assistant", "content": [] }
+            ]
+        });
+
+        assert!(completed_replay_capture(Some(&response), &done_items, true).is_none());
+    }
+
+    #[test]
+    fn incomplete_done_item_sequence_is_not_persisted() {
+        let done_items = BTreeMap::from([
+            (
+                0,
+                json!({ "type": "reasoning", "encrypted_content": "opaque", "summary": [] }),
+            ),
+            (
+                2,
+                json!({ "type": "message", "role": "assistant", "content": [] }),
+            ),
+        ]);
+
+        assert!(completed_replay_capture(None, &done_items, true).is_none());
+        assert!(completed_replay_capture(None, &done_items, false).is_none());
     }
 }

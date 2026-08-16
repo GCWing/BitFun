@@ -577,6 +577,7 @@ impl ExecutionEngine {
                 "bitfun-pc-v1-{}",
                 hex::encode(hasher.finalize())
             )),
+            model_binding_fingerprint: Some(model_binding_fingerprint.to_string()),
         }
     }
 
@@ -6481,6 +6482,14 @@ mod tests {
             .prompt_cache_route_key
             .as_deref()
             .is_some_and(|key| key.starts_with("bitfun-pc-v1-")));
+        assert_eq!(
+            first.model_binding_fingerprint.as_deref(),
+            Some("binding-1")
+        );
+        assert_eq!(
+            changed.model_binding_fingerprint.as_deref(),
+            Some("binding-2")
+        );
     }
 
     fn command_result(tool_name: &str, success: bool, exit_code: Option<i32>) -> Message {

@@ -8969,6 +8969,7 @@ impl SessionManager {
                 name: None,
                 is_error: None,
                 tool_image_attachments: None,
+                model_response_replay: None,
             },
             Message {
                 role: "user".to_string(),
@@ -8980,6 +8981,7 @@ impl SessionManager {
                 name: None,
                 is_error: None,
                 tool_image_attachments: None,
+                model_response_replay: None,
             },
         ];
 

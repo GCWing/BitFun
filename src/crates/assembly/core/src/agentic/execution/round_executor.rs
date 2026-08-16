@@ -42,6 +42,7 @@ use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
 };
 use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
+use bitfun_core_types::ModelResponseReplay;
 use bitfun_runtime_ports::PermissionRule;
 use log::{debug, error, warn};
 use std::sync::Arc;
@@ -217,6 +218,23 @@ impl RoundExecutor {
         parse_bitfun_memory_citation_payloads(payloads)
             .or_else(|| parse_bitfun_memory_citation(&stream_result.full_text))
             .map(Into::into)
+    }
+
+    fn bound_model_response_replay(
+        stream_result: &StreamResult,
+        context: &RoundContext,
+    ) -> Option<ModelResponseReplay> {
+        let capture = stream_result.model_response_replay.as_ref()?;
+        let model_binding_fingerprint = context
+            .model_request_context
+            .model_binding_fingerprint
+            .as_ref()?
+            .clone();
+        Some(ModelResponseReplay {
+            protocol: capture.protocol.clone(),
+            model_binding_fingerprint,
+            items: capture.items.clone(),
+        })
     }
 
     fn map_subagent_batch_execution_policy(
@@ -964,13 +982,15 @@ impl RoundExecutor {
             };
             let parsed_memory_citation =
                 Self::parsed_memory_citation_from_stream_result(&stream_result);
+            let model_response_replay = Self::bound_model_response_replay(&stream_result, &context);
             let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
             let assistant_message =
                 Message::assistant_with_reasoning(reasoning, clean_text, vec![])
                     .with_turn_id(context.dialog_turn_id.clone())
                     .with_round_id(round_id.clone())
                     .with_thinking_signature(stream_result.thinking_signature.clone())
-                    .with_memory_citation(parsed_memory_citation);
+                    .with_memory_citation(parsed_memory_citation)
+                    .with_model_response_replay(model_response_replay);
 
             debug!("Returning RoundResult: has_more_rounds=false");
             debug!(
@@ -1186,13 +1206,15 @@ impl RoundExecutor {
         };
         let parsed_memory_citation =
             Self::parsed_memory_citation_from_stream_result(&stream_result);
+        let model_response_replay = Self::bound_model_response_replay(&stream_result, &context);
         let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
         let assistant_message =
             Message::assistant_with_reasoning(reasoning, clean_text, tool_calls.clone())
                 .with_turn_id(context.dialog_turn_id.clone())
                 .with_round_id(round_id.clone())
                 .with_thinking_signature(stream_result.thinking_signature.clone())
-                .with_memory_citation(parsed_memory_citation);
+                .with_memory_citation(parsed_memory_citation)
+                .with_model_response_replay(model_response_replay);
 
         debug!(
             "Tool execution completed, creating message: assistant_msg_len={}, tool_results={}",
@@ -2011,6 +2033,7 @@ mod tests {
                 cache_creation_token_count: None,
             }),
             provider_metadata: Some(json!({ "finish_reason": "tool_calls" })),
+            model_response_replay: None,
             has_effective_output: false,
             first_chunk_ms: Some(10),
             first_visible_output_ms: None,

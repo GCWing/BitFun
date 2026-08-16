@@ -12,8 +12,8 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 pub use bitfun_agent_stream::{
-    HiddenTextBlock, HiddenTextTag, StreamProcessOptions, StreamProcessorError,
-    ToolCall as StreamToolCall,
+    HiddenTextBlock, HiddenTextTag, ModelResponseReplayCapture, StreamProcessOptions,
+    StreamProcessorError, ToolCall as StreamToolCall,
 };
 
 const MEMORY_CITATION_HIDDEN_TEXT_TAG: &str = "memory_citation";
@@ -29,6 +29,7 @@ pub struct StreamResult {
     pub tool_calls: Vec<ToolCall>,
     pub usage: Option<GeminiUsage>,
     pub provider_metadata: Option<Value>,
+    pub model_response_replay: Option<ModelResponseReplayCapture>,
     pub has_effective_output: bool,
     pub first_chunk_ms: Option<u64>,
     pub first_visible_output_ms: Option<u64>,
@@ -46,6 +47,7 @@ impl From<bitfun_agent_stream::StreamResult> for StreamResult {
             tool_calls: result.tool_calls.into_iter().map(Into::into).collect(),
             usage: result.usage.map(Into::into),
             provider_metadata: result.provider_metadata,
+            model_response_replay: result.model_response_replay,
             has_effective_output: result.has_effective_output,
             first_chunk_ms: result.first_chunk_ms,
             first_visible_output_ms: result.first_visible_output_ms,
