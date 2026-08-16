@@ -537,13 +537,9 @@ impl ExecutionEngine {
     const FINALIZE_USER_FOLLOWUP: &'static str =
         "Provide a final answer. You MUST not call any tools.";
 
-    fn model_request_context(
-        prompt_cache_lineage_id: &str,
-        model_binding_fingerprint: &str,
-    ) -> ModelRequestContext {
+    fn model_request_context(prompt_cache_lineage_id: &str) -> ModelRequestContext {
         ModelRequestContext {
             prompt_cache_route_key: Some(prompt_cache_lineage_id.to_string()),
-            model_binding_fingerprint: Some(model_binding_fingerprint.to_string()),
         }
     }
 
@@ -2494,7 +2490,7 @@ impl ExecutionEngine {
             .get("original_user_input")
             .cloned()
             .unwrap_or_default();
-        let (model_id, model_binding_fingerprint) = self
+        let (model_id, _) = self
             .resolve_model_id_for_turn(
                 session,
                 &context.agent_type,
@@ -2569,10 +2565,8 @@ impl ExecutionEngine {
         };
         Self::validate_frozen_model_contract(context).await?;
         Self::validate_frozen_reasoning_contract(context, ai_client.as_ref())?;
-        let model_request_context = Self::model_request_context(
-            session.effective_prompt_cache_lineage_id(),
-            &model_binding_fingerprint,
-        );
+        let model_request_context =
+            Self::model_request_context(session.effective_prompt_cache_lineage_id());
 
         let primary_model_facts = Self::resolve_primary_model_context(
             &model_id,
@@ -3417,7 +3411,7 @@ impl ExecutionEngine {
             }
         }
 
-        let (model_id, model_binding_fingerprint) = self
+        let (model_id, _) = self
             .resolve_model_id_for_turn(
                 &session,
                 &agent_type,
@@ -3495,10 +3489,8 @@ impl ExecutionEngine {
         };
         Self::validate_frozen_model_contract(&context).await?;
         Self::validate_frozen_reasoning_contract(&context, ai_client.as_ref())?;
-        let model_request_context = Self::model_request_context(
-            session.effective_prompt_cache_lineage_id(),
-            &model_binding_fingerprint,
-        );
+        let model_request_context =
+            Self::model_request_context(session.effective_prompt_cache_lineage_id());
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
         let primary_model_facts = Self::resolve_primary_model_context(
@@ -6436,26 +6428,18 @@ mod tests {
 
     #[test]
     fn provider_prompt_cache_route_key_depends_only_on_lineage() {
-        let first = ExecutionEngine::model_request_context("session-1", "binding-1");
-        let changed_binding = ExecutionEngine::model_request_context("session-1", "binding-2");
-        let changed_lineage = ExecutionEngine::model_request_context("session-2", "binding-1");
+        let first = ExecutionEngine::model_request_context("session-1");
+        let same_lineage = ExecutionEngine::model_request_context("session-1");
+        let changed_lineage = ExecutionEngine::model_request_context("session-2");
 
         assert_eq!(first.prompt_cache_route_key.as_deref(), Some("session-1"));
         assert_eq!(
             first.prompt_cache_route_key,
-            changed_binding.prompt_cache_route_key
+            same_lineage.prompt_cache_route_key
         );
         assert_ne!(
             first.prompt_cache_route_key,
             changed_lineage.prompt_cache_route_key
-        );
-        assert_eq!(
-            first.model_binding_fingerprint.as_deref(),
-            Some("binding-1")
-        );
-        assert_eq!(
-            changed_binding.model_binding_fingerprint.as_deref(),
-            Some("binding-2")
         );
     }
 

@@ -13,13 +13,6 @@ impl OpenAIMessageConverter {
     pub fn convert_messages_to_responses_input(
         messages: Vec<Message>,
     ) -> (Option<String>, Vec<Value>) {
-        Self::convert_messages_to_responses_input_with_context(messages, None)
-    }
-
-    pub fn convert_messages_to_responses_input_with_context(
-        messages: Vec<Message>,
-        model_binding_fingerprint: Option<&str>,
-    ) -> (Option<String>, Vec<Value>) {
         let mut instructions = Vec::new();
         let mut input = Vec::new();
 
@@ -37,9 +30,7 @@ impl OpenAIMessageConverter {
                     }
                 }
                 "assistant" => {
-                    if let Some(replay_items) =
-                        Self::convert_assistant_replay_items(&msg, model_binding_fingerprint)
-                    {
+                    if let Some(replay_items) = Self::convert_assistant_replay_items(&msg) {
                         input.extend(replay_items);
                         continue;
                     }
@@ -91,16 +82,9 @@ impl OpenAIMessageConverter {
         (instructions, input)
     }
 
-    fn convert_assistant_replay_items(
-        msg: &Message,
-        model_binding_fingerprint: Option<&str>,
-    ) -> Option<Vec<Value>> {
+    fn convert_assistant_replay_items(msg: &Message) -> Option<Vec<Value>> {
         let replay = msg.model_response_replay.as_ref()?;
-        let current_fingerprint = model_binding_fingerprint.filter(|value| !value.is_empty())?;
-        if replay.protocol != OPENAI_RESPONSES_REPLAY_PROTOCOL
-            || replay.model_binding_fingerprint != current_fingerprint
-            || replay.items.is_empty()
-        {
+        if replay.protocol != OPENAI_RESPONSES_REPLAY_PROTOCOL || replay.items.is_empty() {
             return None;
         }
 
@@ -554,7 +538,6 @@ mod tests {
         content: Option<&str>,
         tool_calls: Vec<ToolCall>,
         items: Vec<ModelResponseReplayItem>,
-        fingerprint: &str,
     ) -> Message {
         Message {
             role: "assistant".to_string(),
@@ -568,7 +551,6 @@ mod tests {
             tool_image_attachments: None,
             model_response_replay: Some(ModelResponseReplay {
                 protocol: "openai_responses".to_string(),
-                model_binding_fingerprint: fingerprint.to_string(),
                 items,
             }),
         }
@@ -585,7 +567,7 @@ mod tests {
     }
 
     #[test]
-    fn replays_reasoning_before_final_assistant_message_when_fingerprint_matches() {
+    fn replays_reasoning_before_final_assistant_message() {
         let message = assistant_with_replay(
             Some("done"),
             vec![],
@@ -593,13 +575,9 @@ mod tests {
                 opaque_reasoning("rs_1", "opaque_1"),
                 ModelResponseReplayItem::AssistantMessage,
             ],
-            "binding-1",
         );
 
-        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input_with_context(
-            vec![message],
-            Some("binding-1"),
-        );
+        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(vec![message]);
 
         assert_eq!(input.len(), 2);
         assert_eq!(input[0]["type"], json!("reasoning"));
@@ -637,13 +615,9 @@ mod tests {
                     call_id: "call_1".to_string(),
                 },
             ],
-            "binding-1",
         );
 
-        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input_with_context(
-            vec![message],
-            Some("binding-1"),
-        );
+        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(vec![message]);
 
         assert_eq!(
             input
@@ -655,28 +629,6 @@ mod tests {
         assert_eq!(input[1]["call_id"], json!("call_2"));
         assert_eq!(input[1]["arguments"], json!("{\"value\":2}"));
         assert_eq!(input[3]["call_id"], json!("call_1"));
-    }
-
-    #[test]
-    fn fingerprint_mismatch_uses_ordinary_responses_conversion() {
-        let message = assistant_with_replay(
-            Some("done"),
-            vec![],
-            vec![
-                opaque_reasoning("rs_1", "opaque_1"),
-                ModelResponseReplayItem::AssistantMessage,
-            ],
-            "binding-old",
-        );
-
-        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input_with_context(
-            vec![message],
-            Some("binding-new"),
-        );
-
-        assert_eq!(input.len(), 1);
-        assert_eq!(input[0]["type"], json!("message"));
-        assert!(input[0].get("encrypted_content").is_none());
     }
 
     #[test]
@@ -703,13 +655,9 @@ mod tests {
                     call_id: "call_1".to_string(),
                 },
             ],
-            "binding-1",
         );
 
-        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input_with_context(
-            vec![message],
-            Some("binding-1"),
-        );
+        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(vec![message]);
 
         assert_eq!(input.len(), 2);
         assert!(input.iter().all(|item| item["type"] == "function_call"));

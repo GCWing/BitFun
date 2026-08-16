@@ -653,17 +653,11 @@ pub struct AIConfig {
 pub struct ModelRequestContext {
     /// Stable, opaque routing identity for provider-side prompt-prefix caches.
     pub prompt_cache_route_key: Option<String>,
-    /// Fingerprint of the resolved provider/model/endpoint/request binding.
-    ///
-    /// Provider adapters use this only to decide whether opaque response state
-    /// from an earlier round is compatible with the current request.
-    pub model_binding_fingerprint: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelResponseReplay {
     pub protocol: String,
-    pub model_binding_fingerprint: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub items: Vec<ModelResponseReplayItem>,
 }

@@ -24,7 +24,7 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_responses_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::{Message, ModelRequestContext, ReasoningPresetAction, ToolDefinition};
+use crate::types::{Message, ReasoningPresetAction, ToolDefinition};
 use anyhow::Result;
 use log::debug;
 use serde_json::{json, Value};
@@ -184,7 +184,6 @@ pub(crate) async fn send_stream(
     extra_body: Option<Value>,
     max_tries: usize,
     trace: Option<ModelExchangeTraceConfig>,
-    request_context: Option<ModelRequestContext>,
 ) -> Result<StreamResponse> {
     let url = client.config.request_url.clone();
     debug!(
@@ -192,14 +191,8 @@ pub(crate) async fn send_stream(
         client.config.model, url, max_tries
     );
 
-    let model_binding_fingerprint = request_context
-        .as_ref()
-        .and_then(|context| context.model_binding_fingerprint.as_deref());
     let (instructions, response_input) =
-        OpenAIMessageConverter::convert_messages_to_responses_input_with_context(
-            messages,
-            model_binding_fingerprint,
-        );
+        OpenAIMessageConverter::convert_messages_to_responses_input(messages);
     let tools_flat = common::convert_tools_flat(tools);
     let request_body =
         try_build_request_body(client, instructions, response_input, tools_flat, extra_body)?;

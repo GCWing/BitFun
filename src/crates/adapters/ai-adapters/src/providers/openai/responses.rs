@@ -248,13 +248,7 @@ pub(crate) async fn send_stream(
     // self-contained so the standard Responses path stays untouched.
     if super::codex_chatgpt::is_codex_chatgpt_endpoint(&client.config.request_url) {
         return super::codex_chatgpt::send_stream(
-            client,
-            messages,
-            tools,
-            extra_body,
-            max_tries,
-            trace,
-            request_context,
+            client, messages, tools, extra_body, max_tries, trace,
         )
         .await;
     }
@@ -265,14 +259,8 @@ pub(crate) async fn send_stream(
         client.config.model, client.config.request_url, max_tries
     );
 
-    let model_binding_fingerprint = request_context
-        .as_ref()
-        .and_then(|context| context.model_binding_fingerprint.as_deref());
     let (instructions, response_input) =
-        OpenAIMessageConverter::convert_messages_to_responses_input_with_context(
-            messages,
-            model_binding_fingerprint,
-        );
+        OpenAIMessageConverter::convert_messages_to_responses_input(messages);
     let openai_tools = common::convert_tools_flat(tools);
     let request_body = try_build_request_body_with_context(
         client,
@@ -387,7 +375,6 @@ mod tests {
         let client = test_client();
         let request_context = ModelRequestContext {
             prompt_cache_route_key: Some("lineage-1".to_string()),
-            model_binding_fingerprint: Some("binding-1".to_string()),
         };
         let request_body = build_request_body_with_context(
             &client,

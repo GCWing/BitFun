@@ -793,7 +793,6 @@ mod tests {
         let message = Message::assistant("done".to_string()).with_model_response_replay(Some(
             ModelResponseReplay {
                 protocol: "openai_responses".to_string(),
-                model_binding_fingerprint: "binding-1".to_string(),
                 items: vec![ModelResponseReplayItem::OpaqueReasoning {
                     item_id: Some("rs_1".to_string()),
                     summary: vec![],
@@ -810,7 +809,6 @@ mod tests {
             .expect("restored replay");
 
         assert_eq!(replay.protocol, "openai_responses");
-        assert_eq!(replay.model_binding_fingerprint, "binding-1");
         assert!(matches!(
             &replay.items[0],
             ModelResponseReplayItem::OpaqueReasoning { opaque_state, .. }
@@ -836,19 +834,12 @@ mod tests {
         let message = Message::assistant("done".to_string()).with_model_response_replay(Some(
             ModelResponseReplay {
                 protocol: "openai_responses".to_string(),
-                model_binding_fingerprint: "binding-1".to_string(),
                 items: vec![ModelResponseReplayItem::AssistantMessage],
             },
         ));
 
         let ai_message = AIMessage::from(message);
-        assert_eq!(
-            ai_message
-                .model_response_replay
-                .as_ref()
-                .map(|replay| replay.model_binding_fingerprint.as_str()),
-            Some("binding-1")
-        );
+        assert!(ai_message.model_response_replay.is_some());
     }
 
     #[test]

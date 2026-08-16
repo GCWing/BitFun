@@ -220,19 +220,10 @@ impl RoundExecutor {
             .map(Into::into)
     }
 
-    fn bound_model_response_replay(
-        stream_result: &StreamResult,
-        context: &RoundContext,
-    ) -> Option<ModelResponseReplay> {
+    fn model_response_replay(stream_result: &StreamResult) -> Option<ModelResponseReplay> {
         let capture = stream_result.model_response_replay.as_ref()?;
-        let model_binding_fingerprint = context
-            .model_request_context
-            .model_binding_fingerprint
-            .as_ref()?
-            .clone();
         Some(ModelResponseReplay {
             protocol: capture.protocol.clone(),
-            model_binding_fingerprint,
             items: capture.items.clone(),
         })
     }
@@ -982,7 +973,7 @@ impl RoundExecutor {
             };
             let parsed_memory_citation =
                 Self::parsed_memory_citation_from_stream_result(&stream_result);
-            let model_response_replay = Self::bound_model_response_replay(&stream_result, &context);
+            let model_response_replay = Self::model_response_replay(&stream_result);
             let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
             let assistant_message =
                 Message::assistant_with_reasoning(reasoning, clean_text, vec![])
@@ -1206,7 +1197,7 @@ impl RoundExecutor {
         };
         let parsed_memory_citation =
             Self::parsed_memory_citation_from_stream_result(&stream_result);
-        let model_response_replay = Self::bound_model_response_replay(&stream_result, &context);
+        let model_response_replay = Self::model_response_replay(&stream_result);
         let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
         let assistant_message =
             Message::assistant_with_reasoning(reasoning, clean_text, tool_calls.clone())
