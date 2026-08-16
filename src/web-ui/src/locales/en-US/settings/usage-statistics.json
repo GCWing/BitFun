@@ -1,6 +1,6 @@
 {
   "title": "Usage Statistics",
-  "subtitle": "Historical model call statistics: requests, tokens, and estimated cost across your models, providers, and endpoints.",
+  "subtitle": "Historical model call statistics: requests, tokens, and cache hit rates across your models, providers, and endpoints.",
   "timeRange": {
     "label": "Time range",
     "last24Hours": "Last 24 Hours",
@@ -24,8 +24,8 @@
   "summary": {
     "requests": "Requests",
     "tokens": "Total Tokens",
-    "actualCost": "Actual Cost",
-    "standardCost": "Standard Cost"
+    "cachedTokens": "Cached Tokens",
+    "cacheHitRate": "Cache Hit Rate"
   },
   "distributions": {
     "byModel": "Model Distribution",
@@ -48,8 +48,6 @@
     "endpoint": "Endpoint",
     "requests": "Requests",
     "tokens": "Token",
-    "actual": "Actual",
-    "standard": "Standard"
-  },
-  "footnote": "Costs are estimates based on the models.dev catalog prices. Actual and standard cost use the same catalog because BitFun does not apply per-group price overrides."
+    "cacheHitRate": "Cache Hit Rate"
+  }
 }
