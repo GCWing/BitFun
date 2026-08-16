@@ -2,9 +2,10 @@
 //!
 //! The pure functions in this module own the shape of the usage statistics
 //! surfaced by the settings "usage statistics" page: totals, distribution
-//! breakdowns (model / provider group / endpoint) and a token trend series.
-//! Callers supply per-record attribution (provider, endpoint, optional price)
-//! so the module stays free of configuration and catalog dependencies.
+//! breakdowns (model / provider group / endpoint) with per-entry cache hit
+//! rates, and a token trend series. Callers supply per-record attribution
+//! (provider group, endpoint) so the module stays free of configuration and
+//! catalog dependencies.
 
 use super::types::TokenUsageRecord;
 use chrono::{DateTime, Utc};
@@ -19,30 +20,6 @@ pub enum UsageGranularity {
     Day,
 }
 
-/// Model pricing in USD per one million tokens.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ModelPrice {
-    pub input: f64,
-    pub output: f64,
-    pub cache_read: f64,
-    pub cache_write: f64,
-}
-
-impl ModelPrice {
-    /// Estimated USD cost of a single record.
-    ///
-    /// Cached (cache HIT) tokens are billed at the cache-read price instead of
-    /// the full input price; Anthropic-style cache WRITE tokens are billed at
-    /// the cache-write price on top of the remaining input.
-    pub fn estimate_cost(&self, record: &TokenUsageRecord) -> f64 {
-        let billed_input = record.input_tokens.saturating_sub(record.cached_tokens) as f64;
-        billed_input * self.input / 1_000_000.0
-            + record.cached_tokens as f64 * self.cache_read / 1_000_000.0
-            + record.output_tokens as f64 * self.output / 1_000_000.0
-            + record.cache_write_tokens as f64 * self.cache_write / 1_000_000.0
-    }
-}
-
 /// Per-record attribution resolved by the caller.
 #[derive(Debug, Clone)]
 pub struct UsageAttribution {
@@ -50,8 +27,6 @@ pub struct UsageAttribution {
     pub group: String,
     /// Endpoint label (e.g. "api.openai.com/v1/chat/completions").
     pub endpoint: String,
-    /// Optional pricing used to estimate the record cost.
-    pub price: Option<ModelPrice>,
 }
 
 /// One row of a distribution breakdown (model / group / endpoint).
@@ -61,8 +36,28 @@ pub struct UsageStatisticsEntry {
     pub name: String,
     pub requests: u32,
     pub tokens: u64,
-    /// Estimated cost in USD.
-    pub cost: f64,
+    /// Cache hit ratio (0.0..=1.0) for this entry when any request reported
+    /// cache telemetry, otherwise `None`.
+    pub cache_hit_rate: Option<f64>,
+    /// Cache HIT tokens served for this entry.
+    #[serde(skip)]
+    pub cached_tokens: u64,
+    /// Prompt input tokens from requests that reported cache telemetry.
+    #[serde(skip)]
+    pub reported_input_tokens: u64,
+}
+
+impl UsageStatisticsEntry {
+    fn new(name: String) -> Self {
+        Self {
+            name,
+            requests: 0,
+            tokens: 0,
+            cache_hit_rate: None,
+            cached_tokens: 0,
+            reported_input_tokens: 0,
+        }
+    }
 }
 
 /// One bucket of the token usage trend.
@@ -74,7 +69,7 @@ pub struct UsageTrendPoint {
     pub bucket: DateTime<Utc>,
     pub input_tokens: u64,
     pub output_tokens: u64,
-    /// Tokens served from prefix cache (cache HIT), billed at cache-read price.
+    /// Tokens served from prefix cache (cache HIT).
     pub cache_read_tokens: u64,
     /// Tokens written into the cache (Anthropic cache WRITE).
     pub cache_write_tokens: u64,
@@ -93,8 +88,9 @@ pub struct UsageStatistics {
     pub total_output_tokens: u64,
     pub total_cached_tokens: u64,
     pub total_cache_write_tokens: u64,
-    /// Estimated total cost in USD (sum of per-record estimates when priced).
-    pub total_cost: f64,
+    /// Prompt input tokens from requests that reported cache telemetry. Together
+    /// with `total_cached_tokens` it yields the overall cache hit rate.
+    pub total_cache_reported_input_tokens: u64,
     pub by_model: Vec<UsageStatisticsEntry>,
     pub by_group: Vec<UsageStatisticsEntry>,
     pub by_endpoint: Vec<UsageStatisticsEntry>,
@@ -111,8 +107,8 @@ const MAX_TREND_POINTS: usize = 800;
 
 /// Aggregate raw records into dashboard statistics.
 ///
-/// `attribute` maps every record to its provider group, endpoint label and
-/// optional price; the aggregation itself is pure.
+/// `attribute` maps every record to its provider group and endpoint label; the
+/// aggregation itself is pure.
 pub fn aggregate_statistics<F>(
     records: &[TokenUsageRecord],
     granularity: UsageGranularity,
@@ -126,7 +122,7 @@ where
     let mut total_output = 0u64;
     let mut total_cached = 0u64;
     let mut total_cache_write = 0u64;
-    let mut total_cost = 0.0f64;
+    let mut total_cache_reported_input = 0u64;
 
     let mut by_model: HashMap<String, UsageStatisticsEntry> = HashMap::new();
     let mut by_group: HashMap<String, UsageStatisticsEntry> = HashMap::new();
@@ -138,32 +134,14 @@ where
         total_output += record.output_tokens as u64;
         total_cached += record.cached_tokens as u64;
         total_cache_write += record.cache_write_tokens as u64;
+        if record.cached_tokens_available {
+            total_cache_reported_input += record.input_tokens as u64;
+        }
 
         let attribution = attribute(record);
-        let cost = attribution
-            .price
-            .map(|price| price.estimate_cost(record))
-            .unwrap_or(0.0);
-        total_cost += cost;
-
-        accumulate_entry(
-            &mut by_model,
-            record.effective_model_name.clone(),
-            record.total_tokens as u64,
-            cost,
-        );
-        accumulate_entry(
-            &mut by_group,
-            attribution.group,
-            record.total_tokens as u64,
-            cost,
-        );
-        accumulate_entry(
-            &mut by_endpoint,
-            attribution.endpoint,
-            record.total_tokens as u64,
-            cost,
-        );
+        accumulate_entry(&mut by_model, record.effective_model_name.clone(), record);
+        accumulate_entry(&mut by_group, attribution.group, record);
+        accumulate_entry(&mut by_endpoint, attribution.endpoint, record);
     }
 
     let (trend, effective_granularity) = build_trend(records, granularity);
@@ -175,10 +153,10 @@ where
         total_output_tokens: total_output,
         total_cached_tokens: total_cached,
         total_cache_write_tokens: total_cache_write,
-        total_cost,
-        by_model: sort_entries(by_model),
-        by_group: sort_entries(by_group),
-        by_endpoint: sort_entries(by_endpoint),
+        total_cache_reported_input_tokens: total_cache_reported_input,
+        by_model: finalize_entries(by_model),
+        by_group: finalize_entries(by_group),
+        by_endpoint: finalize_entries(by_endpoint),
         trend,
         granularity: effective_granularity,
     }
@@ -187,22 +165,25 @@ where
 fn accumulate_entry(
     map: &mut HashMap<String, UsageStatisticsEntry>,
     name: String,
-    tokens: u64,
-    cost: f64,
+    record: &TokenUsageRecord,
 ) {
-    let entry = map.entry(name.clone()).or_insert(UsageStatisticsEntry {
-        name,
-        requests: 0,
-        tokens: 0,
-        cost: 0.0,
-    });
+    let entry = map
+        .entry(name.clone())
+        .or_insert_with(|| UsageStatisticsEntry::new(name));
     entry.requests += 1;
-    entry.tokens += tokens;
-    entry.cost += cost;
+    entry.tokens += record.total_tokens as u64;
+    entry.cached_tokens += record.cached_tokens as u64;
+    if record.cached_tokens_available {
+        entry.reported_input_tokens += record.input_tokens as u64;
+    }
 }
 
-fn sort_entries(map: HashMap<String, UsageStatisticsEntry>) -> Vec<UsageStatisticsEntry> {
+fn finalize_entries(map: HashMap<String, UsageStatisticsEntry>) -> Vec<UsageStatisticsEntry> {
     let mut entries = map.into_values().collect::<Vec<_>>();
+    for entry in &mut entries {
+        entry.cache_hit_rate = (entry.reported_input_tokens > 0)
+            .then(|| entry.cached_tokens as f64 / entry.reported_input_tokens as f64);
+    }
     entries.sort_by(|left, right| {
         right
             .tokens
@@ -381,11 +362,10 @@ mod tests {
         }
     }
 
-    fn attribution(price: Option<ModelPrice>) -> impl Fn(&TokenUsageRecord) -> UsageAttribution {
-        move |record| UsageAttribution {
+    fn attribution() -> impl Fn(&TokenUsageRecord) -> UsageAttribution {
+        |record| UsageAttribution {
             group: format!("provider-of-{}", record.effective_model_name),
             endpoint: format!("/endpoint-of-{}", record.effective_model_name),
-            price,
         }
     }
 
@@ -405,15 +385,8 @@ mod tests {
             ),
             record("model-b", t0 + Duration::hours(2), 500, 50, 0, 0, false),
         ];
-        let price = ModelPrice {
-            input: 0.5,
-            output: 1.5,
-            cache_read: 0.05,
-            cache_write: 1.25,
-        };
 
-        let stats =
-            aggregate_statistics(&records, UsageGranularity::Hour, attribution(Some(price)));
+        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
 
         assert_eq!(stats.total_requests, 3);
         assert_eq!(stats.total_input_tokens, 3500);
@@ -421,16 +394,7 @@ mod tests {
         assert_eq!(stats.total_cached_tokens, 500);
         assert_eq!(stats.total_cache_write_tokens, 100);
         assert_eq!(stats.total_tokens, 4050);
-
-        let expected_cost = 500.0 * 0.5 / 1e6
-            + 500.0 * 0.05 / 1e6
-            + 200.0 * 1.5 / 1e6
-            + 2000.0 * 0.5 / 1e6
-            + 300.0 * 1.5 / 1e6
-            + 100.0 * 1.25 / 1e6
-            + 500.0 * 0.5 / 1e6
-            + 50.0 * 1.5 / 1e6;
-        assert!((stats.total_cost - expected_cost).abs() < 1e-12);
+        assert_eq!(stats.total_cache_reported_input_tokens, 1000);
 
         assert_eq!(stats.by_model.len(), 2);
         let model_a = stats
@@ -440,21 +404,28 @@ mod tests {
             .unwrap();
         assert_eq!(model_a.requests, 2);
         assert_eq!(model_a.tokens, 3500);
-        assert!(
-            (model_a.cost - expected_cost + 500.0 * 0.5 / 1e6 + 50.0 * 1.5 / 1e6).abs() < 1e-12
-        );
+        assert_eq!(model_a.cached_tokens, 500);
+        assert_eq!(model_a.reported_input_tokens, 1000);
+        assert!((model_a.cache_hit_rate.unwrap() - 0.5).abs() < 1e-9);
+
+        let model_b = stats
+            .by_model
+            .iter()
+            .find(|entry| entry.name == "model-b")
+            .unwrap();
+        assert!(model_b.cache_hit_rate.is_none());
 
         assert_eq!(stats.by_group.len(), 2);
         assert_eq!(stats.by_endpoint.len(), 2);
     }
 
     #[test]
-    fn missing_price_yields_zero_cost() {
+    fn entry_without_cache_telemetry_has_no_hit_rate() {
         let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
         let records = vec![record("model-a", t0, 100, 100, 0, 0, false)];
-        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution(None));
-        assert_eq!(stats.total_cost, 0.0);
-        assert_eq!(stats.by_model[0].cost, 0.0);
+        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
+        assert_eq!(stats.by_model[0].cache_hit_rate, None);
+        assert_eq!(stats.total_cache_reported_input_tokens, 0);
     }
 
     #[test]
@@ -464,7 +435,7 @@ mod tests {
             record("model-a", t0, 100, 0, 0, 0, false),
             record("model-a", t0 + Duration::hours(3), 200, 0, 0, 0, false),
         ];
-        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution(None));
+        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         assert_eq!(stats.granularity, UsageGranularity::Hour);
         assert_eq!(stats.trend.len(), 4);
         assert_eq!(stats.trend[0].input_tokens, 100);
@@ -483,7 +454,7 @@ mod tests {
             record("model-a", t0, 1000, 0, 250, 0, true),
             record("model-b", t0 + Duration::minutes(10), 100, 0, 0, 0, false),
         ];
-        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution(None));
+        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         let point = &stats.trend[0];
         assert_eq!(point.input_tokens, 1100);
         assert_eq!(point.cache_read_tokens, 250);
@@ -498,14 +469,14 @@ mod tests {
             record("model-a", t0, 100, 0, 0, 0, false),
             record("model-a", t0 + Duration::days(60), 200, 0, 0, 0, false),
         ];
-        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution(None));
+        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         assert_eq!(stats.granularity, UsageGranularity::Day);
         assert_eq!(stats.trend.len(), 61);
     }
 
     #[test]
     fn empty_records_produce_empty_statistics() {
-        let stats = aggregate_statistics(&[], UsageGranularity::Hour, attribution(None));
+        let stats = aggregate_statistics(&[], UsageGranularity::Hour, attribution());
         assert_eq!(stats.total_requests, 0);
         assert_eq!(stats.trend.len(), 0);
         assert!(stats.by_model.is_empty());

@@ -25,8 +25,8 @@ export interface UsageStatisticsEntry {
   name: string;
   requests: number;
   tokens: number;
-  /** Estimated cost in USD. */
-  cost: number;
+  /** Cache hit ratio (0.0..=1.0) when any request reported cache telemetry. */
+  cacheHitRate: number | null;
 }
 
 export interface UsageTrendPoint {
@@ -47,7 +47,8 @@ export interface UsageStatistics {
   totalOutputTokens: number;
   totalCachedTokens: number;
   totalCacheWriteTokens: number;
-  totalCost: number;
+  /** Prompt input tokens from requests that reported cache telemetry. */
+  totalCacheReportedInputTokens: number;
   byModel: UsageStatisticsEntry[];
   byGroup: UsageStatisticsEntry[];
   byEndpoint: UsageStatisticsEntry[];

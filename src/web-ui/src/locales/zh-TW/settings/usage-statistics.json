@@ -1,6 +1,6 @@
 {
   "title": "調用統計",
-  "subtitle": "歷史模型調用情況統計：按模型、分組與端點統計請求數、Token 用量與估算費用。",
+  "subtitle": "歷史模型調用情況統計：按模型、分組與端點統計請求數、Token 用量與快取命中率。",
   "timeRange": {
     "label": "時間範圍",
     "last24Hours": "近24小時",
@@ -24,8 +24,8 @@
   "summary": {
     "requests": "請求數",
     "tokens": "Token 總量",
-    "actualCost": "實際費用",
-    "standardCost": "標準費用"
+    "cachedTokens": "快取命中 Token",
+    "cacheHitRate": "快取命中率"
   },
   "distributions": {
     "byModel": "模型分佈",
@@ -48,8 +48,6 @@
     "endpoint": "端點",
     "requests": "請求",
     "tokens": "Token",
-    "actual": "實際",
-    "standard": "標準"
-  },
-  "footnote": "費用基於 models.dev 目錄價估算。BitFun 未提供分組級價格覆寫，因此實際費用與標準費用採用同一目錄價。"
+    "cacheHitRate": "快取命中率"
+  }
 }

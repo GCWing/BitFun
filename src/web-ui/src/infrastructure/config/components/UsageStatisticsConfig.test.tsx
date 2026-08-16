@@ -53,15 +53,15 @@ const SAMPLE_STATS: UsageStatistics = {
   totalOutputTokens: 400_000,
   totalCachedTokens: 4_200_000,
   totalCacheWriteTokens: 0,
-  totalCost: 0.056,
+  totalCacheReportedInputTokens: 4_400_000,
   byModel: [
-    { name: 'deepseek-v4-flash', requests: 47, tokens: 4_800_000, cost: 0.056 },
+    { name: 'deepseek-v4-flash', requests: 47, tokens: 4_800_000, cacheHitRate: 0.95 },
   ],
   byGroup: [
-    { name: 'DeepSeek', requests: 47, tokens: 4_800_000, cost: 0.056 },
+    { name: 'DeepSeek', requests: 47, tokens: 4_800_000, cacheHitRate: 0.95 },
   ],
   byEndpoint: [
-    { name: 'api.openbitfun.com/v1/chat/completions', requests: 47, tokens: 4_800_000, cost: 0.056 },
+    { name: 'api.openbitfun.com/v1/chat/completions', requests: 47, tokens: 4_800_000, cacheHitRate: 0.95 },
   ],
   trend: [
     {
