@@ -281,11 +281,11 @@ plugin、Hook、完整 Client 或 TUI 插件入口。与其独立的 standalone 
 
 当前 Rust 边界调整至少运行：
 
-- `cargo test -p bitfun-runtime-ports --test plugin_runtime_contracts`
-- `cargo test -p bitfun-runtime-ports --test plugin_runtime_diagnostics_contracts`
+- `cargo test --locked -p bitfun-runtime-ports --no-default-features --features plugin-runtime --test plugin_runtime_contracts plugin_runtime_contracts`
+- `cargo test --locked -p bitfun-runtime-ports --no-default-features --features plugin-runtime --test plugin_runtime_contracts plugin_runtime_diagnostics_contracts`
 - `cargo test -p bitfun-plugin-runtime-client`
 - `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`
-- `cargo test -p bitfun-core plugin_runtime::tests --lib`
+- `cargo test -p bitfun-core --no-default-features --features plugin-runtime --lib plugin_runtime::tests`
 - `node scripts/check-core-boundaries.mjs`
 
 目标 Plugin Host 还必须使用固定版本真实 fixture 验证：

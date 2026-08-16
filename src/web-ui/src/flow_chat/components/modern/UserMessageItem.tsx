@@ -12,8 +12,14 @@ import { flowChatManager } from '../../services/FlowChatManager';
 import { useFlowChatContext } from './FlowChatContext';
 import { useActiveSession } from '../../store/modernFlowChatStore';
 import { flowChatStore } from '../../store/FlowChatStore';
+import {
+  FLOWCHAT_TURNS_ROLLED_BACK_EVENT,
+  type FlowChatTurnsRolledBackRequest,
+} from '../../events/flowchatNavigation';
 import { useMessageEditStore } from '../../store/messageEditStore';
-import { snapshotAPI } from '@/infrastructure/api';
+import { useSessionMutationStore } from '../../store/sessionMutationStore';
+import { useSessionStateMachine } from '../../hooks/useSessionStateMachine';
+import { SessionExecutionState, stateMachineManager } from '../../state-machine';
 import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -27,6 +33,7 @@ import {
   describeUserMessageEditImpact,
   editAndRerunUserMessage,
 } from '../../services/UserMessageEditService';
+import { rollbackSessionToTurn } from '../../services/SessionRollbackService';
 import { createLogger } from '@/shared/utils/logger';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { SessionUsageReportCard } from '../usage/SessionUsageReportCard';
@@ -101,7 +108,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
     const [hasOverflow, setHasOverflow] = useState(false);
-    const [isRollingBack, setIsRollingBack] = useState(false);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     // Fine-grained selectors: only the message being edited re-renders on
     // draft keystrokes; other list items subscribe to booleans that rarely flip.
@@ -144,6 +150,16 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const resolvedTurnStatus = dialogTurn?.status ?? turnStatus;
     const isFailed = resolvedTurnStatus === 'error';
     const resolvedSessionId = sessionId ?? currentSession?.sessionId;
+    const sessionMachine = useSessionStateMachine(resolvedSessionId ?? null);
+    const sessionExecutionState = sessionMachine && sessionMachine.sessionId === resolvedSessionId
+      ? sessionMachine.currentState
+      : resolvedSessionId
+        ? stateMachineManager.getCurrentState(resolvedSessionId)
+        : SessionExecutionState.IDLE;
+    const isSessionIdle = sessionExecutionState === SessionExecutionState.IDLE;
+    const sessionMutation = useSessionMutationStore(s => (
+      resolvedSessionId ? s.mutations.get(resolvedSessionId) : undefined
+    ));
     const resolvedAbsoluteTurnIndex = absoluteTurnIndex ?? (
       currentSession ? absoluteSessionTurnIndexForId(currentSession, turnId) : undefined
     );
@@ -160,7 +176,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       !!resolvedSessionId &&
       actionTurnIndex >= 0 &&
       !isRemoteSession &&
-      !isRollingBack &&
+      isSessionIdle &&
+      !sessionMutation &&
       !isEditSubmitting;
     const canEditBase =
       allowUserMessageEdit &&
@@ -170,7 +187,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       !isThreadGoalSystemMessage &&
       !isSystemTriggered &&
       !steeringStatus;
-    const canEdit = canEditBase && !isEditSubmitting && !isRollingBack;
+    const canEdit = canEditBase && isSessionIdle && !isEditSubmitting && !sessionMutation;
     const canShowEditAction = allowUserMessageEdit && !isFailed && !isThreadGoalSystemMessage;
     const editDisabledReason = isRemoteSession
       ? t('message.editDisabledRemote')
@@ -180,11 +197,15 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           ? t('message.cannotEdit')
           : !resolvedSessionId || actionTurnIndex < 0
               ? t('message.editDisabledHistoryNotReady')
+              : !isSessionIdle
+                ? t('message.editDisabledBusy')
               : t('message.cannotEdit');
     const rollbackTooltip = canRollback
       ? t('message.rollbackTo', { index: actionTurnIndex + 1 })
       : isRemoteSession
         ? t('message.rollbackDisabledRemote')
+        : !isSessionIdle
+          ? t('message.rollbackDisabledBusy')
         : t('message.cannotRollback');
     const steeringTag = steeringStatus === 'pending'
       ? {
@@ -274,43 +295,24 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       );
       if (!confirmed) return;
 
-      setIsRollingBack(true);
       try {
-        const historyReady = await flowChatStore.ensureSessionFullHistory(
-          resolvedSessionId,
-          'user-message-rollback',
-        );
-        const hydratedTurnIndex = flowChatStore
-          .getState()
-          .sessions
-          .get(resolvedSessionId)
-          ?.dialogTurns.findIndex(turn => turn.id === turnId) ?? -1;
-        if (!historyReady || hydratedTurnIndex < 0) {
-          throw new Error(t('message.cannotRollback'));
-        }
-
-        const restoredFiles = await snapshotAPI.rollbackToTurn(
-          resolvedSessionId,
-          hydratedTurnIndex,
-          true,
-        );
-
-        // 1) Truncate local dialog turns from this index.
-        flowChatStore.truncateDialogTurnsFrom(resolvedSessionId, hydratedTurnIndex);
-
-        // 2) Refresh file tree and open editors.
-        const { globalEventBus } = await import('@/infrastructure/event-bus');
-        globalEventBus.emit('file-tree:refresh');
-        restoredFiles.forEach(filePath => {
-          globalEventBus.emit('editor:file-changed', { filePath });
+        const result = await rollbackSessionToTurn({
+          sessionId: resolvedSessionId,
+          targetTurnId: turnId,
+          kind: 'rollback',
         });
 
-        // 3) Restore the original user input back into the chat input box.
-        //    Rollback is an explicit user action — always fill to avoid the
-        //    content silently disappearing when the input already has text.
-        if (messageContent.trim().length > 0) {
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent<FlowChatTurnsRolledBackRequest>(
+            FLOWCHAT_TURNS_ROLLED_BACK_EVENT,
+            { detail: { sessionId: resolvedSessionId, fromTurnIndex: result.fromTurnIndex } },
+          ));
+        });
+
+        const composerContent = result.composerText ?? messageContent;
+        if (composerContent.trim().length > 0) {
           globalEventBus.emit('fill-chat-input', {
-            content: messageContent,
+            content: composerContent,
             ...(composerPresentation ? { composerPresentation } : {}),
           });
         }
@@ -319,8 +321,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       } catch (error) {
         log.error('Rollback failed', error);
         notificationService.error(`${t('message.rollbackFailed')}: ${error instanceof Error ? error.message : String(error)}`);
-      } finally {
-        setIsRollingBack(false);
       }
     }, [actionTurnIndex, canRollback, composerPresentation, resolvedSessionId, t, turnId, messageContent]);
 
@@ -361,33 +361,21 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 
       setEditSubmitting(true);
       try {
-        const historyReady = await flowChatStore.ensureSessionFullHistory(
-          resolvedSessionId,
-          'user-message-edit',
-        );
-        const hydratedTurnIndex = flowChatStore
-          .getState()
-          .sessions
-          .get(resolvedSessionId)
-          ?.dialogTurns.findIndex(turn => turn.id === turnId) ?? -1;
-        if (!historyReady || hydratedTurnIndex < 0) {
-          throw new Error(t('message.editDisabledHistoryNotReady'));
-        }
-
         await editAndRerunUserMessage({
           sessionId: resolvedSessionId,
           turnId,
-          turnIndex: hydratedTurnIndex,
           originalContent: messageContent,
           editedContent,
           agentType: currentSession?.mode,
-          rerun: (content, agentType) => {
+          rerun: (content, agentType, sessionMutationLeaseId) => {
             if (!editedPresentation) {
               return flowChatManager.sendMessage(
                 content,
                 resolvedSessionId,
                 undefined,
                 agentType,
+                undefined,
+                { sessionMutationLeaseId },
               );
             }
 
@@ -398,7 +386,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               payload.displayMessage,
               agentType,
               undefined,
-              { userMessageMetadata: payload.userMessageMetadata },
+              {
+                userMessageMetadata: payload.userMessageMetadata,
+                sessionMutationLeaseId,
+              },
             );
           },
         });
@@ -539,6 +530,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
             presentation={composerPresentation}
             workspacePath={currentSession?.workspacePath}
             workspaceId={currentSession?.workspaceId}
+            remoteConnectionId={
+              currentSession?.remoteConnectionId
+              || currentSession?.config?.remoteConnectionId
+            }
             excludeSessionId={resolvedSessionId}
           />
         ) : (
@@ -644,7 +639,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     disabled={!canRollback}
                     title={rollbackTooltip}
                   >
-                    {isRollingBack ? (
+                    {sessionMutation?.kind === 'rollback' && sessionMutation.targetTurnId === turnId ? (
                       <Loader2 size={14} className="user-message-item__rollback-spinner" />
                     ) : (
                       <RotateCcw size={14} />

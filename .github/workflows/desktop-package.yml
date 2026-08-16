@@ -7,9 +7,21 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Tag name to build (e.g. v0.2.0). Leave empty to build from HEAD."
+        description: "Release tag (stable: v0.2.18, beta: v0.2.18-beta.1)."
         required: false
         type: string
+      checkout_ref:
+        description: "Commit, branch, or tag to build. Defaults to tag_name, then HEAD."
+        required: false
+        type: string
+      release_channel:
+        description: "Immutable update channel compiled into the Desktop artifact."
+        required: false
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
       upload_to_release:
         description: "Upload built artifacts to the release specified by tag_name."
         required: false
@@ -26,8 +38,8 @@ permissions:
   packages: write
 
 concurrency:
-  group: desktop-package-${{ github.event.release.tag_name || inputs.tag_name || github.sha }}
-  cancel-in-progress: true
+  group: desktop-package-${{ (github.event.release.prerelease || inputs.release_channel == 'beta') && 'beta' || github.event.release.tag_name || inputs.tag_name || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   # ── Resolve version info ───────────────────────────────────────────
@@ -39,9 +51,12 @@ jobs:
       release_tag: ${{ steps.meta.outputs.release_tag }}
       upload_to_release: ${{ steps.meta.outputs.upload_to_release }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
+      release_channel: ${{ steps.meta.outputs.release_channel }}
       relay_image_only: ${{ steps.meta.outputs.relay_image_only }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Resolve version metadata
         id: meta
@@ -51,6 +66,8 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
           INPUT_TAG_NAME: ${{ inputs.tag_name }}
+          INPUT_CHECKOUT_REF: ${{ inputs.checkout_ref }}
+          INPUT_RELEASE_CHANNEL: ${{ inputs.release_channel }}
           INPUT_UPLOAD_TO_RELEASE: ${{ inputs.upload_to_release }}
           INPUT_RELAY_IMAGE_ONLY: ${{ inputs.relay_image_only }}
         run: |
@@ -61,13 +78,21 @@ jobs:
             VERSION="${TAG#v}"
             UPLOAD="true"
             CHECKOUT_REF="${TAG}"
+            if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
+              CHANNEL="beta"
+            else
+              CHANNEL="stable"
+            fi
           elif [[ -n "${INPUT_TAG_NAME}" ]]; then
             TAG="${INPUT_TAG_NAME}"
             VERSION="${TAG#v}"
+            CHANNEL="${INPUT_RELEASE_CHANNEL:-stable}"
             # A one-off image backfill must use the workflow branch: an older
             # tag does not contain Dockerfile.release or this publishing job.
             if [[ "${INPUT_RELAY_IMAGE_ONLY}" == "true" ]]; then
               CHECKOUT_REF="${GITHUB_SHA}"
+            elif [[ -n "${INPUT_CHECKOUT_REF}" ]]; then
+              CHECKOUT_REF="${INPUT_CHECKOUT_REF}"
             else
               CHECKOUT_REF="${TAG}"
             fi
@@ -81,12 +106,32 @@ jobs:
             TAG="v${VERSION}"
             UPLOAD="false"
             CHECKOUT_REF="${GITHUB_SHA}"
+            CHANNEL="${INPUT_RELEASE_CHANNEL:-stable}"
           fi
+
+          node --input-type=module -e \
+            "import { validateReleaseVersion } from './scripts/release-channel.mjs'; validateReleaseVersion(process.argv[1], process.argv[2]);" \
+            "${CHANNEL}" "${VERSION}"
+
+          git fetch origin main --tags --force
+          CHECKOUT_SHA="$(git rev-parse "${CHECKOUT_REF}^{commit}")"
+          if [[ "${GITHUB_REPOSITORY}" == "GCWing/BitFun" ]] && \
+             ! git merge-base --is-ancestor "${CHECKOUT_SHA}" origin/main; then
+            echo "Ref ${CHECKOUT_REF} (${CHECKOUT_SHA}) is not part of the protected main history." >&2
+            exit 1
+          fi
+          TAG_SHA="$(git rev-parse --verify --quiet "${TAG}^{commit}" || true)"
+          if [[ -n "${TAG_SHA}" && "${TAG_SHA}" != "${CHECKOUT_SHA}" ]]; then
+            echo "Existing tag ${TAG} points to ${TAG_SHA}, not requested commit ${CHECKOUT_SHA}." >&2
+            exit 1
+          fi
+          CHECKOUT_REF="${CHECKOUT_SHA}"
 
           echo "version=$VERSION"          >> "$GITHUB_OUTPUT"
           echo "release_tag=$TAG"          >> "$GITHUB_OUTPUT"
           echo "upload_to_release=$UPLOAD" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$CHECKOUT_REF" >> "$GITHUB_OUTPUT"
+          echo "release_channel=$CHANNEL"  >> "$GITHUB_OUTPUT"
           echo "relay_image_only=${INPUT_RELAY_IMAGE_ONLY:-false}" >> "$GITHUB_OUTPUT"
 
   # ── Build per platform ─────────────────────────────────────────────
@@ -98,12 +143,14 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=6144
       BITFUN_ENABLE_UPDATER_ARTIFACTS: ${{ needs.prepare.outputs.upload_to_release }}
-      TAURI_UPDATER_ENDPOINT: https://github.com/GCWing/BitFun/releases/latest/download/latest.json
+      BITFUN_RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
+      TAURI_UPDATER_ENDPOINT: ${{ github.repository != 'GCWing/BitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
+      TAURI_UPDATER_FALLBACK_ENDPOINT: ${{ github.repository != 'GCWing/BitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
       TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
       # Same trust root, compiled into the Desktop binary so one-click relay
       # deploy can verify the signed checksum locally and hand the remote host
       # a hash it does not have to trust the mirror for.
-      BITFUN_RELEASE_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+      BITFUN_RELEASE_PUBKEY: ${{ secrets.BITFUN_RELEASE_PUBKEY || secrets.TAURI_UPDATER_PUBKEY }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
@@ -233,11 +280,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Apple Developer ID signing and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          BITFUN_REQUIRE_APPLE_SIGNING: ${{ needs.prepare.outputs.upload_to_release }}
+        run: bash scripts/ci/setup-macos-signing.sh
+
+      - name: Project beta build version
+        if: needs.prepare.outputs.release_channel == 'beta'
+        run: node scripts/set-build-version.mjs --version "${{ needs.prepare.outputs.version }}"
+
       - name: Verify release version metadata
         run: node scripts/verify-release-version-sync.mjs --version "${{ needs.prepare.outputs.version }}"
 
       - name: Build desktop app
         run: ${{ matrix.platform.build_command }}
+
+      - name: Verify Apple signature and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash scripts/ci/verify-macos-signing.sh "${{ matrix.platform.target }}"
 
       - name: Verify AppImage fcitx5 GTK module
         if: runner.os == 'Linux'
@@ -258,7 +328,9 @@ jobs:
   linux-binaries:
     name: Linux CLI and Relay Server
     needs: prepare
-    if: needs.prepare.outputs.relay_image_only != 'true'
+    if: >-
+      needs.prepare.outputs.relay_image_only != 'true' &&
+      needs.prepare.outputs.release_channel == 'stable'
     uses: ./.github/workflows/linux-binaries.yml
     secrets:
       release_signing_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -276,7 +348,8 @@ jobs:
     needs: [prepare, linux-binaries]
     if: >-
       always() &&
-      (needs.prepare.outputs.upload_to_release == 'true' ||
+      ((needs.prepare.outputs.upload_to_release == 'true' &&
+        needs.prepare.outputs.release_channel == 'stable') ||
        needs.prepare.outputs.relay_image_only == 'true') &&
       (needs.prepare.outputs.relay_image_only == 'true' ||
        needs.linux-binaries.result == 'success')
@@ -348,7 +421,7 @@ jobs:
           RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
           IMAGE_ONLY: ${{ needs.prepare.outputs.relay_image_only }}
-          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
         run: |
           set -euo pipefail
           asset_version="${RELEASE_VERSION%%+*}"
@@ -363,7 +436,7 @@ jobs:
               if [[ "${RELEASE_TAG}" == "${latest_release}" ]]; then
                 echo "${IMAGE}:latest"
               fi
-            elif [[ "${RELEASE_PRERELEASE:-false}" != "true" ]]; then
+            elif [[ "${RELEASE_CHANNEL}" == "stable" ]]; then
               # The normal release workflow can create the GitHub Release only
               # after packaging, so it cannot rely on /releases/latest yet.
               echo "${IMAGE}:latest"
@@ -469,8 +542,9 @@ jobs:
       always() &&
       needs.prepare.outputs.upload_to_release == 'true' &&
       needs.package.result == 'success' &&
-      needs.linux-binaries.result == 'success' &&
-      needs.publish-relay-image.result == 'success'
+      (needs.prepare.outputs.release_channel == 'beta' ||
+       (needs.linux-binaries.result == 'success' &&
+        needs.publish-relay-image.result == 'success'))
     runs-on: ubuntu-latest
     env:
       REQUIRED_UPDATER_PLATFORMS: windows-x86_64,darwin-x86_64,darwin-aarch64,linux-x86_64,linux-aarch64
@@ -487,6 +561,7 @@ jobs:
           merge-multiple: true
 
       - name: Download Linux binary artifacts
+        if: needs.prepare.outputs.release_channel == 'stable'
         uses: actions/download-artifact@v7
         with:
           pattern: bitfun-linux-${{ needs.prepare.outputs.release_tag }}-*
@@ -494,19 +569,24 @@ jobs:
           merge-multiple: true
 
       - name: Download Relay image descriptor
+        if: needs.prepare.outputs.release_channel == 'stable'
         uses: actions/download-artifact@v7
         with:
           name: bitfun-relay-image-${{ needs.prepare.outputs.release_tag }}
           path: relay-image-assets
 
       - name: List release assets
+        env:
+          RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
         run: |
           echo "Release assets:"
           find release-assets -type f | sort
-          echo "Linux CLI and Relay Server assets:"
-          find linux-release-assets -type f | sort
-          echo "Relay image descriptor:"
-          find relay-image-assets -type f | sort
+          if [[ "${RELEASE_CHANNEL}" == "stable" ]]; then
+            echo "Linux CLI and Relay Server assets:"
+            find linux-release-assets -type f | sort
+            echo "Relay image descriptor:"
+            find relay-image-assets -type f | sort
+          fi
 
       - name: Prepare versioned Windows installer
         run: |
@@ -538,7 +618,7 @@ jobs:
             --manual-assets-dir release-manual-assets \
             --version "${{ needs.prepare.outputs.version }}" \
             --tag "${{ needs.prepare.outputs.release_tag }}" \
-            --repo "GCWing/BitFun" \
+            --repo "${{ github.repository }}" \
             --out release-updater-assets/latest.json \
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}"
 
@@ -551,6 +631,7 @@ jobs:
             --required-manual-platforms "windows-x86_64"
 
       - name: Generate Linux binaries manifest
+        if: needs.prepare.outputs.release_channel == 'stable'
         run: |
           node scripts/generate-linux-binaries-manifest.mjs \
             --assets-dir linux-release-assets \
@@ -586,9 +667,11 @@ jobs:
 
           # Publish the public key alongside the signatures: a signature nobody
           # can fetch a key for is not verifiable.
-          printf '%s' "${BITFUN_SIGNING_PUBKEY}" | base64 -d >release-assets/minisign.pub
+          node scripts/write-minisign-public-key.mjs \
+            --out release-assets/minisign.pub
 
-      - name: Stage uniquely named release assets
+      - name: Stage stable release assets
+        if: needs.prepare.outputs.release_channel == 'stable'
         shell: bash
         run: |
           set -euo pipefail
@@ -617,10 +700,34 @@ jobs:
             relay-image-assets/relay-image.json \
             relay-image-assets/relay-image.json.sig
 
+      - name: Stage beta release assets
+        if: needs.prepare.outputs.release_channel == 'beta'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s globstar
+          node scripts/stage-github-release-assets.mjs \
+            --out-dir release-upload-assets \
+            release-updater-assets/* \
+            release-manual-assets/*.exe \
+            release-manual-assets/*.exe.sig \
+            release-assets/**/*.AppImage \
+            release-assets/**/*.AppImage.sig \
+            release-assets/**/*.deb \
+            release-assets/**/*.deb.sig \
+            release-assets/**/*.dmg \
+            release-assets/**/*.dmg.sig \
+            release-assets/**/*.rpm \
+            release-assets/**/*.rpm.sig \
+            release-assets/minisign.pub
+
       - name: Upload to release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.release_tag }}
+          target_commitish: ${{ needs.prepare.outputs.checkout_ref }}
+          prerelease: ${{ needs.prepare.outputs.release_channel == 'beta' }}
+          name: ${{ needs.prepare.outputs.release_channel == 'beta' && format('BitFun {0} Beta', needs.prepare.outputs.version) || format('BitFun {0}', needs.prepare.outputs.version) }}
           generate_release_notes: true
           files: release-upload-assets/*
           fail_on_unmatched_files: true
@@ -628,7 +735,7 @@ jobs:
       - name: Verify published updater manifest
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/latest.json" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/latest.json" \
             -o latest.published.json
           node scripts/verify-tauri-latest-json.mjs \
             --manifest latest.published.json \
@@ -638,6 +745,7 @@ jobs:
             --check-urls true
 
       - name: Verify published Linux binaries manifest
+        if: needs.prepare.outputs.release_channel == 'stable'
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
             "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
@@ -649,6 +757,7 @@ jobs:
           done < <(jq -r '.platforms[].cli.url' linux-binaries.published.json)
 
       - name: Verify published Relay image descriptor
+        if: needs.prepare.outputs.release_channel == 'stable'
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
             "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json" \
@@ -660,16 +769,88 @@ jobs:
             "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json.sig" \
             -o /dev/null
 
+      - name: Resolve beta channel promotion
+        id: beta-channel
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
+        run: |
+          set -euo pipefail
+          channel_status="$(curl -sS --retry 5 --retry-delay 3 \
+            --output channel.release.json \
+            --write-out '%{http_code}' \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/channel-beta")"
+          case "${channel_status}" in
+            200)
+              echo "channel_exists=true" >>"$GITHUB_OUTPUT"
+              curl -fsSL --retry 5 --retry-delay 3 \
+                "https://github.com/${GITHUB_REPOSITORY}/releases/download/channel-beta/latest.json" \
+                -o current.beta.json
+              ;;
+            404)
+              echo "channel_exists=false" >>"$GITHUB_OUTPUT"
+              if [[ "${RELEASE_CHANNEL}" == "stable" ]]; then
+                echo "promote=false" >>"$GITHUB_OUTPUT"
+                echo "No beta channel exists; stable release does not need to create one."
+                exit 0
+              fi
+              ;;
+            *)
+              echo "Could not inspect channel-beta release (GitHub API returned ${channel_status})." >&2
+              exit 1
+              ;;
+          esac
+          args=(--candidate latest.published.json --github-output "$GITHUB_OUTPUT")
+          if [[ -s current.beta.json ]]; then
+            args+=(--current current.beta.json)
+          fi
+          node scripts/plan-channel-promotion.mjs "${args[@]}"
+
+      - name: Publish beta channel manifest
+        if: steps.beta-channel.outputs.promote == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKOUT_REF: ${{ needs.prepare.outputs.checkout_ref }}
+          CHANNEL_EXISTS: ${{ steps.beta-channel.outputs.channel_exists }}
+        run: |
+          set -euo pipefail
+          if [[ "${CHANNEL_EXISTS}" != "true" ]]; then
+            gh release create channel-beta \
+              --repo "${GITHUB_REPOSITORY}" \
+              --target "${CHECKOUT_REF}" \
+              --prerelease \
+              --title "BitFun Beta Update Channel" \
+              --notes "Mutable updater pointer. Installable beta releases use immutable version tags."
+          fi
+          mkdir -p beta-channel
+          cp latest.published.json beta-channel/latest.json
+          gh release upload channel-beta beta-channel/latest.json \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
+          curl -fsSL --retry 5 --retry-delay 3 \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/channel-beta/latest.json" \
+            -o channel-beta.published.json
+          test "$(jq -r '.version' channel-beta.published.json)" = \
+            "${{ steps.beta-channel.outputs.candidate_version }}"
+
       # Nudge the openbitfun.com mirror to sync now instead of on its next
       # 10-minute cron tick. Until the mirror has these bytes, CN clients have
       # only the GitHub origin to fall back to. Best effort: the cron run is
       # still the source of truth, so a failed or unconfigured ping never fails
-      # the release. Receiver setup: scripts/openbitfun-release-sync.sh.
+      # the release. Receiver: scripts/openbitfun-release-sync.sh.
+      # Host restore: deploy/openbitfun-host/README.md.
       - name: Request openbitfun mirror sync
+        if: github.repository == 'GCWing/BitFun'
         continue-on-error: true
         env:
           SYNC_WEBHOOK_URL: ${{ secrets.OPENBITFUN_SYNC_WEBHOOK_URL }}
           RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
         run: |
           set -euo pipefail
           if [[ -z "${SYNC_WEBHOOK_URL:-}" ]]; then
@@ -678,6 +859,6 @@ jobs:
           fi
           curl -fsSL -X POST --retry 3 --retry-delay 5 --max-time 30 \
             -H 'Content-Type: application/json' \
-            -d "{\"tag\":\"${RELEASE_TAG}\"}" \
+            -d "{\"tag\":\"${RELEASE_TAG}\",\"channel\":\"${RELEASE_CHANNEL}\"}" \
             "${SYNC_WEBHOOK_URL}" >/dev/null
           echo "Mirror sync requested for ${RELEASE_TAG}."

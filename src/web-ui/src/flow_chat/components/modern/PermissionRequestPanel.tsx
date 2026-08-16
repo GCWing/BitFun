@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Check, ChevronsDown, ShieldAlert, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
@@ -19,6 +19,7 @@ interface PermissionRequestPanelProps {
   onRespondBatch: (requestId: string, reply: PermissionReplyKind, feedback?: string) => Promise<void>;
   aboveChatInput?: boolean;
   totalPendingCount?: number;
+  visible?: boolean;
 }
 
 const PERMISSION_ACTION_LABEL_KEYS: Record<string, string> = {
@@ -88,18 +89,32 @@ export function PermissionRequestPanel({
   onRespondBatch,
   aboveChatInput = false,
   totalPendingCount,
+  visible = true,
 }: PermissionRequestPanelProps) {
   const { t } = useTranslation('flow-chat');
   const [feedback, setFeedback] = useState('');
   const [responding, setResponding] = useState(false);
   const [error, setError] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const collapseButtonRef = useRef<HTMLButtonElement>(null);
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+  const pendingFocusTargetRef = useRef<'collapsed' | 'expanded' | null>(null);
   const inputHeight = useChatInputState((state) => state.inputHeight);
   const request = requests[0];
   const risk = permissionRisk(request, t);
   const pendingCount = Math.max(totalPendingCount ?? requests.length, requests.length);
   const hasRejectFeedback = feedback.trim().length > 0;
   const allowActionsDisabledForFeedback = hasRejectFeedback && !responding;
+
+  useLayoutEffect(() => {
+    if (pendingFocusTargetRef.current === 'collapsed' && isCollapsed) {
+      expandButtonRef.current?.focus();
+      pendingFocusTargetRef.current = null;
+    } else if (pendingFocusTargetRef.current === 'expanded' && !isCollapsed) {
+      collapseButtonRef.current?.focus();
+      pendingFocusTargetRef.current = null;
+    }
+  }, [isCollapsed]);
 
   const alwaysAllowTooltip = request?.saveResources?.length
     ? request.projectPath?.trim()
@@ -144,19 +159,32 @@ export function PermissionRequestPanel({
   return (
     <div data-bf-component="permission-request-panel" data-bf-part="root"
       data-bf-state={[isCollapsed && 'collapsed', responding && 'responding', error && 'error'].filter(Boolean).join(' ')}
+      data-visible={visible ? 'true' : 'false'}
+      data-collapsed={isCollapsed ? 'true' : 'false'}
       className={`permission-request-anchor${aboveChatInput ? ' permission-request-anchor--above-chat-input' : ''}`}
       style={panelStyle}
+      aria-hidden={!visible}
+      {...(!visible ? { inert: '' } : {})}
     >
-      {isCollapsed ? (
-        <Tooltip content={t('permission.expandPanel', { count: pendingCount })} placement="top">
+      <Tooltip
+        content={t('permission.expandPanel', { count: pendingCount })}
+        placement="top"
+        disabled={!isCollapsed}
+      >
           <button
+            ref={expandButtonRef}
             type="button"
             data-bf-component="permission-request-panel"
             data-bf-part="collapsedTrigger"
             className="permission-request-panel__collapsed-trigger"
-            onClick={() => setIsCollapsed(false)}
+            onClick={() => {
+              pendingFocusTargetRef.current = 'expanded';
+              setIsCollapsed(false);
+            }}
             aria-label={t('permission.expandPanel', { count: pendingCount })}
             aria-expanded={false}
+            aria-hidden={!isCollapsed}
+            tabIndex={isCollapsed ? 0 : -1}
             data-testid="permission-request-panel-expand"
           >
             <ShieldAlert size={21} aria-hidden="true" />
@@ -164,14 +192,15 @@ export function PermissionRequestPanel({
               {pendingCount > 99 ? '99+' : pendingCount}
             </span>
           </button>
-        </Tooltip>
-      ) : (
+      </Tooltip>
         <section
           id="permission-request-panel"
           data-bf-component="permission-request-panel"
           data-bf-part="panel"
           className="permission-request-panel"
           aria-label={t('permission.title')}
+          aria-hidden={isCollapsed}
+          {...(isCollapsed ? { inert: '' } : {})}
         >
           <div data-bf-component="permission-request-panel" data-bf-part="heading" className="permission-request-panel__heading">
             <div className="permission-request-panel__heading-title">
@@ -184,9 +213,13 @@ export function PermissionRequestPanel({
               </span>
               <Tooltip content={t('permission.collapsePanel')} placement="top">
                 <button
+                  ref={collapseButtonRef}
                   type="button"
                   className="permission-request-panel__collapse"
-                  onClick={() => setIsCollapsed(true)}
+                  onClick={() => {
+                    pendingFocusTargetRef.current = 'collapsed';
+                    setIsCollapsed(true);
+                  }}
                   aria-label={t('permission.collapsePanel')}
                   aria-expanded={true}
                   data-testid="permission-request-panel-collapse"
@@ -301,7 +334,6 @@ export function PermissionRequestPanel({
             </div>
           </div>
         </section>
-      )}
     </div>
   );
 }

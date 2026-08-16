@@ -4,10 +4,19 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "Shared AI protocol adapters for BitFun core and installer"
+autotests = false
 
 [lib]
 name = "bitfun_ai_adapters"
 crate-type = ["rlib"]
+
+[[test]]
+name = "ai_protocol_contracts"
+path = "tests/ai_protocol_contracts.rs"
+
+[[test]]
+name = "ai_stream_contracts"
+path = "tests/ai_stream_contracts.rs"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -15,7 +24,7 @@ async-trait = { workspace = true }
 base64 = { workspace = true, optional = true }
 bitfun-agent-stream = { path = "../../execution/agent-stream" }
 bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-services-core = { path = "../../services/services-core", default-features = false, optional = true }
+bitfun-services-core = { path = "../../services/services-core", optional = true }
 chrono = { workspace = true }
 dirs = { workspace = true, optional = true }
 keyring-core = { workspace = true, optional = true }
@@ -24,7 +33,7 @@ futures = { workspace = true }
 fs2 = { workspace = true, optional = true }
 libc = { workspace = true, optional = true }
 log = { workspace = true }
-reqwest = { workspace = true, features = ["rustls", "socks"] }
+reqwest = { workspace = true, features = ["http2", "json", "rustls", "socks", "stream"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true, optional = true }
@@ -52,6 +61,7 @@ subscription-auth = [
     "dep:fs2",
     "dep:keyring-core",
     "dep:libc",
+    "reqwest/form",
     "dep:sha2",
     "tokio/fs",
     "tokio/io-util",

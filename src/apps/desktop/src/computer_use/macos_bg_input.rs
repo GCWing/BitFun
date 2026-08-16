@@ -388,8 +388,39 @@ pub(super) fn bg_click(
 /// Returns `None` when the AppKit lookup is not available (e.g. headless tests
 /// or non-main-thread contexts where we don't want to assert).
 pub(super) fn frontmost_pid_macos() -> Option<i32> {
+    frontmost_app_identity_macos().map(|id| id.pid)
+}
+
+/// Identity of the macOS frontmost application, read straight from
+/// `NSWorkspace.frontmostApplication`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct MacFrontmostApp {
+    pub pid: i32,
+    /// `NSRunningApplication.localizedName` — what the user sees in the menu
+    /// bar (e.g. "飞书"), which is **not** always the executable or bundle
+    /// name (`Feishu` / `Lark.app`).
+    pub name: Option<String>,
+    pub bundle_id: Option<String>,
+}
+
+/// Best-effort identity (pid + localized name + bundle id) of the frontmost
+/// application.
+///
+/// This deliberately avoids `osascript`: the previous AppleScript spelling
+/// (`tell application "System Events" to … first process whose frontmost is
+/// true`) cost a process spawn on every single tool result, could block on an
+/// AppleEvent timeout when System Events was busy, and — because it embedded a
+/// `try … end try` block in expression position — never actually compiled, so
+/// the caller silently saw `None` forever. `NSWorkspace` answers in-process in
+/// microseconds and needs no Automation permission.
+pub(super) fn frontmost_app_identity_macos() -> Option<MacFrontmostApp> {
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
+    // SAFETY: every selector is sent to a class/instance that was just checked
+    // non-null. `sharedWorkspace`, `frontmostApplication`, `localizedName` and
+    // `bundleIdentifier` are all +0 (autoreleased/borrowed) returns, so nothing
+    // here owns a retain to balance. `NSWorkspace.frontmostApplication` is
+    // documented as safe to read from any thread.
     unsafe {
         let cls = objc2::runtime::AnyClass::get(c"NSWorkspace")?;
         let ws: *mut AnyObject = msg_send![cls, sharedWorkspace];
@@ -402,9 +433,102 @@ pub(super) fn frontmost_pid_macos() -> Option<i32> {
         }
         let pid: i32 = msg_send![app, processIdentifier];
         if pid <= 0 {
+            return None;
+        }
+        let name: *mut AnyObject = msg_send![app, localizedName];
+        let bundle: *mut AnyObject = msg_send![app, bundleIdentifier];
+        Some(MacFrontmostApp {
+            pid,
+            name: ns_string_to_rust(name),
+            bundle_id: ns_string_to_rust(bundle),
+        })
+    }
+}
+
+/// Pid of a running application with the given bundle identifier, preferring
+/// the most recently activated instance. `None` when nothing with that bundle
+/// id is running.
+pub(super) fn pid_for_bundle_id_macos(bundle_id: &str) -> Option<i32> {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::NSString;
+    // SAFETY: `runningApplicationsWithBundleIdentifier:` returns a +0 NSArray;
+    // indices stay in `0..count` and every element is null-checked before use.
+    unsafe {
+        let cls = objc2::runtime::AnyClass::get(c"NSRunningApplication")?;
+        let ns_bundle = NSString::from_str(bundle_id);
+        let arr: *mut AnyObject =
+            msg_send![cls, runningApplicationsWithBundleIdentifier: &*ns_bundle];
+        if arr.is_null() {
+            return None;
+        }
+        let count: usize = msg_send![arr, count];
+        // Prefer an instance that already owns windows; fall back to the first.
+        let mut fallback: Option<i32> = None;
+        for i in 0..count {
+            let app: *mut AnyObject = msg_send![arr, objectAtIndex: i];
+            if app.is_null() {
+                continue;
+            }
+            let pid: i32 = msg_send![app, processIdentifier];
+            if pid <= 0 {
+                continue;
+            }
+            if fallback.is_none() {
+                fallback = Some(pid);
+            }
+            if crate::computer_use::macos_ax_ui::window_count_for_pid(pid).unwrap_or(0) > 0 {
+                return Some(pid);
+            }
+        }
+        fallback
+    }
+}
+
+/// Localized name and bundle id of a running application, by pid.
+pub(super) fn running_app_identity_macos(pid: i32) -> Option<(Option<String>, Option<String>)> {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    // SAFETY: `runningApplicationWithProcessIdentifier:` returns nil for an
+    // unknown pid, which is checked; the two property reads are +0 returns.
+    unsafe {
+        let cls = objc2::runtime::AnyClass::get(c"NSRunningApplication")?;
+        let app: *mut AnyObject = msg_send![cls, runningApplicationWithProcessIdentifier: pid];
+        if app.is_null() {
+            return None;
+        }
+        let name: *mut AnyObject = msg_send![app, localizedName];
+        let bundle: *mut AnyObject = msg_send![app, bundleIdentifier];
+        Some((ns_string_to_rust(name), ns_string_to_rust(bundle)))
+    }
+}
+
+/// Copy an `NSString *` into an owned Rust `String`. Returns `None` for a null
+/// pointer or a string whose UTF-8 buffer is unavailable.
+///
+/// # Safety
+/// `s` must be null or a valid `NSString` pointer.
+pub(super) unsafe fn ns_string_to_rust(s: *mut objc2::runtime::AnyObject) -> Option<String> {
+    use objc2::msg_send;
+    if s.is_null() {
+        return None;
+    }
+    // SAFETY: `s` is a valid NSString per this function's contract, checked
+    // non-null above. `UTF8String` hands back a NUL-terminated buffer owned by
+    // the autorelease pool; `CStr::to_string_lossy().into_owned()` copies out of
+    // it before returning, so nothing borrows the pool past this block.
+    unsafe {
+        let utf8: *const std::os::raw::c_char = msg_send![s, UTF8String];
+        if utf8.is_null() {
+            return None;
+        }
+        let out = std::ffi::CStr::from_ptr(utf8)
+            .to_string_lossy()
+            .into_owned();
+        if out.is_empty() {
             None
         } else {
-            Some(pid)
+            Some(out)
         }
     }
 }

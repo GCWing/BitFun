@@ -10,6 +10,7 @@ use bitfun_product_domains::external_sources::{
     ExternalMcpConflictCandidate, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
     ExternalSourceDiagnostic, PreparedExternalMcpServer, PreparedExternalMcpTransport,
 };
+use bitfun_services_integrations::mcp::server::MCPServerStartFailure;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -61,6 +62,22 @@ pub(super) enum ExternalMcpRuntimeStatus {
     Unavailable(String),
 }
 
+pub(super) const EXTERNAL_MCP_RUNTIME_CONFIGURATION_CHANGED: &str =
+    "external_mcp.runtime.configuration_changed";
+pub(super) const EXTERNAL_MCP_RUNTIME_CONFIGURATION_INVALID: &str =
+    "external_mcp.runtime.configuration_invalid";
+pub(super) const EXTERNAL_MCP_RUNTIME_HOST_UNAVAILABLE: &str =
+    "external_mcp.runtime.host_unavailable";
+pub(super) const EXTERNAL_MCP_RUNTIME_INSTALL_FAILED: &str = "external_mcp.runtime.install_failed";
+pub(super) const EXTERNAL_MCP_RUNTIME_PREPARATION_FAILED: &str =
+    "external_mcp.runtime.preparation_failed";
+pub(super) const EXTERNAL_MCP_RUNTIME_RETIRE_FAILED: &str = "external_mcp.runtime.retire_failed";
+pub(super) const EXTERNAL_MCP_RUNTIME_SERVER_MISSING: &str = "external_mcp.runtime.server_missing";
+pub(super) const EXTERNAL_MCP_RUNTIME_FAILED: &str = "external_mcp.runtime.failed";
+pub(super) const EXTERNAL_MCP_RUNTIME_STOPPED: &str = "external_mcp.runtime.stopped";
+pub(super) const EXTERNAL_MCP_RUNTIME_STATUS_UNAVAILABLE: &str =
+    "external_mcp.runtime.status_unavailable";
+
 /// Narrow product-to-runtime port. Product reconciliation works only with
 /// source-neutral prepared MCP data; the concrete BitFun MCP manager remains
 /// behind this implementation boundary.
@@ -98,26 +115,32 @@ impl ExternalMcpRuntimePort for BitFunExternalMcpRuntime {
         if prepared.id != candidate.definition.id
             || prepared.behavior_version != candidate.definition.behavior_version
         {
-            return Err("The external MCP configuration changed before activation".to_string());
+            return Err(EXTERNAL_MCP_RUNTIME_CONFIGURATION_CHANGED.to_string());
         }
-        let config = prepared_mcp_config(candidate, prepared)?;
+        let config = prepared_mcp_config(candidate, prepared)
+            .map_err(|_| EXTERNAL_MCP_RUNTIME_CONFIGURATION_INVALID.to_string())?;
         mcp_manager()?
             .install_external_ephemeral_server(config, workspace_key.to_string())
             .await
             // Runtime errors may contain a URL or command line. Keep the
             // product-facing error actionable without echoing sensitive data.
-            .map_err(|_| "The external MCP server could not be started".to_string())
+            .map_err(|_| EXTERNAL_MCP_RUNTIME_INSTALL_FAILED.to_string())
     }
 
     async fn retire(&self, runtime_id: &str) -> Result<(), String> {
         mcp_manager()?
             .retire_external_ephemeral_server(runtime_id)
             .await
-            .map_err(|_| "The external MCP server could not be stopped cleanly".to_string())
+            .map_err(|_| EXTERNAL_MCP_RUNTIME_RETIRE_FAILED.to_string())
     }
 
     async fn status(&self, runtime_id: &str) -> Result<ExternalMcpRuntimeStatus, String> {
         let manager = mcp_manager()?;
+        if let Some(failure) = manager.external_server_start_failure(runtime_id).await {
+            return Ok(ExternalMcpRuntimeStatus::Unavailable(
+                external_mcp_start_failure_reason(failure).to_string(),
+            ));
+        }
         if manager.external_server_readiness(runtime_id).await == Some(false) {
             return Ok(ExternalMcpRuntimeStatus::Loading);
         }
@@ -128,28 +151,10 @@ impl ExternalMcpRuntimePort for BitFunExternalMcpRuntime {
         .await
         {
             Ok(Ok(status)) => status,
-            Ok(Err(_)) => return Err("The external MCP server is no longer available".to_string()),
+            Ok(Err(_)) => return Err(EXTERNAL_MCP_RUNTIME_SERVER_MISSING.to_string()),
             Err(_) => return Ok(ExternalMcpRuntimeStatus::Loading),
         };
-        Ok(match status {
-            MCPServerStatus::Connected | MCPServerStatus::Healthy => {
-                ExternalMcpRuntimeStatus::Active
-            }
-            MCPServerStatus::Uninitialized
-            | MCPServerStatus::Starting
-            | MCPServerStatus::Reconnecting => ExternalMcpRuntimeStatus::Loading,
-            MCPServerStatus::NeedsAuth => ExternalMcpRuntimeStatus::Unavailable(
-                "Authentication is required for this MCP server".to_string(),
-            ),
-            MCPServerStatus::Failed => ExternalMcpRuntimeStatus::Unavailable(
-                "The MCP server failed to start or stopped unexpectedly".to_string(),
-            ),
-            MCPServerStatus::Stopping | MCPServerStatus::Stopped => {
-                ExternalMcpRuntimeStatus::Unavailable(
-                    "The MCP server is not currently running".to_string(),
-                )
-            }
-        })
+        Ok(external_mcp_runtime_status(status))
     }
 
     async fn replace_workspace_route(
@@ -169,10 +174,67 @@ impl ExternalMcpRuntimePort for BitFunExternalMcpRuntime {
     }
 }
 
+fn external_mcp_runtime_status(status: MCPServerStatus) -> ExternalMcpRuntimeStatus {
+    match status {
+        MCPServerStatus::Connected | MCPServerStatus::Healthy => ExternalMcpRuntimeStatus::Active,
+        MCPServerStatus::Uninitialized
+        | MCPServerStatus::Starting
+        | MCPServerStatus::Reconnecting => ExternalMcpRuntimeStatus::Loading,
+        MCPServerStatus::NeedsAuth => ExternalMcpRuntimeStatus::Unavailable(
+            external_mcp_start_failure_reason(MCPServerStartFailure::Authentication).to_string(),
+        ),
+        MCPServerStatus::Failed => {
+            ExternalMcpRuntimeStatus::Unavailable(EXTERNAL_MCP_RUNTIME_FAILED.to_string())
+        }
+        MCPServerStatus::Stopping | MCPServerStatus::Stopped => {
+            ExternalMcpRuntimeStatus::Unavailable(EXTERNAL_MCP_RUNTIME_STOPPED.to_string())
+        }
+    }
+}
+
+fn external_mcp_start_failure_reason(failure: MCPServerStartFailure) -> &'static str {
+    match failure {
+        MCPServerStartFailure::Authentication => "external_mcp.start.authentication",
+        MCPServerStartFailure::Timeout => "external_mcp.start.timeout",
+        MCPServerStartFailure::CommandUnavailable => "external_mcp.start.command_unavailable",
+        MCPServerStartFailure::WorkingDirectoryUnavailable => {
+            "external_mcp.start.working_directory_unavailable"
+        }
+        MCPServerStartFailure::ConnectionFailed => "external_mcp.start.connection_failed",
+        MCPServerStartFailure::ProtocolFailed => "external_mcp.start.protocol_failed",
+        MCPServerStartFailure::Other => "external_mcp.start.other",
+    }
+}
+
 fn mcp_manager() -> Result<std::sync::Arc<crate::service::mcp::MCPServerManager>, String> {
     get_global_mcp_service()
         .map(|service| service.server_manager())
-        .ok_or_else(|| "The BitFun MCP runtime is not available in this product host".to_string())
+        .ok_or_else(|| EXTERNAL_MCP_RUNTIME_HOST_UNAVAILABLE.to_string())
+}
+
+#[cfg(test)]
+mod runtime_reason_tests {
+    use super::*;
+
+    #[test]
+    fn terminal_runtime_statuses_use_stable_product_reason_codes() {
+        let cases = [
+            (
+                MCPServerStatus::NeedsAuth,
+                "external_mcp.start.authentication",
+            ),
+            (MCPServerStatus::Failed, EXTERNAL_MCP_RUNTIME_FAILED),
+            (MCPServerStatus::Stopping, EXTERNAL_MCP_RUNTIME_STOPPED),
+            (MCPServerStatus::Stopped, EXTERNAL_MCP_RUNTIME_STOPPED),
+        ];
+
+        for (status, expected) in cases {
+            assert_eq!(
+                external_mcp_runtime_status(status),
+                ExternalMcpRuntimeStatus::Unavailable(expected.to_string())
+            );
+        }
+    }
 }
 
 pub(super) fn prepared_mcp_config(

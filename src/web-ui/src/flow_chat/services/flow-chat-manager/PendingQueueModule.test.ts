@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { pendingQueueManager } from './PendingQueueModule';
 import {
-  pendingQueueManager,
-  queuedMessageHasUnsupportedSteeringPayload,
-} from './PendingQueueModule';
+  LOCAL_SURFACE_ID,
+  activateSurface,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const sessions: string[] = [];
 
@@ -14,7 +15,12 @@ function testSession(): string {
   return sessionId;
 }
 
+beforeEach(() => {
+  activateSurface(LOCAL_SURFACE_ID);
+});
+
 afterEach(() => {
+  activateSurface(LOCAL_SURFACE_ID);
   for (const sessionId of sessions.splice(0)) {
     pendingQueueManager.clear(sessionId);
   }
@@ -57,40 +63,24 @@ describe('PendingQueueModule', () => {
     expect(items[0].retryCount).toBe(0);
   });
 
-  it('rejects only payloads that the text-only steering contract would flatten', () => {
-    const plain = {
-      id: 'plain',
-      sessionId: 'session-1',
-      content: 'plain text',
-      timestamp: 1,
-      status: 'queued' as const,
-      retryCount: 0,
-    };
+  it('keeps equal session ids isolated across device surfaces', () => {
+    const sessionId = testSession();
+    pendingQueueManager.enqueue({ sessionId, content: 'local draft' });
 
-    expect(queuedMessageHasUnsupportedSteeringPayload(plain)).toBe(false);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        imageContexts: [{ id: 'image-1' }],
-      }),
-    ).toBe(true);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        userMessageMetadata: { deepReviewRunManifest: { requestId: 'review-1' } },
-      }),
-    ).toBe(true);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        userMessageMetadata: { sessionReferences: [{ sessionId: 'source' }] },
-      }),
-    ).toBe(true);
-    expect(
-      queuedMessageHasUnsupportedSteeringPayload({
-        ...plain,
-        userMessageMetadata: { composerPresentation: { parts: [] } },
-      }),
-    ).toBe(true);
+    activateSurface('peer-b');
+    expect(pendingQueueManager.list(sessionId)).toEqual([]);
+    pendingQueueManager.enqueue({ sessionId, content: 'peer draft' });
+
+    activateSurface(LOCAL_SURFACE_ID);
+    expect(pendingQueueManager.list(sessionId).map(item => item.content)).toEqual([
+      'local draft',
+    ]);
+    activateSurface('peer-b');
+    expect(pendingQueueManager.list(sessionId).map(item => item.content)).toEqual([
+      'peer draft',
+    ]);
+
+    pendingQueueManager.clearSurface('peer-b');
+    activateSurface(LOCAL_SURFACE_ID);
   });
 });

@@ -8,11 +8,11 @@
 //! Local desktop and OS/system actions are intentionally surfaced through the
 //! dedicated ComputerUse tool/agent, not through public ControlHub domains.
 
-use crate::agentic::tools::browser_control::actions::BrowserActions;
+use crate::agentic::tools::browser_control::actions::{BrowserActions, MAX_WAIT_MS};
 use crate::agentic::tools::browser_control::browser_launcher::{
     BrowserKind, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
 };
-use crate::agentic::tools::browser_control::cdp_client::{CdpClient, CdpVersionInfo};
+use crate::agentic::tools::browser_control::cdp_client::{CdpClient, CdpPageInfo, CdpVersionInfo};
 use crate::agentic::tools::browser_control::session_registry::{
     BrowserSession, BrowserSessionRegistry, BrowserSessionState, DialogHandler,
 };
@@ -41,10 +41,10 @@ static BROWSER_SESSIONS: std::sync::OnceLock<Arc<BrowserSessionRegistry>> =
 const OPEN_BUILT_IN_BROWSER_EVENT: &str = "agentic://open-built-in-browser";
 
 /// `connect { mode: "headless" }` only attaches, it never launches. It must
-/// therefore not default to the port the `default` mode's managed browser
-/// occupies: otherwise a session that already ran `connect { mode: "default" }`
-/// can never reach a headless browser, because `verify_headless_cdp_browser`
-/// hard-rejects the headed browser sitting on that port.
+/// therefore not default to the logical port used by the `default` mode:
+/// otherwise a session that already connected the user's browser can never
+/// reach a headless browser, because `verify_headless_cdp_browser` hard-rejects
+/// the headed browser sitting on that port.
 const DEFAULT_HEADLESS_CDP_PORT: u16 = DEFAULT_CDP_PORT + 1;
 
 /// Computer Use is an independent switch from browser control (`ai.computer_use_enabled`
@@ -80,15 +80,75 @@ impl ControlHubTool {
     }
 
     fn default_browser_connect_hints(kind: &BrowserKind, port: u16) -> Vec<String> {
-        let exe = BrowserLauncher::browser_executable(kind);
-        vec![
-            "Drive pages over CDP rather than desktop mouse/keyboard automation. Note this is BitFun's managed browser profile, not the user's everyday profile: it keeps its own cookies and logins across runs, so on a login wall ask the user to sign in once in that window instead of retrying or typing credentials.".to_string(),
-            format!(
-                "If CDP is not ready on test port {}, retry browser.connect — it starts \"{}\" against BitFun's managed profile with CDP enabled. Do not ask the user to enable a debug port on their everyday browser profile.",
-                port, exe
-            ),
-            "After the browser is listening on the test port, use browser.connect / snapshot / click / fill to drive the DOM directly.".to_string(),
-        ]
+        match kind {
+            BrowserKind::Chrome | BrowserKind::Edge => {
+                let setup_url = if matches!(kind, BrowserKind::Chrome) {
+                    "chrome://inspect/#remote-debugging"
+                } else {
+                    "edge://inspect/#remote-debugging"
+                };
+                vec![
+                    format!(
+                        "{} can connect BitFun to the current real profile, preserving its open tabs, cookies, extensions, and login state.",
+                        kind
+                    ),
+                    format!(
+                        "For one-time setup, ask the user to click Enable default CDP in BitFun Settings > Browser control. BitFun opens {}; enable Remote debugging there (the browser remembers this for normal future starts), then approve BitFun's connection dialog in {}.",
+                        setup_url, kind
+                    ),
+                    "After approval, keep using browser.connect / snapshot / click / fill; BitFun retains one guarded browser connection to avoid repeated prompts.".to_string(),
+                ]
+            }
+            _ => {
+                let exe = BrowserLauncher::browser_executable(kind);
+                vec![
+                    format!(
+                        "If {} already publishes DevToolsActivePort from its normal user-data directory, BitFun reuses that real profile automatically; otherwise it starts a persistent managed profile.",
+                        kind
+                    ),
+                    format!(
+                        "If CDP is not ready on test port {}, retry browser.connect — it starts \"{}\" with BitFun's managed profile.",
+                        port, exe
+                    ),
+                    "After the browser is listening, use browser.connect / snapshot / click / fill to drive the DOM directly.".to_string(),
+                ]
+            }
+        }
+    }
+
+    async fn browser_version(port: u16) -> BitFunResult<CdpVersionInfo> {
+        if let Some(connection) = CdpClient::browser_connection(port).await {
+            connection.client.browser_version().await
+        } else {
+            CdpClient::get_version(port).await
+        }
+    }
+
+    async fn browser_pages(port: u16) -> BitFunResult<Vec<CdpPageInfo>> {
+        if let Some(connection) = CdpClient::browser_connection(port).await {
+            connection.client.browser_pages().await
+        } else {
+            CdpClient::list_pages(port).await
+        }
+    }
+
+    async fn create_browser_page(port: u16, url: Option<&str>) -> BitFunResult<CdpPageInfo> {
+        if let Some(connection) = CdpClient::browser_connection(port).await {
+            connection.client.create_browser_page(url).await
+        } else {
+            CdpClient::create_page(port, url).await
+        }
+    }
+
+    async fn connect_page(port: u16, page: &CdpPageInfo) -> BitFunResult<CdpClient> {
+        if let Some(connection) = CdpClient::browser_connection(port).await {
+            connection.client.attach_to_page(&page.id).await
+        } else {
+            let ws_url = page.web_socket_debugger_url.as_ref().ok_or_else(|| {
+                BitFunError::tool("Page has no WebSocket debugger URL".to_string())
+            })?;
+            CdpClient::connect(ws_url).await
+        }
     }
 
     fn headless_browser_connect_hints(port: u16) -> Vec<String> {
@@ -134,7 +194,11 @@ impl ControlHubTool {
         if browser.to_ascii_lowercase().contains("headless") {
             return Ok(());
         }
-        let reported = if browser.is_empty() { "unknown" } else { browser };
+        let reported = if browser.is_empty() {
+            "unknown"
+        } else {
+            browser
+        };
         Err(ControlHubError::new(
             ErrorCode::NotAvailable,
             format!(
@@ -144,7 +208,7 @@ impl ControlHubTool {
         )
         .with_hints(Self::headless_browser_connect_hints(port))
         .with_hint(
-            "Use connect { mode: \"default\" } to drive the BitFun-managed browser profile instead.",
+            "Use connect { mode: \"default\" } for the user-approved current Chrome or Edge profile, or the compatible managed-profile fallback instead.",
         ))
     }
 
@@ -198,11 +262,16 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
   * Do not call `connect`, `tab_new`, or `navigate` merely to display a URL. Use the CDP workflow only when the agent must read page content or interact with the DOM.
 - UI action:
   * `open_builtin { url, title?, replace_existing? }` — open an http(s) URL in BitFun's built-in right-side browser panel. This changes the BitFun UI only; it does not fetch page text for reasoning. The panel is display-only for the user — the agent cannot snapshot, read, or interact with it; use `connect` + `snapshot` when page content is needed.
-- Automation modes (external managed browser):
-  * `connect { mode: "default" }` (default) — start or attach BitFun's managed browser profile with CDP enabled on port 9222.
+- Automation modes (external browser):
+  * `connect { mode: "default" }` (default) — on Chrome 144+ and current Edge, request a user-approved connection to the currently running real profile so existing tabs and login state are preserved. Other supported Chromium browsers also reuse the real profile when it publishes DevToolsActivePort; otherwise BitFun starts or attaches its persistent managed profile on port 9222.
   * `connect { mode: "headless" }` — attach to an already-running headless browser on the headless test port 9223. This mode never starts a browser; when nothing is listening it returns `NOT_AVAILABLE` together with the exact launch command.
   * `params.port` overrides the CDP port for `connect` and for every other CDP action; after `connect`, actions reuse the connected session's port automatically.
 - Actions: open_builtin, connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, read_article, close, list_pages, tab_query, switch_page, list_sessions.
+- Pausing:
+  * `wait { duration_ms }` — pause for a fixed time, up to 60 minutes (`ms` and `seconds` are accepted spellings). This is the action to use when you must idle between rounds of work, e.g. `{ "duration_ms": 1800000 }` to resume in 30 minutes. It needs no browser session, and the result reports the `ms` actually waited, so check that figure before assuming the full pause happened.
+  * `wait { condition, timeout_ms? }` — wait on the page instead: 'load' | 'domcontentloaded' | 'networkidle' | a CSS/@ref selector, bounded by `timeout_ms` (default 15s). Requires a connected session. When a `condition` is present it always wins, and any duration you pass becomes its timeout rather than a separate sleep.
+  * A `wait` carrying neither is rejected with `INVALID_PARAMS` — it never silently returns.
+  * `wait` holds the turn open for its whole duration, so it suits a one-off pause, not a schedule. For work that should repeat ("produce another round every 30 minutes") or resume more than an hour out, create a job with the `Cron` tool instead, then **end your turn** — creating the job does not end it for you. The job re-invokes you when it fires, so a turn left running is idling with the context loaded and only delays the next round. Every built-in mode that has ControlHub also has `Cron`; if it is genuinely absent from your tool list, say so rather than substituting a chain of long `wait` calls.
 - Automation workflow: connect -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill with `{ "selector": "@e1" }` (the key `ref` is accepted too).
 - Take a fresh snapshot after any DOM mutation; a stale `@eN` ref returns `error.code = STALE_REF`, while a selector that matches nothing returns `NOT_FOUND`.
 
@@ -402,8 +471,8 @@ Branch on `ok` and `error.code`, not on English messages.
                 // The value of a capability probe is entirely in the field
                 // values, so the assistant-visible text must be the payload
                 // itself — a one-line summary tells the model nothing.
-                let assistant = serde_json::to_string_pretty(&body)
-                    .unwrap_or_else(|_| body.to_string());
+                let assistant =
+                    serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string());
                 Ok(vec![ToolResult::ok(body, Some(assistant))])
             }
             "route_hint" => {
@@ -425,13 +494,14 @@ Branch on `ok` and `error.code`, not on English messages.
                 // otherwise send an unroutable request.
                 let mut suggestions: Vec<(&'static str, Option<&'static str>, u32, &'static str)> =
                     vec![];
-                let push = |s: &mut Vec<(&'static str, Option<&'static str>, u32, &'static str)>,
-                            domain: &'static str,
-                            tool: Option<&'static str>,
-                            score: u32,
-                            why: &'static str| {
-                    s.push((domain, tool, score, why));
-                };
+                let push =
+                    |s: &mut Vec<(&'static str, Option<&'static str>, u32, &'static str)>,
+                     domain: &'static str,
+                     tool: Option<&'static str>,
+                     score: u32,
+                     why: &'static str| {
+                        s.push((domain, tool, score, why));
+                    };
 
                 let browser_kw = [
                     "http",
@@ -617,12 +687,100 @@ Branch on `ok` and `error.code`, not on English messages.
         )
     }
 
+    /// Sleep for `requested_ms`, interruptibly.
+    ///
+    /// The sleep races the turn's cancellation token: a 30-minute pace wait
+    /// that ignored it would leave the user unable to stop the agent for half
+    /// an hour. Cancellation surfaces as `BitFunError::Cancelled`, which the
+    /// pipeline already records as a terminal cancelled state rather than a
+    /// tool failure.
+    async fn wait_for_duration(
+        requested_ms: u64,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let waited_ms = requested_ms.min(MAX_WAIT_MS);
+        let sleep = tokio::time::sleep(std::time::Duration::from_millis(waited_ms));
+
+        if let Some(token) = context.cancellation_token() {
+            tokio::select! {
+                _ = sleep => {}
+                _ = token.cancelled() => {
+                    return Err(BitFunError::Cancelled(format!(
+                        "browser.wait cancelled before the {} pause elapsed",
+                        format_duration_ms(waited_ms)
+                    )));
+                }
+            }
+        } else {
+            sleep.await;
+        }
+
+        let (data, summary) = Self::wait_outcome(requested_ms);
+        Ok(vec![ToolResult::ok(data, Some(summary))])
+    }
+
+    /// Describe a completed duration wait.
+    ///
+    /// The old payload carried no duration at all, so a wait that returned
+    /// instantly was indistinguishable from one that ran to completion; both
+    /// printed "Wait completed". State the elapsed time, and say plainly when
+    /// the request was clamped instead of quietly waiting less than asked.
+    fn wait_outcome(requested_ms: u64) -> (Value, String) {
+        let waited_ms = requested_ms.min(MAX_WAIT_MS);
+        let clamped = waited_ms != requested_ms;
+        let summary = if clamped {
+            format!(
+                "Waited {} (requested {} — clamped to the {} maximum)",
+                format_duration_ms(waited_ms),
+                format_duration_ms(requested_ms),
+                format_duration_ms(MAX_WAIT_MS)
+            )
+        } else {
+            format!("Waited {}", format_duration_ms(waited_ms))
+        };
+        (
+            json!({
+                "success": true,
+                "action": "wait",
+                "ms": waited_ms,
+                "requested_ms": requested_ms,
+                "clamped": clamped,
+            }),
+            summary,
+        )
+    }
+
     async fn handle_browser(
         &self,
         action: &str,
         params: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        // A duration wait is a pure pause: it touches no page, so it must not
+        // require (or even resolve) a CDP session — agents pace themselves with
+        // this long before they open a browser. Condition waits fall through to
+        // the session-backed path below, where any duration the caller also
+        // passed becomes the condition's timeout rather than a separate sleep.
+        if action == "wait" && wait_condition(params).is_none() {
+            if let Some(requested_ms) = wait_duration_ms(params) {
+                return Self::wait_for_duration(requested_ms, context).await;
+            }
+            return Ok(err_response(
+                "browser",
+                "wait",
+                ControlHubError::new(
+                    ErrorCode::InvalidParams,
+                    "browser.wait requires either a duration or a `condition`.",
+                )
+                .with_hint(
+                    "To pause, pass `duration_ms` (alias `ms`), e.g. { \"duration_ms\": 1800000 } for 30 minutes.",
+                )
+                .with_hint(
+                    "To wait on the page, pass `condition`: 'load' | 'domcontentloaded' | 'networkidle' | a CSS/@ref selector.",
+                ),
+            ));
+        }
+
         let session_id_param = params
             .get("session_id")
             .and_then(|v| v.as_str())
@@ -738,8 +896,69 @@ Branch on `ok` and `error.code`, not on English messages.
                 let user_data_dir = params.get("user_data_dir").and_then(|v| v.as_str());
                 let launch_result = if mode == "headless" {
                     LaunchResult::AlreadyConnected
+                } else if user_data_dir.is_none()
+                    && CdpClient::browser_connection_for_kind(port, &kind)
+                        .await
+                        .is_some()
+                {
+                    LaunchResult::AlreadyConnected
                 } else {
+                    // Every browser shares the same logical tool port. When
+                    // the selection or explicit profile changes, stop routing
+                    // new actions through the previously retained browser.
+                    if CdpClient::browser_connection(port).await.is_some() {
+                        CdpClient::remove_browser_connection(port).await;
+                    }
                     BrowserLauncher::launch_with_cdp_opts(&kind, port, user_data_dir).await?
+                };
+
+                let uses_user_profile = match &launch_result {
+                    LaunchResult::UserProfileReady { endpoint } => {
+                        if let Err(error) = CdpClient::connect_user_profile_browser(
+                            port,
+                            endpoint.port,
+                            &kind,
+                            &endpoint.web_socket_url,
+                        )
+                        .await
+                        {
+                            return Ok(err_response(
+                                "browser",
+                                "connect",
+                                ControlHubError::new(
+                                    ErrorCode::NotAvailable,
+                                    format!(
+                                        "{} did not approve the connection to the current profile, or the approval request timed out.",
+                                        kind
+                                    ),
+                                )
+                                .with_hint(error.to_string())
+                                .with_hints(Self::default_browser_connect_hints(&kind, port)),
+                            ));
+                        }
+                        true
+                    }
+                    LaunchResult::UserProfileSetupRequired {
+                        setup_url,
+                        instructions,
+                        ..
+                    } => {
+                        return Ok(err_response(
+                            "browser",
+                            "connect",
+                            ControlHubError::new(
+                                ErrorCode::NotAvailable,
+                                format!(
+                                    "{} needs one-time setup before BitFun can use the current logged-in profile.",
+                                    kind
+                                ),
+                            )
+                            .with_hint(instructions)
+                            .with_hint(format!("{} setup page: {setup_url}", kind))
+                            .with_hints(Self::default_browser_connect_hints(&kind, port)),
+                        ));
+                    }
+                    _ => CdpClient::browser_connection(port).await.is_some(),
                 };
 
                 // UX shortcut: a frequent flow is "drive my Gmail tab" /
@@ -764,14 +983,16 @@ Branch on `ok` and `error.code`, not on English messages.
                     .unwrap_or(true);
 
                 match &launch_result {
-                    LaunchResult::AlreadyConnected | LaunchResult::Launched => {
-                        let version = CdpClient::get_version(port).await?;
+                    LaunchResult::AlreadyConnected
+                    | LaunchResult::Launched
+                    | LaunchResult::UserProfileReady { .. } => {
+                        let version = Self::browser_version(port).await?;
                         if mode == "headless" {
                             if let Err(error) = Self::verify_headless_cdp_browser(&version, port) {
                                 return Ok(err_response("browser", "connect", error));
                             }
                         }
-                        let pages = CdpClient::list_pages(port).await?;
+                        let pages = Self::browser_pages(port).await?;
                         let connected_browser = if mode == "headless" {
                             "Headless test browser".to_string()
                         } else {
@@ -781,7 +1002,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         // Selection: explicit target_* > first real page > first.
                         let matched_by_target = if target_url.is_some() || target_title.is_some() {
                             pages.iter().find(|p| {
-                                if p.web_socket_debugger_url.is_none() {
+                                if !uses_user_profile && p.web_socket_debugger_url.is_none() {
                                     return false;
                                 }
                                 let url_ok = target_url
@@ -825,17 +1046,15 @@ Branch on `ok` and `error.code`, not on English messages.
                             .or_else(|| {
                                 pages.iter().find(|p| {
                                     p.page_type.as_deref() == Some("page")
-                                        && p.web_socket_debugger_url.is_some()
+                                        && (uses_user_profile
+                                            || p.web_socket_debugger_url.is_some())
                                 })
                             })
                             .or_else(|| pages.first())
                             .ok_or_else(|| {
                                 BitFunError::tool("No browser pages found via CDP".to_string())
                             })?;
-                        let ws_url = page.web_socket_debugger_url.as_ref().ok_or_else(|| {
-                            BitFunError::tool("Page has no WebSocket debugger URL".to_string())
-                        })?;
-                        let client = CdpClient::connect(ws_url).await?;
+                        let client = Self::connect_page(port, page).await?;
                         let session = BrowserSession {
                             session_id: page.id.clone(),
                             port,
@@ -874,6 +1093,7 @@ Branch on `ok` and `error.code`, not on English messages.
                             "success": true,
                             "browser": connected_browser,
                             "browser_mode": mode,
+                            "browser_profile": if uses_user_profile { "current_user" } else { "managed" },
                             "browser_version": version.browser,
                             "port": port,
                             "session_id": session.session_id,
@@ -883,6 +1103,8 @@ Branch on `ok` and `error.code`, not on English messages.
                             "activated": activated,
                             "status": if mode == "headless" {
                                 "attached"
+                            } else if uses_user_profile {
+                                "connected_user_profile"
                             } else if matches!(launch_result, LaunchResult::AlreadyConnected) {
                                 "already_connected"
                             } else {
@@ -892,7 +1114,12 @@ Branch on `ok` and `error.code`, not on English messages.
                         if let Some(w) = activate_warning {
                             result["warning"] = json!(w);
                         }
-                        let summary = if targeted {
+                        let summary = if uses_user_profile {
+                            format!(
+                                "Connected to the current {} profile via user-approved DOM/CDP (session {}, page '{}')",
+                                connected_browser, session.session_id, page.title
+                            )
+                        } else if targeted {
                             format!(
                                 "Connected to {} via DOM/CDP (session {}, page '{}')",
                                 connected_browser, session.session_id, page.title
@@ -905,6 +1132,24 @@ Branch on `ok` and `error.code`, not on English messages.
                         };
                         Ok(vec![ToolResult::ok(result, Some(summary))])
                     }
+                    LaunchResult::UserProfileSetupRequired {
+                        setup_url,
+                        instructions,
+                        ..
+                    } => Ok(err_response(
+                        "browser",
+                        "connect",
+                        ControlHubError::new(
+                            ErrorCode::NotAvailable,
+                            format!(
+                                "{} needs one-time setup before BitFun can use the current logged-in profile.",
+                                kind
+                            ),
+                        )
+                        .with_hint(instructions)
+                        .with_hint(format!("{} setup page: {setup_url}", kind))
+                        .with_hints(Self::default_browser_connect_hints(&kind, port)),
+                    )),
                     LaunchResult::LaunchedButCdpNotReady { message, .. } => Ok(err_response(
                         "browser",
                         "connect",
@@ -925,7 +1170,7 @@ Branch on `ok` and `error.code`, not on English messages.
             }
 
             "list_pages" => {
-                let pages = CdpClient::list_pages(port).await?;
+                let pages = Self::browser_pages(port).await?;
                 let default_id = browser_sessions().default_id().await;
                 let summary: Vec<Value> = pages
                     .iter()
@@ -976,7 +1221,7 @@ Branch on `ok` and `error.code`, not on English messages.
                     .unwrap_or(20)
                     .max(1);
 
-                let pages = CdpClient::list_pages(port).await?;
+                let pages = Self::browser_pages(port).await?;
                 let default_id = browser_sessions().default_id().await;
                 let total = pages.len();
                 let filtered: Vec<Value> = pages
@@ -1031,12 +1276,8 @@ Branch on `ok` and `error.code`, not on English messages.
                     .get("activate")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(true);
-                let page = CdpClient::create_page(port, url).await?;
-                let ws_url = page
-                    .web_socket_debugger_url
-                    .as_ref()
-                    .ok_or_else(|| BitFunError::tool("New tab has no WebSocket URL".to_string()))?;
-                let client = CdpClient::connect(ws_url).await?;
+                let page = Self::create_browser_page(port, url).await?;
+                let client = Self::connect_page(port, &page).await?;
                 let session = BrowserSession {
                     session_id: page.id.clone(),
                     port,
@@ -1089,14 +1330,11 @@ Branch on `ok` and `error.code`, not on English messages.
                     reused = true;
                     registry.get(Some(page_id)).await?
                 } else {
-                    let pages = CdpClient::list_pages(port).await?;
+                    let pages = Self::browser_pages(port).await?;
                     let page = pages.iter().find(|p| p.id == page_id).ok_or_else(|| {
                         BitFunError::tool(format!("Page '{}' not found", page_id))
                     })?;
-                    let ws_url = page.web_socket_debugger_url.as_ref().ok_or_else(|| {
-                        BitFunError::tool("Page has no WebSocket URL".to_string())
-                    })?;
-                    let client = CdpClient::connect(ws_url).await?;
+                    let client = Self::connect_page(port, page).await?;
                     let session = BrowserSession {
                         session_id: page.id.clone(),
                         port,
@@ -1497,10 +1735,23 @@ Branch on `ok` and `error.code`, not on English messages.
                         )])
                     }
                     "wait" => {
-                        let ms = params.get("duration_ms").and_then(|v| v.as_u64());
-                        let cond = params.get("condition").and_then(|v| v.as_str());
-                        let result = actions.wait(ms, cond).await?;
-                        Ok(vec![ToolResult::ok(result, Some("Wait completed".to_string()))])
+                        // Duration waits already returned from the session-free
+                        // path in `handle_browser`; only condition waits, which
+                        // genuinely need the page, reach here. A duration passed
+                        // alongside the condition bounds it instead of being
+                        // dropped.
+                        let cond = wait_condition(params);
+                        let result = actions
+                            .wait(None, cond, wait_condition_timeout_ms(params))
+                            .await?;
+                        let summary = match result.get("timed_out").and_then(|v| v.as_bool()) {
+                            Some(true) => format!(
+                                "Timed out waiting for '{}'",
+                                cond.unwrap_or("condition")
+                            ),
+                            _ => format!("Waited for '{}'", cond.unwrap_or("condition")),
+                        };
+                        Ok(vec![ToolResult::ok(result, Some(summary))])
                     }
                     "get_text" => {
                         let selector = match selector_param(params) {
@@ -2271,6 +2522,11 @@ impl Tool for ControlHubTool {
         // Wrap legacy handler results into the unified envelope.
         match dispatched {
             Ok(results) => Ok(envelope_wrap_results(domain, action, results)),
+            // Cancellation is the pipeline's own terminal state, not a tool
+            // failure. Folding it into an `ok: false` envelope would both hide
+            // the user's stop from the pipeline and invite the model to
+            // "recover" from a turn that is already being torn down.
+            Err(err @ BitFunError::Cancelled(_)) => Err(err),
             Err(err) => Ok(err_response(
                 domain,
                 action,
@@ -2324,6 +2580,94 @@ fn selector_param(params: &Value) -> Option<&str> {
         .find_map(|key| params.get(*key).and_then(|v| v.as_str()))
         .map(str::trim)
         .filter(|selector| !selector.is_empty())
+}
+
+/// A duration parameter, in milliseconds, under any of `keys`.
+///
+/// A model that writes `"1800000"` as a string still means 1_800_000 ms, and
+/// one that writes `1.5` seconds means 1500 ms.
+fn duration_param_ms(params: &Value, keys: &[&str], unit_ms: f64) -> Option<u64> {
+    keys.iter()
+        .find_map(|key| {
+            let value = params.get(*key)?;
+            value
+                .as_f64()
+                .or_else(|| value.as_str()?.trim().parse::<f64>().ok())
+                .filter(|n| n.is_finite() && *n >= 0.0)
+        })
+        .map(|n| (n * unit_ms).round() as u64)
+}
+
+/// Read a `wait` pause duration out of `params`, in milliseconds.
+///
+/// The action used to read `duration_ms` and nothing else, so the very
+/// plausible `{ "ms": 1800000 }` was dropped on the floor and the call
+/// returned instantly while still reporting success. Accept the obvious
+/// spellings instead — a wait that silently does not wait is far worse than a
+/// slightly wide parameter surface. Millisecond keys are checked before second
+/// keys so a call carrying both cannot be read in the wrong unit.
+///
+/// A `condition` always wins: next to one, every duration key reads as "wait
+/// for this, but no longer than" rather than as a pause, so this returns
+/// `None` and [`wait_condition_timeout_ms`] takes the value instead. Sleeping
+/// on `{ condition, timeout_ms }` would never look at the page at all.
+fn wait_duration_ms(params: &Value) -> Option<u64> {
+    const MS_KEYS: [&str; 5] = ["duration_ms", "ms", "wait_ms", "sleep_ms", "timeout_ms"];
+    const SECOND_KEYS: [&str; 6] = [
+        "duration_seconds",
+        "duration_s",
+        "seconds",
+        "secs",
+        "sleep_seconds",
+        "wait_seconds",
+    ];
+
+    if wait_condition(params).is_some() {
+        return None;
+    }
+    duration_param_ms(params, &MS_KEYS, 1.0)
+        .or_else(|| duration_param_ms(params, &SECOND_KEYS, 1_000.0))
+}
+
+/// The `condition` a `wait` should watch for, if the caller named a usable one.
+fn wait_condition(params: &Value) -> Option<&str> {
+    params
+        .get("condition")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|cond| !cond.is_empty())
+}
+
+/// Read the bound on a `wait { condition }` — how long to keep waiting for the
+/// page before giving up.
+fn wait_condition_timeout_ms(params: &Value) -> Option<u64> {
+    duration_param_ms(
+        params,
+        &["condition_timeout_ms", "timeout_ms", "duration_ms", "ms"],
+        1.0,
+    )
+    .or_else(|| duration_param_ms(params, &["timeout_seconds", "seconds"], 1_000.0))
+}
+
+/// Render a wait duration the way a person would say it, so the tool summary
+/// reads as "Waited 30m" rather than "Wait completed" — the latter is exactly
+/// what a zero-length wait used to print.
+fn format_duration_ms(ms: u64) -> String {
+    let total_secs = ms / 1_000;
+    let (hours, minutes, seconds) = (
+        total_secs / 3_600,
+        (total_secs % 3_600) / 60,
+        total_secs % 60,
+    );
+    if hours > 0 {
+        format!("{hours}h{minutes:02}m")
+    } else if minutes > 0 {
+        format!("{minutes}m{seconds:02}s")
+    } else if total_secs > 0 {
+        format!("{total_secs}s")
+    } else {
+        format!("{ms}ms")
+    }
 }
 
 /// An `@eN` ref that no longer resolves means the snapshot it came from is
@@ -2509,7 +2853,10 @@ mod control_hub_tests {
             .unwrap_or_default();
         assert!(msg.contains("Unknown domain"), "got: {msg}");
         for d in ["browser", "terminal", "meta"] {
-            assert!(msg.contains(d), "valid domain {d} missing from error: {msg}");
+            assert!(
+                msg.contains(d),
+                "valid domain {d} missing from error: {msg}"
+            );
         }
         // ComputerUse is a separate tool, not a ControlHub domain — listing it
         // as one sent models chasing a domain that never existed.
@@ -2517,6 +2864,182 @@ mod control_hub_tests {
             !msg.contains("ComputerUse"),
             "ComputerUse must not be advertised as a ControlHub domain: {msg}"
         );
+    }
+
+    #[test]
+    fn wait_duration_accepts_the_spellings_models_actually_emit() {
+        // `ms` is what the model reached for in the field; reading only
+        // `duration_ms` dropped it and turned a 30-minute pause into a no-op.
+        for key in ["duration_ms", "ms", "wait_ms", "sleep_ms"] {
+            assert_eq!(
+                wait_duration_ms(&json!({ key: 1_800_000u64 })),
+                Some(1_800_000),
+                "millisecond key {key} must be honoured"
+            );
+        }
+        for key in [
+            "duration_seconds",
+            "duration_s",
+            "seconds",
+            "secs",
+            "sleep_seconds",
+            "wait_seconds",
+        ] {
+            assert_eq!(
+                wait_duration_ms(&json!({ key: 90 })),
+                Some(90_000),
+                "second key {key} must be converted to milliseconds"
+            );
+        }
+        assert_eq!(wait_duration_ms(&json!({ "ms": "1500" })), Some(1_500));
+        assert_eq!(wait_duration_ms(&json!({ "seconds": 1.5 })), Some(1_500));
+        // Both units present: milliseconds win, so the wait can never be read
+        // a thousand times too short.
+        assert_eq!(
+            wait_duration_ms(&json!({ "seconds": 5, "duration_ms": 1_800_000u64 })),
+            Some(1_800_000)
+        );
+        assert_eq!(wait_duration_ms(&json!({ "condition": "load" })), None);
+        assert_eq!(wait_duration_ms(&json!({ "ms": -5 })), None);
+        assert_eq!(wait_duration_ms(&json!({ "ms": "soon" })), None);
+        // On its own `timeout_ms` can only mean the pause itself.
+        assert_eq!(
+            wait_duration_ms(&json!({ "timeout_ms": 5_000 })),
+            Some(5_000)
+        );
+    }
+
+    #[test]
+    fn a_condition_wait_keeps_its_timeout_instead_of_becoming_a_sleep() {
+        // `{ condition, timeout_ms }` means "wait for this, but no longer
+        // than". Reading `timeout_ms` as a pause would sleep and never look at
+        // the page at all.
+        let params = json!({ "condition": "networkidle", "timeout_ms": 30_000 });
+        assert_eq!(wait_duration_ms(&params), None);
+        assert_eq!(wait_condition_timeout_ms(&params), Some(30_000));
+
+        // A duration passed next to a condition bounds it rather than being
+        // dropped on the floor.
+        let params = json!({ "condition": "#done", "duration_ms": 45_000 });
+        assert_eq!(wait_duration_ms(&params), None);
+        assert_eq!(wait_condition_timeout_ms(&params), Some(45_000));
+
+        // Nothing given: the action falls back to its own default.
+        assert_eq!(
+            wait_condition_timeout_ms(&json!({ "condition": "load" })),
+            None
+        );
+        assert_eq!(
+            wait_condition_timeout_ms(&json!({ "condition": "load", "timeout_seconds": 20 })),
+            Some(20_000)
+        );
+    }
+
+    #[tokio::test]
+    async fn browser_wait_actually_sleeps_and_reports_the_elapsed_time() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let started = std::time::Instant::now();
+        let results = tool
+            // No browser session exists in this test: a duration wait must not
+            // need one.
+            .dispatch("browser", "wait", &json!({ "ms": 250 }), &ctx)
+            .await
+            .expect("duration wait should succeed");
+        assert!(
+            started.elapsed() >= std::time::Duration::from_millis(240),
+            "wait returned after only {:?}",
+            started.elapsed()
+        );
+        // `dispatch` returns the raw handler payload; `call_impl` is what adds
+        // the `{ ok, domain, action, data }` envelope.
+        let data = results.first().expect("one result").content();
+        assert_eq!(data.get("ms").and_then(|v| v.as_u64()), Some(250));
+        assert_eq!(data.get("clamped").and_then(|v| v.as_bool()), Some(false));
+        assert_eq!(data.get("success").and_then(|v| v.as_bool()), Some(true));
+    }
+
+    #[test]
+    fn browser_wait_clamps_absurd_durations_and_says_so() {
+        // Asserted on the reporting helper rather than through `dispatch`, so
+        // the test does not have to sit through the wait itself.
+        let (data, summary) = ControlHubTool::wait_outcome(MAX_WAIT_MS * 3);
+        assert_eq!(data.get("ms").and_then(|v| v.as_u64()), Some(MAX_WAIT_MS));
+        assert_eq!(
+            data.get("requested_ms").and_then(|v| v.as_u64()),
+            Some(MAX_WAIT_MS * 3)
+        );
+        assert_eq!(data.get("clamped").and_then(|v| v.as_bool()), Some(true));
+        // A shortened wait must announce itself; silently waiting less than
+        // asked is how the agent ends up out of step with the schedule.
+        assert!(summary.contains("clamped"), "got: {summary}");
+
+        let (data, summary) = ControlHubTool::wait_outcome(1_800_000);
+        assert_eq!(data.get("clamped").and_then(|v| v.as_bool()), Some(false));
+        assert_eq!(summary, "Waited 30m00s");
+    }
+
+    #[tokio::test]
+    async fn browser_wait_without_duration_or_condition_is_rejected() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch("browser", "wait", &json!({}), &ctx)
+            .await
+            .expect("reported in-band");
+        let payload = results.first().unwrap().content();
+        // Reporting success for a wait that did not wait is the failure this
+        // guards: the agent moved straight on believing it had paused.
+        assert_eq!(payload.get("ok").and_then(|v| v.as_bool()), Some(false));
+        let error = payload.get("error").expect("error envelope");
+        assert_eq!(
+            error.get("code").and_then(|v| v.as_str()),
+            Some("INVALID_PARAMS")
+        );
+    }
+
+    #[tokio::test]
+    async fn browser_wait_is_interrupted_by_cancellation() {
+        let token = tokio_util::sync::CancellationToken::new();
+        let mut ctx = empty_context();
+        ctx.runtime_handles =
+            bitfun_runtime_ports::ToolRuntimeHandles::new(None, Some(token.clone()));
+
+        let started = std::time::Instant::now();
+        // Driven through `call_impl` so this also covers the envelope layer,
+        // which must let a cancellation through instead of reporting it as an
+        // ordinary `ok: false` tool error.
+        let waiter = tokio::spawn(async move {
+            ControlHubTool::new()
+                .call_impl(
+                    &json!({
+                        "domain": "browser",
+                        "action": "wait",
+                        "params": { "seconds": 600 },
+                    }),
+                    &ctx,
+                )
+                .await
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        token.cancel();
+        let outcome = waiter.await.expect("wait task joins");
+
+        // Without this, stopping the agent could not take effect until the
+        // pause elapsed — ten minutes of an unstoppable turn.
+        assert!(
+            matches!(outcome, Err(BitFunError::Cancelled(_))),
+            "a long pace wait must stay interruptible"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(30));
+    }
+
+    #[test]
+    fn wait_durations_are_formatted_for_humans() {
+        assert_eq!(format_duration_ms(1_800_000), "30m00s");
+        assert_eq!(format_duration_ms(MAX_WAIT_MS), "1h00m");
+        assert_eq!(format_duration_ms(1_500), "1s");
+        assert_eq!(format_duration_ms(250), "250ms");
     }
 
     #[tokio::test]
@@ -2799,9 +3322,7 @@ mod control_hub_tests {
             .expect("open_builtin succeeds without a frontend emitter");
         let payload = results.first().expect("one result").content();
         assert_eq!(
-            payload
-                .get("observable_by_agent")
-                .and_then(|v| v.as_bool()),
+            payload.get("observable_by_agent").and_then(|v| v.as_bool()),
             Some(false),
             "open_builtin must state the panel is not agent-observable: {payload}"
         );
@@ -2826,6 +3347,23 @@ mod control_hub_tests {
         assert!(
             !desc.contains("domain: \"desktop\"") && !desc.contains("domain: \"system\""),
             "ControlHub description must not advertise desktop/system domains"
+        );
+    }
+
+    #[tokio::test]
+    async fn description_documents_wait_params_and_routes_schedules_to_cron() {
+        let desc = ControlHubTool::new().description().await.unwrap();
+        // The action took `duration_ms` and documented nothing, so the model
+        // guessed `ms` and got a silent no-op.
+        assert!(
+            desc.contains("`wait { duration_ms }`") && desc.contains("`ms`"),
+            "description must name the wait duration parameter and its aliases"
+        );
+        // A recurring pace should not be built out of hour-long waits that pin
+        // the turn open.
+        assert!(
+            desc.contains("`Cron` tool"),
+            "description must point repeating schedules at Cron"
         );
     }
 
@@ -2920,7 +3458,7 @@ mod control_hub_tests {
             );
             assert!(
                 err.hints.iter().any(|h| h.contains("mode: \"default\"")),
-                "hints must offer the default managed-profile mode: {:?}",
+                "hints must offer the default interactive-browser mode: {:?}",
                 err.hints
             );
         }
@@ -2944,17 +3482,32 @@ mod control_hub_tests {
     }
 
     #[test]
-    fn default_connect_hints_point_to_managed_profile_not_user_debug_port() {
+    fn default_connect_hints_point_to_guarded_user_profile_not_raw_debug_port() {
         let hints = ControlHubTool::default_browser_connect_hints(&BrowserKind::Chrome, 9222);
         let joined = hints.join(" | ");
         assert!(
-            joined.contains("managed profile"),
-            "hints must guide toward BitFun's managed profile launch: {joined}"
+            joined.contains("current real profile")
+                && joined.contains("chrome://inspect/#remote-debugging")
+                && joined.contains("approve"),
+            "hints must guide toward Chrome's guarded real-profile connection: {joined}"
         );
         assert!(
             !joined.contains("--remote-debugging-port"),
             "hints must not teach enabling a raw debug port on the user's everyday browser: {joined}"
         );
+    }
+
+    #[test]
+    fn edge_connect_hints_use_its_guarded_real_profile_setup() {
+        let hints = ControlHubTool::default_browser_connect_hints(&BrowserKind::Edge, 9222);
+        let joined = hints.join(" | ");
+        assert!(joined.contains("current real profile"), "{joined}");
+        assert!(
+            joined.contains("edge://inspect/#remote-debugging"),
+            "{joined}"
+        );
+        assert!(joined.contains("approve"), "{joined}");
+        assert!(!joined.contains("--remote-debugging-port"), "{joined}");
     }
 
     #[test]

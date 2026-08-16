@@ -7,6 +7,7 @@ export const reasoningPresetEditorAppearanceDescriptor: AppearanceSurfaceDescrip
     { id: 'section' },
     { id: 'primarySettings' },
     { id: 'binding' },
+    { id: 'unavailableWarning' },
     { id: 'generated' },
     { id: 'header' },
     { id: 'empty' },

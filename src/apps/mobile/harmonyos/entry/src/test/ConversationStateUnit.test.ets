@@ -73,6 +73,7 @@ import { RemoteWorkspaceCoordinator } from '../main/ets/services/RemoteWorkspace
 import { RemoteWorkspaceDataSource } from '../main/ets/services/RemoteWorkspaceRepository';
 import { RemoteToolActionClient, RemoteToolActionController } from '../main/ets/services/RemoteToolActionController';
 import { RemoteUiState } from '../main/ets/services/RemoteUiState';
+import { TranscriptIntegrityPolicy } from '../main/ets/services/TranscriptIntegrityPolicy';
 import {
   VoiceInputLifecycleCallbacks,
   VoiceInputLifecycleController,
@@ -89,8 +90,8 @@ import { ConversationController } from '../main/ets/pages/viewmodel/Conversation
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
   REMOTE_CHAT_COMPOSER_CAPABILITIES
-} from '../main/ets/pages/components/ChatComposerCapabilities';
-import { ChatSurface } from '../main/ets/pages/components/ChatSurface';
+} from '../main/ets/pages/state/ChatComposerCapabilities';
+import { ChatSurface } from '../main/ets/pages/state/ChatSurface';
 import { ConversationViewContract } from '../main/ets/pages/components/ConversationViewContract';
 import {
   AppNavigationBackAction,
@@ -290,6 +291,46 @@ export default function conversationStateUnitTest() {
       expect(merged[0].thinking || '').assertEqual('');
     });
 
+    it('does not let an empty poll stub wipe a richer assistant body', 0, () => {
+      const rich = chatMessage('assistant-rich-1', 'assistant', 'Done with the edit');
+      rich.thinking = 'Plan the change first';
+      rich.tools = [{ id: 'tool-1', name: 'Grep', status: 'completed' }];
+      rich.items = [{
+        type: 'thinking',
+        content: 'Plan the change first'
+      }, {
+        type: 'tool',
+        tool: { id: 'tool-1', name: 'Grep', status: 'completed' }
+      }];
+      const stub = chatMessage('assistant-rich-1', 'assistant', '');
+      stub.thinking = '';
+      stub.tools = [];
+      stub.items = [];
+      const merged = RemoteUiState.mergeMessages([rich], [stub]);
+
+      expect(TranscriptIntegrityPolicy.isHollowAssistant(stub)).assertTrue();
+      expect(TranscriptIntegrityPolicy.hasDisplayableBody(merged[0])).assertTrue();
+      expect(merged[0].text).assertEqual('Done with the edit');
+      expect(merged[0].thinking).assertEqual('Plan the change first');
+      expect(merged[0].tools ? merged[0].tools.length : 0).assertEqual(1);
+      expect(merged[0].items ? merged[0].items.length : 0).assertEqual(2);
+    });
+
+    it('keeps structured items when later text arrives without them', 0, () => {
+      const rich = chatMessage('assistant-rich-2', 'assistant', '');
+      rich.thinking = 'Still reasoning';
+      rich.items = [{ type: 'thinking', content: 'Still reasoning' }];
+      rich.tools = [{ id: 'tool-2', name: 'Read', status: 'completed' }];
+      const merged = RemoteUiState.mergeMessages([rich], [
+        chatMessage('assistant-rich-2', 'assistant', 'Final answer')
+      ]);
+
+      expect(merged[0].text).assertEqual('Final answer');
+      expect(merged[0].thinking || '').assertEqual('');
+      expect(merged[0].items ? merged[0].items.length : 0).assertEqual(1);
+      expect(merged[0].tools ? merged[0].tools.length : 0).assertEqual(1);
+    });
+
     it('owns optimistic merge and active turn cleanup rules', 0, () => {
       const store = new ChatTimelineStore();
       store.reset('session-1');
@@ -311,6 +352,61 @@ export default function conversationStateUnitTest() {
       state = store.snapshot();
       expect(state.persistedMessages.length).assertEqual(2);
       expect(state.activeTurn ? state.activeTurn.id : '').assertEqual('');
+    });
+
+    it('never offers a placeholder id as the turn to cancel', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-stop');
+      store.appendOptimisticMessage(chatMessage('local-1', 'user', 'Run it'));
+      const pendingActiveId = store.setPendingActiveTurn('local-1');
+      const pendingTurn = store.snapshot().activeTurn;
+
+      // The placeholder is what the user sees while the desktop has not yet
+      // reported a turn — asking to cancel `pending-local-1` would be refused
+      // as stale, so this window must resolve to "cancel whatever is running".
+      expect(pendingActiveId).assertEqual('active-pending-local-1');
+      expect(ChatTimelineStore.cancelableTurnId(pendingTurn!)).assertEqual('');
+
+      store.setLocalActiveTurn('turn-9');
+      expect(ChatTimelineStore.cancelableTurnId(store.snapshot().activeTurn!)).assertEqual('turn-9');
+    });
+
+    it('keeps a message sent mid-run below the reply it is waiting on', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-queue');
+      // The turn the desktop is already running: its own user message came back
+      // persisted, which is what leaves nothing for the turn to sit behind.
+      store.mergePersistedMessages([chatMessage('user-1', 'user', 'First')]);
+      store.setLocalActiveTurn('turn-1');
+      store.appendOptimisticMessage(chatMessage('local-2', 'user', 'Second'));
+
+      const items = store.project(false);
+      expect(items.length).assertEqual(3);
+      expect(items[0].type).assertEqual('user_message');
+      expect(items[1].type).assertEqual('assistant_live_turn');
+      expect(items[2].type).assertEqual('optimistic_user_message');
+      expect(items[2].message ? items[2].message!.id : '').assertEqual('local-2');
+    });
+
+    it('still draws the first reply under the message that started it', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-first');
+      store.appendOptimisticMessage(chatMessage('local-1', 'user', 'First'));
+      store.setPendingActiveTurn('local-1');
+
+      // Nothing has been persisted yet, so without the anchor the placeholder
+      // would render above the message the user just sent.
+      expect(store.activeTurnAnchorId()).assertEqual('local-1');
+      const pending = store.project(false);
+      expect(pending[0].type).assertEqual('optimistic_user_message');
+      expect(pending[1].type).assertEqual('assistant_live_turn');
+
+      // Promoting the placeholder to the real turn must not lose the anchor.
+      store.setLocalActiveTurn('turn-1');
+      expect(store.activeTurnAnchorId()).assertEqual('local-1');
+      const promoted = store.project(false);
+      expect(promoted[0].type).assertEqual('optimistic_user_message');
+      expect(promoted[1].type).assertEqual('assistant_live_turn');
     });
 
     it('projects empty state through the store', 0, () => {
@@ -1031,13 +1127,17 @@ export default function conversationStateUnitTest() {
       const remoteProjection = ConversationViewState.project(AppRoute.RemoteChat, remote, general, '');
       expect(remoteProjection.surface).assertEqual(ChatSurface.Remote);
       expect(remoteProjection.chatInput).assertEqual('remote draft');
-      expect(remoteProjection.activeSession.sessionId).assertEqual('remote-session');
+      expect(remoteProjection.activeSession.sessionId).assertEqual('');
+      expect(remote.activeSession.sessionId).assertEqual('remote-session');
       expect(remoteProjection.isLoadingConversation).assertTrue();
 
       const generalProjection = ConversationViewState.project(AppRoute.ChatHome, remote, general, 'Configure model');
       expect(generalProjection.surface).assertEqual(ChatSurface.General);
       expect(generalProjection.chatInput).assertEqual('general draft');
       expect(generalProjection.inlineStatusText).assertEqual('Configure model');
+      expect(generalProjection.showSuggestionsWhenEmpty).assertFalse();
+      expect(generalProjection.composerCapabilities.supportsAttachments).assertTrue();
+      expect(generalProjection.composerCapabilities.showAddButton).assertTrue();
     });
   });
 
@@ -1059,6 +1159,39 @@ export default function conversationStateUnitTest() {
       expect(sessions[0].id).assertEqual('shared-session');
       expect(sessions[1].id).assertEqual('one-session');
       expect(sessions[2].id).assertEqual('two-session');
+    });
+
+    // Listings run several at a time, so the result can no longer be read off
+    // the order they happened to finish in.
+    it('keeps results in path order across concurrency batches', 0, async () => {
+      const source = new FakeRemoteWorkspaceDataSource();
+      const paths: string[] = [];
+      for (let index = 0; index < 9; index++) {
+        const path = `/workspace-${index}`;
+        paths.push(path);
+        source.sessionsByPath.set(path, [remoteSession(`session-${index}`, `Session ${index}`)]);
+      }
+      const coordinator = new RemoteWorkspaceCoordinator(source);
+
+      const sessions = await coordinator.sessionsForWorkspaces(paths);
+      expect(sessions.length).assertEqual(9);
+      expect(sessions[0].id).assertEqual('session-0');
+      expect(sessions[4].id).assertEqual('session-4');
+      expect(sessions[8].id).assertEqual('session-8');
+      expect(source.listedPaths.length).assertEqual(9);
+    });
+
+    it('keeps the other workspaces when one of them cannot be listed', 0, async () => {
+      const source = new FakeRemoteWorkspaceDataSource();
+      source.sessionsByPath.set('/one', [remoteSession('one-session', 'One')]);
+      source.sessionsByPath.set('/three', [remoteSession('three-session', 'Three')]);
+      source.failingPaths = ['/two'];
+      const coordinator = new RemoteWorkspaceCoordinator(source);
+
+      const sessions = await coordinator.sessionsForWorkspaces(['/one', '/two', '/three']);
+      expect(sessions.length).assertEqual(2);
+      expect(sessions[0].id).assertEqual('one-session');
+      expect(sessions[1].id).assertEqual('three-session');
     });
   });
 

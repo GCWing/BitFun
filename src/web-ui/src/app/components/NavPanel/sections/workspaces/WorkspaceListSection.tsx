@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
@@ -20,6 +20,8 @@ interface WorkspaceDragPayload {
 }
 
 const WORKSPACE_DRAG_MIME_TYPE = 'application/x-bitfun-workspace';
+const WORKSPACE_DROP_SETTLE_MS = 160;
+const WORKSPACE_DROP_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 
 const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) => {
@@ -40,6 +42,10 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   // Refs for values that must be read inside event handlers without stale closures
   const draggedWorkspaceIdRef = useRef<string | null>(null);
   const dropTargetRef = useRef<{ workspaceId: string; position: WorkspaceDragPosition } | null>(null);
+  const workspaceRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const pendingDropRectsRef = useRef<Map<string, DOMRect> | null>(null);
+  const dropAnimationsRef = useRef<Map<string, Animation>>(new Map());
+
   // Drag-state safety nets (window dragend/mousedown + reset timeout) to clear
   // stuck is-drag-active state when dragend doesn't fire normally.
   const dragSafetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -70,6 +76,42 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   const emptyLabel = variant === 'assistants'
     ? t('nav.workspaces.emptyAssistants')
     : t('nav.workspaces.emptyProjects');
+  const workspaceSignature = workspaces.map(workspace => workspace.id).join(':');
+
+  useEffect(() => () => {
+    dropAnimationsRef.current.forEach(animation => animation.cancel());
+    dropAnimationsRef.current.clear();
+  }, []);
+
+  useLayoutEffect(() => {
+    const previousRects = pendingDropRectsRef.current;
+    if (!previousRects) return;
+    pendingDropRectsRef.current = null;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+    for (const [workspaceId, element] of workspaceRowRefs.current) {
+      const previousRect = previousRects.get(workspaceId);
+      if (!previousRect) continue;
+      const currentRect = element.getBoundingClientRect();
+      const deltaY = previousRect.top - currentRect.top;
+      if (Math.abs(deltaY) < 0.5) continue;
+
+      dropAnimationsRef.current.get(workspaceId)?.cancel();
+      const animation = element.animate(
+        [
+          { transform: `translateY(${deltaY}px)` },
+          { transform: 'translateY(0)' },
+        ],
+        { duration: WORKSPACE_DROP_SETTLE_MS, easing: WORKSPACE_DROP_EASING },
+      );
+      dropAnimationsRef.current.set(workspaceId, animation);
+      animation.addEventListener('finish', () => {
+        if (dropAnimationsRef.current.get(workspaceId) === animation) {
+          dropAnimationsRef.current.delete(workspaceId);
+        }
+      }, { once: true });
+    }
+  }, [workspaceSignature]);
 
   const removeDragArtifacts = useCallback(() => {
     if (dragSafetyTimeoutRef.current !== null) {
@@ -258,10 +300,16 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     draggedWorkspaceIdRef.current = null;
     dropTargetRef.current = null;
     setDropTarget(null);
+    pendingDropRectsRef.current = new Map(
+      Array.from(workspaceRowRefs.current, ([id, element]) => (
+        [id, element.getBoundingClientRect()] as const
+      )),
+    );
 
     try {
       await reorderOpenedWorkspacesInSection(variant, payload.workspaceId, workspaceId, position);
     } catch (error) {
+      pendingDropRectsRef.current = null;
       notificationService.error(
         error instanceof Error ? error.message : t('nav.workspaces.reorderFailed'),
         { duration: 4000 }
@@ -294,6 +342,10 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
             data-bf-part="item"
             data-bf-state={workspace.id === activeWorkspaceId ? 'selected' : undefined}
             key={workspace.id}
+            ref={(element) => {
+              if (element) workspaceRowRefs.current.set(workspace.id, element);
+              else workspaceRowRefs.current.delete(workspace.id);
+            }}
             className={[
               'bitfun-nav-panel__workspace-drop-target',
               draggedWorkspaceId && draggedWorkspaceId !== workspace.id && 'is-drag-active',
@@ -308,9 +360,6 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
             onDragLeave={handleDragLeave(workspace.id)}
             onDrop={(event) => { void handleDrop(workspace.id)(event); }}
           >
-            {dropTarget?.workspaceId === workspace.id && dropTarget.position === 'before' ? (
-              <div data-bf-component="workspace-list-section" data-bf-part="dropLine" className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
-            ) : null}
             <WorkspaceItem
               workspace={workspace}
               isActive={
@@ -324,7 +373,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
               onDrag={handleDrag}
               onDragEnd={handleDragEnd}
             />
-            {dropTarget?.workspaceId === workspace.id && dropTarget.position === 'after' ? (
+            {dropTarget?.workspaceId === workspace.id ? (
               <div data-bf-component="workspace-list-section" data-bf-part="dropLine" className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
             ) : null}
           </div>

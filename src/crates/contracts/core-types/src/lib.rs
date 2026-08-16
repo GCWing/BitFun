@@ -21,14 +21,14 @@ pub use ai::{
     ProviderCatalogModelLimits, ProviderCatalogModelPricing, ProviderCatalogModelSource,
     ProviderCatalogProvider, ProviderCatalogSource, ProviderCatalogUpstreamProvider, ProxyConfig,
     ReasoningCapabilityStatus, ReasoningCatalogBinding, ReasoningCatalogProjection,
-    ReasoningConfig, ReasoningPreset, ReasoningPresetAction, ReasoningPresetDescriptor,
-    ReasoningPresetSource, RemoteModelInfo, ToolCall, ToolCallConfirmationDetails,
-    ToolCallRequestInfo, ToolCallResponseInfo, ToolDefinition,
+    ReasoningCatalogProjectionRequest, ReasoningConfig, ReasoningPreset, ReasoningPresetAction,
+    ReasoningPresetDescriptor, ReasoningPresetSource, RemoteModelInfo, ToolCall,
+    ToolCallConfirmationDetails, ToolCallRequestInfo, ToolCallResponseInfo, ToolDefinition,
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
 pub use session::{
     validate_session_id, SessionAgentRouteOwner, SessionContinuationPolicy, SessionKind,
-    SessionModelBindingPolicy,
+    SessionModelBindingPolicy, SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY,
 };
 pub use session_usage::*;
 pub use speech::*;

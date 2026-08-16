@@ -18,6 +18,8 @@
   --config-page-content-bottom-padding: 48px;
   /* Vertical gap between top-level sections (ConfigPageSection blocks) inside ConfigPageContent. */
   --config-page-section-gap: 32px;
+  /* Keep supporting copy readable and aligned across settings sections and rows. */
+  --config-page-description-max-width: 60ch;
   container-type: inline-size;
   container-name: config-panel;
 }
@@ -96,9 +98,11 @@
 
 .bitfun-config-page-section__description {
   margin: var(--bf-appearance-token-size-gap-1) 0 0;
+  max-inline-size: var(--config-page-description-max-width);
   font-size: var(--bf-appearance-token-font-size-xs);
   color: var(--bf-appearance-token-color-text-secondary);
   line-height: var(--bf-appearance-token-line-height-relaxed);
+  text-wrap: pretty;
 }
 
 .bitfun-config-page-section__extra {
@@ -178,9 +182,11 @@
 
 .bitfun-config-page-row__description {
   margin: var(--bf-appearance-token-size-gap-1) 0 0;
+  max-inline-size: var(--config-page-description-max-width);
   font-size: var(--bf-appearance-token-font-size-xs);
   color: var(--bf-appearance-token-color-text-secondary);
   line-height: var(--bf-appearance-token-line-height-relaxed);
+  text-wrap: pretty;
 }
 
 .bitfun-config-page-row__control {
@@ -208,9 +214,17 @@
   > div:has(> .bitfun-number-input) {
     width: 100%;
     min-width: 0;
+
+    > .select,
+    > .bitfun-input-wrapper,
+    > .bitfun-number-input {
+      width: 100%;
+      min-width: 0;
+    }
   }
 
-  > .bitfun-number-input .bitfun-number-input__input {
+  > .bitfun-number-input .bitfun-number-input__input,
+  > div:has(> .bitfun-number-input) > .bitfun-number-input .bitfun-number-input__input {
     text-align: left;
   }
 }

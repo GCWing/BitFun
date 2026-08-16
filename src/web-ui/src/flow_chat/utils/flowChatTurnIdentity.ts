@@ -1,9 +1,13 @@
-import type { LocalCommandMetadata } from '@/shared/types/session-history';
+import type {
+  LocalCommandMetadata,
+  SessionTurnCatalog,
+} from '@/shared/types/session-history';
 import type {
   DialogTurn,
   DialogTurnIdentity,
   LocalTurnIndex,
   Session,
+  SessionHistoryViewState,
   StorageTurnIndex,
   TurnOrdinal,
 } from '../types/flow-chat';
@@ -41,6 +45,57 @@ export function validSessionTurnCatalog(session: TurnIdentitySession) {
   return session.turnCatalog?.sessionId === session.sessionId
     ? session.turnCatalog
     : undefined;
+}
+
+export interface MaterializedSessionTurnIdentity {
+  turn?: DialogTurn;
+  catalog?: SessionTurnCatalog;
+  ordinal?: TurnOrdinal;
+  storageTurnIndex?: StorageTurnIndex;
+}
+
+/**
+ * Resolve a stable Turn identity from either the canonical live tail or an
+ * already-materialized history window. A catalog-only result remains valid
+ * if the rendered range was pruned while a confirmation dialog was open.
+ */
+export function resolveMaterializedSessionTurnIdentity(
+  session: TurnIdentitySession,
+  historyView: Pick<SessionHistoryViewState, 'catalog' | 'loadedRanges'> | undefined,
+  turnId: string,
+): MaterializedSessionTurnIdentity | undefined {
+  const canonicalTurn = session.dialogTurns.find(candidate => candidate.id === turnId);
+  const materializedRange = canonicalTurn
+    ? undefined
+    : historyView?.loadedRanges.find(range =>
+      range.turns.some(candidate => candidate.id === turnId));
+  const materializedTurnIndex = materializedRange?.turns.findIndex(
+    candidate => candidate.id === turnId,
+  ) ?? -1;
+  const turn = canonicalTurn
+    ?? (materializedTurnIndex >= 0 ? materializedRange?.turns[materializedTurnIndex] : undefined);
+  const catalogs = [validSessionTurnCatalog(session), historyView?.catalog]
+    .filter((catalog): catalog is SessionTurnCatalog => catalog?.sessionId === session.sessionId);
+  const catalog = catalogs.find(candidate => candidate.entries.some(entry => entry.turnId === turnId));
+  const entry = catalog?.entries.find(candidate => candidate.turnId === turnId);
+  if (!turn && !entry) {
+    return undefined;
+  }
+  const directStorageTurnIndex = turn?.storageTurnIndex ?? turn?.backendTurnIndex;
+  return {
+    turn,
+    catalog,
+    ordinal: entry
+      ? asTurnOrdinal(entry.ordinal)
+      : materializedRange && materializedTurnIndex >= 0
+        ? asTurnOrdinal(materializedRange.startOrdinal + materializedTurnIndex)
+        : undefined,
+    storageTurnIndex: directStorageTurnIndex !== undefined
+      ? asStorageTurnIndex(directStorageTurnIndex)
+      : entry
+        ? asStorageTurnIndex(entry.storageTurnIndex)
+        : undefined,
+  };
 }
 
 export function projectedSessionTurnCount(session: TurnIdentitySession): number {
@@ -81,6 +136,35 @@ export function resolveStorageTurnIndex(
   return catalogEntry
     ? asStorageTurnIndex(catalogEntry.storageTurnIndex)
     : undefined;
+}
+
+/**
+ * Storage slot for the next Turn of a Session the frontend persists itself.
+ *
+ * The local runtime hands out that slot through `DialogTurnStarted`, but an
+ * ACP agent runs outside it: nothing on the backend counts those Turns, so the
+ * projection allocates the slot from what it already knows. Returns undefined
+ * when the Session has persisted Turns none of which are projected yet —
+ * guessing there would overwrite history.
+ */
+export function nextStorageTurnIndex(
+  session: TurnIdentitySession,
+): StorageTurnIndex | undefined {
+  let highest = -1;
+  for (const turn of session.dialogTurns) {
+    const storageIndex = turn.storageTurnIndex ?? turn.backendTurnIndex;
+    if (typeof storageIndex === 'number') {
+      highest = Math.max(highest, storageIndex);
+    }
+  }
+  for (const entry of validSessionTurnCatalog(session)?.entries ?? []) {
+    highest = Math.max(highest, entry.storageTurnIndex);
+  }
+
+  if (highest < 0 && projectedSessionTurnCount(session) > 0) {
+    return undefined;
+  }
+  return asStorageTurnIndex(highest + 1);
 }
 
 function buildCatalogOrdinalMaps(session: TurnIdentitySession): {

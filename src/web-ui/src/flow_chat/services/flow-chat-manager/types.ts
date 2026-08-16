@@ -21,7 +21,7 @@ export interface FlowChatContext {
     /** Set when the turn completed with a partial stream recovery. */
     partialRecoveryReason?: string;
   }>;
-  /** In-flight historical session hydration: sessionId -> promise */
+  /** In-flight historical hydration keyed by device surface, epoch, and session. */
   pendingHistoryLoads: Map<string, Promise<void>>;
   /** Capabilities of each in-flight hydrate, used to avoid reusing a weaker preload. */
   pendingHistoryLoadCapabilities?: Map<string, {
@@ -30,7 +30,7 @@ export interface FlowChatContext {
     deferFullHistoryUntilActive: boolean;
     locationKey: string;
   }>;
-  /** In-flight backend context restore for view-restored historical sessions. */
+  /** In-flight backend context restore keyed by device surface and activation. */
   pendingContextRestores?: Map<string, Promise<void>>;
   /** Content buffers: sessionId -> (roundId -> content) */
   contentBuffers: Map<string, Map<string, string>>;

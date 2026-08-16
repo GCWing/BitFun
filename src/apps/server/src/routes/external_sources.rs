@@ -26,10 +26,13 @@ pub(crate) fn supports(method: &str) -> bool {
             | "set_external_source_enabled_command"
             | "set_external_source_conflict_choice_command"
             | "set_external_tool_target_decision_command"
+            | "set_external_tool_targets_enabled_command"
             | "set_external_tool_conflict_choice_command"
             | "set_external_subagent_activation_command"
+            | "set_external_subagents_enabled_command"
             | "choose_external_subagent_conflict_command"
             | "set_external_mcp_server_decision_command"
+            | "set_external_mcp_servers_enabled_command"
             | "choose_external_mcp_conflict_command"
             | "update_external_integration_policy_command"
     )
@@ -162,6 +165,7 @@ mod tests {
         assert!(supports("get_external_source_snapshot"));
         assert!(supports("get_external_source_control_snapshot"));
         assert!(supports("apply_external_source_control_action_command"));
+        assert!(supports("set_external_mcp_servers_enabled_command"));
         assert!(supports("update_external_integration_policy_command"));
         assert!(!supports("open_workspace"));
     }

@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  mdast-util-gfm-autolink-literal@2.0.1:
+    hash: 23ece47d024ddb26beb830db75c7075ea8820bc730565a8e59895957253e5707
+    path: patches/mdast-util-gfm-autolink-literal@2.0.1.patch
+
 importers:
 
   .:
@@ -91,6 +96,15 @@ importers:
       vite:
         specifier: ^7.0.4
         version: 7.3.1(@types/node@22.19.7)(jiti@2.6.1)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  sdk/typescript:
+    devDependencies:
+      '@types/node':
+        specifier: 22.19.7
+        version: 22.19.7
+      typescript:
+        specifier: ~5.8.3
+        version: 5.8.3
 
   src/miniapp-market-web:
     dependencies:
@@ -335,8 +349,8 @@ importers:
         specifier: ^15.6.6
         version: 15.6.6(react@18.3.1)
       react-virtuoso:
-        specifier: ^4.14.1
-        version: 4.18.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^4.18.11
+        version: 4.18.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       rehype-katex:
         specifier: ^7.0.1
         version: 7.0.1
@@ -4672,8 +4686,8 @@ packages:
     peerDependencies:
       react: '>= 0.14.0'
 
-  react-virtuoso@4.18.1:
-    resolution: {integrity: sha512-KF474cDwaSb9+SJ380xruBB4P+yGWcVkcu26HtMqYNMTYlYbrNy8vqMkE+GpAApPPufJqgOLMoWMFG/3pJMXUA==}
+  react-virtuoso@4.18.11:
+    resolution: {integrity: sha512-Qeeq9vqa5seCxACvzbQTUeq3s2/Bu+VlwOMF0jfy3E/ZKHLiXWwJpXBhv2rckqYkvm1XRVFLCBMCmqCU8JNEJg==}
     peerDependencies:
       react: '>=16 || >=17 || >= 18 || >= 19'
       react-dom: '>=16 || >=17 || >= 18 || >=19'
@@ -9663,7 +9677,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  mdast-util-gfm-autolink-literal@2.0.1:
+  mdast-util-gfm-autolink-literal@2.0.1(patch_hash=23ece47d024ddb26beb830db75c7075ea8820bc730565a8e59895957253e5707):
     dependencies:
       '@types/mdast': 4.0.4
       ccount: 2.0.1
@@ -9711,7 +9725,7 @@ snapshots:
   mdast-util-gfm@3.1.0:
     dependencies:
       mdast-util-from-markdown: 2.0.2
-      mdast-util-gfm-autolink-literal: 2.0.1
+      mdast-util-gfm-autolink-literal: 2.0.1(patch_hash=23ece47d024ddb26beb830db75c7075ea8820bc730565a8e59895957253e5707)
       mdast-util-gfm-footnote: 2.1.0
       mdast-util-gfm-strikethrough: 2.0.0
       mdast-util-gfm-table: 2.0.0
@@ -10650,7 +10664,7 @@ snapshots:
       react: 18.3.1
       refractor: 3.6.0
 
-  react-virtuoso@4.18.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  react-virtuoso@4.18.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)

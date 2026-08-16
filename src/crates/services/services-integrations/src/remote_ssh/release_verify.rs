@@ -67,26 +67,37 @@ pub(crate) fn verify_sha256(data: &[u8], expected: &str, filename: &str) -> Resu
     Ok(())
 }
 
-/// Verify a Tauri-format `.sig` (base64 of a complete minisign signature file)
-/// using the likewise base64-wrapped public key.
-pub(crate) fn verify_minisign(data: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<()> {
+/// Verify a Tauri-format `.sig` (base64 of a complete minisign signature file).
+/// The public key may be the raw minisign file accepted by current Tauri CLIs
+/// or the legacy base64 wrapper stored by older release configurations.
+pub(crate) fn verify_minisign(data: &[u8], signature_b64: &str, pubkey: &str) -> Result<()> {
     use base64::Engine as _;
 
-    let decode = |value: &str, what: &str| -> Result<String> {
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(value.trim().as_bytes())
-            .with_context(|| format!("decode {what}"))?;
-        String::from_utf8(bytes).with_context(|| format!("decode {what} as UTF-8"))
-    };
-
-    let public_key = minisign_verify::PublicKey::decode(&decode(pubkey_b64, "release public key")?)
+    let public_key = minisign_verify::PublicKey::decode(&decode_public_key(pubkey)?)
         .map_err(|error| anyhow!("invalid release public key: {error}"))?;
-    let signature =
-        minisign_verify::Signature::decode(&decode(signature_b64, "release signature")?)
-            .map_err(|error| anyhow!("invalid release signature: {error}"))?;
+    let signature_bytes = base64::engine::general_purpose::STANDARD
+        .decode(signature_b64.trim().as_bytes())
+        .context("decode release signature")?;
+    let signature_text =
+        String::from_utf8(signature_bytes).context("decode release signature as UTF-8")?;
+    let signature = minisign_verify::Signature::decode(&signature_text)
+        .map_err(|error| anyhow!("invalid release signature: {error}"))?;
     public_key
         .verify(data, &signature, false)
         .map_err(|error| anyhow!("release signature does not match the signed data: {error}"))
+}
+
+fn decode_public_key(value: &str) -> Result<String> {
+    use base64::Engine as _;
+
+    let value = value.trim();
+    if value.starts_with("untrusted comment:") {
+        return Ok(value.to_owned());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(value.as_bytes())
+        .context("decode release public key")?;
+    String::from_utf8(bytes).context("decode release public key as UTF-8")
 }
 
 /// Verify the minisign signature over a checksum sidecar, then return its
@@ -114,13 +125,8 @@ mod tests {
 
     #[test]
     fn embedded_trust_root_is_always_available_and_well_formed() {
-        use base64::Engine as _;
-
         let pubkey = require_release_pubkey().expect("every build carries a trust root");
-        let decoded = base64::engine::general_purpose::STANDARD
-            .decode(pubkey.trim().as_bytes())
-            .expect("trust root is base64");
-        let text = String::from_utf8(decoded).expect("trust root decodes as UTF-8");
+        let text = decode_public_key(pubkey).expect("trust root has a supported key format");
         minisign_verify::PublicKey::decode(&text).expect("trust root is a minisign public key");
     }
 
@@ -128,6 +134,9 @@ mod tests {
     fn minisign_wire_format_accepts_authentic_data_and_rejects_tampering() {
         verify_minisign(FIXTURE_DATA, FIXTURE_SIGNATURE, FIXTURE_PUBKEY)
             .expect("fixture signature must verify");
+        let raw_pubkey = decode_public_key(FIXTURE_PUBKEY).expect("decode fixture public key");
+        verify_minisign(FIXTURE_DATA, FIXTURE_SIGNATURE, &raw_pubkey)
+            .expect("raw minisign public key must verify");
         assert!(verify_minisign(b"tampered\n", FIXTURE_SIGNATURE, FIXTURE_PUBKEY).is_err());
         assert!(verify_minisign(FIXTURE_DATA, "bm90LWEtc2ln", FIXTURE_PUBKEY).is_err());
     }

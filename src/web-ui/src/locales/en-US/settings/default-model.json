@@ -60,10 +60,6 @@
         "displayName": "Git Functions",
         "description": "Commit messages, code review"
       },
-      "startchat-func-agent": {
-        "displayName": "Chat Startup",
-        "description": "Work status analysis, welcome messages"
-      },
       "arc-func-agent": {
         "displayName": "Architecture Analysis",
         "description": "Dependency graph, Mermaid diagrams"

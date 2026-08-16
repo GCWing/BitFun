@@ -36,12 +36,14 @@ use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use super::builtin_clients::{
-    builtin_client_ids, default_config_for_builtin_client, migrate_legacy_builtin_client_configs,
+    builtin_acp_client_preset, builtin_client_ids, default_config_for_builtin_client,
+    migrate_legacy_builtin_client_configs,
 };
 use super::config::{
     AcpClientConfig, AcpClientConfigFile, AcpClientInfo, AcpClientPermissionMode,
     AcpClientRequirementProbe, AcpClientStatus, RemoteAcpClientRequirementSnapshot,
 };
+use super::dsh_profile::{ensure_bundled_profile, ensure_bundled_profile_remote};
 use super::remote_capability_store::RemoteAcpCapabilityStore;
 use super::remote_session::{preferred_resume_strategies, AcpRemoteSessionStrategy};
 use super::remote_shell::{remote_user_shell_command, render_remote_env_assignments, shell_escape};
@@ -625,7 +627,7 @@ impl AcpClientService {
                 .await
             }
         };
-        let (transport, child) = match transport_result {
+        let (transport, child, stderr_tail) = match transport_result {
             Ok(result) => result,
             Err(error) => {
                 *connection.status.write().await = AcpClientStatus::Failed;
@@ -696,9 +698,12 @@ impl AcpClientService {
             Ok(Err(_)) => {
                 connect_task.abort();
                 self.cleanup_failed_startup(connection_id).await;
-                return Err(BitFunError::service(format!(
-                    "ACP client '{}' exited before initialization completed",
-                    client_id
+                // The agent is gone; whatever it managed to say on the way out
+                // is all anyone has to go on, so put it in front of the user
+                // rather than only in the log.
+                return Err(BitFunError::service(startup_exit_error_message(
+                    client_id,
+                    &stderr_tail.drained_detail().await,
                 )));
             }
             Err(_) => {
@@ -1716,14 +1721,29 @@ impl AcpClientService {
         client_id: &str,
         connection_id: &str,
         config: &AcpClientConfig,
-    ) -> BitFunResult<(ByteStreams<AcpOutgoingStream, AcpIncomingStream>, Child)> {
+    ) -> BitFunResult<(
+        ByteStreams<AcpOutgoingStream, AcpIncomingStream>,
+        Child,
+        StderrTail,
+    )> {
+        // An agent whose runtime BitFun ships (dsh) needs it in place before the
+        // command runs, because the command's only job is to boot it.
+        if let Some(profile) = builtin_acp_client_preset(client_id).and_then(|p| p.bundled_profile)
+        {
+            ensure_bundled_profile(profile).await?;
+        }
+
         let program = resolve_configured_command(&config.command, &config.env);
         let mut command = bitfun_core::util::process_manager::create_tokio_command(&program);
         command
             .args(&config.args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit());
+            // Inheriting sent this to a terminal that a packaged app does not
+            // have, so a local agent that died at startup was as silent as a
+            // remote one. Read it instead: it goes to the log, and its tail
+            // goes into the error the user is shown.
+            .stderr(Stdio::piped());
         apply_command_environment(&mut command, Some(&config.env));
         configure_process_group(&mut command);
 
@@ -1755,9 +1775,15 @@ impl AcpClientService {
             }
         };
 
+        let stderr_tail = match child.stderr.take() {
+            Some(stderr) => spawn_stderr_reader(client_id, stderr),
+            None => StderrTail::default(),
+        };
+
         Ok((
             ByteStreams::new(Box::pin(stdin.compat_write()), Box::pin(stdout.compat())),
             child,
+            stderr_tail,
         ))
     }
 
@@ -1771,16 +1797,17 @@ impl AcpClientService {
     ) -> BitFunResult<(
         ByteStreams<AcpOutgoingStream, AcpIncomingStream>,
         Option<Child>,
+        StderrTail,
     )> {
         match remote_connection_id {
             Some(remote_connection_id) => self
                 .start_remote_transport(client_id, config, workspace_path, remote_connection_id)
                 .await
-                .map(|transport| (transport, None)),
+                .map(|(transport, stderr_tail)| (transport, None, stderr_tail)),
             None => self
                 .start_local_transport(client_id, connection_id, config)
                 .await
-                .map(|(transport, child)| (transport, Some(child))),
+                .map(|(transport, child, stderr_tail)| (transport, Some(child), stderr_tail)),
         }
     }
 
@@ -1790,7 +1817,10 @@ impl AcpClientService {
         config: &AcpClientConfig,
         workspace_path: Option<&str>,
         remote_connection_id: &str,
-    ) -> BitFunResult<ByteStreams<AcpOutgoingStream, AcpIncomingStream>> {
+    ) -> BitFunResult<(
+        ByteStreams<AcpOutgoingStream, AcpIncomingStream>,
+        StderrTail,
+    )> {
         let command = render_remote_client_command(config, workspace_path)?;
         let remote_manager = get_remote_workspace_manager().ok_or_else(|| {
             BitFunError::service("Remote workspace manager is not initialized".to_string())
@@ -1798,6 +1828,19 @@ impl AcpClientService {
         let ssh_manager = remote_manager.get_ssh_manager().await.ok_or_else(|| {
             BitFunError::service("SSH manager is not available for remote ACP".to_string())
         })?;
+        // Same reason as `start_local_transport`: the command below only boots
+        // the runtime BitFun ships, so it has to be on that host first.
+        if let Some(profile) = builtin_acp_client_preset(client_id).and_then(|p| p.bundled_profile)
+        {
+            ensure_bundled_profile_remote(
+                profile,
+                config.command.trim(),
+                &config.env,
+                &ssh_manager,
+                remote_connection_id,
+            )
+            .await?;
+        }
         let transport = ssh_manager
             .open_workspace_stdio(remote_connection_id, &command)
             .await
@@ -1807,14 +1850,24 @@ impl AcpClientService {
                     client_id, error
                 ))
             })?;
-        let (writer, reader, mut stderr, _control, _completion) = transport.into_parts();
+        let (writer, reader, stderr, _control, completion) = transport.into_parts();
+        // Whatever the remote agent says on its way out is the only explanation
+        // a user gets when it dies at startup; sinking it leaves nothing behind
+        // but an unexplained broken pipe.
+        let stderr_tail = spawn_stderr_reader(client_id, stderr);
+        // An agent that dies mid-session leaves the same broken pipe behind as
+        // one that never started, so record which it was.
+        let exit_client_id = client_id.to_string();
         tokio::spawn(async move {
-            let mut sink = tokio::io::sink();
-            let _ = tokio::io::copy(&mut stderr, &mut sink).await;
+            let exit = completion.wait().await;
+            log::info!(
+                "Remote ACP client exited: id={exit_client_id} exit_code={:?}",
+                exit.exit_code
+            );
         });
-        Ok(ByteStreams::new(
-            Box::pin(writer.compat_write()),
-            Box::pin(reader.compat()),
+        Ok((
+            ByteStreams::new(Box::pin(writer.compat_write()), Box::pin(reader.compat())),
+            stderr_tail,
         ))
     }
 
@@ -2508,6 +2561,114 @@ fn protocol_error(error: impl std::fmt::Display) -> BitFunError {
     BitFunError::service(format!("ACP protocol error: {}", error))
 }
 
+/// The last lines an agent wrote to stderr, kept so a startup failure can say
+/// why it failed rather than only that it did.
+///
+/// An agent that dies before answering `initialize` leaves nothing behind but a
+/// closed pipe. Its stderr is the whole account of what went wrong — a missing
+/// runtime, a Node too old for it, a config it refused — and a log file is not
+/// where the user is looking when the dialog says the session did not start.
+#[derive(Clone)]
+struct StderrTail {
+    lines: Arc<std::sync::Mutex<std::collections::VecDeque<String>>>,
+    /// Turns true once the reader reaches EOF.
+    drained: tokio::sync::watch::Receiver<bool>,
+}
+
+impl Default for StderrTail {
+    fn default() -> Self {
+        // Nothing will ever be written to this one, so it starts drained: the
+        // wait below sees a value that already satisfies it and returns at once.
+        let (_sender, drained) = tokio::sync::watch::channel(true);
+        Self {
+            lines: Arc::default(),
+            drained,
+        }
+    }
+}
+
+/// How many lines to keep, and how many of those to put in an error message.
+/// A stack trace is worth keeping whole in the log and worth quoting only in
+/// part in a dialog.
+const STDERR_TAIL_LINES: usize = 20;
+const STDERR_DETAIL_LINES: usize = 8;
+/// How long to let stderr finish arriving after the agent's pipes close.
+const STDERR_DRAIN_GRACE: Duration = Duration::from_millis(500);
+
+impl StderrTail {
+    fn record(&self, line: &str) {
+        let Ok(mut lines) = self.lines.lock() else {
+            return;
+        };
+        if lines.len() == STDERR_TAIL_LINES {
+            lines.pop_front();
+        }
+        lines.push_back(line.to_string());
+    }
+
+    /// Wait for the reader to reach EOF, then quote the tail.
+    ///
+    /// The pipe closing is what tells the connect task the agent is gone, and
+    /// the last lines it wrote can still be in flight when that happens — a
+    /// stack trace quoted without its final line is the one line that mattered.
+    async fn drained_detail(&self) -> String {
+        let mut drained = self.drained.clone();
+        let _ =
+            tokio::time::timeout(STDERR_DRAIN_GRACE, drained.wait_for(|drained| *drained)).await;
+        self.detail()
+    }
+
+    fn detail(&self) -> String {
+        let Ok(lines) = self.lines.lock() else {
+            return String::new();
+        };
+        let start = lines.len().saturating_sub(STDERR_DETAIL_LINES);
+        lines
+            .iter()
+            .skip(start)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
+/// Drain an agent's stderr into the log, keeping the tail for the error message.
+fn spawn_stderr_reader<R>(client_id: &str, stderr: R) -> StderrTail
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    let (drained_tx, drained_rx) = tokio::sync::watch::channel(false);
+    let tail = StderrTail {
+        lines: Arc::default(),
+        drained: drained_rx,
+    };
+    let client_id = client_id.to_string();
+    let sink = tail.clone();
+    tokio::spawn(async move {
+        use tokio::io::AsyncBufReadExt;
+
+        let mut lines = tokio::io::BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let line = line.trim_end();
+            if line.trim().is_empty() {
+                continue;
+            }
+            warn!("ACP client stderr: id={client_id} {line}");
+            sink.record(line);
+        }
+        let _ = drained_tx.send(true);
+    });
+    tail
+}
+
+fn startup_exit_error_message(client_id: &str, stderr_detail: &str) -> String {
+    let base = format!("ACP client '{client_id}' exited before initialization completed");
+    if stderr_detail.trim().is_empty() {
+        return base;
+    }
+    format!("{base}. It said:\n{stderr_detail}")
+}
+
 const STARTUP_TIMEOUT_ERROR_PREFIX: &str = "ACP startup timed out:";
 
 fn startup_timeout_error(client_id: &str, phase: &str) -> BitFunError {
@@ -2653,6 +2814,50 @@ mod tests {
     }
 
     #[test]
+    fn a_startup_failure_quotes_what_the_agent_said() {
+        // Verbatim from a remote host whose Node was too old for the harness.
+        // Without these lines the message is "it exited", which is the one
+        // thing the user already knows.
+        let said = "SyntaxError: The requested module 'node:util' does not provide an export named 'parseEnv'\nNode.js v18.19.1";
+        assert_eq!(
+            startup_exit_error_message("dsh", said),
+            format!("ACP client 'dsh' exited before initialization completed. It said:\n{said}")
+        );
+
+        // An agent that died silently gets the plain sentence, not a dangling
+        // colon over an empty quote.
+        assert_eq!(
+            startup_exit_error_message("dsh", "   "),
+            "ACP client 'dsh' exited before initialization completed"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_stderr_tail_keeps_the_last_lines_and_waits_for_eof() {
+        let (mut writer, reader) = tokio::io::duplex(1024);
+        let tail = spawn_stderr_reader("dsh", reader);
+
+        let mut written = String::new();
+        for line in 0..STDERR_TAIL_LINES + 4 {
+            written.push_str(&format!("line {line}\n"));
+        }
+        tokio::io::AsyncWriteExt::write_all(&mut writer, written.as_bytes())
+            .await
+            .unwrap();
+        drop(writer);
+
+        // The wait is what makes this deterministic: the reader is still
+        // draining when a dead agent's pipes close.
+        let detail = tail.drained_detail().await;
+        let lines = detail.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), STDERR_DETAIL_LINES);
+        assert_eq!(
+            lines.last().copied(),
+            Some(format!("line {}", STDERR_TAIL_LINES + 3).as_str())
+        );
+    }
+
+    #[test]
     fn maps_session_config_values_to_acp_protocol_values() {
         let select = AcpSessionConfigValue::Select {
             value: "on".to_string(),
@@ -2719,6 +2924,20 @@ mod tests {
             vec!["--yes", "@agentclientprotocol/codex-acp@latest"]
         );
         assert_eq!(resolved.env.get("BASE").map(String::as_str), Some("1"));
+        assert!(resolved.enabled);
+    }
+
+    #[test]
+    fn resolves_builtin_dsh_config_for_remote_workspace() {
+        let resolved =
+            resolve_config_for_client(&AcpClientConfigFile::default(), "dsh", Some("remote-host"))
+                .expect("built-in DSH config");
+
+        assert_eq!(resolved.command, "dsh");
+        // A remote workspace resolves the same launch as a local one, and both
+        // transports materialize the profile first, so the command finds it
+        // there either way.
+        assert_eq!(resolved.args, vec!["--profile", "bitfun-acp"]);
         assert!(resolved.enabled);
     }
 }

@@ -11,6 +11,7 @@ use super::{
 };
 use crate::mcp::protocol::{MCPPrompt, MCPResource};
 use log::info;
+use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -37,6 +38,84 @@ pub enum MCPProcessStartContext {
     Remote { data_dir: PathBuf },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MCPServerStartFailure {
+    Authentication,
+    Timeout,
+    CommandUnavailable,
+    WorkingDirectoryUnavailable,
+    ConnectionFailed,
+    ProtocolFailed,
+    Other,
+}
+
+impl MCPServerStartFailure {
+    pub fn classify(error: &str) -> Self {
+        let error = error.to_ascii_lowercase();
+        if [
+            "unauthorized",
+            "forbidden",
+            "authentication",
+            "oauth",
+            "status 401",
+            "status 403",
+            "http 401",
+            "http 403",
+        ]
+        .iter()
+        .any(|pattern| error.contains(pattern))
+        {
+            Self::Authentication
+        } else if ["timed out", "timeout", "deadline elapsed"]
+            .iter()
+            .any(|pattern| error.contains(pattern))
+        {
+            Self::Timeout
+        } else if [
+            "working directory",
+            "current directory",
+            "directory name is invalid",
+        ]
+        .iter()
+        .any(|pattern| error.contains(pattern))
+        {
+            Self::WorkingDirectoryUnavailable
+        } else if [
+            "connection refused",
+            "could not connect",
+            "failed to connect",
+            "dns",
+            "name resolution",
+        ]
+        .iter()
+        .any(|pattern| error.contains(pattern))
+        {
+            Self::ConnectionFailed
+        } else if ["handshake", "initialize", "protocol", "json-rpc"]
+            .iter()
+            .any(|pattern| error.contains(pattern))
+        {
+            Self::ProtocolFailed
+        } else if [
+            "program not found",
+            "executable not found",
+            "command not found",
+            "failed to start mcp server",
+            "os error 2",
+            "process error",
+            "failed to spawn",
+            "create process",
+        ]
+        .iter()
+        .any(|pattern| error.contains(pattern))
+        {
+            Self::CommandUnavailable
+        } else {
+            Self::Other
+        }
+    }
+}
+
 impl MCPProcessStartContext {
     fn server_type(&self) -> MCPServerType {
         match self {
@@ -60,6 +139,7 @@ pub struct MCPServerRuntimeState {
     connection_pool: MCPConnectionPool,
     reconnect_tracker: MCPReconnectTracker,
     catalog_cache: MCPCatalogCache,
+    start_failures: RwLock<HashMap<String, MCPServerStartFailure>>,
 }
 
 impl MCPServerRuntimeState {
@@ -69,6 +149,7 @@ impl MCPServerRuntimeState {
             connection_pool: MCPConnectionPool::new(),
             reconnect_tracker: MCPReconnectTracker::default(),
             catalog_cache: MCPCatalogCache::new(),
+            start_failures: RwLock::new(HashMap::new()),
         }
     }
 
@@ -78,6 +159,18 @@ impl MCPServerRuntimeState {
 
     pub async fn contains(&self, server_id: &str) -> bool {
         self.registry.contains(server_id).await
+    }
+
+    pub async fn set_start_failure(&self, server_id: String, failure: MCPServerStartFailure) {
+        self.start_failures.write().await.insert(server_id, failure);
+    }
+
+    pub async fn clear_start_failure(&self, server_id: &str) {
+        self.start_failures.write().await.remove(server_id);
+    }
+
+    pub async fn start_failure(&self, server_id: &str) -> Option<MCPServerStartFailure> {
+        self.start_failures.read().await.get(server_id).copied()
     }
 
     pub async fn register(&self, config: &MCPServerConfig) -> MCPRuntimeResult<()> {
@@ -93,7 +186,9 @@ impl MCPServerRuntimeState {
     }
 
     pub async fn clear_registry(&self) -> MCPRuntimeResult<()> {
-        self.registry.clear().await
+        self.registry.clear().await?;
+        self.start_failures.write().await.clear();
+        Ok(())
     }
 
     async fn get_process(&self, server_id: &str) -> Option<Arc<RwLock<MCPServerProcess>>> {
@@ -142,6 +237,15 @@ impl MCPServerRuntimeState {
                     MCPRuntimeError::configuration("Missing command for local MCP server")
                 })?;
                 let resolved = resolve_mcp_local_command(command, managed_runtimes_dir)?;
+                if config
+                    .working_directory
+                    .as_deref()
+                    .is_some_and(|directory| !Path::new(directory).is_dir())
+                {
+                    return Err(MCPRuntimeError::configuration(
+                        "MCP working directory is unavailable",
+                    ));
+                }
                 info!(
                     "Starting local MCP server: command={} source={} id={}",
                     resolved.command, resolved.source_label, config.id
@@ -337,5 +441,60 @@ impl MCPServerRuntimeState {
 impl Default for MCPServerRuntimeState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MCPServerRuntimeState, MCPServerStartFailure};
+
+    #[test]
+    fn start_failures_are_actionable_without_exposing_runtime_details() {
+        assert_eq!(
+            MCPServerStartFailure::classify(
+                "Failed to start MCP server 'secret-command': program not found"
+            ),
+            MCPServerStartFailure::CommandUnavailable,
+        );
+        assert_eq!(
+            MCPServerStartFailure::classify("401 Unauthorized: token=secret"),
+            MCPServerStartFailure::Authentication,
+        );
+        assert_eq!(
+            MCPServerStartFailure::classify("initialize request timed out"),
+            MCPServerStartFailure::Timeout,
+        );
+        assert_eq!(
+            MCPServerStartFailure::classify(
+                "Failed to start MCP server: working directory is unavailable"
+            ),
+            MCPServerStartFailure::WorkingDirectoryUnavailable,
+        );
+
+        for failure in [
+            MCPServerStartFailure::CommandUnavailable,
+            MCPServerStartFailure::Authentication,
+            MCPServerStartFailure::Timeout,
+            MCPServerStartFailure::Other,
+        ] {
+            let debug = format!("{failure:?}");
+            assert!(!debug.contains("secret"));
+            assert!(!debug.contains("token="));
+        }
+    }
+
+    #[tokio::test]
+    async fn clearing_registry_also_clears_start_failures() {
+        let state = MCPServerRuntimeState::new();
+        state
+            .set_start_failure(
+                "external:mcp".to_string(),
+                MCPServerStartFailure::CommandUnavailable,
+            )
+            .await;
+
+        state.clear_registry().await.expect("clear registry");
+
+        assert_eq!(state.start_failure("external:mcp").await, None);
     }
 }

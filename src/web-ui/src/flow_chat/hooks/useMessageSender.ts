@@ -21,6 +21,10 @@ import { createLogger } from '@/shared/utils/logger';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
 import { buildImagePayload } from '../utils/imagePayload';
 import {
+  FLOWCHAT_MESSAGE_SUBMITTED_EVENT,
+  type FlowChatMessageSubmittedRequest,
+} from '../events/flowchatNavigation';
+import {
   composerPresentationSessionReferences,
   type ComposerPresentation,
 } from '../utils/composerPresentation';
@@ -248,6 +252,16 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       onExitTemplateMode?.();
 
       onSuccess?.(trimmedMessage);
+      /*
+       * The transcript may be showing a history window this Turn is not in, and
+       * only the submission knows that showing it was asked for. Announced
+       * rather than returned: the composer and the transcript are siblings, and
+       * every host that sends through this hook gets the behaviour.
+       */
+      window.dispatchEvent(new CustomEvent<FlowChatMessageSubmittedRequest>(
+        FLOWCHAT_MESSAGE_SUBMITTED_EVENT,
+        { detail: { sessionId } },
+      ));
       log.info('Message sent successfully', {
         sessionId,
         agentType: agentTypeForSend,

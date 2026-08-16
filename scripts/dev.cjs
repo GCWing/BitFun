@@ -649,7 +649,9 @@ async function main() {
   // Step 1: Run all independent preparation tasks in parallel.
   // copy-monaco / generate-version / mobile-web / flashgrep have no
   // dependencies on each other; each task's output is line-prefixed so the
-  // interleaved logs stay attributable.
+  // interleaved logs stay attributable. The DeepSeek bridge is not prepared
+  // here: it is not a compile-time Tauri resource. Official desktop:build
+  // compiles it; local DeepSeek sessions run `pnpm run prepare:dsh-profile`.
   printStep(
     currentStep++,
     totalSteps,

@@ -290,6 +290,9 @@ impl StreamProcessError {
 #[derive(Debug, Clone, Default)]
 pub struct StreamProcessOptions {
     pub recover_partial_on_cancel: bool,
+    /// Suppress the stream-owned terminal cancellation event when a higher
+    /// layer owns the authoritative cancellation lifecycle.
+    pub suppress_cancel_lifecycle_event: bool,
     /// Allow broad JSON repair for non-Write tools, but only after a provider
     /// confirms a normal tool-use completion.
     pub allow_normal_tool_json_repair: bool,
@@ -333,6 +336,7 @@ struct StreamContext {
     /// output token limit (e.g. "length", "max_tokens", "MAX_TOKENS").
     token_limit_finish_reason: Option<String>,
     allow_normal_tool_json_repair: bool,
+    suppress_cancel_lifecycle_event: bool,
 }
 
 impl StreamContext {
@@ -371,6 +375,7 @@ impl StreamContext {
             partial_recovery_reason: None,
             token_limit_finish_reason: None,
             allow_normal_tool_json_repair: options.allow_normal_tool_json_repair,
+            suppress_cancel_lifecycle_event: options.suppress_cancel_lifecycle_event,
         }
     }
 
@@ -512,6 +517,7 @@ struct GracefulShutdownInput {
     attempt_index: u32,
     tool_calls: Vec<ToolCall>,
     reason: String,
+    suppress_cancel_lifecycle_event: bool,
 }
 
 impl StreamProcessor {
@@ -607,6 +613,7 @@ impl StreamProcessor {
             attempt_index: ctx.attempt_index,
             tool_calls: ctx.tool_calls.clone(),
             reason,
+            suppress_cancel_lifecycle_event: ctx.suppress_cancel_lifecycle_event,
         })
         .await;
     }
@@ -621,6 +628,7 @@ impl StreamProcessor {
             attempt_index,
             tool_calls,
             reason,
+            suppress_cancel_lifecycle_event,
         } = input;
         debug!(
             "Starting graceful shutdown: session_id={}, reason={}",
@@ -679,7 +687,7 @@ impl StreamProcessor {
         }
 
         // 2. Send dialog turn status update (if tools were cleaned up)
-        if tool_call_count > 0 {
+        if tool_call_count > 0 && !(is_user_cancellation && suppress_cancel_lifecycle_event) {
             let event = if is_user_cancellation {
                 AgenticEvent::DialogTurnCancelled {
                     session_id: session_id.clone(),
@@ -1324,6 +1332,7 @@ mod tests {
                     repair_kind: Default::default(),
                 }],
                 reason: "User cancelled stream processing".to_string(),
+                suppress_cancel_lifecycle_event: false,
             })
             .await;
 
@@ -1340,6 +1349,44 @@ mod tests {
             &events[1],
             AgenticEvent::DialogTurnCancelled { session_id, turn_id }
                 if session_id == "session_1" && turn_id == "turn_1"
+        ));
+    }
+
+    #[tokio::test]
+    async fn graceful_shutdown_suppresses_turn_cancellation_for_coordinator_owned_lifecycle() {
+        let sink = Arc::new(RecordingEventSink::default());
+        let processor = StreamProcessor::new(sink.clone());
+
+        processor
+            .graceful_shutdown(GracefulShutdownInput {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                round_id: "round_1".to_string(),
+                attempt_id: "attempt_1".to_string(),
+                attempt_index: 1,
+                tool_calls: vec![ToolCall {
+                    tool_id: "tool_1".to_string(),
+                    tool_name: "Read".to_string(),
+                    arguments: json!({}),
+                    raw_arguments: None,
+                    is_error: false,
+                    parse_error: None,
+                    recovered_from_truncation: false,
+                    repair_kind: Default::default(),
+                }],
+                reason: "User cancelled stream processing".to_string(),
+                suppress_cancel_lifecycle_event: true,
+            })
+            .await;
+
+        let events = sink.events.lock().await;
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            &events[0],
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::Cancelled { identity, .. },
+                ..
+            } if identity.tool_id == "tool_1"
         ));
     }
 

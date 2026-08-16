@@ -1,6 +1,7 @@
 import { RemoteQuestionAnswerPayload } from '../model/RemoteModels';
 import { RemoteI18n } from '../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from './ConnectionErrorPolicy';
+import { RemoteLogger } from './RemoteLogger';
 
 export interface RemoteToolActionClient {
   confirmTool(toolId: string, updatedInput?: Object): Promise<void>;
@@ -59,6 +60,7 @@ export class RemoteToolActionController {
   }
 
   async cancel(toolId: string, sessionId: string, remoteAvailable: boolean): Promise<void> {
+    RemoteLogger.info(`tool cancel requested tool=${RemoteToolActionController.shortId(toolId)} session=${RemoteToolActionController.shortId(sessionId)}`);
     await this.runToolAction(
       toolId,
       sessionId,
@@ -77,6 +79,7 @@ export class RemoteToolActionController {
     remoteAvailable: boolean,
     answers: RemoteQuestionAnswerPayload
   ): Promise<void> {
+    RemoteLogger.info(`question answer requested tool=${RemoteToolActionController.shortId(toolId)} session=${RemoteToolActionController.shortId(sessionId)} fields=${Object.keys(answers).length}`);
     await this.runToolAction(
       toolId,
       sessionId,
@@ -104,6 +107,7 @@ export class RemoteToolActionController {
       this.onBusy(true);
       this.onStatusText(pendingText);
       await action();
+      RemoteLogger.info(`tool action accepted tool=${RemoteToolActionController.shortId(toolId)}`);
       this.onStatusText(successText);
       this.onPoll();
     } catch (err) {
@@ -111,5 +115,10 @@ export class RemoteToolActionController {
     } finally {
       this.onBusy(false);
     }
+  }
+
+  private static shortId(value: string): string {
+    if (value.length <= 10) return value;
+    return `${value.slice(0, 6)}...${value.slice(-4)}`;
   }
 }

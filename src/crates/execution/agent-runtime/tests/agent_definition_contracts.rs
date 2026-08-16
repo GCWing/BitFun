@@ -1,4 +1,5 @@
 //! Agent definition, discovery, prompt, and skill contracts.
+#![cfg(feature = "agent-runtime")]
 
 #[path = "agent_definition_contracts/agent_registry_contracts.rs"]
 mod agent_registry_contracts;

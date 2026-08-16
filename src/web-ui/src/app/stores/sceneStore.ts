@@ -20,6 +20,10 @@ import { create } from 'zustand';
 import { SCENE_TAB_REGISTRY, MAX_OPEN_SCENES, getSceneDef, getMiniAppSceneDef } from '../scenes/registry';
 import { getSceneNav } from '../scenes/nav-registry';
 import { useNavSceneStore } from './navSceneStore';
+import {
+  getInteractionMotion,
+  type InteractionMotion,
+} from '@/shared/utils/motionPreference';
 import type { SceneTab, SceneTabId } from '../components/SceneBar/types';
 
 const AGENT_SCENE_ID: SceneTabId = 'session';
@@ -71,6 +75,9 @@ interface SceneState {
   navHistory: SceneTabId[];
   /** Index of the current position in navHistory. */
   navCursor: number;
+  /** Input source for the latest active-scene change. */
+  navigationMotion: InteractionMotion;
+  navigationSequence: number;
 
   openScene:    (id: SceneTabId) => void;
   activateScene:(id: SceneTabId) => void;
@@ -129,10 +136,13 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   activeTabId: initialActiveId,
   navHistory:  [initialActiveId],
   navCursor:   0,
+  navigationMotion: 'instant',
+  navigationSequence: 0,
 
   openScene: (id) => {
     const state = get();
     const { activeTabId } = state;
+    const navigationMotion = getInteractionMotion();
 
     // Already active — re-sync left nav in case user navigated back to MainNav
     if (id === activeTabId) {
@@ -177,6 +187,8 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         openTabs: ensureAgentFirst(openTabs.map(tab =>
           tab.id === id ? { ...tab, lastUsed: activatedAt } : tab
         )),
+        navigationMotion,
+        navigationSequence: state.navigationSequence + 1,
         ...histUpdate,
       });
       return;
@@ -200,7 +212,13 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     }
 
     next.push(buildSceneTab(id, Date.now()));
-    set({ openTabs: ensureAgentFirst(next), activeTabId: id, ...histUpdate });
+    set({
+      openTabs: ensureAgentFirst(next),
+      activeTabId: id,
+      navigationMotion,
+      navigationSequence: state.navigationSequence + 1,
+      ...histUpdate,
+    });
   },
 
   activateScene: (id) => {
@@ -208,7 +226,8 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   },
 
   closeScene: (id) => {
-    const { openTabs, activeTabId, navHistory, navCursor } = get();
+    const state = get();
+    const { openTabs, activeTabId, navHistory, navCursor } = state;
     if (!isClosableScene(id)) return;
 
     const nextTabs = openTabs.filter(t => t.id !== id);
@@ -216,24 +235,40 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     let newActiveId = activeTabId;
     if (id === activeTabId) {
       if (nextTabs.length === 0) {
-        set({ openTabs: [], activeTabId: '' as SceneTabId, navHistory: [], navCursor: -1 });
+        set({
+          openTabs: [],
+          activeTabId: '' as SceneTabId,
+          navHistory: [],
+          navCursor: -1,
+          navigationMotion: getInteractionMotion(),
+          navigationSequence: state.navigationSequence + 1,
+        });
         return;
       }
       newActiveId = [...nextTabs].sort((a, b) => b.lastUsed - a.lastUsed)[0].id;
     }
 
     const histUpdate = removeFromHistory(navHistory, navCursor, id, newActiveId);
-    set({ openTabs: ensureAgentFirst(nextTabs), activeTabId: newActiveId, ...histUpdate });
+    set({
+      openTabs: ensureAgentFirst(nextTabs),
+      activeTabId: newActiveId,
+      navigationMotion: getInteractionMotion(),
+      navigationSequence: state.navigationSequence + 1,
+      ...histUpdate,
+    });
   },
 
   goBack: () => {
-    const { navHistory, navCursor, openTabs } = get();
+    const state = get();
+    const { navHistory, navCursor, openTabs } = state;
     for (let i = navCursor - 1; i >= 0; i--) {
       const targetId = navHistory[i];
       if (openTabs.some(t => t.id === targetId)) {
         set(state => ({
           navCursor: i,
           activeTabId: targetId,
+          navigationMotion: getInteractionMotion(),
+          navigationSequence: state.navigationSequence + 1,
           openTabs: state.openTabs.map(t =>
             t.id === targetId ? { ...t, lastUsed: Date.now() } : t
           ),
@@ -244,13 +279,16 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   },
 
   goForward: () => {
-    const { navHistory, navCursor, openTabs } = get();
+    const state = get();
+    const { navHistory, navCursor, openTabs } = state;
     for (let i = navCursor + 1; i < navHistory.length; i++) {
       const targetId = navHistory[i];
       if (openTabs.some(t => t.id === targetId)) {
         set(state => ({
           navCursor: i,
           activeTabId: targetId,
+          navigationMotion: getInteractionMotion(),
+          navigationSequence: state.navigationSequence + 1,
           openTabs: state.openTabs.map(t =>
             t.id === targetId ? { ...t, lastUsed: Date.now() } : t
           ),
@@ -261,6 +299,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   },
 
   resetForPeerSwitch: () => {
+    const state = get();
     const tabs = buildDefaultTabs();
     const activeTabId: SceneTabId = tabs[0]?.id ?? WELCOME_SCENE_ID;
     set({
@@ -268,6 +307,8 @@ export const useSceneStore = create<SceneState>((set, get) => ({
       activeTabId,
       navHistory: [activeTabId],
       navCursor: 0,
+      navigationMotion: 'instant',
+      navigationSequence: state.navigationSequence + 1,
     });
   },
 }));

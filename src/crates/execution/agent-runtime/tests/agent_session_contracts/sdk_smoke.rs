@@ -53,7 +53,7 @@ struct FakeSessionClosePort {
 fn sdk_facade_exposes_versioned_preview_compatibility_contract() {
     let compatibility = AgentRuntimeSdkCompatibility::current();
 
-    assert_eq!(compatibility.api_version, 5);
+    assert_eq!(compatibility.api_version, 6);
     assert_eq!(compatibility.crate_version, env!("CARGO_PKG_VERSION"));
     assert_eq!(compatibility.stability, AgentRuntimeSdkStability::Preview);
 }

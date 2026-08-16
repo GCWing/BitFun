@@ -1,12 +1,11 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ChatComposerPolicy } from '../../services/ChatComposerPolicy';
-import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from './ChatComposerCapabilities';
-import { ChatSurface } from './ChatSurface';
+import { ChatComposerPolicy, ComposerPrimaryAction } from '../../services/ChatComposerPolicy';
+import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from '../state/ChatComposerCapabilities';
 import {
   ConversationUiModel,
   ConversationUiModelCatalog,
   ConversationUiSelectedImage
-} from './ConversationUiModels';
+} from '../state/ConversationUiModels';
 import { ConversationModelPresentationPolicy } from '../policy/ConversationModelPresentationPolicy';
 import { CARD, FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, RED, SOFT } from './Theme';
 
@@ -19,6 +18,13 @@ export enum ComposerPresentation {
 const COMPOSER_ACTION_SIZE: number = 40;
 const COMPOSER_INPUT_HEIGHT: number = 42;
 const COMPOSER_EXPANDED_INPUT_HEIGHT: number = 74;
+const COMPOSER_COLLAPSED_HEIGHT: number = 52;
+const COMPOSER_EXPANDED_HEIGHT: number = 126;
+const COMPOSER_IMAGE_CARD_SIZE: number = 64;
+const COMPOSER_IMAGE_STRIP_TOP_GAP: number = 6;
+/** Strip height plus its top gap and the parent Column's 2vp row spacing. */
+const COMPOSER_IMAGE_STRIP_BLOCK: number =
+  COMPOSER_IMAGE_CARD_SIZE + COMPOSER_IMAGE_STRIP_TOP_GAP + 2;
 
 @ComponentV2
 export struct ComposerBar {
@@ -28,7 +34,6 @@ export struct ComposerBar {
   @Param chatInput: string = '';
   @Local inputText: string = '';
   @Local inputFocused: boolean = false;
-  @Param showQuickActions: boolean = false;
   @Param selectedImages: ConversationUiSelectedImage[] = [];
   @Param isBusy: boolean = false;
   @Param canStop: boolean = false;
@@ -42,7 +47,6 @@ export struct ComposerBar {
   @Param selectedModelId: string = '';
   @Local showModelSelectorSheet: boolean = false;
   @Local showModelSelectorPopover: boolean = false;
-  @Event onToggleQuickActions: () => void = () => {};
   @Event onPickImages: () => void = () => {};
   @Event onRemoveImage: (imageId: string) => void = (_imageId: string) => {};
   @Event onSend: () => void = () => {};
@@ -68,10 +72,7 @@ export struct ComposerBar {
   }
 
   build() {
-    Column({ space: 8 }) {
-      if (this.selectedImages.length > 0) {
-        this.SelectedImageStrip()
-      }
+    Column() {
       this.AdaptiveComposer()
     }
     .width('100%')
@@ -90,6 +91,9 @@ export struct ComposerBar {
   @Builder
   AdaptiveComposer() {
     Column({ space: 2 }) {
+      if (this.selectedImages.length > 0) {
+        this.SelectedImageStrip()
+      }
       Row({ space: this.isComposerExpanded() ? 0 : 5 }) {
         if (this.shouldShowAddButton()) {
           Row() {
@@ -135,7 +139,7 @@ export struct ComposerBar {
       }
     }
     .width('100%')
-    .height(this.isComposerExpanded() ? 126 : 52)
+    .height(this.composerHeight())
     .padding({
       left: 8,
       right: 8,
@@ -143,8 +147,7 @@ export struct ComposerBar {
       bottom: this.isComposerExpanded() ? 2 : 0
     })
     .backgroundColor(CARD)
-    .borderRadius(this.isComposerExpanded() ? 18 :
-      (this.presentation === ComposerPresentation.Floating ? 18 : 26))
+    .borderRadius(this.composerRadius())
     .shadow({
       radius: this.presentation === ComposerPresentation.Floating ? 18 : 10,
       color: this.presentation === ComposerPresentation.Floating ? '#18000000' : '#0D000000',
@@ -298,14 +301,13 @@ export struct ComposerBar {
     }
     .width(COMPOSER_ACTION_SIZE)
     .height(COMPOSER_ACTION_SIZE)
+    .accessibilityText(RemoteI18n.t('chat.addImage'))
     .onClick(() => {
       if (this.isVoiceListening) {
         return;
       }
-      if (this.capabilities.supportsAttachments) {
-        this.onToggleQuickActions();
-        return;
-      }
+      // Images are the only thing a message can carry, so a menu in front of the
+      // picker would be a menu of one. Straight to the album, same as local chat.
       this.onPickImages();
     })
   }
@@ -362,26 +364,21 @@ export struct ComposerBar {
   PrimaryActionButton() {
     Button() {
       Stack({ alignContent: Alignment.Center }) {
-        if (this.isVoiceListening || this.canStop) {
+        if (this.primaryAction() === ComposerPrimaryAction.Stop) {
           Text('')
             .width(13)
             .height(13)
             .backgroundColor(CARD)
             .borderRadius(3)
-        } else if (this.hasComposedContent()) {
-          SymbolGlyph($r('sys.symbol.arrow_up'))
-            .fontSize(23)
-            .fontWeight(FontWeight.Medium)
-            .fontColor([INK])
-            .opacity(this.canSend() ? 1 : 0.38)
-        } else if (this.capabilities.showVoiceInput) {
+        } else if (this.primaryAction() === ComposerPrimaryAction.Voice ||
+          this.primaryAction() === ComposerPrimaryAction.VoiceBlocked) {
           this.MicrophoneGlyph()
         } else {
           SymbolGlyph($r('sys.symbol.arrow_up'))
             .fontSize(23)
             .fontWeight(FontWeight.Medium)
             .fontColor([INK])
-            .opacity(0.38)
+            .opacity(this.primaryAction() === ComposerPrimaryAction.Send ? 1 : 0.38)
         }
       }
       .width(40)
@@ -393,20 +390,25 @@ export struct ComposerBar {
     .type(ButtonType.Circle)
     .backgroundColor(this.actionBackgroundColor())
     .borderRadius(20)
+    .accessibilityText(RemoteI18n.t(ChatComposerPolicy.primaryActionAccessibilityKey(
+      this.primaryAction(), this.isVoiceListening)))
+    // Driven off the same decision that drew the glyph, so the button can never
+    // do something other than what it is showing.
     .onClick(() => {
-      if (this.isVoiceListening) {
-        this.onVoiceInput();
+      const action = this.primaryAction();
+      if (action === ComposerPrimaryAction.Stop) {
+        if (this.isVoiceListening) {
+          this.onVoiceInput();
+        } else if (this.canStop) {
+          this.onStop();
+        }
         return;
       }
-      if (this.canStop) {
-        this.onStop();
-        return;
-      }
-      if (this.canSend()) {
+      if (action === ComposerPrimaryAction.Send) {
         this.onSend();
         return;
       }
-      if (this.canUseVoice()) {
+      if (action === ComposerPrimaryAction.Voice) {
         this.onVoiceInput();
       }
     })
@@ -466,46 +468,42 @@ export struct ComposerBar {
           this.SelectedImageCard(image)
         }, (image: ConversationUiSelectedImage) => image.id)
       }
-      .padding({ right: 4 })
+      .padding({ left: 4, right: 4 })
     }
     .scrollable(ScrollDirection.Horizontal)
     .scrollBar(BarState.Off)
+    // Scroll centres content that is narrower than the viewport, which parks a
+    // lone thumbnail in the middle of the composer instead of at its left edge.
+    .align(Alignment.Start)
     .width('100%')
+    .height(COMPOSER_IMAGE_CARD_SIZE)
+    .margin({ top: COMPOSER_IMAGE_STRIP_TOP_GAP })
   }
 
   @Builder
   SelectedImageCard(image: ConversationUiSelectedImage) {
     Stack({ alignContent: Alignment.TopEnd }) {
       Image(image.data_url)
-        .width(64)
-        .height(64)
+        .width(COMPOSER_IMAGE_CARD_SIZE)
+        .height(COMPOSER_IMAGE_CARD_SIZE)
         .objectFit(ImageFit.Cover)
         .borderRadius(14)
       Text('×')
-        .width(22)
-        .height(22)
-        .fontSize(14)
+        .width(32)
+        .height(32)
+        .fontSize(16)
         .fontColor(CARD)
         .textAlign(TextAlign.Center)
         .backgroundColor('#AA222222')
-        .borderRadius(11)
-        .margin({ top: 4, right: 4 })
+        .borderRadius(16)
+        .margin({ top: 0, right: 0 })
+        .accessibilityText(RemoteI18n.t('chat.removeImage'))
         .onClick(() => {
           this.onRemoveImage(image.id);
         })
     }
-    .width(64)
-    .height(64)
-  }
-
-  private canSend(): boolean {
-    return ChatComposerPolicy.canSend(
-      this.inputText,
-      this.selectedImages.length,
-      this.isBusy,
-      this.capabilities.requiresRemoteConnection,
-      this.connectionState
-    );
+    .width(COMPOSER_IMAGE_CARD_SIZE)
+    .height(COMPOSER_IMAGE_CARD_SIZE)
   }
 
   private canUseVoice(): boolean {
@@ -513,18 +511,49 @@ export struct ComposerBar {
       ChatComposerPolicy.canUseVoice(this.inputText, this.selectedImages.length, this.isBusy);
   }
 
-  private hasComposedContent(): boolean {
-    return this.inputText.trim().length > 0 || this.selectedImages.length > 0;
+  // Dictation runs inside this app rather than in a system dialog, so listening
+  // outranks the draft here in a way a running turn does not.
+  private primaryAction(): ComposerPrimaryAction {
+    return ChatComposerPolicy.primaryAction(
+      this.inputText,
+      this.selectedImages.length,
+      this.isBusy,
+      this.isVoiceListening,
+      this.canStop,
+      this.capabilities.supportsMidRunSend,
+      this.capabilities.requiresRemoteConnection,
+      this.connectionState,
+      this.capabilities.showVoiceInput
+    );
   }
 
   private shouldShowAddButton(): boolean {
-    return this.capabilities.showAddButton &&
-      (this.capabilities.supportsAttachments || this.capabilities.surface === ChatSurface.General);
+    return ChatComposerPolicy.shouldShowAddButton(
+      this.capabilities.showAddButton,
+      this.capabilities.supportsAttachments
+    );
+  }
+
+  // Attachments live inside the card, so the card has to grow to hold them.
+  private composerHeight(): number {
+    const base = this.isComposerExpanded() ? COMPOSER_EXPANDED_HEIGHT : COMPOSER_COLLAPSED_HEIGHT;
+    return this.selectedImages.length > 0 ? base + COMPOSER_IMAGE_STRIP_BLOCK : base;
+  }
+
+  // The pill radius only reads as a pill while the card is one row tall.
+  private composerRadius(): number {
+    if (this.isComposerExpanded() || this.selectedImages.length > 0) {
+      return 18;
+    }
+    return this.presentation === ComposerPresentation.Floating ? 18 : 26;
   }
 
   private isComposerExpanded(): boolean {
-    return this.inputFocused || this.showQuickActions || this.showModelSelectorSheet ||
-      this.showModelSelectorPopover || this.inputText.indexOf('\n') >= 0;
+    return ChatComposerPolicy.isExpanded(
+      this.inputText,
+      this.inputFocused,
+      this.isModelSelectorExpanded()
+    );
   }
 
   private isModelSelectorExpanded(): boolean {
@@ -532,8 +561,7 @@ export struct ComposerBar {
   }
 
   private shouldShowModelControl(): boolean {
-    return (this.capabilities.surface === ChatSurface.Remote || this.capabilities.surface === ChatSurface.General) &&
-      this.enabledModels().length > 0;
+    return this.enabledModels().length > 0;
   }
 
   private enabledModels(): ConversationUiModel[] {
@@ -590,13 +618,13 @@ export struct ComposerBar {
       RemoteI18n.t('chat.inputPlaceholder');
   }
 
+  // Follows the offered action rather than the raw flags: while a turn runs and
+  // the user has typed something, the button is a send arrow, and a send arrow
+  // on a stop-red circle reads as "this will cancel".
   private actionBackgroundColor(): ResourceColor {
-    if (this.canStop) {
-      return RED;
+    if (this.primaryAction() !== ComposerPrimaryAction.Stop) {
+      return '#00000000';
     }
-    if (this.isVoiceListening) {
-      return GREEN;
-    }
-    return '#00000000';
+    return this.isVoiceListening ? GREEN : RED;
   }
 }

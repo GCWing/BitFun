@@ -73,3 +73,11 @@
     opacity: 1;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-tool-processing-dots__dot {
+    animation: none;
+    opacity: 0.75;
+    transform: none;
+  }
+}

@@ -3,7 +3,7 @@
 # sync-release.sh — Mirror BitFun release assets from GitHub to openbitfun.com.
 #
 # Flow:
-#   1. Fetch latest.json from GitHub (follows /releases/latest/download/ redirect)
+#   1. Fetch the selected channel's latest.json from GitHub
 #   2. Mirror the signed Relay image descriptor and Linux binary manifest FIRST
 #      (small trust metadata must not queue behind ~700 MB of Desktop packages)
 #   3. Download every Desktop updater package plus the standalone Windows
@@ -12,16 +12,19 @@
 #   5. Atomically publish versioned and root manifests
 #   6. Remove old version dirs, keeping only the most recent KEEP_VERSIONS
 #
-# The published release/latest.json is the Tauri updater fallback endpoint.
+# The published release/latest.json and release/beta/latest.json files are the
+# stable and beta Tauri updater fallback endpoints.
 # When GitHub is unreachable, the desktop client automatically falls through
 # to https://openbitfun.com/release/latest.json and downloads from this mirror.
 # The published release/downloads.json is for the website. Its Windows URL uses
 # latest.json's manual_installers entry while the updater keeps the versioned
 # Tauri setup.exe URL.
 #
-# Cron (every 10 minutes):
-#   */10 * * * * /root/repos/BitFun-AutoUpdate/openbitfun-release-sync.sh \
-#       >> /root/repos/BitFun-AutoUpdate/sync.log 2>&1
+# Cron (every 10 minutes). Run the in-repo script from the BitFun checkout so a
+# new host only needs this repository, not a detached AutoUpdate copy:
+#   */10 * * * * /root/repos/BitFun/scripts/openbitfun-release-sync.sh \
+#       >> /var/log/bitfun-release-sync.log 2>&1
+# Host restore: deploy/openbitfun-host/README.md
 #
 # Optional immediate trigger. The release workflow POSTs to
 # ${OPENBITFUN_SYNC_WEBHOOK_URL} once assets are published (see the "Request
@@ -31,9 +34,13 @@
 #
 #   while true; do
 #     nc -l -p 8787 -q 1 >/dev/null \
-#       && /root/repos/BitFun-AutoUpdate/openbitfun-release-sync.sh \
-#            >> /root/repos/BitFun-AutoUpdate/sync.log 2>&1
+#       && BITFUN_RELEASE_CHANNEL=stable \
+#            /root/repos/BitFun/scripts/openbitfun-release-sync.sh \
+#            >> /var/log/bitfun-release-sync.log 2>&1
 #   done
+#
+# The current production origin is cron-only. Do not invent a detached webhook
+# listener unless OPENBITFUN_SYNC_WEBHOOK_URL is actually configured.
 #
 # Cron stays the source of truth: this script is idempotent and holds a flock,
 # so a webhook run and a cron run cannot collide and a missed webhook only costs
@@ -42,17 +49,35 @@
 set -euo pipefail
 
 # ── Configuration ──────────────────────────────────────────────
-GITHUB_LATEST_JSON_URL="https://github.com/GCWing/BitFun/releases/latest/download/latest.json"
-GITHUB_LINUX_BINARIES_URL="https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json"
-GITHUB_RELAY_IMAGE_URL="https://github.com/GCWing/BitFun/releases/latest/download/relay-image.json"
-OPENBITFUN_BASE_URL="https://openbitfun.com/release"
+RELEASE_CHANNEL="${BITFUN_RELEASE_CHANNEL:-stable}"
+case "$RELEASE_CHANNEL" in
+  stable)
+    CHANNEL_PATH=""
+    GITHUB_RELEASE_ROOT="https://github.com/GCWing/BitFun/releases/latest/download"
+    ;;
+  beta)
+    CHANNEL_PATH="/beta"
+    GITHUB_RELEASE_ROOT="https://github.com/GCWing/BitFun/releases/download/channel-beta"
+    ;;
+  *)
+    echo "Unsupported BITFUN_RELEASE_CHANNEL: $RELEASE_CHANNEL" >&2
+    exit 1
+    ;;
+esac
+GITHUB_LATEST_JSON_URL="${GITHUB_RELEASE_ROOT}/latest.json"
+GITHUB_LINUX_BINARIES_URL="${GITHUB_RELEASE_ROOT}/linux-binaries.json"
+GITHUB_RELAY_IMAGE_URL="${GITHUB_RELEASE_ROOT}/relay-image.json"
+OPENBITFUN_BASE_URL="https://openbitfun.com/release${CHANNEL_PATH}"
 # The mirror deliberately lives outside the website checkout. It used to be
 # BitFun-Website/dist/release, but `npm run build` empties dist/, so every
 # website deploy silently deleted the mirrored installers and manifests —
 # breaking downloads and the updater fallback until someone noticed. nginx
 # serves this directory through a `location ^~ /release/` alias instead.
-WEBSITE_RELEASE_DIR="${WEBSITE_RELEASE_DIR:-/srv/bitfun-release}"
-LOCK_FILE="/root/repos/BitFun-AutoUpdate/sync.lock"
+WEBSITE_RELEASE_ROOT="${WEBSITE_RELEASE_DIR:-/srv/bitfun-release}"
+WEBSITE_RELEASE_DIR="${WEBSITE_RELEASE_ROOT}${CHANNEL_PATH}"
+# Keep the lock off the Nginx /release/ alias. Override with
+# BITFUN_RELEASE_SYNC_LOCK if a host must share a lock across checkouts.
+LOCK_FILE="${BITFUN_RELEASE_SYNC_LOCK:-/var/lock/bitfun-release-sync.lock}"
 LEGACY_WINDOWS_INSTALLER_FILENAME="bitfun-installer.exe"
 WINDOWS_INSTALLER_FILENAME="$LEGACY_WINDOWS_INSTALLER_FILENAME"
 WINDOWS_INSTALLER_URL=""
@@ -495,7 +520,7 @@ main() {
     exit 0
   fi
 
-  log "=== BitFun release sync started ==="
+  log "=== BitFun ${RELEASE_CHANNEL} release sync started ==="
 
   mkdir -p "$WEBSITE_RELEASE_DIR"
 
@@ -566,10 +591,15 @@ if entry:
   VERSION_DIR="${WEBSITE_RELEASE_DIR}/${VERSION}"
   mkdir -p "$VERSION_DIR"
 
-  # 4. Mirror small trust metadata and Linux archives first.
-  mirror_relay_image_descriptor
-  mirror_linux_binaries
-  mirror_dispatch_macos_cli_archives
+  # 4. Stable owns the CLI/Relay floating manifests. The first beta slice only
+  # mirrors Desktop updater and installer assets under /release/beta.
+  if [ "$RELEASE_CHANNEL" = "stable" ]; then
+    mirror_relay_image_descriptor
+    mirror_linux_binaries
+    mirror_dispatch_macos_cli_archives
+  else
+    log "Skipping stable-only CLI and Relay metadata for the beta channel"
+  fi
 
   # 5. Download all platform installer packages
   #    Extract "<url>\t<filename>" pairs, then curl each one.
@@ -638,7 +668,7 @@ print(json.dumps(data, indent=2))
     done
   fi
 
-  log "=== Sync complete: version $VERSION ==="
+  log "=== ${RELEASE_CHANNEL} sync complete: version $VERSION ==="
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

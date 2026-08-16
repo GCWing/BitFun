@@ -76,6 +76,9 @@ export type VirtualItem =
       turnId: string;
       isLastRound: boolean;
       isTurnComplete: boolean;
+      layoutHints?: {
+        expandedThinkingItemIds: string[];
+      };
       turnStartedAt?: number;
       turnEndedAt?: number;
       turnDurationMs?: number;
@@ -124,7 +127,7 @@ interface ModernFlowChatState {
  * adjacent explore groups to reduce visual noise from standalone "thinking N chars" lines.
  * Pure text rounds (like final replies) should not be collapsed.
  * Explore-capable rounds keep explore-group identity from the first render so
- * settling a streaming narrative cannot swap Virtuoso keys and remount the pane.
+ * settling a streaming narrative cannot swap virtual-item keys and remount the pane.
  * Typewriter remount risk is covered by useTypewriter(replayOnMount: false).
  */
 function hasTrailingVisibleText(round: ModelRound): boolean {
@@ -493,7 +496,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           groupIndex++;
         } else {
           // One round is always exactly one virtual item. Splitting a completed
-          // round into segments swaps a single Virtuoso key for N new keys,
+          // round into segments swaps a single virtual-item key for N new keys,
           // which remounts the visible assistant message and flashes the pane.
           items.push({
             type: 'model-round',
@@ -501,6 +504,12 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             turnId: turn.id,
             isLastRound: roundIndex === rounds.length - 1,
             isTurnComplete,
+            layoutHints: {
+              expandedThinkingItemIds: roundIndex === rounds.length - 1
+                && round.items.at(-1)?.type === 'thinking'
+                ? [round.items.at(-1)!.id]
+                : [],
+            },
             turnStartedAt: turn.startTime,
             turnEndedAt: turn.endTime,
             turnDurationMs: typeof turn.endTime === 'number'

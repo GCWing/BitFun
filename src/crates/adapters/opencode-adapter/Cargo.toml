@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "OpenCode-compatible source and candidate adapter for BitFun"
+autotests = false
 
 [lib]
 name = "bitfun_opencode_adapter"
@@ -12,9 +13,9 @@ crate-type = ["rlib"]
 [dependencies]
 async-trait = { workspace = true }
 bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client" }
-bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources", "plugin-source"] }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
-bitfun-services-core = { path = "../../services/services-core", default-features = false, features = ["markdown"] }
+bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources", "plugin-source"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["plugin-runtime"] }
+bitfun-services-core = { path = "../../services/services-core", features = ["markdown"] }
 bitfun-static-hook-support = { path = "../static-hook-support" }
 dirs = { workspace = true }
 dunce = { workspace = true }
@@ -31,9 +32,26 @@ urlencoding = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["plugin-source", "script-tool-runtime"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["script-tool-runtime"] }
+bitfun-services-integrations = { path = "../../services/services-integrations", features = ["plugin-source", "script-tool-runtime"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tempfile = { workspace = true }
+
+[[test]]
+name = "opencode_mcp_adapter"
+path = "tests/opencode_mcp_adapter.rs"
+
+[[test]]
+name = "opencode_source_adapter"
+path = "tests/opencode_source_adapter.rs"
+
+[[test]]
+name = "opencode_static_source_contracts"
+path = "tests/opencode_static_source_contracts.rs"
+
+[[test]]
+name = "tool_source_contracts"
+path = "tests/tool_source_contracts.rs"
 
 [lints]
 workspace = true

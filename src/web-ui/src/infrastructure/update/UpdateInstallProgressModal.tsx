@@ -103,7 +103,7 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
                 ? 'bitfun-update-progress__fill'
                 : 'bitfun-update-progress__fill bitfun-update-progress__fill--indeterminate'
             }
-            style={pct != null ? { width: `${pct}%` } : undefined}
+            style={pct != null ? { transform: `scaleX(${pct / 100})` } : undefined}
             data-bf-component="update"
             data-bf-part="progressFill"
             data-bf-state={pct == null ? 'indeterminate' : undefined}

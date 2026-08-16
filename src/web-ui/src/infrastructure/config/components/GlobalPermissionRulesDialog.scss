@@ -81,9 +81,21 @@
 
   &__rule-row {
     padding-block: 10px;
+    opacity: 1;
+    transform: translateY(0);
+    transition:
+      opacity 100ms ease-out,
+      transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
 
     + .global-permission-rules-dialog__rule-row {
       border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    }
+
+    &[data-exiting='true'] {
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      will-change: opacity, transform;
     }
   }
 
@@ -134,6 +146,16 @@
 
     &__rule-actions {
       justify-content: flex-end;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-permission-rules-dialog__rule-row {
+    transition: opacity 60ms linear;
+
+    &[data-exiting='true'] {
+      transform: none;
     }
   }
 }

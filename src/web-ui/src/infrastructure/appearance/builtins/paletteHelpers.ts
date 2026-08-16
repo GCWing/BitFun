@@ -251,10 +251,10 @@ export function createSlateRadius(): RadiusConfig {
   };
 }
 
-export function createStandardEasing(smooth = 'cubic-bezier(0.4, 0, 0.2, 1)'): AppearancePalette['motion']['easing'] {
+export function createStandardEasing(smooth = 'cubic-bezier(0.77, 0, 0.175, 1)'): AppearancePalette['motion']['easing'] {
   return {
-    standard: 'cubic-bezier(0.4, 0, 0.2, 1)',
-    decelerate: 'cubic-bezier(0, 0, 0.2, 1)',
+    standard: 'cubic-bezier(0.23, 1, 0.32, 1)',
+    decelerate: 'cubic-bezier(0.23, 1, 0.32, 1)',
     smooth,
   };
 }

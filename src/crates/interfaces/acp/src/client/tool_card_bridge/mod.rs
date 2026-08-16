@@ -1,5 +1,6 @@
 mod tool_name;
 mod tool_params;
+mod tool_result;
 
 pub(super) fn acp_tool_name(
     title: &str,
@@ -14,6 +15,16 @@ pub(super) fn normalize_tool_params(
     params: serde_json::Value,
 ) -> serde_json::Value {
     tool_params::normalize_tool_params(tool_name, params)
+}
+
+/// Translate a completed tool's result into the shape its native card reads.
+/// Results the card already understands, and results this cannot parse, are
+/// returned unchanged.
+pub(super) fn normalize_tool_result(
+    tool_name: &str,
+    result: serde_json::Value,
+) -> serde_json::Value {
+    tool_result::normalize_tool_result(tool_name, result)
 }
 
 #[cfg(test)]
@@ -115,5 +126,157 @@ mod tests {
         assert_eq!(params["file_path"], "src/lib.rs");
         assert_eq!(params["old_string"], "before");
         assert_eq!(params["new_string"], "after");
+    }
+
+    #[test]
+    fn resolves_the_tool_identity_from_a_title_that_names_the_tool() {
+        // DeepSeek Harness over ACP puts the tool name in the title and only
+        // the arguments in rawInput, so the alias table has to reach the title.
+        let todo_input = json!({ "todos": [{ "content": "ship it", "status": "pending" }] });
+        assert_eq!(
+            acp_tool_name("todo_write", Some(&todo_input), Some(&ToolKind::Other)),
+            "TodoWrite"
+        );
+        assert_eq!(acp_tool_name("TodoWrite", None, None), "TodoWrite");
+
+        let read_input = json!({ "file_path": "src/main.rs", "offset": 40 });
+        assert_eq!(
+            acp_tool_name("read", Some(&read_input), Some(&ToolKind::Read)),
+            "Read"
+        );
+
+        let bash_input = json!({ "command": "cargo test" });
+        assert_eq!(
+            acp_tool_name("bash", Some(&bash_input), Some(&ToolKind::Execute)),
+            "Bash"
+        );
+
+        // An unknown harness tool keeps its own name rather than being forced
+        // into a native card.
+        assert_eq!(
+            acp_tool_name(
+                "subagent",
+                Some(&json!({ "task": "review" })),
+                Some(&ToolKind::Other)
+            ),
+            "subagent"
+        );
+    }
+
+    #[test]
+    fn splits_the_str_replace_editor_family_by_its_command() {
+        // One tool name, several operations. Without the split every call would
+        // land on Bash, because the `command` key looks like a shell call.
+        let edit_input = json!({
+            "command": "str_replace",
+            "path": "/repo/src/lib.rs",
+            "old_str": "before",
+            "new_str": "after"
+        });
+        assert_eq!(
+            acp_tool_name(
+                "str_replace_editor",
+                Some(&edit_input),
+                Some(&ToolKind::Edit)
+            ),
+            "Edit"
+        );
+        let params = normalize_tool_params("Edit", edit_input);
+        assert_eq!(params["file_path"], "/repo/src/lib.rs");
+        assert_eq!(params["old_string"], "before");
+        assert_eq!(params["new_string"], "after");
+
+        let view_input = json!({ "command": "view", "path": "/repo/README.md" });
+        assert_eq!(
+            acp_tool_name(
+                "str_replace_editor",
+                Some(&view_input),
+                Some(&ToolKind::Read)
+            ),
+            "Read"
+        );
+
+        let create_input = json!({
+            "command": "create",
+            "path": "/repo/notes.md",
+            "file_text": "hi"
+        });
+        assert_eq!(
+            acp_tool_name(
+                "str_replace_editor",
+                Some(&create_input),
+                Some(&ToolKind::Edit)
+            ),
+            "Write"
+        );
+        let params = normalize_tool_params("Write", create_input);
+        assert_eq!(params["file_path"], "/repo/notes.md");
+        assert_eq!(params["content"], "hi");
+    }
+
+    #[test]
+    fn code_mode_gets_its_own_card_rather_than_an_empty_terminal() {
+        // DeepSeek Harness's PTC preset answers every step with one `run_code`
+        // call whose argument is a TypeScript program. As an Execute kind with
+        // no `command`, it used to land on the Bash card and render blank.
+        let input = json!({
+            "code": "const files = await tools.bash({ command: \"ls\" });",
+            "description": "List the project root",
+        });
+        assert_eq!(
+            acp_tool_name("run_code", Some(&input), Some(&ToolKind::Execute)),
+            "RunCode"
+        );
+        let params = normalize_tool_params("RunCode", input);
+        assert_eq!(params["description"], "List the project root");
+
+        // The shape alone is enough when the tool is named something else.
+        assert_eq!(
+            acp_tool_name(
+                "python",
+                Some(&json!({ "code": "print(1)" })),
+                Some(&ToolKind::Execute)
+            ),
+            "RunCode"
+        );
+        // …and a harness that spells the program differently still fills the
+        // field the card reads.
+        assert_eq!(
+            normalize_tool_params("RunCode", json!({ "source": "print(1)" }))["code"],
+            "print(1)"
+        );
+
+        // A shell call that happens to carry a `code` argument is still Bash:
+        // the command is what ran.
+        assert_eq!(
+            acp_tool_name(
+                "bash",
+                Some(&json!({ "command": "echo hi", "code": "unused" })),
+                Some(&ToolKind::Execute)
+            ),
+            "Bash"
+        );
+    }
+
+    #[test]
+    fn descriptive_titles_still_reach_the_heuristics() {
+        // Whole-string aliasing only: a prose title is not a tool name, so the
+        // rawInput shape keeps deciding these.
+        assert_eq!(
+            acp_tool_name(
+                "Run Bash",
+                Some(&json!({ "command": "ls" })),
+                Some(&ToolKind::Execute)
+            ),
+            "Bash"
+        );
+        assert_eq!(
+            acp_tool_name(
+                "Write to file",
+                Some(&json!({ "file_path": "a.txt", "content": "hi" })),
+                Some(&ToolKind::Edit)
+            ),
+            "Write"
+        );
     }
 }

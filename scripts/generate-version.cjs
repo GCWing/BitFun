@@ -59,6 +59,10 @@ function generateVersionInfo(buildEnv) {
   const buildDate = new Date().toISOString();
   const buildTimestamp = Date.now();
   const isDev = buildEnv === 'development';
+  const releaseChannel = process.env.BITFUN_RELEASE_CHANNEL || 'stable';
+  if (!['stable', 'beta', 'nightly'].includes(releaseChannel)) {
+    throw new Error(`Unsupported BITFUN_RELEASE_CHANNEL: ${releaseChannel}`);
+  }
   
   const versionInfo = {
     name: packageJson.name === 'BitFun' ? 'BitFun' : packageJson.name,
@@ -66,6 +70,7 @@ function generateVersionInfo(buildEnv) {
     buildDate,
     buildTimestamp,
     buildEnv,
+    releaseChannel,
     isDev,
     ...gitInfo
   };
@@ -145,5 +150,4 @@ try {
   printWarning('Version info generation failed: ' + (err.message || err));
   process.exit(1);
 }
-
 

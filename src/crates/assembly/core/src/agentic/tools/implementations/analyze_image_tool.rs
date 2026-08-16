@@ -368,16 +368,48 @@ impl Tool for AnalyzeImageTool {
             .take(180)
             .collect::<String>();
 
-        let data = json!({
+        // Coordinate contract. Two separate traps live here:
+        //
+        // 1. `width`/`height` are the dimensions of the image **the model
+        //    saw**, which is often not the file's — large screenshots get
+        //    downscaled to fit the provider's limits. Reporting only those, as
+        //    this did, silently hands back numbers that do not describe the
+        //    file the caller passed in.
+        // 2. Any position or size in `analysis` is prose from a vision model:
+        //    estimated, not measured, and expressed in the resized frame. It is
+        //    not a click target, and treating it as one means compounding a
+        //    guess with a scale factor and (on Retina) a device-pixel ratio.
+        let mut data = json!({
             "path": resolved.display_path(),
             "model_id": vision_model.id,
             "model_name": vision_model.model_name,
             "mime_type": processed.mime_type,
             "width": processed.width,
             "height": processed.height,
+            "original_width": processed.original_width,
+            "original_height": processed.original_height,
+            "was_resized": processed.was_resized(),
             "summary": summary,
             "analysis": analysis,
+            "coordinate_note": "Any position or size mentioned in `analysis` is the vision model's estimate, in the frame of the image it was shown (`width`x`height`). It is not a measurement and not a click target. To act on something on screen, use `ComputerUse` `locate` / `move_to_text` / `describe_screen`, which return real coordinates.",
         });
+        if processed.was_resized() {
+            if let Some(obj) = data.as_object_mut() {
+                obj.insert("scale_from_original".to_string(), json!(processed.scale()));
+                obj.insert(
+                    "resize_note".to_string(),
+                    json!(format!(
+                        "The image was downscaled {}x{} -> {}x{} (x{:.4}) to fit the vision model. \
+Divide by that factor to map anything in `analysis` back to source pixels — but prefer not to: see `coordinate_note`.",
+                        processed.original_width,
+                        processed.original_height,
+                        processed.width,
+                        processed.height,
+                        processed.scale(),
+                    )),
+                );
+            }
+        }
 
         Ok(vec![ToolResult::ok(
             data,

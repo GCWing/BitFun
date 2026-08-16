@@ -21,6 +21,12 @@ pub(crate) struct SessionWorkspaceCheckpoint {
     pub(crate) snapshot_id: Option<String>,
 }
 
+impl SessionWorkspaceCheckpoint {
+    pub(crate) fn display_path(&self) -> String {
+        self.path.to_string_lossy().into_owned()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionRevertState {
@@ -41,6 +47,13 @@ impl SessionRevertState {
             phase: SessionRevertPhase::Applying,
             workspace_checkpoint: Vec::new(),
         }
+    }
+
+    pub(crate) fn diagnostic_mutation_id(&self, session_id: &str) -> String {
+        format!(
+            "session-revert:{session_id}:{}:{}",
+            self.boundary_turn, self.original_turn_end
+        )
     }
 }
 
@@ -130,6 +143,40 @@ pub(crate) fn resolve_undo(
     })
 }
 
+pub(crate) fn resolve_targeted(
+    turns: &[DialogTurnData],
+    target_turn_id: &str,
+    current: Option<&SessionRevertState>,
+) -> Option<SessionRevertTransition> {
+    let target = turns
+        .iter()
+        .find(|turn| turn.kind == DialogTurnKind::UserDialog && turn.turn_id == target_turn_id)?;
+    let mut state = current.cloned().unwrap_or_else(|| {
+        SessionRevertState::initial(target.turn_index, original_turn_end(turns))
+    });
+    state.boundary_turn = target.turn_index;
+    state.phase = SessionRevertPhase::Applying;
+    let hidden_turn_count = turns
+        .iter()
+        .filter(|turn| turn.turn_index >= state.boundary_turn)
+        .count();
+
+    Some(SessionRevertTransition::Stage {
+        state,
+        replacement_prompt: Some(
+            target
+                .user_message
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("original_text"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(&target.user_message.content)
+                .to_string(),
+        ),
+        hidden_turn_count,
+    })
+}
+
 pub(crate) fn resolve_redo(
     turns: &[DialogTurnData],
     current: Option<&SessionRevertState>,
@@ -173,7 +220,10 @@ fn original_turn_end(turns: &[DialogTurnData]) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_redo, resolve_undo, SessionRevertTransition};
+    use super::{
+        resolve_redo, resolve_targeted, resolve_undo, SessionRevertPhase, SessionRevertState,
+        SessionRevertTransition, SessionWorkspaceCheckpoint, SESSION_REVERT_SCHEMA_VERSION,
+    };
     use crate::service::session::{DialogTurnData, DialogTurnKind, TurnStatus, UserMessageData};
 
     fn user_turn(index: usize, prompt: &str) -> DialogTurnData {
@@ -199,6 +249,8 @@ mod tests {
             has_final_response: Some(true),
             error: None,
             error_detail: None,
+            recovery: None,
+            recovery_epoch: None,
             status: TurnStatus::Completed,
         }
     }
@@ -257,5 +309,45 @@ mod tests {
         assert!(matches!(clear, SessionRevertTransition::Clear { .. }));
         assert_eq!(clear.hidden_turn_count(), 0);
         assert!(resolve_redo(&turns, None).is_none());
+    }
+
+    #[test]
+    fn targeted_resolution_uses_turn_identity_with_sparse_storage_indices() {
+        let turns = vec![
+            user_turn(0, "first"),
+            user_turn(1, "second"),
+            maintenance_turn(7),
+            user_turn(8, "third"),
+        ];
+        let transition = resolve_targeted(&turns, "turn-8", None).expect("target should resolve");
+        assert_eq!(transition.boundary_turn(), Some(8));
+        assert_eq!(transition.hidden_turn_count(), 1);
+        assert_eq!(transition.replacement_prompt(), Some("third"));
+        assert!(resolve_targeted(&turns, "missing", None).is_none());
+        assert!(resolve_targeted(&turns, "turn-7", None).is_none());
+    }
+
+    #[test]
+    fn targeted_resolution_extends_an_existing_staged_revert() {
+        let turns = vec![user_turn(0, "first"), user_turn(1, "second")];
+        let staged = SessionRevertState {
+            schema_version: SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 1,
+            original_turn_end: 2,
+            phase: SessionRevertPhase::Staged,
+            workspace_checkpoint: vec![SessionWorkspaceCheckpoint {
+                path: "src/lib.rs".into(),
+                snapshot_id: Some("snapshot-1".to_string()),
+            }],
+        };
+
+        let transition = resolve_targeted(&turns, "turn-0", Some(&staged))
+            .expect("visible target should extend the staged revert");
+        let state = transition
+            .staged_state()
+            .expect("target should stage a boundary");
+        assert_eq!(state.boundary_turn, 0);
+        assert_eq!(state.original_turn_end, 2);
+        assert_eq!(state.workspace_checkpoint, staged.workspace_checkpoint);
     }
 }

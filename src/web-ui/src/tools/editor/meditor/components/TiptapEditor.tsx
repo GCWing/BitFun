@@ -22,6 +22,7 @@ import { Input } from '@/component-library';
 import { editorAiAPI } from '@/infrastructure/api/service-api/EditorAiAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 import { MarkdownAlignmentExtension } from '../extensions/MarkdownAlignmentExtension';
 import { BlockIdExtension } from '../extensions/BlockIdExtension';
@@ -36,7 +37,7 @@ import {
   InlineAiPreviewExtension,
 } from '../extensions/InlineAiPreviewExtension';
 import { inlineAiPreviewPluginKey } from '../extensions/InlineAiPreviewPluginKey';
-import { RawHtmlBlock, RawHtmlInline, RenderOnlyBlock } from '../extensions/RawHtmlExtensions';
+import { Frontmatter, RawHtmlBlock, RawHtmlInline, RenderOnlyBlock } from '../extensions/RawHtmlExtensions';
 import { getBlockIndexForLine } from '../utils/markdownBlocks';
 import {
   buildInlineContinuePrompt,
@@ -600,6 +601,9 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       }),
       DetailsSummary,
       DetailsContent,
+      Frontmatter.configure({
+        label: t('editor.meditor.frontmatter.label'),
+      }),
       // Keep raw/render-only fallbacks for HTML we still can't round-trip safely.
       RenderOnlyBlock.configure({
         basePath,
@@ -886,7 +890,10 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       return;
     }
 
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element.scrollIntoView({
+      behavior: getMotionAwareScrollBehavior('smooth'),
+      block: 'center',
+    });
 
     if (highlight) {
       element.classList.add('m-editor-tiptap-block-highlighted');

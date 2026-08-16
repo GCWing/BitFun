@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 5;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -64,7 +64,8 @@ pub use bitfun_harness::{
 };
 pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentContextReloadPort, AgentDialogSteerRequest,
-    AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment,
+    AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRecoveryOutcome,
+    AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest, AgentInputAttachment,
     AgentInteractionResponsePort, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
     AgentLocalCommandTurnRecordRequest, AgentLocalCommandTurnRecordResult,
     AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
@@ -79,13 +80,14 @@ pub use bitfun_runtime_ports::{
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
     AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertPort,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
-    AgentSessionUsagePort, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
-    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
-    AgentThreadGoalUpdateStatusRequest, AgentTransientSessionDiscardRequest,
-    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome,
+    AgentSessionRollbackToTurnRequest, AgentSessionSummary, AgentSessionUsagePort,
+    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
+    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
+    AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, AgentTurnInterruptionRequest, AgentTurnInterruptionResult,
     AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserAnswersRequest,
     AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
     AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferencePort,
@@ -553,6 +555,13 @@ impl AgentRuntime {
         self.inner.redo_session(request).await
     }
 
+    pub async fn rollback_session_to_turn(
+        &self,
+        request: AgentSessionRollbackToTurnRequest,
+    ) -> Result<AgentSessionRollbackToTurnOutcome, RuntimeError> {
+        self.inner.rollback_session_to_turn(request).await
+    }
+
     pub async fn fork_session(
         &self,
         request: AgentSessionForkRequest,
@@ -658,6 +667,13 @@ impl AgentRuntime {
         self.inner.steer_dialog_turn(request).await
     }
 
+    pub async fn recover_interrupted_turn(
+        &self,
+        request: AgentDialogTurnRecoveryRequest,
+    ) -> Result<AgentDialogTurnRecoveryOutcome, RuntimeError> {
+        self.inner.recover_interrupted_turn(request).await
+    }
+
     pub async fn deliver_background_result(
         &self,
         request: AgentBackgroundResultRequest,
@@ -705,6 +721,13 @@ impl AgentRuntime {
         request: AgentTurnCancellationRequest,
     ) -> Result<AgentTurnCancellationResult, RuntimeError> {
         self.inner.cancel_turn(request).await
+    }
+
+    pub async fn interrupt_turn(
+        &self,
+        request: AgentTurnInterruptionRequest,
+    ) -> Result<AgentTurnInterruptionResult, RuntimeError> {
+        self.inner.interrupt_turn(request).await
     }
 
     pub async fn cancel_lineage_session(

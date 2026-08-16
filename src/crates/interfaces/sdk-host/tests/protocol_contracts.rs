@@ -1,8 +1,8 @@
 use bitfun_sdk_host::protocol::{
     ErrorCode, ErrorData, ErrorStage, HostCapabilities, InitializeParams, InitializeResult,
-    JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccessResponse, QueryEvent, QueryResultError,
-    QueryResultParams, QueryTerminalStatus, RecoveryAction, RequestId, SessionLifetime, Stability,
-    PROTOCOL_VERSION,
+    JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccessResponse, OutcomeCertainty, QueryEvent,
+    QueryOutput, QueryResultError, QueryResultParams, QueryTerminalStatus, RecoveryAction,
+    RequestId, SessionLifetime, Stability, PROTOCOL_VERSION,
 };
 
 #[test]
@@ -85,7 +85,11 @@ fn query_events_and_terminal_errors_are_closed_protocol_values() {
         query_id: "query-1".to_string(),
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
+        operation_id: "operation-1".to_string(),
         status: QueryTerminalStatus::Failed,
+        output: QueryOutput {
+            text: "partial response".to_string(),
+        },
         error: Some(QueryResultError {
             message: "Permission approval is required".to_string(),
             data: ErrorData {
@@ -93,6 +97,9 @@ fn query_events_and_terminal_errors_are_closed_protocol_values() {
                 stage: ErrorStage::Query,
                 retryable: false,
                 correlation_id: "query:query-1".to_string(),
+                operation_id: Some("operation-1".to_string()),
+                causation_id: None,
+                outcome_certainty: OutcomeCertainty::Committed,
                 recovery: None,
             },
         }),
@@ -100,6 +107,9 @@ fn query_events_and_terminal_errors_are_closed_protocol_values() {
     .unwrap();
     assert_eq!(result["error"]["data"]["code"], "action_required");
     assert_eq!(result["error"]["data"]["stage"], "query");
+    assert_eq!(result["operationId"], "operation-1");
+    assert_eq!(result["output"]["text"], "partial response");
+    assert_eq!(result["error"]["data"]["outcomeCertainty"], "committed");
     assert_eq!(
         result["error"]["message"],
         "Permission approval is required"
@@ -142,6 +152,9 @@ fn success_and_error_envelopes_are_strict_json_rpc() {
             stage: ErrorStage::Query,
             retryable: true,
             correlation_id: "request:2".to_string(),
+            operation_id: Some("operation-2".to_string()),
+            causation_id: None,
+            outcome_certainty: OutcomeCertainty::NotStarted,
             recovery: Some(RecoveryAction::Retry),
         },
     );
@@ -150,6 +163,7 @@ fn success_and_error_envelopes_are_strict_json_rpc() {
     assert_eq!(value["error"]["data"]["stage"], "query");
     assert_eq!(value["error"]["data"]["recovery"], "retry");
     assert_eq!(value["error"]["data"]["retryable"], true);
+    assert_eq!(value["error"]["data"]["outcomeCertainty"], "not_started");
 }
 
 #[test]

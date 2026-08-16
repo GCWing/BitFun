@@ -230,7 +230,12 @@
     input {
       font-size: 12px;
       color: var(--bf-appearance-token-color-text-primary);
-
+      transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        color 0.2s ease;
+      
       &::placeholder {
         color: var(--bf-appearance-token-color-text-muted);
         font-size: 12px;
@@ -456,5 +461,12 @@
       width: 100%;
       padding: 10px;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-project-dialog__btn-spinner {
+    animation: none;
+    transform: none;
   }
 }

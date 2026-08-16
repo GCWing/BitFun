@@ -1,4 +1,4 @@
-import { ConversationUiImage } from './ConversationUiModels';
+import { ConversationUiImage } from '../state/ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { FileTargetResolver } from '../../services/FileTargetResolver';
 import {

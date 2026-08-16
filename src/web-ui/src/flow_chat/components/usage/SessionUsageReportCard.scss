@@ -14,7 +14,6 @@
   background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 82%, var(--bf-appearance-token-color-bg-scene));
   box-shadow: 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 4%, transparent) inset;
   color: var(--bf-appearance-token-color-text-primary);
-  animation: slideInUp 0.3s ease;
 
   &--fallback {
     position: relative;

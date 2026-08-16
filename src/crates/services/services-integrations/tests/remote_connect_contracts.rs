@@ -2216,6 +2216,7 @@ fn remote_connect_model_catalog_builder_preserves_config_shape() {
                     execution_provider: None,
                     execution_model: None,
                 }],
+                unavailable_presets: Vec::new(),
             }),
         }],
         provider_catalog: Default::default(),

@@ -139,8 +139,8 @@ export const bitfunSlatePalette: AppearancePalette = {
     duration: {
       instant: '0.08s',
       fast: '0.12s',
-      base: '0.25s',
-      slow: '0.5s',
+      base: '0.2s',
+      slow: '0.4s',
     },
 
     easing: createStandardEasing(),

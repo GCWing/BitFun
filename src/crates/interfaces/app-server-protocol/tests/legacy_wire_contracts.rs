@@ -1,0 +1,84 @@
+use agent_client_protocol::JsonRpcMessage;
+use bitfun_app_server_protocol::{
+    agent::{RunResponse, SubmitDialogTurnMessage, SubmitDialogTurnRequest},
+    config::GetAgentProfileConfigMessage,
+    permission::RespondPermissionMessage,
+    session::{RestoreSessionMessage, SessionProcessingPhase, SessionRuntimeState},
+};
+use serde_json::json;
+
+#[test]
+fn legacy_submit_dialog_contract_keeps_optional_policy_and_method() {
+    let request: SubmitDialogTurnRequest = serde_json::from_value(json!({
+        "sessionId": "session-1",
+        "message": "hello",
+        "agentType": "general"
+    }))
+    .expect("legacy dialog payload should accept a missing policy");
+    let body = request.0;
+
+    assert!(body.policy.is_none());
+    assert!(body.attachments.is_empty());
+    assert!(body.metadata.is_empty());
+    assert!(SubmitDialogTurnMessage::matches_method(
+        "agent/submitDialogTurn"
+    ));
+    assert_eq!(
+        std::any::TypeId::of::<SubmitDialogTurnMessage>(),
+        std::any::TypeId::of::<SubmitDialogTurnRequest>()
+    );
+}
+
+#[test]
+fn legacy_restore_and_session_state_keep_their_wire_shape() {
+    let request: RestoreSessionMessage = serde_json::from_value(json!({
+        "workspacePath": "/workspace",
+        "sessionId": "session-1"
+    }))
+    .expect("restore request should accept omitted includeInternal");
+    assert!(!request.include_internal);
+
+    let state = SessionRuntimeState::Processing {
+        current_turn_id: "turn-1".to_string(),
+        phase: SessionProcessingPhase::ToolCalling,
+    };
+    assert_eq!(
+        serde_json::to_value(state).expect("state should serialize"),
+        json!({
+            "kind": "processing",
+            "currentTurnId": "turn-1",
+            "phase": "toolCalling"
+        })
+    );
+}
+
+#[test]
+fn legacy_mixed_case_fields_and_response_defaults_remain_compatible() {
+    let profile: GetAgentProfileConfigMessage = serde_json::from_value(json!({
+        "agent_id": "general"
+    }))
+    .expect("legacy get-profile request should keep snake_case");
+    assert_eq!(profile.agent_id, "general");
+
+    let permission: RespondPermissionMessage = serde_json::from_value(json!({
+        "request_id": "permission-1",
+        "reply": { "reply": "once" }
+    }))
+    .expect("legacy permission request should keep snake_case");
+    assert_eq!(permission.request_id, "permission-1");
+
+    let response: RunResponse = serde_json::from_value(json!({
+        "sessionId": "session-1",
+        "turnId": "turn-1"
+    }))
+    .expect("accepted should default to false");
+    assert!(!response.accepted);
+    assert_eq!(
+        serde_json::to_value(response).expect("response should serialize"),
+        json!({
+            "sessionId": "session-1",
+            "turnId": "turn-1",
+            "accepted": false
+        })
+    );
+}

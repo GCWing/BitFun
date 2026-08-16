@@ -6,12 +6,14 @@ use bitfun_core::external_sources::{
     apply_external_source_control_action, choose_external_mcp_conflict,
     choose_external_subagent_conflict, external_source_snapshot,
     get_external_source_control_snapshot, set_external_mcp_server_decision,
-    set_external_prompt_command_conflict_choice, set_external_source_enabled,
-    set_external_subagent_activation, set_external_subagent_model_binding,
+    set_external_mcp_servers_enabled, set_external_prompt_command_conflict_choice,
+    set_external_source_enabled, set_external_subagent_activation,
+    set_external_subagent_model_binding, set_external_subagents_enabled,
     set_external_tool_conflict_choice, set_external_tool_target_decision,
-    update_external_integration_policy, ExternalIntegrationPolicyMutation,
-    ExternalSourceControlRequestV1, ExternalSourceHostCapabilities, ExternalSourceOperationError,
-    ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
+    set_external_tool_targets_enabled, update_external_integration_policy,
+    ExternalIntegrationPolicyMutation, ExternalSourceControlRequestV1,
+    ExternalSourceHostCapabilities, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
     ExternalSubagentModelBindingTarget,
 };
 use serde_json::Value;
@@ -58,6 +60,28 @@ fn required_u64(request: &Value, key: &str) -> ExternalSourceOperationResult<u64
     request.get(key).and_then(Value::as_u64).ok_or_else(|| {
         ExternalSourceOperationError::invalid_request(format!("Missing or invalid '{key}'"))
     })
+}
+
+fn decision_pairs(
+    request: &Value,
+    first_key: &str,
+    second_key: &str,
+) -> ExternalSourceOperationResult<Vec<(String, String)>> {
+    let decisions = request
+        .get("decisions")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            ExternalSourceOperationError::invalid_request("Missing or invalid 'decisions'")
+        })?;
+    decisions
+        .iter()
+        .map(|decision| {
+            Ok((
+                required_string(decision, first_key)?,
+                required_string(decision, second_key)?,
+            ))
+        })
+        .collect()
 }
 
 fn model_binding_target_field(
@@ -221,6 +245,16 @@ async fn dispatch_inner(
             )
             .await
         }
+        "set_external_tool_targets_enabled_command" => {
+            set_external_tool_targets_enabled(
+                workspace,
+                decision_pairs(request, "approvalKey", "decisionKey")?,
+                required_bool(request, "enabled")?,
+                required_u64(request, "expectedCatalogGeneration")?,
+                required_u64(request, "expectedPreferenceRevision")?,
+            )
+            .await
+        }
         "set_external_tool_conflict_choice_command" => {
             set_external_tool_conflict_choice(
                 workspace,
@@ -238,6 +272,16 @@ async fn dispatch_inner(
                 required_u64(request, "expectedSubagentGeneration")?,
                 required_u64(request, "expectedPreferenceRevision")?,
                 &required_string(request, "decisionKey")?,
+            )
+            .await
+        }
+        "set_external_subagents_enabled_command" => {
+            set_external_subagents_enabled(
+                workspace,
+                decision_pairs(request, "candidateId", "decisionKey")?,
+                required_bool(request, "enabled")?,
+                required_u64(request, "expectedSubagentGeneration")?,
+                required_u64(request, "expectedPreferenceRevision")?,
             )
             .await
         }
@@ -268,6 +312,16 @@ async fn dispatch_inner(
                 &required_string(request, "candidateId")?,
                 &required_string(request, "decisionKey")?,
                 required_bool(request, "approved")?,
+                required_u64(request, "expectedMcpGeneration")?,
+                required_u64(request, "expectedPreferenceRevision")?,
+            )
+            .await
+        }
+        "set_external_mcp_servers_enabled_command" => {
+            set_external_mcp_servers_enabled(
+                workspace,
+                decision_pairs(request, "candidateId", "decisionKey")?,
+                required_bool(request, "enabled")?,
                 required_u64(request, "expectedMcpGeneration")?,
                 required_u64(request, "expectedPreferenceRevision")?,
             )
@@ -393,6 +447,24 @@ mod tests {
                 .unwrap_err()
                 .code,
             ExternalSourceOperationErrorCode::InvalidRequest
+        );
+    }
+
+    #[test]
+    fn peer_bulk_decisions_preserve_the_reviewed_identity_pairs() {
+        let request = serde_json::json!({
+            "decisions": [
+                { "candidateId": "agent-a", "decisionKey": "decision-a" },
+                { "candidateId": "agent-b", "decisionKey": "decision-b" }
+            ]
+        });
+
+        assert_eq!(
+            decision_pairs(&request, "candidateId", "decisionKey").unwrap(),
+            vec![
+                ("agent-a".to_string(), "decision-a".to_string()),
+                ("agent-b".to_string(), "decision-b".to_string()),
+            ]
         );
     }
 }

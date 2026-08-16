@@ -101,11 +101,11 @@ export class MockGeneralChatAdapter implements GeneralChatPort {
     }
     if (MockGeneralChatAdapter.looksLikeCodeTask(normalized)) {
       return [
-        '这个问题可能需要 Code 能力来读取本地项目、运行命令或查看日志。',
+        '这个问题可能需要远程能力来读取本地项目、运行命令或查看日志。',
         '',
-        '如果只是要通用建议，我可以先给排查路径；如果要看本地仓库、改代码或运行命令，就应该从侧栏进入 Code。',
+        '如果只是要通用建议，我可以先给排查路径；如果要看本地仓库、改代码或运行命令，就应该从侧栏进入远程。',
         '',
-        '当前是 mock 回复。接入 BitFun harness 后，普通聊天会给出真实模型建议，Code 模块会继续负责本地 workspace 和工具执行。'
+        '当前是 mock 回复。接入 BitFun harness 后，普通聊天会给出真实模型建议，远程模块会继续负责本地 workspace 和工具执行。'
       ].join('\n');
     }
     if (normalized.indexOf('图片') >= 0 || normalized.toLowerCase().indexOf('image') >= 0) {
@@ -135,7 +135,7 @@ export class MockGeneralChatAdapter implements GeneralChatPort {
     return [
       `我收到了：${normalized}`,
       '',
-      '在手机端，BitFun 不应该只是普通聊天框，而是一个通用助手入口：可以问答、搜索资料、分析图片、处理文件、写作改写，也可以在需要本地项目能力时引导进入 Code。',
+      '在手机端，BitFun 不应该只是普通聊天框，而是一个通用助手入口：可以问答、搜索资料、分析图片、处理文件、写作改写，也可以在需要本地项目能力时引导进入远程。',
       '',
       '当前回复是 mock，用来验证移动端交互和流式 UI。下一步把这个 backend 替换为 BitFun harness 的普通聊天接口后，就会返回真实模型结果。'
     ].join('\n');

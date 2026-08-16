@@ -1,9 +1,10 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
+import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemotePermissionMode } from '../../model/RemoteModels';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
 import { BitFunAccountLoginPage } from './BitFunAccountLoginPage';
+import { AccountDeviceSelectionPolicy } from '../policy/AccountDeviceSelectionPolicy';
 
 @ComponentV2
 export struct RemoteControlSettingsSheet {
@@ -23,9 +24,10 @@ export struct RemoteControlSettingsSheet {
   @Event onOpenAccount: () => void = () => {};
   @Event onAddConnection: () => void = () => {};
   @Event cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> = async (_relayUrl: string, _username: string, _password: string): Promise<string> => '';
-  @Event cloudSync: () => Promise<string> = async (): Promise<string> => '0';
   @Event cloudLogout: () => Promise<void> = async (): Promise<void> => {};
   @Event cloudListDevices: () => Promise<CloudAccountDevice[]> = async (): Promise<CloudAccountDevice[]> => [];
+  @Event cloudSelectDevice: (device: CloudAccountDevice) => Promise<void> =
+    async (_device: CloudAccountDevice): Promise<void> => {};
   @Event getPermissionMode: () => Promise<RemotePermissionMode> = async (): Promise<RemotePermissionMode> => 'ask';
   @Event setPermissionMode: (mode: RemotePermissionMode) => Promise<RemotePermissionMode> =
     async (mode: RemotePermissionMode): Promise<RemotePermissionMode> => mode;
@@ -33,11 +35,10 @@ export struct RemoteControlSettingsSheet {
   @Event onReconnect: () => void = () => {};
   @Local showProfile: boolean = false;
   @Local showLogin: boolean = false;
-  @Local cloudSyncBusy: boolean = false;
-  @Local cloudSyncStatus: string = '';
   @Local accountDevices: CloudAccountDevice[] = [];
   @Local accountDevicesBusy: boolean = false;
   @Local accountDevicesError: string = '';
+  @Local switchingDeviceId: string = '';
   @Local permissionMode: RemotePermissionMode = 'ask';
   @Local permissionModeBusy: boolean = false;
   @Local permissionModeLoaded: boolean = false;
@@ -553,32 +554,6 @@ export struct RemoteControlSettingsSheet {
         .lineHeight(20)
         .fontColor(MUTED)
         .width('100%')
-
-      Text(RemoteI18n.t('remote.settings.accountSync'))
-        .height(42)
-        .width('100%')
-        .fontSize(15)
-        .fontColor(PRIMARY_ACTION_TEXT)
-        .backgroundColor(PRIMARY_ACTION)
-        .textAlign(TextAlign.Center)
-        .borderRadius(21)
-        .opacity(this.cloudSyncBusy ? 0.52 : 1)
-        .onClick(async () => {
-          if (this.cloudSyncBusy) return;
-          this.cloudSyncBusy = true;
-          this.cloudSyncStatus = '';
-          try {
-            const count = await this.cloudSync();
-            this.cloudSyncStatus = RemoteI18n.f('remote.settings.accountSyncSuccess', count);
-          } catch (err) {
-            this.cloudSyncStatus = err instanceof Error ? err.message : RemoteI18n.t('remote.settings.accountSyncFailed');
-          } finally {
-            this.cloudSyncBusy = false;
-          }
-        })
-      if (this.cloudSyncStatus.length > 0) {
-        Text(this.cloudSyncStatus).fontSize(13).fontColor(MUTED).width('100%')
-      }
     }
     .width('100%')
     .padding({ left: 18, right: 18, top: 16, bottom: 16 })
@@ -613,7 +588,6 @@ export struct RemoteControlSettingsSheet {
       this.logoutBusy = true;
       try {
         await this.cloudLogout();
-        this.cloudSyncStatus = '';
         this.showProfile = false;
         this.showLogin = true;
       } finally {
@@ -651,6 +625,10 @@ export struct RemoteControlSettingsSheet {
         }, (device: CloudAccountDevice): string =>
           `${device.deviceId}:${device.online ? 'online' : 'offline'}:${device.lastSeenAt || 0}:${device.deviceName}`)
       }
+      if (this.accountDevicesError.length > 0 && this.desktopDevices().length > 0) {
+        Text(this.accountDevicesError)
+          .fontSize(13).lineHeight(18).fontColor(RED).width('100%')
+      }
     }
     .width('100%').padding({ left: 18, right: 18, top: 16, bottom: 16 })
     .backgroundColor(CARD).borderRadius(24).margin({ bottom: 24 })
@@ -668,9 +646,19 @@ export struct RemoteControlSettingsSheet {
         Text(this.deviceStatus(device))
           .fontSize(13).fontColor(device.online ? GREEN : MUTED)
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+      if (this.shouldShowDeviceConnectAction(device)) {
+        Text(this.switchingDeviceId === device.deviceId ?
+          RemoteI18n.t('remote.settings.deviceConnecting') : RemoteI18n.t('connect.connect'))
+          .fontSize(14).fontColor(INK)
+          .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+          .backgroundColor(SOFT).borderRadius(14)
+      }
     }
     .width('100%').height(54).alignItems(VerticalAlign.Center)
-    .opacity(device.online ? 1 : 0.68)
+    .opacity(this.canActivateAccountDevice(device) ? 1 : 0.68)
+    .onClick(() => {
+      void this.connectAccountDevice(device);
+    })
   }
 
   private async refreshAccountDevices(allowPendingLogin: boolean = false): Promise<void> {
@@ -689,6 +677,49 @@ export struct RemoteControlSettingsSheet {
   private desktopDevices(): CloudAccountDevice[] {
     return this.accountDevices.filter((device: CloudAccountDevice): boolean =>
       device.deviceId !== this.deviceId && device.deviceName !== 'HarmonyOS Phone');
+  }
+
+  private canActivateAccountDevice(device: CloudAccountDevice): boolean {
+    return AccountDeviceSelectionPolicy.canActivate(
+      device.online,
+      device.deviceId,
+      this.deviceId,
+      this.controlTargetDeviceId,
+      this.connectionState,
+      this.switchingDeviceId
+    );
+  }
+
+  private shouldShowDeviceConnectAction(device: CloudAccountDevice): boolean {
+    return AccountDeviceSelectionPolicy.shouldShowConnectAction(
+      device.online,
+      device.deviceId,
+      this.deviceId,
+      this.controlTargetDeviceId,
+      this.connectionState
+    );
+  }
+
+  private async connectAccountDevice(device: CloudAccountDevice): Promise<void> {
+    if (!this.canActivateAccountDevice(device)) {
+      return;
+    }
+    this.switchingDeviceId = device.deviceId;
+    this.accountDevicesError = '';
+    try {
+      if (AccountDeviceSelectionPolicy.canSelectOnline(
+        device.online, device.deviceId, this.deviceId, ''
+      )) {
+        await this.cloudSelectDevice(device);
+      } else {
+        this.onReconnect();
+      }
+    } catch (err) {
+      this.accountDevicesError = err instanceof Error ? err.message :
+        RemoteI18n.t('remote.settings.deviceSwitchFailed');
+    } finally {
+      this.switchingDeviceId = '';
+    }
   }
 
   private deviceStatus(device: CloudAccountDevice): string {

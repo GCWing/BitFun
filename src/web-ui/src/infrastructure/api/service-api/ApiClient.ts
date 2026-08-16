@@ -1,6 +1,11 @@
  
 
-import { getTransportAdapter, ITransportAdapter, type TransportRequestTiming } from '../adapters';
+import {
+  getTransportAdapter,
+  isPeerLocalOnlyCommand,
+  ITransportAdapter,
+  type TransportRequestTiming,
+} from '../adapters';
 import {
   IApiClient,
   ApiResponse,
@@ -17,6 +22,11 @@ import { createLogger } from '@/shared/utils/logger';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { estimateJsonBytes, isRemoteTraceRequest, startupTrace } from '@/shared/utils/startupTrace';
 import { sanitizeErrorForLog, sanitizeLogValue, sanitizeTextForLog } from '../logSanitizer';
+import {
+  SurfaceChangedError,
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('ApiClient');
 const sanitizeForLog = sanitizeLogValue;
@@ -286,13 +296,36 @@ export class ApiClient implements IApiClient {
   }
 
   private createRequest(type: 'tauri' | 'http', config: TauriCommandConfig | HttpRequestConfig): ApiRequest {
+    const scope = type === 'tauri' ? getActiveSurfaceScope() : null;
     return {
       id: `${type}-${Date.now()}-${Math.random()}`,
       type,
       config,
       timestamp: new Date(),
-      retryCount: 0
+      retryCount: 0,
+      surfaceId: scope?.surfaceId,
+      surfaceEpoch: scope?.epoch,
     };
+  }
+
+  private assertRequestSurface(request: ApiRequest, action: string): void {
+    if (request.type !== 'tauri') {
+      return;
+    }
+    const command = (request.config as TauriCommandConfig).command;
+    // These commands are controller-plane operations even while a peer is
+    // rendered, so a UI surface activation does not change their authority.
+    if (isPeerLocalOnlyCommand(command)) {
+      return;
+    }
+    const scope = getActiveSurfaceScope();
+    if (request.surfaceId !== scope.surfaceId || request.surfaceEpoch !== scope.epoch) {
+      throw new SurfaceChangedError(
+        request.surfaceId ?? scope.surfaceId,
+        request.surfaceEpoch ?? scope.epoch,
+        action,
+      );
+    }
   }
 
   private async executeRequest<T>(request: ApiRequest): Promise<T> {
@@ -322,7 +355,10 @@ export class ApiClient implements IApiClient {
     this.updateStats({ totalRequests: this.stats.totalRequests + 1 });
 
     try {
-      
+      // In particular this stops an ApiClient retry from following a newly
+      // rebound `this.adapter` onto another device.
+      this.assertRequestSurface(request, traceCommand);
+
       const controller = new AbortController();
       activeRequestsAtStart = this.activeRequests.size;
       this.activeRequests.set(request.id, controller);
@@ -340,6 +376,10 @@ export class ApiClient implements IApiClient {
       try {
         
         const response = await this.applyMiddleware(request, async (req) => {
+          // Middleware may delay or replay `next()`. Check at the actual
+          // transport boundary as well as at request entry so it cannot run an
+          // old product request through the adapter bound during that delay.
+          this.assertRequestSurface(req, traceCommand);
           if (req.type === 'tauri') {
             transportTiming = {};
             return this.executeTauriCommand(req.config as TauriCommandConfig, transportTiming);
@@ -347,6 +387,7 @@ export class ApiClient implements IApiClient {
             return this.executeHttpRequest(req.config as HttpRequestConfig, controller.signal);
           }
         });
+        this.assertRequestSurface(request, traceCommand);
 
         clearTimeout(timeoutId);
         maxConcurrentRequests = this.activeRequestPressure.get(request.id)?.maxConcurrentRequests ?? this.activeRequests.size;
@@ -438,7 +479,14 @@ export class ApiClient implements IApiClient {
         remote,
       });
 
-      
+      // A device activation ended. This is typed control flow: wrapping it as
+      // COMMAND_FAILED would turn a normal switch into a product error, and
+      // retrying could send the old request through the newly bound adapter.
+      if (isSurfaceChangedError(error)) {
+        throw error;
+      }
+
+
       if (!optionalConfigNotFound && request.retryCount < (request.config.retries || this.config.retries)) {
         const delay = (request.config.retryDelay || this.config.retryDelay) * Math.pow(2, request.retryCount);
         
@@ -485,8 +533,11 @@ export class ApiClient implements IApiClient {
         timestamp: new Date()
       };
     } catch (error) {
+      if (isSurfaceChangedError(error)) {
+        throw error;
+      }
       const structuredError = preserveStructuredCommandError(error);
-      const errorMessage = structuredError?.message ?? (error instanceof Error ? error.message : String(error));
+      const errorMessage = structuredError?.message ?? transportErrorMessage(error);
       
       
       const isExpectedError = errorMessage.includes('not found') || 
@@ -712,6 +763,12 @@ export function createRetryMiddleware(maxRetries: number = 3, baseDelay: number 
       try {
         return await next(request);
       } catch (error) {
+        // Retrying inside middleware bypasses executeRequest's outer surface
+        // assertion. Let the typed cancellation escape immediately so an old
+        // request cannot be replayed through the adapter bound for a new device.
+        if (isSurfaceChangedError(error)) {
+          throw error;
+        }
         lastError = error as Error;
         
         if (attempt < maxRetries) {

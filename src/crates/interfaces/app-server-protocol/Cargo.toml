@@ -12,15 +12,20 @@ name = "bitfun_app_server_protocol"
 agent-client-protocol = { workspace = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources"] }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "git-port"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ts-rs = { workspace = true, optional = true }
 
 [features]
 default = []
-ts = ["dep:ts-rs"]
+ts = [
+    "dep:ts-rs",
+    "bitfun-core-types/ts",
+    "bitfun-product-domains/ts",
+    "bitfun-runtime-ports/ts",
+]
 
 [lints]
 workspace = true

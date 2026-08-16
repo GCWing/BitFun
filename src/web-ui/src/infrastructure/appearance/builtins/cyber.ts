@@ -135,11 +135,11 @@ export const bitfunCyberPalette: AppearancePalette = {
     duration: {
       instant: '0.08s',
       fast: '0.12s',
-      base: '0.25s',
-      slow: '0.5s',
+      base: '0.2s',
+      slow: '0.4s',
     },
 
-    easing: createStandardEasing('cubic-bezier(0.25, 0.46, 0.45, 0.94)'),
+    easing: createStandardEasing(),
   },
 
 
@@ -202,4 +202,3 @@ export const bitfunCyberPalette: AppearancePalette = {
     },
   },
 };
-

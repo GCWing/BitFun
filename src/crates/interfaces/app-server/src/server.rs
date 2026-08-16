@@ -7,6 +7,7 @@
 mod event_forwarder;
 mod fallback;
 mod handlers;
+mod wire;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;

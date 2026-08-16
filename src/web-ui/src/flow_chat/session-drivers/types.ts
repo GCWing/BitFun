@@ -18,6 +18,7 @@ import type { Session } from '../types/flow-chat';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import type { SessionDriverId } from './resolve';
+import type { SurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 
 export type { SessionDriverId } from './resolve';
 
@@ -44,13 +45,20 @@ export interface SendMessageOptions {
   onSessionConflictRetryStart?: () => void;
   onSessionConflictRetrySuccess?: () => void;
   fromSessionConflictRetry?: boolean;
+  /** Identifies the edit-rerun mutation lease allowed to submit this Turn. */
+  sessionMutationLeaseId?: string;
 }
 
 /** The message content of one submission, before flavor routing. */
 export interface SubmissionDraft {
   message: string;
   displayMessage?: string;
-  hasImages: boolean;
+  /**
+   * Composer image contexts for this submission. Steering carries them just
+   * like a turn submission does, so a message with attachments does not have
+   * to wait for a turn boundary.
+   */
+  imageContexts?: ImageInputContextData[];
 }
 
 /**
@@ -64,6 +72,8 @@ export type SubmissionPlan =
   | { kind: 'reject'; reason: string };
 
 export interface StartTurnInput {
+  /** Device activation that owns every projection write in this submission. */
+  surfaceScope: SurfaceScope;
   sessionId: string;
   message: string;
   displayMessage?: string;
@@ -83,6 +93,12 @@ export interface StartTurnInput {
  */
 export interface TurnTracker {
   createdLocalTurnId: string | null;
+  /**
+   * Set once a host has accepted the turn. Until then the turn exists only as a
+   * local projection, so a submission interrupted by a device-surface switch
+   * must recover the message rather than assume it is running somewhere.
+   */
+  hostAcceptedTurn: boolean;
 }
 
 /**
@@ -99,7 +115,6 @@ export interface UsageReportUiParams {
   noWorkspaceMessage: string;
   failedTitle: string;
   unknownErrorMessage: string;
-  loadingMarkdown: string;
 }
 
 /**
@@ -130,6 +145,8 @@ export type PermissionReplyKindLike = 'once' | 'always' | 'reject';
  * driver takes over: workspace identity, agent type, and the initial title.
  */
 export interface SessionCreationSeed {
+  /** Device activation that owns the created session projection. */
+  surfaceScope: SurfaceScope;
   config: SessionConfig;
   agentType: string;
   sessionName: string;
@@ -223,15 +240,15 @@ export interface SessionDriver {
   compactSession(context: FlowChatContext, sessionId: string): Promise<void>;
 
   /**
-   * Generate and insert the session usage report turn. `uiParams` carries the
-   * caller's localized strings; the driver decides where the report data
-   * comes from and whether the rendered turn persists.
+   * Produce the session usage report and show it. `uiParams` carries the
+   * caller's localized strings; the driver decides where the report data comes
+   * from. The report is not written into the transcript.
    */
   runUsageReport(
     context: FlowChatContext,
     sessionId: string,
     uiParams: UsageReportUiParams,
-  ): Promise<{ inserted: boolean }>;
+  ): Promise<{ shown: boolean }>;
 
   /** How pending permission requests for this session are obtained. */
   permissionRequestSource(sessionId: string): PermissionRequestSource;

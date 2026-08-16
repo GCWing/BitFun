@@ -51,30 +51,21 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
       {(title || description) && (
         <div style={{ flexShrink: 0 }}>
           {title && (
-            <h4 
+            <button
+              type="button"
               className="config-form-section-title"
-              style={{ 
-                cursor: collapsible ? 'pointer' : 'default',
-                userSelect: 'none'
-              }}
+              disabled={!collapsible}
               onClick={handleToggle}
+              aria-expanded={collapsible ? !collapsed : undefined}
             >
               {icon}
               {title}
               {collapsible && (
-                <span 
-                  style={{ 
-                    marginLeft: '8px',
-                    transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s ease',
-                    fontSize: '14px',
-                    color: 'var(--bf-appearance-token-color-text-muted)'
-                  }}
-                >
+                <span className="config-form-section-chevron" aria-hidden="true">
                   ▼
                 </span>
               )}
-            </h4>
+            </button>
           )}
           {description && (
             <p className="config-form-section-description">
@@ -84,11 +75,16 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
         </div>
       )}
       
-      {(!collapsible || !collapsed) && (
+      <div
+        className="config-form-section-collapse"
+        data-open={!collapsible || !collapsed ? 'true' : 'false'}
+        aria-hidden={collapsible && collapsed}
+        {...(collapsible && collapsed ? { inert: '' } : {})}
+      >
         <div className={contentClass} style={contentStyle}>
           {children}
         </div>
-      )}
+      </div>
     </div>
   );
 };

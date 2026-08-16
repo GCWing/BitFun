@@ -418,3 +418,12 @@
     transform: translateX(100%);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-skills-config__market-skeleton-line::after,
+  .bitfun-skills-config__market-skeleton-chip::after,
+  .bitfun-skills-config__market-skeleton-btn::after {
+    animation: none;
+    transform: none;
+  }
+}

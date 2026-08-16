@@ -5,6 +5,61 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
 
 ## Invariants (do not regress)
 
+0. **A surface switch is a view change, not a teardown.** Attachments and the
+   rendered surface are independent: peers stay attached (and keep running our
+   work) after the UI moves elsewhere, and `switchToLocal` is a switch, not a
+   disconnect. Two consequences:
+
+   - Everything in `resetProductSurface()` must be **frontend-only**.
+     `resetProductSurface` runs before the transport swap, so any backend call
+     it makes lands on the device being *left*. `terminal_shutdown_all` and
+     `lsp_close_workspace` were exactly that bug: switching away killed the
+     PTYs and language servers an agent turn there was still using
+     (regression: 2026-08-14 multi-device switch). Use
+     `TerminalService.disconnect()` and
+     `WorkspaceLspManager.detachAllForSurfaceSwitch()`.
+   - **Identity includes the device surface.** Workspace paths and session ids
+     can be equal on different machines. FlowChat/workspace containers,
+     state machines, processing status, pending messages, composer drafts,
+     request dedup and capability caches must therefore use
+     `(DeviceSurfaceId, local identity)`. `activateSurface` commits transport,
+     event routing and container selection before notifying observers. A normal
+     switch preserves every container; only explicit/lost attachment disposal
+     may call `discardSurfaceState`.
+   - **In-flight submissions must survive the switch.** `startTurn` has an
+     async window between adding the projection turn and re-reading the
+     session (state transition, worktree bind, model sync). Clearing the store
+     inside that window made the submission resume against a missing session
+     and throw `Session lost after adding dialog turn` — before
+     `start_dialog_turn`, so the message reached no host at all (regression:
+     2026-08-15). `resetProductSurface` therefore awaits
+     `waitForInFlightSubmissions` first. `sendMessage` and its driver carry one
+     `SurfaceScope`; after every host await, a stale epoch abandons without
+     writing into the newly selected container, and an unaccepted message is
+     re-queued onto its original surface. Any new await inside `startTurn`
+     widens that window and must keep the same scope checkpoint.
+   - **Reconciliation repairs a projection, never guts it.** The wholesale
+     replace path (`replaceRunningSnapshot`) skips the forward-progress
+     comparator so a settled turn can adopt the host's copy. A turn keeps its
+     identity and user message independently of its rounds, so a windowed or
+     not-yet-checkpointed snapshot can name the turn while carrying none of its
+     work — and a first-time surface projection has no state machines, so
+     *every* turn reads as idle and qualifies for replacement.
+     That combination erased the whole response and left only the prompt on
+     screen (regression: 2026-08-15). `snapshotDropsProjectedTurnContent` gates
+     the replace; the refresh loop still re-attaches an executing turn when a
+     snapshot is refused, or a rebuilt surface would render it as static
+     history.
+   - **Surface-scoped events must stay routed by source device.** Background
+     attachments mean several agent streams share one event bus. The
+     controller tags re-emitted peer payloads with `__bitfunSourceDeviceId`
+     and `deviceSurfaceRouting.ts` (applied inside
+     `TauriTransportAdapter.listen`) drops anything not produced by the
+     rendered device. Adding a fanned-out event on the Rust side means adding
+     it to `SURFACE_SCOPED_EVENTS`/prefixes too, or local and peer streams will
+     interleave in one store. Never route control-plane events (`account://…`)
+     — they must always pass.
+
 1. **Cloud session/turn APIs stay on the controller** (`LOCAL_ONLY` in
    `peer-device-adapter.ts`). Peer history comes from HostInvoke
    (`restore_session_view`, list sessions, …), not from
@@ -44,9 +99,12 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
 8. **`relay_deploy_*` is LOCAL_ONLY.** One-click deploy SSHes from the
    controller to a user-owned host; do not HostInvoke it onto the peer.
 
-9. **Clear workspace before peer flag emit.** `resetProductSurface` must call
-   `workspaceManager.clearForPeerModeSwitch()` so SessionModule cannot prefer
-   a stale controller path while rebootstrap is in flight. Never pass `{}` to
+9. **Select workspace state atomically with transport.** Before commit,
+   `workspaceManager.clearForPeerModeSwitch()` invalidates work still in flight
+   but deliberately preserves the device being left. `activateSurface` then
+   selects the target's cached workspace container in the same synchronous
+   commit that swaps transport, before the peer-mode event. SessionModule must
+   never observe A's path with B's transport. Never pass `{}` to
    `createChatSession` when a live workspace exists — use
    `flowChatSessionConfigForCurrentWorkspace`.
 
@@ -63,8 +121,12 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     succeeding without affecting the process.
 
 12. **Active chat has snapshot self-healing.** DeviceEvent has no ACK/replay, so
-    FlowChat reconciles the active Peer session from `restore_session_view`
-    every 3s and immediately after a detected event gap. The Peer Host must
+    FlowChat reconciles the active session from `restore_session_view`
+    every 3s and immediately after a detected event gap. This is gated on
+    `isSurfaceReconcileEnabled()`, **not** on Peer Mode: once a window has
+    switched surface, a turn left running on the local device also needs the
+    repair, because its events were dropped by surface routing while another
+    device was rendered. The Peer Host must
     overlay its live in-memory session state on the persisted view; otherwise
     an in-progress turn is normalized as interrupted history and later chunks
     are dropped by the controller state machine. Reconciliation must not
@@ -90,10 +152,11 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     tail; the controller must not follow it with an unconditional full restore.
     `load_session_turn_window` is a high-priority, retryable read and carries
     the same session/workspace scope as restore. Sequential history scrolling
-    and turn-rail navigation request bounded windows. Search, edit, rollback,
-    and an older Host that rejects the window command use the shared explicit
-    full-history ensure fallback. Never include catalog preview text in Peer
-    request/response logs.
+    and turn-rail navigation request bounded windows. Search and older Hosts
+    that reject the window command use the shared explicit full-history ensure
+    fallback. Targeted rollback is separately capability-gated and never falls
+    back to a controller-local or numeric rollback path. Never include catalog
+    preview text in Peer request/response logs.
 
 ## Related account-login guards
 

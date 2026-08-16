@@ -229,6 +229,7 @@ export interface ReasoningCatalogProjection {
   status: 'unsupported' | 'known' | 'unknown';
   default_preset?: string;
   presets?: ReasoningPresetDescriptor[];
+  unavailable_presets?: ReasoningPresetDescriptor[];
 }
 
 export interface ModelMetadata {
@@ -320,6 +321,15 @@ export type SubagentModelSelection =
   | { kind: 'fixed'; model_id: string }
   | { kind: 'inherit' };
 
+export type TaskModelSelection =
+  | { kind: 'fixed'; model_id: string }
+  | { kind: 'inherit' };
+
+export interface TaskModelsConfig {
+  session_title: TaskModelSelection;
+  git_commit: TaskModelSelection;
+}
+
 export interface AgentModelDefaultsConfig {
   mode: string;
   subagents: {
@@ -333,7 +343,7 @@ export interface AIConfig {
   models: AIModelConfig[];
   default_models: DefaultModelsConfig;
   agent_model_defaults: AgentModelDefaultsConfig;
-  func_agent_models: Record<string, string>;
+  task_models: TaskModelsConfig;
   agent_profiles: Record<string, StoredAgentProfileConfigItem>;
   proxy: ProxyConfig;
   debug_mode_config: DebugModeConfig;
@@ -351,6 +361,7 @@ export interface AIConfig {
   subagent_batch_execution_policy?: 'safe_only' | 'force_parallel' | 'serial';
   computer_use_enabled?: boolean;
   browser_control_preferred_browser?: string;
+  browser_control_auto_connect_on_startup?: boolean;
 }
 
 export interface StoredAgentProfileConfigItem {

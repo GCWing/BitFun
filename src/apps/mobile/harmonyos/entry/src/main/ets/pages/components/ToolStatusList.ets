@@ -1,6 +1,7 @@
-import { ConversationUiQuestionAnswer, ConversationUiToolStatus } from './ConversationUiModels';
+import { ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ToolFileReference, ToolFileReferenceResolver } from '../../services/ToolFileReferenceResolver';
+import { ToolCollapseGroup, ToolCollapsePolicy } from '../policy/ToolCollapsePolicy';
 import { CARD, FILE_LINK, GREEN, INK, LINE, MUTED, RED, SOFT } from './Theme';
 import { ToolGlyph } from './ToolGlyphs';
 import { ToolConfirmationPanel, ToolQuestionAnswerPanel } from './ToolInteractionPanels';
@@ -146,11 +147,12 @@ export struct ToolStatusList {
       if (this.isQuestionTool(tool)) {
         ToolQuestionAnswerPanel({
           toolId: tool.id || '',
-          prompt: this.questionPrompt(tool),
+          questionsJson: this.questionInputJson(tool),
+          isBusy: this.isBusy,
           onAnswerQuestion: this.onAnswerQuestion
         })
       }
-      if (this.isRunningTool(tool)) {
+      if (this.isRunningTool(tool) || this.isQuestionTool(tool)) {
         Row() {
           Blank()
           Text(RemoteI18n.t('chat.cancelTool'))
@@ -335,47 +337,31 @@ export struct ToolStatusList {
   }
 
   private toolRenderEntries(): ToolRenderEntry[] {
-    if (this.expanded) {
-      return this.expandedToolRenderEntries();
-    }
-
+    const groups = this.expanded ?
+      ToolCollapsePolicy.expandedGroups(this.tools) :
+      ToolCollapsePolicy.collapsedGroups(this.tools);
     const entries: ToolRenderEntry[] = [];
-    let collapsed: ConversationUiToolStatus[] = [];
-    let collapsedStart = 0;
-    this.tools.forEach((tool: ConversationUiToolStatus, index: number) => {
-      if (this.shouldCollapseExploreTool(tool)) {
-        if (collapsed.length === 0) {
-          collapsedStart = index;
-        }
-        collapsed.push(tool);
-        return;
-      }
-      this.flushCollapsedTools(entries, collapsed, collapsedStart);
-      collapsed = [];
-      entries.push(this.toolEntry(tool, index));
+    groups.forEach((group: ToolCollapseGroup) => {
+      entries.push(this.entryFromGroup(group));
     });
-    this.flushCollapsedTools(entries, collapsed, collapsedStart);
     return entries;
   }
 
-  private expandedToolRenderEntries(): ToolRenderEntry[] {
-    const entries: ToolRenderEntry[] = [];
-    let collapsed: ConversationUiToolStatus[] = [];
-    let collapsedStart = 0;
-    this.tools.forEach((tool: ConversationUiToolStatus, index: number) => {
-      if (this.shouldCollapseExploreTool(tool)) {
-        if (collapsed.length === 0) {
-          collapsedStart = index;
-        }
-        collapsed.push(tool);
-        return;
-      }
-      this.flushExpandedCollapsedTools(entries, collapsed, collapsedStart);
-      collapsed = [];
-      entries.push(this.toolEntry(tool, index));
-    });
-    this.flushExpandedCollapsedTools(entries, collapsed, collapsedStart);
-    return entries;
+  private entryFromGroup(group: ToolCollapseGroup): ToolRenderEntry {
+    if (group.type === 'summary') {
+      const stats = this.collapsedToolStats(group.tools);
+      return {
+        type: 'summary',
+        key: `summary-${group.startIndex}-${group.tools.length}-${stats.readCount}-${stats.searchCount}-${stats.commandCount}-${stats.otherCount}`,
+        tools: group.tools,
+        readCount: stats.readCount,
+        searchCount: stats.searchCount,
+        commandCount: stats.commandCount,
+        otherCount: stats.otherCount
+      };
+    }
+    const tool = group.tools[0];
+    return this.toolEntry(tool, group.startIndex);
   }
 
   private toolEntry(tool: ConversationUiToolStatus, index: number): ToolRenderEntry {
@@ -391,52 +377,6 @@ export struct ToolStatusList {
     };
   }
 
-  private flushCollapsedTools(
-    entries: ToolRenderEntry[],
-    tools: ConversationUiToolStatus[],
-    startIndex: number
-  ): void {
-    if (tools.length === 0) {
-      return;
-    }
-    if (tools.length < 2) {
-      tools.forEach((tool: ConversationUiToolStatus, index: number) => {
-        entries.push(this.toolEntry(tool, startIndex + index));
-      });
-      return;
-    }
-    const stats = this.collapsedToolStats(tools);
-    entries.push({
-      type: 'summary',
-      key: `summary-${startIndex}-${tools.length}-${stats.readCount}-${stats.searchCount}-${stats.commandCount}-${stats.otherCount}`,
-      tools,
-      readCount: stats.readCount,
-      searchCount: stats.searchCount,
-      commandCount: stats.commandCount,
-      otherCount: stats.otherCount
-    });
-  }
-
-  private flushExpandedCollapsedTools(
-    entries: ToolRenderEntry[],
-    tools: ConversationUiToolStatus[],
-    startIndex: number
-  ): void {
-    if (tools.length === 0) {
-      return;
-    }
-    if (tools.length < 2) {
-      tools.forEach((tool: ConversationUiToolStatus, index: number) => {
-        entries.push(this.toolEntry(tool, startIndex + index));
-      });
-      return;
-    }
-    this.flushCollapsedTools(entries, tools, startIndex);
-    tools.forEach((tool: ConversationUiToolStatus, index: number) => {
-      entries.push(this.toolEntry(tool, startIndex + index));
-    });
-  }
-
   private collapsedToolStats(tools: ConversationUiToolStatus[]): ToolRenderEntry {
     let readCount = 0;
     let searchCount = 0;
@@ -448,7 +388,7 @@ export struct ToolStatusList {
         readCount += 1;
       } else if (kind === 'search') {
         searchCount += 1;
-      } else if (kind === 'command') {
+      } else if (this.isCommandTool(tool)) {
         commandCount += 1;
       } else {
         otherCount += 1;
@@ -463,19 +403,6 @@ export struct ToolStatusList {
       commandCount,
       otherCount
     };
-  }
-
-  private shouldCollapseExploreTool(tool: ConversationUiToolStatus): boolean {
-    if (this.hasToolError(tool) || this.isPendingConfirmation(tool) || this.isQuestionTool(tool) ||
-      this.isRunningTool(tool)) {
-      return false;
-    }
-    return this.isCollapsibleExploreTool(tool) && (this.isCompletedTool(tool) || this.isCancelledTool(tool));
-  }
-
-  private isCollapsibleExploreTool(tool: ConversationUiToolStatus): boolean {
-    const kind = this.exploreToolKind(tool);
-    return kind === 'read' || kind === 'search';
   }
 
   private exploreToolKind(tool: ConversationUiToolStatus): string {
@@ -1015,8 +942,8 @@ export struct ToolStatusList {
 
   private isQuestionTool(tool: ConversationUiToolStatus): boolean {
     const status = (tool.status || '').toLowerCase();
-    const name = tool.name || '';
-    return name === 'AskUserQuestion' &&
+    const name = this.normalizedToolName(tool);
+    return (name === 'askuserquestion' || name === 'ask_user_question') &&
       status !== 'completed' &&
       status !== 'done' &&
       status !== 'failed' &&
@@ -1037,6 +964,16 @@ export struct ToolStatusList {
       return RemoteI18n.t('chat.questionDefault');
     }
     return this.toolPreview(preview);
+  }
+
+  private questionInputJson(tool: ConversationUiToolStatus): string {
+    if (tool.tool_input) {
+      try {
+        return JSON.stringify(tool.tool_input);
+      } catch (_err) {
+      }
+    }
+    return this.toolInputPreview(tool);
   }
 
   private questionPromptFromJson(preview: string): string {

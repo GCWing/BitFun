@@ -26,6 +26,7 @@ import { i18nService } from '@/infrastructure/i18n';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { WorkspaceKind } from '@/shared/types';
 import { createLogger } from '@/shared/utils/logger';
+import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 
 const logger = createLogger('ExternalSourcesConfig');
 import {
@@ -63,6 +64,7 @@ import {
   ExternalCommandConflicts,
   ExternalSourceSection,
   buildExternalApplicationsView,
+  sourceDiagnosticCategory,
   type ExternalApplicationView,
 } from './external-sources';
 import './ExternalSourcesConfig.scss';
@@ -189,29 +191,29 @@ function agentDiagnosticParams(
     : undefined;
 }
 
-function sourceDiagnosticCategory(code: string): string {
-  if (code.includes('preference_read_failed')) return 'confirmationStateUnavailable';
-  if (code.includes('conflict_history_write_failed')) return 'conflictHistoryUnavailable';
-  if (code.includes('discovery_in_progress')) return 'checkInProgress';
-  if (code.includes('timeout')) return 'checkTimedOut';
-  if (code.includes('trust_required')) return 'confirmationRequired';
-  if (code.includes('too_large') || code.includes('file_limit') || code.includes('bytes_limit')) {
-    return 'sourceTooLarge';
-  }
-  if (code.includes('invalid') || code.includes('parse') || code.includes('definition')
-    || code.includes('export_missing') || code.includes('name_unsupported')) {
-    return 'invalidSettings';
-  }
-  if (code.includes('unreadable') || code.includes('read_failed')
-    || code.includes('metadata_failed') || code.includes('directory_')) {
-    return 'unreadableSource';
-  }
-  if (code.includes('projection_only') || code.includes('unsupported')
-    || code.includes('restricted')) {
-    return 'notSupported';
-  }
-  if (code.includes('failed')) return 'checkFailed';
-  return 'sourceIssue';
+const MCP_START_FAILURE_TRANSLATIONS: Record<string, string> = {
+  'external_mcp.start.authentication': 'mcp.failureReasons.authentication',
+  'external_mcp.start.timeout': 'mcp.failureReasons.timeout',
+  'external_mcp.start.command_unavailable': 'mcp.failureReasons.commandUnavailable',
+  'external_mcp.start.working_directory_unavailable': 'mcp.failureReasons.workingDirectoryUnavailable',
+  'external_mcp.start.connection_failed': 'mcp.failureReasons.connectionFailed',
+  'external_mcp.start.protocol_failed': 'mcp.failureReasons.protocolFailed',
+  'external_mcp.start.other': 'mcp.failureReasons.other',
+  'external_mcp.native_configuration_unavailable': 'mcp.failureReasons.nativeConfigurationUnavailable',
+  'external_mcp.runtime.host_read_only': 'mcp.failureReasons.hostReadOnly',
+  'external_mcp.runtime.configuration_changed': 'mcp.failureReasons.configurationChanged',
+  'external_mcp.runtime.configuration_invalid': 'mcp.failureReasons.configurationInvalid',
+  'external_mcp.runtime.host_unavailable': 'mcp.failureReasons.hostUnavailable',
+  'external_mcp.runtime.install_failed': 'mcp.failureReasons.installFailed',
+  'external_mcp.runtime.preparation_failed': 'mcp.failureReasons.preparationFailed',
+  'external_mcp.runtime.server_missing': 'mcp.failureReasons.serverMissing',
+  'external_mcp.runtime.failed': 'mcp.failureReasons.runtimeFailed',
+  'external_mcp.runtime.stopped': 'mcp.failureReasons.stopped',
+  'external_mcp.runtime.status_unavailable': 'mcp.failureReasons.statusUnavailable',
+};
+
+function localizedMcpFailureReason(reason: string, t: TFunction): string {
+  return t(MCP_START_FAILURE_TRANSLATIONS[reason] ?? 'mcp.failureReasons.other');
 }
 
 function sourceScopeLabel(scope: string, t: TFunction): string {
@@ -640,6 +642,40 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     };
   }, [loadSnapshot, snapshot?.discoveryPending]);
 
+  const startingMcpSignature = (snapshot?.mcpServers ?? [])
+    .filter((server) => server.activationState.state === 'starting')
+    .map((server) => server.candidateId)
+    .sort()
+    .join('\u001f');
+
+  useEffect(() => {
+    if (!startingMcpSignature) return undefined;
+    let cancelled = false;
+    let timer: number | undefined;
+    let attempt = 0;
+    const schedulePoll = () => {
+      const delay = DISCOVERY_POLL_DELAYS_MS[
+        Math.min(attempt, DISCOVERY_POLL_DELAYS_MS.length - 1)
+      ];
+      timer = window.setTimeout(async () => {
+        const result = await loadSnapshot(false, false);
+        if (cancelled) return;
+        const finished = result.status === 'accepted'
+          && !(result.snapshot?.mcpServers ?? []).some(
+            (server) => server.activationState.state === 'starting',
+          );
+        if (finished) return;
+        attempt += 1;
+        schedulePoll();
+      }, delay);
+    };
+    schedulePoll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [loadSnapshot, startingMcpSignature]);
+
   const sourceGroups = useMemo(
     () => snapshot ? buildExternalSourcePresentationGroups(snapshot) : [],
     [snapshot],
@@ -1008,6 +1044,83 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     return accepted;
   }, [loadSnapshot, runMutation, snapshot, t, workspacePath]);
 
+  const setToolTargetsEnabled = useCallback(async (enabled: boolean) => {
+    const current = snapshotRef.current;
+    if (!current) return;
+    const decisions = enabled
+      ? (current.toolApprovalRequests ?? []).map((request) => ({
+          approvalKey: request.approvalKey,
+          decisionKey: request.decisionKey,
+        }))
+      : Array.from(new Map((current.tools ?? []).map((tool) => [
+          tool.approvalKey,
+          { approvalKey: tool.approvalKey, decisionKey: tool.decisionKey },
+        ])).values());
+    await runMutation(
+      'bulk-tools',
+      () => externalSourcesAPI.setToolTargetsEnabled(
+        workspacePath,
+        decisions,
+        enabled,
+        current.generation,
+        current.preferenceRevision ?? 0,
+      ),
+      true,
+      'all',
+      t(enabled ? 'bulkActions.enabled' : 'bulkActions.disabled'),
+      'canApproveRuntime',
+    );
+  }, [runMutation, t, workspacePath]);
+
+  const setSubagentsEnabled = useCallback(async (enabled: boolean) => {
+    const current = snapshotRef.current;
+    if (!current) return;
+    const decisions = (current.subagents ?? [])
+      .filter((agent) => !enabled || agent.activationState.state === 'approval_required')
+      .map((agent) => ({ candidateId: agent.candidateId, decisionKey: agent.decisionKey }));
+    const accepted = await runMutation(
+      'bulk-subagents',
+      () => externalSourcesAPI.setSubagentsEnabled(
+        workspacePath,
+        decisions,
+        enabled,
+        current.subagentGeneration ?? 0,
+        current.preferenceRevision ?? 0,
+      ),
+      true,
+      'subagents',
+      t(enabled ? 'bulkActions.enabled' : 'bulkActions.disabled'),
+      'canApproveRuntime',
+    );
+    if (accepted) await loadSnapshot(true, false);
+  }, [loadSnapshot, runMutation, t, workspacePath]);
+
+  const setMcpServersEnabled = useCallback(async (enabled: boolean) => {
+    const current = snapshotRef.current;
+    if (!current) return;
+    const decisions = (enabled
+      ? current.mcpApprovalRequests ?? []
+      : current.mcpServers ?? []).map((server) => ({
+        candidateId: server.candidateId,
+        decisionKey: server.decisionKey,
+      }));
+    const accepted = await runMutation(
+      'bulk-mcp',
+      () => externalSourcesAPI.setMcpServersEnabled(
+        workspacePath,
+        decisions,
+        enabled,
+        current.mcpGeneration ?? 0,
+        current.preferenceRevision ?? 0,
+      ),
+      true,
+      'all',
+      t(enabled ? 'bulkActions.enabled' : 'bulkActions.disabled'),
+      'canApproveRuntime',
+    );
+    if (accepted) await loadSnapshot(true, false);
+  }, [loadSnapshot, runMutation, t, workspacePath]);
+
   const isRemote = workspace?.workspaceKind === WorkspaceKind.Remote
     || Boolean(workspace?.connectionId);
   const policy = snapshot?.integrationPolicy;
@@ -1191,7 +1304,10 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
         ) ?? matchingEcosystemElements[0]
       : document.querySelector<HTMLElement>('[data-external-attention="true"]');
     if (!target) return;
-    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.scrollIntoView({
+      block: 'center',
+      behavior: getMotionAwareScrollBehavior('smooth'),
+    });
     if (target instanceof HTMLDetailsElement) {
       target.open = true;
       target.querySelector<HTMLElement>('summary')?.focus();
@@ -1217,7 +1333,10 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
     window.requestAnimationFrame(() => {
       const policyCard = document.querySelector<HTMLElement>('[data-bf-part="policyCard"]');
       if (!policyCard) return;
-      policyCard.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      policyCard.scrollIntoView({
+        block: 'center',
+        behavior: getMotionAwareScrollBehavior('smooth'),
+      });
       policyCard.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus();
     });
   }, []);
@@ -2247,12 +2366,35 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
             ) : null}
 
             {(snapshot?.mcpServers?.length ?? 0) > 0 ? (
-              <ConfigPageSection title={t('mcp.title')}>
+              <ConfigPageSection
+                title={t('mcp.title')}
+                extra={(
+                  <div className="bitfun-external-sources-config__tool-actions" data-bf-bulk-capability="mcp">
+                    {(snapshot?.mcpApprovalRequests?.length ?? 0) > 0 ? (
+                      <Button variant="primary" size="small" aria-describedby="external-mcp-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setMcpServersEnabled(true)}>
+                        {t('bulkActions.enablePending', { count: snapshot?.mcpApprovalRequests?.length ?? 0 })}
+                      </Button>
+                    ) : null}
+                    <Button variant="secondary" size="small" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setMcpServersEnabled(false)}>
+                      {t('bulkActions.disableAll')}
+                    </Button>
+                  </div>
+                )}
+              >
+                {(snapshot?.mcpApprovalRequests?.length ?? 0) > 0 ? (
+                  <div id="external-mcp-bulk-risk" className="bitfun-external-sources-config__tool-warning">
+                    {t('bulkActions.enableRisk', { count: snapshot?.mcpApprovalRequests?.length ?? 0 })}
+                  </div>
+                ) : null}
                 {snapshot?.mcpServers?.map((server) => {
                   const state = server.activationState.state;
                   const reviewing = reviewingMcpKey === server.candidateId;
                   const canEnable = state === 'declined' || state === 'configuration_changed';
                   const canDisable = ['starting', 'active', 'runtime_unavailable'].includes(state);
+                  const runtimeFailureReason = state === 'runtime_unavailable'
+                    && 'reason' in server.activationState
+                    ? localizedMcpFailureReason(server.activationState.reason, t)
+                    : undefined;
                   const source = snapshot.sources.find((candidate) => (
                     candidate.record.key.providerId === server.definition.id.source.providerId
                     && candidate.record.key.sourceId === server.definition.id.source.sourceId
@@ -2261,7 +2403,11 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     <React.Fragment key={server.candidateId}>
                       <ConfigPageRow
                         label={server.definition.name}
-                        description={`${t(`mcp.transport.${server.definition.transport}`)} · ${t('mcp.externalSource')}`}
+                        description={[
+                          t(`mcp.transport.${server.definition.transport}`),
+                          t('mcp.externalSource'),
+                          runtimeFailureReason,
+                        ].filter(Boolean).join(' · ')}
                         align="center"
                       >
                         <div className="bitfun-external-sources-config__source-control" data-bf-component="external-sources-config" data-bf-part="sourceControl">
@@ -2309,7 +2455,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             })}</span>
                             {source ? (
                               <>
-                                <span>{t('mcp.sourceLocation')}: {renderPathLink(
+                                <span>{t('mcp.sourceLocationLabel')}: {renderPathLink(
                                   source.record.location,
                                   source.stableKey,
                                 )}</span>
@@ -2339,9 +2485,17 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                               })}</span>
                             ) : null}
                             {'reason' in server.activationState ? (
-                              <span>{t(server.activationState.state === 'runtime_unavailable'
-                                ? 'mcp.runtimeUnavailableGuidance'
-                                : 'mcp.unsupportedGuidance')}</span>
+                              <>
+                                <span>{t('mcp.failureReason', {
+                                  reason: localizedMcpFailureReason(
+                                    server.activationState.reason,
+                                    t,
+                                  ),
+                                })}</span>
+                                <span>{t(server.activationState.state === 'runtime_unavailable'
+                                  ? 'mcp.runtimeUnavailableGuidance'
+                                  : 'mcp.unsupportedGuidance')}</span>
+                              </>
                             ) : null}
                             <span>{t('mcp.changePolicy')}</span>
                           </div>
@@ -2661,7 +2815,26 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
             ) : null}
 
             {(snapshot?.subagents?.length ?? 0) > 0 ? (
-              <ConfigPageSection title={t('agents.title')}>
+              <ConfigPageSection
+                title={t('agents.title')}
+                extra={(
+                  <div className="bitfun-external-sources-config__tool-actions" data-bf-bulk-capability="subagent">
+                    {(snapshot?.pendingSubagentApprovals?.length ?? 0) > 0 ? (
+                      <Button variant="primary" size="small" aria-describedby="external-subagent-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setSubagentsEnabled(true)}>
+                        {t('bulkActions.enablePending', { count: snapshot?.pendingSubagentApprovals?.length ?? 0 })}
+                      </Button>
+                    ) : null}
+                    <Button variant="secondary" size="small" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setSubagentsEnabled(false)}>
+                      {t('bulkActions.disableAll')}
+                    </Button>
+                  </div>
+                )}
+              >
+                {(snapshot?.pendingSubagentApprovals?.length ?? 0) > 0 ? (
+                  <div id="external-subagent-bulk-risk" className="bitfun-external-sources-config__tool-warning">
+                    {t('bulkActions.enableRisk', { count: snapshot?.pendingSubagentApprovals?.length ?? 0 })}
+                  </div>
+                ) : null}
                 {snapshot?.subagents?.map((agent) => {
                   const reviewing = reviewingAgentKey === agent.candidateId;
                   const state = agent.activationState.state;
@@ -3075,7 +3248,26 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
             />
 
             {(snapshot?.tools?.length ?? 0) > 0 ? (
-              <ConfigPageSection title={t('tools.title')}>
+              <ConfigPageSection
+                title={t('tools.title')}
+                extra={(
+                  <div className="bitfun-external-sources-config__tool-actions" data-bf-bulk-capability="tool">
+                    {(snapshot?.toolApprovalRequests?.length ?? 0) > 0 ? (
+                      <Button variant="primary" size="small" aria-describedby="external-tool-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setToolTargetsEnabled(true)}>
+                        {t('bulkActions.enablePending', { count: snapshot?.toolApprovalRequests?.length ?? 0 })}
+                      </Button>
+                    ) : null}
+                    <Button variant="secondary" size="small" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setToolTargetsEnabled(false)}>
+                      {t('bulkActions.disableAll')}
+                    </Button>
+                  </div>
+                )}
+              >
+                {(snapshot?.toolApprovalRequests?.length ?? 0) > 0 ? (
+                  <div id="external-tool-bulk-risk" className="bitfun-external-sources-config__tool-warning">
+                    {t('bulkActions.enableRisk', { count: snapshot?.toolApprovalRequests?.length ?? 0 })}
+                  </div>
+                ) : null}
                 {snapshot?.tools?.map((tool) => {
                   const toolKey = `${tool.definition.id.target.source.providerId}:${tool.definition.id.target.source.sourceId}:${tool.definition.id.target.localId}:${tool.definition.id.exportId}`;
                   const source = snapshot.sources.find((candidate) => matchesToolSource(candidate, tool));

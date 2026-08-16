@@ -20,6 +20,25 @@
     max-width: 100%;
   }
 
+  /*
+   * No mount animation survives inside a virtualized row.
+   *
+   * `.markdown-renderer` carries `animation: fadeIn 0.35s` from the shared
+   * component library, where a block is mounted once and a fade reads as the
+   * content arriving. Here a row mounts every time it enters the rendered
+   * window: the four Turns a history page brings, the rows the junction's own
+   * correction scrolls into view, and every row the reader scrolls back over
+   * afterwards. Each one fades from transparent, so a page up reads as the
+   * transcript dimming and coming back — the same reason `ModelRoundItem.scss`
+   * and the typewriter's `replayOnMount` refuse a mount animation of their own.
+   *
+   * Scoped to the wrapper rather than removed from the library: outside the
+   * list — docs, previews, panels — a markdown block really is mounted once.
+   */
+  .markdown-renderer {
+    animation: none;
+  }
+
   &--search-match {
     outline: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, transparent);
     outline-offset: -1px;

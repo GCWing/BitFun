@@ -161,6 +161,10 @@ mod tests {
                 assert_eq!(value.get("ok"), Some(&json!(true)));
                 assert_eq!(value.get("peer"), Some(&json!(true)));
                 assert!(value.get("device_id").and_then(|v| v.as_str()).is_some());
+                assert_eq!(
+                    value.pointer("/capabilities/targeted_session_rollback"),
+                    Some(&json!(true))
+                );
             }
             other => panic!("unexpected response: {other:?}"),
         }

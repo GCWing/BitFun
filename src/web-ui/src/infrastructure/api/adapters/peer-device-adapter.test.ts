@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PEER_MUTATION_REQUEST_TIMEOUT_MS,
   PEER_READ_MAX_RETRIES,
@@ -6,13 +6,27 @@ import {
   PEER_RETRY_BASE_DELAY_MS,
   PeerDeviceTransportAdapter,
   PeerProductCommandError,
+  PeerTransportClosedError,
   isPeerLocalOnlyCommand,
   isPeerRetryableIdempotentMutation,
   isPeerRetryableReadCommand,
   peerInvokePriorityFor,
 } from './peer-device-adapter';
+import {
+  getTransportSurfaceId,
+  resetTransportAdapter,
+  setTransportAdapter,
+} from './index';
+import { TauriTransportAdapter } from './tauri-adapter';
+import { isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
 
 describe('isPeerLocalOnlyCommand', () => {
+  it('keeps file-search streaming on the negotiated response path', () => {
+    const adapter = new PeerDeviceTransportAdapter('peer-1', vi.fn());
+    expect(adapter.supportsSearchStreamEvents()).toBe(false);
+    expect(isPeerLocalOnlyCommand('search_filenames')).toBe(false);
+  });
+
   it('keeps local speech capture and model events on the controller device', () => {
     expect(isPeerLocalOnlyCommand('speech_list_models')).toBe(true);
     expect(isPeerLocalOnlyCommand('speech_start_input_session')).toBe(true);
@@ -37,6 +51,7 @@ describe('peerInvokePriorityFor', () => {
     expect(peerInvokePriorityFor('list_persisted_sessions_page')).toBe('high');
     expect(peerInvokePriorityFor('initialize_workspace_startup_state')).toBe('high');
     expect(peerInvokePriorityFor('start_dialog_turn')).toBe('high');
+    expect(peerInvokePriorityFor('rollback_session_to_turn')).toBe('high');
     expect(peerInvokePriorityFor('reload_config')).toBe('high');
     expect(peerInvokePriorityFor('get_config')).toBe('high');
     expect(peerInvokePriorityFor('get_available_modes')).toBe('high');
@@ -281,6 +296,43 @@ describe('PeerDeviceTransportAdapter queue', () => {
     );
   });
 
+  it('rejects targeted rollback when the Peer host lacks the negotiated capability', async () => {
+    const deviceRpc = vi.fn();
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(adapter.request('rollback_session_to_turn', {
+      request: {
+        workspacePath: '/repo',
+        sessionId: 'session-1',
+        targetTurnId: 'turn-7',
+      },
+    })).rejects.toEqual(expect.objectContaining<Partial<PeerProductCommandError>>({
+      name: 'PeerProductCommandError',
+      message: 'The connected Peer host does not support targeted Session rollback',
+    }));
+    expect(deviceRpc).not.toHaveBeenCalled();
+  });
+
+  it('forwards targeted rollback after capability negotiation', async () => {
+    const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
+      resp: 'host_invoke_result',
+      ok: true,
+      value: { status: 'completed', sessionId: 'session-1' },
+    }));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {
+      supportsTargetedSessionRollback: true,
+    });
+
+    await expect(adapter.request('rollback_session_to_turn', {
+      request: {
+        workspacePath: '/repo',
+        sessionId: 'session-1',
+        targetTurnId: 'turn-7',
+      },
+    })).resolves.toEqual({ status: 'completed', sessionId: 'session-1' });
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves a session conflict returned by the Peer Host without replaying it', async () => {
     const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
       resp: 'host_invoke_result',
@@ -368,10 +420,187 @@ describe('PeerDeviceTransportAdapter queue', () => {
   });
 });
 
+describe('PeerDeviceTransportAdapter disposal', () => {
+  it('settles queued requests instead of dropping them', async () => {
+    const gate = createDeferred<string>();
+    const deviceRpc = vi.fn(() => gate.promise);
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {}, 1);
+    await adapter.connect();
+
+    const inFlight = captureOutcome(adapter.request('get_opened_workspaces', { request: {} }));
+    const queued = captureOutcome(adapter.request('list_persisted_sessions_page', {
+      request: { workspacePath: '/repo' },
+    }));
+    expect(adapter.getQueueDepthsForTest().high).toBe(1);
+
+    await adapter.disconnect();
+    await flushMicrotasks();
+
+    // Both the waiting caller and the one already on the wire must hear back;
+    // a silent drop is what left session/history loads spinning forever.
+    expect(queued.settled).toBe(true);
+    expect(isSurfaceChangedError(queued.value)).toBe(true);
+    expect(queued.value).toBeInstanceOf(PeerTransportClosedError);
+    expect(inFlight.settled).toBe(true);
+    expect(isSurfaceChangedError(inFlight.value)).toBe(true);
+    expect(adapter.getQueueDepthsForTest()).toEqual({ high: 0, normal: 0, low: 0 });
+
+    gate.resolve(hostInvokeOk([]));
+  });
+
+  it('keeps concurrency accounting correct across disposal', async () => {
+    const gate = createDeferred<string>();
+    const deviceRpc = vi.fn(() => gate.promise);
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {}, 2);
+    await adapter.connect();
+
+    const inFlight = captureOutcome(adapter.request('get_opened_workspaces', { request: {} }));
+    expect(adapter.getActiveCountsForTest()).toMatchObject({ total: 1, high: 1 });
+
+    await adapter.disconnect();
+
+    // The request still occupies its transport slot: rewriting the count to
+    // zero underneath it made its later settle decrement a fresh count, so the
+    // limiter believed it had a free slot it did not have.
+    expect(adapter.getActiveCountsForTest()).toMatchObject({ total: 1, high: 1 });
+
+    gate.resolve(hostInvokeOk([]));
+    await flushMicrotasks();
+
+    expect(adapter.getActiveCountsForTest()).toMatchObject({ total: 0, high: 0 });
+    expect(inFlight.settled).toBe(true);
+  });
+
+  it('refuses to reopen the peer data plane after disposal', async () => {
+    const deviceRpc = vi.fn().mockResolvedValue(hostInvokeOk(true));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+    await adapter.connect();
+    await adapter.disconnect();
+
+    expect(adapter.isDisposed()).toBe(true);
+    expect(adapter.isConnected()).toBe(false);
+    await expect(adapter.request('get_opened_workspaces', { request: {} }))
+      .rejects.toBeInstanceOf(PeerTransportClosedError);
+    expect(deviceRpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('surface-aware transport registry', () => {
+  afterEach(async () => {
+    await resetTransportAdapter();
+  });
+
+  it('records the surface each registered adapter serves', () => {
+    const adapter = new PeerDeviceTransportAdapter('peer-1', vi.fn());
+    setTransportAdapter(adapter);
+    expect(getTransportSurfaceId()).toBe('peer-1');
+
+    setTransportAdapter(new TauriTransportAdapter());
+    expect(getTransportSurfaceId()).toBe('local');
+  });
+
+  it('rejects a request that lands after its surface stopped being rendered', async () => {
+    const gate = createDeferred<string>();
+    const onHostInvokeTransportFailure = vi.fn();
+    const deviceRpc = vi.fn(() => gate.promise);
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {
+      onHostInvokeTransportFailure,
+    });
+    setTransportAdapter(adapter);
+
+    const pending = captureOutcome(adapter.request('list_persisted_sessions_page', {
+      request: { workspacePath: '/repo' },
+    }));
+
+    setTransportAdapter(new TauriTransportAdapter());
+    await flushMicrotasks();
+
+    // The activation boundary settles the caller; it does not wait for a weak
+    // relay request to answer or exhaust its retry budget.
+    expect(pending.settled).toBe(true);
+    expect(isSurfaceChangedError(pending.value)).toBe(true);
+    expect(onHostInvokeTransportFailure).not.toHaveBeenCalled();
+
+    gate.resolve(hostInvokeOk([{ id: 'peer-session' }]));
+    await flushMicrotasks();
+
+    expect(pending.settled).toBe(true);
+    expect(isSurfaceChangedError(pending.value)).toBe(true);
+    // A switch is not a weak link; counting it as one would degrade a healthy peer.
+    expect(onHostInvokeTransportFailure).not.toHaveBeenCalled();
+  });
+
+  it('invalidates late work when the same adapter is rebound for a new activation', async () => {
+    const gate = createDeferred<string>();
+    const adapter = new PeerDeviceTransportAdapter('peer-1', vi.fn(() => gate.promise));
+    await adapter.connect();
+    setTransportAdapter(adapter);
+
+    const pending = captureOutcome(adapter.request('list_persisted_sessions_page', {
+      request: { workspacePath: '/repo' },
+    }));
+
+    // The surface controller uses a same-adapter rebind to abort A#1 before
+    // the next target can commit. A#1's answer must not survive into A#2.
+    setTransportAdapter(adapter);
+    gate.resolve(hostInvokeOk([{ id: 'stale-session' }]));
+    await flushMicrotasks();
+
+    expect(pending.settled).toBe(true);
+    expect(isSurfaceChangedError(pending.value)).toBe(true);
+  });
+
+  it('rejects requests issued through a retired adapter without calling the peer', async () => {
+    const deviceRpc = vi.fn().mockResolvedValue(hostInvokeOk([]));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+    setTransportAdapter(adapter);
+    setTransportAdapter(new TauriTransportAdapter());
+
+    const error = await adapter
+      .request('list_persisted_sessions_page', { request: { workspacePath: '/repo' } })
+      .then(() => undefined, (rejection: unknown) => rejection);
+
+    expect(isSurfaceChangedError(error)).toBe(true);
+    expect(deviceRpc).not.toHaveBeenCalled();
+    // The attachment survives the switch, so rendering the peer again revives it.
+    setTransportAdapter(adapter);
+    await expect(adapter.request('list_persisted_sessions_page', {
+      request: { workspacePath: '/repo' },
+    })).resolves.toEqual([]);
+  });
+});
+
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   const promise = new Promise<T>((res) => {
     resolve = res;
   });
   return { promise, resolve };
+}
+
+function hostInvokeOk(value: unknown): string {
+  return JSON.stringify({ resp: 'host_invoke_result', ok: true, value });
+}
+
+/**
+ * Observe a request without awaiting it, so a promise that never settles fails
+ * the assertion instead of hanging the test until its timeout.
+ */
+function captureOutcome<T>(request: Promise<T>) {
+  const outcome: { settled: boolean; value: unknown } = { settled: false, value: undefined };
+  void request.then(
+    (value) => {
+      outcome.settled = true;
+      outcome.value = value;
+    },
+    (error: unknown) => {
+      outcome.settled = true;
+      outcome.value = error;
+    },
+  );
+  return outcome;
+}
+
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }

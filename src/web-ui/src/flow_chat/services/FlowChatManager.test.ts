@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FlowChatManager } from './FlowChatManager';
+import {
+  activateSurface,
+  isSurfaceChangedError,
+  resetDeviceSurfaceForTest,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const storeMocks = vi.hoisted(() => ({
   store: {} as any,
@@ -12,7 +17,9 @@ const storeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./ProcessingStatusManager', () => ({
-  processingStatusManager: {},
+  processingStatusManager: {
+    clearSurface: vi.fn(),
+  },
 }));
 
 vi.mock('./flow-chat-manager/PeerSessionRefreshModule', () => ({
@@ -46,7 +53,9 @@ vi.mock('@/infrastructure/api/service-api/ACPClientAPI', () => ({
 }));
 
 vi.mock('../state-machine', () => ({
-  stateMachineManager: {},
+  stateMachineManager: {
+    clearSurface: vi.fn(),
+  },
 }));
 
 vi.mock('./EventBatcher', () => ({
@@ -85,6 +94,9 @@ vi.mock('./flow-chat-manager', () => ({
   cancelSessionTask: vi.fn(),
   installPendingQueueDrainListener: vi.fn(),
   drainPendingQueue: vi.fn(),
+  pendingQueueManager: {
+    clearSurface: vi.fn(),
+  },
   initializeEventListeners: storeMocks.initializeEventListeners,
   processBatchedEvents: vi.fn(),
   addDialogTurn: vi.fn(),
@@ -133,6 +145,7 @@ function createHistoricalSession(overrides: Record<string, unknown> = {}) {
 
 describe('FlowChatManager initialization', () => {
   beforeEach(() => {
+    resetDeviceSurfaceForTest();
     (FlowChatManager as any).instance = undefined;
     vi.clearAllMocks();
     storeMocks.eventBatchers.length = 0;
@@ -183,6 +196,7 @@ describe('FlowChatManager initialization', () => {
     storeMocks.initializeEventListeners.mockReturnValue(listenerInitialization.promise);
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async () => ({
         sessions: [],
         totalTopLevelCount: 0,
@@ -216,6 +230,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(() => metadataLoad.promise),
       getState: vi.fn(() => ({
         sessions,
@@ -269,6 +284,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async () => ({
         sessions: [],
         totalTopLevelCount: 2,
@@ -321,6 +337,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async () => ({
         sessions: [],
         totalTopLevelCount: 1,
@@ -369,6 +386,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async (
         workspacePath: string,
       ) => ({
@@ -435,6 +453,7 @@ describe('FlowChatManager initialization', () => {
 
     storeMocks.store = {
       registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
       loadSessionMetadataPage: vi.fn(async () => ({
         sessions: [],
         totalTopLevelCount: 2,
@@ -456,5 +475,141 @@ describe('FlowChatManager initialization', () => {
     expect(storeMocks.store.switchSession).toHaveBeenCalledTimes(1);
     expect(storeMocks.store.switchSession).toHaveBeenCalledWith('parent-1');
     expect(storeMocks.store.switchSession).not.toHaveBeenCalledWith('subagent-1');
+  });
+
+  // The page describes the device it was read from and has already landed in
+  // that surface's own container. Selecting out of it after the window moved
+  // would apply one device's history to another; the device now on screen runs
+  // its own bootstrap.
+  it('abandons a workspace bootstrap when the window switches device mid-load', async () => {
+    const sessions = new Map<string, any>();
+
+    storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
+      loadSessionMetadataPage: vi.fn(async () => {
+        activateSurface('device-b');
+        sessions.set('history-1', createHistoricalSession({ historyState: 'ready', isHistorical: false }));
+        return { sessions: [{ sessionId: 'history-1' }], totalTopLevelCount: 1, hasMore: false };
+      }),
+      getState: vi.fn(() => ({ sessions, activeSessionId: null })),
+      loadSessionHistory: vi.fn(async () => undefined),
+      switchSession: vi.fn(),
+    };
+
+    const manager = FlowChatManager.getInstance();
+    await expect(manager.initialize('D:/workspace/BitFun')).rejects.toSatisfy(isSurfaceChangedError);
+
+    expect(storeMocks.store.loadSessionMetadataPage).toHaveBeenCalledTimes(1);
+    expect(storeMocks.store.switchSession).not.toHaveBeenCalled();
+  });
+
+  // The same repository is routinely open at the same path on two devices, so a
+  // request key without the surface handed device A's bootstrap the in-flight
+  // initialization of device B — and A then read back B's session list.
+  it('does not deduplicate initialization for the same path across devices', async () => {
+    const metadataLoads = [
+      createDeferred<Record<string, unknown>>(),
+      createDeferred<Record<string, unknown>>(),
+    ];
+    const peerSessions = new Map<string, any>();
+    let activeSessionId: string | null = null;
+
+    storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
+      loadSessionMetadataPage: vi.fn(
+        () => metadataLoads[storeMocks.store.loadSessionMetadataPage.mock.calls.length - 1].promise,
+      ),
+      getState: vi.fn(() => ({ sessions: peerSessions, activeSessionId })),
+      loadSessionHistory: vi.fn(async () => undefined),
+      switchSession: vi.fn((sessionId: string) => {
+        activeSessionId = sessionId;
+      }),
+    };
+
+    const manager = FlowChatManager.getInstance();
+    const localInitialize = manager.initialize('D:/workspace/BitFun');
+    await flushAsyncWork();
+    expect(storeMocks.store.loadSessionMetadataPage).toHaveBeenCalledTimes(1);
+
+    activateSurface('device-b');
+    const peerInitialize = manager.initialize('D:/workspace/BitFun');
+    await flushAsyncWork();
+    // A shared key would have handed this bootstrap the local device's request.
+    expect(storeMocks.store.loadSessionMetadataPage).toHaveBeenCalledTimes(2);
+
+    peerSessions.set('peer-1', createHistoricalSession({
+      sessionId: 'peer-1',
+      historyState: 'ready',
+      isHistorical: false,
+    }));
+    metadataLoads[0].resolve({ sessions: [], totalTopLevelCount: 0, hasMore: false });
+    metadataLoads[1].resolve({
+      sessions: [{ sessionId: 'peer-1' }],
+      totalTopLevelCount: 1,
+      hasMore: false,
+    });
+
+    // The local bootstrap started under a surface this window left; it must not
+    // adopt the peer's answer.
+    await expect(localInitialize).rejects.toSatisfy(isSurfaceChangedError);
+    await expect(peerInitialize).resolves.toBe(true);
+    expect(storeMocks.store.switchSession).toHaveBeenCalledTimes(1);
+    expect(storeMocks.store.switchSession).toHaveBeenCalledWith('peer-1');
+  });
+
+  it('restores history for a session that is already active but still metadata-only', async () => {
+    const activeSession = createHistoricalSession({ sessionId: 'active-1' });
+    const sessions = new Map<string, any>([['active-1', activeSession]]);
+
+    storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 0),
+      loadSessionMetadataPage: vi.fn(async () => ({
+        sessions: [{ sessionId: 'active-1' }],
+        totalTopLevelCount: 1,
+        hasMore: false,
+      })),
+      getState: vi.fn(() => ({ sessions, activeSessionId: 'active-1' })),
+      loadSessionHistory: vi.fn(async () => undefined),
+      switchSession: vi.fn(),
+    };
+
+    const manager = FlowChatManager.getInstance();
+    await expect(manager.initialize('D:/workspace/BitFun')).resolves.toBe(true);
+
+    // Without this the breadcrumb and turn rail render from the catalog while
+    // the message area stays blank until the user clicks the session.
+    expect(storeMocks.store.loadSessionHistory).toHaveBeenCalledWith(
+      'active-1',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('reports no history when metadata claims sessions but none are selectable', async () => {
+    storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
+      getSurfaceGeneration: vi.fn(() => 7),
+      loadSessionMetadataPage: vi.fn(async () => ({
+        sessions: [{ sessionId: 'history-1' }],
+        totalTopLevelCount: 1,
+        hasMore: false,
+      })),
+      getState: vi.fn(() => ({ sessions: new Map(), activeSessionId: null })),
+      loadSessionHistory: vi.fn(async () => undefined),
+      switchSession: vi.fn(),
+    };
+
+    const manager = FlowChatManager.getInstance();
+
+    // `false` is the caller's signal to create a session against the live
+    // workspace. Returning `true` here would leave the surface with no active
+    // session and no new one.
+    await expect(manager.initialize('D:/workspace/BitFun')).resolves.toBe(false);
+    expect(storeMocks.store.switchSession).not.toHaveBeenCalled();
   });
 });

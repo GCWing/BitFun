@@ -1,17 +1,23 @@
 // Generates src/generated/api/index.ts — a barrel re-exporting every
 // ts-rs-generated type. Run after `cargo test ... export` (gen:types).
 // Generated files are gitignored; this barrel is regenerated alongside them.
-import { readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, basename, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const dir = join(here, '..', 'src', 'generated', 'api');
 
+if (process.argv.includes('--clean')) {
+  await rm(dir, { recursive: true, force: true });
+  await mkdir(dir, { recursive: true });
+  process.exit(0);
+}
+
 const header = `// GENERATED CODE! DO NOT MODIFY BY HAND!
 //
-// Source: src/crates/interfaces/app-server/src/schema/ (+ upstream contract
-// crates), exported via ts-rs (#[ts(export)], run by \`npm run gen:types\`).
+// Source: bitfun-app-server-protocol (+ stable contract crates), exported via
+// ts-rs (#[ts(export)], run by \`npm run gen:types\`).
 // This barrel re-exports every generated type so consumers can import from a
 // single path: \`import type { SubmitDialogTurnBody } from '@/generated/api'\`.
 //
@@ -24,9 +30,25 @@ const files = (await readdir(dir, { withFileTypes: true }))
   .sort();
 
 const requiredTypes = [
+  'AgentSessionArchiveStateRequest',
+  'AgentSessionForkAtTurnRequest',
   'ConfigUpdate',
+  'ForkSessionResponse',
+  'GitBranch',
+  'GitRepositoryPathRequest',
+  'ListSessionsResponse',
+  'PermissionGrant',
+  'PermissionReply',
+  'RemoveProjectPermissionGrantResponse',
+  'ResetAgentProfileConfigMessage',
+  'ResetAgentProfileConfigResponse',
+  'RunResponse',
   'SaveCloudSpeechConfigRequest',
   'SaveCloudSpeechConfigResult',
+  'SetAgentProfileConfigMessage',
+  'SetAgentProfileConfigResponse',
+  'SubmitDialogTurnBody',
+  'SubmitDialogTurnResponse',
 ];
 const missingTypes = requiredTypes.filter((typeName) => !files.includes(typeName));
 if (missingTypes.length > 0) {

@@ -119,4 +119,78 @@ describe('ReasoningPresetSelector', () => {
       .toBe('reasoningSelector.source.model_config');
     expect(document.body.querySelector('[data-preset-id="high"] small')).toBeNull();
   });
+
+  it('returns focus to the trigger and keeps keyboard motion suppressed while exiting', async () => {
+    const onSelect = vi.fn();
+    await act(async () => {
+      root.render(
+        <ReasoningPresetSelector
+          projection={{
+            status: 'known',
+            presets: [
+              { id: 'high', label: 'High', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+            ],
+          }}
+          onSelect={onSelect}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-reasoning-preset-selector-btn"]',
+    );
+    trigger?.focus();
+    await act(async () => {
+      trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const option = document.body.querySelector<HTMLButtonElement>('[data-preset-id="high"]');
+    option?.focus();
+    await act(async () => {
+      option?.click();
+    });
+
+    const exitingMenu = document.body.querySelector<HTMLElement>(
+      '[data-testid="chat-reasoning-preset-selector-menu"]',
+    );
+    expect(onSelect).toHaveBeenCalledWith('high');
+    expect(document.activeElement).toBe(trigger);
+    expect(exitingMenu?.getAttribute('aria-hidden')).toBe('true');
+    expect(exitingMenu?.dataset.keyboardOpen).toBe('true');
+  });
+
+  it('restores trigger focus when Escape closes a focused menu', async () => {
+    await act(async () => {
+      root.render(
+        <ReasoningPresetSelector
+          projection={{
+            status: 'known',
+            presets: [
+              { id: 'medium', label: 'Medium', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'medium' }] },
+            ],
+          }}
+          onSelect={vi.fn()}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-reasoning-preset-selector-btn"]',
+    );
+    await act(async () => {
+      trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await Promise.resolve();
+    });
+    const option = document.body.querySelector<HTMLButtonElement>('[data-preset-id="medium"]');
+    option?.focus();
+
+    await act(async () => {
+      option?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    expect(document.activeElement).toBe(trigger);
+    expect(document.body.querySelector('[data-testid="chat-reasoning-preset-selector-menu"]')
+      ?.getAttribute('aria-hidden')).toBe('true');
+  });
 });

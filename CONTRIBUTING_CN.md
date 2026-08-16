@@ -55,6 +55,7 @@ pnpm install
 ```bash
 # Desktop（日常开发推荐）
 pnpm run desktop:dev                # 完整热更新：Vite HMR + Rust 自动重编译并重启
+pnpm run prepare:dsh-profile        # 可选：编译 DeepSeek Harness 桥，供本地会话使用
 
 # Desktop（轻量预览，无 Rust 自动重编译）
 pnpm run desktop:preview:debug      # 复用预构建二进制 + Vite HMR；Rust 改动需手动重启

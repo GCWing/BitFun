@@ -41,7 +41,8 @@ export class ConversationSessionFilterPolicy {
       ConversationSessionFilterPolicy.normalizeWorkspacePath(right);
   }
 
-  private static normalizeWorkspacePath(path: string): string {
+  /** Public so a caller can bucket by workspace instead of comparing pairwise. */
+  static normalizeWorkspacePath(path: string): string {
     let value = path.trim();
     while (value.length > 1 && (value.endsWith('/') || value.endsWith('\\'))) {
       value = value.slice(0, value.length - 1);

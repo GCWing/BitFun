@@ -1,0 +1,6 @@
+# A roster row the deployment must fix: the directory occupies the id but
+# carries no `agent.cordis.yml`, so discovery reports it broken. It exists to
+# prove the mode picker withholds a choice every attempt would refuse.
+name: Broken mode
+description: the fixture nobody can compose
+order: 3

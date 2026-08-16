@@ -91,7 +91,6 @@ use api::session_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
 use api::speech_api::*;
-use api::startchat_agent_api::*;
 use api::storage_commands::*;
 use api::subagent_api::*;
 use api::system_api::*;
@@ -1144,6 +1143,16 @@ pub async fn _run() {
                 step_started,
             );
 
+            // Reattach to a browser that is already running with remote
+            // debugging on, so a BitFun restart does not drop the connection.
+            let step_started = Instant::now();
+            api::browser_control_api::init_on_startup();
+            startup_trace.record_elapsed_step(
+                "native_setup",
+                "browser_control_init_on_startup",
+                step_started,
+            );
+
             {
                 let step_started = Instant::now();
                 let _terminal_state: tauri::State<'_, api::terminal_api::TerminalState> =
@@ -1281,6 +1290,7 @@ pub async fn _run() {
             api::agentic_api::update_session_mode,
             api::agentic_api::update_session_model,
             api::agentic_api::update_session_permission_mode,
+            api::agentic_api::update_active_turn_permission_mode,
             api::agentic_api::get_session_permission_mode,
             api::agentic_api::reload_session_context,
             api::agentic_api::update_session_title,
@@ -1295,6 +1305,8 @@ pub async fn _run() {
             api::agentic_api::ensure_assistant_bootstrap,
             api::agentic_api::run_init_agents_md,
             api::agentic_api::cancel_dialog_turn,
+            api::agentic_api::interrupt_dialog_turn,
+            api::agentic_api::recover_interrupted_dialog_turn,
             api::agentic_api::steer_dialog_turn,
             api::agentic_api::control_deep_review_queue,
             api::agentic_api::cancel_session,
@@ -1353,11 +1365,14 @@ pub async fn _run() {
             set_native_prompt_command_conflict_choice_command,
             expand_external_prompt_command_command,
             set_external_tool_target_decision_command,
+            set_external_tool_targets_enabled_command,
             set_external_tool_conflict_choice_command,
             set_external_subagent_activation_command,
+            set_external_subagents_enabled_command,
             set_external_subagent_model_binding_command,
             choose_external_subagent_conflict_command,
             set_external_mcp_server_decision_command,
+            set_external_mcp_servers_enabled_command,
             choose_external_mcp_conflict_command,
             api::context_upload_api::upload_image_contexts,
             get_all_tools_info,
@@ -1540,17 +1555,13 @@ pub async fn _run() {
             save_git_repo_history,
             load_git_repo_history,
             preview_commit_message,
-            analyze_work_state,
-            quick_analyze_work_state,
-            generate_greeting_only,
-            get_work_state_summary,
             compute_diff,
             apply_patch,
             save_merged_diff_content,
             initialize_snapshot,
             record_file_change,
             rollback_session,
-            rollback_to_turn,
+            rollback_session_to_turn,
             accept_session,
             accept_file,
             reject_file,
@@ -1585,7 +1596,6 @@ pub async fn _run() {
             load_session_turns,
             get_session_usage_report,
             save_session_turn,
-            record_local_command_turn,
             save_session_metadata,
             export_session_transcript,
             delete_persisted_session,
@@ -1684,6 +1694,7 @@ pub async fn _run() {
             subscribe_config_updates,
             get_model_configs,
             get_ai_model_catalog,
+            project_ai_model_reasoning_catalog,
             get_models_dev_catalog_status,
             refresh_models_dev_catalog_now,
             reveal_models_dev_cache_directory,
@@ -1895,8 +1906,8 @@ pub async fn _run() {
             api::browser_control_api::browser_control_list_browsers,
             api::browser_control_api::browser_control_get_status,
             api::browser_control_api::browser_control_launch,
+            api::browser_control_api::browser_control_enable_default_cdp,
             api::browser_control_api::browser_control_restart_with_cdp,
-            api::browser_control_api::browser_control_create_launcher,
             // Insights API
             api::insights_api::generate_insights,
             api::insights_api::get_latest_insights,
@@ -2200,10 +2211,6 @@ async fn init_agentic_system() -> anyhow::Result<(
 
 async fn init_function_agents(ai_client_factory: Arc<AIClientFactory>) -> anyhow::Result<()> {
     let _ = bitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
-        ai_client_factory.clone(),
-    );
-
-    let _ = bitfun_core::function_agents::startchat_func_agent::StartchatFunctionAgent::new(
         ai_client_factory.clone(),
     );
 
@@ -2653,7 +2660,7 @@ fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
 fn create_event_emitter(
     transport: Arc<TauriTransportAdapter>,
 ) -> Arc<dyn bitfun_core::infrastructure::events::EventEmitter> {
-    use bitfun_core::infrastructure::events::TransportEmitter;
+    use bitfun_transport::TransportEmitter;
     let inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
         Arc::new(TransportEmitter::new(transport));
     api::remote_connect_api::wrap_peer_aware_emitter(inner)

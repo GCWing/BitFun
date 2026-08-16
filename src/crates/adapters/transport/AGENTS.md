@@ -2,9 +2,12 @@
 
 Scope: this guide applies to `src/crates/adapters/transport`.
 
-`bitfun-transport` owns the event delivery abstraction and adapters used by
-current product hosts. It bridges owned event projections to concrete delivery
-channels without owning product logic or future protocol plans.
+`bitfun-transport` owns the event delivery abstraction and the smallest
+protocol-neutral message mechanics reused by current product hosts. It bridges
+owned event projections to concrete delivery channels and caps JSON encoding
+without owning product logic or protocol plans. Its colocated TypeScript core
+owns carrier-neutral message and JSON-RPC correlation mechanics reused by SDK
+stdio and the WebSocket client.
 
 ## Guardrails
 
@@ -19,6 +22,10 @@ channels without owning product logic or future protocol plans.
   platform plan alone is not enough.
 - Transport may serialize and deliver events; it must not decide product policy,
   session lifecycle, tool exposure, permissions, or remote workspace behavior.
+- Shared JSON and message helpers must remain protocol-neutral. Host wire
+  shapes, routes, authentication, lifecycle, framing choice, and concrete
+  size-limit policy stay in the owning protocol adapter or app. Do not extract
+  a framing helper until at least two current consumers share its semantics.
 - Preserve event names, payload compatibility, ordering assumptions, and
   backpressure/error semantics when refactoring adapters.
 - Keep protocol routes and frontend clients in their owning app. Their existence
@@ -28,6 +35,7 @@ channels without owning product logic or future protocol plans.
 
 ```bash
 cargo check -p bitfun-transport
+pnpm --dir sdk/typescript test
 node scripts/check-core-boundaries.mjs
 ```
 

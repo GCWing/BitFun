@@ -377,3 +377,10 @@
     transform: rotate(360deg);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-acp-agents__status.is-checking svg {
+    animation: none;
+    transform: none;
+  }
+}

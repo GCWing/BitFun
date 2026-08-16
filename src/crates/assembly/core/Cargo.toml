@@ -11,13 +11,14 @@ crate-type = ["rlib"]
 
 [dependencies]
 # Inherit shared dependencies from workspace
-tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["fs", "sync"] }
+tokio-util = { workspace = true, optional = true }
 napi-ohos = { workspace = true }
 napi-derive-ohos = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 async-trait = { workspace = true }
-futures = { workspace = true }
+futures = { workspace = true, optional = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -34,8 +35,8 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true, optional = true }
 cron = { workspace = true, optional = true }
-regex = { workspace = true }
-base64 = { workspace = true }
+regex = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
 hex = { workspace = true }
@@ -65,7 +66,6 @@ include_dir = { workspace = true, optional = true }
 
 # Command detection (cross-platform)
 similar = { workspace = true, optional = true }
-urlencoding = { workspace = true }
 
 # Shared AI protocol adapters
 bitfun-ai-adapters = { path = "../../adapters/ai-adapters", optional = true }
@@ -83,35 +83,35 @@ bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true
 bitfun-harness = { path = "../../execution/harness", optional = true }
 
 # Product capability pack contracts
-bitfun-product-capabilities = { path = "../product-capabilities", default-features = false, optional = true }
+bitfun-product-capabilities = { path = "../product-capabilities", optional = true }
 
 # Ecosystem-neutral external source lifecycle coordinator
 bitfun-external-sources = { path = "../external-sources", optional = true }
 
 # Agent tool contracts
-bitfun-agent-tools = { path = "../../execution/tool-contracts" }
+bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
 
 # Tool pack provider plan
-bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false, optional = true }
+bitfun-tool-packs = { path = "../../execution/tool-provider-groups", optional = true }
 
 # Core service owner crate
-bitfun-services-core = { path = "../../services/services-core", default-features = false, features = ["json-io"] }
+bitfun-services-core = { path = "../../services/services-core", features = ["json-io"] }
 
 # Integration service owner crate
-bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, optional = true }
+bitfun-services-integrations = { path = "../../services/services-integrations", optional = true }
 
 # Product domain owner crate
-bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
+bitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
 
 # Tool runtime
-tool-runtime = { path = "../../execution/tool-execution", default-features = false, optional = true }
+tool-runtime = { path = "../../execution/tool-execution", optional = true }
 
 # terminal
 terminal-core = { path = "../../services/terminal", optional = true }
 
 # I18n internationalization
-fluent-bundle = { workspace = true }
-unic-langid = { workspace = true }
+fluent-bundle = { workspace = true, optional = true }
+unic-langid = { workspace = true, optional = true }
 
 sha2 = { workspace = true }
 
@@ -123,23 +123,21 @@ tokio-tungstenite = { workspace = true, optional = true }
 # Event layer dependency (lowest layer)
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-events = { path = "../../contracts/events" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission", "workspace-ports"] }
 bitfun-runtime-services = { path = "../../execution/runtime-services", optional = true }
 
 # Reviewed product-full plugin composition root.
 bitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional = true }
+bitfun-dsh-adapter = { path = "../../adapters/dsh-adapter", optional = true }
 bitfun-claude-code-adapter = { path = "../../adapters/claude-code-adapter", optional = true }
 bitfun-codex-adapter = { path = "../../adapters/codex-adapter", optional = true }
 bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client", optional = true }
-
-# Transport layer dependency
-bitfun-transport = { path = "../../adapters/transport" }
 
 [features]
 # Full product runtime compatibility set. Product entrypoints with a narrower
 # construction path select stable owner features instead of inheriting this
 # union.
-default = ["product-full"]
+default = []
 # Derive `ts_rs::TS` on selected wire types (e.g. `AgentProfileView`) for
 # downstream TypeScript binding export. Propagates `ts` to the upstream crates
 # whose types core re-exports (git types live in `services-integrations`,
@@ -157,6 +155,11 @@ ts = [
 ]
 product-full = [
     "agent-runtime",
+    "document-read",
+    "diagnostics",
+    "diff",
+    "subscription-auth",
+    "i18n-runtime",
     "model-catalog",
     "mcp-runtime",
     "remote-connect",
@@ -203,22 +206,38 @@ product-full = [
 agent-runtime = [
     "ai-adapter-runtime",
     "dep:bitfun-agent-runtime",
+    "bitfun-agent-runtime/agent-runtime",
     "dep:bitfun-agent-content",
     "dep:bitfun-agent-stream",
+    "dep:bitfun-agent-tools",
+    "bitfun-agent-tools/computer-use-contract",
+    "bitfun-runtime-ports/agent-api",
+    "bitfun-runtime-ports/git-port",
+    "bitfun-runtime-ports/remote-exec-port",
+    "bitfun-runtime-ports/remote-workspace-ports",
+    "bitfun-runtime-ports/runtime-event-port",
+    "bitfun-runtime-ports/terminal-port",
+    "bitfun-runtime-ports/tool-runtime-handles",
+    "bitfun-runtime-ports/workspace-ports",
+    "dep:base64",
     "dep:bitfun-harness",
     "dep:dashmap",
     "dep:filetime",
     "dep:flate2",
     "dep:fs2",
+    "dep:futures",
     "dep:include_dir",
     "dep:indexmap",
     "dep:image",
     "dep:md5",
     "dep:rusqlite",
+    "dep:regex",
     "dep:similar",
+    "dep:tokio-util",
     "dep:tool-runtime",
     "bitfun-services-core/permission",
     "bitfun-services-core/runtime-ownership",
+    "bitfun-services-core/workspace-text-runtime",
     "bitfun-services-core/session-git",
     "filesystem",
     "local-storage",
@@ -232,13 +251,21 @@ agent-runtime = [
     "tool-packs",
     "tools-basic",
     "tools-agent-control",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/rt",
+    "tokio/time",
 ]
+# Backend Fluent translation state. Locale contracts and model-facing language
+# facts remain available without this runtime implementation.
+i18n-runtime = ["dep:fluent-bundle", "dep:unic-langid"]
 external-sources = [
     "agent-runtime",
     "model-catalog",
     "mcp-runtime",
     "script-tool-runtime",
     "dep:bitfun-opencode-adapter",
+    "dep:bitfun-dsh-adapter",
     "dep:bitfun-claude-code-adapter",
     "dep:bitfun-codex-adapter",
     "dep:bitfun-external-sources",
@@ -257,6 +284,7 @@ model-catalog = [
 ]
 mcp-runtime = [
     "agent-runtime",
+    "bitfun-agent-tools/mcp-bridge",
     "dep:axum",
     "dep:reqwest",
     "bitfun-services-integrations/mcp",
@@ -275,23 +303,35 @@ workspace-search = [
 browser-control = [
     "dep:tokio-tungstenite",
     "bitfun-services-integrations/browser-control",
+    "tokio/net",
+    "tokio/rt",
+    "tokio/time",
 ]
 web-tools = [
     "bitfun-services-integrations/web-tools",
     "tool-runtime/web-readable",
 ]
-deep-research = ["bitfun-services-integrations/deep-research"]
-script-tool-runtime = ["bitfun-services-integrations/script-tool-runtime"]
+deep-research = [
+    "bitfun-agent-runtime?/deep-research",
+    "bitfun-services-integrations/deep-research",
+]
+script-tool-runtime = [
+    "bitfun-runtime-ports/script-tool-runtime",
+    "bitfun-services-integrations/script-tool-runtime",
+]
 scheduled-jobs = [
     "dep:chrono-tz",
     "dep:cron",
 ]
+# Additive dependency modifiers. Weak dependency feature references preserve
+# the owning runtime boundary instead of activating that runtime by themselves.
+document-read = ["tool-runtime?/document-read"]
+subscription-auth = ["bitfun-ai-adapters?/subscription-auth"]
 
 # Tool groups mirror the provider-neutral groups in bitfun-tool-packs. They
 # compose concrete service owners but never form a product-shaped umbrella.
 tools-basic = [
     "bitfun-tool-packs/basic",
-    "tool-runtime/document-read",
     "workspace-search",
 ]
 tools-git = [
@@ -336,16 +376,20 @@ tools-agent-control = [
 plugin-runtime = [
     "external-sources",
     "dep:bitfun-plugin-runtime-client",
+    "bitfun-runtime-ports/plugin-runtime",
 ]
 debug-log = [
     "dep:axum",
+    "dep:tokio-util",
     "dep:tower-http",
     "bitfun-services-integrations/debug-log",
+    "tokio/macros",
+    "tokio/net",
+    "tokio/rt",
+    "tokio/time",
 ]
 ai-adapter-runtime = [
     "dep:bitfun-ai-adapters",
-    "bitfun-ai-adapters/subscription-auth",
-    "dep:reqwest",
 ]
 product-capabilities = ["dep:bitfun-product-capabilities"]
 plugin-source = [
@@ -370,11 +414,13 @@ file-watch = ["bitfun-services-integrations/file-watch"]
 git = ["bitfun-services-integrations/git"]
 review-platform = ["bitfun-services-integrations/review-platform"]
 service-integrations = ["announcement", "file-watch", "git", "review-platform"]
-dispatch-store = ["local-storage", "bitfun-services-core/dispatch-workspace"]
+diagnostics = ["bitfun-services-core/diagnostics"]
+diff = ["bitfun-services-core/diff"]
+dispatch-store = ["dep:base64", "local-storage", "bitfun-services-core/dispatch-workspace"]
 filesystem = ["bitfun-services-core/filesystem"]
-local-storage = ["bitfun-services-core/local-storage"]
+local-storage = ["dep:bitfun-agent-tools", "bitfun-services-core/local-storage"]
 process-runtime = ["bitfun-services-core/process-runtime"]
-lsp = ["dep:notify", "bitfun-services-core/lsp"]
+lsp = ["dep:notify", "bitfun-services-core/lsp", "tokio/macros"]
 terminal = ["dep:terminal-core"]
 workspace-runtime = [
     "dep:serde_yaml",
@@ -404,7 +450,7 @@ ssh-remote = [
 [dev-dependencies]
 bitfun-runtime-services = { path = "../../execution/runtime-services", features = ["test-support"] }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [[test]]
 name = "git_contracts"

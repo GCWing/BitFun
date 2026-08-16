@@ -567,6 +567,7 @@ pub fn project_reasoning_catalog_with_limit_and_auto_binding(
     };
 
     let mut descriptors = BTreeMap::<String, ReasoningPresetDescriptor>::new();
+    let mut unavailable_descriptors = BTreeMap::<String, ReasoningPresetDescriptor>::new();
     let mut has_unmapped_reasoning = false;
     if let Some((source_provider, source_model)) = source_match {
         if source_model.reasoning {
@@ -606,6 +607,37 @@ pub fn project_reasoning_catalog_with_limit_and_auto_binding(
                     | ModelsDevReasoningOption::Toggle
                     | ModelsDevReasoningOption::BudgetTokens { .. } => {
                         has_unmapped_reasoning = true;
+                        if matches!(binding, ReasoningCatalogBinding::ModelsDev { .. }) {
+                            let unavailable = match option {
+                                ModelsDevReasoningOption::Effort { values } => effort_descriptors(
+                                    values,
+                                    support.nullable_effort,
+                                    ReasoningPresetSource::ModelsDev,
+                                    source_provider,
+                                    &source_model.id,
+                                ),
+                                ModelsDevReasoningOption::Toggle => toggle_descriptors(
+                                    ReasoningPresetSource::ModelsDev,
+                                    source_provider,
+                                    &source_model.id,
+                                ),
+                                ModelsDevReasoningOption::BudgetTokens { min, max } => {
+                                    budget_descriptors(
+                                        *min,
+                                        *max,
+                                        source_model.output_limit,
+                                        effective_max_output_tokens,
+                                        provider,
+                                        ReasoningPresetSource::ModelsDev,
+                                        source_provider,
+                                        &source_model.id,
+                                    )
+                                }
+                            };
+                            for descriptor in unavailable {
+                                unavailable_descriptors.insert(descriptor.id.clone(), descriptor);
+                            }
+                        }
                         Vec::new()
                     }
                 };
@@ -673,12 +705,15 @@ pub fn project_reasoning_catalog_with_limit_and_auto_binding(
             }
             if preset.disabled {
                 descriptors.remove(preset_id);
+                unavailable_descriptors.remove(preset_id);
                 continue;
             }
             if preset.actions.is_empty() {
                 descriptors.remove(preset_id);
+                unavailable_descriptors.remove(preset_id);
                 continue;
             }
+            unavailable_descriptors.remove(preset_id);
             descriptors.insert(
                 preset_id.to_string(),
                 ReasoningPresetDescriptor {
@@ -700,6 +735,12 @@ pub fn project_reasoning_catalog_with_limit_and_auto_binding(
 
     let mut presets = descriptors.into_values().collect::<Vec<_>>();
     presets.sort_by(|left, right| {
+        left.order
+            .cmp(&right.order)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    let mut unavailable_presets = unavailable_descriptors.into_values().collect::<Vec<_>>();
+    unavailable_presets.sort_by(|left, right| {
         left.order
             .cmp(&right.order)
             .then_with(|| left.id.cmp(&right.id))
@@ -731,6 +772,7 @@ pub fn project_reasoning_catalog_with_limit_and_auto_binding(
         status,
         default_preset: default_preset.map(ToOwned::to_owned),
         presets,
+        unavailable_presets,
     }
 }
 
@@ -1193,7 +1235,9 @@ mod tests {
                 }},
                 "anthropic": {"models": {
                     "claude-sonnet-4-6": {"id":"claude-sonnet-4-6","reasoning":true,
-                        "reasoning_options":[{"type":"effort","values":["low","high"]},{"type":"budget_tokens","min":1024}]}
+                        "reasoning_options":[{"type":"effort","values":["low","high"]},{"type":"budget_tokens","min":1024}]},
+                    "claude-fable-5": {"id":"claude-fable-5","reasoning":true,
+                        "reasoning_options":{"type":"effort","values":["low","medium","high","xhigh","max"]}}
                 }},
                 "deepseek": {"models": {
                     "deepseek-v4-flash": {"id":"deepseek-v4-flash","reasoning":true,
@@ -1914,6 +1958,35 @@ mod tests {
             preset.execution_provider.as_deref() == Some("openai")
                 && preset.execution_model.as_deref() == Some("gpt-test")
         }));
+    }
+
+    #[test]
+    fn explicit_anthropic_binding_reports_efforts_unavailable_to_openai_chat() {
+        let configured = ReasoningConfig {
+            catalog: ReasoningCatalogBinding::ModelsDev {
+                provider: "anthropic".to_string(),
+                model: "claude-fable-5".to_string(),
+            },
+            ..Default::default()
+        };
+        let projection = project_reasoning_catalog(
+            "openai",
+            "dummy-model",
+            "http://localhost:8000/v1/chat/completions",
+            Some(&configured),
+            Some(&catalog()),
+        );
+
+        assert_eq!(projection.status, ReasoningCapabilityStatus::Unknown);
+        assert!(projection.presets.is_empty());
+        assert_eq!(
+            projection
+                .unavailable_presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect::<Vec<_>>(),
+            ["low", "medium", "high", "xhigh", "max"]
+        );
     }
 
     #[test]

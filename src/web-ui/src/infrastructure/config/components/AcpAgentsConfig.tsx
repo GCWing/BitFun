@@ -90,7 +90,7 @@ interface AcpClientPreset {
 
 // Presets that speak ACP natively and therefore need no separate adapter
 // package (their CLI binary is launched directly).
-const NATIVE_ACP_PRESET_IDS = new Set(['opencode', 'omp']);
+const NATIVE_ACP_PRESET_IDS = new Set(['opencode', 'dsh', 'omp']);
 
 // Presets BitFun cannot install on the user's behalf — the agent must be
 // installed manually (e.g. omp targets bun and ships via its own installer).
@@ -104,6 +104,16 @@ const PRESETS: AcpClientPreset[] = [
     description: 'Native ACP coding agent.',
     command: 'opencode',
     args: ['acp'],
+  },
+  // BitFun ships the ACP bridge for DeepSeek Harness and installs it into the
+  // user's own dsh as a profile on first launch, so the only setup left is the
+  // harness itself and the model the user picks inside it.
+  {
+    id: 'dsh',
+    name: 'DeepSeek Harness',
+    description: 'DeepSeek Harness with BitFun\'s bundled ACP bridge. Uses the model and API key configured in dsh.',
+    command: 'dsh',
+    args: ['--profile', 'bitfun-acp'],
   },
   {
     id: 'omp',

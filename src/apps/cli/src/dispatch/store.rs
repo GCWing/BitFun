@@ -2522,6 +2522,7 @@ mod tests {
             message_id: "message-1".to_string(),
             content: "Continue with tests".to_string(),
             display_content: None,
+            attachments: Vec::new(),
         };
 
         assert!(store

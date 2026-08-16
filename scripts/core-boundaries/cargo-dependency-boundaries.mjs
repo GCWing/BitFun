@@ -2,7 +2,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { servicesReqwestOwnerFeatures } from './rules/feature-rules.mjs';
+import {
+  acpClientCoreFeatures,
+  acpServerCoreFeatures,
+  capabilityContractDependencyRules,
+  guardedEmptyInternalDefaultManifestPaths,
+  servicesReqwestOwnerFeatures,
+} from './rules/feature-rules.mjs';
 
 const SKIPPED_DIRECTORIES = new Set([
   '.git',
@@ -127,7 +133,7 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
   ['browser-control', ['time']],
   ['canvas-runtime', ['fs']],
   ['debug-log', ['rt']],
-  ['deep-research', ['fs']],
+  ['deep-research', []],
   ['git', ['fs', 'io-util', 'macros', 'rt', 'time']],
   ['file-watch', ['rt', 'sync']],
   ['function-agents', ['fs', 'io-util', 'macros', 'rt', 'time']],
@@ -146,17 +152,45 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
 ]);
 
 const SERVICES_CORE_TOKIO_FEATURES = new Map([
-  ['filesystem', ['fs']],
-  ['json-io', ['fs', 'sync']],
-  ['local-storage', ['fs', 'sync']],
-  ['process-runtime', ['io-util', 'process']],
-  ['workspace-instructions', ['fs', 'io-util']],
-  ['lsp', ['fs', 'io-util', 'process', 'sync']],
-  ['workspace-runtime', ['fs', 'io-util', 'process', 'sync']],
+  ['diff', ['rt', 'time']],
+  ['filesystem', ['fs', 'rt']],
+  ['json-io', ['fs', 'rt', 'sync', 'time']],
+  ['local-storage', ['fs', 'rt', 'sync', 'time']],
+  ['permission', ['rt']],
+  ['process-runtime', ['io-util', 'process', 'rt', 'time']],
+  ['workspace-instructions', ['fs', 'io-util', 'rt']],
+  ['workspace-text-runtime', ['rt']],
+  ['lsp', ['fs', 'io-util', 'process', 'rt', 'sync', 'time']],
+  ['workspace-runtime', ['fs', 'io-util', 'process', 'rt', 'sync', 'time']],
 ]);
-const SERVICES_CORE_BASE_TOKIO_FEATURES = ['rt', 'time'];
+const SERVICES_CORE_BASE_TOKIO_FEATURES = [];
+const SERVICES_INTEGRATIONS_TOKIO_AGGREGATES = new Set(['product-full']);
+const SERVICES_CORE_TOKIO_AGGREGATES = new Set(['session-git']);
+const CORE_TOKIO_FEATURES = new Map([
+  ['agent-runtime', ['io-util', 'macros', 'rt', 'time']],
+  ['mcp-runtime', ['io-util', 'macros', 'rt', 'rt-multi-thread', 'time']],
+  ['browser-control', ['net', 'rt', 'time']],
+  ['debug-log', ['macros', 'net', 'rt', 'time']],
+  ['lsp', ['macros']],
+]);
+const CORE_TOKIO_AGGREGATES = new Set([
+  'external-sources',
+  'plugin-runtime',
+  'product-full',
+  'remote-connect',
+  'tools-browser-web',
+  'tools-mcp',
+]);
+const AGENT_RUNTIME_TOKIO_FEATURES = new Map([
+  ['native-hook-runtime', ['io-util', 'macros', 'process', 'rt', 'time']],
+  ['agent-runtime', ['io-util', 'macros', 'process', 'rt', 'sync', 'time']],
+]);
 
 const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set();
+
+function tokioCapabilityReference(value) {
+  return value.match(/^tokio\??\/(.+)$/)?.[1];
+}
 
 function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set()) {
   if (visiting.has(feature)) {
@@ -166,8 +200,9 @@ function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set())
 
   const capabilities = new Set();
   for (const value of featureGraph[feature] ?? []) {
-    if (value.startsWith('tokio/')) {
-      capabilities.add(value.slice('tokio/'.length));
+    const capability = tokioCapabilityReference(value);
+    if (capability) {
+      capabilities.add(capability);
     } else if (Object.hasOwn(featureGraph, value)) {
       for (const capability of effectiveTokioCapabilities(value, featureGraph, visiting)) {
         capabilities.add(capability);
@@ -179,7 +214,7 @@ function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set())
   return capabilities;
 }
 
-function findOwnedTokioFeatureViolations(pkg, ownerProfiles) {
+function findOwnedTokioFeatureViolations(pkg, ownerProfiles, aggregateFeatures = new Set()) {
   const violations = [];
   const featureGraph = pkg.features ?? {};
 
@@ -217,7 +252,17 @@ function findOwnedTokioFeatureViolations(pkg, ownerProfiles) {
     if (ownerProfiles.has(feature)) {
       continue;
     }
-    if (values.some((value) => value.startsWith('tokio/'))) {
+    if (aggregateFeatures.has(feature)) {
+      if (values.some((value) => tokioCapabilityReference(value))) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name}:${feature} Tokio aggregate must compose reviewed owners instead of declaring Tokio capabilities directly`,
+        });
+      }
+      continue;
+    }
+    if (effectiveTokioCapabilities(feature, featureGraph).size > 0) {
       violations.push({
         path: pkg.manifest_path,
         line: 1,
@@ -230,7 +275,11 @@ function findOwnedTokioFeatureViolations(pkg, ownerProfiles) {
 }
 
 export function findServicesIntegrationsTokioFeatureViolations(pkg) {
-  return findOwnedTokioFeatureViolations(pkg, SERVICES_INTEGRATIONS_TOKIO_FEATURES);
+  return findOwnedTokioFeatureViolations(
+    pkg,
+    SERVICES_INTEGRATIONS_TOKIO_FEATURES,
+    SERVICES_INTEGRATIONS_TOKIO_AGGREGATES,
+  );
 }
 
 function reqwestDependencyFeatureReferences(references) {
@@ -243,36 +292,37 @@ function reqwestDependencyFeatureReferences(references) {
   );
 }
 
-const REQWEST_TRANSPORT_FEATURES = [
-  'form',
-  'http2',
-  'json',
-  'multipart',
-  'query',
-  'stream',
-];
 const REQWEST_PACKAGE_PROFILES = new Map([
-  ['bitfun-core', { dependencyFeatures: REQWEST_TRANSPORT_FEATURES, optional: true }],
+  ['bitfun-core', { dependencyFeatures: [], optional: true }],
   ['bitfun-services-integrations', {
-    dependencyFeatures: REQWEST_TRANSPORT_FEATURES,
+    dependencyFeatures: ['http2'],
     optional: true,
     servicesOwners: true,
   }],
   ['bitfun-ai-adapters', {
-    dependencyFeatures: [...REQWEST_TRANSPORT_FEATURES, 'rustls', 'socks'],
+    dependencyFeatures: ['http2', 'json', 'rustls', 'socks', 'stream'],
     optional: false,
-    allowedPackageFeatureRefs: new Set(['reqwest/rustls']),
+    allowedPackageFeatureRefs: new Set(['reqwest/form']),
+    requiredPackageFeatureRefs: new Map([
+      ['subscription-auth', new Set(['reqwest/form'])],
+    ]),
   }],
-  ...[
-    'bitfun-cli',
-    'bitfun-desktop',
-    'bitfun-miniapp-market-service',
-    'bitfun-skin-market-service',
-  ].map((packageName) => [packageName, {
-    dependencyFeatures: [...REQWEST_TRANSPORT_FEATURES, 'rustls'],
+  ['bitfun-cli', {
+    dependencyFeatures: ['http2', 'rustls', 'stream'],
     optional: false,
-    allowedPackageFeatureRefs: new Set(['reqwest/rustls']),
-  }]),
+  }],
+  ['bitfun-desktop', {
+    dependencyFeatures: ['http2', 'json', 'query', 'rustls', 'stream'],
+    optional: false,
+  }],
+  ['bitfun-miniapp-market-service', {
+    dependencyFeatures: ['form', 'http2', 'json', 'rustls'],
+    optional: false,
+  }],
+  ['bitfun-skin-market-service', {
+    dependencyFeatures: ['http2', 'json', 'rustls'],
+    optional: false,
+  }],
 ]);
 
 function findReqwestPackageProfileViolations(pkg, profile) {
@@ -352,6 +402,18 @@ function findReqwestPackageProfileViolations(pkg, profile) {
             line: 1,
             message:
               `${pkg.name}:${featureName} has unreviewed Reqwest feature reference ${reference}`,
+          });
+        }
+      }
+    }
+    for (const [featureName, requiredReferences] of profile.requiredPackageFeatureRefs ?? []) {
+      const actualReferences = new Set(pkg.features?.[featureName] ?? []);
+      for (const reference of requiredReferences) {
+        if (!actualReferences.has(reference)) {
+          violations.push({
+            path: pkg.manifest_path,
+            line: 1,
+            message: `${pkg.name}:${featureName} is missing Reqwest feature reference ${reference}`,
           });
         }
       }
@@ -511,6 +573,20 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
   const violations = [];
   const featureGraph = pkg.features ?? {};
   const ownerFeatures = new Set(servicesReqwestOwnerFeatures);
+  const ownerFeatureReferences = new Map([
+    ['announcement', ['reqwest/json']],
+    ['browser-control', ['reqwest/json']],
+    ['debug-log', ['reqwest/json']],
+    ['mcp', ['reqwest/json', 'reqwest/stream']],
+    ['miniapp-market', ['reqwest/json', 'reqwest/query', 'reqwest/stream']],
+    ['miniapp-runtime', ['reqwest/stream']],
+    ['models-dev', ['reqwest/system-proxy']],
+    ['remote-connect', ['reqwest/json', 'reqwest/multipart', 'reqwest/query']],
+    ['remote-ssh-concrete', ['reqwest/stream']],
+    ['review-platform', ['reqwest/json', 'reqwest/query', 'reqwest/stream']],
+    ['speech', ['reqwest/stream']],
+    ['web-tools', ['reqwest/json']],
+  ]);
 
   for (const featureName of servicesReqwestOwnerFeatures) {
     const references = featureGraph[featureName];
@@ -536,6 +612,15 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
         message: `${pkg.name}:${featureName} is missing reqwest/rustls`,
       });
     }
+    for (const reference of ownerFeatureReferences.get(featureName) ?? []) {
+      if (!references.includes(reference)) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name}:${featureName} is missing Reqwest feature reference ${reference}`,
+        });
+      }
+    }
   }
 
   for (const [featureName, references] of Object.entries(featureGraph)) {
@@ -556,12 +641,15 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
       });
       continue;
     }
+    const allowedReferences = new Set([
+      'reqwest',
+      'dep:reqwest',
+      'reqwest/rustls',
+      ...(ownerFeatureReferences.get(featureName) ?? []),
+    ]);
     for (const reference of reqwestReferences) {
       if (
-        reference !== 'reqwest'
-        && reference !== 'dep:reqwest'
-        && reference !== 'reqwest/rustls'
-        && !(featureName === 'models-dev' && reference === 'reqwest/system-proxy')
+        !allowedReferences.has(reference)
       ) {
         violations.push({
           path: pkg.manifest_path,
@@ -578,7 +666,11 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
 
 
 export function findServicesCoreTokioFeatureViolations(pkg) {
-  return findOwnedTokioFeatureViolations(pkg, SERVICES_CORE_TOKIO_FEATURES);
+  return findOwnedTokioFeatureViolations(
+    pkg,
+    SERVICES_CORE_TOKIO_FEATURES,
+    SERVICES_CORE_TOKIO_AGGREGATES,
+  );
 }
 
 export function findServicesCorePlatformDependencyFeatureViolations(packages) {
@@ -629,9 +721,22 @@ export function findTokioDependencyFeatureViolations(packages) {
       const featureOwnedServicesCoreRuntime =
         pkg.name === 'bitfun-services-core'
         && (dependency.kind ?? null) === null;
-      if (featureOwnedServicesCoreRuntime) {
+      const featureOwnedCoreRuntime =
+        pkg.name === 'bitfun-core'
+        && (dependency.kind ?? null) === null;
+      const featureOwnedAgentRuntime =
+        pkg.name === 'bitfun-agent-runtime'
+        && (dependency.kind ?? null) === null;
+      if (
+        featureOwnedIntegrationRuntime
+        || featureOwnedServicesCoreRuntime
+        || featureOwnedCoreRuntime
+        || featureOwnedAgentRuntime
+      ) {
         const actual = [...features].sort();
-        const expected = [...SERVICES_CORE_BASE_TOKIO_FEATURES].sort();
+        const expected = [...(featureOwnedCoreRuntime
+          ? ['fs', 'sync']
+          : SERVICES_CORE_BASE_TOKIO_FEATURES)].sort();
         const missing = expected.filter((feature) => !actual.includes(feature));
         const unexpected = actual.filter((feature) => !expected.includes(feature));
         if (missing.length > 0) {
@@ -662,6 +767,19 @@ export function findTokioDependencyFeatureViolations(packages) {
     }
     if (pkg.name === 'bitfun-services-core') {
       violations.push(...findServicesCoreTokioFeatureViolations(pkg));
+    }
+    if (pkg.name === 'bitfun-core') {
+      violations.push(...findOwnedTokioFeatureViolations(
+        pkg,
+        CORE_TOKIO_FEATURES,
+        CORE_TOKIO_AGGREGATES,
+      ));
+    }
+    if (pkg.name === 'bitfun-agent-runtime') {
+      violations.push(...findOwnedTokioFeatureViolations(
+        pkg,
+        AGENT_RUNTIME_TOKIO_FEATURES,
+      ));
     }
   }
 
@@ -770,53 +888,48 @@ export function findProductEntrypointCoreFeatureViolations(
   packages,
   { root, crateLayoutRules },
 ) {
+  const coreCompatibilityReviewedFeatures = [
+    'agent-runtime',
+    'document-read',
+    'subscription-auth',
+    'deep-research',
+    'lsp',
+    'external-sources',
+    'tools-basic',
+    'tools-git',
+    'tools-mcp',
+    'tools-browser-web',
+    'tools-computer-use',
+    'tools-image-analysis',
+    'tools-miniapp',
+    'tools-canvas',
+    'tools-agent-control',
+  ];
   const reviewedCoreFeatureClosures = new Map([
     ['bitfun-cli', [
-      'agent-runtime',
+      ...coreCompatibilityReviewedFeatures,
       'remote-connect',
-      'deep-research',
-      'lsp',
-      'external-sources',
       'plugin-runtime',
       'ssh-remote',
-      'tools-basic',
-      'tools-git',
-      'tools-mcp',
-      'tools-browser-web',
-      'tools-computer-use',
-      'tools-image-analysis',
-      'tools-miniapp',
-      'tools-canvas',
-      'tools-agent-control',
     ]],
-    ['bitfun-acp', [
-      'agent-runtime',
-      'deep-research',
-      'lsp',
-      'external-sources',
-      'ssh-remote',
-      'tools-basic',
-      'tools-git',
-      'tools-mcp',
-      'tools-browser-web',
-      'tools-computer-use',
-      'tools-image-analysis',
-      'tools-miniapp',
-      'tools-canvas',
-      'tools-agent-control',
-    ]],
+    ['bitfun-acp', [...new Set([...acpClientCoreFeatures, ...acpServerCoreFeatures])]],
     ['bitfun-app-server', [
       'external-sources',
       'git',
+      'i18n-runtime',
       'remote-connect',
     ]],
+    ['bitfun-sdk-host-app', coreCompatibilityReviewedFeatures],
   ]);
-  const acpActiveCoreFeatures = [
+  const fullProductCoreEntrypoints = new Set(['bitfun-desktop', 'bitfun-server']);
+  const fullProductCoreEntrypointsFound = new Set();
+  const coreCompatibilityActiveFeatures = [
     'agent-runtime',
     'ai-adapter-runtime',
     'browser-control',
     'canvas-runtime',
     'deep-research',
+    'document-read',
     'external-sources',
     'file-watch',
     'filesystem',
@@ -828,12 +941,11 @@ export function findProductEntrypointCoreFeatureViolations(
     'plugin-source',
     'process-runtime',
     'product-capabilities',
-    'remote-workspace',
     'review-platform',
     'runtime-services',
     'scheduled-jobs',
     'script-tool-runtime',
-    'ssh-remote',
+    'subscription-auth',
     'terminal',
     'tool-packs',
     'tools-agent-control',
@@ -850,9 +962,20 @@ export function findProductEntrypointCoreFeatureViolations(
     'workspace-runtime',
     'workspace-watch',
   ];
+  const acpActiveCoreFeatures = [
+    ...coreCompatibilityActiveFeatures,
+    'remote-workspace',
+    'ssh-remote',
+  ];
   const reviewedActiveCoreFeatureClosures = new Map([
-    ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime', 'remote-connect']],
+    ['bitfun-cli', [
+      ...acpActiveCoreFeatures,
+      'i18n-runtime',
+      'plugin-runtime',
+      'remote-connect',
+    ]],
     ['bitfun-acp', acpActiveCoreFeatures],
+    ['bitfun-sdk-host-app', coreCompatibilityActiveFeatures],
     ['bitfun-app-server', [
       'agent-runtime',
       'ai-adapter-runtime',
@@ -860,6 +983,7 @@ export function findProductEntrypointCoreFeatureViolations(
       'file-watch',
       'filesystem',
       'git',
+      'i18n-runtime',
       'local-storage',
       'mcp-runtime',
       'model-catalog',
@@ -880,10 +1004,128 @@ export function findProductEntrypointCoreFeatureViolations(
       'workspace-watch',
     ]],
   ]);
+  const reviewedForbiddenDependencyOwnerFeatures = new Map([
+    ['bitfun-sdk-host-app', new Map([
+      ['bitfun-services-integrations', [
+        'announcement',
+        'debug-log',
+        'function-agents',
+        'product-full',
+        'remote-connect',
+        'remote-ssh',
+        'remote-ssh-concrete',
+      ]],
+      ['bitfun-product-domains', ['function-agents', 'product-full']],
+      ['bitfun-services-core', ['dispatch-workspace']],
+    ])],
+  ]);
   const packageByManifest = new Map(
     packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
   );
   const violations = [];
+
+  const reviewedAcpRoleSelections = new Map([
+    ['bitfun-cli', {
+      label: 'CLI',
+      requiredFeatures: ['client', 'server'],
+    }],
+    ['bitfun-desktop', {
+      label: 'Desktop',
+      requiredFeatures: ['client'],
+    }],
+  ]);
+  const acpPackage = packages.find((pkg) => pkg.name === 'bitfun-acp');
+  if (acpPackage) {
+    const reviewedConsumersFound = new Set();
+    for (const sourcePackage of packages) {
+      const declaredDependencies = (sourcePackage.dependencies ?? []).filter((candidate) => {
+        if (!candidate.path) {
+          return false;
+        }
+        return packageByManifest.get(
+          normalizedPath(join(candidate.path, 'Cargo.toml')),
+        )?.name === 'bitfun-acp';
+      });
+      const normalDependencies = declaredDependencies.filter(
+        (dependency) => dependency.kind === null,
+      );
+      const rule = reviewedAcpRoleSelections.get(sourcePackage.name);
+      if (!rule) {
+        if (declaredDependencies.length > 0) {
+          violations.push({
+            path: sourcePackage.manifest_path,
+            line: 1,
+            message: `bitfun-acp consumer ${sourcePackage.name} must register an explicit role selection`,
+          });
+        }
+        continue;
+      }
+      if (declaredDependencies.length === 0) {
+        continue;
+      }
+      reviewedConsumersFound.add(sourcePackage.name);
+      const unconditionalDependencies = normalDependencies.filter(
+        (dependency) => dependency.target === null && dependency.optional !== true,
+      );
+      if (unconditionalDependencies.length === 0) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `${rule.label} ACP role selection must keep an unconditional normal bitfun-acp dependency`,
+        });
+      }
+      if (declaredDependencies.some((dependency) => dependency.optional === true)) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `${rule.label} ACP role selection must not make a bitfun-acp dependency optional`,
+        });
+      }
+      if (declaredDependencies.some((dependency) => dependency.uses_default_features !== false)) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `${rule.label} ACP role selection must set default-features = false on every dependency`,
+        });
+      }
+      const unconditionalFeatures = new Set(
+        unconditionalDependencies.flatMap((dependency) => dependency.features ?? []),
+      );
+      const selectedFeatures = new Set(
+        declaredDependencies.flatMap((dependency) => dependency.features ?? []),
+      );
+      if (unconditionalDependencies.length > 0) {
+        for (const requiredFeature of rule.requiredFeatures) {
+          if (!unconditionalFeatures.has(requiredFeature)) {
+            violations.push({
+              path: sourcePackage.manifest_path,
+              line: 1,
+              message: `${rule.label} ACP role selection must include ${requiredFeature}`,
+            });
+          }
+        }
+      }
+      for (const selectedFeature of selectedFeatures) {
+        if (!rule.requiredFeatures.includes(selectedFeature)) {
+          violations.push({
+            path: sourcePackage.manifest_path,
+            line: 1,
+            message: `${rule.label} ACP role selection must not include ${selectedFeature}`,
+          });
+        }
+      }
+    }
+    for (const [sourceName, rule] of reviewedAcpRoleSelections) {
+      const sourcePackage = packages.find((pkg) => pkg.name === sourceName);
+      if (sourcePackage && !reviewedConsumersFound.has(sourceName)) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `${rule.label} ACP role selection must keep the bitfun-acp dependency`,
+        });
+      }
+    }
+  }
 
   for (const sourcePackage of packages) {
     const sourceLayer = layerForManifest(sourcePackage.manifest_path, {
@@ -904,21 +1146,32 @@ export function findProductEntrypointCoreFeatureViolations(
       if (targetPackage?.name !== 'bitfun-core') {
         continue;
       }
-      if (dependency.uses_default_features !== false) {
-        violations.push({
-          path: sourcePackage.manifest_path,
-          line: 1,
-          message: `product entrypoint ${sourcePackage.name} must set default-features = false for its bitfun-core ${dependencyDescription(dependency)}`,
-        });
-      }
-      if (!Array.isArray(dependency.features) || dependency.features.length === 0) {
+      const roleOwnedAcpDependency =
+        sourcePackage.name === 'bitfun-acp' && dependency.optional === true;
+      if (
+        !roleOwnedAcpDependency
+        && (!Array.isArray(dependency.features) || dependency.features.length === 0)
+      ) {
         violations.push({
           path: sourcePackage.manifest_path,
           line: 1,
           message: `product entrypoint ${sourcePackage.name} must select at least one explicit feature for its bitfun-core ${dependencyDescription(dependency)}`,
         });
       }
-      const reviewedClosure = reviewedCoreFeatureClosures.get(sourcePackage.name);
+      if (fullProductCoreEntrypoints.has(sourcePackage.name)) {
+        fullProductCoreEntrypointsFound.add(sourcePackage.name);
+        const selectedFeatures = [...new Set(dependency.features ?? [])].sort();
+        if (selectedFeatures.length !== 1 || selectedFeatures[0] !== 'product-full') {
+          violations.push({
+            path: sourcePackage.manifest_path,
+            line: 1,
+            message: `${sourcePackage.name} Core capability closure must select exactly product-full`,
+          });
+        }
+      }
+      const reviewedClosure = roleOwnedAcpDependency
+        ? undefined
+        : reviewedCoreFeatureClosures.get(sourcePackage.name);
       if (reviewedClosure) {
         const selectedFeatures = new Set(dependency.features ?? []);
         for (const requiredFeature of reviewedClosure) {
@@ -942,6 +1195,18 @@ export function findProductEntrypointCoreFeatureViolations(
       }
     }
   }
+  for (const sourceName of packages.some((pkg) => pkg.name === 'bitfun-core')
+    ? fullProductCoreEntrypoints
+    : []) {
+    const sourcePackage = packages.find((pkg) => pkg.name === sourceName);
+    if (sourcePackage && !fullProductCoreEntrypointsFound.has(sourceName)) {
+      violations.push({
+        path: sourcePackage.manifest_path,
+        line: 1,
+        message: `${sourceName} Core capability closure must keep the bitfun-core dependency`,
+      });
+    }
+  }
 
   const corePackage = packages.find((pkg) => pkg.name === 'bitfun-core');
   if (corePackage) {
@@ -959,7 +1224,7 @@ export function findProductEntrypointCoreFeatureViolations(
         continue;
       }
       const allowedCoreFeatures = new Set(
-        reviewedActiveCoreFeatureClosures.get(rootName) ?? [],
+        ['default', ...(reviewedActiveCoreFeatureClosures.get(rootName) ?? [])],
       );
       const rootSelectedFeatures = Object.keys(rootPackage.features ?? {})
         .filter((feature) => feature !== 'default');
@@ -967,7 +1232,10 @@ export function findProductEntrypointCoreFeatureViolations(
         ['bitfun-cli', 'CLI'],
         ['bitfun-acp', 'ACP'],
         ['bitfun-app-server', 'App Server'],
+        ['bitfun-sdk-host-app', 'SDK Host'],
       ]).get(rootName) ?? rootName;
+      const forbiddenOwnerFeatures =
+        reviewedForbiddenDependencyOwnerFeatures.get(rootName);
 
       const packageStates = new Map();
       const pending = [];
@@ -1106,7 +1374,388 @@ export function findProductEntrypointCoreFeatureViolations(
             }
             continue;
           }
+
+          const forbiddenOwnerFeature = (
+            forbiddenOwnerFeatures?.get(targetPackage.name) ?? []
+          ).find((feature) => targetState.featureState.active.has(feature));
+          if (forbiddenOwnerFeature) {
+            const forbiddenOwner = `${targetPackage.name}/${forbiddenOwnerFeature}`;
+            const reportKey = [
+              rootName,
+              targetDependencyKindContext,
+              forbiddenOwner,
+            ].join('|');
+            if (!reportedUnexpectedFeatures.has(reportKey)) {
+              reportedUnexpectedFeatures.add(reportKey);
+              violations.push({
+                path: sourcePackage.manifest_path,
+                line: 1,
+                message: `${rootLabel} dependency closure must not enable ${forbiddenOwner}: ${[
+                  ...packagePath,
+                  forbiddenOwner,
+                ].join(' -> ')}`,
+              });
+            }
+            continue;
+          }
         }
+      }
+    }
+  }
+
+  return violations;
+}
+
+function normalizedDependencyKind(dependency) {
+  return dependency.kind ?? 'normal';
+}
+
+function normalizedDependencyTarget(dependency) {
+  return dependency.target ?? null;
+}
+
+function sameStringSet(actual, expected) {
+  const left = [...new Set(actual ?? [])].sort();
+  const right = [...new Set(expected ?? [])].sort();
+  return left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
+function featureForwardingReferences(featureGraph, dependency) {
+  const alias = dependencyAlias(dependency);
+  const references = [];
+  for (const [sourceFeature, values] of Object.entries(featureGraph ?? {})) {
+    for (const value of values) {
+      const match = value.match(/^([^/?]+)(\?)?\/(.+)$/);
+      if (match?.[1] === alias) {
+        references.push({
+          sourceFeature,
+          feature: match[3],
+          weak: Boolean(match[2]),
+        });
+      }
+    }
+  }
+  return references;
+}
+
+function featureDependencyActivations(featureGraph, dependency) {
+  const alias = dependencyAlias(dependency);
+  const activations = [];
+  for (const [sourceFeature, values] of Object.entries(featureGraph ?? {})) {
+    if (values.includes(`dep:${alias}`) || values.includes(alias)) {
+      activations.push(sourceFeature);
+    }
+  }
+  return activations;
+}
+
+function packageMatchesManifest(pkg, manifestPath, root) {
+  return repositoryPath(root, pkg.manifest_path) === manifestPath;
+}
+
+function dependencyTargetsPackage(dependency, targetPackage) {
+  return dependency.path !== null
+    && dependency.path !== undefined
+    && normalizedPath(join(dependency.path, 'Cargo.toml'))
+      === normalizedPath(targetPackage.manifest_path);
+}
+
+function dependencyEdgeMatches(dependency, expected) {
+  return normalizedDependencyKind(dependency) === expected.kind
+    && dependency.optional === expected.optional
+    && normalizedDependencyTarget(dependency) === expected.target
+    && (dependency.rename ?? null) === (expected.rename ?? null)
+    && sameStringSet(dependency.features, expected.features);
+}
+
+function featureTransitivelyReaches(featureGraph, sourceFeature, destinations, seen = new Set()) {
+  if (destinations.has(sourceFeature)) {
+    return true;
+  }
+  if (seen.has(sourceFeature)) {
+    return false;
+  }
+  seen.add(sourceFeature);
+  return (featureGraph[sourceFeature] ?? []).some((reference) =>
+    Object.hasOwn(featureGraph, reference)
+    && featureTransitivelyReaches(featureGraph, reference, destinations, seen));
+}
+
+export function findRedundantInternalDefaultFeatureDisables(
+  packages,
+  {
+    root,
+    guardedManifests = guardedEmptyInternalDefaultManifestPaths,
+  } = {},
+) {
+  if (!root) {
+    throw new Error('redundant internal default-feature check requires the repository root');
+  }
+
+  const packageByManifest = new Map(
+    packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
+  );
+  const guardedTargets = new Set(
+    guardedManifests.map((path) => normalizedPath(join(root, path))),
+  );
+  const violations = [];
+
+  for (const consumer of packages) {
+    for (const dependency of consumer.dependencies ?? []) {
+      if (dependency.uses_default_features !== false || !dependency.path) {
+        continue;
+      }
+      const targetPackage = packageByManifest.get(
+        normalizedPath(join(dependency.path, 'Cargo.toml')),
+      );
+      const targetFeatures = targetPackage?.features ?? {};
+      if (
+        !targetPackage
+        || !guardedTargets.has(normalizedPath(targetPackage.manifest_path))
+        || !Object.hasOwn(targetFeatures, 'default')
+        || !sameStringSet(targetFeatures.default, [])
+      ) {
+        continue;
+      }
+      violations.push({
+        path: consumer.manifest_path,
+        line: 1,
+        message: `${consumer.name} ${targetPackage.name} dependency has redundant default-features = false because the target default is guarded empty`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function findGuardedInternalDefaultFeatureViolations(
+  packages,
+  {
+    root,
+    guardedManifests = guardedEmptyInternalDefaultManifestPaths,
+  } = {},
+) {
+  if (!root) {
+    throw new Error('guarded internal default-feature check requires the repository root');
+  }
+
+  const packageByManifest = new Map(
+    packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
+  );
+  const violations = [];
+
+  for (const manifestPath of guardedManifests) {
+    const targetPackage = packageByManifest.get(normalizedPath(join(root, manifestPath)));
+    if (!targetPackage) {
+      violations.push({
+        path: join(root, manifestPath),
+        line: 1,
+        message: `guarded internal empty-default target is missing: ${manifestPath}`,
+      });
+      continue;
+    }
+    const targetFeatures = targetPackage.features ?? {};
+    if (
+      !Object.hasOwn(targetFeatures, 'default')
+      || !sameStringSet(targetFeatures.default, [])
+    ) {
+      violations.push({
+        path: targetPackage.manifest_path,
+        line: 1,
+        message: `${targetPackage.name} guarded default feature must stay explicitly empty`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function findCapabilityContractConsumerViolations(
+  packages,
+  rules = capabilityContractDependencyRules,
+  { root } = {},
+) {
+  const violations = [];
+  const targetPackages = new Map();
+
+  if (!root) {
+    throw new Error('capability contract consumer check requires the repository root');
+  }
+
+  for (const rule of rules) {
+    const targetPackage = packages.find((pkg) =>
+      pkg.name === rule.packageName && packageMatchesManifest(pkg, rule.manifestPath, root));
+    if (!targetPackage) {
+      violations.push({
+        path: rule.manifestPath,
+        line: 1,
+        message: `${rule.packageName} managed target is missing from Cargo metadata`,
+      });
+      continue;
+    }
+    targetPackages.set(rule.packageName, targetPackage);
+    if (
+      !Object.hasOwn(targetPackage.features ?? {}, 'default')
+      || !sameStringSet(targetPackage.features.default, [])
+    ) {
+      violations.push({
+        path: targetPackage.manifest_path,
+        line: 1,
+        message: `${rule.packageName} capability contract default feature must stay empty`,
+      });
+    }
+    const actualFeatures = Object.keys(targetPackage.features ?? {})
+      .filter((feature) => feature !== 'default');
+    const expectedFeatures = Object.keys(rule.featureProfiles)
+      .filter((feature) => feature !== 'default');
+    if (!sameStringSet(actualFeatures, expectedFeatures)) {
+      violations.push({
+        path: targetPackage.manifest_path,
+        line: 1,
+        message: `${rule.packageName} capability contract feature surface must stay exact`,
+      });
+    }
+    for (const [feature, expectedReferences] of Object.entries(rule.featureProfiles)) {
+      if (
+        Object.hasOwn(targetPackage.features ?? {}, feature)
+        && !sameStringSet(targetPackage.features[feature], expectedReferences)
+      ) {
+        violations.push({
+          path: targetPackage.manifest_path,
+          line: 1,
+          message: `${rule.packageName}:${feature} feature graph must stay exact`,
+        });
+      }
+    }
+  }
+
+  for (const rule of rules) {
+    const targetPackage = targetPackages.get(rule.packageName);
+    if (!targetPackage) {
+      continue;
+    }
+    for (const consumer of packages) {
+      const namedDependencies = (consumer.dependencies ?? []).filter(
+        (dependency) => dependency.name === rule.packageName,
+      );
+      const managedDependencies = namedDependencies.filter((dependency) =>
+        dependencyTargetsPackage(dependency, targetPackage));
+      for (const dependency of namedDependencies) {
+        if (dependencyTargetsPackage(dependency, targetPackage)) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name} ${rule.packageName} dependency must use the managed internal path`,
+        });
+      }
+
+      const consumerProfile = rule.consumers.get(consumer.name);
+      if (!consumerProfile) {
+        if (managedDependencies.length > 0) {
+          violations.push({
+            path: consumer.manifest_path,
+            line: 1,
+            message: `${consumer.name} has an unreviewed consumer edge to ${rule.packageName}`,
+          });
+        }
+        continue;
+      }
+      const unmatchedExpectedEdges = [...consumerProfile.edges];
+      for (const dependency of managedDependencies) {
+        const matchIndex = unmatchedExpectedEdges.findIndex((edge) =>
+          dependencyEdgeMatches(dependency, edge));
+        if (matchIndex === -1) {
+          violations.push({
+            path: consumer.manifest_path,
+            line: 1,
+            message: `${consumer.name} has an unreviewed ${rule.packageName} dependency edge`,
+          });
+        } else {
+          unmatchedExpectedEdges.splice(matchIndex, 1);
+        }
+      }
+      for (const edge of unmatchedExpectedEdges) {
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name} is missing reviewed ${edge.kind} ${rule.packageName} dependency edge`,
+        });
+      }
+
+      const actualForwarders = managedDependencies.flatMap((dependency) =>
+        featureForwardingReferences(consumer.features, dependency));
+      for (const forwarding of actualForwarders) {
+        const allowed = (consumerProfile.forwarders ?? []).some((expected) =>
+          expected.sourceFeature === forwarding.sourceFeature
+          && expected.feature === forwarding.feature
+          && expected.weak === forwarding.weak);
+        if (allowed) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${forwarding.sourceFeature} has unreviewed ${rule.packageName}/${forwarding.feature} forwarding`,
+        });
+      }
+      for (const expected of consumerProfile.forwarders ?? []) {
+        const present = actualForwarders.some((forwarding) =>
+          expected.sourceFeature === forwarding.sourceFeature
+          && expected.feature === forwarding.feature
+          && expected.weak === forwarding.weak);
+        if (present) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${expected.sourceFeature} is missing reviewed ${rule.packageName}/${expected.feature} forwarding`,
+        });
+      }
+      const actualActivators = managedDependencies.flatMap((dependency) =>
+        featureDependencyActivations(consumer.features, dependency));
+      for (const sourceFeature of actualActivators) {
+        if ((consumerProfile.activators ?? []).includes(sourceFeature)) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${sourceFeature} has unreviewed ${rule.packageName} activation`,
+        });
+      }
+      for (const sourceFeature of consumerProfile.activators ?? []) {
+        if (actualActivators.includes(sourceFeature)) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${sourceFeature} is missing reviewed ${rule.packageName} activation`,
+        });
+      }
+
+      const directOwners = new Set([
+        ...(consumerProfile.forwarders ?? []).map(({ sourceFeature }) => sourceFeature),
+        ...(consumerProfile.activators ?? []),
+      ]);
+      const allowedAggregates = new Set(consumerProfile.aggregates ?? []);
+      for (const feature of Object.keys(consumer.features ?? {})) {
+        if (
+          directOwners.has(feature)
+          || allowedAggregates.has(feature)
+          || !featureTransitivelyReaches(consumer.features, feature, directOwners)
+        ) {
+          continue;
+        }
+        violations.push({
+          path: consumer.manifest_path,
+          line: 1,
+          message: `${consumer.name}:${feature} is an unreviewed aggregate of ${rule.packageName} capability owners`,
+        });
       }
     }
   }
@@ -1526,6 +2175,9 @@ export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
       packages,
       { root, crateLayoutRules },
     ),
+    ...findGuardedInternalDefaultFeatureViolations(packages, { root }),
+    ...findRedundantInternalDefaultFeatureDisables(packages, { root }),
+    ...findCapabilityContractConsumerViolations(packages, undefined, { root }),
     ...findFeatureGatedTestTargetViolations(packages),
     ...findRuntimeServicesTestSupportFeatureViolations(packages),
     ...findTokioDependencyFeatureViolations(packages),

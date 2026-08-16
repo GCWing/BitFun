@@ -1,5 +1,4 @@
 import display from '@ohos.display';
-import deviceInfo from '@ohos.deviceInfo';
 import mediaQuery from '@ohos.mediaquery';
 import { RemoteUiState } from '../../services/RemoteUiState';
 import { AppShell } from './AppShell';
@@ -46,14 +45,6 @@ function safeFoldStatus(): display.FoldStatus {
   }
 }
 
-function safeDeviceType(): string {
-  try {
-    return deviceInfo.deviceType || '';
-  } catch (_err) {
-    return '';
-  }
-}
-
 @ComponentV2
 export struct AppRootPresentation {
   @Param shellState: AppShellState = new AppShellState();
@@ -78,12 +69,15 @@ export struct AppRootPresentation {
   @Local restoreCollapsedMasterAfterPreview: boolean = false;
   @Local showRemoteViewSettings: boolean = false;
   @Local remoteSurfaceState: RemoteSurfaceState = new RemoteSurfaceState();
-  private readonly deviceType: string = safeDeviceType();
   private verticalCreases: ConversationLayoutCrease[] = [];
   private wideQueryListener?: mediaQuery.MediaQueryListener;
   private foldStatusChanged: (status: display.FoldStatus) => void =
     (status: display.FoldStatus): void => {
       this.foldStatus = status;
+      this.refreshWideGeometry();
+    };
+  private foldDisplayModeChanged: (mode: display.FoldDisplayMode) => void =
+    (_mode: display.FoldDisplayMode): void => {
       this.refreshWideGeometry();
     };
   private wideQueryChanged: (result: mediaQuery.MediaQueryResult) => void =
@@ -181,6 +175,7 @@ export struct AppRootPresentation {
         // Compact conversations own the drawer, not a back control: Local and
         // Remote both open the sidebar over the chat instead of leaving it.
         showBackButton: false,
+        hoverOperateMode: this.isHoverLayout(),
         onRestoreSidebar: () => this.restoreWideMasterPane()
       })
     }
@@ -271,7 +266,7 @@ export struct AppRootPresentation {
     try {
       const appMediaQuery = this.getUIContext().getMediaQuery();
       this.wideQueryListener = appMediaQuery.matchMediaSync(
-        `screen and (${ConversationLayoutPolicy.WIDE_LAYOUT_MIN_WIDTH} < width)`
+        `screen and (${ConversationLayoutPolicy.MD_MIN_WIDTH} < width)`
       );
       this.wideLayoutMatched = this.wideQueryListener.matches;
       this.wideQueryListener.on('change', this.wideQueryChanged);
@@ -287,6 +282,7 @@ export struct AppRootPresentation {
       this.foldStatus = display.getFoldStatus();
       this.refreshWideGeometry();
       display.on('foldStatusChange', this.foldStatusChanged);
+      display.on('foldDisplayModeChange', this.foldDisplayModeChanged);
     } catch (_err) {
       this.foldStatus = display.FoldStatus.FOLD_STATUS_UNKNOWN;
       this.unbindFoldStatus();
@@ -296,6 +292,7 @@ export struct AppRootPresentation {
   private unbindFoldStatus(): void {
     try {
       display.off('foldStatusChange', this.foldStatusChanged);
+      display.off('foldDisplayModeChange', this.foldDisplayModeChanged);
     } catch (_err) {
     }
   }
@@ -319,8 +316,9 @@ export struct AppRootPresentation {
       this.viewportWidth,
       this.wideLayoutMatched,
       this.foldStatus === display.FoldStatus.FOLD_STATUS_FOLDED,
-      this.deviceType,
-      verticalCreases
+      verticalCreases,
+      this.isExpandedFoldable(),
+      this.isHoverLayout()
     );
     const geometry = ConversationLayoutPolicy.resolveWideGeometry(
       this.viewportWidth,
@@ -338,13 +336,43 @@ export struct AppRootPresentation {
     }
   }
 
+  private isHoverLayout(): boolean {
+    return this.foldStatus === display.FoldStatus.FOLD_STATUS_HALF_FOLDED;
+  }
+
+  private isExpandedFoldable(): boolean {
+    return this.foldStatus === display.FoldStatus.FOLD_STATUS_EXPANDED && this.isFoldableDevice();
+  }
+
+  private isFoldableDevice(): boolean {
+    try {
+      return display.isFoldable();
+    } catch (_err) {
+      return this.foldStatus === display.FoldStatus.FOLD_STATUS_EXPANDED ||
+        this.foldStatus === display.FoldStatus.FOLD_STATUS_HALF_FOLDED ||
+        this.foldStatus === display.FoldStatus.FOLD_STATUS_FOLDED;
+    }
+  }
+
   private currentVerticalCreases(): ConversationLayoutCrease[] {
-    if (this.foldStatus === display.FoldStatus.FOLD_STATUS_FOLDED) {
+    if (this.foldStatus === display.FoldStatus.FOLD_STATUS_FOLDED || this.isHoverLayout()) {
       return [];
     }
+    return ConversationLayoutPolicy.effectiveVerticalCreases(
+      this.viewportWidth,
+      this.reportedVerticalCreases(),
+      this.isExpandedFoldable()
+    );
+  }
+
+  private reportedVerticalCreases(): ConversationLayoutCrease[] {
     try {
       const region = display.getCurrentFoldCreaseRegion();
-      return region.creaseRects
+      const creaseRects = region.creaseRects;
+      if (!creaseRects) {
+        return [];
+      }
+      return creaseRects
         .filter((rect: display.Rect): boolean => rect.height > rect.width)
         .map((rect: display.Rect): ConversationLayoutCrease => {
           return new ConversationLayoutCrease(
@@ -403,6 +431,7 @@ export struct AppRootPresentation {
     AppConnectSurface({
       remotePageState: this.remotePageState,
       deviceId: this.deviceId,
+      openIntent: this.shellState.connectSheetIntent,
       actions: this.actions
     })
   }

@@ -5,6 +5,7 @@ import {
   getUnsupportedTiptapMarkdownFeatures,
   markdownToTiptapDoc,
   tiptapDocToMarkdown,
+  tiptapDocToTopLevelMarkdownBlocks,
 } from './tiptapMarkdown';
 
 describe('tiptap markdown compatibility', () => {
@@ -53,6 +54,29 @@ describe('tiptap markdown compatibility', () => {
 
     expect(canRoundTripMarkdownWithTiptap(markdown)).toBe(true);
     expect(getUnsupportedTiptapMarkdownFeatures(markdown)).toEqual([]);
+  });
+
+  it('parses gfm email autolinks without lookbehind-dependent behavior', () => {
+    const markdown = 'Contact support@example.com or see /admin@example.com.';
+
+    const doc = markdownToTiptapDoc(markdown);
+    const paragraph = doc.content?.[0];
+    const emailNode = paragraph?.content?.find(node =>
+      node.marks?.some(mark =>
+        mark.type === 'link' && mark.attrs?.href === 'mailto:support@example.com'
+      )
+    );
+    const slashEmailNode = paragraph?.content?.find(node =>
+      node.marks?.some(mark =>
+        mark.type === 'link' && mark.attrs?.href === 'mailto:admin@example.com'
+      )
+    );
+
+    expect(emailNode?.text).toBe('support@example.com');
+    expect(slashEmailNode).toBeUndefined();
+    expect(tiptapDocToMarkdown(doc)).toBe(
+      'Contact [support@example.com](mailto:support@example.com) or see /admin@example.com.'
+    );
   });
 
   it('supports deep heading levels', () => {
@@ -123,7 +147,7 @@ describe('tiptap markdown compatibility', () => {
     expect(getUnsupportedTiptapMarkdownFeatures(markdown)).toContain('roundTripMismatch');
   });
 
-  it('treats frontmatter as unsafe for the IR editor', () => {
+  it('preserves frontmatter as an editable IR block', () => {
     const markdown = [
       '---',
       'name: Demo',
@@ -137,11 +161,52 @@ describe('tiptap markdown compatibility', () => {
 
     const analysis = analyzeMarkdownEditability(markdown);
 
-    expect(analysis.mode).toBe('unsafe');
-    expect(analysis.hardIssues).toContain('frontmatter');
-    expect(analysis.hardIssues).toContain('semanticMismatch');
-    expect(analysis.softIssues).toContain('roundTripMismatch');
-    expect(analysis.canonicalMarkdown).toContain('## name: Demo');
+    const doc = markdownToTiptapDoc(markdown);
+
+    expect(analysis.mode).toBe('lossless');
+    expect(analysis.hardIssues).toEqual([]);
+    expect(analysis.softIssues).toEqual([]);
+    expect(analysis.canonicalMarkdown).toBe(markdown);
+    expect(doc.content?.[0]).toMatchObject({
+      type: 'frontmatter',
+      attrs: {
+        yaml: expect.stringContaining('name: Demo'),
+        delimiter: '---',
+        bodyPrefix: '\n',
+      },
+    });
+    expect(tiptapDocToMarkdown(doc)).toBe(markdown);
+    expect(tiptapDocToTopLevelMarkdownBlocks(doc)).toEqual([
+      expect.objectContaining({ markdown: '# Body' }),
+    ]);
+  });
+
+  it('preserves TOML-style frontmatter delimiters and CRLF inside the envelope', () => {
+    const markdown = '+++\r\ntitle = "Demo"\r\n+++\r\n\r\n# Body\r\n';
+    const doc = markdownToTiptapDoc(markdown);
+
+    expect(doc.content?.[0]?.type).toBe('frontmatter');
+    expect(doc.content?.[0]?.attrs).toMatchObject({
+      yaml: 'title = "Demo"',
+      delimiter: '+++',
+      openingLineEnding: '\r\n',
+      contentLineEnding: '\r\n',
+      closingLineEnding: '\r\n',
+      bodyPrefix: '\r\n',
+    });
+    expect(tiptapDocToMarkdown(doc, { preserveTrailingNewline: true })).toBe(
+      '+++\r\ntitle = "Demo"\r\n+++\r\n\r\n# Body\n',
+    );
+  });
+
+  it('rebuilds structural delimiters around edited frontmatter content', () => {
+    const doc = markdownToTiptapDoc('---\nname: Demo\n---\n\n# Body');
+    const frontmatter = doc.content?.[0];
+
+    expect(frontmatter?.attrs).toBeDefined();
+    frontmatter!.attrs!.yaml = 'name: Updated';
+
+    expect(tiptapDocToMarkdown(doc)).toBe('---\nname: Updated\n---\n\n# Body');
   });
 
   it('upgrades simple details regions into structured details nodes', () => {

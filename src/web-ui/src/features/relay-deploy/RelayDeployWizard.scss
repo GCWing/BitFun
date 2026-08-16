@@ -631,3 +631,12 @@
     background: transparent;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .relay-deploy-wizard {
+    .spinning,
+    &__form--highlighted {
+      animation: none;
+    }
+  }
+}

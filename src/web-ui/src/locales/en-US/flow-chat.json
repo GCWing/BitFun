@@ -93,6 +93,7 @@
     "failedDescription": "Retry loading the saved conversation. If it was imported from another device, check your account and connection first.",
     "preparingOlderHistory": "Preparing older history...",
     "olderHistoryNotReady": "Older history is not ready yet.",
+    "newerHistoryNotReady": "Newer history is not ready yet.",
     "remoteSessionMissing": "The backend session data was not found. If you just reconnected an SSH remote workspace, close and reopen the remote project, or create a new session and try again.",
     "retry": "Retry"
   },
@@ -174,7 +175,6 @@
       "tokens": "{{value}} tokens"
     },
     "loading": {
-      "markdown": "Generating usage report...",
       "title": "Generating usage report",
       "description": "Reading local session records and preparing a privacy-safe summary.",
       "steps": {
@@ -315,7 +315,9 @@
     },
     "slowestLabels": {
       "modelCall": "Turn {{turn}} model call",
-      "modelCallUnknown": "Model call"
+      "modelCallUnknown": "Model call",
+      "turn": "Turn {{turn}}",
+      "turnUnknown": "Turn"
     },
     "slowest": {
       "details": {
@@ -452,6 +454,8 @@
     "restoreMain": "Restore Main Window",
     "inUseTitle": "Session open elsewhere",
     "inUseMessage": "This session is open in another BitFun instance. Close it there, then retry.",
+    "surfaceSwitchDroppedTitle": "Message not sent",
+    "surfaceSwitchDropped": "The device switched before this message was sent, and its queue is full. Send it again.",
     "retry": "Retry"
   },
   "scroll": {
@@ -478,23 +482,20 @@
     "clickToCollapse": "Click to collapse",
     "fillToInput": "Fill to input",
     "cannotRollback": "Cannot rollback",
+    "rollbackDisabledBusy": "Wait until the session is idle before rolling back.",
     "rollbackDisabledRemote": "Remote workspaces do not support complete rollback because remote file snapshots are not recorded. No files or messages will be changed.",
     "rollbackTo": "Rollback to before turn {{index}} (delete this and following turns)",
     "rollbackDialogTitle": "Rollback to before turn {{index}}?",
     "rollbackDialogIntro": "This will:",
     "rollbackDialogBulletFiles": "Undo all file modifications from that turn onwards",
     "rollbackDialogBulletHistory": "Delete that turn and all following dialog records (irreversible)",
-    "rollbackPanelDialogTitle": "Roll back to before turn {{index}}?",
-    "rollbackPanelDialogIntro": "This will:",
-    "rollbackPanelBulletRestore": "Restore files to the state before turn {{index}}",
-    "rollbackPanelBulletUndo": "Undo all file changes from that turn onward",
-    "rollbackPanelBulletHistory": "Keep the session history (you can roll forward again anytime)",
     "rollbackSuccess": "Rolled back and deleted subsequent dialog records",
     "rollbackFailed": "Rollback failed",
     "saveEdit": "Save and rerun",
     "cancelEdit": "Cancel",
     "editPlaceholder": "Edit your message...",
     "cannotEdit": "Cannot edit this message",
+    "editDisabledBusy": "Wait until the session is idle before editing and rerunning.",
     "editDisabledImages": "Image messages cannot be edited yet",
     "editDisabledRemote": "Editing and rerunning requires complete rollback, which is unavailable because remote file snapshots are not recorded.",
     "editDisabledLocalCommand": "Local command messages cannot be edited",
@@ -533,6 +534,8 @@
     "sendShortcut": "Send (⏎)",
     "stop": "Stop",
     "stopGeneration": "Stop Generation (Esc)",
+    "continueInterrupted": "Continue interrupted work",
+    "continueInterruptedFailed": "Could not continue the interrupted work. Please try again.",
     "processingCapsule": "Processing",
     "cancelShortcut": "Cancel",
     "clear": "Clear",
@@ -677,7 +680,6 @@
         "sessionUnavailable": "Remote task information is incomplete. Reopen the task or create a new one.",
         "compactWhileRunning": "Wait for the current remote task to finish before compacting the context.",
         "compactRejected": "The target could not start compaction. Try again shortly.",
-        "imagesWhileRunning": "Images will be sent with the next turn. Wait for the current remote task to finish and try again.",
         "sessionNotReady": "The remote task is still being prepared. Try sending again shortly.",
         "submissionUnconfirmed": "BitFun cannot yet confirm whether the target received this task. Check the task status shortly."
       }
@@ -721,9 +723,14 @@
       "noSession": "Open or start a session before changing its permission mode.",
       "turnScope": "Next message only",
       "currentTurnOverride": "Permissions: {{mode}} (next message only)",
+      "activeTurnScope": "This turn",
+      "currentActiveTurnOverride": "Permissions: {{mode}} (this turn only)",
       "nextTurnOnly": "Use {{mode}} for the next message only",
       "nextTurnOnlyShort": "Once",
+      "activeTurnOnly": "Use {{mode}} for the rest of this turn",
+      "activeTurnOnlyShort": "This turn",
       "fullAccessWarningMessageNextTurn": "Full access allows tools by default without asking each time. This applies to the next message only; project and enforced rules still apply.",
+      "fullAccessWarningMessageActiveTurn": "Full access allows tools by default without asking each time. This applies to later model rounds in the current turn; project and enforced rules still apply.",
       "openDefaultSettings": "Open permission settings"
     },
     "addModeTooltip": "Add Plan or Debug",
@@ -881,6 +888,8 @@
   "fileMention": {
     "searchResults": "Search Results",
     "loading": "Loading...",
+    "browseUnavailable": "Workspace files are unavailable. Check the connection and try again.",
+    "searchUnavailable": "Workspace search is unavailable. Check the connection and try again.",
     "noMatchingFiles": "No matching files found",
     "emptyDirectory": "Empty directory",
     "rootDirectory": "Root",
@@ -1325,9 +1334,6 @@
       "failed": "Command failed"
     }
   },
-  "stickyTaskIndicator": {
-    "tooltip": "Jump to current task"
-  },
   "sessionFilesBadge": {
     "files": "files",
     "filesSummaryCount": "{{count}} files",
@@ -1644,6 +1650,20 @@
       "exitCode": "Exit code: {{code}}",
       "commandInterrupted": "Command interrupted",
       "executionFailed": "Command execution failed"
+    },
+    "runCode": {
+      "title": "Run Code",
+      "programLabel": "Program",
+      "outputLabel": "Output",
+      "writing": "Writing the program...",
+      "running": "Running the program...",
+      "completed": "Program finished",
+      "failed": "Program failed",
+      "cancelled": "Program cancelled",
+      "rejected": "Program rejected",
+      "copyCode": "Copy code",
+      "codeCopied": "Code copied",
+      "copyCodeFailed": "Failed to copy code"
     },
     "approval": {
       "waiting": "Waiting for confirmation",
@@ -2387,6 +2407,9 @@
     "fastModel": "Fast Model",
     "fastMode": "Fast mode",
     "fastModeDescription": "1.5x speed with higher credit usage",
+    "acpMode": "Mode",
+    "acpModeLocked": "This conversation has already started, so its mode is fixed.",
+    "acpModeFailed": "Failed to switch mode",
     "switchFailed": "Failed to switch model",
     "modelNotConfigured": "Not Configured",
     "contextUsage": {
@@ -2514,7 +2537,6 @@
     },
     "errors": {
       "emptyContent": "Message content cannot be empty",
-      "richContentUnsupported": "Messages with attachments or structured metadata can only be sent after the active turn finishes",
       "sendNowFailed": "Send now failed; please try again"
     }
   },

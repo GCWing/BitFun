@@ -47,16 +47,28 @@ Cargo 会统一同一 package 在依赖图中的 feature；workspace dependency 
 
 ### 3.2 产品入口显式选择 Core 能力
 
-`src/apps/*`、`src/crates/interfaces/*` 和 installer app 直接依赖 `bitfun-core` 时必须同时：
-
-1. 设置 `default-features = false`；
-2. 声明非空 `features` 列表。
+`src/apps/*`、`src/crates/interfaces/*` 和 installer app 直接依赖 `bitfun-core` 时必须声明非空
+`features` 列表。Core 的 `default` 由 Core 自身和边界检查保证为空，因此仓内 consumer 不重复声明
+`default-features = false`；能力边界仍由 consumer 的显式 feature 集合决定。
 
 入口应选择真实需要的 owner feature；`product-full` 只能描述确实需要完整产品装配的兼容入口，不能作为尚未完成 feature/owner 分解时的占位解法。缩小某个产品的 capability 集合时必须从实际 construction/command path 反推，并保留行为等价或明确 unsupported-state 测试。
 
+Core library 的默认 feature 集合为空；完整产品必须显式选择 `product-full`。若 interface crate 以多个
+公开角色复用一条 optional Core dependency，则 dependency 声明本身保持无 feature，每个角色 feature
+分别激活 Core 并选择自己的非空 owner 闭包；兼容默认值只能组合这些已评审角色，不能重新引入
+`product-full`。每个角色必须独立编译，产品消费者还要显式关闭该 interface crate 的默认 feature 并选择
+真实使用的角色，避免 workspace feature union 掩盖边界缺口。
+
 Core 的 `agent-runtime` 只承载 Agent 生命周期基线和明确的基线工具，不得再次把 MCP、Remote Connect、模型目录、Browser/Web、Git/LSP 或产品工具组藏成 capability union。具体 service 由同名 owner feature 选择，内置工具由 `tools-*` 选择；`product-full` 显式相加全部 owner，CLI/ACP 等窄入口则按真实命令与构造路径列出自己的闭包。
 
+执行层的 `bitfun-agent-runtime` 自身也保持空默认：完整生命周期由 `agent-runtime` 选择，DeepResearch 纯编号由 `deep-research` 选择，原生 Hook 配置解析与进程执行分别由 `native-hook-settings`、`native-hook-runtime` 选择。叶能力仍留在原 owner crate 内，不为依赖收敛新建 DTO/runtime crate；完整产品必须显式恢复真实 owner，不能依赖 workspace feature union 偶然补齐。
+
 Owner feature 不等于“无前置依赖”。当实现确实调用较低层基线时，依赖必须按 `owner → baseline` 显式组合，禁止反向把 owner 藏回基线：例如 Core MCP 工具桥和 Remote Connect 依赖 Agent 生命周期，Workspace Search 依赖本地 Workspace Runtime。每个新增或调整后的 owner 闭包都必须单独 `cargo check`，避免被 Desktop/CLI 的 feature union 偶然补齐。
+
+只为已经启用的 optional dependency 增加子能力时，使用 Cargo 的弱依赖转发
+`dependency?/feature`，并把 modifier 与 runtime owner 分开命名和看护。modifier 单独启用不得激活
+runtime dependency；真实产品入口必须同时显式选择 owner 与 modifier。不要为了复用一个子 feature
+把完整 adapter、service 或 tool runtime 拉回窄闭包。
 
 Function Agent 的 Git/AI 适配由 `function-agents` 选择，MiniApp 的 domain/runtime/market
 闭包由 `tools-miniapp` 选择；不得再通过一个通用 `product-domains` Core feature 把两者、
@@ -72,18 +84,41 @@ Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品
 ### 3.3 Workspace dependency 只提供共同底座
 
 - workspace 声明负责版本和真正跨产品共享的最小 feature；
+- 第三方依赖的默认 feature 若不是每个 consumer 的稳定契约，在 workspace 声明统一关闭；成员继承该策略，
+  只增加自身实际使用的 feature，不在各 manifest 重复 `default-features = false`；
+- 仓内 crate 的空默认值由被依赖 crate 拥有并由边界检查锁定，consumer 不重复关闭；只有 ACP 这类有意保留
+  非空兼容默认的 crate，窄 consumer 才必须显式关闭默认值并选择角色；
+- 被 Docker 等独立构建上下文单独复制的 manifest 无法继承 workspace 根，继续显式声明版本与默认策略；
 - runtime、HTTP、TLS、crypto、codec 等产品特定 feature 留给实际 app/service/adapter owner；
 - `full` feature 只有在所有真实消费者都需要且更窄集合不能稳定维护时才允许；
 - target-specific dependency 放在最接近平台实现的 owner，不因单一平台需求污染跨平台 crate；
 - 修改共享 dependency feature 视为构建影响变更，必须检查真实产品组合的 feature graph。
 
-### 3.4 Reqwest TLS 后端由客户端 owner 选择
+### 3.4 Reqwest 能力由客户端 owner 选择
 
-- workspace 级 `reqwest` 只统一版本以及跨产品共享的 HTTP、序列化和流能力，不启用 TLS 后端；
-- 真正创建 HTTPS client 的 app、service 或 adapter 必须在自身依赖声明中显式选择 `reqwest/rustls`，只使用 `reqwest::Url` 的 contract/assembly 路径不加载 TLS；
-- capability crate 的每个 Reqwest owner feature 必须独立带齐 `reqwest/rustls`，不能依赖 `product-full` 或其他 feature 的 Cargo feature-union 偶然补齐；
+- workspace 级 `reqwest` 只统一版本并关闭默认 feature，不替任何客户端选择 HTTP/2、序列化、表单、流、代理或 TLS 能力；
+- 真正创建 client 的 app、service 或 adapter 必须在自身依赖声明中显式选择实际使用的 Reqwest feature 和 `reqwest/rustls`；只使用 `reqwest::Url` 的 contract/assembly 路径不加载传输能力；
+- capability crate 的每个 Reqwest owner feature 必须独立带齐自己的数据/传输 feature 与 `reqwest/rustls`，不能依赖 `product-full` 或其他 feature 的 Cargo feature-union 偶然补齐；
 - 边界检查以 Cargo metadata 的解码结果看护全部直接 consumer，并检查 resolved Reqwest feature union，防止传递依赖重新激活 Native TLS；
 - 不并列启用 native-tls 兼容栈。只有真实产品场景无法由 Rustls 平台证书验证承载时，才以明确行为证据评审替换方案，而不是重新叠加第二后端。
+
+### 3.5 稳定契约 crate 按消费能力切片
+
+稳定 DTO、port 和纯契约继续由原 contract/execution crate 拥有；当同一 crate 的公开表面覆盖多个互不相关的
+能力域时，优先在原 crate 内用 additive owner feature 隔离源码和可选依赖，不为了构建数字迁移 runtime owner
+或复制公共类型。feature 关闭时 API 不可见是明确的编译期契约变化；feature 开启后必须保留原公开路径、序列化
+形状和错误语义。
+
+- contract crate 的 `default` 保持空并由目标 crate 的边界契约看护；consumer 继承该空默认值，只选择实际
+  消费的切片，不在每条 normal/dev/build/target dependency edge 重复关闭 default features；
+- feature 名描述稳定能力，例如 Agent API、workspace/terminal/remote/Git port、协议 bridge 或 Computer Use
+  contract，不描述某个临时调用方、PR 或测试；
+- 不提供 `full`、`service-ports`、`all-contracts` 等重新合并全部表面的 umbrella。只有多个 owner 共同消费且
+  无法合理拆开的稳定复合类型可以保留一个窄 aggregate，并明确列出其组成；
+- 同一依赖的 Cargo feature 会在完整图中相加，因此窄 consumer 必须独立 `cargo check/test`。完整产品构建
+  只能证明组合闭包可用，不能证明单个 consumer 的声明完整；
+- 边界检查看护目标 crate 的空默认、feature surface、consumer edge 及强/弱 feature 转发；不得依赖包名文本
+  而漏掉 rename、optional、dev/build 或 target-specific edge。
 
 ## 4. 依赖 owner 与准入检查
 
@@ -95,6 +130,13 @@ Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品
 - DTO、事件和端口属于 contracts，保持行为轻量且不得依赖上层；
 - Assembly 选择和连接 capability，不实现具体 adapter、OS 或 service 细节；
 - app 只拥有入口、平台生命周期和产品呈现，不复制可复用服务逻辑。
+- 稳定 contract 与具体运行时实现位于同一 crate 时，优先用单一 owner feature 隔离实现依赖；不得为
+  feature-free DTO、fallback 或纯事实强拉解析器、全局状态、网络或 host adapter。
+- 平台 host 已直接拥有的 adapter 不通过 Assembly facade 二次依赖或 re-export；上层只共享稳定
+  contract，具体 emitter/transport 由真实 host 直接构造。
+- Services Core 的 feature-free surface 只保留同步稳定 contract、JSONC 和路径规范化；诊断脱敏、
+  Diff 计算和异步 workspace 文本读取分别由 `diagnostics`、`diff`、`workspace-text-runtime` owner
+  选择。Assembly 可用同名 feature 保留兼容 facade，但不得把这些实现依赖放回默认闭包。
 
 新增依赖或显著扩大已有依赖 feature 时，PR 描述至少给出：
 

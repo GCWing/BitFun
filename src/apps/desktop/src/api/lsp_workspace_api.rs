@@ -6,12 +6,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bitfun_core::infrastructure::events::TransportEmitter;
 use bitfun_core::service::lsp::types::CompletionItem;
 use bitfun_core::service::lsp::{
     close_workspace, get_workspace_manager, open_workspace_with_emitter, ServerState,
 };
-use bitfun_transport::TauriTransportAdapter;
+use bitfun_transport::{TauriTransportAdapter, TransportEmitter};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -42,8 +42,9 @@ ChatView -> TuiAgentClient -> TuiBackend -> App Server client
 Embedded TUI uses an in-memory App Server connection. During the migration,
 Shared TUI uses a CLI Host compatibility adapter that implements `TuiBackend`
 over the private versioned Runtime IPC; the TUI client and controllers must not
-reference that IPC. Replacing the physical Shared transport with App Server
-Pipe/UDS framing belongs to Phase 5. Side-effecting operations need stable
+reference that IPC. Embedded direct-runtime migration belongs to Phase 5;
+replacing the physical Shared transport with App Server Pipe/UDS framing belongs
+to the separately reviewed Phase 6. Side-effecting operations need stable
 identities, controller/idle rules, bounded frames, and outcome-unknown handling
 before a connection can retry.
 

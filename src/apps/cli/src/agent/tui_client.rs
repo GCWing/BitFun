@@ -33,17 +33,17 @@ use bitfun_product_domains::tool_permissions::{
 use bitfun_runtime_ports::{
     put_agent_workspace_references, AgentContextReloadRequest, AgentDialogSteerRequest,
     AgentDialogTurnExecution, AgentDialogTurnRequest, AgentInputAttachment,
-    AgentLocalCommandTurnRecordRequest, AgentMessageWorkspaceReferencesRequest,
-    AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
-    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
-    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionSummary, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
-    AgentSubmissionSource, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    AgentTurnSettlementRequest, AgentUserShellCommandRequest, AgentWorkspaceReference,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult,
-    DialogSubmissionPolicy, SessionExecutionTarget, SessionTranscript, WorkspaceDiffSnapshot,
+    AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
+    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSubmissionSource, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, AgentTurnSettlementRequest, AgentUserShellCommandRequest,
+    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, DialogSubmissionPolicy, SessionExecutionTarget,
+    SessionTranscript, WorkspaceDiffSnapshot,
 };
 use tokio::sync::{broadcast, Mutex};
 
@@ -769,16 +769,6 @@ impl TuiAgentClient {
         Ok(())
     }
 
-    pub(crate) async fn record_completed_local_command_turn(
-        &self,
-        request: AgentLocalCommandTurnRecordRequest,
-    ) -> Result<()> {
-        self.backend
-            .record_local_command_turn(RecordLocalCommandTurnRequest(request))
-            .await?;
-        Ok(())
-    }
-
     pub(crate) fn set_approval_policy(&self, policy: CliApprovalPolicy) {
         *self
             .approval_policy
@@ -1368,7 +1358,7 @@ impl TuiAgentClient {
             .map_err(|error| anyhow::anyhow!(error.message))?;
         let result = self
             .backend
-            .submit_dialog_turn(SubmitDialogTurnRequest(AgentDialogTurnRequest {
+            .submit_dialog_turn(SubmitDialogTurnRequest::from(AgentDialogTurnRequest {
                 session_id: session_id.clone(),
                 message,
                 original_message,
@@ -1429,6 +1419,8 @@ impl TuiAgentClient {
                 turn_id,
                 content,
                 display_content,
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
             }))
             .await?
             .steering_id)

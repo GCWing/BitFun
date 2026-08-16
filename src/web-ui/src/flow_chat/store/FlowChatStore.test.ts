@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flowChatStore, mergeModelRoundAttemptDiagnostics } from './FlowChatStore';
+import {
+  LOCAL_SURFACE_ID,
+  SurfaceChangedError,
+  activateSurface,
+  isSurfaceChangedError,
+} from '@/infrastructure/peer-device/deviceSurface';
 import type { FlowChatState, Session } from '../types/flow-chat';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
@@ -106,6 +112,14 @@ vi.mock('../state-machine', () => ({
 }));
 
 const resetStore = () => {
+  // A test that rendered another device leaves that surface's container behind.
+  activateSurface(LOCAL_SURFACE_ID);
+  const surfaceContainers = (flowChatStore as any).surfaceContainers as Map<string, unknown>;
+  Array.from(surfaceContainers.keys())
+    .filter(surfaceId => surfaceId !== LOCAL_SURFACE_ID)
+    .forEach(surfaceId => {
+      flowChatStore.discardSurfaceState(surfaceId);
+    });
   const metadataListRequests = (flowChatStore as any).metadataListRequests as
     | Map<string, { cleanupTimer?: ReturnType<typeof setTimeout> }>
     | undefined;
@@ -1181,104 +1195,6 @@ describe('FlowChatStore round attempts', () => {
   });
 });
 
-describe('FlowChatStore local usage reports', () => {
-  afterEach(() => {
-    resetStore();
-  });
-
-  it('inserts a local usage report as user-visible content', () => {
-    const session = createSession({ lastActiveAt: 1234 });
-    flowChatStore.setState(() => ({
-      sessions: new Map([[session.sessionId, session]]),
-      activeSessionId: session.sessionId,
-    }));
-
-    const turn = flowChatStore.addLocalUsageReportTurn({
-      sessionId: session.sessionId,
-      markdown: '# Session Usage Report',
-      reportId: 'usage-1',
-      schemaVersion: 1,
-      generatedAt: 10,
-    });
-
-    const stored = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0];
-    expect(turn).not.toBeNull();
-    expect(stored?.kind).toBe('local_command');
-    expect(stored?.userMessage.content).toBe('# Session Usage Report');
-    expect(stored?.userMessage.metadata).toMatchObject({
-      localCommandKind: 'usage_report',
-      modelVisible: false,
-    });
-    expect(flowChatStore.getState().sessions.get(session.sessionId)?.lastActiveAt)
-      .toBe(1234);
-  });
-
-  it('can update local usage reports without touching session activity', () => {
-    const session = createSession({ lastActiveAt: 4321 });
-    flowChatStore.setState(() => ({
-      sessions: new Map([[session.sessionId, session]]),
-      activeSessionId: session.sessionId,
-    }));
-
-    const turn = flowChatStore.addLocalUsageReportTurn({
-      sessionId: session.sessionId,
-      markdown: '# Loading',
-      reportId: 'usage-1',
-      schemaVersion: 1,
-      generatedAt: 10,
-      status: 'loading',
-    });
-
-    expect(turn).not.toBeNull();
-    flowChatStore.updateDialogTurn(
-      session.sessionId,
-      turn!.id,
-      current => ({
-        ...current,
-        status: 'completed',
-        userMessage: {
-          ...current.userMessage,
-          content: '# Complete',
-        },
-      }),
-      { touchActivity: false },
-    );
-
-    const stored = flowChatStore.getState().sessions.get(session.sessionId);
-    expect(stored?.dialogTurns[0].userMessage.content).toBe('# Complete');
-    expect(stored?.lastActiveAt).toBe(4321);
-  });
-
-  it('appends repeated usage reports as separate snapshots', () => {
-    const session = createSession();
-    flowChatStore.setState(() => ({
-      sessions: new Map([[session.sessionId, session]]),
-      activeSessionId: session.sessionId,
-    }));
-
-    flowChatStore.addLocalUsageReportTurn({
-      sessionId: session.sessionId,
-      markdown: '# Usage 1',
-      reportId: 'usage-1',
-      schemaVersion: 1,
-      generatedAt: 10,
-    });
-    flowChatStore.addLocalUsageReportTurn({
-      sessionId: session.sessionId,
-      markdown: '# Usage 2',
-      reportId: 'usage-2',
-      schemaVersion: 1,
-      generatedAt: 20,
-    });
-
-    const turns = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns || [];
-    expect(turns).toHaveLength(2);
-    expect(turns.map(turn => turn.id)).toEqual([
-      'local-usage-usage-1',
-      'local-usage-usage-2',
-    ]);
-  });
-});
 
 describe('FlowChatStore ACP context usage', () => {
   afterEach(() => {
@@ -1455,6 +1371,7 @@ describe('FlowChatStore historical session hydration state', () => {
     peerModeFlagMock.active = false;
     apiMocks.restoreSessionView.mockReset();
     apiMocks.restoreSessionWithTurns.mockReset();
+    apiMocks.loadSessionTurns.mockReset();
     apiMocks.loadSessionTurnWindow.mockReset();
     apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
     vi.stubGlobal('CustomEvent', class {
@@ -3656,6 +3573,7 @@ describe('FlowChatStore historical session hydration state', () => {
     }));
 
     ((flowChatStore as any).fullHistoryHydrationRequests as Map<string, unknown>).set('pending-history-1', {
+      surfaceId: LOCAL_SURFACE_ID,
       sessionId: 'history-1',
       remote: false,
       requireActiveSession: true,
@@ -4674,6 +4592,92 @@ describe('FlowChatStore historical session hydration state', () => {
     ).toEqual(['turn-12', 'turn-13', 'turn-14']);
   });
 
+  it('discards cached history windows when an authoritative restore changes the catalog', async () => {
+    const beforeCatalog = createTurnCatalog(8, 'catalog-before');
+    const afterCatalog = createTurnCatalog(6, 'catalog-after');
+    apiMocks.restoreSessionView
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 8,
+          createdAt: 1,
+        },
+        turns: [5, 6, 7].map(index => createPersistedTurn(index)),
+        turnCatalog: beforeCatalog,
+        contextRestoreState: 'pending',
+        isPartial: true,
+        loadedTurnCount: 3,
+        totalTurnCount: 8,
+      })
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 6,
+          createdAt: 1,
+        },
+        turns: [3, 4, 5].map(index => createPersistedTurn(index)),
+        turnCatalog: afterCatalog,
+        contextRestoreState: 'pending',
+        isPartial: true,
+        loadedTurnCount: 3,
+        totalTurnCount: 6,
+      });
+    apiMocks.loadSessionTurnWindow.mockResolvedValueOnce({
+      status: 'ready',
+      catalogRevision: beforeCatalog.revision,
+      totalTurnCount: 8,
+      startOrdinal: 0,
+      endOrdinalExclusive: 8,
+      targetTurnId: 'turn-0',
+      turns: Array.from({ length: 8 }, (_, index) => createPersistedTurn(index)),
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        'history-1',
+        createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        }),
+      ]]),
+      activeSessionId: 'history-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+    const loaded = await flowChatStore.loadSessionTurnWindow('history-1', 0, {
+      source: 'target',
+    });
+    expect(loaded.status).toBe('ready');
+    expect(flowChatStore.activateSessionHistoryWindow(
+      'history-1',
+      0,
+      loaded.navigationGeneration,
+    )?.range).toMatchObject({ startOrdinal: 0, endOrdinalExclusive: 8 });
+
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+
+    expect(flowChatStore.getSessionHistoryViewState('history-1')).toMatchObject({
+      catalog: { revision: 'catalog-after', totalTurnCount: 6 },
+      activeRange: null,
+      pendingTargetOrdinal: null,
+      loadedRanges: [{
+        startOrdinal: 3,
+        endOrdinalExclusive: 6,
+        turns: [
+          expect.objectContaining({ id: 'turn-3' }),
+          expect.objectContaining({ id: 'turn-4' }),
+          expect.objectContaining({ id: 'turn-5' }),
+        ],
+      }],
+    });
+  });
+
   it('activates an adjacent catalog window from the restored tail without hydrating the session', async () => {
     const catalog = createTurnCatalog(15);
     apiMocks.restoreSessionView.mockResolvedValueOnce({
@@ -4754,107 +4758,6 @@ describe('FlowChatStore historical session hydration state', () => {
     expect(apiMocks.loadSessionTurnWindow).toHaveBeenCalledTimes(1);
   });
 
-  it('commits a provisional usage report at its authoritative ordinal without corrupting the restored tail', async () => {
-    const catalog = createTurnCatalog(7);
-    apiMocks.restoreSessionView.mockResolvedValueOnce({
-      session: {
-        sessionId: 'history-1',
-        sessionName: 'History 1',
-        agentType: 'agentic',
-        state: 'Idle',
-        turnCount: 7,
-        createdAt: 1,
-      },
-      turns: [4, 5, 6].map(index => createPersistedTurn(index)),
-      turnCatalog: catalog,
-      contextRestoreState: 'pending',
-      isPartial: true,
-      loadedTurnCount: 3,
-      totalTurnCount: 7,
-    });
-    flowChatStore.setState(() => ({
-      sessions: new Map([[
-        'history-1',
-        createSession({
-          sessionId: 'history-1',
-          isHistorical: true,
-          historyState: 'metadata-only',
-        }),
-      ]]),
-      activeSessionId: 'history-1',
-    }));
-
-    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
-    const provisional = flowChatStore.addLocalUsageReportTurn({
-      sessionId: 'history-1',
-      markdown: '# Session Usage Report',
-      reportId: 'usage-1',
-      schemaVersion: 1,
-      generatedAt: 10,
-    });
-    expect(provisional?.backendTurnIndex).toBeUndefined();
-    expect(provisional?.userMessage.metadata?.usageReportProvisional).toBe(true);
-    expect(flowChatStore.getSessionHistoryViewState('history-1')?.loadedRanges).toMatchObject([{
-      startOrdinal: 4,
-      endOrdinalExclusive: 7,
-    }]);
-
-    const authoritativeCatalog = {
-      ...createTurnCatalog(8, 'catalog-2'),
-      entries: [
-        ...createTurnCatalog(8, 'catalog-2').entries.slice(0, 7),
-        {
-          ordinal: 7,
-          storageTurnIndex: 7,
-          turnId: provisional?.id,
-          preview: 'Session Usage Report',
-          previewTruncated: false,
-        },
-      ],
-    };
-    expect(flowChatStore.commitLocalUsageReportTurn({
-      sessionId: 'history-1',
-      dialogTurnId: provisional!.id,
-      turnId: provisional!.id,
-      storageTurnIndex: 7,
-      totalTurnCount: 8,
-      turnCatalog: authoritativeCatalog,
-    })).toBe(true);
-
-    const session = flowChatStore.getState().sessions.get('history-1');
-    expect(session).toMatchObject({
-      isPartial: true,
-      loadedTurnCount: 4,
-      totalTurnCount: 8,
-    });
-    expect(session?.dialogTurns.find(turn => turn.id === 'turn-4')?.backendTurnIndex).toBe(4);
-    const committedReport = session?.dialogTurns.find(turn => turn.id === provisional?.id);
-    expect(committedReport?.backendTurnIndex).toBe(7);
-    expect(committedReport?.userMessage.metadata).not.toHaveProperty('usageReportProvisional');
-    expect(flowChatStore.getSessionHistoryViewState('history-1')?.loadedRanges).toMatchObject([{
-      startOrdinal: 4,
-      endOrdinalExclusive: 8,
-    }]);
-
-    apiMocks.loadSessionTurnWindow.mockResolvedValueOnce({
-      status: 'ready',
-      catalogRevision: authoritativeCatalog.revision,
-      totalTurnCount: 8,
-      startOrdinal: 0,
-      endOrdinalExclusive: 4,
-      targetTurnId: 'turn-3',
-      turns: [0, 1, 2, 3].map(index => createPersistedTurn(index)),
-    });
-    await expect(flowChatStore.loadSessionTurnWindow('history-1', 3)).resolves.toMatchObject({
-      status: 'ready',
-      isCurrent: true,
-    });
-    expect(flowChatStore.activateSessionHistoryWindowFromTail('history-1', 3)?.range).toMatchObject({
-      startOrdinal: 0,
-      endOrdinalExclusive: 8,
-      mode: 'history-window',
-    });
-  });
 
   it('caches an optimistic turn after a partial restored tail at its absolute ordinal', async () => {
     const catalog = createTurnCatalog(23);
@@ -5032,52 +4935,6 @@ describe('FlowChatStore historical session hydration state', () => {
       .toMatchObject([{ startOrdinal: 20, endOrdinalExclusive: 24 }]);
   });
 
-  it('does not change projected counts when removing a provisional usage report', async () => {
-    const catalog = createTurnCatalog(23);
-    apiMocks.restoreSessionView.mockResolvedValueOnce({
-      session: {
-        sessionId: 'history-1',
-        sessionName: 'History 1',
-        agentType: 'agentic',
-        state: 'Idle',
-        turnCount: 23,
-        createdAt: 1,
-      },
-      turns: [20, 21, 22].map(index => createPersistedTurn(index)),
-      turnCatalog: catalog,
-      contextRestoreState: 'pending',
-      isPartial: true,
-      loadedTurnCount: 3,
-      totalTurnCount: 23,
-    });
-    flowChatStore.setState(() => ({
-      sessions: new Map([['history-1', createSession({
-        sessionId: 'history-1',
-        isHistorical: true,
-        historyState: 'metadata-only',
-      })]]),
-      activeSessionId: 'history-1',
-    }));
-    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
-    const provisional = flowChatStore.addLocalUsageReportTurn({
-      sessionId: 'history-1',
-      markdown: '# Loading',
-      reportId: 'usage-1',
-      schemaVersion: 1,
-      generatedAt: 24,
-      status: 'loading',
-    });
-
-    flowChatStore.deleteDialogTurn('history-1', provisional!.id);
-
-    expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
-      loadedTurnCount: 3,
-      totalTurnCount: 23,
-      dialogTurns: [{ id: 'turn-20' }, { id: 'turn-21' }, { id: 'turn-22' }],
-    });
-    expect(flowChatStore.getSessionHistoryViewState('history-1')?.loadedRanges)
-      .toMatchObject([{ startOrdinal: 20, endOrdinalExclusive: 23 }]);
-  });
 
   it('invalidates cached history and catalog entries after truncating a complete session', async () => {
     const catalog = createTurnCatalog(10);
@@ -5558,6 +5415,7 @@ describe('FlowChatStore historical session hydration state', () => {
     }));
     const startFallback = vi.fn();
     ((flowChatStore as any).fullHistoryHydrationRequests as Map<string, unknown>).set('fallback', {
+      surfaceId: LOCAL_SURFACE_ID,
       sessionId: 'history-1',
       remote: false,
       requireActiveSession: true,
@@ -6094,5 +5952,380 @@ describe('FlowChatStore historical session hydration state', () => {
     await flowChatStore.initializeFromDisk('D:/workspace/BitFun');
 
     expect(flowChatStore.getState().sessions.get('history-1')?.currentTokenUsage).toBeUndefined();
+  });
+});
+
+describe('FlowChatStore reconcile snapshot content safety', () => {
+  const HYDRATED_ROUND = {
+    id: 'round-0',
+    turnId: 'turn-0',
+    roundIndex: 0,
+    timestamp: 2,
+    textItems: [{ id: 'text-0', content: 'BitFun is an agentic IDE…', timestamp: 2 }],
+    toolItems: [],
+    thinkingItems: [],
+    startTime: 2,
+    status: 'completed',
+  };
+
+  const hostSession = (state = 'Idle') => ({
+    sessionId: 'history-1',
+    sessionName: 'History 1',
+    agentType: 'agentic',
+    state,
+    turnCount: 1,
+    createdAt: 1,
+  });
+
+  beforeEach(() => {
+    peerModeFlagMock.active = false;
+    apiMocks.restoreSessionView.mockReset();
+    apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
+    vi.stubGlobal('CustomEvent', class {
+      type: string;
+      detail: unknown;
+
+      constructor(type: string, init?: { detail?: unknown }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() });
+  });
+
+  afterEach(() => {
+    resetStore();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  async function hydrateSessionWithContent(): Promise<void> {
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          workspacePath: '/repo/BitFun',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{ ...createPersistedTurn(0), modelRounds: [HYDRATED_ROUND], endTime: 3 }],
+      contextRestoreState: 'ready',
+    });
+    await flowChatStore.loadSessionHistory('history-1', '/repo/BitFun');
+  }
+
+  it('keeps a hydrated turn when a wholesale replace snapshot carries none of its work', async () => {
+    // The reported failure: after switching device away and back, the rebuilt
+    // projection has no state machines, so every turn reads as idle and every
+    // snapshot qualifies for wholesale replacement. A windowed snapshot names
+    // the turn but carries no rounds, so replacing it left the user prompt on
+    // screen with the whole response gone.
+    await hydrateSessionWithContent();
+    expect(
+      flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0].modelRounds,
+    ).toHaveLength(1);
+
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{ ...createPersistedTurn(0), modelRounds: [] }],
+      contextRestoreState: 'ready',
+    });
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/repo/BitFun',
+      { replaceRunningSnapshot: true, requireActiveSession: true },
+    );
+
+    expect(result.applied).toBe(false);
+    const turn = flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0];
+    expect(turn?.modelRounds).toHaveLength(1);
+    expect(turn?.modelRounds[0].items).toHaveLength(1);
+  });
+
+  it('refuses a replace that would drop a round the projection already shows', async () => {
+    await hydrateSessionWithContent();
+
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{
+        ...createPersistedTurn(0),
+        modelRounds: [{ ...HYDRATED_ROUND, id: 'round-other' }],
+      }],
+      contextRestoreState: 'ready',
+    });
+
+    await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/repo/BitFun',
+      { replaceRunningSnapshot: true, requireActiveSession: true },
+    );
+
+    expect(
+      flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0].modelRounds[0].id,
+    ).toBe('round-0');
+  });
+
+  it('still adopts the host copy when the snapshot carries the projected work', async () => {
+    // The guard must not disable wholesale replacement, which is how a settled
+    // turn picks up the host's authoritative copy.
+    await hydrateSessionWithContent();
+
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: hostSession(),
+      turns: [{
+        ...createPersistedTurn(0),
+        modelRounds: [{
+          ...HYDRATED_ROUND,
+          textItems: [
+            { id: 'text-0', content: 'BitFun is an agentic IDE…', timestamp: 2 },
+            { id: 'text-1', content: '…with multi-device control.', timestamp: 3 },
+          ],
+        }],
+      }],
+      contextRestoreState: 'ready',
+    });
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/repo/BitFun',
+      { replaceRunningSnapshot: true, requireActiveSession: true },
+    );
+
+    expect(result.applied).toBe(true);
+    expect(
+      flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0].modelRounds[0].items,
+    ).toHaveLength(2);
+  });
+});
+
+describe('FlowChatStore device surfaces', () => {
+  const PEER_SURFACE_ID = 'device-b';
+
+  const restoredTurn = (sessionId: string) => ({
+    turnId: `${sessionId}-turn-1`,
+    turnIndex: 0,
+    sessionId,
+    timestamp: 1,
+    userMessage: { id: `${sessionId}-user-1`, content: 'hello', timestamp: 1 },
+    modelRounds: [],
+    startTime: 1,
+    status: 'completed',
+  });
+
+  const restoredSession = (sessionId: string) => ({
+    sessionId,
+    sessionName: sessionId,
+    agentType: 'agentic',
+    state: 'Idle',
+    turnCount: 1,
+    createdAt: 1,
+  });
+
+  const seedSession = (sessionId: string) => {
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        [sessionId, createSession({
+          sessionId,
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: sessionId,
+    }));
+  };
+
+  beforeEach(() => {
+    peerModeFlagMock.active = false;
+    apiMocks.restoreSessionView.mockReset();
+    apiMocks.restoreSessionWithTurns.mockReset();
+    apiMocks.listSessionsPage.mockReset();
+    apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
+  });
+
+  afterEach(() => {
+    resetStore();
+  });
+
+  // The capability record used to collapse every non-SSH host onto `'local'`,
+  // so one peer that rejects the command downgraded this machine's own history
+  // restore for the rest of the session.
+  it('keeps an unsupported restore command on the device that rejected it', async () => {
+    activateSurface(PEER_SURFACE_ID);
+    seedSession('peer-1');
+    apiMocks.restoreSessionView.mockRejectedValueOnce(
+      new Error('unknown command restore_session_view'),
+    );
+    apiMocks.restoreSessionWithTurns.mockResolvedValueOnce({
+      session: restoredSession('peer-1'),
+      turns: [restoredTurn('peer-1')],
+    });
+
+    await flowChatStore.loadSessionHistory('peer-1', '/repo/BitFun');
+    expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(1);
+    expect(apiMocks.restoreSessionWithTurns).toHaveBeenCalledTimes(1);
+
+    activateSurface(LOCAL_SURFACE_ID);
+    seedSession('local-1');
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: restoredSession('local-1'),
+      turns: [restoredTurn('local-1')],
+      contextRestoreState: 'ready',
+    });
+
+    await flowChatStore.loadSessionHistory('local-1', '/repo/BitFun');
+
+    expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(2);
+    expect(apiMocks.restoreSessionWithTurns).toHaveBeenCalledTimes(1);
+    expect(flowChatStore.getState().sessions.get('local-1')).toMatchObject({
+      historyState: 'ready',
+    });
+  });
+
+  it('keeps each device sessions across a switch away and back', async () => {
+    seedSession('local-1');
+
+    activateSurface(PEER_SURFACE_ID);
+    expect(flowChatStore.getState().sessions.has('local-1')).toBe(false);
+    seedSession('peer-1');
+
+    activateSurface(LOCAL_SURFACE_ID);
+    const localState = flowChatStore.getState();
+    expect(localState.activeSessionId).toBe('local-1');
+    expect(localState.sessions.has('local-1')).toBe(true);
+    expect(localState.sessions.has('peer-1')).toBe(false);
+
+    activateSurface(PEER_SURFACE_ID);
+    const peerState = flowChatStore.getState();
+    expect(peerState.activeSessionId).toBe('peer-1');
+    expect(peerState.sessions.has('peer-1')).toBe(true);
+  });
+
+  it('abandons an optimistic turn on its owning device without touching an equal peer session', () => {
+    seedSession('shared-session');
+    const optimisticTurn = {
+      id: 'optimistic-turn',
+      sessionId: 'shared-session',
+      agentType: 'agentic',
+      userMessage: { id: 'user-1', content: 'hello', timestamp: 1 },
+      modelRounds: [],
+      status: 'pending' as const,
+      startTime: 1,
+    };
+    flowChatStore.addDialogTurn('shared-session', optimisticTurn);
+
+    activateSurface(PEER_SURFACE_ID);
+    seedSession('shared-session');
+    flowChatStore.addDialogTurn('shared-session', {
+      ...optimisticTurn,
+      id: 'peer-turn',
+    });
+
+    flowChatStore.abandonOptimisticDialogTurn(
+      LOCAL_SURFACE_ID,
+      'shared-session',
+      'optimistic-turn',
+    );
+
+    expect(flowChatStore.getState().sessions.get('shared-session')?.dialogTurns)
+      .toHaveLength(1);
+    activateSurface(LOCAL_SURFACE_ID);
+    expect(flowChatStore.getState().sessions.get('shared-session')?.dialogTurns)
+      .toHaveLength(0);
+  });
+
+  // The rendered pane is derived from the store through this subscription, so
+  // selecting another container has to announce itself or the previous device's
+  // messages stay on screen.
+  it('notifies subscribers when another device becomes the rendered one', () => {
+    seedSession('local-1');
+    const observedActiveSessionIds: Array<string | null> = [];
+    const unsubscribe = flowChatStore.subscribe(state => {
+      observedActiveSessionIds.push(state.activeSessionId);
+    });
+
+    try {
+      activateSurface(PEER_SURFACE_ID);
+      expect(observedActiveSessionIds).toEqual([null]);
+
+      seedSession('peer-1');
+      activateSurface(LOCAL_SURFACE_ID);
+      expect(observedActiveSessionIds).toEqual([null, 'peer-1', 'local-1']);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('reports the switch through the surface generation without dropping sessions', () => {
+    seedSession('local-1');
+    const generationBefore = flowChatStore.getSurfaceGeneration();
+
+    flowChatStore.prepareForSurfaceSwitch();
+    activateSurface(PEER_SURFACE_ID);
+
+    expect(flowChatStore.getSurfaceGeneration()).toBeGreaterThan(generationBefore);
+    activateSurface(LOCAL_SURFACE_ID);
+    expect(flowChatStore.getState().sessions.has('local-1')).toBe(true);
+  });
+
+  it('loads session metadata once per device for the same workspace path', async () => {
+    apiMocks.listSessionsPage.mockResolvedValue({
+      sessions: [],
+      totalTopLevelCount: 0,
+      loadedTopLevelCount: 0,
+      nextCursor: undefined,
+      hasMore: false,
+    });
+
+    await flowChatStore.loadSessionMetadataPage('/repo/BitFun', 5);
+    expect(apiMocks.listSessionsPage).toHaveBeenCalledTimes(1);
+
+    // Same path, other machine: the dedup entry must not answer for it.
+    activateSurface(PEER_SURFACE_ID);
+    await flowChatStore.loadSessionMetadataPage('/repo/BitFun', 5);
+
+    expect(apiMocks.listSessionsPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('abandons a history restore that lands after the window switched device', async () => {
+    seedSession('local-1');
+    apiMocks.restoreSessionView.mockImplementationOnce(async () => {
+      activateSurface(PEER_SURFACE_ID);
+      return {
+        session: restoredSession('local-1'),
+        turns: [restoredTurn('local-1')],
+        contextRestoreState: 'ready',
+      };
+    });
+
+    await expect(
+      flowChatStore.loadSessionHistory('local-1', '/repo/BitFun'),
+    ).rejects.toSatisfy(isSurfaceChangedError);
+
+    // Neither device may be told the restore failed: the peer never asked, and
+    // the local projection is intact in its own container.
+    expect(flowChatStore.getState().sessions.has('local-1')).toBe(false);
+    activateSurface(LOCAL_SURFACE_ID);
+    expect(flowChatStore.getState().sessions.get('local-1')).toMatchObject({
+      historyState: 'metadata-only',
+    });
+  });
+
+  it('does not fall back onto the next device after a typed surface cancellation', async () => {
+    seedSession('local-1');
+    apiMocks.restoreSessionView.mockRejectedValueOnce(
+      new SurfaceChangedError(LOCAL_SURFACE_ID, 1, 'restore session view'),
+    );
+
+    await expect(
+      flowChatStore.loadSessionHistory('local-1', '/repo/BitFun'),
+    ).rejects.toSatisfy(isSurfaceChangedError);
+
+    expect(apiMocks.loadSessionTurns).not.toHaveBeenCalled();
   });
 });

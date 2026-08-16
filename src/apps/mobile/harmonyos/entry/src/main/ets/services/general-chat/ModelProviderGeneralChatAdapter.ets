@@ -19,15 +19,33 @@ export const GENERAL_CHAT_SYSTEM_PROMPT: string = [
   'It is not a blockchain, gaming, NFT, cryptocurrency, or Web3 product. Never invent those product claims.',
   'Treat those product exclusions as internal factual constraints and do not mention them unless the user asks something directly related.',
   'Help with general questions, writing, summarization, planning, research preparation, and everyday work.',
+  'The user may attach images. When images are present, look at them and answer from what you can see.',
   'This mobile chat currently has no local workspace, shell, desktop file, web browsing, or external tool access.',
   'Never claim to have used unavailable tools or accessed information you were not given.',
   'When a task requires reading or changing a local repository, running commands, or accessing desktop files, explain that the user should use BitFun Remote/Code.',
   'Answer in the user\'s language. Be concise, concrete, and honest about uncertainty.'
 ].join('\n');
 
+export interface ModelProviderImageSource {
+  type: string;
+  media_type?: string;
+  data?: string;
+}
+
+export interface ModelProviderImageUrl {
+  url: string;
+}
+
+export interface ModelProviderContentPart {
+  type: string;
+  text?: string;
+  source?: ModelProviderImageSource;
+  image_url?: ModelProviderImageUrl;
+}
+
 export interface ModelProviderMessage {
   role: string;
-  content: string;
+  content: string | ModelProviderContentPart[];
 }
 
 interface AnthropicRequestBody {
@@ -261,9 +279,6 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
     history: ChatMessage[] = [],
     observer?: GeneralChatStreamObserver
   ): Promise<GeneralChatSendResult> {
-    if (images.length > 0) {
-      throw new Error(RemoteI18n.t('generalChat.imageNotSupported'));
-    }
     const config = await this.configStore.activeSnapshot();
     const apiKey = (await this.configStore.activeAccessToken()).trim();
     if (config.apiUrl.length === 0 || config.modelName.length === 0 || apiKey.length === 0) {
@@ -277,14 +292,14 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
       text: userText,
       status: 'pending',
       timestamp: new Date().toISOString(),
-      images: []
+      images: images.slice()
     };
     if (observer) {
       await observer.onUserMessage(userMessage);
     }
-    const messages = ModelProviderGeneralChatAdapter.toProviderMessages(history);
-    messages.push({ role: 'user', content: userText });
     const protocol = ModelProviderGeneralChatAdapter.resolveProtocol(config.apiUrl);
+    const messages = ModelProviderGeneralChatAdapter.toProviderMessages(history, protocol);
+    messages.push(ModelProviderGeneralChatAdapter.userProviderMessage(userText, images, protocol));
     const parser = new ModelProviderSseParser(protocol);
     const streamChunks: string[] = [];
     let assistantText = '';
@@ -495,17 +510,108 @@ export class ModelProviderGeneralChatAdapter implements GeneralChatPort {
     throw new Error(RemoteI18n.f('generalChat.requestFailed', `${statusCode}`));
   }
 
-  private static toProviderMessages(history: ChatMessage[]): ModelProviderMessage[] {
+  private static toProviderMessages(
+    history: ChatMessage[],
+    protocol: ModelProviderProtocol
+  ): ModelProviderMessage[] {
     const messages: ModelProviderMessage[] = [];
     history.forEach((message: ChatMessage) => {
-      const text = (message.text || '').trim();
       const status = (message.status || '').toLowerCase();
-      if (status !== 'failed' &&
-        (message.role === 'user' || message.role === 'assistant') && text.length > 0) {
-        messages.push({ role: message.role, content: text });
+      if (status === 'failed' || (message.role !== 'user' && message.role !== 'assistant')) {
+        return;
+      }
+      const text = (message.text || '').trim();
+      if (message.role === 'user') {
+        const providerMessage = ModelProviderGeneralChatAdapter.userProviderMessage(
+          text,
+          message.images || [],
+          protocol
+        );
+        if (ModelProviderGeneralChatAdapter.hasProviderContent(providerMessage)) {
+          messages.push(providerMessage);
+        }
+        return;
+      }
+      if (text.length > 0) {
+        messages.push({ role: 'assistant', content: text });
       }
     });
     return messages;
+  }
+
+  private static userProviderMessage(
+    text: string,
+    images: ImageAttachment[],
+    protocol: ModelProviderProtocol
+  ): ModelProviderMessage {
+    const parts: ModelProviderContentPart[] = [];
+    if (protocol === ModelProviderProtocol.OpenAi && text.length > 0) {
+      parts.push({ type: 'text', text });
+    }
+    images.forEach((image: ImageAttachment) => {
+      const dataUrl = (image.data_url || '').trim();
+      if (dataUrl.length === 0) {
+        return;
+      }
+      const mediaType = ModelProviderGeneralChatAdapter.imageMediaType(dataUrl, image.mime_type);
+      const rawBase64 = ModelProviderGeneralChatAdapter.imageBase64(dataUrl);
+      if (rawBase64.length === 0) {
+        return;
+      }
+      if (protocol === ModelProviderProtocol.Anthropic) {
+        const source: ModelProviderImageSource = {
+          type: 'base64',
+          media_type: mediaType,
+          data: rawBase64
+        };
+        parts.push({ type: 'image', source });
+        return;
+      }
+      const imageUrl: ModelProviderImageUrl = {
+        url: dataUrl.indexOf('data:') === 0 ? dataUrl : `data:${mediaType};base64,${rawBase64}`
+      };
+      parts.push({ type: 'image_url', image_url: imageUrl });
+    });
+    if (protocol === ModelProviderProtocol.Anthropic && text.length > 0) {
+      parts.push({ type: 'text', text });
+    }
+    if (parts.length === 0) {
+      return { role: 'user', content: text };
+    }
+    if (parts.length === 1 && parts[0].type === 'text') {
+      return { role: 'user', content: text };
+    }
+    return { role: 'user', content: parts };
+  }
+
+  private static hasProviderContent(message: ModelProviderMessage): boolean {
+    if (typeof message.content === 'string') {
+      return message.content.trim().length > 0;
+    }
+    return message.content.length > 0;
+  }
+
+  private static imageMediaType(dataUrl: string, explicitMime?: string): string {
+    const trimmed = (explicitMime || '').trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+    if (dataUrl.indexOf('data:') === 0) {
+      const semicolon = dataUrl.indexOf(';');
+      if (semicolon > 5) {
+        return dataUrl.slice(5, semicolon);
+      }
+    }
+    return 'image/jpeg';
+  }
+
+  private static imageBase64(dataUrl: string): string {
+    const marker = ';base64,';
+    const index = dataUrl.indexOf(marker);
+    if (index >= 0) {
+      return dataUrl.slice(index + marker.length);
+    }
+    return dataUrl;
   }
 
   private static titleFromMessage(text: string): string {

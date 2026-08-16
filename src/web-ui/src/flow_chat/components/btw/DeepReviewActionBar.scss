@@ -1145,3 +1145,10 @@
     }
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .deep-review-action-bar__icon--loading,
+  .deep-review-action-bar__fixing-icon {
+    animation: none;
+  }
+}

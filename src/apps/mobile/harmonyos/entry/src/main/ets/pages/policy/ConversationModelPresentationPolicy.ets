@@ -1,7 +1,7 @@
 import {
   ConversationUiModel,
   ConversationUiModelCatalog
-} from '../components/ConversationUiModels';
+} from '../state/ConversationUiModels';
 
 export class ConversationModelPresentationPolicy {
   static enabledModels(catalog: ConversationUiModelCatalog): ConversationUiModel[] {

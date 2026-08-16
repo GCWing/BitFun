@@ -42,7 +42,7 @@ use bitfun_app_server_protocol::worktree::*;
 use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 use bitfun_runtime_ports::{
     AgentSessionCompactionResult, AgentSessionForkResult, AgentSessionWorkspaceBinding,
-    AgentUserShellCommandResult,
+    AgentSubmissionSource, AgentUserShellCommandResult, DialogSubmissionPolicy,
 };
 use tokio::sync::broadcast;
 
@@ -421,7 +421,11 @@ impl TuiBackend for SharedTuiBackend {
         request: SubmitDialogTurnRequest,
     ) -> Result<SubmitDialogTurnResponse, TuiBackendError> {
         match self
-            .request(RuntimeIpcOperation::SubmitTurn { request: request.0 })
+            .request(RuntimeIpcOperation::SubmitTurn {
+                request: request.0.to_request(DialogSubmissionPolicy::for_source(
+                    AgentSubmissionSource::Cli,
+                )),
+            })
             .await?
         {
             RuntimeIpcOperationResult::TurnAccepted {
@@ -500,21 +504,6 @@ impl TuiBackend for SharedTuiBackend {
             "submit_user_answers",
         )?;
         Ok(SubmitUserAnswersResponse {})
-    }
-
-    async fn record_local_command_turn(
-        &self,
-        request: RecordLocalCommandTurnRequest,
-    ) -> Result<RecordLocalCommandTurnResponse, TuiBackendError> {
-        match self
-            .request(RuntimeIpcOperation::RecordLocalCommandTurn { request: request.0 })
-            .await?
-        {
-            RuntimeIpcOperationResult::LocalCommandTurnRecorded { record } => {
-                Ok(RecordLocalCommandTurnResponse(record))
-            }
-            other => Err(unexpected("record_local_command_turn", other)),
-        }
     }
 
     async fn respond_permission(
@@ -1209,7 +1198,6 @@ fn tui_capabilities(management: &AppManagementCapabilities) -> Vec<CapabilityDes
             "session",
             vec![
                 "session/sync",
-                "session/recordLocalCommandTurn",
                 "session/rename",
                 "session/updateModel",
                 "session/updateMode",

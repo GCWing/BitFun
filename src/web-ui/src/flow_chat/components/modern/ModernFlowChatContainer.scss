@@ -16,24 +16,13 @@
   display: flex;
   flex-direction: column;
   background: var(--bf-appearance-token-color-bg-scene);
-  position: relative; // Positioning context for floating header.
-  
-  // Header overlays message list for glass effect.
-  > .flowchat-header {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 20; // Ensure it stays above the message list.
-  }
-  
+  position: relative; // Positioning context for the permission panel and overlays.
+
   &__messages {
-    // Messages fill the container, including header area.
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    // Header and messages stack vertically; messages take the remaining space.
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: hidden;
     background: transparent;
   }
@@ -143,7 +132,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 76px;
+  padding-top: 40px;
   pointer-events: auto;
   background: var(--bf-appearance-token-color-bg-scene);
   contain: paint;
@@ -152,10 +141,10 @@
 .modern-flowchat-container__history-open-intent-shield::before {
   content: "";
   position: absolute;
-  top: 116px;
+  top: 80px;
   left: 50%;
   width: min(720px, calc(100% - 48px));
-  height: min(220px, calc(100% - 168px));
+  height: min(220px, calc(100% - 132px));
   min-height: 120px;
   transform: translateX(-50%);
   border-radius: 8px;
@@ -183,5 +172,12 @@
 @keyframes history-placeholder-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-session-placeholder__icon svg,
+  .modern-flowchat-container__history-open-intent-spinner {
+    animation: none;
   }
 }

@@ -1549,6 +1549,24 @@ export const externalSourcesAPI = {
     });
   },
 
+  setToolTargetsEnabled(
+    workspacePath: string | undefined,
+    decisions: Array<{ approvalKey: string; decisionKey: string }>,
+    enabled: boolean,
+    expectedCatalogGeneration: number,
+    expectedPreferenceRevision: number,
+  ) {
+    return invokeSnapshot('set_external_tool_targets_enabled_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        decisions,
+        enabled,
+        expectedCatalogGeneration,
+        expectedPreferenceRevision,
+      },
+    });
+  },
+
   setToolConflictChoice(
     workspacePath: string | undefined,
     conflictKey: string,
@@ -1581,6 +1599,26 @@ export const externalSourcesAPI = {
         expectedSubagentGeneration,
         expectedPreferenceRevision,
         decisionKey,
+      },
+    });
+    emitExternalAgentCatalogUpdated(workspacePath);
+    return catalog;
+  },
+
+  async setSubagentsEnabled(
+    workspacePath: string | undefined,
+    decisions: Array<{ candidateId: string; decisionKey: string }>,
+    enabled: boolean,
+    expectedSubagentGeneration: number,
+    expectedPreferenceRevision: number,
+  ) {
+    const catalog = await invokeSnapshot('set_external_subagents_enabled_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        decisions,
+        enabled,
+        expectedSubagentGeneration,
+        expectedPreferenceRevision,
       },
     });
     emitExternalAgentCatalogUpdated(workspacePath);
@@ -1643,6 +1681,24 @@ export const externalSourcesAPI = {
         candidateId,
         decisionKey,
         approved,
+        expectedMcpGeneration,
+        expectedPreferenceRevision,
+      },
+    });
+  },
+
+  setMcpServersEnabled(
+    workspacePath: string | undefined,
+    decisions: Array<{ candidateId: string; decisionKey: string }>,
+    enabled: boolean,
+    expectedMcpGeneration: number,
+    expectedPreferenceRevision: number,
+  ) {
+    return invokeSnapshot('set_external_mcp_servers_enabled_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        decisions,
+        enabled,
         expectedMcpGeneration,
         expectedPreferenceRevision,
       },

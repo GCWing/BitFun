@@ -260,7 +260,12 @@
     border-radius: $size-radius-sm;
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      opacity $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-subtle);

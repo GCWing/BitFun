@@ -14,6 +14,38 @@ export interface AcpFastModeState {
   enabled: boolean;
 }
 
+export interface AcpModeState {
+  option: Extract<AcpSessionConfigOption, { type: 'select' }>;
+  currentValue: string;
+  /**
+   * Nothing left to pick. An agent that fixes a session's mode says so by
+   * publishing only the mode in force — a client cannot know an agent's own
+   * rule, and one that allows switching mid-conversation keeps its full list.
+   */
+  locked: boolean;
+}
+
+/**
+ * The session mode selector, if the agent offers one.
+ *
+ * ACP's `mode` category is exactly "the picker that is not the model picker",
+ * so this stays generic: dsh-acp publishes its agent presets here, claude-code
+ * and codex publish their own permission modes.
+ */
+export function resolveAcpModeState(
+  options: AcpSessionConfigOption[],
+): AcpModeState | null {
+  const option = options.find(candidate => candidate.category === 'mode');
+  if (!option || option.type !== 'select' || option.options.length === 0) return null;
+  if (!option.options.some(candidate => candidate.value === option.currentValue)) return null;
+
+  return {
+    option,
+    currentValue: option.currentValue,
+    locked: option.options.length <= 1,
+  };
+}
+
 export interface AcpReasoningState {
   option: Extract<AcpSessionConfigOption, { type: 'select' }>;
   projection: ReasoningCatalogProjection;

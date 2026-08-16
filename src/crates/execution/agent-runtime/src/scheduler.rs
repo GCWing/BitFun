@@ -4,7 +4,7 @@ use crate::events::turn_outcome_kind;
 use crate::thread_goal::{build_objective_updated_plan, build_thread_goal_continuation_plan};
 use bitfun_runtime_ports::{
     should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
-    AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
+    AgentInputAttachment, AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
     DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy, DialogTriggerSource,
     RoundInjection, RoundInjectionKind, RoundInjectionTarget, RoundInjectionToolPreemption,
     ThreadGoal,
@@ -162,6 +162,12 @@ impl ActiveDialogTurnStore {
         self.inner
             .get(session_id)
             .is_some_and(|turn| turn.turn_id() == turn_id)
+    }
+
+    pub fn matches_agent_session_request(&self, session_id: &str, turn_id: &str) -> bool {
+        self.inner
+            .get(session_id)
+            .is_some_and(|turn| turn.turn_id() == turn_id && turn.is_agent_session_request())
     }
 
     pub fn suppression_key_for_requester(
@@ -371,7 +377,7 @@ pub enum AgentSessionReplyAction {
     Forward(AgentSessionReplyPlan),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DialogSteeringAction {
     Reject {
         error: String,
@@ -592,6 +598,17 @@ impl SessionRoundInjectionBuffer {
         taken
     }
 
+    /// Drop injections whose target was only "whatever turn is currently
+    /// running" while retaining messages explicitly bound to a Turn. An
+    /// interrupted Turn may resume later, but an unscoped injection must not
+    /// leak into a different Turn if the user abandons it.
+    pub fn discard_current_running(&self, session_id: &str) {
+        let Some(mut entry) = self.inner.get_mut(session_id) else {
+            return;
+        };
+        entry.retain(|message| matches!(message.target, RoundInjectionTarget::ExactTurn(_)));
+    }
+
     pub fn remove_by_id(&self, session_id: &str, injection_id: &str) -> Option<RoundInjection> {
         let mut entry = self.inner.get_mut(session_id)?;
         let index = entry
@@ -700,8 +717,18 @@ pub fn resolve_background_delivery_injection(
         target: RoundInjectionTarget::CurrentRunningTurn,
         content,
         display_content,
+        attachments: Vec::new(),
+        metadata: serde_json::Map::new(),
         created_at,
     }
+}
+
+pub fn target_background_delivery_injection_to_turn(
+    mut injection: RoundInjection,
+    turn_id: String,
+) -> RoundInjection {
+    injection.target = RoundInjectionTarget::ExactTurn(turn_id);
+    injection
 }
 
 pub fn resolve_background_delivery_injection_for_turn(
@@ -712,15 +739,16 @@ pub fn resolve_background_delivery_injection_for_turn(
     created_at: SystemTime,
     turn_id: String,
 ) -> RoundInjection {
-    let mut injection = resolve_background_delivery_injection(
-        kind,
-        injection_id,
-        content,
-        display_content,
-        created_at,
-    );
-    injection.target = RoundInjectionTarget::ExactTurn(turn_id);
-    injection
+    target_background_delivery_injection_to_turn(
+        resolve_background_delivery_injection(
+            kind,
+            injection_id,
+            content,
+            display_content,
+            created_at,
+        ),
+        turn_id,
+    )
 }
 
 pub fn is_background_result_injection(kind: RoundInjectionKind) -> bool {
@@ -737,6 +765,11 @@ pub enum TurnOutcome {
     },
     /// Turn was cancelled by user.
     Cancelled { turn_id: String },
+    /// Turn was intentionally interrupted and may be recovered in place.
+    Interrupted {
+        turn_id: String,
+        execution_generation: u32,
+    },
     /// Turn failed with an error.
     Failed { turn_id: String, error: String },
 }
@@ -744,6 +777,7 @@ pub enum TurnOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TurnOutcomeQueueAction {
     DispatchNext,
+    HoldQueue,
     ClearQueue,
 }
 
@@ -751,6 +785,7 @@ pub enum TurnOutcomeQueueAction {
 pub enum TurnOutcomeStatus {
     Completed,
     Cancelled,
+    Interrupted,
     Failed,
 }
 
@@ -759,6 +794,7 @@ impl TurnOutcomeStatus {
         match self {
             Self::Completed => "completed",
             Self::Cancelled => "cancelled",
+            Self::Interrupted => "interrupted",
             Self::Failed => "failed",
         }
     }
@@ -775,6 +811,7 @@ impl TurnOutcome {
         match self {
             Self::Completed { turn_id, .. }
             | Self::Cancelled { turn_id }
+            | Self::Interrupted { turn_id, .. }
             | Self::Failed { turn_id, .. } => turn_id,
         }
     }
@@ -783,6 +820,7 @@ impl TurnOutcome {
         match self {
             Self::Completed { .. } => TurnOutcomeStatus::Completed,
             Self::Cancelled { .. } => TurnOutcomeStatus::Cancelled,
+            Self::Interrupted { .. } => TurnOutcomeStatus::Interrupted,
             Self::Failed { .. } => TurnOutcomeStatus::Failed,
         }
     }
@@ -804,6 +842,10 @@ impl TurnOutcome {
                 "The target session cancelled this request before producing a final answer."
                     .to_string()
             }
+            Self::Interrupted { .. } => {
+                "The target session interrupted this request before producing a final answer."
+                    .to_string()
+            }
             Self::Failed { error, .. } => {
                 format!("The target session failed to complete this request.\nError: {error}")
             }
@@ -813,6 +855,7 @@ impl TurnOutcome {
     pub fn queue_action(&self) -> TurnOutcomeQueueAction {
         match self {
             Self::Completed { .. } | Self::Cancelled { .. } => TurnOutcomeQueueAction::DispatchNext,
+            Self::Interrupted { .. } => TurnOutcomeQueueAction::HoldQueue,
             Self::Failed { .. } => TurnOutcomeQueueAction::ClearQueue,
         }
     }
@@ -822,6 +865,7 @@ impl TurnOutcome {
 pub enum GoalContinuationAfterTurnAction {
     SkipNoActiveTurn,
     AbortForCancelled,
+    AbortForInterrupted,
     Evaluate { turn_completed: bool },
 }
 
@@ -876,6 +920,7 @@ pub fn resolve_turn_outcome_lifecycle_plan(
     } else {
         match status {
             TurnOutcomeStatus::Cancelled => GoalContinuationAfterTurnAction::AbortForCancelled,
+            TurnOutcomeStatus::Interrupted => GoalContinuationAfterTurnAction::AbortForInterrupted,
             TurnOutcomeStatus::Completed => GoalContinuationAfterTurnAction::Evaluate {
                 turn_completed: true,
             },
@@ -888,7 +933,10 @@ pub fn resolve_turn_outcome_lifecycle_plan(
     TurnOutcomeLifecyclePlan {
         status,
         queue_action: outcome.queue_action(),
-        drain_finished_turn_injections: true,
+        // Interrupted is a resumable generation of the same Turn. Steering
+        // and background results already accepted for that Turn remain valid
+        // until the user either resumes it or explicitly abandons it.
+        drain_finished_turn_injections: status != TurnOutcomeStatus::Interrupted,
         goal_continuation,
     }
 }
@@ -937,6 +985,8 @@ pub fn resolve_dialog_steering_action(
     turn_id: &str,
     content: String,
     display_content: Option<String>,
+    attachments: Vec<AgentInputAttachment>,
+    metadata: serde_json::Map<String, serde_json::Value>,
     steering_id: String,
     created_at: SystemTime,
 ) -> DialogSteeringAction {
@@ -957,6 +1007,8 @@ pub fn resolve_dialog_steering_action(
             target: RoundInjectionTarget::ExactTurn(turn_id.to_string()),
             content,
             display_content: display,
+            attachments,
+            metadata,
             created_at,
         },
         outcome: DialogSteerOutcome::Buffered {
@@ -1062,6 +1114,63 @@ mod tests {
         );
         assert!(plan.dispatch_next());
         assert!(!plan.clear_queue());
+    }
+
+    #[test]
+    fn outcome_lifecycle_holds_queue_for_interrupted_turn() {
+        let outcome = TurnOutcome::Interrupted {
+            turn_id: "turn_1".to_string(),
+            execution_generation: 1,
+        };
+
+        let plan = resolve_turn_outcome_lifecycle_plan(&outcome, true);
+
+        assert_eq!(plan.status, TurnOutcomeStatus::Interrupted);
+        assert_eq!(plan.queue_action, TurnOutcomeQueueAction::HoldQueue);
+        assert!(
+            !plan.drain_finished_turn_injections,
+            "same-turn injections must survive until recovery or explicit abandonment"
+        );
+        assert_eq!(
+            plan.goal_continuation,
+            GoalContinuationAfterTurnAction::AbortForInterrupted
+        );
+        assert!(!plan.dispatch_next());
+        assert!(!plan.clear_queue());
+    }
+
+    #[test]
+    fn interrupted_turn_discards_only_unscoped_current_turn_injections() {
+        let buffer = SessionRoundInjectionBuffer::default();
+        buffer.push(
+            "session-1",
+            resolve_background_delivery_injection(
+                BackgroundInjectionKind::ThreadGoalObjectiveUpdated,
+                "current".to_string(),
+                "current-only".to_string(),
+                None,
+                SystemTime::now(),
+            ),
+        );
+        buffer.push(
+            "session-1",
+            target_background_delivery_injection_to_turn(
+                resolve_background_delivery_injection(
+                    BackgroundInjectionKind::BackgroundResult,
+                    "exact".to_string(),
+                    "resume-me".to_string(),
+                    None,
+                    SystemTime::now(),
+                ),
+                "turn-1".to_string(),
+            ),
+        );
+
+        buffer.discard_current_running("session-1");
+
+        assert!(buffer.has_pending_for_turn("session-1", "turn-1"));
+        assert!(!buffer.has_pending_for_turn("session-1", "turn-2"));
+        assert_eq!(buffer.pending_count("session-1"), 1);
     }
 
     #[test]

@@ -3,7 +3,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const markdownEditorAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'markdown-editor',
   parts: [
-    { id: 'root' }, { id: 'loading' }, { id: 'error' }, { id: 'notice' },
+    { id: 'root' }, { id: 'loading' }, { id: 'error' },
     { id: 'toolbar' }, { id: 'modeToggle' }, { id: 'actions' }, { id: 'body' },
   ],
   facets: [{ id: 'view', attribute: 'data-bf-view', values: ['preview', 'markdown', 'source'] }],

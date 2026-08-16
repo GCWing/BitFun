@@ -15,10 +15,12 @@ import {
 } from './rules/crate-layout.mjs';
 import { checkTuiLegacyBackendRatchet } from './tui-boundary-ratchet.mjs';
 import {
+  acpClosedFeatureProfileRules,
   coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
   optionalDependencyFeatureOwnerRules,
   ownerCrateFeatureAssemblyRules,
+  reviewedOptionalDependencyAggregateFeatures,
 } from './rules/feature-rules.mjs';
 import {
   facadeOnlyFiles,
@@ -32,15 +34,18 @@ import { runManifestParserSelfTest } from './self-test.mjs';
 import {
   featureReferencesDependency,
   featureReferencesFeature,
+  featureReferencesOptionalDependencyOwner,
   unexpectedDependencyOwnerFeatures,
   unexpectedReachableLocalFeatures,
 } from './manifest-feature-helpers.mjs';
 import { checkCargoDependencyBoundariesSafely } from './cargo-dependency-boundaries.mjs';
+import { checkPeerCommandPolicySync } from './peer-command-policy.mjs';
 import {
   agentRuntimeIntegrationTestTargets,
   checkAgentRuntimeIntegrationTestTopology,
   checkCliIntegrationTestTopology,
-  checkServiceIntegrationTestTopologies,
+  checkExternalSourceIntegrationTestTopologies,
+  checkReviewedIntegrationTestTopologies,
   cliIntegrationTestTargets,
   validateExplicitIntegrationTestTopology,
 } from './explicit-test-topology.mjs';
@@ -511,11 +516,16 @@ function checkForbiddenManifestDependencyRule(rule) {
 
 function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const manifestPath = join(crateDir, 'Cargo.toml');
+  const repoManifestPath = toRepoPath(manifestPath);
   const lines = readText(manifestPath).split(/\r?\n/);
   const deps = parseManifestDependencies(lines);
   const normalDeps = deps.filter((dep) => dep.kind === 'normal');
   const depsByName = new Map(normalDeps.map((dep) => [dep.name, dep]));
   const features = parseManifestFeatures(lines);
+  const reviewedAggregateFeatures = new Set([
+    ...reviewedOptionalDependencyAggregateFeatures(repoManifestPath),
+    ...(rule.reviewedAggregateFeatures ?? []),
+  ]);
   const declaredOwnerDeps = new Set(rule.dependencies.map((dependency) => dependency.depName));
 
   for (const dependency of rule.dependencies) {
@@ -545,7 +555,7 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
         });
         continue;
       }
-      if (!featureReferencesDependency(feature, dependency.depName)) {
+      if (!featureReferencesOptionalDependencyOwner(feature, dependency.depName)) {
         failures.push({
           path: manifestPath,
           line: feature.line,
@@ -553,7 +563,11 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
         });
       }
     }
-    for (const [featureName, feature] of unexpectedDependencyOwnerFeatures(features, dependency)) {
+    for (const [featureName, feature] of unexpectedDependencyOwnerFeatures(
+      features,
+      dependency,
+      reviewedAggregateFeatures,
+    )) {
       failures.push({
         path: manifestPath,
         line: feature.line,
@@ -578,19 +592,6 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
       path: manifestPath,
       line: dep.line,
       message: `${rule.reason}; optional runtime dependency must declare owner feature coverage: ${depName}`,
-    });
-  }
-}
-
-function checkCoreDefaultProductFullFeature() {
-  const manifestPath = join(crateDirForName('core'), 'Cargo.toml');
-  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
-  if (!featureReferencesFeature(features.get('default'), 'product-full')) {
-    failures.push({
-      path: manifestPath,
-      line: features.get('default')?.line ?? 1,
-      message:
-        'bitfun-core default feature must remain product-full until a separate product matrix review changes it',
     });
   }
 }
@@ -874,14 +875,14 @@ function checkForbiddenContent(repoPath, patterns) {
     }
   });
 }
-
 function checkRequiredContent(repoPath, patterns, reason) {
   const path = repoPathToFsPath(repoPath);
-  const text = readText(path);
   for (const pattern of patterns) {
+    const patternPath = pattern.path ? repoPathToFsPath(pattern.path) : path;
+    const text = readText(patternPath);
     if (!pattern.regex.test(text)) {
       failures.push({
-        path,
+        path: patternPath,
         line: 1,
         message: `${reason}; ${pattern.message}`,
       });
@@ -1089,6 +1090,7 @@ export function runCoreBoundaryCheck() {
       manifestDependencyMatches,
       matchingForbiddenDependency,
       coreClosedFeatureProfileRules,
+      acpClosedFeatureProfileRules,
       coreProductFullFeatureAssemblyRule,
       ownerCrateFeatureAssemblyRules,
       parseManifestFeatures,
@@ -1123,7 +1125,8 @@ export function runCoreBoundaryCheck() {
   failures.push(...checkCargoDependencyBoundariesSafely({ root: ROOT, crateLayoutRules }));
   failures.push(...checkAgentRuntimeIntegrationTestTopology(ROOT));
   failures.push(...checkCliIntegrationTestTopology(ROOT));
-  failures.push(...checkServiceIntegrationTestTopologies(ROOT));
+  failures.push(...checkExternalSourceIntegrationTestTopologies(ROOT), ...checkReviewedIntegrationTestTopologies(ROOT));
+  failures.push(...checkPeerCommandPolicySync(ROOT));
 
   for (const rule of forbiddenManifestDependencyRules) {
     checkForbiddenManifestDependencyRule(rule);
@@ -1154,9 +1157,11 @@ export function runCoreBoundaryCheck() {
     checkOptionalDependencyFeatureOwners(crateDir, rule);
   }
 
-  checkCoreDefaultProductFullFeature();
   checkCoreProductFullFeatureAssembly(coreProductFullFeatureAssemblyRule);
   for (const rule of coreClosedFeatureProfileRules) {
+    checkClosedFeatureProfile(rule);
+  }
+  for (const rule of acpClosedFeatureProfileRules) {
     checkClosedFeatureProfile(rule);
   }
   for (const rule of ownerCrateFeatureAssemblyRules) {
@@ -1178,7 +1183,6 @@ export function runCoreBoundaryCheck() {
   for (const rule of requiredContentRules) {
     checkRequiredContent(rule.path, rule.patterns, rule.reason);
   }
-
   for (const rule of publicApiAllowlistRules) {
     checkPublicApiAllowlist(rule);
   }

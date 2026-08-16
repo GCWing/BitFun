@@ -76,6 +76,10 @@ export class FilePreviewPlacementPolicy {
     if (creaseLayout) {
       return creaseLayout;
     }
+    const creaseFocusLayout = FilePreviewPlacementPolicy.creaseAlignedFocusSplit(viewportWidth, creases);
+    if (creaseFocusLayout) {
+      return creaseFocusLayout;
+    }
     const flatLayout = FilePreviewPlacementPolicy.flatTriplePane(
       viewportWidth,
       creases,
@@ -141,6 +145,31 @@ export class FilePreviewPlacementPolicy {
       conversationWidth,
       dividerWidth,
       detailWidth - conversationWidth
+    );
+  }
+
+  private static creaseAlignedFocusSplit(
+    viewportWidth: number,
+    creases: ConversationLayoutCrease[]
+  ): FilePreviewLayout | undefined {
+    const visible = FilePreviewPlacementPolicy.visibleCreases(viewportWidth, creases);
+    if (visible.length !== 1) {
+      return undefined;
+    }
+    const crease = visible[0];
+    const conversationWidth = crease.left;
+    const previewWidth = viewportWidth - crease.left - crease.width;
+    if (conversationWidth < FilePreviewPlacementPolicy.MIN_CONVERSATION_WIDTH ||
+      previewWidth < FilePreviewPlacementPolicy.MIN_PREVIEW_WIDTH) {
+      return undefined;
+    }
+    return new FilePreviewLayout(
+      FilePreviewPlacement.WideFocusSplit,
+      0,
+      0,
+      conversationWidth,
+      crease.width,
+      previewWidth
     );
   }
 

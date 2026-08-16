@@ -14,6 +14,8 @@ import { createLogger } from '@/shared/utils/logger';
 import './TabBar.scss';
 
 const log = createLogger('TabBar');
+const TAB_REORDER_DURATION_MS = 160;
+const TAB_REORDER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 export interface TabBarProps {
   /** Tab list */
@@ -107,6 +109,9 @@ export const TabBar: React.FC<TabBarProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const tabsListRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const tabWrapperRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const pendingReorderRectsRef = useRef<Map<string, DOMRect> | null>(null);
+  const reorderAnimationsRef = useRef<Map<string, Animation>>(new Map());
   // Cache actual tab widths (keyed by tab.id + title since title affects width)
   const tabWidthCacheRef = useRef<Map<string, number>>(new Map());
 
@@ -234,6 +239,46 @@ export const TabBar: React.FC<TabBarProps> = ({
   // Split visible and overflow tabs
   const displayedTabs = visibleTabs.slice(0, visibleTabsCount);
   const overflowTabs = visibleTabs.slice(visibleTabsCount);
+  const displayedTabSignature = displayedTabs.map(tab => tab.id).join(':');
+
+  useEffect(() => () => {
+    reorderAnimationsRef.current.forEach(animation => animation.cancel());
+    reorderAnimationsRef.current.clear();
+  }, []);
+
+  useLayoutEffect(() => {
+    const previousRects = pendingReorderRectsRef.current;
+    if (!previousRects) return;
+    pendingReorderRectsRef.current = null;
+
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    if (reduceMotion) return;
+
+    for (const [tabId, element] of tabWrapperRefs.current) {
+      const previousRect = previousRects.get(tabId);
+      if (!previousRect) continue;
+      const deltaX = previousRect.left - element.getBoundingClientRect().left;
+      if (Math.abs(deltaX) < 0.5) continue;
+
+      reorderAnimationsRef.current.get(tabId)?.cancel();
+      const animation = element.animate(
+        [
+          { transform: `translateX(${deltaX}px)` },
+          { transform: 'translateX(0)' },
+        ],
+        {
+          duration: TAB_REORDER_DURATION_MS,
+          easing: TAB_REORDER_EASING,
+        },
+      );
+      reorderAnimationsRef.current.set(tabId, animation);
+      animation.addEventListener('finish', () => {
+        if (reorderAnimationsRef.current.get(tabId) === animation) {
+          reorderAnimationsRef.current.delete(tabId);
+        }
+      }, { once: true });
+    }
+  }, [displayedTabSignature]);
 
   // Handle tab drag start
   const handleTabDragStart = useCallback((tab: CanvasTab) => (_e: React.DragEvent) => {
@@ -274,6 +319,11 @@ export const TabBar: React.FC<TabBarProps> = ({
       if (data.sourceGroupId === groupId) {
         const currentIndex = visibleTabs.findIndex(t => t.id === data.tabId);
         if (currentIndex !== -1 && currentIndex !== targetIndex) {
+          pendingReorderRectsRef.current = new Map(
+            Array.from(tabWrapperRefs.current, ([tabId, element]) => (
+              [tabId, element.getBoundingClientRect()] as const
+            )),
+          );
           onReorderTab(data.tabId, targetIndex);
         }
       }
@@ -281,6 +331,26 @@ export const TabBar: React.FC<TabBarProps> = ({
       log.error('Failed to parse drag data', err);
     }
   }, [draggingTabId, groupId, visibleTabs, onReorderTab]);
+
+  const draggingDisplayedIndex = draggingTabId
+    ? displayedTabs.findIndex(tab => tab.id === draggingTabId)
+    : -1;
+  const draggedTabWidth = draggingDisplayedIndex >= 0
+    ? getTabWidth(displayedTabs[draggingDisplayedIndex])
+    : 0;
+
+  const getDragShift = (index: number): number => {
+    if (dragOverIndex === null || draggingDisplayedIndex < 0 || index === draggingDisplayedIndex) {
+      return 0;
+    }
+    if (draggingDisplayedIndex < dragOverIndex && index > draggingDisplayedIndex && index <= dragOverIndex) {
+      return -draggedTabWidth;
+    }
+    if (draggingDisplayedIndex > dragOverIndex && index >= dragOverIndex && index < draggingDisplayedIndex) {
+      return draggedTabWidth;
+    }
+    return 0;
+  };
 
   // Clear indicator when drag ends
   useEffect(() => {
@@ -308,8 +378,18 @@ export const TabBar: React.FC<TabBarProps> = ({
           <div
             data-bf-component="canvas-tab-bar"
             data-bf-part="tabWrapper"
+            data-tab-id={tab.id}
             key={tab.id}
             className="canvas-tab-bar__tab-wrapper"
+            ref={(element) => {
+              if (element) tabWrapperRefs.current.set(tab.id, element);
+              else tabWrapperRefs.current.delete(tab.id);
+            }}
+            style={{
+              transform: getDragShift(index) === 0
+                ? undefined
+                : `translateX(${getDragShift(index)}px)`,
+            }}
             onDragOver={(e) => handleDragOver(e, index)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, index)}

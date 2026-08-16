@@ -4,7 +4,9 @@
 //! tested without compiling the full BitFun product runtime.
 
 pub mod bounded_fs;
+#[cfg(feature = "diagnostics")]
 pub mod diagnostics;
+#[cfg(feature = "diff")]
 pub mod diff;
 pub mod dispatch_contract;
 #[cfg(feature = "dispatch-workspace")]

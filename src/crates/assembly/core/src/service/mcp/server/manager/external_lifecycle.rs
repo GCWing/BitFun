@@ -48,11 +48,22 @@ impl MCPServerManager {
         external_start_token_is_current(start_tokens.get(server_id), expected)
     }
 
-    async fn remove_ephemeral_server_for_start(&self, server_id: &str, expected: &Arc<()>) -> bool {
+    async fn remove_ephemeral_server_for_start(
+        &self,
+        server_id: &str,
+        expected: &Arc<()>,
+        failure: MCPServerStartFailure,
+    ) -> bool {
         let _lifecycle_guard = self.ephemeral_lifecycle.lock().await;
         if !self.external_start_token_matches(server_id, expected).await {
             return false;
         }
+        // Publish the safe failure fact before cleanup. Cleanup may itself
+        // fail, but the product surface must still be able to explain why the
+        // server left Starting.
+        self.runtime
+            .set_start_failure(server_id.to_string(), failure)
+            .await;
         if let Err(error) = self.remove_ephemeral_server(server_id).await {
             warn!(
                 "Could not clean up failed external MCP startup: id={} error={}",
@@ -73,6 +84,7 @@ impl MCPServerManager {
         config.validate()?;
         let _lifecycle_guard = self.ephemeral_lifecycle.lock().await;
         let server_id = config.id.clone();
+        self.runtime.clear_start_failure(&server_id).await;
         let start_token = Arc::new(());
         self.ephemeral_start_tokens
             .write()
@@ -183,12 +195,13 @@ impl MCPServerManager {
                         }
                     }
                     Ok(Err(error)) => {
+                        let failure = MCPServerStartFailure::classify(&error.to_string());
                         warn!(
                             "External ephemeral MCP server failed to start: id={} error={}",
                             server_id, error
                         );
                         if manager
-                            .remove_ephemeral_server_for_start(&server_id, &start_token)
+                            .remove_ephemeral_server_for_start(&server_id, &start_token, failure)
                             .await
                         {
                             notify_external_tool_registry_changed();
@@ -200,7 +213,11 @@ impl MCPServerManager {
                             server_id
                         );
                         if manager
-                            .remove_ephemeral_server_for_start(&server_id, &start_token)
+                            .remove_ephemeral_server_for_start(
+                                &server_id,
+                                &start_token,
+                                MCPServerStartFailure::Timeout,
+                            )
                             .await
                         {
                             notify_external_tool_registry_changed();
@@ -220,6 +237,7 @@ impl MCPServerManager {
         const RETIREMENT_RECLAIM_ATTEMPTS: usize = 3;
         const RETIREMENT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
         let _lifecycle_guard = self.ephemeral_lifecycle.lock().await;
+        self.runtime.clear_start_failure(server_id).await;
         self.ephemeral_start_tokens.write().await.remove(server_id);
         if !self.runtime.contains(server_id).await {
             self.runtime.remove_runtime_config(server_id).await;

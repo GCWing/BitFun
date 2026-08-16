@@ -7,6 +7,19 @@ session/config/context facts, lifecycle helper state, and the narrow
 port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
 `bitfun-core`.
 
+## Feature Boundaries
+
+- `deep-research` exposes only provider-neutral citation renumbering.
+- `native-hook-settings` exposes Codex-compatible hook settings parsing and
+  validation without process execution.
+- `native-hook-runtime` extends settings with payload, output, and managed
+  child-process execution.
+- `agent-runtime` selects the complete portable runtime and includes
+  `native-hook-runtime`; it intentionally does not include `deep-research`.
+- `default` stays empty. Consumers select the smallest owner feature they use;
+  do not add a compatibility `full` feature or rely on another workspace
+  consumer to create a Cargo feature union.
+
 ## Guardrails
 
 - Do not depend on `bitfun-core`, app crates, Tauri, ACP protocol, web UI,
@@ -64,7 +77,7 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
 
 ## Test Target Layout
 
-Integration contracts use five explicit Cargo targets so package-level checks
+Integration contracts use seven explicit Cargo targets so package-level checks
 do not relink the same feature-free dependency closure for every source file,
 while platform-specific process tests retain executable-level isolation:
 
@@ -72,8 +85,10 @@ while platform-specific process tests retain executable-level isolation:
 |---|---|
 | `agent_definition_contracts` | Agent definitions, discovery, prompts, prompt cache, and skills |
 | `agent_session_contracts` | Events, scheduling, sessions, SDK behavior, and workspace-reference ports |
-| `agent_interaction_contracts` | Permissions, questions, and hook execution |
-| `agent_long_horizon_contracts` | DeepResearch, DeepReview, and long-running thread-goal behavior |
+| `agent_interaction_contracts` | Permissions, questions, hook payloads, and post-call hook behavior (`agent-runtime`) |
+| `agent_long_horizon_contracts` | DeepReview and long-running thread-goal behavior (`agent-runtime`) |
+| `deep_research_contracts` | Citation numbering without the complete Agent Runtime (`deep-research`) |
+| `native_hook_settings_contracts` | Hook settings parsing without process execution (`native-hook-settings`) |
 | `native_hook_execution_contracts` | Unix-only native process execution, timeout, and cleanup behavior |
 
 Add a contract to the nearest existing target. Do not add another top-level
@@ -94,8 +109,10 @@ Use the focused contract form by default. Run the package-wide form only when a
 change crosses several runtime targets:
 
 ```bash
-cargo test --locked -p bitfun-agent-runtime --test <target> <module>::<test>
-cargo test --locked -p bitfun-agent-runtime
+cargo test --locked -p bitfun-agent-runtime --no-default-features --features agent-runtime,deep-research --lib --tests
+cargo test --locked -p bitfun-agent-runtime --no-default-features --features deep-research --test deep_research_contracts
+cargo test --locked -p bitfun-agent-runtime --no-default-features --features native-hook-settings --test native_hook_settings_contracts
+cargo test --locked -p bitfun-agent-runtime --no-default-features --features agent-runtime --test <target> <module>::<test>
 ```
 
 Run `pnpm run check:core-boundaries` only when Cargo dependencies, explicit test

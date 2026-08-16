@@ -7,6 +7,7 @@ export function runManifestParserSelfTest({
   parseManifestDependencies,
   manifestDependencyMatches,
   matchingForbiddenDependency,
+  acpClosedFeatureProfileRules,
   coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
   ownerCrateFeatureAssemblyRules,
@@ -60,10 +61,13 @@ export function runManifestParserSelfTest({
   const explicitTestManifest = [
     '[package]',
     'autotests = false',
-    ...agentRuntimeIntegrationTestTargets.flatMap(({ name, path }) => [
+    ...agentRuntimeIntegrationTestTargets.flatMap(({ name, path, requiredFeatures }) => [
       '[[test]]',
       `name = "${name}"`,
       `path = "${path}"`,
+      ...(requiredFeatures === undefined
+        ? []
+        : [`required-features = [${requiredFeatures.map((feature) => `"${feature}"`).join(', ')}]`]),
     ]),
     '[lints]',
   ].join('\n');
@@ -151,6 +155,56 @@ export function runManifestParserSelfTest({
   });
   if (!orphanErrors.some((error) => error.includes('orphan_contracts.rs'))) {
     throw new Error('explicit integration-test topology must reject an orphan leaf test');
+  }
+  const reviewedLeafTargets = agentRuntimeIntegrationTestTargets.map((target) => (
+    target.path === 'tests/agent_definition_contracts.rs'
+      ? {
+          ...target,
+          leaves: ['tests/agent_definition_contracts/prompt_contracts.rs'],
+        }
+      : target
+  ));
+  const missingReviewedLeafErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    expectedTargets: reviewedLeafTargets,
+    leafRustFiles: [],
+    leafSources: new Map(),
+  });
+  if (!missingReviewedLeafErrors.some((error) => error.includes('grouped test leaves'))) {
+    throw new Error('explicit integration-test topology must reject a removed reviewed leaf');
+  }
+  for (const requiredFeaturesDeclaration of [
+    'required-features = [\n  "opt-in",\n]',
+    '"required\\u002dfeatures" = ["opt-in"]',
+  ]) {
+    const unexpectedRequiredFeaturesErrors = validateExplicitIntegrationTestTopology({
+      ...explicitTestFixture,
+      expectedTargets: reviewedLeafTargets,
+      manifestText: explicitTestManifest.replace(
+        'required-features = ["agent-runtime"]',
+        requiredFeaturesDeclaration,
+      ),
+    });
+    if (!unexpectedRequiredFeaturesErrors.some((error) => error.includes('required-features'))) {
+      throw new Error(`ungated explicit test topology accepted: ${requiredFeaturesDeclaration}`);
+    }
+  }
+  const independentRequiredFeaturesErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    expectedTargets: reviewedLeafTargets.map((target) => (
+      target.path === 'tests/native_hook_execution_contracts.rs'
+        ? { ...target, requiredFeatures: ['native-hooks'] }
+        : target
+    )),
+    manifestText: explicitTestManifest.replace(
+      'required-features = ["native-hook-runtime"]',
+      'required-features = ["native-hooks"]',
+    ),
+  });
+  if (independentRequiredFeaturesErrors.length > 0) {
+    throw new Error(
+      `target-scoped required-features contract rejected an independent target: ${independentRequiredFeaturesErrors.join('; ')}`,
+    );
   }
   const reviewedLeafCfgFixture = {
     ...explicitTestFixture,
@@ -316,6 +370,8 @@ export function runManifestParserSelfTest({
 
   for (const featureName of [
     'agent-runtime',
+    'diagnostics',
+    'diff',
     'announcement',
     'canvas-runtime',
     'debug-log',
@@ -323,6 +379,7 @@ export function runManifestParserSelfTest({
     'file-watch',
     'filesystem',
     'git',
+    'i18n-runtime',
     'lsp',
     'local-storage',
     'process-runtime',
@@ -352,11 +409,30 @@ export function runManifestParserSelfTest({
   const coreManifest = 'src/crates/assembly/core/Cargo.toml';
   const servicesCoreManifest = 'src/crates/services/services-core/Cargo.toml';
   const expectedClosedCoreProfiles = [
+    [coreManifest, 'default', []],
+    [coreManifest, 'i18n-runtime', ['dep:fluent-bundle', 'dep:unic-langid']],
+    [coreManifest, 'diagnostics', ['bitfun-services-core/diagnostics']],
+    [coreManifest, 'diff', ['bitfun-services-core/diff']],
     [servicesCoreManifest, 'default', []],
+    [servicesCoreManifest, 'diagnostics', ['dep:regex']],
+    [
+      servicesCoreManifest,
+      'diff',
+      ['dep:similar', 'dep:tokio', 'tokio/rt', 'tokio/time'],
+    ],
     [
       servicesCoreManifest,
       'filesystem',
-      ['dep:base64', 'dep:chrono', 'dep:ignore', 'dep:sha2', 'tokio/fs'],
+      [
+        'dep:base64',
+        'dep:chrono',
+        'dep:ignore',
+        'dep:regex',
+        'dep:sha2',
+        'dep:tokio',
+        'tokio/fs',
+        'tokio/rt',
+      ],
     ],
     [
       servicesCoreManifest,
@@ -367,10 +443,15 @@ export function runManifestParserSelfTest({
         'dep:chrono',
         'dep:fs2',
         'dep:libc',
+        'dep:regex',
         'dep:sha2',
+        'dep:similar',
+        'dep:tokio',
         'dep:windows',
         'tokio/fs',
+        'tokio/rt',
         'tokio/sync',
+        'tokio/time',
         'windows/Win32_Foundation',
         'windows/Win32_Storage_FileSystem',
       ],
@@ -380,11 +461,14 @@ export function runManifestParserSelfTest({
       'process-runtime',
       [
         'dep:libc',
+        'dep:tokio',
         'dep:which',
         'dep:win32job',
         'dep:windows',
         'tokio/io-util',
         'tokio/process',
+        'tokio/rt',
+        'tokio/time',
         'windows/Win32_Foundation',
         'windows/Win32_System_Diagnostics_ToolHelp',
         'windows/Win32_System_Threading',
@@ -393,7 +477,20 @@ export function runManifestParserSelfTest({
     [
       servicesCoreManifest,
       'workspace-instructions',
-      ['dep:globset', 'dep:serde_yaml', 'tokio/fs', 'tokio/io-util'],
+      [
+        'dep:globset',
+        'dep:regex',
+        'dep:serde_yaml',
+        'dep:tokio',
+        'tokio/fs',
+        'tokio/io-util',
+        'tokio/rt',
+      ],
+    ],
+    [
+      servicesCoreManifest,
+      'workspace-text-runtime',
+      ['dep:tokio', 'tokio/rt'],
     ],
     [
       servicesCoreManifest,
@@ -416,6 +513,8 @@ export function runManifestParserSelfTest({
         'dep:anyhow',
         'dep:async-trait',
         'dep:bitfun-runtime-ports',
+        'bitfun-runtime-ports/runtime-event-port',
+        'bitfun-runtime-ports/workspace-ports',
         'dep:dunce',
         'process-runtime',
         'tokio/fs',
@@ -425,11 +524,19 @@ export function runManifestParserSelfTest({
     ],
     [servicesCoreManifest, 'session-git', ['local-storage', 'dep:git2']],
     [servicesCoreManifest, 'workspace-identity', ['dep:dunce', 'dep:sha2']],
-    [coreManifest, 'dispatch-store', ['local-storage', 'bitfun-services-core/dispatch-workspace']],
+    [
+      coreManifest,
+      'dispatch-store',
+      ['dep:base64', 'local-storage', 'bitfun-services-core/dispatch-workspace'],
+    ],
     [coreManifest, 'filesystem', ['bitfun-services-core/filesystem']],
-    [coreManifest, 'local-storage', ['bitfun-services-core/local-storage']],
+    [
+      coreManifest,
+      'local-storage',
+      ['dep:bitfun-agent-tools', 'bitfun-services-core/local-storage'],
+    ],
     [coreManifest, 'process-runtime', ['bitfun-services-core/process-runtime']],
-    [coreManifest, 'lsp', ['dep:notify', 'bitfun-services-core/lsp']],
+    [coreManifest, 'lsp', ['dep:notify', 'bitfun-services-core/lsp', 'tokio/macros']],
     [coreManifest, 'terminal', ['dep:terminal-core']],
     [
       coreManifest,
@@ -490,6 +597,70 @@ export function runManifestParserSelfTest({
         .some((reference) => reference.includes('product-full'))
     ) {
       throw new Error(`core closed feature profile must not reach product-full in ${featureName}`);
+    }
+  }
+  const acpProfiles = new Map(
+    acpClosedFeatureProfileRules.map((rule) => [rule.featureName, rule]),
+  );
+  const expectedAcpProfiles = new Map([
+    ['default', ['client', 'server']],
+    [
+      'client',
+      [
+        'bitfun-agent-tools/acp-bridge',
+        'dep:futures',
+        'dep:serde',
+        // The bundled DeepSeek Harness profile the ACP client materializes:
+        // $DSH_HOME lookup, a minimum-version comparison, and packing the
+        // profile for a remote host.
+        'dep:dirs',
+        'dep:semver',
+        'dep:tar',
+        'dep:bitfun-core',
+        'bitfun-core/agent-runtime',
+        'bitfun-core/ssh-remote',
+      ],
+    ],
+    [
+      'server',
+      [
+        'dep:bitfun-agent-tools',
+        'dep:bitfun-agent-runtime',
+        'bitfun-agent-runtime/agent-runtime',
+        'dep:bitfun-core-types',
+        'dep:bitfun-core',
+        'dep:sha2',
+        'bitfun-core/agent-runtime',
+        'bitfun-core/document-read',
+        'bitfun-core/subscription-auth',
+        'bitfun-core/deep-research',
+        'bitfun-core/lsp',
+        'bitfun-core/external-sources',
+        'bitfun-core/tools-basic',
+        'bitfun-core/tools-git',
+        'bitfun-core/tools-mcp',
+        'bitfun-core/tools-browser-web',
+        'bitfun-core/tools-computer-use',
+        'bitfun-core/tools-image-analysis',
+        'bitfun-core/tools-miniapp',
+        'bitfun-core/tools-canvas',
+        'bitfun-core/tools-agent-control',
+      ],
+    ],
+  ]);
+  for (const [featureName, expectedReferences] of expectedAcpProfiles) {
+    const rule = acpProfiles.get(featureName);
+    if (!rule?.exact) {
+      throw new Error(`ACP closed feature profile must cover ${featureName} exactly`);
+    }
+    if (
+      rule.requiredFeatureRefs.length !== expectedReferences.length
+      || expectedReferences.some((reference) => !rule.requiredFeatureRefs.includes(reference))
+    ) {
+      throw new Error(`ACP closed feature profile has stale references for ${featureName}`);
+    }
+    if (rule.requiredFeatureRefs.some((reference) => reference.includes('product-full'))) {
+      throw new Error(`ACP closed feature profile must not reach product-full in ${featureName}`);
     }
   }
   const ownerFeatureRulePaths = new Set(
@@ -913,6 +1084,7 @@ export function runManifestParserSelfTest({
     'schannel',
     'win32job',
     'bitfun-relay-service',
+    'bitfun-transport',
     'htmd',
     'legible',
     'readability-js',
@@ -931,6 +1103,7 @@ export function runManifestParserSelfTest({
     'aes',
     'aes-gcm',
     'bitfun-relay-service',
+    'bitfun-transport',
     'eventsource-stream',
     'git2',
     'glob',
@@ -968,45 +1141,6 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
-  const workspaceReqwestRule = requiredContentRules.find((rule) => rule.path === 'Cargo.toml');
-  const workspaceReqwestRuleText = workspaceReqwestRule?.patterns
-    .map((pattern) => pattern.regex.source)
-    .join('\n') ?? '';
-  for (const featureName of ['http2', 'json', 'stream', 'multipart', 'query', 'form']) {
-    if (!workspaceReqwestRuleText.includes(featureName)) {
-      throw new Error(`workspace Reqwest boundary must allow only reviewed feature ${featureName}`);
-    }
-  }
-  const workspaceReqwestPattern = workspaceReqwestRule?.patterns[0]?.regex;
-  const reviewedReqwestDeclaration =
-    'reqwest = { version = "0.13.4", default-features = false, features = ["http2", "json", "stream", "multipart", "query", "form"] }';
-  if (!workspaceReqwestPattern?.test(reviewedReqwestDeclaration)) {
-    throw new Error('workspace Reqwest boundary must accept the reviewed transport/data profile');
-  }
-  for (const featureName of ['default-tls', 'http3', '__native-tls']) {
-    const expandedDeclaration = reviewedReqwestDeclaration.replace(
-      '"form"]',
-      `"form", "${featureName}"]`,
-    );
-    if (workspaceReqwestPattern.test(expandedDeclaration)) {
-      throw new Error(`workspace Reqwest boundary must reject TLS-enabling feature ${featureName}`);
-    }
-  }
-  for (const path of [
-    'src/apps/cli/Cargo.toml',
-    'src/apps/desktop/Cargo.toml',
-    'src/crates/adapters/ai-adapters/Cargo.toml',
-    'src/crates/services/miniapp-market-service/Cargo.toml',
-    'src/crates/services/skin-market-service/Cargo.toml',
-  ]) {
-    const reqwestRule = requiredContentRules.find((rule) => rule.path === path);
-    const reqwestRuleText = reqwestRule?.patterns
-      .map((pattern) => pattern.regex.source)
-      .join('\n') ?? '';
-    if (!reqwestRuleText.includes('rustls')) {
-      throw new Error(`${path} must guard the explicit Reqwest Rustls client dependency`);
-    }
-  }
   const servicesCoreOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-core',
   );
@@ -1029,8 +1163,13 @@ export function runManifestParserSelfTest({
     ['ignore', ['filesystem']],
     ['libc', ['local-storage', 'process-runtime']],
     ['notify', ['lsp']],
+    [
+      'regex',
+      ['diagnostics', 'filesystem', 'local-storage', 'markdown', 'workspace-instructions'],
+    ],
     ['rusqlite', ['permission']],
     ['serde_yaml', ['markdown', 'workspace-instructions']],
+    ['similar', ['diff', 'local-storage']],
     [
       'sha2',
       [
@@ -1045,6 +1184,21 @@ export function runManifestParserSelfTest({
     ['win32job', ['process-runtime']],
     ['windows', ['json-io', 'local-storage', 'process-runtime']],
     ['zip', ['lsp']],
+    [
+      'tokio',
+      [
+        'diff',
+        'filesystem',
+        'json-io',
+        'local-storage',
+        'lsp',
+        'permission',
+        'process-runtime',
+        'workspace-instructions',
+        'workspace-runtime',
+        'workspace-text-runtime',
+      ],
+    ],
   ]);
   for (const [dependencyName, ownerFeatures] of expectedServicesCoreOwners) {
     const dependency = servicesCoreOptionalOwnerRule?.dependencies.find(
@@ -1320,6 +1474,9 @@ export function runManifestParserSelfTest({
   const pluginPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/plugin.rs',
   );
+  const agentRuntimePublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/execution/agent-runtime/src/lib.rs',
+  );
   const pluginRootReexportRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/lib.rs',
   );
@@ -1414,6 +1571,20 @@ export function runManifestParserSelfTest({
     'TopLevelEnum,PluginDispatchEnvelope,HiddenType,PublicName,MultiLineType,PublicMultiLine,host,CONTRACT_VERSION'
   ) {
     throw new Error('public API parser must collect top-level items and re-exports without impl methods');
+  }
+  const parsedAgentRuntimeModules = collectTopLevelRustPublicSymbols(`
+    #[cfg(feature = "agent-runtime")]
+    pub mod agents;
+    pub mod accidental_feature_free_api;
+  `);
+  if (!agentRuntimePublicApiRule?.allowedSymbols?.includes('agents')) {
+    throw new Error('Agent Runtime public API allowlist must include reviewed owner modules');
+  }
+  if (
+    !parsedAgentRuntimeModules.includes('accidental_feature_free_api') ||
+    agentRuntimePublicApiRule.allowedSymbols.includes('accidental_feature_free_api')
+  ) {
+    throw new Error('Agent Runtime public API allowlist must reject an unreviewed feature-free module');
   }
   const parsedExternalSubagentIds = collectTopLevelRustPublicSymbols(`
     external_subagent_id!(ExternalSubagentLocalId, "local");
@@ -2356,7 +2527,7 @@ export function runManifestParserSelfTest({
 
   const requiredContentContracts = [
     {
-      path: 'src/crates/contracts/runtime-ports/src/lib.rs',
+      path: 'src/crates/contracts/runtime-ports/src/agent_api.rs',
       contracts: [
         'AgentDialogTurnRequest',
         'AgentDialogPrependedReminder',
@@ -3258,7 +3429,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/product-capabilities/tests/product_capabilities.rs',
+      path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_capabilities.rs',
       contracts: [
         'product_assembly_plan_exposes_build_feature_groups_explicitly',
         'product_runtime_assembly_reports_runtime_service_capability_gaps',
@@ -3266,7 +3437,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
+      path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/plugin_product_shape.rs',
       contracts: [
         'executable_plugin_runtime_is_limited_to_product_full_desktop_and_cli',
         'executable_plugin_runtime_client_builds_agent_runtime_parts',
@@ -3305,7 +3476,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+      path: 'src/crates/assembly/product-capabilities/tests/product_capability_contracts/product_sdk_assembly.rs',
       contracts: [
         'product_runtime_parts_can_build_agent_runtime_sdk_without_core',
         'sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_bitfun_core',
@@ -4239,7 +4410,7 @@ export function runManifestParserSelfTest({
       contracts: ['renumber_research_report', 'ResearchCitationRenumberOutput', 'ResearchCitationDisplayMapEntry', 'rejected_index_rows_dropped', 'should_post_process_research_report'],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/agent_long_horizon_contracts/deep_research_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
       contracts: ['deep_research_citation_renumber_owner_preserves_report_and_display_map_contracts', 'deep_research_citation_renumber_owner_is_idempotent_without_citations'],
     },
     {
@@ -4300,11 +4471,11 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/Cargo.toml',
       contracts: [
-        'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", default-features = false, optional = true \\}',
+        'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", optional = true \\}',
         'bitfun-ai-adapters = \\{ path = "\\.\\.\\/\\.\\.\\/adapters\\/ai-adapters", optional = true \\}',
-        'bitfun-tool-packs = \\{ path = "\\.\\.\\/\\.\\.\\/execution\\/tool-provider-groups", default-features = false, optional = true \\}',
-        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, optional = true \\}',
-        'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", default-features = false, optional = true \\}',
+        'bitfun-tool-packs = \\{ path = "\\.\\.\\/\\.\\.\\/execution\\/tool-provider-groups", optional = true \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", optional = true \\}',
+        'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", optional = true \\}',
         'dep:bitfun-ai-adapters',
         'ai-adapter-runtime',
         'canvas-runtime',
@@ -4875,14 +5046,11 @@ export function runManifestParserSelfTest({
       contracts: [
         'prepare_commit_ai_prompt',
         'parse_commit_ai_response',
-        'build_work_state_analysis_prompt',
-        'parse_work_state_analysis_response',
         'send_message',
         'AgentError::internal_error',
         'CoreCommitAiAnalysisService',
-        'CoreWorkStateAiAnalysisService',
+        'CoreCommitAiAnalysisService::new_with_task_config',
         'parse_commit_response_preserves_product_domain_response_policy',
-        'parse_complete_analysis_preserves_product_domain_response_policy',
       ],
     },
     {
@@ -4890,20 +5058,12 @@ export function runManifestParserSelfTest({
       contracts: [
         'FunctionAgentGitService',
         'git_commit_snapshot',
-        'startchat_git_snapshot',
-        'startchat_time_snapshot',
-        'process_manager::create_command("git")',
-        'git_unpushed_commits',
-        'git_ahead_behind',
-        'git_last_commit_timestamp',
       ],
     },
     {
       path: 'src/crates/services/services-integrations/tests/function_agent_contracts.rs',
       contracts: [
         'git_service_builds_commit_snapshot_from_staged_diff_without_unstaged_content',
-        'git_service_startchat_snapshot_preserves_no_head_and_non_git_fallback',
-        'git_service_time_snapshot_uses_last_commit_timestamp',
       ],
     },
     {
@@ -4911,42 +5071,19 @@ export function runManifestParserSelfTest({
       contracts: ['CoreCommitAiAnalysisService as AIAnalysisService'],
     },
     {
-      path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/ai_service.rs',
-      contracts: ['CoreWorkStateAiAnalysisService as AIWorkStateService'],
-    },
-    {
       path: 'src/crates/assembly/core/src/function_agents/git-func-agent/commit_generator.rs',
       contracts: ['CoreProductDomainRuntime', 'generate_function_agent_commit_message'],
-    },
-    {
-      path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
-      contracts: ['CoreProductDomainRuntime', 'analyze_function_agent_work_state'],
     },
     {
       path: 'src/crates/contracts/product-domains/src/function_agents/ports.rs',
       contracts: [
         'FunctionAgentRuntimeFacade',
         'generate_commit_message',
-        'analyze_work_state',
-        'git_work_state_from_snapshot',
-        'StartchatTimeSnapshot',
-        'startchat_time_snapshot',
       ],
     },
     {
       path: 'src/crates/contracts/product-domains/src/function_agents/common.rs',
       contracts: ['extract_json_from_ai_response', 'try_repair_json'],
-    },
-    {
-      path: 'src/crates/contracts/product-domains/src/function_agents/startchat_func_agent/utils.rs',
-      contracts: [
-        'WORK_STATE_ANALYSIS_PROMPT',
-        'build_work_state_analysis_prompt',
-        'ParsedCompleteAnalysis',
-        'parse_complete_analysis_value',
-        'parse_complete_analysis_json',
-        'parse_work_state_analysis_response',
-      ],
     },
     {
       path: 'src/crates/contracts/product-domains/src/function_agents/git_func_agent/utils.rs',
@@ -5451,7 +5588,6 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
     'bitfun-sdk-host',
     'bitfun-services-core',
     'bitfun-services-integrations',
-    'bitfun-transport',
     'terminal-core',
     'tool-runtime',
     'tauri',
@@ -5463,13 +5599,14 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
       throw new Error(`agent-runtime-ipc lightweight boundary must forbid ${dependency}`);
     }
   }
-  for (const sharedContract of [
+  for (const allowedDependency of [
     'bitfun-events',
     'bitfun-product-domains',
     'bitfun-runtime-ports',
+    'bitfun-transport',
   ]) {
-    if (runtimeIpcBoundary?.forbiddenDeps.includes(sharedContract)) {
-      throw new Error(`agent-runtime-ipc must be allowed to reuse ${sharedContract}`);
+    if (runtimeIpcBoundary?.forbiddenDeps.includes(allowedDependency)) {
+      throw new Error(`agent-runtime-ipc must be allowed to reuse ${allowedDependency}`);
     }
   }
   const runtimeIpcProfile = dependencyProfileRules.find(
@@ -5553,6 +5690,54 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
   ) {
     throw new Error(
       'agent-runtime-ipc local-only guard must cover network transports in new private modules',
+    );
+  }
+  const runtimeIpcSharedTransportPattern = runtimeIpcTransportRule?.patterns.find(
+    (pattern) => pattern.message.includes('bounded JSON API'),
+  )?.regex;
+  if (
+    !runtimeIpcSharedTransportPattern ||
+    !runtimeIpcSharedTransportPattern.test('use bitfun_transport::TransportAdapter;') ||
+    !runtimeIpcSharedTransportPattern.test('use bitfun_transport as transport;') ||
+    runtimeIpcSharedTransportPattern.test('use bitfun_transport::encode_json_with_limit;') ||
+    runtimeIpcSharedTransportPattern.test('use bitfun_transport::JsonCodecError;')
+  ) {
+    throw new Error(
+      'agent-runtime-ipc may consume only the reviewed bitfun-transport bounded JSON API',
+    );
+  }
+  const runtimeIpcTransportFeatureRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/Cargo.toml' &&
+      rule.reason.includes('bitfun-transport features'),
+  );
+  const runtimeIpcTransportFeaturePattern =
+    runtimeIpcTransportFeatureRule?.patterns[0]?.regex;
+  if (
+    !runtimeIpcTransportFeaturePattern?.test(
+      'bitfun-transport = { path = "../transport", features = ["tauri-adapter"] }',
+    ) ||
+    runtimeIpcTransportFeaturePattern.test(
+      'bitfun-transport = { path = "../transport" }',
+    )
+  ) {
+    throw new Error('agent-runtime-ipc must not enable bitfun-transport features');
+  }
+  const runtimeIpcTransportDependencyRule = requiredContentRules.find(
+    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/Cargo.toml' &&
+      rule.reason.includes('exact feature-free bitfun-transport dependency'),
+  );
+  const runtimeIpcTransportDependencyPattern =
+    runtimeIpcTransportDependencyRule?.patterns[0]?.regex;
+  if (
+    !runtimeIpcTransportDependencyPattern?.test(
+      'bitfun-transport = { path = "../transport" }',
+    ) ||
+    runtimeIpcTransportDependencyPattern.test(
+      'bitfun-transport = {\n  path = "../transport",\n  features = ["tauri-adapter"]\n}',
+    )
+  ) {
+    throw new Error(
+      'agent-runtime-ipc must keep the exact feature-free bitfun-transport dependency',
     );
   }
 }

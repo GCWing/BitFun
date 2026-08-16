@@ -4,6 +4,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { ITransportAdapter, type TransportRequestTiming } from './base';
 import { createLogger } from '@/shared/utils/logger';
+import { routeSurfaceEvent } from '@/infrastructure/peer-device/deviceSurfaceRouting';
 import { sanitizeErrorForLog } from '../logSanitizer';
 
 const log = createLogger('TauriAdapter');
@@ -33,6 +34,10 @@ export class TauriTransportAdapter implements ITransportAdapter {
   private invokeFn: ((action: string, params?: any) => Promise<any>) | null = null;
   private initPromise: Promise<void> | null = null;
   private listenerRegistrationPromises = new Set<Promise<void>>();
+
+  supportsSearchStreamEvents(): boolean {
+    return true;
+  }
 
   // Lazy initialize Tauri API
   private async ensureInitialized() {
@@ -123,8 +128,15 @@ export class TauriTransportAdapter implements ITransportAdapter {
 
     const registration = listen<T>(event, (e) => {
       if (!isUnlistened) {
+        // Peer devices stay attached while the UI renders another device, so
+        // several product event streams share this bus. Only the rendered
+        // device surface may reach product listeners.
+        const route = routeSurfaceEvent(event, e.payload);
+        if (!route.deliver) {
+          return;
+        }
         try {
-          callback(e.payload);
+          callback(route.payload);
         } catch (error) {
       log.error('Error in event listener callback', { event, error: sanitizeErrorForLog(error) });
         }

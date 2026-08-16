@@ -23,10 +23,9 @@ use tokio::sync::broadcast::error::TryRecvError;
 use bitfun_app_server_protocol::model::{AddModelRequest, UpdateModelRequest};
 use bitfun_app_server_protocol::skill::SkillSummary;
 use bitfun_app_server_protocol::subagent::SubagentSummary;
-use bitfun_core_types::SessionUsageReport;
 use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
 use bitfun_runtime_ports::{
-    AgentLocalCommandTurnRecordRequest, AgentSessionComposerUpdate, AgentSessionLineageEntry,
+    AgentSessionComposerUpdate, AgentSessionLineageEntry,
     AgentSessionLineageInspection, AgentSessionLineageSnapshot, AgentSessionUsageRequest,
     AgentTurnCancellationResult, AgentWorkspaceReferenceSearchResult, SessionTranscript,
     WorkspaceDiffSnapshot,

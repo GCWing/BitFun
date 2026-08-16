@@ -1,5 +1,5 @@
 import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
-import { ChatSurface } from './ChatSurface';
+import { ChatSurface } from '../state/ChatSurface';
 
 export class ConversationViewContract {
   static surfaceForRoute(isRemoteChat: boolean): ChatSurface {

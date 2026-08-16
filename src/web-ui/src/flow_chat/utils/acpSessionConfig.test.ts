@@ -4,6 +4,7 @@ import type { AcpSessionConfigOption } from '@/infrastructure/api/service-api/AC
 import {
   buildAcpFastModeValue,
   getAcpModelProviderName,
+  resolveAcpModeState,
   resolveAcpReasoningState,
   resolveAcpFastModeState,
 } from './acpSessionConfig';
@@ -79,6 +80,50 @@ describe('ACP reasoning config', () => {
       type: 'select',
       currentValue: 'high',
       options: [{ value: 'high', name: 'High' }],
+    }])).toBeNull();
+  });
+});
+
+describe('ACP session mode config', () => {
+  const option: AcpSessionConfigOption = {
+    id: 'agent-preset',
+    name: 'Mode',
+    category: 'mode',
+    type: 'select',
+    currentValue: 'standard',
+    options: [
+      { value: 'standard', name: 'Standard' },
+      { value: 'minimal', name: 'Minimal' },
+    ],
+  };
+
+  it('resolves whatever the agent files under the mode category', () => {
+    expect(resolveAcpModeState([option])).toEqual({
+      option,
+      currentValue: 'standard',
+      locked: false,
+    });
+  });
+
+  it('reads one remaining choice as locked', () => {
+    // The only signal ACP gives an agent for "this can no longer change":
+    // nothing left to pick. Agents that keep offering alternatives stay live.
+    const fixed: AcpSessionConfigOption = {
+      ...option,
+      description: 'This conversation has already started, so its mode is fixed.',
+      options: [{ value: 'standard', name: 'Standard' }],
+    };
+
+    expect(resolveAcpModeState([fixed])?.locked).toBe(true);
+  });
+
+  it('fails closed for an uncategorized, empty, or inconsistent option', () => {
+    expect(resolveAcpModeState([])).toBeNull();
+    expect(resolveAcpModeState([{ ...option, category: undefined }])).toBeNull();
+    expect(resolveAcpModeState([{ ...option, options: [] }])).toBeNull();
+    expect(resolveAcpModeState([{ ...option, currentValue: 'gone' }])).toBeNull();
+    expect(resolveAcpModeState([{
+      id: 'agent-preset', name: 'Mode', category: 'mode', type: 'boolean', currentValue: true,
     }])).toBeNull();
   });
 });

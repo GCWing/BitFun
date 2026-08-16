@@ -92,6 +92,7 @@ export struct SettingsSheet {
       .backgroundColor(CARD)
       .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
       .margin({ top: 22, right: 18 })
+      .accessibilityText(RemoteI18n.t('common.close'))
       .onClick(() => {
         this.onClose();
       })

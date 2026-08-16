@@ -457,6 +457,50 @@ describe('ExternalSourcesAPI', () => {
     });
   });
 
+  it('sends exact owner-scoped decision sets for bulk resource changes', async () => {
+    const toolDecisions = [{ approvalKey: 'tool-approval-v1', decisionKey: 'tool-v1' }];
+    const subagentDecisions = [{ candidateId: 'agent-review', decisionKey: 'agent-v1' }];
+    const mcpDecisions = [{ candidateId: 'mcp-docs', decisionKey: 'mcp-v1' }];
+
+    await externalSourcesAPI.setToolTargetsEnabled(
+      'D:/workspace/project', toolDecisions, true, 11, 7,
+    );
+    await externalSourcesAPI.setSubagentsEnabled(
+      'D:/workspace/project', subagentDecisions, false, 12, 8,
+    );
+    await externalSourcesAPI.setMcpServersEnabled(
+      'D:/workspace/project', mcpDecisions, true, 13, 9,
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('set_external_tool_targets_enabled_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        decisions: toolDecisions,
+        enabled: true,
+        expectedCatalogGeneration: 11,
+        expectedPreferenceRevision: 7,
+      },
+    });
+    expect(invokeMock).toHaveBeenCalledWith('set_external_subagents_enabled_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        decisions: subagentDecisions,
+        enabled: false,
+        expectedSubagentGeneration: 12,
+        expectedPreferenceRevision: 8,
+      },
+    });
+    expect(invokeMock).toHaveBeenCalledWith('set_external_mcp_servers_enabled_command', {
+      request: {
+        workspacePath: 'D:/workspace/project',
+        decisions: mcpDecisions,
+        enabled: true,
+        expectedMcpGeneration: 13,
+        expectedPreferenceRevision: 9,
+      },
+    });
+  });
+
   it('sends policy scope and optimistic revision as one atomic mutation', async () => {
     const catalogUpdated = vi.fn();
     const unsubscribe = globalEventBus.on('mode:config:updated', catalogUpdated);

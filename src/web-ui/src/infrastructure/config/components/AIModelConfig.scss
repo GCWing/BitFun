@@ -489,7 +489,11 @@
     background: transparent;
     border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: var(--bf-appearance-token-size-radius-sm);
-    transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+      box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
     min-height: 36px;
 
     
@@ -719,7 +723,12 @@
     border: none;
     background: var(--bf-appearance-token-element-bg-subtle);
     color: var(--bf-appearance-token-color-text-muted);
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard,
+      color $motion-base $easing-standard,
+      opacity $motion-base $easing-standard,
+      transform $motion-base $easing-standard;
 
     
     &:hover {
@@ -1040,7 +1049,12 @@
       color: var(--bf-appearance-token-color-text-primary);
       font-size: var(--bf-appearance-token-font-size-sm);
       font-family: $font-family-sans;
-      transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+      transition:
+        background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+        border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+        box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+        color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+        opacity var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
       min-height: 36px;
 
       
@@ -1651,7 +1665,10 @@
     background: transparent;
     border-radius: var(--bf-appearance-token-size-radius-sm);
     border: 1px solid var(--bf-appearance-token-border-base);
-    transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+      border-color var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard),
+      box-shadow var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-subtle);
@@ -1787,10 +1804,10 @@
 
   
   .spinning {
-    animation: spin 1s linear infinite;
+    animation: bitfun-ai-model-config-spin 1s linear infinite;
   }
 
-  @keyframes spin {
+  @keyframes bitfun-ai-model-config-spin {
     to {
       transform: rotate(360deg);
     }
@@ -1951,7 +1968,11 @@
 
   &__custom-option {
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-base $easing-standard,
+      border-color $motion-base $easing-standard,
+      box-shadow $motion-base $easing-standard,
+      color $motion-base $easing-standard;
     border: 1px dashed var(--bf-appearance-token-border-base);
 
     &:hover {
@@ -2437,5 +2458,12 @@
     &__subscription-login-actions {
       justify-content: flex-start;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-ai-model-config .spinning {
+    animation: none;
+    transform: none;
   }
 }

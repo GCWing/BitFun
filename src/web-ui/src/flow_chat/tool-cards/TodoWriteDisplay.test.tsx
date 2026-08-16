@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 import { createTodoRenderItems } from './todoRenderItems';
 import { TodoWriteDisplay } from './TodoWriteDisplay';
+import { FLOWCHAT_COLLAPSE_DURATION_MS } from '../components/modern/flowChatCollapseMotion';
 
 vi.mock('react-i18next', async (importOriginal) => ({
   ...await importOriginal<typeof import('react-i18next')>(),
@@ -93,38 +94,26 @@ describe('TodoWriteDisplay automatic collapse', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it('publishes an auto collapse intent before removing expanded todos', () => {
-    let receivedDetail: Record<string, unknown> | null = null;
-    let hadExpandedBodyWhenIntentFired = false;
-    const handleIntent = (event: Event) => {
-      receivedDetail = (event as CustomEvent<Record<string, unknown>>).detail;
-      hadExpandedBodyWhenIntentFired = Boolean(container.querySelector('.todo-expanded-body'));
-    };
-    window.addEventListener('flowchat:tool-card-collapse-intent', handleIntent);
+  it('lets completed todo content collapse through normal layout state', () => {
+    vi.useFakeTimers();
+    act(() => {
+      root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('pending')} config={config} />);
+    });
+    expect(container.querySelector('.todo-expanded-body')).not.toBeNull();
 
-    try {
-      act(() => {
-        root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('pending')} config={config} />);
-      });
-      expect(container.querySelector('.todo-expanded-body')).not.toBeNull();
+    act(() => {
+      root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('in_progress')} config={config} />);
+    });
 
-      act(() => {
-        root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('in_progress')} config={config} />);
-      });
+    expect(container.querySelector('.todo-expanded-body')).not.toBeNull();
 
-      expect(hadExpandedBodyWhenIntentFired).toBe(true);
-      expect(receivedDetail).toMatchObject({
-        toolId: 'todo-tool-a',
-        toolName: 'TodoWrite',
-        cardHeight: 320,
-        reason: 'auto',
-      });
-      expect(container.querySelector('.todo-expanded-body')).toBeNull();
-    } finally {
-      window.removeEventListener('flowchat:tool-card-collapse-intent', handleIntent);
-    }
+    act(() => {
+      vi.advanceTimersByTime(FLOWCHAT_COLLAPSE_DURATION_MS);
+    });
+    expect(container.querySelector('.todo-expanded-body')).toBeNull();
   });
 });

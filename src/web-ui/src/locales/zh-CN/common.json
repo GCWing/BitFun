@@ -224,6 +224,7 @@
       "sessions": "会话",
       "project": "目录",
       "persona": "助理",
+      "todos": "待办事项",
       "agents": "专业智能体",
       "skills": "技能",
       "tools": "工具",
@@ -234,6 +235,7 @@
     },
     "tooltips": {
       "persona": "助理 — 创建与管理所有助理实例",
+      "todos": "待办 — 汇总所有定时任务，列表与日历两层查看",
       "agents": "它能调用哪些 Agent",
       "skills": "它懂什么专项知识 — 技能知识文件",
       "tools": "它能用什么工具 — 内置工具与 MCP 服务",
@@ -429,7 +431,7 @@
         "enabledHint": "启用该任务",
         "scheduleKind": "调度方式",
         "at": "执行时间",
-        "everyMs": "间隔（分钟）",
+        "everyMs": "间隔",
         "anchorMs": "锚点时间（可选）",
         "cronExpr": "Cron 表达式",
         "timezone": "时区（可选）",
@@ -454,9 +456,13 @@
         "cron": "Cron"
       },
       "scheduleSummary": {
-        "every": "每 {{everyMinutes}} 分钟",
         "cron": "Cron: {{expr}}",
-        "cronWithTz": "Cron: {{expr}} · {{tz}}"
+        "cronWithTz": "Cron: {{expr}} · {{tz}}",
+        "everyUnit": {
+          "minute": "每 {{value}} 分钟",
+          "hour": "每 {{value}} 小时",
+          "day": "每 {{value}} 天"
+        }
       },
       "targets": {
         "session": "会话",
@@ -503,6 +509,11 @@
         "promptRequired": "请输入任务内容",
         "workspaceRequired": "请输入工作区路径",
         "sessionRequired": "请选择会话"
+      },
+      "intervalUnits": {
+        "minute": "分钟",
+        "hour": "小时",
+        "day": "天"
       }
     },
     "workspaces": {
@@ -767,6 +778,18 @@
     "peerRemoteLabel": "{{name}}",
     "peerRemoteBadgeTitle": "远程设备：{{name}}",
     "disconnectPeer": "断开",
+    "deviceSwitcher": {
+      "title": "设备",
+      "open": "切换设备",
+      "running": "$t(shared:statuses.running)",
+      "noDevices": "该账号下暂无其他已登录设备。",
+      "hint": "切换只改变当前窗口显示的设备，各设备的任务都会继续执行。",
+      "othersRunning": "其他设备仍在执行任务（{{count}}）",
+      "switched": "已切换到 {{name}}",
+      "switchedLocal": "已切换回本机",
+      "disconnected": "已断开 {{name}}",
+      "disconnectHint": "结束对该设备的控制，并取消它正在为你执行的任务"
+    },
     "peerAutoExitOffline": "远程设备「{{name}}」已离线 — 已断开",
     "peerAutoExitRpc": "与远程设备「{{name}}」连接丢失 — 已断开",
     "syncInProgressHint": "云端同步仍在进行，请稍后再打开远程设备。",
@@ -1346,6 +1369,7 @@
     "browser": "浏览器",
     "insights": "洞察",
     "assistant": "助理",
+    "todos": "待办事项",
     "shell": "Shell",
     "panelView": "面板视图"
   },
@@ -1711,5 +1735,14 @@
   },
   "collapse": "折叠",
   "expand": "展开",
-  "retry": "重试"
+  "retry": "重试",
+  "dateTimeField": {
+    "label": "日期与时间",
+    "openPicker": "打开日期选择器",
+    "pickerLabel": "选择日期",
+    "previousMonth": "上个月",
+    "nextMonth": "下个月",
+    "now": "此刻",
+    "close": "关闭"
+  }
 }

@@ -383,7 +383,7 @@ const ExternalMcpOverview: React.FC = () => {
           {scopeLabel(sourceRecord?.scope)}
         </span>
         {sourceStatus ? (
-          <span className={`bitfun-mcp-tools__status-badge ${sourceStatus === 'stale' ? 'is-pending' : 'is-error'}`} data-bf-component="external-mcp-overview" data-bf-part="statusBadge" data-bf-state={sourceStatus === 'stale' ? 'pending' : 'error'}>
+          <span className={`bitfun-mcp-tools__status-badge ${sourceStatus === 'degraded' ? 'is-error' : ''}`} data-bf-component="external-mcp-overview" data-bf-part="statusBadge" data-bf-state={sourceStatus === 'degraded' ? 'error' : 'stale'}>
             {t(`external.status.${sourceStatus}`)}
           </span>
         ) : null}

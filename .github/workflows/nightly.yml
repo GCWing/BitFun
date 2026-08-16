@@ -68,6 +68,11 @@ jobs:
     if: needs.check-changes.outputs.should_build == 'true'
     env:
       NODE_OPTIONS: --max-old-space-size=6144
+      BITFUN_RELEASE_CHANNEL: nightly
+      # Nightly does not publish a Tauri latest.json feed yet. Preserve its
+      # existing stable updater endpoints until that publishing path exists.
+      TAURI_UPDATER_ENDPOINT: https://github.com/GCWing/BitFun/releases/latest/download/latest.json
+      TAURI_UPDATER_FALLBACK_ENDPOINT: https://openbitfun.com/release/latest.json
       # Nightly relay archives are signed too (linux-binaries.yml receives the
       # key), so nightly Desktop needs the same trust root to verify them.
       BITFUN_RELEASE_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
@@ -176,28 +181,8 @@ jobs:
           set -euo pipefail
 
           echo "Patching version to $NIGHTLY_VERSION"
-
-          # Patch package.json
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
-            pkg.version = process.env.NIGHTLY_VERSION.split('+')[0];
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-            for (const file of ['BitFun-Installer/package.json', 'BitFun-Installer/package-lock.json']) {
-              const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
-              data.version = pkg.version;
-              if (data.packages?.['']) data.packages[''].version = pkg.version;
-              fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
-            }
-          "
-
-          # Patch Cargo workspace version (semver: nightly suffix uses hyphen)
-          # Cargo.toml only accepts: MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-PRE
-          CARGO_VERSION="$(echo "$NIGHTLY_VERSION" | sed 's/+.*//')"
-          sed -i.bak "s/^version = \".*\" # x-release-please-version/version = \"${CARGO_VERSION}\" # x-release-please-version/" Cargo.toml
-          rm -f Cargo.toml.bak
-          sed -i.bak "0,/^version = \".*\"/s//version = \"${CARGO_VERSION}\"/" BitFun-Installer/src-tauri/Cargo.toml
-          rm -f BitFun-Installer/src-tauri/Cargo.toml.bak
+          ASSET_VERSION="${NIGHTLY_VERSION%%+*}"
+          node scripts/set-build-version.mjs --version "$ASSET_VERSION"
 
           echo "package.json version: $(jq -r '.version' package.json)"
           echo "Cargo.toml version:   $(grep 'x-release-please-version' Cargo.toml)"
@@ -466,7 +451,8 @@ jobs:
 
           # Publish the public key alongside the signatures: a signature nobody
           # can fetch a key for is not verifiable.
-          printf '%s' "${BITFUN_SIGNING_PUBKEY}" | base64 -d >release-assets/minisign.pub
+          node scripts/write-minisign-public-key.mjs \
+            --out release-assets/minisign.pub
 
       - name: Create nightly release
         uses: softprops/action-gh-release@v3

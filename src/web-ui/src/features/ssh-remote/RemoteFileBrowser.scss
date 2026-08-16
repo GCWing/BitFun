@@ -11,7 +11,7 @@
   background: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.6);
   backdrop-filter: blur(4px);
   z-index: 260;
-  animation: fadeIn 0.2s ease;
+  animation: remote-file-browser-fade-in 0.2s ease;
 
   // Beat `.bitfun-app-layout *:focus-visible` (same specificity as a single-class :focus-visible; load order can win).
   .remote-file-browser__path-input:focus,
@@ -22,7 +22,7 @@
   }
 }
 
-@keyframes fadeIn {
+@keyframes remote-file-browser-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
@@ -38,7 +38,7 @@
   border-radius: 12px;
   box-shadow: 0 24px 48px var(--bf-appearance-token-color-overlay-black-50), 0 0 0 1px var(--bf-appearance-token-color-overlay-white-04);
   overflow: hidden;
-  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: remote-file-browser-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
   &__header {
     display: flex;
@@ -68,7 +68,9 @@
     border-radius: 6px;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-subtle);
@@ -149,7 +151,9 @@
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     white-space: nowrap;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-subtle);
@@ -196,7 +200,10 @@
     border-radius: 6px;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      opacity var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &:hover:not(:disabled) {
       background: var(--bf-appearance-token-element-bg-subtle);
@@ -220,7 +227,7 @@
     flex-shrink: 0;
 
     .remote-file-browser__spinner-inline {
-      animation: spin 0.8s linear infinite;
+      animation: remote-file-browser-spin 0.8s linear infinite;
     }
   }
 
@@ -265,7 +272,7 @@
   }
 
   &__spinner {
-    animation: spin 1s linear infinite;
+    animation: remote-file-browser-spin 1s linear infinite;
     color: var(--bf-appearance-token-color-accent-500);
   }
 
@@ -435,7 +442,9 @@
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     text-align: left;
-    transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+    transition:
+      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     svg {
       color: var(--bf-appearance-token-color-text-muted);
@@ -586,12 +595,12 @@
   }
 }
 
-@keyframes spin {
+@keyframes remote-file-browser-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-@keyframes slideIn {
+@keyframes remote-file-browser-slide-in {
   from {
     opacity: 0;
     transform: translateY(20px) scale(0.97);
@@ -599,5 +608,21 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remote-file-browser-overlay,
+  .remote-file-browser,
+  .remote-file-browser__spinner,
+  .remote-file-browser__spinner-inline {
+    animation: none;
+  }
+
+  .remote-file-browser__close-btn,
+  .remote-file-browser__breadcrumb-btn,
+  .remote-file-browser__toolbar-btn,
+  .remote-file-browser__context-menu-item {
+    transition: none;
   }
 }

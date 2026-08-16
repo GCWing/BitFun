@@ -532,6 +532,20 @@ pub struct DialogTurnData {
     )]
     pub error_detail: Option<AiErrorDetail>,
 
+    /// Additive recovery lifecycle for an intentionally interrupted user turn.
+    ///
+    /// `TurnStatus` remains backward-compatible (`cancelled` while interrupted)
+    /// so older builds can still load the turn and simply treat it as terminal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery: Option<DialogTurnRecoveryData>,
+
+    /// Monotonic tombstone proving that the Runtime has owned persistence for
+    /// this turn. It remains after recovery settles so a delayed whole-turn UI
+    /// projection from an older execution generation cannot overwrite the
+    /// authoritative terminal payload.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery_epoch: Option<u32>,
+
     /// Turn status
     pub status: TurnStatus,
 }
@@ -999,6 +1013,29 @@ fn default_transcript_line_range() -> TranscriptLineRange {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DialogTurnRecoveryStatus {
+    Interrupted,
+    Recovering,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DialogTurnRecoveryData {
+    pub status: DialogTurnRecoveryStatus,
+    /// Generation zero is the original execution; each recovery increments it.
+    pub execution_generation: u32,
+    #[serde(default)]
+    pub resume_count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interrupted_at: Option<u64>,
+    /// Model binding captured at interruption. Recovery rejects a model switch
+    /// instead of silently continuing one turn under a different model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+}
+
 /// Turn status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -1162,6 +1199,8 @@ impl DialogTurnData {
             has_final_response: None,
             error: None,
             error_detail: None,
+            recovery: None,
+            recovery_epoch: None,
             status: TurnStatus::InProgress,
         }
     }
@@ -1190,9 +1229,10 @@ impl DialogTurnData {
 #[cfg(test)]
 mod tests {
     use super::{
-        DialogTurnData, DialogTurnKind, ModelRoundData, SessionMemoryMode, SessionMetadata,
-        SessionRelationship, SessionRelationshipKind, SessionTurnWindowResponse, TextItemData,
-        ThinkingItemData, ToolItemData, UserMessageData,
+        DialogTurnData, DialogTurnKind, DialogTurnRecoveryData, DialogTurnRecoveryStatus,
+        ModelRoundData, SessionMemoryMode, SessionMetadata, SessionRelationship,
+        SessionRelationshipKind, SessionTurnWindowResponse, TextItemData, ThinkingItemData,
+        ToolItemData, UserMessageData,
     };
     use bitfun_core_types::{SessionContinuationPolicy, SessionKind};
 
@@ -1217,6 +1257,41 @@ mod tests {
             serde_json::from_value(payload).expect("legacy payload should deserialize");
 
         assert_eq!(turn.kind, DialogTurnKind::UserDialog);
+        assert!(turn.recovery.is_none());
+    }
+
+    #[test]
+    fn interrupted_turn_recovery_metadata_is_additive_and_generation_scoped() {
+        let mut turn = DialogTurnData::new(
+            "turn-1".to_string(),
+            0,
+            "session-1".to_string(),
+            UserMessageData {
+                id: "user-1".to_string(),
+                content: "hello".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        turn.recovery = Some(DialogTurnRecoveryData {
+            status: DialogTurnRecoveryStatus::Interrupted,
+            execution_generation: 2,
+            resume_count: 2,
+            interrupted_at: Some(42),
+            model_id: Some("model-a".to_string()),
+        });
+
+        let serialized = serde_json::to_value(&turn).expect("serialize interrupted turn");
+        assert_eq!(serialized["status"], "inprogress");
+        assert_eq!(serialized["recovery"]["status"], "interrupted");
+        assert_eq!(serialized["recovery"]["executionGeneration"], 2);
+        assert_eq!(serialized["recovery"]["resumeCount"], 2);
+        assert_eq!(serialized["recovery"]["interruptedAt"], 42);
+        assert_eq!(serialized["recovery"]["modelId"], "model-a");
+
+        let restored: DialogTurnData =
+            serde_json::from_value(serialized).expect("restore interrupted turn");
+        assert_eq!(restored.recovery, turn.recovery);
     }
 
     #[test]

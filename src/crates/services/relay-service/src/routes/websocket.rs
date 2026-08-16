@@ -88,6 +88,10 @@ pub enum InboundMessage {
     AuthConnect {
         token: String,
         device_name: String,
+        /// `desktop` | `mobile` | `watch`. Absent from clients that predate
+        /// the field, which leaves the stored kind untouched.
+        #[serde(default)]
+        device_kind: Option<String>,
     },
     /// Route an encrypted payload to another device in the same account.
     DeviceMessage {
@@ -540,7 +544,11 @@ async fn handle_text_message(
             }
         }
 
-        InboundMessage::AuthConnect { token, device_name } => {
+        InboundMessage::AuthConnect {
+            token,
+            device_name,
+            device_kind,
+        } => {
             if state.room_manager.has_connection(conn_id)
                 || state.device_manager.has_connection(conn_id)
             {
@@ -548,6 +556,9 @@ async fn handle_text_message(
             }
             if !crate::db::is_valid_auth_token(&token)
                 || !is_valid_display_text(&device_name, MAX_DEVICE_NAME_BYTES)
+                || device_kind
+                    .as_deref()
+                    .is_some_and(|kind| !crate::db::is_valid_device_kind(kind))
             {
                 return reject_protocol(out_tx, "invalid authentication parameters");
             }
@@ -598,6 +609,7 @@ async fn handle_text_message(
                 &auth.user_id,
                 &auth.device_id,
                 &device_name,
+                device_kind.as_deref(),
                 conn_id,
             )
             .await
@@ -853,6 +865,7 @@ async fn activate_pending_device_if_authorized(
     expected_user_id: &str,
     expected_device_id: &str,
     device_name: &str,
+    device_kind: Option<&str>,
     conn_id: ConnId,
 ) -> anyhow::Result<bool> {
     // Serialize the final token lookup, durable device update, activation, and
@@ -872,9 +885,15 @@ async fn activate_pending_device_if_authorized(
         return Ok(false);
     }
 
-    if let Err(error) =
-        crate::db::DeviceRow::upsert(db, expected_device_id, expected_user_id, device_name, None)
-            .await
+    if let Err(error) = crate::db::DeviceRow::upsert(
+        db,
+        expected_device_id,
+        expected_user_id,
+        device_name,
+        device_kind,
+        None,
+    )
+    .await
     {
         device_manager.disconnect_pending(conn_id);
         return Err(error);
@@ -1006,7 +1025,7 @@ mod tests {
         UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
         let token = AuthToken::create(&db, "owner", "device-a")
@@ -1037,7 +1056,7 @@ mod tests {
                 .unwrap()
         );
         assert!(!activate_pending_device_if_authorized(
-            &db, &manager, &token, "owner", "device-a", "Device A", 1,
+            &db, &manager, &token, "owner", "device-a", "Device A", None, 1,
         )
         .await
         .unwrap());
@@ -1052,7 +1071,7 @@ mod tests {
         UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
         DeviceRow::set_online(&db, "owner", "device-a", true)
@@ -1105,7 +1124,7 @@ mod tests {
             .await
             .unwrap();
         assert!(!activate_pending_device_if_authorized(
-            &db, &manager, &token, "owner", "device-a", "Device A", 2,
+            &db, &manager, &token, "owner", "device-a", "Device A", None, 2,
         )
         .await
         .unwrap());
@@ -1137,10 +1156,10 @@ mod tests {
         UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
-        DeviceRow::upsert(&db, "device-c", "owner", "Device C", None)
+        DeviceRow::upsert(&db, "device-c", "owner", "Device C", None, None)
             .await
             .unwrap();
         DeviceRow::set_online(&db, "owner", "device-a", true)
@@ -1230,7 +1249,7 @@ mod tests {
         UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
         let token = AuthToken::create(&db, "owner", "device-a")
@@ -1248,7 +1267,7 @@ mod tests {
                 .await
                 .unwrap()
         );
-        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
         DeviceRow::set_online(&db, "owner", "device-a", true)
@@ -1281,7 +1300,7 @@ mod tests {
         UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
         let token = AuthToken::create(&db, "owner", "device-a")
@@ -1299,7 +1318,7 @@ mod tests {
         manager.register_pending("owner", "device-a", &token, "Device A", 1, tx, close_tx);
 
         assert!(!activate_pending_device_if_authorized(
-            &db, &manager, &token, "owner", "device-a", "Device A", 1,
+            &db, &manager, &token, "owner", "device-a", "Device A", None, 1,
         )
         .await
         .unwrap());
@@ -1317,7 +1336,7 @@ mod tests {
         UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None)
+        DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
         let token = AuthToken::create(&db, "owner", "device-a")
@@ -1332,7 +1351,7 @@ mod tests {
         assert!(manager.online_devices("owner").is_empty());
         assert!(!manager.route_message("owner", "device-a", "opaque"));
         assert!(activate_pending_device_if_authorized(
-            &db, &manager, &token, "owner", "device-a", "Device A", 1,
+            &db, &manager, &token, "owner", "device-a", "Device A", None, 1,
         )
         .await
         .unwrap());

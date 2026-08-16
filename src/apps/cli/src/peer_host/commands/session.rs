@@ -796,7 +796,7 @@ mod tests {
 
         let snapshot_source = include_str!("snapshot.rs");
         let rollback = snapshot_source
-            .split_once("pub(crate) async fn rollback_to_turn")
+            .split_once("pub(crate) async fn rollback_session_to_turn")
             .expect("Peer rollback")
             .1
             .split_once("#[cfg(test)]")

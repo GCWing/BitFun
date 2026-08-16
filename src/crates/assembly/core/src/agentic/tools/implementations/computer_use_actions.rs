@@ -160,10 +160,10 @@ impl ComputerUseActions {
         )
         .with_hints([
             "If your target is NOT the browser: the guard only looks at the app this action would drive, so switch focus with `key_chord` [\"alt\",\"tab\"] / [\"command\",\"tab\"] (never guarded) or `open_app`, or skip focus entirely and pass an explicit non-browser `app` selector ({pid|bundle_id|name}, from `list_apps`) to `app_click` / `app_type_text` / `app_scroll` / `app_key_chord`",
-            "Page content: call ControlHub browser.connect first — it starts/attaches BitFun's managed browser profile with CDP enabled — then drive the page with snapshot/click/fill/press_key",
+            "Page content: call ControlHub browser.connect first — Chrome 144+ and Edge use a user-approved connection to the current real profile; other supported Chromium browsers reuse a real-profile endpoint when available and otherwise fall back to BitFun's persistent managed profile — then drive the page with snapshot/click/fill/press_key",
             "Browser chrome (address bar, tabs, back/forward, reload, downloads): use browser.navigate / tab_new / switch_page / back / forward / reload / close instead of mouse+keyboard",
             "File picker or <input type=file>: do NOT drive the native dialog — use browser.set_file_input_files { selector, files: [\"/abs/path\"] }. For JS alert/confirm/prompt use browser.dialog",
-            "For login/cookies/extensions keep using the CDP browser path; do not ask the user to enable a debug port on their everyday browser profile",
+            "For Chrome or Edge login/cookies/extensions, keep using the guarded CDP path; for one-time setup, ask the user to click Enable default CDP in BitFun Settings > Browser control, enable Remote debugging in the browser-owned page, and approve BitFun",
             "For isolated project Web UI testing, use the headless browser flow instead of desktop automation",
         ])
     }
@@ -427,8 +427,15 @@ impl ComputerUseActions {
                     host.key_chord(select_all).await?;
                 }
                 host.key_chord(paste_chord).await?;
+                // A paste lands in whatever already had focus and never moves
+                // the pointer, so it is not a reason to demand a fresh capture.
+                // This must run for *every* paste, not just `submit: true`:
+                // pasting and then sending a separate Enter `key_chord` is the
+                // common shape, and leaving the guard armed refuses that Enter
+                // with advice ("call `screenshot` first") that a text-only model
+                // cannot act on.
+                host.computer_use_trust_pointer_after_text_input();
                 if submit {
-                    host.computer_use_trust_pointer_after_text_input();
                     host.key_chord(submit_keys.clone()).await?;
                 }
 
@@ -542,9 +549,9 @@ impl ComputerUseActions {
     // ── Desktop AX-first dispatch (Codex parity) ──────────────────────
     // Routes the seven new app-targeted actions through the typed
     // `ComputerUseHost` API. Every successful response carries a
-    // unified envelope: `target_app`, `background_input`,
-    // `before_digest` and (for state queries) `app_state` /
-    // `app_state_nodes` so the model can reason about the AX tree
+    // unified envelope: `target_app`, `background_input`, `before_digest`
+    // and (for state queries) `app_state`, whose `tree_text` is the single
+    // rendering of the AX tree — so the model can reason about state
     // before/after each action without re-querying.
     async fn handle_desktop_ax(
         &self,
@@ -755,15 +762,34 @@ impl ComputerUseActions {
         // the heavy `screenshot` payload (it is attached out-of-band as a
         // multimodal image, not as base64 inside the JSON tree, to keep token
         // budgets under control and let the provider deliver it as `image_url`).
+        //
+        // `tree_text` is the **only** rendering of the AX tree we send. Results
+        // used to carry a sibling `app_state_nodes` array holding the same
+        // nodes as verbose JSON — one object per node, ~15 lines each. It was
+        // strictly redundant (`render_tree_text` already emits idx, role,
+        // title, value, identifier, description, help, url, frame and the
+        // enabled/focused/selected/expanded flags, with parentage implied by
+        // indentation) and nothing consumed it, yet it accounted for ~78% of a
+        // `get_app_state` result: a single observation of a windowless app
+        // measured 107 KB, of which 82 KB was that duplicate.
         fn snap_state_json(
             snap: &crate::agentic::tools::computer_use_host::AppStateSnapshot,
         ) -> serde_json::Value {
+            // Bounded here rather than at the `get_app_state` call site: every
+            // `app_click` / `app_type_text` / `app_scroll` / `app_key_chord` /
+            // `app_wait_for` result carries this same post-action tree, so they
+            // all shared the same unbounded-payload risk.
+            let tree_text = super::computer_use_tool::clip_tree_text(
+                snap.tree_text.clone(),
+                super::computer_use_tool::APP_STATE_TREE_TEXT_MAX_BYTES,
+            );
             let mut v = json!({
                 "app": snap.app,
                 "window_title": snap.window_title,
                 "digest": snap.digest,
                 "captured_at_ms": snap.captured_at_ms,
-                "tree_text": snap.tree_text,
+                "tree_text": tree_text,
+                "node_count": snap.nodes.len(),
                 "has_screenshot": snap.screenshot.is_some(),
             });
             if let Some(shot) = snap.screenshot.as_ref() {
@@ -904,7 +930,6 @@ impl ComputerUseActions {
             let mut v = json!({
                 "target_app": app,
                 "app_state": snap_state_json(&res.snapshot),
-                "app_state_nodes": res.snapshot.nodes,
                 "loop_warning": res.snapshot.loop_warning,
                 "execution_note": res.execution_note,
                 "interactive_view": res.view.as_ref().map(build_interactive_view_json),
@@ -925,7 +950,6 @@ impl ComputerUseActions {
             let mut v = json!({
                 "target_app": app,
                 "app_state": snap_state_json(&res.snapshot),
-                "app_state_nodes": res.snapshot.nodes,
                 "loop_warning": res.snapshot.loop_warning,
                 "execution_note": res.execution_note,
                 "visual_mark_view": res.view.as_ref().map(build_visual_mark_view_json),
@@ -1069,7 +1093,6 @@ impl ComputerUseActions {
                     "background_input": bg,
                     "ax_tree": ax,
                     "app_state": snap_state_json(&snap),
-                    "app_state_nodes": snap.nodes,
                     "before_digest": snap.digest,
                     "loop_warning": snap.loop_warning,
                 });
@@ -1164,7 +1187,6 @@ impl ComputerUseActions {
                     "background_input": bg,
                     "before_digest": before,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(data, Some("clicked".to_string()), &after)])
@@ -1212,7 +1234,6 @@ impl ComputerUseActions {
                     "focus": focus,
                     "before_digest": before,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(
@@ -1237,7 +1258,6 @@ impl ComputerUseActions {
                     "dy": dy,
                     "focus": focus,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(
@@ -1268,7 +1288,6 @@ impl ComputerUseActions {
                     "keys": keys,
                     "focus_idx": focus_idx,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(
@@ -1302,7 +1321,6 @@ impl ComputerUseActions {
                     "background_input": bg,
                     "predicate": predicate,
                     "app_state": snap_state_json(&after),
-                    "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
                 });
                 Ok(vec![snap_result(
@@ -2008,12 +2026,14 @@ mod tests {
 
     /// The rejection must lead somewhere: a non-browser escape route, the
     /// ControlHub actions that own browser chrome / file pickers / dialogs, and
-    /// no contradiction with `browser.connect`'s "never ask for a debug port".
+    /// no contradiction with `browser.connect`'s guarded approval flow.
     #[test]
     fn browser_guard_hints_offer_an_executable_way_out() {
         let error = ComputerUseActions::desktop_browser_guard_error("click", None);
         assert!(
-            error.message.contains("not because your task is browser-related"),
+            error
+                .message
+                .contains("not because your task is browser-related"),
             "{}",
             error.message
         );
@@ -2026,7 +2046,7 @@ mod tests {
         assert!(hints.contains("app_click"), "{hints}");
         assert!(
             !hints.contains("test port enabled") && !hints.contains("--remote-debugging-port"),
-            "must not contradict browser.connect's managed-profile rule: {hints}"
+            "must not teach the unsafe legacy default-profile debug-port flow: {hints}"
         );
     }
 

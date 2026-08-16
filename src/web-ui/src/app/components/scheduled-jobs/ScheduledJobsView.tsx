@@ -20,10 +20,8 @@ import {
   cronAPI,
   type CreateCronJobRequest,
   type CronJob,
-  type CronJobTarget,
   type CronJobTargetKind,
   type CronSchedule,
-  type CronWorkspaceRef,
   type UpdateCronJobRequest,
 } from '@/infrastructure/api';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
@@ -39,41 +37,36 @@ import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
 import { WorkspaceKind } from '@/shared/types';
-import { normalizePath } from '@/shared/utils/pathUtils';
+import {
+  ASSISTANT_WORKSPACE_AGENT_TYPE,
+  DEFAULT_AGENT_TYPE,
+  EMPTY_VALIDATION_ERRORS,
+  INTERVAL_UNIT_OPTIONS,
+  SCHEDULED_JOBS_CHANGED_EVENT,
+  buildScheduleFromDraft,
+  buildTargetFromDraft,
+  buildWorkspaceRef,
+  createEmptyDraft,
+  formatIntervalValue,
+  splitInterval,
+  getCurrentLocalDateTimeInput,
+  getNextExecutionAtMs,
+  hasValidationErrors,
+  isFutureLocalDateTimeInput,
+  jobToDraft,
+  notifyScheduledJobsChanged as emitScheduledJobsChanged,
+  validateDraft,
+  type IntervalUnit,
+  type JobDraft,
+  type JobDraftValidationErrors,
+  type ScheduleKind,
+} from './scheduledJobDraft';
+import LocalizedDateTimeField from './LocalizedDateTimeField';
+import './LocalizedDateTimeField.scss';
 import './ScheduledJobsView.scss';
 
 const log = createLogger('ScheduledJobsView');
-const MINUTE_IN_MS = 60_000;
 const NEW_JOB_ID = '__new__';
-const DEFAULT_AGENT_TYPE = 'agentic';
-const ASSISTANT_WORKSPACE_AGENT_TYPE = 'Claw';
-const SCHEDULED_JOBS_CHANGED_EVENT = 'bitfun:scheduled-jobs-changed';
-
-type ScheduleKind = CronSchedule['kind'];
-
-interface JobDraft {
-  name: string;
-  text: string;
-  enabled: boolean;
-  sessionId: string;
-  agentType: string;
-  scheduleKind: ScheduleKind;
-  at: string;
-  everyMinutes: string;
-  anchorMs: string;
-  expr: string;
-  tz: string;
-}
-
-interface JobDraftValidationErrors {
-  name: boolean;
-  sessionId: boolean;
-  agentType: boolean;
-  text: boolean;
-  at: boolean;
-  everyMinutes: boolean;
-  cronExpr: boolean;
-}
 
 export interface ScheduledJobsViewProps {
   workspacePath?: string;
@@ -91,32 +84,6 @@ export interface ScheduledJobsViewProps {
   assistantWorkspaceMode?: boolean;
 }
 
-function getCurrentLocalDateTimeInput(): string {
-  return toLocalDateTimeInput(new Date().toISOString());
-}
-
-function toLocalDateTimeInput(isoTimestamp: string): string {
-  const date = new Date(isoTimestamp);
-  const timezoneOffset = date.getTimezoneOffset();
-  const localDate = new Date(date.getTime() - timezoneOffset * 60_000);
-  return localDate.toISOString().slice(0, 16);
-}
-
-function timestampMsToLocalDateTimeInput(timestampMs: number): string {
-  return toLocalDateTimeInput(new Date(timestampMs).toISOString());
-}
-
-function isFutureLocalDateTimeInput(value: string, nowMs = Date.now()): boolean {
-  const timestampMs = new Date(value).getTime();
-  return Number.isFinite(timestampMs) && timestampMs > nowMs;
-}
-
-function formatEveryMinutes(everyMs: number): string {
-  const everyMinutes = everyMs / MINUTE_IN_MS;
-  if (Number.isInteger(everyMinutes)) return String(everyMinutes);
-  return everyMinutes.toFixed(2).replace(/\.?0+$/, '');
-}
-
 function getDefaultAgentType(
   targetKind: CronJobTargetKind,
   workspaceKind?: WorkspaceKind,
@@ -127,139 +94,6 @@ function getDefaultAgentType(
   return DEFAULT_AGENT_TYPE;
 }
 
-function createEmptyDraft(defaultSessionId = '', defaultAgentType = DEFAULT_AGENT_TYPE): JobDraft {
-  return {
-    name: '',
-    text: '',
-    enabled: true,
-    sessionId: defaultSessionId,
-    agentType: defaultAgentType,
-    scheduleKind: 'at',
-    at: getCurrentLocalDateTimeInput(),
-    everyMinutes: '60',
-    anchorMs: '',
-    expr: '0 8 * * *',
-    tz: '',
-  };
-}
-
-function buildWorkspaceRef(
-  workspacePath?: string,
-  workspaceId?: string,
-  remoteConnectionId?: string | null,
-  remoteSshHost?: string | null,
-): CronWorkspaceRef | null {
-  const normalizedWorkspacePath = normalizePath(workspacePath?.trim() ?? '');
-  if (!normalizedWorkspacePath) {
-    return null;
-  }
-
-  return {
-    workspacePath: normalizedWorkspacePath,
-    workspaceId: workspaceId?.trim() || undefined,
-    remoteConnectionId: remoteConnectionId?.trim() || undefined,
-    remoteSshHost: remoteSshHost?.trim() || undefined,
-  };
-}
-
-function buildTargetFromDraft(
-  targetKind: CronJobTargetKind,
-  draft: JobDraft,
-  workspace: CronWorkspaceRef,
-): CronJobTarget {
-  if (targetKind === 'session') {
-    return {
-      kind: 'session',
-      sessionId: draft.sessionId.trim(),
-      workspace,
-    };
-  }
-
-  return {
-    kind: 'workspace',
-    workspace,
-    launch: {
-      agentType: draft.agentType.trim() || DEFAULT_AGENT_TYPE,
-    },
-  };
-}
-
-function jobToDraft(job: CronJob, defaultAgentType: string): JobDraft {
-  const base = createEmptyDraft('', defaultAgentType);
-  const draft: JobDraft = {
-    ...base,
-    name: job.name,
-    text: job.payload.text,
-    enabled: job.enabled,
-  };
-  if (job.target.kind === 'session') {
-    draft.sessionId = job.target.sessionId;
-  } else {
-    draft.agentType = job.target.launch.agentType || defaultAgentType;
-  }
-  if (job.schedule.kind === 'at') {
-    draft.scheduleKind = 'at';
-    draft.at = toLocalDateTimeInput(job.schedule.at);
-  } else if (job.schedule.kind === 'every') {
-    draft.scheduleKind = 'every';
-    draft.everyMinutes = formatEveryMinutes(job.schedule.everyMs);
-    draft.anchorMs = job.schedule.anchorMs != null
-      ? timestampMsToLocalDateTimeInput(job.schedule.anchorMs)
-      : '';
-  } else {
-    draft.scheduleKind = 'cron';
-    draft.expr = job.schedule.expr;
-    draft.tz = job.schedule.tz ?? '';
-  }
-  return draft;
-}
-
-function buildScheduleFromDraft(draft: JobDraft): CronSchedule {
-  if (draft.scheduleKind === 'at') {
-    return { kind: 'at', at: new Date(draft.at).toISOString() };
-  }
-  if (draft.scheduleKind === 'every') {
-    const everyMinutes = Number(draft.everyMinutes);
-    const anchorMs = draft.anchorMs.trim() ? new Date(draft.anchorMs).getTime() : undefined;
-    return { kind: 'every', everyMs: Math.round(everyMinutes * MINUTE_IN_MS), anchorMs };
-  }
-  return { kind: 'cron', expr: draft.expr.trim(), tz: draft.tz.trim() || undefined };
-}
-
-function validateDraft(
-  targetKind: CronJobTargetKind,
-  draft: JobDraft,
-): JobDraftValidationErrors {
-  const everyMinutes = Number(draft.everyMinutes);
-  return {
-    name: !draft.name.trim(),
-    sessionId: targetKind === 'session' && !draft.sessionId.trim(),
-    agentType: targetKind === 'workspace' && !draft.agentType.trim(),
-    text: !draft.text.trim(),
-    at: draft.scheduleKind === 'at' && !draft.at.trim(),
-    everyMinutes:
-      draft.scheduleKind === 'every'
-      && (!draft.everyMinutes.trim() || !Number.isFinite(everyMinutes) || everyMinutes <= 0),
-    cronExpr: draft.scheduleKind === 'cron' && !draft.expr.trim(),
-  };
-}
-
-function hasValidationErrors(errors: JobDraftValidationErrors): boolean {
-  return (
-    errors.name
-    || errors.sessionId
-    || errors.agentType
-    || errors.text
-    || errors.at
-    || errors.everyMinutes
-    || errors.cronExpr
-  );
-}
-
-function getNextExecutionAtMs(job: CronJob): number | null {
-  return job.state.pendingTriggerAtMs ?? job.state.retryAtMs ?? job.state.nextRunAtMs ?? null;
-}
-
 function formatScheduleSummary(
   schedule: CronSchedule,
   formatDate: (date: Date | number, options?: Intl.DateTimeFormatOptions) => string,
@@ -268,8 +102,12 @@ function formatScheduleSummary(
   switch (schedule.kind) {
     case 'at':
       return `${t('nav.scheduledJobs.scheduleKinds.at')}: ${formatTimestamp(new Date(schedule.at).getTime(), formatDate, t)}`;
-    case 'every':
-      return t('nav.scheduledJobs.scheduleSummary.every', { everyMinutes: formatEveryMinutes(schedule.everyMs) });
+    case 'every': {
+      const interval = splitInterval(schedule.everyMs);
+      return t(`nav.scheduledJobs.scheduleSummary.everyUnit.${interval.unit}`, {
+        value: formatIntervalValue(interval.value),
+      });
+    }
     case 'cron':
       return schedule.tz
         ? t('nav.scheduledJobs.scheduleSummary.cronWithTz', { expr: schedule.expr, tz: schedule.tz })
@@ -381,15 +219,9 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
   const [saving, setSaving] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<JobDraftValidationErrors>({
-    name: false,
-    sessionId: false,
-    agentType: false,
-    text: false,
-    at: false,
-    everyMinutes: false,
-    cronExpr: false,
-  });
+  const [validationErrors, setValidationErrors] = useState<JobDraftValidationErrors>(
+    EMPTY_VALIDATION_ERRORS,
+  );
 
   const defaultAgentType = useMemo(
     () => assistantWorkspaceMode
@@ -410,9 +242,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
     : targetKind;
 
   const notifyScheduledJobsChanged = useCallback(() => {
-    window.dispatchEvent(new CustomEvent(SCHEDULED_JOBS_CHANGED_EVENT, {
-      detail: { sourceId: instanceIdRef.current },
-    }));
+    emitScheduledJobsChanged(instanceIdRef.current);
   }, []);
 
   useEffect(() => {
@@ -551,15 +381,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
   ]);
 
   const resetValidationErrors = useCallback(() => {
-    setValidationErrors({
-      name: false,
-      sessionId: false,
-      agentType: false,
-      text: false,
-      at: false,
-      everyMinutes: false,
-      cronExpr: false,
-    });
+    setValidationErrors(EMPTY_VALIDATION_ERRORS);
   }, []);
 
   const handleCreateNew = useCallback(() => {
@@ -947,7 +769,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                   setValidationErrors(current => ({
                     ...current,
                     at: false,
-                    everyMinutes: false,
+                    everyValue: false,
                     cronExpr: false,
                   }));
                   setDraft(c => ({
@@ -980,13 +802,10 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.at')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <Input
-                size="small"
-                type="datetime-local"
+              <LocalizedDateTimeField
                 value={draft.at}
                 error={validationErrors.at}
-                onChange={e => {
-                  const at = e.currentTarget.value;
+                onChange={at => {
                   setValidationErrors(current => ({ ...current, at: false }));
                   setDraft(c => ({
                     ...c,
@@ -1006,18 +825,31 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 <span className="asv__field-label">{t('nav.scheduledJobs.fields.everyMs')}</span>
               </div>
               <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-                <Input
-                  size="small"
-                  type="number"
-                  value={draft.everyMinutes}
-                  error={validationErrors.everyMinutes}
-                  onChange={e => {
-                    const everyMinutes = e.currentTarget.value;
-                    setValidationErrors(current => ({ ...current, everyMinutes: false }));
-                    setDraft(c => ({ ...c, everyMinutes }));
-                  }}
-                  placeholder="60"
-                />
+                <div className="asv__control-grid asv__control-grid--interval">
+                  <Input
+                    size="small"
+                    type="number"
+                    value={draft.everyValue}
+                    error={validationErrors.everyValue}
+                    onChange={e => {
+                      const everyValue = e.currentTarget.value;
+                      setValidationErrors(current => ({ ...current, everyValue: false }));
+                      setDraft(c => ({ ...c, everyValue }));
+                    }}
+                    placeholder="1"
+                  />
+                  <Select
+                    size="small"
+                    value={draft.everyUnit}
+                    options={INTERVAL_UNIT_OPTIONS.map(unit => ({
+                      value: unit,
+                      label: t(`nav.scheduledJobs.intervalUnits.${unit}`),
+                    }))}
+                    onChange={value => {
+                      setDraft(c => ({ ...c, everyUnit: value as IntervalUnit }));
+                    }}
+                  />
+                </div>
               </div>
             </div>
             <div className="asv__form-row asv__form-row--inline" data-bf-component="scheduled-jobs-view" data-bf-part="field">
@@ -1025,15 +857,10 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 <span className="asv__field-label">{t('nav.scheduledJobs.fields.anchorMs')}</span>
               </div>
               <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-                <Input
-                  size="small"
-                  type="datetime-local"
+                <LocalizedDateTimeField
                   value={draft.anchorMs}
-                  onChange={e => {
-                    const anchorMs = e.currentTarget.value;
-                    setDraft(c => ({ ...c, anchorMs }));
-                  }}
-                  placeholder={t('nav.scheduledJobs.placeholders.anchorMs')}
+                  onChange={anchorMs => setDraft(c => ({ ...c, anchorMs }))}
+                  aria-label={t('nav.scheduledJobs.fields.anchorMs')}
                 />
               </div>
             </div>

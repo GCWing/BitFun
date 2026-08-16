@@ -1,4 +1,5 @@
 import { CARD, GREEN, INK, MUTED } from './Theme';
+import { TemplateIcon } from './TemplateIcon';
 
 @ComponentV2
 export struct SidebarGlyph {
@@ -44,15 +45,11 @@ export struct SidebarGlyph {
   private Remote() {
     Stack({ alignContent: Alignment.Center }) {
       if (this.connectionState === 'connected' || this.connectionState === 'reconnecting') {
-        Image($r('app.media.remote_ref_sidebar_connected'))
-          .width(35).height(34).objectFit(ImageFit.Contain)
-          .renderMode(ImageRenderMode.Template).foregroundColor(INK)
+        TemplateIcon({ src: $r('app.media.remote_ref_sidebar_connected'), iconWidth: 35, iconHeight: 34 })
         Text('').width(8).height(8).backgroundColor(GREEN).borderRadius(4)
           .position({ x: 24, y: 22 })
       } else {
-        Image($r('app.media.remote_logo'))
-          .width(34).height(34).objectFit(ImageFit.Contain)
-          .renderMode(ImageRenderMode.Template).foregroundColor(MUTED)
+        TemplateIcon({ src: $r('app.media.remote_logo'), iconWidth: 34, iconHeight: 34, tint: MUTED })
       }
     }
     .width(35).height(34)

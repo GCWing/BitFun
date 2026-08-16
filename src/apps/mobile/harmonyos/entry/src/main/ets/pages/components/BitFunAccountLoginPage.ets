@@ -1,6 +1,7 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { DEFAULT_CLOUD_RELAY_URL } from '../../services/CloudAccountClient';
 import { CARD, INK, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SUBTLE } from './Theme';
+import { TemplateIcon } from './TemplateIcon';
 
 @ComponentV2
 export struct BitFunAccountLoginPage {
@@ -104,11 +105,11 @@ export struct BitFunAccountLoginPage {
       .scrollBar(BarState.Off)
 
       Button() {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(23)
-          .fontColor([INK])
-          .width(26)
-          .height(26)
+        TemplateIcon({
+          src: $r('app.media.remote_ref_back'),
+          iconWidth: 15,
+          iconHeight: 23
+        })
       }
       .width(44)
       .height(44)
@@ -116,6 +117,7 @@ export struct BitFunAccountLoginPage {
       .type(ButtonType.Circle)
       .backgroundColor('#00000000')
       .position({ x: 28, y: 22 })
+      .accessibilityText(RemoteI18n.t('common.back'))
       .onClick(() => {
         this.onBack();
       })

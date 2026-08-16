@@ -1,6 +1,6 @@
 import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
-import { PairIdentity, RelayHttpClient } from './RelayHttpClient';
+import { PairIdentity, PeerDeviceProvisionOutcome, RelayHttpClient } from './RelayHttpClient';
 import { CloudAccountClient, CloudAccountSession } from './CloudAccountClient';
 import { AccountDeviceCommandTransport, RemoteCommandTransport, RoomRemoteCommandTransport } from './RemoteCommandTransport';
 import { RemoteCommandFactory } from './RemoteCommandFactory';
@@ -10,12 +10,22 @@ import { RemoteFileDownloadClient } from './RemoteFileDownloadController';
 import { RemoteLogger } from './RemoteLogger';
 import { RemoteModelClient } from './RemoteModelController';
 import { RemoteResponseMapper } from './RemoteResponseMapper';
+import { TranscriptIntegrityPolicy } from './TranscriptIntegrityPolicy';
 import { RemoteSessionClient } from './RemoteSessionController';
 import { RemoteToolActionClient } from './RemoteToolActionController';
 
 export interface DelegatedAccountSession {
   relayUrl: string;
   session: CloudAccountSession;
+}
+
+/** A credential minted for a peer device, paired with the relay it belongs to. */
+export interface ProvisionedPeerDevice {
+  relayUrl: string;
+  token: string;
+  userId: string;
+  masterKeyBase64: string;
+  deviceId: string;
 }
 
 export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFileDownloadClient, RemoteModelClient, RemoteSessionClient, RemoteToolActionClient {
@@ -69,6 +79,37 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
         masterKey: Encoding.base64ToBytes(this.roomClient.delegatedMasterKey)
       }
     };
+  }
+
+  /**
+   * True when a QR-paired room channel is live. Provisioning a peer device is
+   * only answerable there, so the caller uses this to decide whether the
+   * feature is offerable at all rather than letting the user find out after a
+   * 45-second wait.
+   */
+  hasRoomChannel(): boolean {
+    return this.roomRelayUrl.trim().length > 0;
+  }
+
+  /**
+   * Relay a watch's provisioning request to the paired desktop. Goes straight
+   * to the room client rather than through `send()`, because the account-device
+   * transport reaches a different desktop handler that cannot mint credentials.
+   */
+  async provisionPeerDevice(
+    deviceId: string,
+    deviceName: string,
+    requestId: string
+  ): Promise<PeerDeviceProvisionOutcome> {
+    if (!this.hasRoomChannel()) {
+      throw new Error('Remote room channel is not connected.');
+    }
+    return this.roomClient.provisionPeerDevice(deviceId, deviceName, requestId);
+  }
+
+  /** Relay the provisioned credential belongs to — the one this room lives on. */
+  roomRelayEndpoint(): string {
+    return this.roomRelayUrl;
   }
 
   async connectAccountDevice(
@@ -221,9 +262,15 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
   }
 
   async getSessionMessages(sessionId: string): Promise<SessionMessagesResult> {
+    const startedAt = Date.now();
     const response = await this.send<SessionMessagesResponse>(RemoteCommandFactory.getSessionMessages(sessionId));
     const rawMessages = response.messages || [];
     const messages = rawMessages.map((item: ChatMessageResponse) => RemoteResponseMapper.chatMessage(item));
+    RemoteLogger.info(
+      `get_session_messages done session=${RemoteSessionManager.shortId(sessionId)} ` +
+        `raw=${rawMessages.length} ${TranscriptIntegrityPolicy.describeMessages(messages)} ` +
+        `ms=${Date.now() - startedAt}`
+    );
     const result: SessionMessagesResult = {
       messages,
       hasMore: false
@@ -270,7 +317,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       modelCatalog: response.model_catalog
     };
     const rawActive = response.active_turn;
-    RemoteLogger.info(`poll_session done session=${RemoteSessionManager.shortId(sessionId)} changed=${result.changed ? '1' : '0'} state=${result.sessionState} active=${rawActive ? rawActive.turn_id : ''} activeStatus=${rawActive ? rawActive.status : ''} rawText=${rawActive && rawActive.text ? rawActive.text.length : 0} rawThinking=${rawActive && rawActive.thinking ? rawActive.thinking.length : 0} rawItems=${rawActive && rawActive.items ? rawActive.items.length : 0} rawItemText=${RemoteSessionManager.itemsContentLength(rawActive ? rawActive.items : undefined)} projectedText=${result.activeTurn ? result.activeTurn.text.length : 0} new=${newMessages.length} ms=${Date.now() - startedAt}`);
+    RemoteLogger.info(`poll_session done session=${RemoteSessionManager.shortId(sessionId)} changed=${result.changed ? '1' : '0'} state=${result.sessionState} active=${rawActive ? rawActive.turn_id : ''} activeStatus=${rawActive ? rawActive.status : ''} rawText=${rawActive && rawActive.text ? rawActive.text.length : 0} rawThinking=${rawActive && rawActive.thinking ? rawActive.thinking.length : 0} rawItems=${rawActive && rawActive.items ? rawActive.items.length : 0} rawItemText=${RemoteSessionManager.itemsContentLength(rawActive ? rawActive.items : undefined)} projectedText=${result.activeTurn ? result.activeTurn.text.length : 0} new=${newMessages.length} ${newMessages.length > 0 ? TranscriptIntegrityPolicy.describeMessages(newMessages) + ' ' : ''}ms=${Date.now() - startedAt}`);
     return result;
   }
 

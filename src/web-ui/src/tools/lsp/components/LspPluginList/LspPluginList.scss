@@ -270,7 +270,7 @@
     font-size: var(--bf-appearance-token-font-size-xs);
     font-family: $font-family-mono;
     color: var(--bf-appearance-token-color-text-primary);
-    transition: all $motion-fast $easing-standard;
+    transition: background-color $motion-fast $easing-standard;
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-medium);
@@ -332,6 +332,14 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lsp-plugin-list__spinning,
+  .lsp-plugin-list .spinner,
+  .lsp-plugin-item__details {
+    animation: none;
   }
 }
 

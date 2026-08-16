@@ -19,7 +19,12 @@
   color: var(--bf-appearance-token-color-text-secondary);
   border: none;
   border-radius: var(--bf-appearance-token-size-radius-sm);
-  transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+  transition:
+    background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
   &:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 50%, transparent);
@@ -44,13 +49,9 @@
     font-size: var(--bf-appearance-token-font-size-lg);
   }
 
-  &:hover:not(:disabled) {
-    background: var(--bf-appearance-token-element-bg-medium);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
   &:active:not(:disabled) {
     background: var(--bf-appearance-token-element-bg-soft);
+    scale: 0.97;
   }
 
   &:disabled,
@@ -80,11 +81,6 @@
     background: var(--bf-appearance-token-element-bg-base);
     color: var(--bf-appearance-token-color-text-secondary);
 
-    &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
     &:active:not(:disabled) {
       background: var(--bf-appearance-token-element-bg-soft);
     }
@@ -93,11 +89,6 @@
   &-ghost {
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
-
-    &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
 
     &:active:not(:disabled) {
       background: var(--bf-appearance-token-element-bg-base);
@@ -108,13 +99,6 @@
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
     border: 1px dashed var(--bf-appearance-token-border-base);
-
-    &:hover:not(:disabled) {
-      background: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-primary);
-      border-style: solid;
-      border-color: var(--bf-appearance-token-border-medium);
-    }
 
     &:active:not(:disabled) {
       background: var(--bf-appearance-token-element-bg-base);
@@ -169,28 +153,19 @@
   outline: none;
   border: none;
   border-radius: var(--bf-appearance-token-size-radius-sm);
-  transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
+  transition:
+    background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    box-shadow var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    scale var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
   background: var(--bf-appearance-token-element-bg-base);
   color: var(--bf-appearance-token-color-text-secondary);
 
-  &:hover {
-    background: var(--bf-appearance-token-element-bg-medium);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
   &-ai {
     background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 18%, transparent);
     color: var(--bf-appearance-token-color-purple-500);
-
-    &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 28%, transparent);
-      color: var(--bf-appearance-token-color-static-white);
-
-      svg {
-        color: var(--bf-appearance-token-color-purple-500);
-      }
-    }
 
     &:active {
       background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 22%, transparent);
@@ -201,11 +176,6 @@
     background: color-mix(in srgb, var(--bf-appearance-token-color-error) 18%, transparent);
     color: var(--bf-appearance-token-color-error);
 
-    &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 28%, transparent);
-      color: var(--bf-appearance-token-color-static-white);
-    }
-
     &:active {
       background: color-mix(in srgb, var(--bf-appearance-token-color-error) 22%, transparent);
     }
@@ -214,11 +184,6 @@
   &-success {
     background: color-mix(in srgb, var(--bf-appearance-token-color-success) 18%, transparent);
     color: var(--bf-appearance-token-color-success);
-
-    &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, transparent);
-      color: var(--bf-appearance-token-color-static-white);
-    }
 
     &:active {
       background: color-mix(in srgb, var(--bf-appearance-token-color-success) 22%, transparent);
@@ -232,7 +197,7 @@
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.98);
+    scale: 0.97;
   }
 }
 
@@ -249,12 +214,14 @@
 
     &-ghost:hover:not(:disabled) {
       background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &-dashed:hover:not(:disabled) {
       background: var(--bf-appearance-token-element-bg-subtle);
       border-style: solid;
       border-color: var(--bf-appearance-token-border-medium);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 
@@ -266,14 +233,21 @@
 
     &-ai:hover:not(:disabled) {
       background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 28%, transparent);
+      color: var(--bf-appearance-token-color-static-white);
+
+      svg {
+        color: var(--bf-appearance-token-color-purple-500);
+      }
     }
 
     &-danger:hover:not(:disabled) {
       background: color-mix(in srgb, var(--bf-appearance-token-color-error) 28%, transparent);
+      color: var(--bf-appearance-token-color-static-white);
     }
 
     &-success:hover:not(:disabled) {
       background: color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, transparent);
+      color: var(--bf-appearance-token-color-static-white);
     }
   }
 }
@@ -282,13 +256,18 @@
   .btn,
   .btn-action {
     transition:
-      background-color var(--bf-appearance-token-motion-fast) ease,
-      color var(--bf-appearance-token-motion-fast) ease,
-      border-color var(--bf-appearance-token-motion-fast) ease;
+      background-color var(--bf-appearance-token-motion-instant) ease,
+      color var(--bf-appearance-token-motion-instant) ease,
+      border-color var(--bf-appearance-token-motion-instant) ease,
+      box-shadow var(--bf-appearance-token-motion-instant) ease;
 
     &:active:not(:disabled) {
-      transform: none;
+      scale: none;
     }
+  }
+
+  .btn-loading-icon {
+    animation: none;
   }
 }
 

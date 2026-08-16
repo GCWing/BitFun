@@ -728,3 +728,9 @@
     transform: rotate(360deg);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-chat-input-workspace-strip__worktree-icon.is-spinning {
+    animation: none;
+  }
+}

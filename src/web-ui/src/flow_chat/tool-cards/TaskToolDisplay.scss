@@ -488,7 +488,12 @@
     font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 160ms ease,
+      border-color 160ms ease,
+      color 160ms ease,
+      opacity 160ms ease;
     border: none;
 
     &:disabled {
@@ -649,7 +654,7 @@
 
 /* E — task description text fades with the card */
 .task-tool-display.base-tool-card-wrapper--loading-shimmer .task-action {
-  animation: tool-card-text-fade 2.2s ease-in-out infinite;
+  animation: task-tool-loading-fade 2.2s ease-in-out infinite;
 }
 
 /* Reviewer context block — replaces raw prompt for review-team members. */
@@ -691,13 +696,18 @@
   }
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
+@keyframes task-tool-loading-fade {
+  0%, 100% {
     opacity: 1;
-    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.68;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-tool-display .task-subagent-stop-button:disabled svg,
+  .task-tool-display.base-tool-card-wrapper--loading-shimmer .task-action {
+    animation: none;
   }
 }

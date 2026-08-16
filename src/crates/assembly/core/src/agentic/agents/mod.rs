@@ -145,6 +145,10 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "Git".to_string(),
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
+        // Pairs with ControlHub: its `wait` sends anything repeating, or
+        // further out than an hour, to Cron rather than holding the turn open
+        // for the interval.
+        "Cron".to_string(),
         "InitMiniApp".to_string(),
         "FinalizeMiniApp".to_string(),
         "PublishMiniApp".to_string(),

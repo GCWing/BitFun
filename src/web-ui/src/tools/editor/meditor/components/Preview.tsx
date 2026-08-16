@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MarkdownRenderer } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n';
+import { splitMarkdownFrontmatter } from '../utils/markdownFrontmatter';
 import './Preview.scss';
 
 interface PreviewProps {
@@ -58,23 +60,28 @@ export function shouldFillPreviewViewport(scrollHeight: number, clientHeight: nu
 }
 
 export const Preview: React.FC<PreviewProps> = ({ value, basePath, progressive = false }) => {
+  const { t } = useI18n('tools');
+  const frontmatter = useMemo(() => splitMarkdownFrontmatter(value), [value]);
+  const markdownValue = frontmatter?.body ?? value;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const loadMoreScheduledRef = useRef(false);
   const loadMoreTimerRef = useRef<number | null>(null);
   const nextOffsetRef = useRef(0);
-  const hasMoreRef = useRef(progressive && value.length > 0);
+  const hasMoreRef = useRef(progressive && markdownValue.length > 0);
   const initialChunk = useMemo(
-    () => progressive ? takeNextMarkdownChunk(value, 0) : { content: value, nextOffset: value.length },
-    [progressive, value],
+    () => progressive
+      ? takeNextMarkdownChunk(markdownValue, 0)
+      : { content: markdownValue, nextOffset: markdownValue.length },
+    [markdownValue, progressive],
   );
   const [renderedChunks, setRenderedChunks] = useState<string[]>([initialChunk.content]);
 
   useEffect(() => {
     nextOffsetRef.current = initialChunk.nextOffset;
-    hasMoreRef.current = progressive && initialChunk.nextOffset < value.length;
+    hasMoreRef.current = progressive && initialChunk.nextOffset < markdownValue.length;
     setRenderedChunks(initialChunk.content ? [initialChunk.content] : []);
-  }, [initialChunk, progressive, value.length]);
+  }, [initialChunk, markdownValue.length, progressive]);
 
   const loadMore = useCallback(() => {
     if (loadMoreScheduledRef.current || !hasMoreRef.current) {
@@ -87,17 +94,17 @@ export const Preview: React.FC<PreviewProps> = ({ value, basePath, progressive =
       setRenderedChunks(current => {
         const additions: string[] = [];
         let offset = nextOffsetRef.current;
-        for (let index = 0; index < PROGRESSIVE_CHUNK_BATCH && offset < value.length; index += 1) {
-          const chunk = takeNextMarkdownChunk(value, offset);
+        for (let index = 0; index < PROGRESSIVE_CHUNK_BATCH && offset < markdownValue.length; index += 1) {
+          const chunk = takeNextMarkdownChunk(markdownValue, offset);
           additions.push(chunk.content);
           offset = chunk.nextOffset;
         }
         nextOffsetRef.current = offset;
-        hasMoreRef.current = offset < value.length;
+        hasMoreRef.current = offset < markdownValue.length;
         return additions.length > 0 ? [...current, ...additions] : current;
       });
     }, 0);
-  }, [value]);
+  }, [markdownValue]);
 
   useEffect(() => () => {
     if (loadMoreTimerRef.current !== null) {
@@ -149,6 +156,18 @@ export const Preview: React.FC<PreviewProps> = ({ value, basePath, progressive =
   return (
     <div ref={scrollContainerRef} className="m-editor-preview" data-bf-component="editor-tool" data-bf-part="meditorPreview">
       <div ref={contentRef} className="m-editor-preview-content">
+        {frontmatter && (
+          <section className="m-editor-preview-frontmatter" data-bf-component="editor-tool" data-bf-part="meditorFrontmatter">
+            <header className="m-editor-preview-frontmatter__header">
+              <span className="m-editor-preview-frontmatter__label">
+                {t('editor.meditor.frontmatter.label')}
+              </span>
+            </header>
+            <pre className="m-editor-preview-frontmatter__source">
+              <code>{frontmatter.yaml}</code>
+            </pre>
+          </section>
+        )}
         {renderedChunks.map((chunk, index) => (
           <div className="m-editor-preview-chunk" key={index} style={{ contentVisibility: 'auto', containIntrinsicSize: '800px' }}>
             <MarkdownRenderer content={chunk} basePath={basePath} />

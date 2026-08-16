@@ -19,6 +19,7 @@ use crate::trace::{
 use crate::types::ProxyConfig;
 use crate::types::*;
 use anyhow::Result;
+use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
 use format::ApiFormat;
 use log::warn;
 use reqwest::Client;
@@ -223,30 +224,36 @@ impl AIClient {
         extra_body: Option<serde_json::Value>,
         trace: Option<ModelExchangeTraceConfig>,
     ) -> Result<StreamResponse> {
-        let max_tries = SEND_MESSAGE_STREAM_ATTEMPTS;
-        match ApiFormat::parse(&self.config.format)? {
-            ApiFormat::OpenAIChat => {
-                openai::chat::send_stream(self, messages, tools, extra_body, max_tries, trace).await
-            }
-            ApiFormat::OpenAIResponses => {
-                openai::responses::send_stream(self, messages, tools, extra_body, max_tries, trace)
-                    .await
-            }
-            ApiFormat::Anthropic => {
-                anthropic::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
-                    .await
-            }
-            ApiFormat::Gemini => {
-                gemini::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
-                    .await
-            }
-            ApiFormat::GeminiCodeAssist => {
-                gemini::code_assist::send_stream(
-                    self, messages, tools, extra_body, max_tries, trace,
-                )
-                .await
-            }
-        }
+        self.send_message_stream_with_extra_body_and_max_attempts(
+            messages,
+            tools,
+            extra_body,
+            SEND_MESSAGE_STREAM_ATTEMPTS,
+            trace,
+        )
+        .await
+    }
+
+    /// Open one model stream without an adapter-owned retry loop.
+    ///
+    /// Runtime owners with a broader attempt lifecycle use this entry point so
+    /// connection, HTTP, TTFT, parsing, and in-stream failures all consume one
+    /// shared retry budget instead of multiplying nested retry loops.
+    pub async fn send_message_stream_once(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        trace: Option<ModelExchangeTraceConfig>,
+    ) -> Result<StreamResponse> {
+        let custom_body = self.config.custom_request_body.clone();
+        self.send_message_stream_with_extra_body_and_max_attempts(
+            messages,
+            tools,
+            custom_body,
+            1,
+            trace,
+        )
+        .await
     }
 
     pub async fn send_message(
@@ -306,15 +313,33 @@ impl AIClient {
         max_attempts: usize,
     ) -> Result<GeminiResponse> {
         for attempt in 0..max_attempts {
-            let stream_response = self
+            let stream_response = match self
                 .send_message_stream_with_extra_body_and_max_attempts(
                     messages.clone(),
                     tools.clone(),
                     extra_body.clone(),
-                    max_attempts,
+                    1,
                     trace.clone(),
                 )
-                .await?;
+                .await
+            {
+                Ok(response) => response,
+                Err(error) => {
+                    if attempt == max_attempts - 1 {
+                        return Err(error);
+                    }
+                    let delay_ms = send_message_retry_delay_ms_for_error(attempt, &error);
+                    warn!(
+                        "Retrying AI stream request after error: attempt={}/{}, delay_ms={}, error={}",
+                        attempt + 1,
+                        max_attempts,
+                        delay_ms,
+                        error
+                    );
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                    continue;
+                }
+            };
             let trace_handle = stream_response.trace_handle.clone();
 
             match response_aggregator::aggregate_stream_response(stream_response).await {
@@ -323,26 +348,6 @@ impl AIClient {
                         .await;
                     return Ok(response);
                 }
-                Err(error)
-                    if attempt < max_attempts - 1
-                        && is_transient_stream_error(&error.to_string()) =>
-                {
-                    fail_aggregated_trace(
-                        trace.as_ref(),
-                        trace_handle.as_ref(),
-                        &error.to_string(),
-                    )
-                    .await;
-                    let delay_ms = send_message_retry_delay_ms(attempt, &error.to_string());
-                    warn!(
-                        "Retrying aggregated AI stream after transient error: attempt={}/{}, delay_ms={}, error={}",
-                        attempt + 1,
-                        max_attempts,
-                        delay_ms,
-                        error
-                    );
-                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                }
                 Err(error) => {
                     fail_aggregated_trace(
                         trace.as_ref(),
@@ -350,7 +355,18 @@ impl AIClient {
                         &error.to_string(),
                     )
                     .await;
-                    return Err(error);
+                    if attempt == max_attempts - 1 {
+                        return Err(error);
+                    }
+                    let delay_ms = send_message_retry_delay_ms_for_error(attempt, &error);
+                    warn!(
+                        "Retrying aggregated AI stream after error: attempt={}/{}, delay_ms={}, error={}",
+                        attempt + 1,
+                        max_attempts,
+                        delay_ms,
+                        error
+                    );
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                 }
             }
         }
@@ -428,15 +444,35 @@ impl AIClient {
     }
 }
 
+#[cfg(test)]
 fn send_message_retry_delay_ms(attempt_index: usize, error_message: &str) -> u64 {
+    send_message_retry_delay_ms_with_provider(attempt_index, error_message, None)
+}
+
+fn send_message_retry_delay_ms_for_error(attempt_index: usize, error: &anyhow::Error) -> u64 {
+    send_message_retry_delay_ms_with_provider(
+        attempt_index,
+        &error.to_string(),
+        error.downcast_ref::<AiProviderError>(),
+    )
+}
+
+fn send_message_retry_delay_ms_with_provider(
+    attempt_index: usize,
+    error_message: &str,
+    provider_error: Option<&AiProviderError>,
+) -> u64 {
     let shift = u32::try_from(attempt_index)
         .unwrap_or(u32::MAX)
         .min(SEND_MESSAGE_MAX_RETRY_EXPONENT_SHIFT);
     let msg = error_message.to_lowercase();
-    let is_rate_limit =
-        msg.contains("429") || msg.contains("rate limit") || msg.contains("too many requests");
+    let is_rate_limit = provider_error
+        .is_some_and(|error| error.category == ErrorCategory::RateLimit)
+        || msg.contains("429")
+        || msg.contains("rate limit")
+        || msg.contains("too many requests");
 
-    if is_rate_limit {
+    let fallback = if is_rate_limit {
         SEND_MESSAGE_RATE_LIMIT_RETRY_BASE_DELAY_MS
             .saturating_mul(1u64 << shift)
             .min(SEND_MESSAGE_MAX_RATE_LIMIT_DELAY_MS)
@@ -444,93 +480,17 @@ fn send_message_retry_delay_ms(attempt_index: usize, error_message: &str) -> u64
         SEND_MESSAGE_RETRY_BASE_DELAY_MS
             .saturating_mul(1u64 << shift)
             .min(SEND_MESSAGE_MAX_EXPONENTIAL_DELAY_MS)
+    };
+
+    match provider_error.and_then(|error| error.retry_after_ms) {
+        Some(retry_after_ms) if is_rate_limit => retry_after_ms
+            .max(fallback)
+            .min(SEND_MESSAGE_MAX_RATE_LIMIT_DELAY_MS),
+        Some(retry_after_ms) if retry_after_ms > 0 => {
+            retry_after_ms.min(SEND_MESSAGE_MAX_RATE_LIMIT_DELAY_MS)
+        }
+        Some(_) | None => fallback,
     }
-}
-
-fn is_transient_stream_error(error_message: &str) -> bool {
-    let msg = error_message.to_lowercase();
-
-    let non_retryable_keywords = [
-        "invalid api key",
-        "unauthorized",
-        "forbidden",
-        "model not found",
-        "unsupported model",
-        "invalid request",
-        "bad request",
-        "prompt is too long",
-        "content policy",
-        "proxy authentication required",
-        "provider quota",
-        "provider billing",
-        "insufficient_quota",
-        "insufficient quota",
-        "insufficient balance",
-        "not_enough_balance",
-        "not enough balance",
-        "余额不足",
-        "无可用资源包",
-        "账户已欠费",
-        "code=1113",
-        "\"code\":\"1113\"",
-        "client error 400",
-        "client error 401",
-        "client error 402",
-        "client error 403",
-        "client error 404",
-        "client error 413",
-        "client error 422",
-        "sse parsing error",
-        "schema error",
-        "unknown api format",
-    ];
-
-    if non_retryable_keywords.iter().any(|k| msg.contains(k)) {
-        return false;
-    }
-
-    [
-        "transport error",
-        "error decoding response body",
-        "stream closed before response completed",
-        "stream processing error",
-        "sse stream error",
-        "sse error",
-        "sse timeout",
-        "stream data timeout",
-        "timeout",
-        "request timeout",
-        "deadline exceeded",
-        "connection reset",
-        "connection closed",
-        "broken pipe",
-        "unexpected eof",
-        "connection refused",
-        "socket closed",
-        "temporarily unavailable",
-        "service unavailable",
-        "bad gateway",
-        "gateway timeout",
-        "overloaded",
-        "proxy",
-        "tunnel",
-        "dns",
-        "network",
-        "econnreset",
-        "econnrefused",
-        "etimedout",
-        "rate limit",
-        "too many requests",
-        "408",
-        "409",
-        "425",
-        "429",
-        "502",
-        "503",
-        "504",
-    ]
-    .iter()
-    .any(|k| msg.contains(k))
 }
 
 async fn complete_aggregated_trace(
@@ -584,11 +544,43 @@ fn gemini_response_to_trace(response: &GeminiResponse) -> ModelExchangeResponseT
 
 #[cfg(test)]
 mod tests {
-    use super::{is_transient_stream_error, send_message_retry_delay_ms, AIClient};
+    use super::{send_message_retry_delay_ms, AIClient};
     use crate::providers::{anthropic, gemini, gemini::GeminiMessageConverter, openai};
     use crate::types::{AIConfig, ToolDefinition};
     use crate::types::{ReasoningPresetAction, ReasoningPresetDescriptor};
+    use axum::extract::State;
+    use axum::http::header::CONTENT_TYPE;
+    use axum::response::IntoResponse;
+    use axum::routing::post;
+    use axum::Router;
     use serde_json::{json, Value};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    #[derive(Clone)]
+    struct StreamRetryFixtureState {
+        attempts: Arc<AtomicUsize>,
+    }
+
+    async fn malformed_stream_then_success(
+        State(state): State<StreamRetryFixtureState>,
+    ) -> impl IntoResponse {
+        let payload = if state.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+            "data: not-json\n\n"
+        } else {
+            concat!(
+                "data: {\"id\":\"chatcmpl_test\",\"object\":\"chat.completion.chunk\",",
+                "\"created\":1,\"model\":\"test-model\",\"choices\":[{\"index\":0,",
+                "\"delta\":{\"content\":\"Recovered\"},\"finish_reason\":\"stop\"}],",
+                "\"usage\":null}\n\n",
+                "data: [DONE]\n\n"
+            )
+        };
+
+        ([(CONTENT_TYPE, "text/event-stream")], payload)
+    }
 
     fn make_test_client(format: &str, custom_request_body: Option<Value>) -> AIClient {
         AIClient::new(AIConfig {
@@ -2255,20 +2247,32 @@ mod tests {
         assert_eq!(request.timeout(), None);
     }
 
-    #[test]
-    fn aggregated_send_message_retries_transient_stream_errors() {
-        for msg in [
-            "SSE Error: stream closed before response completed",
-            "Transport Error: error decoding response body",
-            "Anthropic API is temporarily overloaded",
-            "Gemini SSE stream timeout after 60s",
-            "OpenAI Streaming API error 503: service unavailable",
-        ] {
-            assert!(
-                is_transient_stream_error(msg),
-                "expected transient stream error: {msg}"
-            );
-        }
+    #[tokio::test]
+    async fn aggregated_send_message_retries_every_stream_error() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let app = Router::new()
+            .route("/chat/completions", post(malformed_stream_then_success))
+            .with_state(StreamRetryFixtureState {
+                attempts: Arc::clone(&attempts),
+            });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind stream retry fixture");
+        let address = listener.local_addr().expect("stream retry fixture address");
+        let server_task = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("stream retry fixture should run");
+        });
+        let mut client = make_test_client("openai", None);
+        client.config.request_url = format!("http://{address}/chat/completions");
+
+        let result = client.send_test_message(Vec::new(), None, 2).await;
+
+        server_task.abort();
+        let response = result.expect("the second stream attempt should succeed");
+        assert_eq!(response.text, "Recovered");
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 
     #[test]
@@ -2291,19 +2295,5 @@ mod tests {
             16_000
         );
         assert_eq!(send_message_retry_delay_ms(5, "too many requests"), 60_000);
-    }
-
-    #[test]
-    fn aggregated_send_message_does_not_retry_permanent_errors() {
-        for msg in [
-            "OpenAI Streaming API client error 401: unauthorized",
-            "SSE Parsing Error: missing field choices",
-            "Provider error: provider=glm, code=1113, message=余额不足或无可用资源包",
-        ] {
-            assert!(
-                !is_transient_stream_error(msg),
-                "expected permanent stream error: {msg}"
-            );
-        }
     }
 }

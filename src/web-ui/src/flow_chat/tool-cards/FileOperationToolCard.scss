@@ -273,7 +273,7 @@
   align-items: center;
   gap: 4px;
   color: var(--bf-appearance-token-color-text-muted);
-  transition: all 0.2s ease;
+  transition: color 160ms ease;
   flex-shrink: 0;
   cursor: pointer;
 
@@ -429,5 +429,11 @@
     background: var(--bf-appearance-token-color-error-bg);
     color: var(--bf-appearance-token-color-error);
     box-shadow: 0 2px 8px var(--bf-appearance-token-color-error-bg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .params-streaming-indicator {
+    animation: none;
   }
 }

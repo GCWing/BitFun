@@ -209,6 +209,8 @@ vi.mock('react-i18next', async (importOriginal) => ({
         'usage.slowestKinds.turn': 'Turn',
         'usage.slowestLabels.modelCall': 'Turn {{turn}} model call',
         'usage.slowestLabels.modelCallUnknown': 'Model call',
+        'usage.slowestLabels.turn': 'Turn {{turn}}',
+        'usage.slowestLabels.turnUnknown': 'Turn',
         'usage.table.rowLimitSummary': 'Showing {{visible}} of {{total}} rows',
         'usage.table.showAllRows': 'Show all {{count}} rows',
         'usage.table.showFewerRows': 'Show first {{count}} rows',
@@ -306,6 +308,8 @@ const USAGE_LOCALE_REQUIRED_KEYS = [
   'usage.slowestKinds.turn',
   'usage.slowestLabels.modelCall',
   'usage.slowestLabels.modelCallUnknown',
+  'usage.slowestLabels.turn',
+  'usage.slowestLabels.turnUnknown',
 ];
 
 function getLocaleValue(messages: unknown, key: string): unknown {
@@ -1460,13 +1464,16 @@ describe('Session usage report UI components', () => {
     });
 
     expect(container.textContent).toContain('Slow spans are derived from recorded turn, model, and tool timestamps');
-    expect(container.textContent).toContain('turn 2');
+    // Built from `turnIndex: 2`, not the report's own `label: 'turn 2'`, which
+    // is hard-coded English numbered from zero.
+    expect(container.textContent).toContain('Turn 3');
+    expect(container.textContent).not.toContain('turn 2');
     expect(container.textContent).toContain('1m 35s');
     expect(container.textContent).toContain('Redacted');
     expect(container.textContent).not.toContain('secret shell command');
 
     const turnLink = container.querySelector<HTMLButtonElement>('.session-usage-panel__turn-link');
-    expect(turnLink?.textContent).toBe('turn 2');
+    expect(turnLink?.textContent).toBe('Turn 3');
     act(() => {
       turnLink?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
@@ -1574,7 +1581,13 @@ describe('Session usage report UI components', () => {
       slowestTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
-    expect(container.textContent).toContain('Turn 4 model call');
+    /*
+     * The same number the jump below asks for. This test asserted `Turn 4`
+     * here and `turnIndex: 5` there, four lines apart, and the disagreement
+     * was the defect: the report indexes Turns from zero, every other reader
+     * adds one, and only this label did not.
+     */
+    expect(container.textContent).toContain('Turn 5 model call');
     expect(container.textContent).toContain('Model call');
     expect(container.textContent).not.toContain('gpt-5.4');
     expect(container.querySelector('[data-tooltip="Model call in this turn. Model: gpt-5.4. Jump to this turn"]'))

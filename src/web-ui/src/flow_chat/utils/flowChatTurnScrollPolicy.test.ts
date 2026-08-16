@@ -4,7 +4,6 @@ import {
   isDialogTurnInFlight,
   isThreadGoalContinuationTurn,
   shouldUseLatestTurnFollowOutput,
-  shouldUseStickyLatestPin,
 } from './flowChatTurnScrollPolicy';
 
 function makeTurn(partial: Partial<DialogTurn>): DialogTurn {
@@ -29,7 +28,7 @@ describe('flowChatTurnScrollPolicy', () => {
     expect(isDialogTurnInFlight(turn)).toBe(false);
   });
 
-  it('skips sticky pin for thread goal continuation turns', () => {
+  it('skips natural tail follow for thread goal continuation turns', () => {
     const turn = makeTurn({
       status: 'processing',
       userMessage: {
@@ -41,10 +40,9 @@ describe('flowChatTurnScrollPolicy', () => {
     });
     expect(isThreadGoalContinuationTurn(turn)).toBe(true);
     expect(shouldUseLatestTurnFollowOutput(turn)).toBe(false);
-    expect(shouldUseStickyLatestPin(turn)).toBe(false);
   });
 
-  it('allows sticky pin for in-flight user turns', () => {
+  it('follows in-flight user turns at the natural tail', () => {
     const turn = makeTurn({
       status: 'processing',
       modelRounds: [{
@@ -56,13 +54,11 @@ describe('flowChatTurnScrollPolicy', () => {
       }],
     } as Partial<DialogTurn>);
     expect(shouldUseLatestTurnFollowOutput(turn)).toBe(true);
-    expect(shouldUseStickyLatestPin(turn)).toBe(true);
   });
 
-  it('lets follow-output own a newly submitted user-only turn before sticky pin starts', () => {
+  it('lets follow-output own a newly submitted user-only turn', () => {
     const turn = makeTurn({ status: 'processing', modelRounds: [] });
     expect(isDialogTurnInFlight(turn)).toBe(true);
     expect(shouldUseLatestTurnFollowOutput(turn)).toBe(true);
-    expect(shouldUseStickyLatestPin(turn)).toBe(false);
   });
 });

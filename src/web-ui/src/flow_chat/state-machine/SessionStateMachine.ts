@@ -261,8 +261,6 @@ export class SessionStateMachineImpl {
 
     if (event === SessionExecutionEvent.USER_CANCEL && this.context.taskId && this.context.currentDialogTurnId) {
       const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
-      flowChatStore.cancelSessionTask(this.sessionId);
-
       const sessionId = this.context.taskId;
       const dialogTurnId = this.context.currentDialogTurnId;
       const { acpClientIdFromAgentType } = await import('@/flow_chat/utils/acpSession');
@@ -283,11 +281,37 @@ export class SessionStateMachineImpl {
           });
         } else {
           const { agentAPI } = await import('@/infrastructure/api/service-api/AgentAPI');
-          await agentAPI.cancelDialogTurn(sessionId, dialogTurnId);
+          const { isPeerDeviceModeActive } = await import(
+            '@/infrastructure/peer-device/peerModeFlag'
+          );
+          const goalStatus = session?.threadGoal?.status?.toLowerCase();
+          const supportsRecoverableInterruption =
+            session?.sessionKind === 'normal'
+            && !session.remoteConnectionId
+            && !session.remoteSshHost
+            && !session.config?.remoteConnectionId
+            && !session.config?.remoteSshHost
+            && !session.config?.dispatchTarget
+            && !session.config?.dispatchJobId
+            && goalStatus !== 'active'
+            && goalStatus !== 'paused'
+            && !isPeerDeviceModeActive();
+          if (supportsRecoverableInterruption) {
+            await agentAPI.interruptDialogTurn(sessionId, dialogTurnId);
+          } else {
+            await agentAPI.cancelDialogTurn(sessionId, dialogTurnId);
+          }
         }
-        log.debug('Backend cancellation completed', { sessionId, dialogTurnId, acpClientId });
+        log.debug('Backend interruption completed', { sessionId, dialogTurnId, acpClientId });
       } catch (error) {
         log.error('Backend cancellation failed', { sessionId, dialogTurnId, acpClientId, error });
+        await this.transition(SessionExecutionEvent.USER_CANCEL_FAILED).catch(transitionError => {
+          log.error('Failed to restore processing state after cancellation failure', {
+            sessionId,
+            dialogTurnId,
+            transitionError,
+          });
+        });
       }
     }
 

@@ -11,8 +11,9 @@ use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnPort,
-    AgentDialogTurnRequest, AgentInputAttachment, AgentInteractionResponsePort,
-    AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
+    AgentDialogTurnRecoveryOutcome, AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest,
+    AgentInputAttachment, AgentInteractionResponsePort, AgentLifecycleDeliveryPort,
+    AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
     AgentLocalCommandTurnRecordResult, AgentMessageWorkspaceReferencesRequest,
     AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
     AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
@@ -24,20 +25,21 @@ use bitfun_runtime_ports::{
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
     AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
+    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
     AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
-    AgentUserAnswersRequest, AgentUserShellCommandPort, AgentUserShellCommandRequest,
-    AgentUserShellCommandResult, AgentWorkspaceReference, AgentWorkspaceReferencePort,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DialogSteerOutcome,
-    DialogSubmitOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
-    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
-    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
-    WorkspaceDiffSnapshot,
+    AgentTurnCancellationResult, AgentTurnInterruptionRequest, AgentTurnInterruptionResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserAnswersRequest,
+    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
+    AgentWorkspaceReference, AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, DialogSubmitOutcome,
+    PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError,
+    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
+    SessionTranscriptRequest, ThreadGoal, WorkspaceDiffSnapshot,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -1247,6 +1249,21 @@ impl AgentRuntime {
         port.redo_session(request).await.map_err(RuntimeError::from)
     }
 
+    pub async fn rollback_session_to_turn(
+        &self,
+        request: AgentSessionRollbackToTurnRequest,
+    ) -> Result<AgentSessionRollbackToTurnOutcome, RuntimeError> {
+        let port = self.session_revert.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session revert port is not registered",
+            ))
+        })?;
+        port.rollback_session_to_turn(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
     pub async fn fork_session(
         &self,
         request: AgentSessionForkRequest,
@@ -1486,6 +1503,33 @@ impl AgentRuntime {
         Ok(outcome)
     }
 
+    pub async fn recover_interrupted_turn(
+        &self,
+        request: AgentDialogTurnRecoveryRequest,
+    ) -> Result<AgentDialogTurnRecoveryOutcome, RuntimeError> {
+        let requested_session_id = request.session_id.clone();
+        let requested_turn_id = request.turn_id.clone();
+        let dialog_turn = self
+            .dialog_turn
+            .as_ref()
+            .ok_or(RuntimeError::MissingDialogTurnPort)?;
+        let outcome = dialog_turn
+            .recover_interrupted_turn(request)
+            .await
+            .map_err(RuntimeError::from)?;
+        if outcome.session_id != requested_session_id || outcome.turn_id != requested_turn_id {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                format!(
+                    "agent dialog recovery provider returned session_id '{}' and turn_id '{}' for requested session_id '{}' and turn_id '{}'",
+                    outcome.session_id, outcome.turn_id, requested_session_id, requested_turn_id
+                ),
+            )
+            .into());
+        }
+        Ok(outcome)
+    }
+
     pub async fn deliver_background_result(
         &self,
         request: AgentBackgroundResultRequest,
@@ -1576,6 +1620,20 @@ impl AgentRuntime {
             .ok_or(RuntimeError::MissingCancellationPort)?;
         cancellation
             .cancel_turn(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn interrupt_turn(
+        &self,
+        request: AgentTurnInterruptionRequest,
+    ) -> Result<AgentTurnInterruptionResult, RuntimeError> {
+        let cancellation = self
+            .cancellation
+            .as_ref()
+            .ok_or(RuntimeError::MissingCancellationPort)?;
+        cancellation
+            .interrupt_turn(request)
             .await
             .map_err(RuntimeError::from)
     }
@@ -1686,11 +1744,54 @@ mod tests {
         ClockPort, DialogQueuePriority, DialogSubmissionPolicy, DialogSubmitOutcome,
         FileSystemPort, PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
         PluginRuntimeClient, PluginRuntimeUnavailableReason, PortErrorKind, PortResult,
-        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort,
-        SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
-        ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
+        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort,
+        SessionStorageKind, SessionStoragePathRequest, SessionStoragePathResolution,
+        SessionStorePort, SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest,
+        ThreadGoal, ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
     };
-    use bitfun_runtime_services::{test_support::FakeRuntimePort, RuntimeServicesBuilder};
+    use bitfun_runtime_services::RuntimeServicesBuilder;
+
+    #[derive(Debug)]
+    struct TestRuntimePort {
+        capability: RuntimeServiceCapability,
+    }
+
+    impl TestRuntimePort {
+        fn new(capability: RuntimeServiceCapability) -> Self {
+            Self { capability }
+        }
+    }
+
+    impl RuntimeServicePort for TestRuntimePort {
+        fn capability(&self) -> RuntimeServiceCapability {
+            self.capability
+        }
+    }
+
+    impl FileSystemPort for TestRuntimePort {}
+    impl WorkspacePort for TestRuntimePort {}
+
+    #[async_trait::async_trait]
+    impl SessionStorePort for TestRuntimePort {
+        async fn resolve_session_storage_path(
+            &self,
+            request: SessionStoragePathRequest,
+        ) -> PortResult<SessionStoragePathResolution> {
+            Ok(SessionStoragePathResolution::new(
+                request.workspace_path.clone(),
+                request.workspace_path,
+                SessionStorageKind::Local,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ))
+        }
+    }
+
+    impl ClockPort for TestRuntimePort {
+        fn now_unix_millis(&self) -> i64 {
+            0
+        }
+    }
 
     #[derive(Debug, Default)]
     struct FakeAgentRuntimePorts {
@@ -1698,6 +1799,7 @@ mod tests {
         exact_session_result_id: Mutex<Option<String>>,
         submitted_messages: Mutex<Vec<AgentSubmissionRequest>>,
         cancelled_turns: Mutex<Vec<AgentTurnCancellationRequest>>,
+        interrupted_turns: Mutex<Vec<AgentTurnInterruptionRequest>>,
         compaction_requests: Mutex<Vec<AgentSessionCompactionRequest>>,
         before_turn_fork_requests: Mutex<Vec<AgentSessionForkBeforeTurnRequest>>,
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
@@ -1918,6 +2020,11 @@ mod tests {
                 retired_turn_ids: Vec::new(),
                 changed: true,
                 hidden_turn_count: 1,
+                boundary_storage_turn_index: None,
+                target_turn_id: None,
+                restored_files: Vec::new(),
+                reload_required: false,
+                reload_reason: None,
             })
         }
 
@@ -2219,6 +2326,18 @@ mod tests {
                 requested: true,
             })
         }
+
+        async fn interrupt_turn(
+            &self,
+            request: AgentTurnInterruptionRequest,
+        ) -> PortResult<AgentTurnInterruptionResult> {
+            self.interrupted_turns.lock().unwrap().push(request.clone());
+            Ok(AgentTurnInterruptionResult {
+                session_id: request.session_id,
+                turn_id: request.turn_id,
+                requested: true,
+            })
+        }
     }
 
     #[derive(Debug, Default)]
@@ -2242,13 +2361,13 @@ mod tests {
 
     fn runtime_services_with_events(events: Arc<dyn RuntimeEventSink>) -> RuntimeServices {
         let filesystem: Arc<dyn FileSystemPort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::FileSystem));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::FileSystem));
         let workspace: Arc<dyn WorkspacePort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Workspace));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::Workspace));
         let session_store: Arc<dyn SessionStorePort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::SessionStore));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::SessionStore));
         let clock: Arc<dyn ClockPort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Clock));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::Clock));
 
         RuntimeServicesBuilder::new()
             .with_filesystem(filesystem)
@@ -2632,6 +2751,30 @@ mod tests {
                 .as_deref(),
             Some("requester_session")
         );
+    }
+
+    #[tokio::test]
+    async fn interrupt_turn_delegates_to_cancellation_owner() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_cancellation_port(ports.clone())
+            .build()
+            .expect("runtime");
+
+        let result = runtime
+            .interrupt_turn(AgentTurnInterruptionRequest {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                source: Some(AgentSubmissionSource::DesktopUi),
+                wait_timeout_ms: Some(30_000),
+            })
+            .await
+            .expect("interrupt");
+
+        assert!(result.requested);
+        assert_eq!(result.turn_id, "turn_1");
+        assert_eq!(ports.interrupted_turns.lock().unwrap().len(), 1);
     }
 
     #[tokio::test]
@@ -3317,6 +3460,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn recover_interrupted_turn_delegates_and_validates_identity() {
+        #[derive(Debug)]
+        struct RecoveryPort;
+
+        #[async_trait::async_trait]
+        impl bitfun_runtime_ports::AgentDialogTurnPort for RecoveryPort {
+            async fn submit_dialog_turn(
+                &self,
+                _request: AgentDialogTurnRequest,
+            ) -> PortResult<DialogSubmitOutcome> {
+                unreachable!("recovery must not submit a new turn")
+            }
+
+            async fn recover_interrupted_turn(
+                &self,
+                request: AgentDialogTurnRecoveryRequest,
+            ) -> PortResult<AgentDialogTurnRecoveryOutcome> {
+                Ok(AgentDialogTurnRecoveryOutcome {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id,
+                    execution_generation: request.execution_generation + 1,
+                })
+            }
+        }
+
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(FakeAgentRuntimePorts::default()))
+            .with_dialog_turn_port(Arc::new(RecoveryPort))
+            .build()
+            .expect("runtime");
+        let result = runtime
+            .recover_interrupted_turn(AgentDialogTurnRecoveryRequest {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                execution_generation: 0,
+                workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("recover");
+
+        assert_eq!(result.session_id, "session_1");
+        assert_eq!(result.turn_id, "turn_1");
+        assert_eq!(result.execution_generation, 1);
+    }
+
+    #[tokio::test]
     async fn submit_dialog_turn_rejects_provider_session_identity_mismatch() {
         #[derive(Debug)]
         struct MismatchedDialogTurnPort;
@@ -3383,6 +3574,8 @@ mod tests {
                 turn_id: "turn_1".to_string(),
                 content: "check tests".to_string(),
                 display_content: None,
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
             })
             .await
             .expect_err("steering without a dialog-turn provider must fail");
@@ -3433,6 +3626,8 @@ mod tests {
             turn_id: "turn_1".to_string(),
             content: "check tests".to_string(),
             display_content: Some("Check tests".to_string()),
+            attachments: Vec::new(),
+            metadata: serde_json::Map::new(),
         };
 
         let result = runtime
@@ -3492,6 +3687,8 @@ mod tests {
                 turn_id: "turn_1".to_string(),
                 content: "check tests".to_string(),
                 display_content: None,
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
             })
             .await
             .expect_err("provider turn mismatch must fail closed");

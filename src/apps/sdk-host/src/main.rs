@@ -33,7 +33,10 @@ async fn run_host() -> Result<()> {
 }
 
 fn main() {
-    bitfun_sdk_host_app::initialize_process_runtime();
+    if let Err(error) = bitfun_sdk_host_app::initialize_process_runtime() {
+        eprintln!("Error: {error}");
+        std::process::exit(1);
+    }
 
     let worker = bitfun_sdk_host_app::spawn_sdk_host_worker(|| {
         let runtime = tokio::runtime::Builder::new_multi_thread()

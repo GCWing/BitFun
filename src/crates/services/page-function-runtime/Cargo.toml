@@ -1,6 +1,6 @@
 [package]
 name = "bitfun-page-function-runtime"
-version = "0.2.17"
+version = "0.2.18"
 authors = ["BitFun Team"]
 edition = "2021"
 description = "Embedded JS Page Function runtime for BitFun Pages (rquickjs)"

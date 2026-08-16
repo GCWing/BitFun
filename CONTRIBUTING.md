@@ -58,6 +58,7 @@ pnpm install
 ```bash
 # Desktop (recommended for daily development)
 pnpm run desktop:dev                # full hot-reload: Vite HMR + Rust auto-rebuild & restart
+pnpm run prepare:dsh-profile        # optional: compile the DeepSeek Harness bridge for local sessions
 
 # Desktop (lightweight preview, no Rust auto-rebuild)
 pnpm run desktop:preview:debug      # reuse pre-built binary + Vite HMR; Rust changes require manual restart

@@ -25,7 +25,11 @@
     line-height: 1;
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      opacity $motion-fast $easing-standard;
     white-space: nowrap;
 
     // Avoid I-beam over label/icon; beat global :disabled cursor when chained with class.
@@ -86,7 +90,11 @@
     border-radius: $size-radius-base;
     color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      opacity $motion-fast $easing-standard;
 
     span,
     svg {
@@ -236,7 +244,10 @@
     line-height: var(--bf-appearance-token-flowchat-compact-line-height);
     text-align: left;
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      opacity $motion-fast $easing-standard;
 
     span,
     svg {
@@ -404,7 +415,10 @@
     font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      opacity $motion-fast $easing-standard;
     user-select: none;
 
     span,

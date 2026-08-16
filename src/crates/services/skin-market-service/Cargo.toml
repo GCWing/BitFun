@@ -17,12 +17,12 @@ chrono = { workspace = true }
 hex = { workspace = true }
 image = { workspace = true }
 hmac = { workspace = true }
-reqwest = { workspace = true, features = ["rustls"] }
+reqwest = { workspace = true, features = ["http2", "json", "rustls"] }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
 tokio = { workspace = true, features = ["fs", "rt", "sync", "time"] }
 tokio-util = { workspace = true, features = ["io"] }
 tower-http = { version = "0.6.11", features = ["fs"] }

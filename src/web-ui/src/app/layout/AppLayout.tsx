@@ -26,7 +26,7 @@ import { MCPInteractionDialog } from '../components/MCPInteractionDialog/MCPInte
 import { workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
-import { confirmDialog } from '@/component-library';
+import { confirmDialog, PresenceBoundary } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { DailyAppUpdateGate } from '@/infrastructure/update';
 import { useI18n } from '@/infrastructure/i18n';
@@ -777,7 +777,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       </div>
 
       {/* Dialogs (previously owned by TitleBar) */}
-      {showNewProjectDialog && (
+      <PresenceBoundary active={showNewProjectDialog}>
         <Suspense fallback={null}>
           <NewProjectDialog
             isOpen={showNewProjectDialog}
@@ -790,16 +790,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             }
           />
         </Suspense>
-      )}
-      {showAboutDialog && (
+      </PresenceBoundary>
+      <PresenceBoundary active={showAboutDialog}>
         <Suspense fallback={null}>
           <AboutDialog
             isOpen={showAboutDialog}
             onClose={() => setShowAboutDialog(false)}
           />
         </Suspense>
-      )}
-      {showWorkspaceStatus && (
+      </PresenceBoundary>
+      <PresenceBoundary active={showWorkspaceStatus}>
         <Suspense fallback={null}>
           <WorkspaceManager
             isVisible={showWorkspaceStatus}
@@ -807,7 +807,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             onWorkspaceSelect={() => {}}
           />
         </Suspense>
-      )}
+      </PresenceBoundary>
       <MCPInteractionDialog />
     </>
   );

@@ -16,6 +16,19 @@ export const servicesReqwestOwnerFeatures = [
   'web-tools',
 ];
 
+export const guardedEmptyInternalDefaultManifestPaths = [
+  'src/crates/assembly/core/Cargo.toml',
+  'src/crates/assembly/product-capabilities/Cargo.toml',
+  'src/crates/contracts/product-domains/Cargo.toml',
+  'src/crates/contracts/runtime-ports/Cargo.toml',
+  'src/crates/execution/agent-runtime/Cargo.toml',
+  'src/crates/execution/tool-contracts/Cargo.toml',
+  'src/crates/execution/tool-execution/Cargo.toml',
+  'src/crates/execution/tool-provider-groups/Cargo.toml',
+  'src/crates/services/services-core/Cargo.toml',
+  'src/crates/services/services-integrations/Cargo.toml',
+];
+
 export const optionalDependencyFeatureOwnerRules = [
   {
     crateName: 'services-core',
@@ -36,8 +49,19 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'ignore', ownerFeatures: ['filesystem'] },
       { depName: 'libc', ownerFeatures: ['local-storage', 'process-runtime'] },
       { depName: 'notify', ownerFeatures: ['lsp'] },
+      {
+        depName: 'regex',
+        ownerFeatures: [
+          'diagnostics',
+          'filesystem',
+          'local-storage',
+          'markdown',
+          'workspace-instructions',
+        ],
+      },
       { depName: 'rusqlite', ownerFeatures: ['permission'] },
       { depName: 'serde_yaml', ownerFeatures: ['markdown', 'workspace-instructions'] },
+      { depName: 'similar', ownerFeatures: ['diff', 'local-storage'] },
       {
         depName: 'sha2',
         ownerFeatures: [
@@ -52,14 +76,63 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'win32job', ownerFeatures: ['process-runtime'] },
       { depName: 'windows', ownerFeatures: ['json-io', 'local-storage', 'process-runtime'] },
       { depName: 'zip', ownerFeatures: ['lsp'] },
+      {
+        depName: 'tokio',
+        ownerFeatures: [
+          'diff',
+          'filesystem',
+          'json-io',
+          'local-storage',
+          'lsp',
+          'permission',
+          'process-runtime',
+          'workspace-instructions',
+          'workspace-runtime',
+          'workspace-text-runtime',
+        ],
+      },
     ],
   },
   {
     crateName: 'runtime-ports',
+    reviewedAggregateFeatures: ['tool-runtime-handles'],
     reason:
-      'runtime-ports may expose product-domain permission ports only through the explicit permission contract slice',
+      'runtime-ports optional capabilities must stay behind their exact contract slice',
     dependencies: [
-      { depName: 'bitfun-product-domains', ownerFeatures: ['permission'] },
+      { depName: 'anyhow', ownerFeatures: ['workspace-ports'] },
+      { depName: 'bitfun-core-types', ownerFeatures: ['agent-api', 'ts'] },
+      { depName: 'bitfun-product-domains', ownerFeatures: ['permission', 'ts'] },
+      { depName: 'tokio', ownerFeatures: ['remote-exec-port', 'terminal-port'] },
+      { depName: 'tokio-util', ownerFeatures: ['workspace-ports'] },
+      { depName: 'ts-rs', ownerFeatures: ['ts'] },
+    ],
+  },
+  {
+    crateName: 'agent-runtime',
+    reviewedAggregateFeatures: ['native-hook-runtime'],
+    reason:
+      'agent-runtime optional dependencies must stay behind the full runtime, DeepResearch, or native-hook owner slice',
+    dependencies: [
+      { depName: 'async-trait', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-agent-tools', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-core-types', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-events', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-harness', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-runtime-services', ownerFeatures: ['agent-runtime'] },
+      { depName: 'dashmap', ownerFeatures: ['agent-runtime'] },
+      { depName: 'hex', ownerFeatures: ['agent-runtime'] },
+      { depName: 'log', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
+      { depName: 'regex', ownerFeatures: ['agent-runtime', 'deep-research', 'native-hook-settings'] },
+      { depName: 'serde', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
+      { depName: 'serde_json', ownerFeatures: ['agent-runtime', 'native-hook-runtime', 'native-hook-settings'] },
+      { depName: 'serde_yaml', ownerFeatures: ['agent-runtime'] },
+      { depName: 'sha2', ownerFeatures: ['agent-runtime'] },
+      { depName: 'thiserror', ownerFeatures: ['agent-runtime'] },
+      { depName: 'tokio', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
+      { depName: 'tokio-util', ownerFeatures: ['agent-runtime'] },
+      { depName: 'uuid', ownerFeatures: ['agent-runtime'] },
     ],
   },
   {
@@ -68,14 +141,20 @@ export const optionalDependencyFeatureOwnerRules = [
       'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',
     dependencies: [
       { depName: 'axum', ownerFeatures: ['debug-log', 'mcp-runtime'] },
-      { depName: 'bitfun-ai-adapters', ownerFeatures: ['ai-adapter-runtime'] },
-      { depName: 'bitfun-agent-runtime', ownerFeatures: ['agent-runtime'] },
+      { depName: 'base64', ownerFeatures: ['agent-runtime', 'dispatch-store'] },
+      {
+        depName: 'bitfun-ai-adapters',
+        ownerFeatures: ['ai-adapter-runtime', 'subscription-auth'],
+      },
+      { depName: 'bitfun-agent-runtime', ownerFeatures: ['agent-runtime', 'deep-research'] },
       { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
+      { depName: 'bitfun-agent-tools', ownerFeatures: ['agent-runtime', 'local-storage', 'mcp-runtime'] },
       { depName: 'bitfun-claude-code-adapter', ownerFeatures: ['external-sources'] },
       { depName: 'bitfun-codex-adapter', ownerFeatures: ['external-sources'] },
       { depName: 'bitfun-external-sources', ownerFeatures: ['external-sources'] },
       { depName: 'bitfun-harness', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-opencode-adapter', ownerFeatures: ['external-sources'] },
+      { depName: 'bitfun-dsh-adapter', ownerFeatures: ['external-sources'] },
       { depName: 'bitfun-plugin-runtime-client', ownerFeatures: ['plugin-runtime'] },
       { depName: 'bitfun-product-capabilities', ownerFeatures: ['product-capabilities'] },
       {
@@ -86,6 +165,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'function-agents',
           'plugin-source',
           'tools-miniapp',
+          'ts',
         ],
       },
       { depName: 'bitfun-runtime-services', ownerFeatures: ['runtime-services'] },
@@ -110,6 +190,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'script-tool-runtime',
           'ssh-remote',
           'tools-miniapp',
+          'ts',
           'web-tools',
           'workspace-search',
         ],
@@ -134,12 +215,15 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'dashmap', ownerFeatures: ['agent-runtime'] },
       { depName: 'filetime', ownerFeatures: ['agent-runtime'] },
       { depName: 'flate2', ownerFeatures: ['agent-runtime'] },
+      { depName: 'fluent-bundle', ownerFeatures: ['i18n-runtime'] },
       { depName: 'fs2', ownerFeatures: ['agent-runtime'] },
+      { depName: 'futures', ownerFeatures: ['agent-runtime'] },
       { depName: 'image', ownerFeatures: ['agent-runtime'] },
       { depName: 'include_dir', ownerFeatures: ['agent-runtime'] },
       { depName: 'indexmap', ownerFeatures: ['agent-runtime'] },
       { depName: 'md5', ownerFeatures: ['agent-runtime'] },
-      { depName: 'reqwest', ownerFeatures: ['ai-adapter-runtime', 'mcp-runtime', 'tools-miniapp'] },
+      { depName: 'reqwest', ownerFeatures: ['mcp-runtime', 'tools-miniapp'] },
+      { depName: 'regex', ownerFeatures: ['agent-runtime'] },
       { depName: 'rusqlite', ownerFeatures: ['agent-runtime'] },
       { depName: 'semver', ownerFeatures: ['tools-miniapp'] },
       { depName: 'serde_yaml', ownerFeatures: ['workspace-runtime'] },
@@ -147,8 +231,13 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'terminal-core', ownerFeatures: ['terminal'] },
       { depName: 'notify', ownerFeatures: ['lsp', 'workspace-watch'] },
       { depName: 'tokio-tungstenite', ownerFeatures: ['browser-control'] },
+      { depName: 'tokio-util', ownerFeatures: ['agent-runtime', 'debug-log'] },
       { depName: 'tower-http', ownerFeatures: ['debug-log'] },
-      { depName: 'tool-runtime', ownerFeatures: ['agent-runtime', 'tools-basic', 'web-tools'] },
+      { depName: 'unic-langid', ownerFeatures: ['i18n-runtime'] },
+      {
+        depName: 'tool-runtime',
+        ownerFeatures: ['agent-runtime', 'document-read', 'web-tools'],
+      },
     ],
   },
   {
@@ -158,10 +247,10 @@ export const optionalDependencyFeatureOwnerRules = [
     dependencies: [
       { depName: 'aes', ownerFeatures: ['remote-connect'] },
       { depName: 'aes-gcm', ownerFeatures: ['feedback', 'mcp', 'remote-connect', 'remote-ssh-concrete'] },
-      { depName: 'anyhow', ownerFeatures: ['browser-control', 'debug-log', 'feedback', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
+      { depName: 'anyhow', ownerFeatures: ['browser-control', 'debug-log', 'deep-research', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
       {
         depName: 'async-trait',
-        ownerFeatures: ['feedback', 'git', 'mcp', 'miniapp-market', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
+        ownerFeatures: ['feedback', 'deep-research', 'git', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
       },
       {
         depName: 'base64',
@@ -169,8 +258,8 @@ export const optionalDependencyFeatureOwnerRules = [
       },
       { depName: 'bitfun-agent-runtime', ownerFeatures: ['deep-research', 'hook-import'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['remote-connect', 'speech'] },
-      { depName: 'bitfun-product-domains', ownerFeatures: ['canvas-runtime', 'feedback', 'function-agents', 'hook-import', 'miniapp-market', 'miniapp-runtime', 'plugin-source', 'privacy'] },
-      { depName: 'bitfun-runtime-ports', ownerFeatures: ['git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
+      { depName: 'bitfun-product-domains', ownerFeatures: ['canvas-runtime', 'feedback', 'function-agents', 'hook-import', 'miniapp-market', 'miniapp-runtime', 'plugin-source'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['deep-research', 'git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
       {
         depName: 'bitfun-services-core',
         ownerFeatures: ['browser-control', 'git', 'hook-import', 'mcp', 'miniapp-runtime', 'process-tree', 'remote-connect', 'remote-ssh', 'review-platform', 'workspace-search'],
@@ -236,11 +325,320 @@ export const optionalDependencyFeatureOwnerRules = [
   },
 ];
 
+function capabilityEdge(features = [], overrides = {}) {
+  return {
+    kind: 'normal',
+    optional: false,
+    rename: null,
+    target: null,
+    features,
+    ...overrides,
+  };
+}
+
+function capabilityForwarder(sourceFeature, feature, weak = false) {
+  return { sourceFeature, feature, weak };
+}
+
+function capabilityConsumer(edges, forwarders = [], activators = [], aggregates = []) {
+  return { edges, forwarders, activators, aggregates };
+}
+
+export const capabilityContractDependencyRules = [
+  {
+    packageName: 'bitfun-runtime-ports',
+    manifestPath: 'src/crates/contracts/runtime-ports/Cargo.toml',
+    featureProfiles: {
+      default: [],
+      'agent-api': ['dep:bitfun-core-types'],
+      'git-port': [],
+      permission: ['dep:bitfun-product-domains'],
+      'plugin-runtime': [],
+      'remote-exec-port': ['dep:tokio'],
+      'remote-workspace-ports': [],
+      'runtime-event-port': [],
+      'script-tool-runtime': [],
+      'terminal-port': ['dep:tokio'],
+      'tool-runtime-handles': ['workspace-ports', 'terminal-port', 'remote-exec-port'],
+      ts: [
+        'dep:ts-rs',
+        'agent-api',
+        'permission',
+        'bitfun-core-types/ts',
+        'bitfun-product-domains?/ts',
+      ],
+      'workspace-ports': ['dep:anyhow', 'dep:tokio-util'],
+    },
+    consumers: new Map([
+      ['bitfun-agent-runtime', capabilityConsumer([
+        capabilityEdge([
+          'agent-api',
+          'git-port',
+          'permission',
+          'plugin-runtime',
+          'remote-workspace-ports',
+          'runtime-event-port',
+          'terminal-port',
+          'workspace-ports',
+        ], { optional: true }),
+      ], [], ['agent-runtime'])],
+      ['bitfun-agent-runtime-ipc', capabilityConsumer([
+        capabilityEdge(['agent-api', 'git-port']),
+      ])],
+      ['bitfun-agent-tools', capabilityConsumer([capabilityEdge()])],
+      ['bitfun-app-server', capabilityConsumer([capabilityEdge(['agent-api'])])],
+      ['bitfun-app-server-protocol', capabilityConsumer(
+        [capabilityEdge(['agent-api', 'git-port'])],
+        [capabilityForwarder('ts', 'ts')],
+      )],
+      ['bitfun-cli', capabilityConsumer([
+        capabilityEdge(['agent-api', 'git-port', 'permission', 'plugin-runtime', 'workspace-ports']),
+      ])],
+      ['bitfun-core', capabilityConsumer(
+        [capabilityEdge(['permission', 'workspace-ports'])],
+        [
+          capabilityForwarder('agent-runtime', 'agent-api'),
+          capabilityForwarder('agent-runtime', 'git-port'),
+          capabilityForwarder('agent-runtime', 'remote-exec-port'),
+          capabilityForwarder('agent-runtime', 'remote-workspace-ports'),
+          capabilityForwarder('agent-runtime', 'runtime-event-port'),
+          capabilityForwarder('agent-runtime', 'terminal-port'),
+          capabilityForwarder('agent-runtime', 'tool-runtime-handles'),
+          capabilityForwarder('agent-runtime', 'workspace-ports'),
+          capabilityForwarder('plugin-runtime', 'plugin-runtime'),
+          capabilityForwarder('script-tool-runtime', 'script-tool-runtime'),
+          capabilityForwarder('ts', 'ts'),
+        ],
+        [],
+        ['external-sources', 'mcp-runtime', 'product-full', 'remote-connect', 'tools-mcp'],
+      )],
+      ['bitfun-desktop', capabilityConsumer([
+        capabilityEdge(['agent-api', 'permission', 'workspace-ports']),
+      ])],
+      ['bitfun-opencode-adapter', capabilityConsumer([
+        capabilityEdge(['plugin-runtime']),
+        capabilityEdge(['script-tool-runtime'], { kind: 'dev' }),
+      ])],
+      ['bitfun-dsh-adapter', capabilityConsumer([
+        capabilityEdge(['plugin-runtime']),
+      ])],
+      ['bitfun-plugin-runtime-client', capabilityConsumer([
+        capabilityEdge(['plugin-runtime']),
+      ])],
+      ['bitfun-product-capabilities', capabilityConsumer([
+        capabilityEdge(['plugin-runtime']),
+        capabilityEdge(['agent-api'], { kind: 'dev' }),
+      ])],
+      ['bitfun-runtime-services', capabilityConsumer([
+        capabilityEdge([
+          'git-port',
+          'remote-exec-port',
+          'remote-workspace-ports',
+          'runtime-event-port',
+          'terminal-port',
+          'workspace-ports',
+        ]),
+      ])],
+      ['bitfun-sdk-host', capabilityConsumer([
+        capabilityEdge(['agent-api']),
+        capabilityEdge(['permission'], { kind: 'dev' }),
+      ])],
+      ['bitfun-services-core', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('permission', 'permission'),
+          capabilityForwarder('workspace-runtime', 'runtime-event-port'),
+          capabilityForwarder('workspace-runtime', 'workspace-ports'),
+        ],
+        ['permission', 'workspace-runtime'],
+      )],
+      ['bitfun-services-integrations', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('deep-research', 'workspace-ports'),
+          capabilityForwarder('git', 'git-port'),
+          capabilityForwarder('remote-connect', 'agent-api'),
+          capabilityForwarder('remote-connect', 'remote-workspace-ports'),
+          capabilityForwarder('remote-ssh', 'remote-exec-port'),
+          capabilityForwarder('remote-ssh', 'remote-workspace-ports'),
+          capabilityForwarder('remote-ssh', 'workspace-ports'),
+          capabilityForwarder('script-tool-runtime', 'script-tool-runtime'),
+        ],
+        ['remote-ssh-concrete'],
+        ['function-agents', 'product-full'],
+      )],
+      ['terminal-core', capabilityConsumer([
+        capabilityEdge(['terminal-port']),
+      ])],
+      ['tool-runtime', capabilityConsumer([capabilityEdge()])],
+    ]),
+  },
+  {
+    packageName: 'bitfun-agent-tools',
+    manifestPath: 'src/crates/execution/tool-contracts/Cargo.toml',
+    featureProfiles: {
+      default: [],
+      'acp-bridge': [],
+      'computer-use-contract': [],
+      'element-token': [],
+      'mcp-bridge': [],
+    },
+    consumers: new Map([
+      ['bitfun-acp', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [capabilityForwarder('client', 'acp-bridge')],
+        ['server'],
+        ['default'],
+      )],
+      ['bitfun-agent-runtime', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [],
+        ['agent-runtime'],
+      )],
+      ['bitfun-agent-stream', capabilityConsumer([
+        capabilityEdge([], { kind: 'dev' }),
+      ])],
+      ['bitfun-cli', capabilityConsumer([capabilityEdge()])],
+      ['bitfun-core', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('agent-runtime', 'computer-use-contract'),
+          capabilityForwarder('mcp-runtime', 'mcp-bridge'),
+        ],
+        ['agent-runtime', 'local-storage'],
+        [
+          'dispatch-store',
+          'external-sources',
+          'plugin-runtime',
+          'product-full',
+          'remote-connect',
+          'remote-workspace',
+          'ssh-remote',
+          'tools-basic',
+          'tools-mcp',
+          'workspace-runtime',
+          'workspace-search',
+          'workspace-watch',
+        ],
+      )],
+      ['bitfun-desktop', capabilityConsumer([
+        capabilityEdge(['element-token']),
+      ])],
+      ['bitfun-services-integrations', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [capabilityForwarder('mcp', 'mcp-bridge')],
+        ['remote-connect'],
+        ['product-full'],
+      )],
+      ['tool-runtime', capabilityConsumer([capabilityEdge()])],
+    ]),
+  },
+  {
+    packageName: 'bitfun-agent-runtime',
+    manifestPath: 'src/crates/execution/agent-runtime/Cargo.toml',
+    featureProfiles: {
+      default: [],
+      'deep-research': ['dep:regex'],
+      'native-hook-settings': ['dep:regex', 'dep:serde_json'],
+      'native-hook-runtime': [
+        'native-hook-settings',
+        'dep:log',
+        'dep:serde',
+        'dep:serde_json',
+        'dep:tokio',
+        'tokio/io-util',
+        'tokio/macros',
+        'tokio/process',
+        'tokio/rt',
+        'tokio/time',
+      ],
+      'agent-runtime': [
+        'native-hook-runtime',
+        'dep:async-trait',
+        'dep:bitfun-agent-stream',
+        'dep:bitfun-agent-tools',
+        'dep:bitfun-core-types',
+        'dep:bitfun-events',
+        'dep:bitfun-harness',
+        'dep:bitfun-runtime-ports',
+        'dep:bitfun-runtime-services',
+        'dep:dashmap',
+        'dep:hex',
+        'dep:log',
+        'dep:regex',
+        'dep:serde',
+        'dep:serde_json',
+        'dep:serde_yaml',
+        'dep:sha2',
+        'dep:thiserror',
+        'dep:tokio',
+        'dep:tokio-util',
+        'dep:uuid',
+        'tokio/macros',
+        'tokio/rt',
+        'tokio/sync',
+      ],
+    },
+    consumers: new Map([
+      ['bitfun-acp', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [capabilityForwarder('server', 'agent-runtime')],
+        ['server'],
+        ['default'],
+      )],
+      ['bitfun-app-server', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-cli', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-core', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('agent-runtime', 'agent-runtime'),
+          capabilityForwarder('deep-research', 'deep-research', true),
+        ],
+        ['agent-runtime'],
+        ['external-sources', 'mcp-runtime', 'plugin-runtime', 'product-full', 'remote-connect', 'tools-mcp'],
+      )],
+      ['bitfun-desktop', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-product-capabilities', capabilityConsumer([
+        capabilityEdge(['agent-runtime'], { kind: 'dev' }),
+      ])],
+      ['bitfun-sdk-host', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-sdk-host-app', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-server', capabilityConsumer([
+        capabilityEdge(['agent-runtime']),
+      ])],
+      ['bitfun-services-integrations', capabilityConsumer(
+        [capabilityEdge([], { optional: true })],
+        [
+          capabilityForwarder('deep-research', 'deep-research'),
+          capabilityForwarder('hook-import', 'native-hook-settings'),
+        ],
+        ['deep-research', 'hook-import'],
+        ['product-full'],
+      )],
+    ]),
+  },
+];
+
 export const coreProductFullFeatureAssemblyRule = {
   manifestPath: 'src/crates/assembly/core/Cargo.toml',
   featureName: 'product-full',
   requiredFeatureRefs: [
     'agent-runtime',
+    'diagnostics',
+    'diff',
+    'document-read',
+    'subscription-auth',
+    'i18n-runtime',
     'browser-control',
     'deep-research',
     'mcp-runtime',
@@ -283,30 +681,141 @@ export const coreProductFullFeatureAssemblyRule = {
   reason: 'bitfun-core product-full must explicitly assemble current owner feature groups',
 };
 
+export const acpClientCoreFeatures = [
+  'agent-runtime',
+  'ssh-remote',
+];
+
+export const acpServerCoreFeatures = [
+  'agent-runtime',
+  'document-read',
+  'subscription-auth',
+  'deep-research',
+  'lsp',
+  'external-sources',
+  'tools-basic',
+  'tools-git',
+  'tools-mcp',
+  'tools-browser-web',
+  'tools-computer-use',
+  'tools-image-analysis',
+  'tools-miniapp',
+  'tools-canvas',
+  'tools-agent-control',
+];
+
+export const acpClosedFeatureProfileRules = [
+  {
+    manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
+    featureName: 'default',
+    requiredFeatureRefs: ['client', 'server'],
+    exact: true,
+    reason: 'bitfun-acp default must preserve its complete client and server compatibility surface',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
+    featureName: 'client',
+    requiredFeatureRefs: [
+      'bitfun-agent-tools/acp-bridge',
+      'dep:futures',
+      'dep:serde',
+      // The bundled DeepSeek Harness profile: `dirs` locates $DSH_HOME,
+      // `semver` compares the build's minimum dsh version against the installed
+      // one, and `tar` packs the profile for a remote workspace, which receives
+      // it as one stream over its own transport. All three are client-only —
+      // the server surface never launches an agent.
+      'dep:dirs',
+      'dep:semver',
+      'dep:tar',
+      'dep:bitfun-core',
+      ...acpClientCoreFeatures.map((feature) => `bitfun-core/${feature}`),
+    ],
+    exact: true,
+    reason: 'bitfun-acp client must own only external ACP agent and SSH transport capabilities',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
+    featureName: 'server',
+    requiredFeatureRefs: [
+      'dep:bitfun-agent-tools',
+      'dep:bitfun-agent-runtime',
+      'bitfun-agent-runtime/agent-runtime',
+      'dep:bitfun-core-types',
+      'dep:bitfun-core',
+      'dep:sha2',
+      ...acpServerCoreFeatures.map((feature) => `bitfun-core/${feature}`),
+    ],
+    exact: true,
+    reason: 'bitfun-acp server must preserve the reviewed Agent Runtime capability surface without SSH transport',
+  },
+];
+
 export const coreClosedFeatureProfileRules = [
+  {
+    manifestPath: 'src/crates/interfaces/app-server/Cargo.toml',
+    featureName: 'ts',
+    requiredFeatureRefs: ['bitfun-app-server-protocol/ts'],
+    exact: true,
+    reason: 'App Server must delegate TypeScript wire export to the protocol owner',
+  },
+  {
+    manifestPath: 'src/crates/interfaces/app-server-protocol/Cargo.toml',
+    featureName: 'ts',
+    requiredFeatureRefs: [
+      'bitfun-core-types/ts',
+      'bitfun-product-domains/ts',
+      'bitfun-runtime-ports/ts',
+      'dep:ts-rs',
+    ],
+    exact: true,
+    reason: 'App Server Protocol must own the complete behavior-light TypeScript wire surface',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'default',
+    requiredFeatureRefs: [],
+    exact: true,
+    reason: 'bitfun-core default must stay empty so product entrypoints select capabilities explicitly',
+  },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'agent-runtime',
     requiredFeatureRefs: [
       'ai-adapter-runtime',
       'dep:bitfun-agent-runtime',
+      'bitfun-agent-runtime/agent-runtime',
       'dep:bitfun-agent-content',
       'dep:bitfun-agent-stream',
+      'dep:bitfun-agent-tools',
+      'bitfun-agent-tools/computer-use-contract',
+      'bitfun-runtime-ports/agent-api',
+      'bitfun-runtime-ports/git-port',
+      'bitfun-runtime-ports/remote-exec-port',
+      'bitfun-runtime-ports/remote-workspace-ports',
+      'bitfun-runtime-ports/runtime-event-port',
+      'bitfun-runtime-ports/terminal-port',
+      'bitfun-runtime-ports/tool-runtime-handles',
+      'bitfun-runtime-ports/workspace-ports',
+      'dep:base64',
       'dep:bitfun-harness',
       'dep:dashmap',
       'dep:filetime',
       'dep:flate2',
       'dep:fs2',
+      'dep:futures',
       'dep:include_dir',
       'dep:indexmap',
       'dep:image',
       'dep:md5',
       'dep:rusqlite',
+      'dep:regex',
       'dep:similar',
+      'dep:tokio-util',
       'dep:tool-runtime',
       'bitfun-services-core/permission',
       'bitfun-services-core/runtime-ownership',
       'bitfun-services-core/session-git',
+      'bitfun-services-core/workspace-text-runtime',
       'filesystem',
       'local-storage',
       'process-runtime',
@@ -319,6 +828,10 @@ export const coreClosedFeatureProfileRules = [
       'tool-packs',
       'tools-basic',
       'tools-agent-control',
+      'tokio/io-util',
+      'tokio/macros',
+      'tokio/rt',
+      'tokio/time',
     ],
     allowedTransitiveFeatureRefs: [
       'workspace-search',
@@ -330,6 +843,28 @@ export const coreClosedFeatureProfileRules = [
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'i18n-runtime',
+    requiredFeatureRefs: ['dep:fluent-bundle', 'dep:unic-langid'],
+    exact: true,
+    reason:
+      'i18n-runtime must own only the backend Fluent bundle and language identifier implementation',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'diagnostics',
+    requiredFeatureRefs: ['bitfun-services-core/diagnostics'],
+    exact: true,
+    reason: 'bitfun-core diagnostics must preserve only the reusable diagnostic redaction facade',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'diff',
+    requiredFeatureRefs: ['bitfun-services-core/diff'],
+    exact: true,
+    reason: 'bitfun-core diff must preserve only the reusable local diff facade',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'external-sources',
     requiredFeatureRefs: [
       'agent-runtime',
@@ -337,6 +872,7 @@ export const coreClosedFeatureProfileRules = [
       'mcp-runtime',
       'script-tool-runtime',
       'dep:bitfun-opencode-adapter',
+      'dep:bitfun-dsh-adapter',
       'dep:bitfun-claude-code-adapter',
       'dep:bitfun-codex-adapter',
       'dep:bitfun-external-sources',
@@ -372,7 +908,11 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'plugin-runtime',
-    requiredFeatureRefs: ['external-sources', 'dep:bitfun-plugin-runtime-client'],
+    requiredFeatureRefs: [
+      'external-sources',
+      'dep:bitfun-plugin-runtime-client',
+      'bitfun-runtime-ports/plugin-runtime',
+    ],
     allowedTransitiveFeatureRefs: [
       'agent-runtime',
       'model-catalog',
@@ -419,6 +959,7 @@ export const coreClosedFeatureProfileRules = [
     featureName: 'mcp-runtime',
     requiredFeatureRefs: [
       'agent-runtime',
+      'bitfun-agent-tools/mcp-bridge',
       'dep:axum',
       'dep:reqwest',
       'bitfun-services-integrations/mcp',
@@ -483,7 +1024,13 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'browser-control',
-    requiredFeatureRefs: ['dep:tokio-tungstenite', 'bitfun-services-integrations/browser-control'],
+    requiredFeatureRefs: [
+      'dep:tokio-tungstenite',
+      'bitfun-services-integrations/browser-control',
+      'tokio/net',
+      'tokio/rt',
+      'tokio/time',
+    ],
     exact: true,
     reason: 'browser-control must own only the CDP browser adapter',
   },
@@ -497,14 +1044,20 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'deep-research',
-    requiredFeatureRefs: ['bitfun-services-integrations/deep-research'],
+    requiredFeatureRefs: [
+      'bitfun-agent-runtime?/deep-research',
+      'bitfun-services-integrations/deep-research',
+    ],
     exact: true,
     reason: 'deep-research must own only research report post-processing',
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'script-tool-runtime',
-    requiredFeatureRefs: ['bitfun-services-integrations/script-tool-runtime'],
+    requiredFeatureRefs: [
+      'bitfun-runtime-ports/script-tool-runtime',
+      'bitfun-services-integrations/script-tool-runtime',
+    ],
     exact: true,
     reason: 'script-tool-runtime must own only external script tool execution support',
   },
@@ -517,10 +1070,33 @@ export const coreClosedFeatureProfileRules = [
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'document-read',
+    requiredFeatureRefs: ['tool-runtime?/document-read'],
+    exact: true,
+    reason:
+      'document-read must add conversion only when the Agent tool runtime owner is selected',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'subscription-auth',
+    requiredFeatureRefs: ['bitfun-ai-adapters?/subscription-auth'],
+    exact: true,
+    reason:
+      'subscription-auth must add local credential resolution only when the AI adapter runtime owner is selected',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'ai-adapter-runtime',
+    requiredFeatureRefs: ['dep:bitfun-ai-adapters'],
+    exact: true,
+    reason:
+      'ai-adapter-runtime must own provider protocol clients without implicitly enabling local subscription credentials',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'tools-basic',
     requiredFeatureRefs: [
       'bitfun-tool-packs/basic',
-      'tool-runtime/document-read',
       'workspace-search',
     ],
     allowedTransitiveFeatureRefs: [
@@ -665,8 +1241,13 @@ export const coreClosedFeatureProfileRules = [
     featureName: 'debug-log',
     requiredFeatureRefs: [
       'dep:axum',
+      'dep:tokio-util',
       'dep:tower-http',
       'bitfun-services-integrations/debug-log',
+      'tokio/macros',
+      'tokio/net',
+      'tokio/rt',
+      'tokio/time',
     ],
     exact: true,
     reason: 'bitfun-core debug-log must own only the debug ingest HTTP capability',
@@ -680,8 +1261,31 @@ export const coreClosedFeatureProfileRules = [
   },
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',
+    featureName: 'diagnostics',
+    requiredFeatureRefs: ['dep:regex'],
+    exact: true,
+    reason: 'services-core diagnostics must own only deterministic diagnostic-log redaction',
+  },
+  {
+    manifestPath: 'src/crates/services/services-core/Cargo.toml',
+    featureName: 'diff',
+    requiredFeatureRefs: ['dep:similar', 'dep:tokio', 'tokio/rt', 'tokio/time'],
+    exact: true,
+    reason: 'services-core diff must own only local text diff calculation and its bounded async runtime',
+  },
+  {
+    manifestPath: 'src/crates/services/services-core/Cargo.toml',
     featureName: 'filesystem',
-    requiredFeatureRefs: ['dep:base64', 'dep:chrono', 'dep:ignore', 'dep:sha2', 'tokio/fs'],
+    requiredFeatureRefs: [
+      'dep:base64',
+      'dep:chrono',
+      'dep:ignore',
+      'dep:regex',
+      'dep:sha2',
+      'dep:tokio',
+      'tokio/fs',
+      'tokio/rt',
+    ],
     exact: true,
     reason: 'services-core filesystem must own only local file operations and recursive search dependencies',
   },
@@ -690,9 +1294,12 @@ export const coreClosedFeatureProfileRules = [
     featureName: 'json-io',
     requiredFeatureRefs: [
       'dep:fs2',
+      'dep:tokio',
       'dep:windows',
       'tokio/fs',
+      'tokio/rt',
       'tokio/sync',
+      'tokio/time',
       'windows/Win32_Foundation',
       'windows/Win32_Storage_FileSystem',
     ],
@@ -708,10 +1315,15 @@ export const coreClosedFeatureProfileRules = [
       'dep:chrono',
       'dep:fs2',
       'dep:libc',
+      'dep:regex',
       'dep:sha2',
+      'dep:similar',
+      'dep:tokio',
       'dep:windows',
       'tokio/fs',
+      'tokio/rt',
       'tokio/sync',
+      'tokio/time',
       'windows/Win32_Foundation',
       'windows/Win32_Storage_FileSystem',
     ],
@@ -723,11 +1335,14 @@ export const coreClosedFeatureProfileRules = [
     featureName: 'process-runtime',
     requiredFeatureRefs: [
       'dep:libc',
+      'dep:tokio',
       'dep:which',
       'dep:win32job',
       'dep:windows',
       'tokio/io-util',
       'tokio/process',
+      'tokio/rt',
+      'tokio/time',
       'windows/Win32_Foundation',
       'windows/Win32_System_Diagnostics_ToolHelp',
       'windows/Win32_System_Threading',
@@ -738,9 +1353,24 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',
     featureName: 'workspace-instructions',
-    requiredFeatureRefs: ['dep:globset', 'dep:serde_yaml', 'tokio/fs', 'tokio/io-util'],
+    requiredFeatureRefs: [
+      'dep:globset',
+      'dep:regex',
+      'dep:serde_yaml',
+      'dep:tokio',
+      'tokio/fs',
+      'tokio/io-util',
+      'tokio/rt',
+    ],
     exact: true,
     reason: 'services-core workspace-instructions must own declarative instruction discovery, scope parsing, and glob expansion only',
+  },
+  {
+    manifestPath: 'src/crates/services/services-core/Cargo.toml',
+    featureName: 'workspace-text-runtime',
+    requiredFeatureRefs: ['dep:tokio', 'tokio/rt'],
+    exact: true,
+    reason: 'services-core workspace-text-runtime must own only bounded asynchronous local workspace reads',
   },
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',
@@ -765,6 +1395,8 @@ export const coreClosedFeatureProfileRules = [
       'dep:anyhow',
       'dep:async-trait',
       'dep:bitfun-runtime-ports',
+      'bitfun-runtime-ports/runtime-event-port',
+      'bitfun-runtime-ports/workspace-ports',
       'dep:dunce',
       'process-runtime',
       'tokio/fs',
@@ -791,7 +1423,11 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'dispatch-store',
-    requiredFeatureRefs: ['local-storage', 'bitfun-services-core/dispatch-workspace'],
+    requiredFeatureRefs: [
+      'dep:base64',
+      'local-storage',
+      'bitfun-services-core/dispatch-workspace',
+    ],
     exact: true,
     reason: 'bitfun-core dispatch-store must expose only the durable dispatch index facade',
   },
@@ -805,7 +1441,7 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'local-storage',
-    requiredFeatureRefs: ['bitfun-services-core/local-storage'],
+    requiredFeatureRefs: ['dep:bitfun-agent-tools', 'bitfun-services-core/local-storage'],
     exact: true,
     reason: 'bitfun-core local-storage must select only reusable local persistence owners',
   },
@@ -819,7 +1455,7 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'lsp',
-    requiredFeatureRefs: ['dep:notify', 'bitfun-services-core/lsp'],
+    requiredFeatureRefs: ['dep:notify', 'bitfun-services-core/lsp', 'tokio/macros'],
     exact: true,
     reason: 'bitfun-core lsp must select only the LSP owner and its workspace watcher dependency',
   },
@@ -941,6 +1577,13 @@ export const ownerCrateFeatureAssemblyRules = [
   {
     manifestPath: 'src/crates/services/services-integrations/Cargo.toml',
     reason: 'services-integrations must keep integration feature groups explicit and default-light',
+    optionalDependencyAggregateFeatures: [
+      'function-agents',
+      'mcp',
+      'miniapp-market',
+      'remote-ssh-concrete',
+      'script-tool-runtime',
+    ],
     requiredProductFullFeatures: [
       'announcement',
       'browser-control',
@@ -970,3 +1613,23 @@ export const ownerCrateFeatureAssemblyRules = [
     requiredProductFullFeatures: ['appearance-market', 'plugin-source', 'miniapp', 'function-agents', 'external-sources'],
   },
 ];
+
+export function reviewedOptionalDependencyAggregateFeatures(manifestPath) {
+  const features = new Set(
+    coreClosedFeatureProfileRules
+      .filter((profile) => profile.manifestPath === manifestPath)
+      .map((profile) => profile.featureName),
+  );
+  if (coreProductFullFeatureAssemblyRule.manifestPath === manifestPath) {
+    features.add(coreProductFullFeatureAssemblyRule.featureName);
+  }
+  const ownerAssembly = ownerCrateFeatureAssemblyRules.find((profile) =>
+    profile.manifestPath === manifestPath);
+  if (ownerAssembly) {
+    features.add('product-full');
+    for (const feature of ownerAssembly.optionalDependencyAggregateFeatures ?? []) {
+      features.add(feature);
+    }
+  }
+  return features;
+}

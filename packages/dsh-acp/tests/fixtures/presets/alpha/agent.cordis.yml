@@ -1,0 +1,5 @@
+# The default fixture mode: one tool, named after the preset.
+- id: alpha-tool
+  name: ../../plugins/contribute.js
+  config:
+    tool: alpha

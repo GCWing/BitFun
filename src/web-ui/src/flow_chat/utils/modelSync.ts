@@ -12,6 +12,10 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext } from '../services/flow-chat-manager/types';
 import { getModelMaxTokens } from './modelResolution';
 import { sessionProjectWorkspacePath } from './sessionWorkspace';
+import {
+  getActiveSurfaceScope,
+  type SurfaceScope,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('ModelSync');
 
@@ -39,6 +43,7 @@ export async function syncSessionModelSelection(
   context: FlowChatContext,
   sessionId: string,
   agentType: string,
+  surfaceScope: SurfaceScope = getActiveSurfaceScope(),
 ): Promise<void> {
   const session = context.flowChatStore.getState().sessions.get(sessionId);
   if (!session) {
@@ -51,6 +56,7 @@ export async function syncSessionModelSelection(
   // it to the backend in case the restored runtime session lost that state.
   if (sessionModelId) {
     const desiredMaxContextTokens = await getModelMaxTokens(sessionModelId, agentType);
+    surfaceScope.assertCurrent('resolve session model context window');
     if (session.maxContextTokens !== desiredMaxContextTokens) {
       context.flowChatStore.updateSessionMaxContextTokens(sessionId, desiredMaxContextTokens);
     }
@@ -63,6 +69,7 @@ export async function syncSessionModelSelection(
       remoteSshHost: session.remoteSshHost,
       includeInternal: session.sessionKind === 'subagent',
     });
+    surfaceScope.assertCurrent('synchronize session model');
     return;
   }
 
@@ -71,6 +78,7 @@ export async function syncSessionModelSelection(
     'ai.models',
     'ai.default_models',
   ]);
+  surfaceScope.assertCurrent('load session model configuration');
   const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
   const allModels = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
   const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
@@ -78,6 +86,7 @@ export async function syncSessionModelSelection(
   const desiredModelId = normalizeModelSelection(agentModelDefaults?.mode, allModels, defaultModels);
   const shouldForceAutoSync = desiredModelId === 'auto';
   const desiredMaxContextTokens = await getModelMaxTokens(desiredModelId, agentType);
+  surfaceScope.assertCurrent('resolve session model context window');
   const shouldSyncContextWindow = session.maxContextTokens !== desiredMaxContextTokens;
 
   context.flowChatStore.updateSessionModelName(sessionId, desiredModelId);
@@ -93,6 +102,7 @@ export async function syncSessionModelSelection(
     remoteSshHost: session.remoteSshHost,
     includeInternal: session.sessionKind === 'subagent',
   });
+  surfaceScope.assertCurrent('synchronize session model');
 
   log.info('Session model synchronized before send', {
     sessionId,

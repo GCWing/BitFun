@@ -1,4 +1,5 @@
 import { AppShellState } from '../state/AppShellState';
+import { ConversationLayoutPolicy } from '../policy/ConversationLayoutPolicy';
 import { PAGE_BG } from './Theme';
 
 const WIDE_SETTINGS_SHEET_MAX_WIDTH: number = 680;
@@ -24,7 +25,14 @@ export struct AppShell {
   build() {
     Stack({ alignContent: Alignment.Start }) {
       Column() {
-        this.sidebar()
+        // The drawer is a compact affordance. Wide layouts put the same session
+        // list in the master pane instead, and this copy stayed mounted behind
+        // an opacity of 0 — invisible, but rebuilt on every selection change,
+        // which on a tablet doubled the cost of switching sessions. Compact
+        // keeps it mounted so opening and closing still cross-fades.
+        if (!this.useWideLayout || this.shellState.showSidebar) {
+          this.sidebar()
+        }
       }
       .width(this.sidebarWidth())
       .height('100%')
@@ -126,7 +134,7 @@ export struct AppShell {
     if (this.shellWidth <= 0) {
       return 280;
     }
-    if (this.shellWidth < 720) {
+    if (this.shellWidth < ConversationLayoutPolicy.MD_MIN_WIDTH) {
       return Math.min(280, Math.max(220, Math.round(this.shellWidth * 0.68)));
     }
     return Math.min(420, Math.max(280, Math.round(this.shellWidth * 0.35)));

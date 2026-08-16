@@ -1,6 +1,7 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ACCENT, CARD, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
+import { AccountDeviceSelectionPolicy } from '../policy/AccountDeviceSelectionPolicy';
 
 @ComponentV2
 export struct ConnectAccountDevicePage {
@@ -17,7 +18,6 @@ export struct ConnectAccountDevicePage {
   @Local accountDevicesBusy: boolean = false;
   @Local accountDevicesError: string = '';
   @Local switchingDeviceId: string = '';
-  @Local otherConnectionMethodsExpanded: boolean = false;
 
   aboutToAppear(): void {
     this.refreshAccountDevices();
@@ -50,7 +50,7 @@ export struct ConnectAccountDevicePage {
           Text(RemoteI18n.t('connect.accountDevicesBody'))
             .fontSize(14).lineHeight(21).fontColor(MUTED).width('100%')
           this.AccountDeviceList()
-          this.OtherConnectionMethods()
+          this.ScanPairCodeAction()
         }
         .width('100%')
         .constraintSize({ minHeight: '100%' })
@@ -110,36 +110,18 @@ export struct ConnectAccountDevicePage {
   }
 
   @Builder
-  private OtherConnectionMethods() {
-    Column() {
-      Row({ space: 12 }) {
-        Text(RemoteI18n.t('connect.otherConnectionMethods'))
-          .fontSize(16).fontWeight(FontWeight.Medium).fontColor(INK)
-        Blank()
-        SymbolGlyph(this.otherConnectionMethodsExpanded ?
-          $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
-          .fontSize(13).fontColor([MUTED])
-      }
-      .width('100%').height(58).padding({ left: 16, right: 16 })
-      .onClick(() => {
-        this.otherConnectionMethodsExpanded = !this.otherConnectionMethodsExpanded;
-      })
-
-      if (this.otherConnectionMethodsExpanded) {
-        Divider().color(LINE).margin({ left: 16, right: 16 })
-        Row({ space: 12 }) {
-          SymbolGlyph($r('sys.symbol.link'))
-            .fontSize(20).fontColor([MUTED]).width(22).height(22).opacity(0.66)
-          Text(RemoteI18n.t('connect.scanPairCodeAction'))
-            .fontSize(16).fontWeight(FontWeight.Medium).fontColor(INK).layoutWeight(1)
-          SymbolGlyph($r('sys.symbol.chevron_right'))
-            .fontSize(13).fontColor([MUTED]).width(16).height(16).opacity(0.44)
-        }
-        .width('100%').height(58).padding({ left: 16, right: 16 })
-        .onClick(() => this.onOpenScanner())
-      }
+  private ScanPairCodeAction() {
+    Row({ space: 12 }) {
+      SymbolGlyph($r('sys.symbol.link'))
+        .fontSize(20).fontColor([MUTED]).width(22).height(22).opacity(0.66)
+      Text(RemoteI18n.t('connect.scanPairCodeAction'))
+        .fontSize(16).fontWeight(FontWeight.Medium).fontColor(INK).layoutWeight(1)
+      SymbolGlyph($r('sys.symbol.chevron_right'))
+        .fontSize(13).fontColor([MUTED]).width(16).height(16).opacity(0.44)
     }
-    .width('100%').backgroundColor(CARD).borderRadius(8).border({ width: 1, color: LINE })
+    .width('100%').height(58).padding({ left: 16, right: 16 })
+    .backgroundColor(CARD).borderRadius(8).border({ width: 1, color: LINE })
+    .onClick(() => this.onOpenScanner())
   }
 
   @Builder
@@ -170,7 +152,15 @@ export struct ConnectAccountDevicePage {
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
-      if (device.online) {
+      if (this.canSelectAccountDevice(device) && AccountDeviceSelectionPolicy.shouldShowConnectAction(
+        device.online, device.deviceId, this.deviceId, this.controlTargetDeviceId, this.connectionState
+      )) {
+        Text(this.switchingDeviceId === device.deviceId ?
+          RemoteI18n.t('remote.settings.deviceConnecting') : RemoteI18n.t('connect.connect'))
+          .fontSize(14).fontColor(INK)
+          .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+          .backgroundColor(SOFT).borderRadius(14)
+      } else if (device.online) {
         SymbolGlyph($r('sys.symbol.chevron_right'))
           .fontSize(13).fontColor([MUTED]).width(16).height(16).opacity(0.44)
       }
@@ -204,9 +194,6 @@ export struct ConnectAccountDevicePage {
         RemoteI18n.t('remote.settings.deviceLoadFailed');
     } finally {
       this.accountDevicesBusy = false;
-      if (!this.hasOnlineDesktopDevice()) {
-        this.otherConnectionMethodsExpanded = true;
-      }
     }
   }
 
@@ -216,15 +203,9 @@ export struct ConnectAccountDevicePage {
   }
 
   private canSelectAccountDevice(device: CloudAccountDevice): boolean {
-    return device.online && device.deviceId !== this.deviceId && this.switchingDeviceId.length === 0;
-  }
-
-  private hasOnlineDesktopDevice(): boolean {
-    const devices = this.desktopDevices();
-    for (let index = 0; index < devices.length; index += 1) {
-      if (devices[index].online) return true;
-    }
-    return false;
+    return AccountDeviceSelectionPolicy.canSelectOnline(
+      device.online, device.deviceId, this.deviceId, this.switchingDeviceId
+    );
   }
 
   private accountDeviceStatus(device: CloudAccountDevice): string {

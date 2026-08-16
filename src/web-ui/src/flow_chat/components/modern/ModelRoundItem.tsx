@@ -131,6 +131,7 @@ interface ModelRoundItemProps {
   turnEndedAt?: number;
   turnDurationMs?: number;
   turnTokenUsage?: TokenUsage;
+  expandedThinkingItemIds?: string[];
 }
 
 function sortRoundAttempts(attempts: ModelRoundAttempt[]): ModelRoundAttempt[] {
@@ -362,6 +363,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     turnEndedAt,
     turnDurationMs,
     turnTokenUsage,
+    expandedThinkingItemIds = [],
   }) => {
     const { t } = useTranslation('flow-chat');
     const { formatDate, formatNumber } = useI18n('flow-chat');
@@ -488,6 +490,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 turnId={turnId}
                 roundId={options.roundId}
                 isLastItem={isLast && itemIdx === group.items.length - 1}
+                expandedThinkingItemIds={expandedThinkingItemIds}
               />
             ));
 
@@ -516,6 +519,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 turnId={turnId}
                 roundId={options.roundId}
                 isLastItem={isLast}
+                expandedThinkingItemIds={expandedThinkingItemIds}
               />
             );
           }
@@ -524,7 +528,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             return null;
         }
       })
-    ), [sessionId, turnId]);
+    ), [expandedThinkingItemIds, sessionId, turnId]);
 
     const handleCopyScope = useCallback(async (scope: TranscriptExportScope) => {
       setIsCopyMenuOpen(false);
@@ -847,6 +851,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       prev.round.historyRounds === next.round.historyRounds &&
       prev.isLastRound === next.isLastRound &&
       prev.isTurnComplete === next.isTurnComplete &&
+      prev.expandedThinkingItemIds === next.expandedThinkingItemIds &&
       prev.turnStartedAt === next.turnStartedAt &&
       prev.turnEndedAt === next.turnEndedAt &&
       prev.turnDurationMs === next.turnDurationMs &&
@@ -865,6 +870,7 @@ interface FlowItemRendererProps {
   turnId: string;
   roundId?: string;
   isLastItem?: boolean;
+  expandedThinkingItemIds?: string[];
 }
 
 // Do not memoize: streaming content updates frequently.
@@ -873,6 +879,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
   turnId,
   roundId,
   isLastItem,
+  expandedThinkingItemIds = [],
 }) => {
   const {
     onToolConfirm,
@@ -903,7 +910,11 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
 
     case 'thinking':
       return (
-        <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} isLastItem={isLastItem} />
+        <ModelThinkingDisplay
+          thinkingItem={item as FlowThinkingItem}
+          isLastItem={isLastItem}
+          forceExpanded={expandedThinkingItemIds.includes(item.id)}
+        />
       );
 
     case 'tool': {

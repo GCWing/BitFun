@@ -249,10 +249,19 @@ fn peer_session_control_and_usage_persistence_use_runtime_sdk() {
             "Peer Host session control must route {sdk_operation} through the Runtime SDK"
         );
     }
+    // Inverted, along with the behaviour it described. `/usage` renders into
+    // the conversation view and writes nothing: a report about a session is not
+    // an event in it, and the Turn this used to persist was loaded back by the
+    // desktop and given a numbered slot in its Turn rail. `add_assistant_message`
+    // is the UI-only path — `turn_id: None`, never persisted — and in a terminal
+    // the scrollback is the record.
+    //
+    // Source text only. This says the call is absent, not that nothing persists;
+    // a behavioural guarantee would have to come from the runtime port's own
+    // tests.
     assert!(
-        CHAT_SELECTION.contains("record_completed_local_command_turn")
-            && !CHAT_SELECTION.contains("append_completed_local_command_turn"),
-        "TUI usage persistence must use the fixed-semantics Runtime SDK port"
+        !CHAT_SELECTION.contains("record_completed_local_command_turn"),
+        "/usage must not write a local_command Turn: it renders into the          conversation view and persists nothing"
     );
 
     for removed_compatibility_method in [
@@ -350,14 +359,13 @@ fn chat_context_reload_uses_the_same_tui_backend_as_session_operations() {
 }
 
 #[test]
-fn tui_client_covers_interactive_permission_and_local_turn_operations() {
+fn tui_client_covers_interactive_permission_operations() {
     const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
 
     for sdk_operation in [
         "subscribe_permission_requests",
         "pending_permission_requests",
         "respond_permission",
-        "record_completed_local_command_turn",
     ] {
         assert!(
             TUI_CLIENT.contains(sdk_operation),

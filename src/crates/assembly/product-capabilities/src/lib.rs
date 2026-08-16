@@ -276,7 +276,7 @@ const PRODUCT_DELIVERY_PROFILE_ENTRIES: &[ProductDeliveryProfileEntry] = &[
     ),
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::Sdk,
-        ProductCoreDependencyMode::ProductFullCompatibility,
+        ProductCoreDependencyMode::ExplicitCoreCapabilityClosure,
     ),
 ];
 

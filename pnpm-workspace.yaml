@@ -1,7 +1,11 @@
 packages:
+  - "sdk/typescript"
   - "src/web-ui"
   - "src/mobile-web"
   - "src/miniapp-market-web"
   - "src/skin-market-web"
   - "BitFun-Installer"
   - "tests/e2e"
+
+patchedDependencies:
+  mdast-util-gfm-autolink-literal@2.0.1: patches/mdast-util-gfm-autolink-literal@2.0.1.patch

@@ -1,6 +1,6 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice, CloudAccountRequestError, CloudAccountSession, CloudAccountClient } from '../../services/CloudAccountClient';
-import { CloudAccountSessionStore } from '../../services/CloudAccountSessionStore';
+import { CloudAccountSessionStore, PersistedCloudAccountSession } from '../../services/CloudAccountSessionStore';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { Encoding } from '../../services/Encoding';
 import {
@@ -14,6 +14,7 @@ import { GeneralChatCloudConfigPolicy } from '../../services/general-chat/Genera
 import { GeneralChatServiceStatus } from '../../services/general-chat/GeneralChatServiceState';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteSessionManager } from '../../services/RemoteSessionManager';
+import { WatchProvisionOutcome } from '../../services/WatchProvisionController';
 import { RemotePermissionMode } from '../../model/RemoteModels';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { RemotePageState } from '../state/RemotePageState';
@@ -33,6 +34,8 @@ export interface CloudAccountSettingsHooks {
   readonly startHeartbeat: () => void;
   readonly resetTimeline: () => void;
   readonly resetKnownRemoteState: () => void;
+  /** Cached transcripts and session lists belong to the account that was signed in. */
+  readonly clearCachedRemoteData: () => Promise<void>;
   readonly closeSettings: () => void;
   readonly closeConnectSheet: () => void;
   readonly navigateRemoteHome: () => void;
@@ -157,6 +160,63 @@ export class SettingsController {
     return this.cloudSession !== undefined;
   }
 
+  /**
+   * Whether this phone might be able to add a device to the account itself.
+   *
+   * Deliberately "might": the session here is either a real password login or
+   * one delegated by a room pairing, and only the first carries a token the
+   * relay will mint from. The two are indistinguishable locally, so the answer
+   * is optimistic and `provisionWatchCredential` reports the refusal.
+   */
+  canMintWatchCredential(): boolean {
+    return this.cloudSession !== undefined && this.cloudRelayUrl.length > 0;
+  }
+
+  /**
+   * Mints a watch's own account credential straight from this phone.
+   *
+   * Returns `undefined` when this phone is not entitled to mint — no session,
+   * or a delegated token the relay refuses — which is the caller's cue to fall
+   * back to asking the paired desktop. Any other failure throws, because a
+   * network blip is not the same answer as "you may not".
+   *
+   * The account master key never leaves for the relay: it is read from the
+   * session this phone already holds and handed back for sealing to the
+   * watch's ephemeral key.
+   */
+  async provisionWatchCredential(
+    deviceId: string,
+    deviceName: string,
+    requestId: string
+  ): Promise<WatchProvisionOutcome | undefined> {
+    const session = this.cloudSession;
+    if (!session || this.cloudRelayUrl.length === 0) {
+      return undefined;
+    }
+    const cloud = this.requireCloud();
+    try {
+      const provisioned = await cloud.client.provisionDevice(
+        this.cloudRelayUrl, session, deviceId, deviceName, requestId);
+      RemoteLogger.info(`watch credential minted from the phone account device=${provisioned.deviceId}`);
+      return {
+        ok: true,
+        relayUrl: this.cloudRelayUrl,
+        token: provisioned.token,
+        userId: provisioned.userId,
+        masterKeyBase64: Encoding.bytesToBase64(session.masterKey),
+        deviceId: provisioned.deviceId,
+        failure: '',
+        desktopReported: false
+      };
+    } catch (err) {
+      if (err instanceof CloudAccountRequestError && (err.statusCode === 401 || err.statusCode === 403)) {
+        RemoteLogger.info('phone account may not mint a device credential; deferring to the desktop');
+        return undefined;
+      }
+      throw err instanceof Error ? err : new Error('Watch credential provisioning failed.');
+    }
+  }
+
   async persistDelegatedAccountSession(): Promise<void> {
     if (this.cloudSession) {
       return;
@@ -192,27 +252,6 @@ export class SettingsController {
     return session.userId;
   }
 
-  async syncCloudAccount(): Promise<string> {
-    const cloud = this.requireCloud();
-    const session = this.cloudSession;
-    if (!session || this.cloudRelayUrl.length === 0) {
-      throw new Error(RemoteI18n.t('remote.settings.accountNotSignedIn'));
-    }
-    let bundles: Object[];
-    try {
-      bundles = await cloud.client.fetchSessions(this.cloudRelayUrl, session, 0);
-    } catch (err) {
-      if (err instanceof CloudAccountRequestError && err.statusCode === 401) {
-        await this.expireCloudAccountSession();
-        throw new Error(RemoteI18n.t('remote.settings.accountExpired'));
-      }
-      throw new Error(err instanceof Error ? err.message : RemoteI18n.t('remote.settings.accountSyncFailed'));
-    }
-    await this.loadGeneralChatAccountModels(session, this.cloudRelayUrl);
-    RemoteLogger.info(`cloud account backup sync completed count=${bundles.length}`);
-    return String(bundles.length);
-  }
-
   applyCloudAccountSession(session: CloudAccountSession, relayUrl: string, username: string): void {
     const remoteState = this.requireCloud().remoteState;
     this.cloudSession = session;
@@ -232,6 +271,7 @@ export class SettingsController {
     this.store.replaceAccountModels([]);
     await this.refreshModelCatalog();
     await cloud.sessionStore.clear();
+    await cloud.hooks.clearCachedRemoteData();
     cloud.remoteState.setAccountUserId('');
     cloud.remoteState.setAccountUsername('');
     cloud.remoteState.clearControlTarget();
@@ -245,7 +285,7 @@ export class SettingsController {
       return [];
     }
     try {
-      return await cloud.client.listDevices(this.cloudRelayUrl, session);
+      return await cloud.client.listDevices(this.cloudRelayUrl, session, cloud.hooks.deviceId());
     } catch (err) {
       if (err instanceof CloudAccountRequestError && err.statusCode === 401) {
         await this.expireCloudAccountSession();
@@ -275,7 +315,19 @@ export class SettingsController {
     return cloud.sessionManager.setPermissionMode(mode);
   }
 
-  async restoreCloudTarget(targetDeviceId: string, targetDeviceName: string): Promise<void> {
+  /**
+   * Puts the account back on the desktop it was last driving.
+   *
+   * `navigateHome` is off for the cold-start restore: the launch route is the
+   * user's business, and reconnecting in the background should not move them
+   * off the screen the app opened on. A manual reconnect is already on the
+   * Remote surface, so there it lands where the user expects.
+   */
+  async restoreCloudTarget(
+    targetDeviceId: string,
+    targetDeviceName: string,
+    navigateHome: boolean = true
+  ): Promise<void> {
     const targetId = targetDeviceId.trim();
     if (targetId.length === 0) {
       return;
@@ -297,9 +349,27 @@ export class SettingsController {
         deviceName: target.deviceName || targetDeviceName || target.deviceId,
         online: target.online,
         lastSeenAt: target.lastSeenAt
-      });
+      }, navigateHome);
     } catch (err) {
       RemoteLogger.warn(`cloud target restore failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+      if (!this.cloudSession) {
+        // The account itself went away — an expired token clears it — so there
+        // is no desktop left to aim at, and the surfaces already say as much.
+        return;
+      }
+      // A failed connect attempt drops the target so a half-open link cannot be
+      // mistaken for a live one, but a restore that failed is exactly the case
+      // where the target still matters: without it the reconnect button has
+      // nothing to retry and falls through to the paired-desktop path.
+      remoteState.setControlTarget('account_device', targetId, targetDeviceName.trim() || targetId);
+      // The caller announces `reconnecting` before this runs, and every surface
+      // hides its reconnect entry point while a connect is in flight. Failing
+      // silently would leave that announcement standing forever, with no way
+      // left to retry it. Only report when nothing downstream already did.
+      if (remoteState.connectionState !== 'failed') {
+        remoteState.setConnectionState('failed');
+        remoteState.setStatusText(ConnectionErrorPolicy.errorText(err));
+      }
     }
   }
 
@@ -370,7 +440,9 @@ export class SettingsController {
         targetDeviceName: device.deviceName
       });
       cloud.hooks.startHeartbeat();
-      await cloud.hooks.loadRecentWorkspaces();
+      // Same reasoning as the paired-desktop path in RemoteConnectionController:
+      // the cross-workspace scan runs behind a list that is already usable.
+      void cloud.hooks.loadRecentWorkspaces();
     } catch (err) {
       if (err instanceof CloudAccountRequestError && err.statusCode === 401) {
         await this.expireCloudAccountSession();
@@ -438,11 +510,31 @@ export class SettingsController {
         masterKey: Encoding.base64ToBytes(persisted.masterKey)
       };
       this.applyCloudAccountSession(session, persisted.relayUrl, persisted.username || session.userId);
+      this.restorePersistedControlTarget(persisted);
       await this.loadGeneralChatAccountModels(session, persisted.relayUrl);
     } catch (err) {
       RemoteLogger.warn(`cloud account restore failed: ${err instanceof Error ? err.message : 'unknown error'}`);
       await cloud.sessionStore.clear();
     }
+  }
+
+  /**
+   * Names the desktop this account was last driving, without connecting to it.
+   *
+   * The account path has no pairing snapshot on disk the way the scanned-room
+   * path does — the target rides along in the encrypted account record — so
+   * without this a cold start could not even say which desktop it used to be
+   * on, and the restore that follows would have nothing to aim at.
+   */
+  private restorePersistedControlTarget(persisted: PersistedCloudAccountSession): void {
+    const targetId = (persisted.targetDeviceId || '').trim();
+    if (targetId.length === 0) {
+      return;
+    }
+    const targetName = (persisted.targetDeviceName || '').trim() || targetId;
+    const remoteState = this.requireCloud().remoteState;
+    remoteState.setControlTarget('account_device', targetId, targetName);
+    remoteState.setDesktopIdentity(targetName, targetId);
   }
 
   private async loadGeneralChatAccountModels(session: CloudAccountSession, relayUrl: string): Promise<void> {

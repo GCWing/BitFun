@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { ChevronRight, ChevronDown, FolderOpen, FileText } from 'lucide-react';
+import { ChevronRight, ChevronDown, FolderOpen, FileText, Loader2 } from 'lucide-react';
 import { Input } from '../../../component-library/components/Input';
 import { dragManager } from '../../../shared/services/DragManager';
 import { fileTreeDragSource } from '../../../shared/context-system/drag-drop/FileTreeDragSource';
@@ -233,6 +233,7 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
   indentPx,
   isSelected = false,
   isExpanded = false,
+  isLoading = false,
   className = '',
   renamingPath,
   onRename,
@@ -322,7 +323,9 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
     >
       {node.isDirectory ? (
         <span className={`bitfun-file-explorer__expand-icon ${isExpanded ? 'bitfun-file-explorer__expand-icon--expanded' : ''}`} onClick={handleExpandClick}>
-          {isExpanded ? (
+          {isLoading ? (
+            <Loader2 size={16} className="bitfun-file-explorer__loading-icon" />
+          ) : isExpanded ? (
             <ChevronDown size={16} />
           ) : (
             <ChevronRight size={16} />

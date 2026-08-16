@@ -1,46 +1,66 @@
-//! Local, provider-neutral document-to-Markdown conversion for the Read tool.
+//! Document path recognition and optional provider-neutral Markdown conversion.
 
+#[cfg(feature = "document-read")]
 use std::collections::VecDeque;
+#[cfg(feature = "document-read")]
 use std::fmt;
 use std::path::Path;
+#[cfg(feature = "document-read")]
 use std::sync::{Arc, Mutex, OnceLock};
 
+#[cfg(feature = "document-read")]
 use anydoc::Format;
+#[cfg(feature = "document-read")]
 use sha2::{Digest, Sha256};
+#[cfg(feature = "document-read")]
 use tokio::sync::Semaphore;
 
 /// Maximum source-document size accepted by the Read tool conversion path.
+#[cfg(feature = "document-read")]
 pub const MAX_DOCUMENT_INPUT_BYTES: usize = 64 * 1024 * 1024;
 
 /// Maximum retained Markdown for one conversion and across the in-memory conversion cache.
+#[cfg(feature = "document-read")]
 pub const MAX_DOCUMENT_MARKDOWN_BYTES: usize = 16 * 1024 * 1024;
 
+#[cfg(feature = "document-read")]
 const MAX_DOCUMENT_CACHE_ENTRIES: usize = 4;
 
+/// Extensions recognized as documents even when conversion support is not compiled.
+pub const SUPPORTED_DOCUMENT_EXTENSIONS: &[&str] = &[
+    "doc", "docx", "docm", "odt", "pdf", "pptx", "pptm", "ppsx", "ppsm", "ppt", "pps", "pot",
+    "rtf", "epub", "xlsx", "xlsm", "xlsb", "xls", "ods", "odp", "csv",
+];
+
 /// A document representation that can be paged by the normal Read primitives.
+#[cfg(feature = "document-read")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConvertedDocument {
     pub markdown: Arc<str>,
     pub source_format: &'static str,
 }
 
+#[cfg(feature = "document-read")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct DocumentCacheKey {
     source_sha256: [u8; 32],
     format: Format,
 }
 
+#[cfg(feature = "document-read")]
 struct DocumentCacheEntry {
     key: DocumentCacheKey,
     document: ConvertedDocument,
 }
 
+#[cfg(feature = "document-read")]
 #[derive(Default)]
 struct DocumentCache {
     entries: VecDeque<DocumentCacheEntry>,
     retained_markdown_bytes: usize,
 }
 
+#[cfg(feature = "document-read")]
 impl DocumentCache {
     fn get(&mut self, key: DocumentCacheKey) -> Option<ConvertedDocument> {
         let index = self.entries.iter().position(|entry| entry.key == key)?;
@@ -74,12 +94,14 @@ impl DocumentCache {
 }
 
 /// Provider-neutral document conversion failure.
+#[cfg(feature = "document-read")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentConversionError {
     code: &'static str,
     message: String,
 }
 
+#[cfg(feature = "document-read")]
 impl DocumentConversionError {
     fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
@@ -93,21 +115,31 @@ impl DocumentConversionError {
     }
 }
 
+#[cfg(feature = "document-read")]
 impl fmt::Display for DocumentConversionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.message)
     }
 }
 
+#[cfg(feature = "document-read")]
 impl std::error::Error for DocumentConversionError {}
 
-/// Whether the path extension names a format handled by anydoc.
+/// Whether the path extension names a supported document format.
 pub fn is_supported_document_path(path: &str) -> bool {
-    Format::from_path(Path::new(path)).is_some()
+    Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            SUPPORTED_DOCUMENT_EXTENSIONS
+                .iter()
+                .any(|supported| extension.eq_ignore_ascii_case(supported))
+        })
 }
 
 /// Convert document bytes on the blocking pool. Conversion is serialized process-wide because
 /// parsers can temporarily retain substantially more decompressed data than the source file.
+#[cfg(feature = "document-read")]
 pub async fn convert_document_to_markdown(
     bytes: Vec<u8>,
     path_hint: String,
@@ -148,11 +180,13 @@ pub async fn convert_document_to_markdown(
     })?
 }
 
+#[cfg(feature = "document-read")]
 fn document_conversion_semaphore() -> &'static Arc<Semaphore> {
     static SEMAPHORE: OnceLock<Arc<Semaphore>> = OnceLock::new();
     SEMAPHORE.get_or_init(|| Arc::new(Semaphore::new(1)))
 }
 
+#[cfg(feature = "document-read")]
 fn convert_document_to_markdown_sync(
     bytes: &[u8],
     path_hint: &str,
@@ -201,11 +235,13 @@ fn convert_document_to_markdown_sync(
     Ok(document)
 }
 
+#[cfg(feature = "document-read")]
 fn document_cache() -> &'static Mutex<DocumentCache> {
     static CACHE: OnceLock<Mutex<DocumentCache>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(DocumentCache::default()))
 }
 
+#[cfg(feature = "document-read")]
 fn format_name(format: Format) -> &'static str {
     match format {
         Format::Doc => "doc",
@@ -251,6 +287,15 @@ mod tests {
         assert!(!is_supported_document_path("README.md"));
     }
 
+    #[cfg(feature = "document-read")]
+    #[test]
+    fn recognized_extensions_match_anydoc() {
+        for extension in SUPPORTED_DOCUMENT_EXTENSIONS {
+            assert!(Format::from_extension(extension).is_some(), "{extension}");
+        }
+    }
+
+    #[cfg(feature = "document-read")]
     #[test]
     fn content_detection_takes_precedence_over_a_wrong_extension_hint() {
         let converted =
@@ -261,6 +306,7 @@ mod tests {
         assert!(converted.markdown.contains("Hello from RTF"));
     }
 
+    #[cfg(feature = "document-read")]
     #[test]
     fn csv_uses_the_path_hint_because_it_has_no_content_signature() {
         let converted =
@@ -272,6 +318,7 @@ mod tests {
         assert!(converted.markdown.contains("| alpha | 1 |"));
     }
 
+    #[cfg(feature = "document-read")]
     #[test]
     fn repeated_conversion_reuses_cached_markdown_for_offset_reads() {
         let first =

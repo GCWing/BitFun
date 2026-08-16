@@ -12,7 +12,9 @@ product behavior. UI apps and delivery hosts remain under `src/apps`,
 | Crate | Responsibility | Local doc |
 |---|---|---|
 | `acp` | Agent Client Protocol interface over the assembled product runtime | [AGENTS.md](acp/AGENTS.md) |
-| `app-server` | Protocol-agnostic JSON-RPC app-server/client scaffold over `agent_client_protocol` custom roles | [AGENTS.md](app-server/AGENTS.md) |
+| `app-server-protocol` | Behavior-light App Server methods, wire DTOs, errors, events, and protocol roles | [AGENTS.md](app-server/AGENTS.md) |
+| `app-server-client` | Transport-agnostic typed App Server client and event distribution | [AGENTS.md](app-server/AGENTS.md) |
+| `app-server` | Production App Server handler registration, lifecycle, and owner-to-wire adapters | [AGENTS.md](app-server/AGENTS.md) |
 | `sdk-host` | Versioned local Agent SDK Host protocol and connection use cases; process bootstrap and stdio framing remain in `src/apps/sdk-host` | — |
 
 ## Placement Rules

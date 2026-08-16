@@ -380,13 +380,19 @@ export class WorkspaceAPI {
   }
 
    
-  async getDirectoryChildren(path: string): Promise<ExplorerNodeDto[]> {
+  async getDirectoryChildren(
+    path: string,
+    remoteConnectionId?: string,
+  ): Promise<ExplorerNodeDto[]> {
     try {
       return await api.invoke('get_directory_children', { 
-        request: { path } 
+        request: { path, remoteConnectionId }
       });
     } catch (error) {
-      throw createTauriCommandError('get_directory_children', error, { path });
+      throw createTauriCommandError('get_directory_children', error, {
+        path,
+        remoteConnectionId,
+      });
     }
   }
 
@@ -541,7 +547,7 @@ export class WorkspaceAPI {
   }
 
   private supportsSearchStreamEvents(): boolean {
-    return typeof window !== 'undefined' && '__TAURI__' in window;
+    return api.getAdapter().supportsSearchStreamEvents?.() === true;
   }
 
   private async runSearchStream(
@@ -556,6 +562,7 @@ export class WorkspaceAPI {
       wholeWord: boolean;
       maxResults?: number;
       includeDirectories?: boolean;
+      remoteConnectionId?: string;
     },
     callbacks: FileSearchStreamCallbacks = {},
     signal?: AbortSignal
@@ -568,8 +575,6 @@ export class WorkspaceAPI {
       await this.cancelSearch(request.searchId);
       throw new DOMException(`${commandName} aborted`, 'AbortError');
     }
-
-    const { listen } = await import('@tauri-apps/api/event');
 
     return await new Promise<FileSearchCompleteEvent>((resolve, reject) => {
       let settled = false;
@@ -621,8 +626,7 @@ export class WorkspaceAPI {
       }
 
       void (async () => {
-        cleanupCallbacks.push(await listen<FileSearchProgressEvent>(FILE_SEARCH_PROGRESS_EVENT, (tauriEvent) => {
-          const event = tauriEvent.payload;
+        cleanupCallbacks.push(api.listen<FileSearchProgressEvent>(FILE_SEARCH_PROGRESS_EVENT, (event) => {
           if (event.searchId !== request.searchId || event.searchKind !== searchKind) {
             return;
           }
@@ -630,8 +634,7 @@ export class WorkspaceAPI {
           callbacks.onProgress?.(event);
         }));
 
-        cleanupCallbacks.push(await listen<FileSearchCompleteEvent>(FILE_SEARCH_COMPLETE_EVENT, (tauriEvent) => {
-          const event = tauriEvent.payload;
+        cleanupCallbacks.push(api.listen<FileSearchCompleteEvent>(FILE_SEARCH_COMPLETE_EVENT, (event) => {
           if (event.searchId !== request.searchId || event.searchKind !== searchKind) {
             return;
           }
@@ -639,8 +642,7 @@ export class WorkspaceAPI {
           settleResolve(event);
         }));
 
-        cleanupCallbacks.push(await listen<FileSearchErrorEvent>(FILE_SEARCH_ERROR_EVENT, (tauriEvent) => {
-          const event = tauriEvent.payload;
+        cleanupCallbacks.push(api.listen<FileSearchErrorEvent>(FILE_SEARCH_ERROR_EVENT, (event) => {
           if (event.searchId !== request.searchId || event.searchKind !== searchKind) {
             return;
           }
@@ -648,6 +650,10 @@ export class WorkspaceAPI {
           settleReject(new Error(event.error));
         }));
 
+        await api.waitForListenerRegistrations();
+        if (settled || signal?.aborted) {
+          return;
+        }
         await api.invoke<FileSearchStreamStartResponse>(commandName, { request });
       })().catch((error) => {
         settleReject(
@@ -719,7 +725,8 @@ export class WorkspaceAPI {
     searchIdOrSignal?: string | AbortSignal,
     maxResults?: number,
     includeDirectories: boolean = true,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    remoteConnectionId?: string,
   ): Promise<FileSearchResult[]> {
     const response = await this.searchFilenamesOnlyDetailed(
       rootPath,
@@ -730,7 +737,8 @@ export class WorkspaceAPI {
       searchIdOrSignal,
       maxResults,
       includeDirectories,
-      signal
+      signal,
+      remoteConnectionId,
     );
     return response.results;
   }
@@ -744,11 +752,16 @@ export class WorkspaceAPI {
     searchIdOrSignal?: string | AbortSignal,
     maxResults?: number,
     includeDirectories: boolean = true,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    remoteConnectionId?: string,
   ): Promise<FileSearchResponse> {
     const effectiveSignal = searchIdOrSignal instanceof AbortSignal ? searchIdOrSignal : signal;
     const effectiveSearchId =
       typeof searchIdOrSignal === 'string' ? searchIdOrSignal : this.createSearchId('filenames');
+
+    if (effectiveSignal?.aborted) {
+      throw new DOMException('search_filenames aborted', 'AbortError');
+    }
 
     try {
       const resultPromise = api.invoke<FileSearchResponse>('search_filenames', {
@@ -761,6 +774,7 @@ export class WorkspaceAPI {
           wholeWord,
           maxResults,
           includeDirectories,
+          remoteConnectionId,
         }
       });
 
@@ -779,6 +793,7 @@ export class WorkspaceAPI {
         wholeWord,
         maxResults,
         includeDirectories,
+        remoteConnectionId,
       });
     }
   }
@@ -793,7 +808,8 @@ export class WorkspaceAPI {
     maxResults?: number,
     includeDirectories: boolean = true,
     callbacks: FileSearchStreamCallbacks = {},
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    remoteConnectionId?: string,
   ): Promise<FileSearchCompleteEvent> {
     const effectiveSignal = searchIdOrSignal instanceof AbortSignal ? searchIdOrSignal : signal;
     const effectiveSearchId =
@@ -809,7 +825,8 @@ export class WorkspaceAPI {
         effectiveSearchId,
         maxResults,
         includeDirectories,
-        effectiveSignal
+        effectiveSignal,
+        remoteConnectionId,
       );
       const groupedResults = groupSearchResultsByFile(response.results);
       const event: FileSearchCompleteEvent = {
@@ -841,6 +858,7 @@ export class WorkspaceAPI {
         wholeWord,
         maxResults,
         includeDirectories,
+        remoteConnectionId,
       },
       callbacks,
       effectiveSignal

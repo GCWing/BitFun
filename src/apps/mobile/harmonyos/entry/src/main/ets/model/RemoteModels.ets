@@ -128,6 +128,12 @@ export interface RemoteCommand {
   answers?: Object;
   image_contexts?: RemoteImageContext[];
   images?: ImageAttachment[];
+  // provision_peer_device. `request_id` is minted by the device being
+  // provisioned, unlike `_request_id`, which the phone stamps on every command
+  // for its own correlation logging.
+  device_id?: string;
+  device_name?: string;
+  request_id?: string;
 }
 
 export interface PairChallengeResponse {
@@ -250,6 +256,18 @@ export interface DelegatedIdentityResponse extends CommandStatusResponse {
   device_id?: string;
 }
 
+/**
+ * Answer to `provision_peer_device`. Shaped like a delegated identity but
+ * carrying a 30-day *full* device credential, and `device_id` names the device
+ * that was just registered rather than the desktop that registered it.
+ */
+export interface PeerDeviceProvisionedResponse extends CommandStatusResponse {
+  token?: string;
+  user_id?: string;
+  master_key?: string;
+  device_id?: string;
+}
+
 export interface SessionListResult {
   sessions: RemoteSession[];
   hasMore: boolean;
@@ -338,8 +356,11 @@ export interface RemoteToolStatusResponse {
 }
 
 export interface RemoteQuestionAnswerPayload {
-  answer: string;
-  '0': string;
+  answer?: string;
+  '0'?: string | string[];
+  '1'?: string | string[];
+  '2'?: string | string[];
+  '3'?: string | string[];
 }
 
 export interface ChatMessageItemResponse {
@@ -353,6 +374,7 @@ export interface ChatMessageItemResponse {
 export interface ImageAttachment {
   name: string;
   data_url: string;
+  mime_type?: string;
 }
 
 export interface SelectedImageAttachment extends ImageAttachment {

@@ -46,6 +46,7 @@ import {
   getUsageExportRedactPathsPreference,
   setUsageExportRedactPathsPreference,
   subscribeUsageExportRedactPathsPreference,
+  getDisplayTurnIndex,
 } from './usageReportUtils';
 import type { SessionUsagePanelTab } from './sessionUsagePanelTypes';
 import './SessionUsagePanel.scss';
@@ -541,10 +542,6 @@ function UsageFileTurnIndexesValue({
       )}
     </span>
   );
-}
-
-function getDisplayTurnIndex(rawTurnIndex: number): number {
-  return Math.max(0, Math.trunc(rawTurnIndex)) + 1;
 }
 
 function getStableFileToolAnchorId(

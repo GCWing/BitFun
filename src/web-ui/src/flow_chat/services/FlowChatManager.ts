@@ -15,6 +15,12 @@ import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { stateMachineManager } from '../state-machine';
 import { EventBatcher } from './EventBatcher';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  getActiveSurfaceId,
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+  type DeviceSurfaceId,
+} from '@/infrastructure/peer-device/deviceSurface';
 import type { WorkspaceInfo } from '@/shared/types';
 import type { Session } from '../types/flow-chat';
 import {
@@ -48,6 +54,8 @@ import {
   cancelSessionTask as cancelSessionTaskModule,
   installPendingQueueDrainListener,
   drainPendingQueue,
+  waitForInFlightSubmissions,
+  pendingQueueManager,
   initializeEventListeners,
   processBatchedEvents,
   addDialogTurn as addDialogTurnModule,
@@ -112,8 +120,11 @@ export class FlowChatManager {
   }
 
   /** Public hook used by the queue panel "send now" fallback to drain head item. */
-  async drainPendingQueueForSession(sessionId: string): Promise<void> {
-    return drainPendingQueue(this.context, sessionId);
+  async drainPendingQueueForSession(
+    sessionId: string,
+    options?: { allowInterruptedRecoveryAbandon?: boolean },
+  ): Promise<void> {
+    return drainPendingQueue(this.context, sessionId, options);
   }
 
   public static getInstance(): FlowChatManager {
@@ -166,6 +177,11 @@ export class FlowChatManager {
     return request;
   }
 
+  /**
+   * The same repository is routinely open at the same path on two devices, so
+   * without the surface a bootstrap for one device is handed the in-flight
+   * initialization of another — and reads back the wrong device's session list.
+   */
   private static createInitializationRequestKey(
     workspacePath: string,
     preferredMode?: string,
@@ -173,6 +189,7 @@ export class FlowChatManager {
     remoteSshHost?: string
   ): string {
     return JSON.stringify([
+      getActiveSurfaceId(),
       workspacePath,
       preferredMode ?? '',
       remoteConnectionId ?? '',
@@ -187,6 +204,7 @@ export class FlowChatManager {
     remoteConnectionId?: string,
     remoteSshHost?: string
   ): Promise<boolean> {
+    const scope = getActiveSurfaceScope();
     try {
       await this.initializeEventListeners();
       if (this.disposed) {
@@ -213,6 +231,12 @@ export class FlowChatManager {
       if (this.disposed) {
         return false;
       }
+
+      // This page belongs to the device it was read from and has already landed
+      // in that surface's own container. Selecting a session out of it now would
+      // apply one device's history to another; the surface this window moved to
+      // runs its own bootstrap.
+      scope.assertCurrent('initializeWorkspace');
 
       const sessionMatchesWorkspace = (session: {
         workspacePath?: string;
@@ -262,6 +286,7 @@ export class FlowChatManager {
           if (this.disposed) {
             return false;
           }
+          scope.assertCurrent('initializeWorkspace');
           state = this.context.flowChatStore.getState();
           workspaceSessions = Array
             .from(state.sessions.values())
@@ -287,6 +312,30 @@ export class FlowChatManager {
         !!activeSession && sessionMatchesWorkspace(activeSession);
       const activeSessionIdAtAutoSelectStart = state.activeSessionId;
 
+      // History is only restored on the auto-select path below. A session that
+      // is already active — restored by the nav list after a Peer Device
+      // surface switch, for example — keeps its metadata-only projection, so
+      // the breadcrumb and turn rail render from the catalog while the message
+      // area stays empty until the user clicks the session by hand.
+      if (
+        activeSessionBelongsToWorkspace &&
+        activeSession &&
+        activeSession.isHistorical === true &&
+        isCurrentInitializationRequest()
+      ) {
+        await this.context.flowChatStore.loadSessionHistory(
+          activeSession.sessionId,
+          workspacePath,
+          undefined,
+          activeSession.remoteConnectionId,
+          activeSession.remoteSshHost,
+        );
+        if (this.disposed) {
+          return false;
+        }
+        scope.assertCurrent('initializeWorkspace');
+      }
+
       if (hasHistoricalSessions && !activeSessionBelongsToWorkspace) {
         if (!isCurrentInitializationRequest()) {
           return hasHistoricalSessions;
@@ -297,8 +346,17 @@ export class FlowChatManager {
           : undefined) || sortedWorkspaceSessions[0];
 
         if (!latestSession) {
+          // The caller reads the return value as "a session is available, do
+          // not create one". Reporting history we cannot select would leave the
+          // surface with no active session and no new one, so report no history
+          // and let the caller create against the live workspace instead.
           this.context.currentWorkspacePath = workspacePath;
-          return hasHistoricalSessions;
+          log.warn('Session metadata reported history with nothing selectable for this workspace', {
+            workspacePath,
+            metadataSessionCount: initialMetadataPage.sessions.length,
+            totalTopLevelCount: initialMetadataPage.totalTopLevelCount,
+          });
+          return false;
         }
 
         if (latestSession.isHistorical) {
@@ -312,6 +370,7 @@ export class FlowChatManager {
           if (this.disposed) {
             return false;
           }
+          scope.assertCurrent('initializeWorkspace');
         }
 
         if (!isCurrentInitializationRequest()) {
@@ -344,10 +403,18 @@ export class FlowChatManager {
 
       return hasHistoricalSessions;
     } catch (error) {
-      log.error('Initialization failed', error);
       // Must not return false: callers treat false as "no history → create
       // session", which in Peer Device Mode can create on the peer with a
-      // stale controller workspace path.
+      // stale controller workspace path. A surface change is not a failure
+      // either — this bootstrap simply no longer owns the rendered device —
+      // but it must still not report "no history" to the caller.
+      if (isSurfaceChangedError(error)) {
+        log.debug('Abandoned workspace initialization after a device surface switch', {
+          workspacePath,
+        });
+        throw error;
+      }
+      log.error('Initialization failed', error);
       throw error;
     }
   }
@@ -402,8 +469,31 @@ export class FlowChatManager {
   }
 
   /**
-   * Clear all session UI state when entering/exiting Peer Device Mode so the
-   * next workspace bootstrap loads the target device's session list only.
+   * Let submissions that already created a projection turn hand it to their
+   * host before the rendered transport changes.
+   *
+   * Without this, a switch during the async window in `startTurn` (state
+   * transition, worktree binding, model sync) resumes against a store that no
+   * longer holds the session, and the turn is lost before `start_dialog_turn`
+   * ever runs. A timeout is safe: `sendMessage` detects the surface change and
+   * re-queues the message.
+   */
+  public async waitForInFlightSubmissions(timeoutMs: number): Promise<boolean> {
+    return waitForInFlightSubmissions(timeoutMs);
+  }
+
+  /**
+   * Detach this window from the device it is rendering, before the transport
+   * swaps to another one.
+   *
+   * The store keeps that device's sessions in its own container, so nothing is
+   * deleted here: state machines and processing status stay alive for work the
+   * device may still be running, and returning to it renders immediately.
+   *
+   * Debounced disk writes are the exception. They are addressed by session id
+   * only, so a checkpoint that fires after the transport swap would persist one
+   * device's turn onto another's disk. Drop them; the host keeps its own copy
+   * and reconciliation re-reads it.
    */
   public resetForPeerModeSwitch(): string[] {
     this.cleanupEventListeners();
@@ -412,19 +502,30 @@ export class FlowChatManager {
     // Drop controller-local path so createChatSession cannot reuse a stale
     // Windows/Mac path against the peer host after the surface switch.
     this.context.currentWorkspacePath = null;
-    const removedSessionIds = this.context.flowChatStore.clearAllSessionsForPeerSwitch();
-    removedSessionIds.forEach(sessionId => {
-      stateMachineManager.delete(sessionId);
-      this.context.processingManager.clearSessionStatus(sessionId);
+    const detachedSessionIds = Array.from(
+      this.context.flowChatStore.getState().sessions.keys(),
+    );
+    detachedSessionIds.forEach(sessionId => {
       cleanupSaveState(this.context, sessionId);
       cleanupSessionBuffers(this.context, sessionId);
     });
+    this.context.flowChatStore.prepareForSurfaceSwitch();
     try {
       useModernFlowChatStore.getState().clear();
     } catch (error) {
       log.warn('Failed to clear modern FlowChat store during peer switch', error);
     }
-    return removedSessionIds;
+    // No session ids: a switch removes nothing, and callers must not tear down
+    // runtime state for sessions that still exist on their own device.
+    return [];
+  }
+
+  /** Permanently forget a peer that was explicitly detached or became lost. */
+  public discardDeviceSurface(surfaceId: DeviceSurfaceId): void {
+    this.context.flowChatStore.discardSurfaceState(surfaceId);
+    stateMachineManager.clearSurface(surfaceId);
+    this.context.processingManager.clearSurface(surfaceId);
+    pendingQueueManager.clearSurface(surfaceId);
   }
 
   public destroy(): void {
@@ -675,6 +776,7 @@ export class FlowChatManager {
       preserveTurnOnStartError?: boolean;
       onSessionConflictRetryStart?: () => void;
       onSessionConflictRetrySuccess?: () => void;
+      sessionMutationLeaseId?: string;
     }
   ): Promise<void> {
     const targetSessionId = sessionId || this.context.flowChatStore.getState().activeSessionId;
@@ -708,11 +810,11 @@ export class FlowChatManager {
     return driverForSession(sessionId, session).compactSession(this.context, sessionId);
   }
 
-  /** Generate and insert the session usage report through its driver. */
+  /** Produce the session usage report and show it, through its driver. */
   async runSessionUsageReport(
     sessionId: string,
     uiParams: import('../session-drivers/types').UsageReportUiParams,
-  ): Promise<{ inserted: boolean }> {
+  ): Promise<{ shown: boolean }> {
     const session = this.context.flowChatStore.getState().sessions.get(sessionId);
     return driverForSession(sessionId, session).runUsageReport(this.context, sessionId, uiParams);
   }

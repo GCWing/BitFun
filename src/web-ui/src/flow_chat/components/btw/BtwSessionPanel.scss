@@ -162,6 +162,15 @@
     box-sizing: border-box;
     overflow: hidden;
     pointer-events: none;
+    transition: opacity 140ms ease;
+
+    &[data-visible='false'] {
+      opacity: 0;
+      visibility: hidden;
+      transition:
+        opacity 140ms ease,
+        visibility 0s linear 140ms;
+    }
   }
 
   &__action-bar-wrapper > .deep-review-action-bar {
@@ -228,6 +237,18 @@
     left: 14px;
     z-index: 11;
     pointer-events: auto;
+    transition:
+      opacity 120ms ease,
+      transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+      visibility 0s linear 0s;
+
+    &[data-bf-state='hidden'] {
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(4px) scale(0.96);
+      pointer-events: none;
+      transition-delay: 0s, 0s, 150ms;
+    }
   }
 
   &__minimized-button {
@@ -274,6 +295,13 @@
 @media (max-width: 768px) {
   .btw-session-panel__runtime-status .runtime-status-slot__content {
     padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btw-session-panel__action-bar-wrapper,
+  .btw-session-panel__minimized-indicator {
+    transition: none;
   }
 }
 

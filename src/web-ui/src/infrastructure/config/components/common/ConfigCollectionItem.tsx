@@ -1,5 +1,6 @@
 import React, { useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { PresenceBoundary } from '@/component-library';
 import './ConfigCollectionItem.scss';
 
 export interface ConfigCollectionItemProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -90,9 +91,23 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
         </div>
       </div>
 
-      {isExpanded && details && (
-        <div id={detailsId} className="bitfun-collection-item__details" data-bf-component="config" data-bf-part="collectionDetails">{details}</div>
-      )}
+      {details ? (
+        <PresenceBoundary
+          active={isExpanded}
+          exitDurationMs={180}
+          minimumExitDurationMs={180}
+        >
+          <div
+            id={detailsId}
+            className="bitfun-collection-item__details-collapse"
+            data-open={isExpanded ? 'true' : 'false'}
+            aria-hidden={!isExpanded}
+            {...(!isExpanded ? { inert: '' } : {})}
+          >
+            <div className="bitfun-collection-item__details" data-bf-component="config" data-bf-part="collectionDetails">{details}</div>
+          </div>
+        </PresenceBoundary>
+      ) : null}
     </div>
   );
 };

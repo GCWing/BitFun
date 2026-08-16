@@ -1,788 +1,577 @@
 # FlowChat Scroll Stability
 
-This document explains the scroll-stability mechanism used by `VirtualMessageList.tsx`.
+FlowChat reserves a resident tail spacer below the transcript, and pairs it with
+a follow target that does not move backwards for free. Together these give a
+newly submitted Turn a top-aligned position and keep a tool-card collapse from
+dragging earlier content down.
 
-## Rule Zero: Do Not Create Motion For This Mechanism To Chase
+That is this document. Four siblings carry the rest.
 
-Every rule below is compensation for content that changes size on its own. The
-cheapest way to keep the pane stable is to not generate the movement in the
-first place. Five invariants hold across the message list, and breaking any of
-them reintroduces the "the chat keeps refreshing itself" report:
+## Which Document
 
-1. **Keep a live action's top-level projection identity stable.** A rendered
-   `ModelRound` remains one `model-round` virtual item, and an explore-only
-   round remains one `explore-group` virtual item with a stable key. Within a
-   `ModelRound`, an active collapsible tool is intentionally kept as a critical
-   item; after it settles it may join the surrounding explore grouping. That
-   inner grouping transition must not split the round into multiple virtual
-   items or replace the item/round keys, which would unmount the card and look
-   like a flash. Likewise, never hide the old location with `display: none` as
-   a handoff mechanism.
-2. **No mount-triggered animation on anything the list renders.** The list is
-   virtualized: an item that scrolls out of view unmounts and remounts, so a
-   `fadeIn` / `slideInUp` keyed off mount replays on every pass. Same for an
-   animation keyed off `--streaming` → `--complete`: it replays when the
-   typewriter drains. `getModelRoundItemClassName` deliberately has no `--enter`
-   modifier, and `.user-message-item` deliberately has no enter animation.
-3. **Keep wall-clock state out of projection and grouping.**
-   `sessionToVirtualItems` and `buildModelRoundItemGroups` remain pure
-   functions of session data. A timer must not reclassify a round, change a
-   `VirtualItem` key, or create a recently-completed projection. The card layer
-   does have a bounded completion-preview timer (documented below), but it only
-   changes local expanded state after the card is already rendered; it does not
-   restructure the virtual list.
-4. **Do not compact a live tail in the same completion commit.** The execution
-   and file-operation cards use a short completion-preview grace period while
-   they remain the expanded tail. A newer item still collapses them immediately;
-   if no newer item arrives, they compact after the grace period. Task,
-   question, thinking, and explore-group components retain their own
-   status/last-item policies and are not implicitly covered by this timer. When
-   an automatic collapse starts, it **may animate** for
-   `FLOWCHAT_COLLAPSE_DURATION_MS` (300ms) as long as
-   `flowchat:tool-card-collapse-intent` stays active for that full window plus
-   settle frames. Instant collapse is reserved for `prefers-reduced-motion` or
-   an explicit `disableAnimation` opt-out. Height, opacity, and transform must
-   share one duration (see `flowChatCollapseMotion.ts` /
-   `SmoothHeightCollapse`). Do not hard-swap `BaseToolCard` ↔ `CompactToolCard`
-   for expand/collapse — that remounts the body with no height transition.
-5. **Keep the leading edge stable across collapse states.** A revealed body
-   must not add `margin-inline-start`, `padding-inline-start`, or an equivalent
-   left offset relative to its collapsed header. Expanded thinking, explore
-   rows, tool details, image previews, and subagent projections all begin on
-   their owning message/card edge. Vertical and trailing-edge spacing may
-   remain, but a leading inset reads as a horizontal jump during collapse.
+| Changing | Read |
+|---|---|
+| the tail spacer, the follow target, pinning, holding, resizing, the footer | this file |
+| history paging, the prepend, the viewport anchor, history presentation | `FLOWCHAT_HISTORY_PAGING.md` |
+| anything that writes `scrollTop`, one-shot navigation, the diagnostic trail | `FLOWCHAT_VIEWPORT_REGISTER.md` |
+| the virtualizer, item measurement, item keys, anything a row renders | `FLOWCHAT_VIRTUALIZATION.md` |
+| what to run before claiming it works | `FLOWCHAT_VERIFICATION.md` |
 
-A sixth, related rule lives in `useTypewriter`: `replayOnMount` defaults to
-false, so a still-streaming block that remounts continues from its current text
-instead of resetting to an empty string and re-growing.
+*Known Gaps* below is the whole list for all five — accepted defects are easier
+to keep in one place than to hunt for.
 
-Read this before changing any of the following:
+## The Rule That Matters
 
-- footer height / footer rendering in `VirtualMessageList.tsx`
-- scroll compensation state or refs
-- semantic anchor lifetime and one-shot fallback restoration
-- `ResizeObserver` / `MutationObserver` / transition listeners
-- `flowchat:tool-card-collapse-intent`
-- `tool-card-toggle`
-- `overflow-anchor` styles in `VirtualMessageList.scss`
+**Static reservation is allowed. Reactive compensation is not.**
 
-## Problem
+The tail spacer's height is a function of the viewport and the input-stack
+inset. It must never be derived from a measured content height, a collapse
+delta, an animation duration, or a streaming rate. The moment its height reacts
+to content, it stops being a reservation and becomes the compensation engine
+that was removed in "remove synthetic tail-space scrolling" — do not rebuild
+that under a new name.
 
-FlowChat uses `react-virtuoso` for virtualization. When the user is already at or near the bottom, collapsing content near the end of the list can shrink total content height.
+## How Much To Reserve
 
-Without compensation, the browser clamps `scrollTop` downward immediately because the previous bottom position no longer exists. That causes the visible header/content above to drop.
+The spacer keeps two offsets inside the scroll range, and is the larger of what
+they need. Both are bounds, not estimates: reserving more than the larger one is
+pure blank at the end of the scroll range, and reserving less than either is a
+clamp.
 
-If we compensate too late, the user sees a flash:
+- **A pinned Turn.** Worst case its user message is the newest item with nothing
+  answering it yet, so the message, the input inset and the spacer are all that
+  lie below the message top. `clientHeight - bottomInsetPx -
+  PINNED_TURN_MIN_ITEM_HEIGHT_PX` is exactly enough to put it on the top edge.
+- **A held collapse gap.** `hold-tail` parks up to `tailHoldMaxGapPx` past the
+  content end, and an offset the browser clamps is one the hold rule does not
+  actually get to hold.
 
-1. browser clamps `scrollTop`
-2. code restores `scrollTop`
-3. header appears to drop and jump back
+`PINNED_TURN_MIN_ITEM_HEIGHT_PX` must stay an **under**estimate of a
+user-message item. Too low costs a few spare pixels of blank; too high puts the
+pinned offset past the end of the scroll range, and the Turn is clamped back
+down from the viewport top while the follow loop rewrites the clamped offset
+every frame.
 
-If we restore without enough compensation, the final position is still wrong.
+While the pin reserve is the binding bound, the spacer and the footer sum to a
+constant: growing the composer moves the content end without moving the end of
+the scroll range. Under the hold-gap floor the spacer stops tracking the inset
+and the range grows with the composer, exactly as it did when the spacer was a
+flat viewport.
 
-The goal of this mechanism is:
+## Why Both Halves Are Required
 
-- keep the visible header/content vertically stable
-- allow temporary invisible blank space at the bottom
-- avoid the collapse flash
+The spacer alone fixes nothing. It only removes the browser's forced `scrollTop`
+clamp when content shrinks, which is *permission* to hold position. A follow
+target that re-aligns the content end to the viewport bottom every frame will
+still drag earlier content down by the collapse delta, spacer or not.
 
-## High-Level Strategy
+`flowChatTailFollow.ts` supplies the second half:
 
-The fix is a two-stage approach:
+- `pin-turn-top` holds a freshly submitted Turn's user message at the viewport
+  top while its answer is shorter than one viewport, then hands off at the
+  crossover. The blank below a pinned Turn is the mode, not a defect.
+- `hold-tail` keeps its previous offset when content shrinks, and gives ground
+  only once the blank below the live output exceeds `tailHoldMaxGapPx`
+  (a share of the viewport, not a measured delta).
 
-1. Pre-compensate before a known collapse starts.
-2. Reconcile with the real measured height delta after layout updates.
+Both are pure functions over geometry. They hold no timers and observe no
+mutation.
 
-This prevents the "drop first, restore later" behavior while still using the actual measured shrink amount to settle on the correct final compensation.
+`useFlowChatFollowOutput` is the only continuous outer viewport writer. Three
+things about how it runs are load-bearing:
 
-## Core Building Blocks
+- **`scheduleFollowToLatest` re-asserts ownership after a layout change but does
+  not force the content end.** A collapse resizes content too, and the hold rule
+  is what keeps that from moving the viewport.
+- **The pinned Turn's offset is re-resolved from live layout every frame.**
+  Items above it are estimates until they are measured, so a cached absolute
+  offset would drift.
+- **When streaming stops, `hold-tail` settles any remaining blank with one
+  smooth scroll.** A pinned Turn does not settle.
 
-## 1. Bottom Reservations
+`tailHoldMaxGapPx` is a **streaming allowance**. Blank below the live output is
+tolerable only because more output is about to fill it. Do not reuse it to
+absorb anything else — applied to a foreign forward move it parks the content
+end mid-viewport permanently, since nothing pulls the target back down.
 
-The footer uses a unified bottom-reservation model. Each reservation contributes
-temporary tail space, but keeps its own semantics:
+## Opening a Session
 
-- `collapse`: shrink protection for height loss near the bottom
-- `pin`: viewport positioning space for "pin turn to top" navigation
+A session mounts against an unsettled transcript: item heights are still
+estimates, and an `isPartial` session pages older Turns in for hundreds of
+milliseconds. The end of content can travel thousands of pixels after the first
+alignment, so opening is its own phase with its own rules.
 
-The rendered footer height is the sum of all active reservations.
+**While opening, the transcript is hidden and the follow target is
+authoritative.** It tracks the content end exactly — no remembered offset, no
+gap tolerance, and no accommodation of a foreign `scrollTop` write. The
+virtualizer writes during this window too, as items measure and it corrects for
+the ones above the viewport; fighting it is invisible because nothing is
+painted, and accommodating it would be permanent once paging stops.
 
-A non-zero `collapse` reservation must have an explicit semantic owner: an
-active or retained tool collapse, input-stack shrink, preserved-element range,
-late-shrink clamp, or protected-range transfer from a pin. Ordinary Virtuoso
-measurement convergence has no such owner. An idle measurement with no owner
-must only rebase the measured height and must never create Footer space from a
-negative `scrollHeight` delta alone.
+Nothing places the opening viewport by aligning to an item. The end of *real
+content* is above the resident tail spacer, and no item knows where that is, so
+the follow target writes the offset and the reveal waits for it.
 
-Reservation state is ref-owned first and mirrored into React state. A Virtuoso
-Footer remount must synchronously read the ref-owned value; otherwise one stale
-React commit can remove exactly the reserved scroll range for a frame.
+Session open enters follow-output as `session-open`, even with nothing
+streaming. The frame loop then runs on a `SETTLE_FRAMES` budget that refreshes
+whenever the target actually moves, so it tracks measurement and paging and then
+goes quiet. Without it nothing owns the viewport after the one-shot alignment,
+and the transcript strands wherever that early shot landed. `scrollToTurnEnd`
+deliberately does **not** exit follow-output for the same reason: it is the
+session-open placement and wants the same position the settle is converging on,
+and releasing ownership there hands the viewport back to nobody.
 
-The Virtuoso Footer does not receive reservation pixels through React context.
-Its stable DOM node is updated imperatively, and its ref callback restores the
-current ref-owned height on mount. This keeps reservation updates from causing
-an additional measurement-sensitive Virtuoso render.
+**After the reveal, the follow target is cooperative.** The gap tolerance
+applies again, because from then on a shrinking content end means a card
+collapsed, not that measurement is still catching up.
 
-Important details:
+The reveal waits for a *semantic* signal — the last virtual item rendered with
+its end inside the viewport, plus the viewport in position — not for geometry to
+stop changing. Before the virtualizer renders anything, `scrollHeight` and the
+end sit unchanged at their unmeasured values, which is indistinguishable from
+having finished; a stability test reveals on frame 3 and shows the whole settle.
 
-- the real footer height is `MESSAGE_LIST_FOOTER_HEIGHT + totalBottomReservationPx`
-- reservation space is not real content height
-- reservations may define a `floorPx`
-- a floor prevents unrelated shrink reconciliation from dropping live scroll range
-- collapse floors still drain from measured content growth or deliberate downward
-  user navigation; pin floors drain only through the sticky-pin settlement path
-- all measurements that compare old vs new content height must use:
+## User-Controlled Reserved Blank
 
-```ts
-effectiveScrollHeight = scroller.scrollHeight - getTotalBottomCompensationPx()
+The spacer is a full viewport the user can scroll into. Once a reader exits
+follow-output, their own scroll position is preserved even when it lands in the
+blank. There is no `scrollend` correction or quiet-period fallback that takes
+the viewport back. Explicit actions such as opening a session, submitting a new
+Turn, navigating a Turn, rolling back, or choosing jump-to-latest remain the
+ways to re-enter follow-output.
+
+The remaining follow rules carry the live-tail design:
+
+**The target is the follow target, never the content end.** A short new Turn is
+pinned above the content end, so aiming at the content end would scroll *up*
+and shove the message the user just sent into the middle of the viewport. A
+held collapse gap is likewise a legitimate offset up to `tailHoldMaxGapPx` past
+the content end; judged against the content end it would read as an overshoot
+and fight the hold rule on every collapse. `memorylessFollowState` computes the
+target from live geometry with no remembered offset, because the offset the hold
+rule was protecting stopped being meaningful the moment the user took over.
+
+The pin's *identity* therefore outlives a user takeover; only its *activity*
+stops. Three things retire a pin: the crossover to `hold-tail`, a newer Turn,
+and a session change. The crossover has to be one-way — a collapse can pull
+content back under one viewport, and re-pinning there would jump the viewport
+backwards. Since nothing re-pins a Turn whose identity was dropped, that is
+automatic.
+
+**Where a jump to latest lands.** Every entry into follow-output resumes at the
+end of real content, with one exception: a jump to latest while the **newest**
+Turn is still pinned returns to the pin. That mode only holds while the Turn's
+answer is shorter than one viewport, so everything it has produced is already on
+screen, and aiming at the content end would scroll *up* and shove the message
+the user just sent into the middle. The exemption therefore outlives the Turn:
+a short Turn stays pinned until a newer one replaces it.
+
+## Output Catching Up With a Reader in the Blank
+
+This watch covers the reader who scrolled up out of the tail but is still
+looking at reserved blank, and whom output then overtakes.
+
+Scrolling up gives the follow away permanently, and that is right only for a
+reader who left the live region. A small scroll up may not have. The blank is up
+to `tailHoldMaxGapPx` under `hold-tail` and the whole gap under a pinned Turn,
+so the reader can be a few hundred pixels off the tail with nothing hidden from
+them at all — until output grows past the bottom edge, and they silently stop
+seeing it with no affordance saying so.
+
+So a watch runs for as long as the reader holds the viewport — from the scroll
+that took it to whatever hands it back. `scrollTop > contentEnd` is the
+predicate for "the blank is on screen". The watch keeps one bit between
+samples: whether the blank was on screen at the previous one. A crossing is that
+bit going from set to clear, and which side moved decides who keeps the viewport
+(`resolveTailDepartureCrossing`):
+
+- **`content-caught-up`** — the content end rose further than the reader moved.
+  Output filled the space under someone who was standing still, so follow takes
+  the viewport back.
+- **`reader-left-blank`** — the reader moved further than the content end rose.
+  They went to read history, and are left alone. The latch clears, so nothing
+  asks again until they put the blank back on screen themselves.
+
+A crossing does **not** end the watch. Scoping it to one was tried and is wrong:
+a reader who climbs out of the blank, reads for a while and scrolls back down to
+sit in it again is in exactly the position the rule exists for, and had already
+spent the single crossing they were given. The watch also opens on any exit that
+finds none open, not only the one that took the follow — every wheel notch
+exits, and only the first of them finds anything to give up.
+
+Streaming does not stop because the reader scrolled, so both sides usually move
+between samples and the tie-break above is doing real work. Two guards keep it
+honest:
+
+**A live gesture vetoes the resume.** Measured over one session's twenty
+departures: nine left blank on screen, and two of those ended `content-caught-up`
+— one a reader who had been still for 1.6s and was overtaken, one 320ms into a
+live gesture with the reader climbing 200px while content grew 237. The
+tie-break called the second for the content, correctly, and acting on it would
+have taken the viewport back mid-scroll. `user-gesture` on the register
+separates them, because a wheel claim lapses `USER_DRIVEN_SCROLL_WINDOW_MS`
+after the last notch and notches arrive faster than that. A veto *defers* the
+crossing rather than settling it — the latch stays set, so the next sample
+judges the same transition again: a reader who carries on climbing out-moves the
+content and is let go by a verdict that never needed the veto, and one who has
+stopped is followed as soon as the claim lapses.
+
+**Geometry read from two moments is not geometry.** `scrollTop` is clamped to
+`scrollHeight - clientHeight`, so no settled viewport is more than the spacer
+past the content end (`isTailBlankMeasurable`). A larger reading means the
+transcript is mid-restructure: a history prepend shifts the viewport by the
+height it inserted before that height is in the scroll range, and the blank
+between the two reads as thousands of pixels. Measured on a session that paged
+its whole history on the first scroll up — 14252px of shift against a content
+end still reading 989, a blank of 6239px. Read at face value that is a reader
+deep in the blank, which is the one state this acts on, so the next sample would
+have pulled them out of the history they had just asked for. Such a sample takes
+no verdict and does not touch the latch: a restructure says nothing about where
+the reader was standing before it.
+
+Resuming does not scroll. The blank closing *is* the two offsets meeting, so
+what remains is one sample of growth, and the follow loop's ease covers it; a
+one-shot scroll here would be a snap the reader can see for a correction they
+cannot. It also retires the pin, even when the departure happened under one: the
+pin's reservation is the blank the reader just scrolled out of, and restoring it
+would pull them back down to the offset they left.
+
+The whole watch is a ref. `followOutput.tailWatch` and
+`followOutput.tailWatchEnded` bracket it — the second carrying `crossings`, so a
+watch that never resolved anything can be told from one that resolved against
+the reader — and `followOutput.tailCrossing` records each transition with its
+verdict, both raw deltas, and whether a gesture was live.
+
+## The Follow Eases Its Write, Never Its Target
+
+The follow target moves when the transcript reflows, and Markdown reflows a
+line at a time. A loop that assigns the target outright therefore spends 24px
+on one frame out of seven and nothing on the other six, which is what a reader
+reports as the output jumping rather than scrolling. `flowChatTailEase.ts`
+spends the same distance over all seven.
+
+It buys latency, not speed. Under steady growth the eased offset settles where
+its per-frame catch-up equals the growth, so the visible step converges on *the
+content's growth per frame* whatever the fraction is; smoothing spreads a lumpy
+motion evenly across frames it already had. What `TAIL_EASE_ALPHA` actually
+sets is how far behind the tail the offset rides, and that lag is what has to be
+given back when the stream stops.
+
+**Only the write is eased.** `followStateRef` still holds the offset the rule
+owns, so the settle budget and the at-tail band both keep reading
+a target rather than a position in transit. An ease that leaked into the target
+would make every one of them chase the lag.
+
+Four boundaries, and none of them is a matter of taste:
+
+- **Past `TAIL_EASE_SNAP_ABOVE_PX` it jumps.** The first frame of an ease covers
+  a quarter of the distance, so beyond four lines the ease's *opening step* is
+  already bigger than the jump it set out to replace.
+- **A target above the current offset is never eased.** That is content getting
+  shorter — a card collapsing, a table reflowing — and easing down through it
+  reads as the transcript being clawed backwards.
+- **Not while the transcript is opening.** There the target is authoritative and
+  nothing is painted, so an ease is travel nobody can see, holding open the one
+  phase whose whole point is to end. The reveal is watching for the viewport to
+  reach the content end.
+- **An ease in flight keeps the loop alive.** The settle budget is refreshed by
+  the *target* travelling, so without this a correction arriving on the last
+  budgeted frame would be abandoned partway. It terminates on its own: the ease
+  halves what is left every frame, and a write the register refuses moves
+  nothing and so books no further frame.
+
+A step of the list's own scroll offset changes no layout, and the worry that it
+would still be charged for — the virtualizer re-windows from the scroll events
+it produces, and each one is also an anchor carry and a visible-Turn pass — did
+not show up in the measurement. Over 1580 steps and 8435px of following, list
+commits held between 15/s and 28/s while the step rate varied from 29/s to
+119/s, so the cost per step *falls* as the follow gets busier. The two highest
+commit rates in the session, 46/s and 51/s, were windows where the list follow
+took no step at all and a thinking card was growing instead. Commits track
+content changing height, which is also what moves the follow target, and the
++0.80 correlation between the two is that shared cause rather than a price.
+
+What the ease actually did, over the same run: no step over a line that was not
+a deliberate snap, 99% of steps under 12px, 67% under 4px, and every window's
+largest step exactly `TAIL_EASE_ALPHA` of its largest lag — 0.242 to 0.261
+against a nominal 0.25, which is also the evidence that nothing else was
+writing the viewport in between.
+
+"At bottom" is a band, not a point: from the end of real content down to
+whatever the follow rule owns. A pinned Turn and a held collapse gap are both
+inside it, so neither raises the jump-to-latest affordance; the reserved blank
+is outside it, so parking there does. No virtualizer-reported "at bottom" can
+express this: the end of the scroll range is the bottom of the reserved blank,
+not the end of content.
+
+The band is recomputed on scroll, on resize, **and when follow ownership
+changes** — its lower edge is the follow target, which can move while the
+viewport is perfectly still. A jump to latest that lands on a pin the viewport
+already sits on writes
+nothing at all. Driving the band from scroll events alone left the affordance
+visible over a viewport that was at the tail, and clicking it then had nothing
+to do — an inert button is worse than a missing one.
+
+**A follow the frame loop is still correcting is inside the band by
+definition.** The eased write rides behind the offset it owns, so a burst of
+two or three lines would otherwise drop the viewport out of the band for a few
+frames and flash the affordance over a transcript that is following the newest
+output. Ownership cannot express this: it outlives the loop deliberately, and a
+viewport resting in the reserved blank is an intentional reader-controlled
+state. A gesture stops the loop before it can hide anything, and no later settle
+step reclaims the viewport.
+
+## Resizing Anchors the Viewport Bottom
+
+A plain scroller preserves `scrollTop` across a resize, which anchors the **top**
+edge — the bottom is where content gets revealed or swallowed. For a transcript
+that is backwards, because the interesting end is the bottom.
+`handleViewportResize` anchors there instead. Follow output already behaves this
+way for a viewport it owns; this is the same rule for one it does not, so the
+same drag stops producing two different results depending on whether the user
+had scrolled.
+
+The two halves are not equally capable, and the difference is the useful part:
+
+- **A height change moves no content.** Preserving `scrollTop + clientHeight` is
+  exact and needs no judgement about what the user was doing, so it is applied
+  unconditionally. It also preserves the distance to the content end, which
+  makes "was at the end, stays at the end" fall out for free rather than being a
+  case. Growing the viewport is additionally a *restoration*: the browser used
+  to clamp a bottom-anchored viewport at `scrollHeight - clientHeight`, and the
+  resident spacer removed that clamp.
+- **A width change reflows the transcript.** Where the line that was on the
+  bottom edge went is a DOM question, and by the time the resize is observed the
+  reflow has already happened, so it cannot be answered after the fact.
+  Answering it would mean sampling an element anchor on the scroll path, which
+  is a `getBoundingClientRect` per scroll event. Instead only the one position
+  that can be recomputed from geometry is restored — the end of the transcript —
+  which needs `wasAtTail`, the band check from *before* the resize.
+  `VirtualMessageList` mirrors `isAtBottom` into a ref for that, and calls the
+  handler ahead of recomputing it.
+
+**One correction is not enough.** A width change reflows every item and a height
+change makes the virtualizer render a different number of them; either way it
+re-measures over the following passes, so the content end keeps moving after the
+first callback. The correction therefore repeats over
+`TAIL_REALIGN_RESIZE_CALLBACKS`, a window opened only by a change to the
+scroller's own box. Streaming content growth arrives through the same observer
+and must never inherit that window — it moves the content end away from a
+resting viewport and can never strand it, so reacting to it would be all risk
+and no benefit.
+
+Two properties are shared with the gesture path, and one is not:
+
+- **Instant, never animated.** A height change moves the viewport by exactly the
+  height that was added or removed, so nothing appears to move at all; the rest
+  is a correction the user is already watching happen under the cursor. An
+  animation would add a scroll nobody asked for.
+- **No transfer of ownership** — unlike the gesture path. A gesture ending in
+  the blank says "take me to the end"; a layout change says nothing. The
+  browser's clamp never changed who owned the viewport either.
+
+Native scroll anchoring cannot help here: `overflow-anchor: none` is set
+throughout the transcript, because it fights the virtualizer.
+
+## An Animation Only as Far as the Reader Can Follow
+
+A jump to latest animates within `FLOWCHAT_ANIMATED_JUMP_MAX_VIEWPORTS` of where
+the viewport already is, and lands outright past that. The distance is counted
+in viewports, not pixels: what a reader can follow is a share of what they can
+see, and the same 2000px is two and a half screens on a laptop and most of one
+on a tall display.
+
+**The animation is the affordance, not the movement.** Its job is spatial
+continuity — showing which way and how far the viewport went — and three screens
+on, the transcript in between goes past faster than anyone can read it. What is
+left is a wait where the answer was, which is why every other navigation in the
+transcript is instant already.
+
+Distance also costs more than it looks. Animating across N screens of a
+virtualized transcript renders and measures every item passed while the
+animation runs, and heights are estimates until they are measured — so the
+content end moves under an animation aimed at where it used to be, and the
+follow loop corrects that afterwards as a second, visible movement.
+
+And past a few screens the animation does not finish. The stand-down below is
+bounded, and what it does not cover is delivered as a jump: measured, a jump
+issued for 8717px animated 5480 of them and was finished by the loop in a single
+3290px write. Two thirds of a scroll and then a jump is worse than either half
+alone, and no yield budget fixes it — a longer one only makes the reader wait
+through more of an animation they cannot read.
+
+The other `'smooth'` request in `useFlowChatFollowOutput`, the post-streaming
+settle, needs no such test: the gap it closes is bounded by `tailHoldMaxGapPx`,
+which is 60% of one viewport.
+
+`followOutput.jumpBehavior` records the decision and the distance in viewports.
+It is also how the constant is checked: if `followOutput.animatedScrollEnded`
+still reports a `backstop` reason, an animation ran out its yield without
+arriving and the number is too high.
+
+## The Frame Loop Yields to Its Own Animated Scrolls
+
+`applyFollowTarget` assigns `scrollTop` outright, which cancels an in-flight
+smooth scroll on the very next frame. Both `'smooth'` requests in
+`useFlowChatFollowOutput` — the near jump to latest and the post-streaming
+settle — were therefore jumps in practice, so the loop stands down while one
+travels.
+
+**What ends the stand-down is the viewport having sat still for
+`SMOOTH_SCROLL_STALL_MS`.** That says the animation is over, or was cancelled,
+or never started; either way there is nothing left to yield to. Arriving on
+target ends it as well, and sooner.
+
+**Neither half of this may be counted in frames, and both were.** A frame count
+is not a duration, and the two failures are the same mistake at opposite ends
+of the animation:
+
+- The budget was 45 frames — 0.75s at 60Hz, 0.52s on a busy 200Hz display — so
+  what a caller bought depended on the machine. The browser scales a smooth
+  scroll's duration with its distance; measured, a jump aimed at 8717px animated
+  5480 of them and was finished by the loop in a single 3290px write, 38% short.
+  A wall-clock budget is what makes that failure the same size everywhere, and
+  the distance cap above is what stops anything asking for a jump that size in
+  the first place.
+- The stall check was then two frames, which is 10ms at 200Hz. A programmatic
+  smooth scroll *eases in* — measured, 2px in its first 50ms against 9734px to
+  travel — and with scroll offsets quantised to 0.8px the early frames
+  genuinely do not move. So the stand-down ended 21ms after it began, having
+  animated nothing, and the jump to latest lost its animation entirely.
+
+`SMOOTH_SCROLL_STALL_MS` is therefore derived from the curve's start rather
+than from the platform's startup latency, which is the shorter of the two:
+visible increments arrive up to ~40ms apart early on, and the constant is that
+doubled. `SMOOTH_SCROLL_YIELD_MS` remains as a backstop for an animation that
+never ends at all — also a wall-clock fact, and now written as one.
+
+`followOutput.animatedScrollEnded` says which of the three ended it and how far
+the animation actually got. Both bugs above were a stand-down ending early, and
+both were invisible in the trail: the loop simply started writing, exactly as
+it does when an animation finishes properly.
+
+The stand-down ends *by falling through to the write*, not by returning. An
+animation aims at the offset it was issued for, and content arrives while it
+travels, so the frame that reclaims the viewport is also the frame that covers
+whatever grew — one catch-up step rather than one wasted frame and then a
+bigger one.
+
+The whole mechanism is *intra-owner* and deliberately outside the register:
+this is follow-output yielding to its own animation, and the register
+arbitrates between writers rather than inside one. See
+`FLOWCHAT_VIEWPORT_REGISTER.md`.
+
+## Footer Contract
+
+The footer below the items holds two independent pieces, and they must stay
+separate:
+
+```text
+message-list-footer      = current input-stack height + bottom inset + clearance
+message-list-tail-spacer = tailSpacerPxForViewport(clientHeight, footer)
 ```
 
-If you forget to subtract reservation space, future shrink/growth calculations become wrong.
-
-`pin` reservations use this extra metadata:
-
-- `targetTurnId`: which user turn the viewport should align to
-- `mode: 'transient' | 'sticky-latest'`
-- `floorPx`: the minimum tail space needed to keep the pinned target stable
-
-`sticky-latest` is used for the "latest turn should stay pinned to top" behavior.
-Its floor grows when live DOM measurements require more range and drains only
-from measured positive content growth.
-The pinned item may hand off to tail-follow only after both the complete pin
-reservation (`px`, not only `floorPx`) and collapse reservation reach zero.
-
-## 2. Synchronous Footer DOM Apply
-
-React state alone is not enough here.
-
-`applyFooterCompensationNow()` writes footer height directly to the DOM and forces layout reads:
-
-- `footer.style.height`
-- `footer.style.minHeight`
-- `footer.offsetHeight`
-- `scroller.scrollHeight`
-
-This is intentional. It ensures the browser uses the new footer height in the same turn, before we restore the anchor.
-
-If you move compensation back to "React render only", the flash can return because the DOM may still be one frame behind when `scrollTop` is restored.
-
-## 3. Semantic Anchor Coordinator
-
-`FlowChatViewportCoordinator` owns the semantic viewport anchor. It tracks one
-primary mode at a time: pinned item, following tail, or preserving an element.
-Tool cards supply an anchor element but never calculate scroll offsets or
-heights. The coordinator records the element's viewport-relative position and
-restores it after the list remeasures. While an element anchor is active, the
-coordinator also owns virtualizer compensation corrections, so independent
-scroll writers cannot fight the pinned header.
-
-The logical `isFollowingOutput` flag follows the same ownership rule: it is
-only true while the coordinator owns `following-tail`. A `sticky-latest` pin
-clears the flag and arms its turn for handoff. Once collapse protection and
-unsettled pin growth have drained, the handoff re-enters tail follow when
-either the pin reservation is empty or the natural content tail (excluding
-Footer reservations) reaches the viewport bottom. The latter condition avoids
-making real content grow through stale synthetic pin space before follow can
-start. This prevents a stale React render from allowing follow effects to
-overwrite a pinned header.
-The armed turn identity is owned only by `useFlowChatFollowOutput`; the list
-must not mirror it in a second ref because session resume and pin preparation
-can otherwise update the two identities in different commits.
-
-Collapse anchors have three phases: active while CSS layout is changing,
-retained-provisional while delayed virtualizer measurements may still arrive,
-and settled-grace after the provisional estimate has been reconciled to current
-DOM geometry. A short negative-layout quiet window ends the provisional phase.
-The Footer is then reduced atomically to the minimum physical range needed by
-the captured `scrollTop`; an anchor at `scrollTop === 0` needs no overflow range.
-The semantic anchor remains retained through one final grace window, so a late
-Virtuoso shrink can extend the range and restart settlement without exposing a
-clamped frame. User navigation, a new pin, session reset, DOM disconnection, or
-a quiet grace with no further correction releases it. Scroll
-events enqueue semantic-element restores into the coordinator's single pending
-animation frame. A transaction-owned non-user clamp may additionally extend its
-physical range and restore the captured raw position synchronously before paint.
-Active preservation blocks automatic tail takeover, while retained preservation
-allows the tail controller to take ownership when its normal distance and intent
-rules say that following should resume.
-
-There is no persistent raw `scrollTop` lock or scroll-listener lock. An
-unsignaled shrink may adjust an already owned protected range, but it may not
-create a collapse reservation from idle geometry alone. Without a semantic
-owner, the list accepts the new Virtuoso measurement and rebases its height and
-scroll baselines. Subsequent layout changes are handled by the semantic anchor
-(when present), the owned reservation transaction, or follow mode.
-
-An element anchor also owns the minimum physical scroll range needed to restore
-its offset. After writing `scrollTop`, the coordinator remeasures the actual DOM
-offset. If a positive correction remains because the browser clamped at the
-bottom, the range host synchronously extends the matching reservation, flushes
-layout, and retries in the same frame. The post-write DOM measurement is the
-source of truth because integer `scrollHeight` can overstate the browser's
-subpixel scroll limit.
-
-Physical-bottom synchronization must yield whenever the coordinator owns an
-element anchor. It also yields while streaming `following-tail` owns the
-viewport, because the single tail loop is the writer for content-growth motion.
-Outside tail follow, physical-bottom synchronization is limited to a real
-viewport `clientHeight` change. A message, round footer, or other content growth
-changes `scrollHeight` only and must remain below the existing viewport instead
-of moving the transcript upward to reach the new physical bottom.
-A sticky pin intentionally sits at the physical bottom created by its
-reservation; treating that geometry as tail-follow causes every content growth
-measurement to push the pinned header upward before the coordinator can restore
-it. Pinned, anchored, and non-streaming paths keep the normal physical-bottom
-synchronization behavior.
-
-Sticky pin floors are not reduced from a transient target rect. Positive
-effective content growth first enters a short settlement ledger (currently
-300 ms) instead of immediately removing physical bottom range. An unsignaled
-negative height correction cancels matching unsettled growth; a known collapse
-does not. Growth that reaches the complete remaining pin floor settles
-immediately because the sticky viewport has reached its tail-follow handoff
-boundary; if a collapse transaction is still active, that settlement resumes
-as soon as the transaction finishes. Sub-threshold growth still waits for the
-quiet window. Stable growth consumes the pin floor in one synchronous Footer
-update. Live pin reconciliation may increase a floor immediately, but cannot
-shrink it while Virtuoso item measurements are still moving. Stream end performs
-one final pin measurement when the target is available, transfers all remaining
-pin range into protected collapse space, and releases `pinned-item` ownership in
-the same transaction. A temporarily virtualized target must not block this
-release: the existing physical range is retained until a later explicit drain.
-Pending pin retries and growth settlement are canceled at that boundary.
-
-When a sticky target is temporarily virtualized, its provisional range must be
-computed from `scrollHeight - currentPinPx`. Reusing physical `scrollHeight`
-directly feeds the synthetic footer back into the next retry and grows the range
-on every frame. Provisional pins remain at `floorPx: 0`; if the request expires
-without capturing an element anchor, that range is removed atomically.
-
-The pin-owned portion of the footer is capped at one viewport. A rendered
-target can never require more than `clientHeight` of extra range to align its
-top inside the viewport, and one viewport is also sufficient to materialize a
-virtualized target. This cap applies to provisional and established pin ranges.
-It does not apply to collapse compensation or the total footer: a large card or
-several cumulative collapses can legitimately require more than one viewport to
-preserve the current semantic anchor.
-
-Pending pin retries carry a synchronous generation plus the owning session and
-turn. Canceling or replacing a request increments the generation before React
-state is updated, so already-queued animation frames cannot restore a canceled
-reservation. User navigation drops a provisional sticky range instead of
-transferring it into protected collapse. Established pins keep the existing
-protected-range handoff.
-
-Arbitrary-turn navigation is a materialize-then-align transaction. Starting a
-new request exits tail follow, but it does not remove the previous established
-pin reservation before the target DOM exists. That reservation remains only as
-physical scroll range; the active request prevents the old sticky target from
-reconciling it. Once the requested user message is rendered, the shared pin
-resolver applies the request's alignment policy. Exact requests replace the old
-reservation, align the message to the 57px viewport offset, and start bounded
-transient stabilization. Turn-rail requests use best-effort alignment: they
-still align exactly when the natural range is sufficient, but when the target
-cannot reach the 57px offset without synthetic tail space, they remove the
-transient pin reservation, clamp to the natural maximum, and release
-`pinned-item` ownership immediately. The natural boundary is an expected
-content limit, not a pending transaction, so it must not retry until TTL expiry.
-`sticky-latest` always uses the exact policy because streaming follow-output
-depends on its protected pin range. An expired request releases semantic
-ownership while preserving the current physical range, so failure cannot
-silently clamp the pane to the bottom.
-
-`rangeChanged` is a target-materialization signal, not a source of turn
-identity. It retries the active generation against real DOM geometry. RAF
-retries remain as a bounded fallback for browsers that coalesce range updates.
-Transient navigation remains pending until the requested turn stays aligned for
-two consecutive geometry samples. During that bounded transaction, Virtuoso's
-materialization range expands to two viewport heights in both directions so
-height-estimate reconciliation cannot immediately evict the target. If the
-pinned DOM element still disconnects, the coordinator drops the stale element
-anchor but retains logical `pinned-item` ownership while the active generation
-rematerializes it. User intent, replacement, expiry, and explicit handoff still
-release that ownership.
-Virtuoso mounts on the first initial-history commit. A target prepared before
-its ref is available becomes `initialTopMostItemIndex`; targets selected after
-mount enter the normal immediate materialize-then-align transaction. The
-left-side
-`FlowChatTurnRail` is mounted outside the scroller and delegates navigation to
-the same container-owned turn-pin request, so it does not need to rebind across
-renderer handoffs or write the FlowChat viewport directly.
-
-Mounting an already-streaming session is not a new-turn event. Session entry
-resumes tail follow directly, while sticky pinning remains reserved for a new
-turn that appears in the currently mounted session.
-
-## 4. Collapse Intent
-
-Some collapses are predictable before layout actually shrinks.
-
-`flowchat:tool-card-collapse-intent` is emitted before a known collapsible UI
-shrinks. `VirtualMessageList` uses that event to:
-
-- capture the card root as the semantic header anchor
-- capture the pre-collapse anchor `scrollTop`
-- capture the bottom distance before collapse
-- estimate required compensation from current card height
-- apply provisional compensation immediately
-
-This pre-compensation is what avoids the flash.
-
-Runtime status is transient session UI state, not a `FlowItem`. The always-mounted
-`RuntimeStatusSlot` occupies the first 24px of the existing Footer spacer and
-switches only `visibility`; showing, hiding, and clearing it never change list
-height or enter collapse reconciliation. Subagent projections use the same
-fixed-height slot inside their local scroll surface.
-
-If the list waits until `ResizeObserver` sees the shrink, the browser may already have clamped `scrollTop`.
-
-### Completion-preview grace period
-
-`useToolCardCompletionGracePeriod.ts` provides the bounded tail-preview window
-used by `ExecProcessToolCardView`, `TerminalToolCard`, and
-`FileOperationToolCard`. Its default is
-`TOOL_CARD_COMPLETION_PREVIEW_GRACE_MS = 800`.
-
-The timer starts only when a card that was expanded during execution is still
-the last rendered item and has not been manually toggled. A newer item, user
-interaction, unmount, or loss of tail ownership cancels the pending preview.
-For ExecProcess/Terminal cards this covers terminal completion, cancellation,
-errors, and rejections. For successful Write/Edit cards, the timer starts after
-the typewriter reveal finishes so the completed content is not truncated. The
-timer does not change `isLastItem`; an empty next round can still leave the
-previous card as the rendered tail, but the grace period bounds that wait. The
-timer expiry calls the existing height-contract collapse path, so footer
-pre-compensation and semantic-anchor handling remain the same as for a
-successor-driven collapse.
-
-This is deliberately separate from the VirtualMessageList collapse-intent TTL
-and settlement timers: the former controls when a card may compact, while the
-latter protects the viewport while its height changes.
-
-## Runtime Flow
-
-## A. Known Tool Card Collapse
-
-When a helper-backed card or region is about to collapse:
-
-1. it dispatches `flowchat:tool-card-collapse-intent` with its anchor element before the collapse state is applied
-2. `VirtualMessageList` estimates the upcoming shrink using `cardHeight`
-3. `VirtualMessageList` adds provisional footer compensation immediately
-4. `VirtualMessageList` applies the provisional footer synchronously and records
-   the semantic anchor's viewport offset
-5. actual layout shrink happens
-6. `ResizeObserver` / `MutationObserver` / transition listeners trigger `measureHeightChange()`
-7. measured shrink reconciles the compensation to the real final value
-8. the coordinator restores the anchor element's exact viewport-relative position
-
-Common examples:
-
-- `FileOperationToolCard`
-- `ModelThinkingDisplay`
-- `TerminalToolCard`
-- `ExploreGroupRenderer`
-
-## B. Unknown or Unsignaled Shrink
-
-If a shrink happens without a collapse intent:
-
-1. `measureHeightChange()` detects the negative height delta
-2. compensation falls back to `shrinkAmount - distanceFromBottom`
-3. `restoreScrollPositionOnce()` makes one clamped fallback restore using the
-   previously known scroll position
-
-This path is safer than doing nothing, but it is more likely to show visible movement than the pre-compensation path.
-
-## C. Initial-History Snapshot Handoff
-
-Virtuoso is the only initial-history scroller and mounts on the first commit.
-For sessions that still need the initial history render budget, a bounded recent
-projection is rendered above it as a non-interactive snapshot. The snapshot:
-
-- has no scroll container, spacers, pagination handlers, or viewport writer
-- uses `pointer-events: none` and cannot consume wheel, touch, keyboard, or
-  scrollbar intent
-- keeps the previous pixels visible while Virtuoso measures its initial range
-- releases immediately when the user starts scrolling so the real Virtuoso
-  motion is never hidden behind a frozen frame
-- retargets its release condition when Turn navigation begins during handoff
-- disappears only after the requested Turn has visible text, the session
-  changes, or the bounded handoff timeout expires
-
-All Turn navigation, search materialization, boundary pagination, bottom state,
-and follow-output transitions run through the mounted Virtuoso instance even
-while the snapshot is visible. A catalog-backed partial session still keeps
-only its restored tail as the default data presentation; this rendering change
-does not imply full-history hydration.
-
-## D. Arbitrary Turn Navigation Through Virtuoso
-
-The left-side turn rail delegates to the container-owned top-aligned pin
-transaction:
-
-1. record generation, session, target turn, behavior, and pin mode
-2. exit tail follow without removing established physical range
-3. if the target is absent, issue an immediate `scrollToIndex(..., align:
-   'start')`
-4. retry from `rangeChanged` and bounded RAF work until the target user message
-   exists
-5. replace the prior pin reservation with the target's measured reservation
-6. align the target to the shared 57px header offset and stabilize delayed
-   Virtuoso measurements
-7. cancel stale work on a newer request, user intent, session switch, jump to
-   latest, or timeout
-
-Every turn-rail marker, including the canonical latest Turn, uses this same
-immediate transient top-pin transaction. Selecting the latest marker means
-"show this Turn header"; it does not restore the tail presentation or resume
-follow-output. Only the explicit jump-to-latest action restores the canonical
-tail presentation and re-enters live-tail following. This separation keeps
-turn navigation consistent and treats every rail selection as user reading
-intent, including while the latest Turn is streaming.
-
-Do not clear the previous pin/footer range in step 2. The target may be outside
-the current Virtuoso range, and removing the footer first lets the browser clamp
-the old position to the physical bottom before materialization succeeds.
-
-The turn rail is an independent overlay surface. Its height is bounded to 60%
-of the FlowChat content area; overflow scrolls only the rail, and keeping the
-current marker visible may update only the rail list's `scrollTop`. Rail wheel,
-keyboard, hover, and tooltip behavior must never become another writer for the
-outer FlowChat viewport.
-
-The existing visible-turn DOM measurement also collects every distinct turn
-whose rendered items intersect the readable viewport. The first intersecting
-turn remains the semantic current turn, while every intersecting turn marker
-uses the same rail emphasis. Publish a new ordered `visibleTurnIds` snapshot
-only when membership or order changes so ordinary scroll frames do not cause
-redundant rail renders.
-
-### Catalog-backed history loading
-
-Catalog, loaded Turn cache, and active presentation are separate layers. Keep
-these ownership rules intact:
-
-- `Session.dialogTurns` remains the live restored tail unless an explicit
-  full-history consumer calls `ensureSessionFullHistory`.
-- Data residency, viewport intent, and follow-output ownership are independent.
-  A cached history presentation may remain resident after the viewport returns
-  to the live tail, but it must not keep the UI in history-reading mode,
-  suppress live-tail anchoring, or imply that follow-output is active.
-- For a small session whose cached presentation is contiguous from ordinal zero
-  through the current total (`[0, totalTurnCount)`) and stays within the
-  continuous projection budgets (24 Turns and 200 virtual items), explicit
-  jump-to-latest changes only the viewport intent and follow-output ownership.
-  The rendered projection and its stable virtual-item keys remain unchanged;
-  `historyWindow` is disabled so boundary loading cannot start while following
-  the tail. Canonical overlapping Turns are still overlaid by stable id, and a
-  newly appended canonical Turn extends the projection at the end.
-- Incomplete, discontinuous, or over-budget presentations retain the fallback
-  behavior: explicit jump-to-latest clears the Store's `activeRange`, restores
-  the canonical tail data source, and keeps the most recent component
-  presentation only as a reactivation hint. The Store LRU remains authoritative:
-  reactivation must find the complete range in `loadedRanges`, touch it as MRU,
-  and otherwise fall back to the ordinary window-load transaction.
-- Turn-rail navigation and sequential boundary loading use
-  `load_session_turn_window`; neither path writes the FlowChat scroller.
-- Upward user intent at the restored-tail boundary loads the adjacent ordinal
-  window without holding viewport ownership. Presentation activation then waits
-  for a bounded 320 ms quiet window after the latest wheel, touch, keyboard, or
-  scrollbar intent. New input resets that wait; session changes and newer
-  presentation-owner generations cancel it. Only after the quiet window is
-  acquired does the list capture the current element anchor and change to one
-  contiguous history-window presentation. This keeps a multi-thousand-pixel
-  prepend commit out of an active wheel gesture while still allowing the data
-  request itself to prefetch in parallel. Never expose a later cached range
-  across an unloaded gap.
-- Derive the restored-tail boundary from the canonical `Session.dialogTurns`
-  ordinal interval, never from the start of a merged `loadedRanges` entry.
-  Cache residency may extend to the first Turn while the canonical tail still
-  renders only recent Turns. Reaching ordinal zero is an exhausted boundary,
-  not a not-ready or failed load.
-- Appending below the current presentation does not require compensation.
-  Prepending or trimming above it must retain the existing element-anchor
-  transaction until the same user message returns to its captured viewport
-  offset.
-- A rejected or failed adjacent-window request must release only the element
-  anchor lease created during its commit preparation, if any. A stale
-  completion must never release a newer navigation or layout-preservation
-  transaction.
-- The non-tail loaded Turn cache uses a 48-Turn soft budget and a 64-Turn hard
-  budget. Crossing the hard budget evicts least-recently-used ordinals back
-  toward the soft budget. The live tail, active presentation, pending target,
-  and in-flight request intervals are protected; merged cached ranges may be
-  sliced, but the active presentation is never trimmed by cache eviction.
-- Passive live-tail updates outside the presented history range remain hidden
-  while the user reads history. When the history range overlaps canonical live
-  Turns, stable Turn ids select the canonical objects instead of cached
-  snapshots so streaming or recently completed content stays current without
-  changing the viewport intent. An explicit `send-message` Turn-pin request
-  first restores the tail presentation, then lets the existing sticky-latest
-  pin materialize the newly submitted Turn.
-- Cross-feature focus requests identify a Turn by stable `turnId` whenever one
-  is available, with `turnIndex` reserved for the absolute one-based visible
-  ordinal. They delegate to the same catalog/window materialization transaction
-  as the Turn rail. Never pass that absolute ordinal to `scrollToTurn` on a
-  partial tail or bounded history presentation; that method only understands
-  the currently rendered local list.
-- Search, edit, rollback, and compatibility fallback are explicit full-history
-  consumers. Their shared ensure operation deduplicates an existing request and
-  applies the completed projection only after the caller asks for it.
-- A Host without `turnCatalog`, or without `load_session_turn_window`, retains
-  the legacy full-restore fallback. This compatibility path must not cause a
-  catalog-capable Host to resume unconditional background hydration.
-
-## Why Transition Tracking Exists
-
-User-initiated expand/collapse still uses animated layout properties such as:
-
-- `grid-template-rows`
-- `height`
-- `max-height`
-
-Automatic and manual collapses both animate through the shared motion contract
-unless animation is explicitly disabled.
-
-During those transitions, the DOM may report intermediate sizes for multiple frames.
-
-The collapse intent carries a hard TTL (`expiresAtMs`, currently 1000 ms), but
-that TTL only bounds collapse measurement and reservation settlement; it does
-not expire the semantic element anchor. Automatic collapses are
-finalized after `FLOWCHAT_COLLAPSE_DURATION_MS` plus a short settle-frame window;
-manual or otherwise unsignaled intents use the TTL timer. The scroll handler keeps only a throttled-background
-timer fallback for browsers that delay timers. While the intent is alive, the
-grow branch of `measureHeightChange` protects the collapse reservation, but it
-may still consume measured content growth from the sticky pin reservation.
-Intent settlement follows the current semantic viewport owner. A sticky pinned
-turn always reconciles provisional collapse space back into a freshly measured
-pin reservation, even when the active transaction established a non-zero
-collapse floor. That floor protects the pin only while layout is moving; it
-must not cause the full-card estimate to survive into the next collapse. If the
-pinned target is temporarily unavailable, settlement retries without dropping
-the current range. A following tail instead enters retained-provisional quiet
-settlement, while a collapsing header that owns `preserving-element` reduces
-the footer atomically to the minimum range needed by its captured `scrollTop`.
-A detached protected viewport uses the same geometric settlement against its
-current `scrollTop`, without retaining provisional pixels above that range.
-These owner-specific transactions prevent both clear-and-reacquire frames and
-cumulative provisional whitespace. Any deferred follow is then replayed.
-
-## E. Follow-Output Mode (continuous tail)
-
-When the viewport is in follow-output mode and the latest turn is still
-streaming, the user's intent is "keep the tail visible". After the viewport
-coordinator has entered `following-tail`, one RAF loop eases `scrollTop` toward
-the effective bottom. Follow events only wake this loop; they do not launch
-additional scroll writers. The target subtracts the current Footer
-reservation, and large gaps snap directly to the target instead of leaving the
-user visibly behind the output.
-
-The loop is dormant while `pinned-item`, `preserving-element`, or a collapse
-transaction owns the viewport. It never clears reservations or calls
-`followTail()` from inside the animation frame. This keeps the semantic
-handoff and Virtuoso compensation paths authoritative while allowing small
-line-height growth to move over several frames. Explicit "jump to latest"
-navigation keeps its native smooth scroll; the RAF loop waits for that motion
-to settle before writing.
-
-Collapses interact with follow mode in three mutually exclusive ways:
-
-1. **Known collapse while follow + streaming is active:** the intent applies
-   synchronous Footer pre-compensation before the card shrinks. The active
-   intent allows shrink reconciliation even though tail follow is running.
-    When the CSS window ends, the transaction becomes a retained-provisional
-   collapse anchor instead of shrinking the Footer from a signed net-height
-   estimate. Virtuoso
-   can publish the matching item measurement after the CSS transition and after
-   stream end; reducing synthetic range before that measurement clamps the
-   viewport by exactly the removed pixels.
-   The retained transaction records the latest safe follow position. After a
-   negative-layout quiet window, it replaces both the provisional `px` and stale
-   `floorPx` with the minimum geometrically required Footer range. The final
-   release uses one timer plus a geometry generation: any effective height
-   change invalidates that timer's snapshot, and the timer performs one more
-   quiet check instead of every token allocating new timer work. If a later
-   measurement clamps below that position, the scroll handler synchronously
-   extends the range and restores it before paint. Real content growth and
-   downward follow movement consume the range one-for-one. User intent, a new
-   pin, session reset, or a final quiet grace releases the retained anchor.
-   Stream end restarts the same settlement path;
-   it does not preserve the provisional full-card estimate indefinitely.
-2. **Unsignaled shrink while follow + streaming is active:** a strict physical
-   clamp signature (the previous and current geometries are both at their
-   physical bottoms, the range shrink matches the negative `scrollTop` delta,
-   viewport height is stable, and there is no user intent) starts a
-   `late-shrink` viewport transaction. The scroll handler extends the Footer and
-   restores the pre-clamp position synchronously, covering virtualizer size
-   commits that arrive after the originating collapse transaction was released.
-   Other unsignaled shrinks remain owned by the tail loop; it follows only
-   downward toward the new effective bottom on the next frame.
-   A negative `scrollBy` issued by Virtuoso after a virtualized height
-   reduction is also suppressed when the previous geometry was already at the
-   physical bottom. That compensation would move the viewport away from the
-   tail; the next follow frame owns the single tail correction instead.
-3. **Not following (user reading older content):** the intent +
-   pre-compensation + semantic-anchor path applies as described above, and
-   `shouldSuspendAutoFollow` keeps event-driven follow scheduling
-   deferred until the intent's TTL lapses.
-
-The loop is cancelled as soon as follow exits (user upward scroll,
-session change, or streaming end). Explicit "jump to latest" navigation pauses
-the writer while its native smooth scroll completes, then resumes the same
-single tail loop.
-
-## Why `overflow-anchor: none` Must Stay
-
-`VirtualMessageList.scss` disables native browser scroll anchoring on:
-
-- `[data-virtuoso-scroller]`
-- `.message-list-footer`
-
-This is required because the browser's built-in anchoring fights the manual compensation logic.
-
-If you remove `overflow-anchor: none`, the browser may apply its own anchor correction on top of our compensation and produce unstable or inconsistent results.
-
-## Required Event Contract
-
-`tool-card-toggle`
-
-- dispatch after a generic expand/collapse action that changes height
-- purpose: schedule a follow-up measurement
-
-`flowchat:tool-card-collapse-intent`
-
-- dispatch before a collapse that can reduce list height near the bottom
-- include the card root as `anchorElement`; its top edge represents the stable header position
-- include `cardHeight` when possible
-- purpose: pre-compensate before the browser clamps scroll position
-
-Current producer:
-
-- `useToolCardHeightContract.ts` (used by most tool cards, including
-  `ExecProcessToolCardView`, `FileOperationToolCard`, and `TerminalToolCard`)
-- `ModelThinkingDisplay.tsx`
-- `ExploreGroupRenderer.tsx`
-
-Most tool cards now emit these events through `useToolCardHeightContract`.
-The helper measures the visible `cardRootRef` and retains recent visible
-measurements so state-driven collapses still report the pre-collapse height.
-Never substitute an inner scroll container's `scrollHeight`; hidden overflow is
-not layout height removed from the FlowChat list.
-
-If a future collapsible component shows the same "header drops" or "flash on collapse" symptom, it should likely emit `flowchat:tool-card-collapse-intent` before collapsing.
-
-## Invariants To Preserve
-
-- Footer compensation must remain additive temporary space, not real content.
-- Effective height comparisons must subtract current compensation.
-- Footer DOM compensation must be applied synchronously before anchor restore.
-- Anchor restore must clamp against current `maxScrollTop`.
-- A stalled positive anchor correction must extend physical bottom range and
-  retry before paint.
-- Resize and height observers must not synchronize to the physical bottom while
-  a semantic element anchor owns the viewport.
-- Sticky pin floors must shrink from measured content growth, not a transient
-  target-element position.
-- A user gesture that exits pinned mode must release the semantic anchor and
-  atomically transfer the pin reservation to a protected collapse range in the
-  same operation; an idle coordinator must never retain a live pin reservation.
-- Stream end or cancellation must perform that same protected-range transfer
-  before releasing `pinned-item`, even when the pinned DOM target is unavailable.
-- Scroll-handler anchor corrections must be coalesced through the coordinator's
-  animation-frame restore queue; they must not write `scrollTop` synchronously.
-- A retained collapse transaction may synchronously restore only a non-user
-  downward clamp. It is transaction-scoped, advances with downward tail follow,
-  and must release on user intent; it is not a general `scrollTop` lock.
-- Following-tail collapse finalization must never reduce Footer range directly
-  from a signed net-height estimate. It may reduce the retained estimate only
-  after the negative-layout quiet window, using current DOM geometry while the
-  anchor remains protected through the final grace.
-- Unsignaled shrink reconciliation must not reduce a protected collapse floor;
-  only measured growth, downward navigation, bottom arrival, or an explicit
-  reservation reset may consume it.
-- Unsignaled shrink reconciliation must not create a collapse reservation when
-  no collapse transaction owns the range. Session-open and history-projection
-  handoffs rebase their measurements instead of treating estimate convergence
-  as content collapse.
-- Pre-collapse intent must capture the anchor before the component shrinks.
-- Compensation must not be consumed too early during active layout transitions.
-- Session changes and empty-list resets must clear compensation and anchor state.
-
-## Common Ways To Break This
-
-- Adding a mount-triggered CSS animation to a virtualized list item, or animating
-  an automatic collapse without keeping collapse-intent protection alive for the
-  full `FLOWCHAT_COLLAPSE_DURATION_MS` window (see Rule Zero).
-- Feeding `Date.now()` back into `sessionToVirtualItems` /
-  `buildModelRoundItemGroups`, or splitting one `ModelRound` into several
-  `model-round` virtual items — both swap stable Virtuoso keys for new ones and
-  remount visible content.
-- Replacing `applyFooterCompensationNow()` with state-only rendering.
-- Measuring raw `scrollHeight` deltas without subtracting existing compensation.
-- Removing `flowchat:tool-card-collapse-intent` from a helper-backed collapsible component.
-- Finalizing an active collapse intent when a new one arrives mid-burst instead of
-  coalescing TTL / provisional shrink (drops footer protection for a frame).
-- Dispatching collapse intent after `setState` instead of before it.
-- Removing `overflow-anchor: none`.
-- Removing the intent TTL, settle-frame finalizer, or the throttled scroll
-  fallback that covers delayed background timers.
-- Reintroducing a persistent scroll-listener lock or allowing multiple competing
-  scroll writers. Semantic anchors and the bounded fallback must remain separate.
-- Passing reservation pixels through Virtuoso context or React-owned Footer
-  styles. The stable Footer DOM and ref-owned reservation are the hot path.
-- Restoring the blanket follow-mode early return in
-  `handleToolCardCollapseIntent` or applying it to an active known intent in
-  `measureHeightChange`. Known streaming collapses require synchronous range
-  reservation; only unsignaled shrinks are delegated entirely to the RAF loop.
-- Removing the `shouldSuspendAutoFollow` gate from event-driven follow
-  scheduling. Outside follow mode it keeps deferred follows from firing while a
-  collapse intent is still protecting the anchor.
-- Removing the continuous RAF follow loop. Event-driven follow alone cannot
-  keep up with dense token streams without visible jitter outside collapse
-  windows.
-
-## If You Need To Change This Logic
-
-### Opt-in viewport diagnostics
-
-Enable `app.logging.flow_chat_diagnostics` from the logging settings only while
-reproducing a viewport stability issue. The frontend records bounded JSONL
-batches to `flowchat.log` in the current session log directory. When disabled,
-probe payloads are not evaluated and no timer, IPC request, or file is created.
-
-The diagnostic schema groups events by hypothesis:
-
-- `A`: user scroll intent, pin release, reservation transfer, and tail handoff
-- `B`: semantic anchor capture, correction, release, or unexpected reacquisition
-- `C`: content measurement, Footer compensation, and physical range changes
-- `D`: Virtuoso scroll compensation and tail-follow ownership
-- `E`: streaming tool-card collapse intent and anchor preservation
-
-Do not add message content, tool arguments, file contents, or other sensitive
-payloads to this channel. Keep all data producers lazy and guard hot-path probes
-with `flowChatDiagnostics.isEnabled()` before allocating probe objects.
-
-Use this checklist:
-
-1. Verify a just-completed ExecCommand/Write tail keeps its preview during the
-   short grace period, then compacts if no follow-on item arrives.
-2. Verify manual collapse of a completed `Write` / `Edit` tool card.
-3. Verify a newer item still causes immediate automatic compaction before the
-   grace period expires.
-4. Verify repeated expand/collapse near the bottom.
-5. Verify thinking / explore / other collapsible sections still schedule measurements correctly.
-6. Verify there is no visible "drop then snap back" flash.
-7. Verify the final header position remains stable after collapse.
+The footer must not retain an earlier input height or include an estimated card
+shrink. The spacer reads the footer to size itself, but the two must not be
+folded into one number: the footer is content the transcript clears, the spacer
+is range past the end of content, and only the footer is inside the content end.
+
+Footer height represents only the current input-stack layout and real footer
+content such as history state and `RuntimeStatusSlot`.
+
+## Known Gaps
+
+- The eased follow raises the scroll-event rate from one a line to one a frame
+  while output streams — 1247 of them in one 120-second session, each an anchor
+  stand-down and a visible-Turn pass. It does not show in list commits, and
+  nothing here counts the DOM reads themselves, so what is actually known is
+  that the rendering cost did not move. Re-measure with the `tailFollow` probe
+  before changing `TAIL_EASE_ALPHA`.
+- Easing is bounded by the frames the display gives it. The step it converges
+  on is the content's growth *per frame*, so the same stream smooths less at
+  60Hz than on the ~200Hz display these numbers come from, and a fast enough
+  stream is a line a frame anywhere — at which point the ease is spending its
+  lag and buying nothing.
+- `SMOOTH_SCROLL_YIELD_MS` is only a backstop now, but it is still a guess: an
+  animation that stalls mid-flight without ever resuming holds the follow off
+  for its whole duration. Nothing observed has done that — the stall check ends
+  every real animation long before it — and the cost if one did is the follow
+  resuming late, not the viewport landing wrong.
+- A scrollbar drag is recognised from the gutter the bar occupies, so it is
+  invisible where the platform draws overlay scrollbars that take no layout
+  width — WebKit-backed builds, where `scrollbar-gutter: stable` reserves
+  nothing either. There the drag can still fight the frame loop while output
+  streams. Closing it means either a signal that does not depend on the bar
+  having a box, or a scrollbar of our own.
+- A collapse larger than `tailHoldMaxGapPx` still moves the viewport, by the
+  excess only.
+- **A reader who scrolls out of the blank and stops at the content end keeps no
+  follow.** Output then accumulates below the bottom edge unseen until an
+  explicit follow entry takes the viewport again.
+- **Paging a long history while still scrolling throws the reading position a
+  long way.** Reproduced four times: a session opened on its three-Turn tail
+  pages the rest on the first scroll up, the prepend is compensated, and the
+  reader keeps wheeling through the settle that follows. Their Turn is out of
+  the rendered window for the whole of it, so `captureAnchorForScroll` cannot
+  re-capture and carries instead — adding each scroll to the Turn's expected
+  offset with no DOM to check the result against. Measured: three attempts,
+  5532.7px, an anchor agreed at 112.6px from the viewport top becoming one
+  agreed at 3356px in a 985px viewport, and a −1349px correction computed
+  against that. Worst case it clamps at `scrollTop: 0` with the session's first
+  Turn at the top. `ANCHOR_MISSING_TURN_ATTEMPTS` does not bound it — that is
+  frames, not distance.
+
+  **Three fixes were tried and reverted; do not re-derive them.** *Refuse a
+  correction whose offset left the viewport* — an anchored offset legitimately
+  leaves it, both when the reader scrolls past their own Turn and when a
+  registered writer's travel is taken out, and each has a test asserting the
+  correction that follows. *Subtract the browser's clamp,*
+  `previousScrollTop - max(0, scrollHeight - clientHeight)` — unsound, because
+  the previous offset was valid at the previous range, so any shrink at all
+  makes it exceed the new maximum whether or not the viewport was ever clamped;
+  measured, it took 2790.7px off a descent the reader had made themselves.
+  *Track the smallest range since the last credit* — the floor came back equal
+  to the current range, so no dip was ever observed. `overflow-anchor` is a dead
+  end too: already `none` on every scrolling box here.
+
+  What the four logs do establish: the reader is wheeling continuously
+  throughout (the `user-gesture` claims are coalesced, so read `suppressedCount`
+  before concluding they stopped), and the descent is largely theirs. The next
+  attempt should probably bound the *result* — an offset several screens outside
+  the viewport is wrong whatever put it there — rather than try to attribute the
+  movement, which is what all three failures had in common.
+- An animated scroll aims at the target it was issued for. Jumping to latest
+  while output is arriving therefore ends with one catch-up step covering
+  whatever content grew during the animation — under the ease's snap threshold
+  at ordinary streaming rates, and a visible jump above them.
+- A width change anchors the viewport bottom only for a viewport that was at the
+  end of the transcript. Everywhere else the reflow moves content out from under
+  the bottom edge and nothing puts it back, because the anchor would have to be
+  captured before the reflow. Closing this means sampling an element anchor on
+  the scroll path.
+- On a very short transcript the scrollbar exposes a viewport of empty range.
+  The range is intentionally draggable and no longer bounces back.
+- The opening reveal has a hard frame cap. A session that pages for longer than
+  the cap is revealed mid-settle; raising the cap trades that against a longer
+  blank on open.
+- **Estimates are still estimates.** A page of history is now reserved per item
+  rather than at one scalar, so the range it takes up is close instead of wrong
+  by an order of magnitude — but `estimateVirtualMessageItemHeight` cannot know
+  how a model round wraps. Corrections shrink; they do not reach zero. And the
+  cost of rendering a heavy item is a separate axis: less measurement is forced
+  at once, but the work each one costs is unchanged. See
+  `FLOWCHAT_VIRTUALIZATION.md`.
+- A junction still costs one frame at the first page of a session, measured at
+  93px: the commit paints before the settle frame that would correct it. Slower
+  frames swallow both and show nothing. Closing it means a tighter estimator,
+  not a further correction — the correction already equals the change in the
+  scroll range every time it runs.
 
 ## Related Files
 
-- `src/web-ui/src/flow_chat/components/modern/VirtualMessageList.tsx`
-- `src/web-ui/src/flow_chat/components/modern/FlowChatViewportCoordinator.ts`
-- `src/web-ui/src/flow_chat/components/modern/VirtualMessageList.scss`
-- `src/web-ui/src/flow_chat/tool-cards/useToolCardHeightContract.ts`
-- `src/web-ui/src/flow_chat/tool-cards/useToolCardCompletionGracePeriod.ts`
-- `src/web-ui/src/flow_chat/tool-cards/ExecProcessToolCardView.tsx`
-- `src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx`
-- `src/web-ui/src/flow_chat/tool-cards/ModelThinkingDisplay.tsx`
-- `src/web-ui/src/flow_chat/tool-cards/TerminalToolCard.tsx`
-- `src/web-ui/src/flow_chat/components/modern/ExploreGroupRenderer.tsx`
+- `flowChatTailFollow.ts`
+- `useFlowChatFollowOutput.ts`
+- `../../utils/flowChatScrollLayout.ts`
+- `../../tool-cards/useToolCardHeightContract.ts`
+- `VirtualMessageList.tsx`
+- `ModernFlowChatContainer.tsx`

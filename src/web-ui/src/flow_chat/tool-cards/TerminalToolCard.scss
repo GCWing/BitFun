@@ -160,7 +160,6 @@
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
-  transition: all 0.2s ease;
   line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   box-sizing: border-box;
 
@@ -299,7 +298,12 @@
   color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 180ms ease,
+    opacity 160ms ease;
   padding: 0;
   position: relative;
   overflow: hidden;

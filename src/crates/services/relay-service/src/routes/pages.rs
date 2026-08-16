@@ -3093,10 +3093,10 @@ mod tests {
         UserRow::create(&pool, "u2", "bob", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&pool, "d1", "u1", "Laptop", None)
+        DeviceRow::upsert(&pool, "d1", "u1", "Laptop", None, None)
             .await
             .unwrap();
-        DeviceRow::upsert(&pool, "d2", "u2", "Phone", None)
+        DeviceRow::upsert(&pool, "d2", "u2", "Phone", None, None)
             .await
             .unwrap();
         let tok_alice = AuthToken::create(&pool, "u1", "d1").await.unwrap();

@@ -253,5 +253,16 @@ describe('ExecProcessToolCardView', () => {
       vi.advanceTimersByTime(1);
     });
     expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
+    expect(container.querySelector('.terminal-result-container')).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(299);
+    });
+    expect(container.querySelector('.terminal-result-container')).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(container.querySelector('.terminal-result-container')).toBeNull();
   });
 });

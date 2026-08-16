@@ -9,6 +9,15 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
+import {
+  SurfaceChangedError,
+  getActiveSurfaceId,
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+  surfaceScopedKey,
+  type DeviceSurfaceId,
+  type SurfaceScope,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('WorkspaceLspManager');
 
@@ -52,9 +61,16 @@ interface CachedServerStatus {
 }
 
 export class WorkspaceLspManager {
+  /**
+   * Keyed by device surface **and** workspace path. The same repository is
+   * routinely checked out at the same path on two machines, so a path alone
+   * would hand a manager negotiated with one host to the other.
+   */
   private static instances = new Map<string, WorkspaceLspManager>();
   
   private workspacePath: string;
+  private readonly surfaceId: DeviceSurfaceId;
+  private detached = false;
   private eventUnlisten?: () => void;
   private isInitialized = false;
   private serverStatusByLanguage = new Map<string, CachedServerStatus>();
@@ -70,8 +86,9 @@ export class WorkspaceLspManager {
     complete: (message?: string) => void;
   }>();
   
-  private constructor(workspacePath: string) {
+  private constructor(workspacePath: string, surfaceId: DeviceSurfaceId) {
     this.workspacePath = workspacePath;
+    this.surfaceId = surfaceId;
   }
   
   
@@ -79,33 +96,52 @@ export class WorkspaceLspManager {
     return this.workspacePath;
   }
   
-  
+  getSurfaceId(): DeviceSurfaceId {
+    return this.surfaceId;
+  }
+
+  private static instanceKey(workspacePath: string): string {
+    return surfaceScopedKey(getActiveSurfaceId(), workspacePath);
+  }
+
+
   static getOrCreate(workspacePath: string): WorkspaceLspManager {
-    if (!this.instances.has(workspacePath)) {
-      const manager = new WorkspaceLspManager(workspacePath);
-      this.instances.set(workspacePath, manager);
+    const key = this.instanceKey(workspacePath);
+    if (!this.instances.has(key)) {
+      const manager = new WorkspaceLspManager(workspacePath, getActiveSurfaceId());
+      this.instances.set(key, manager);
     }
-    return this.instances.get(workspacePath)!;
+    return this.instances.get(key)!;
   }
   
   
   static get(workspacePath: string): WorkspaceLspManager | undefined {
-    return this.instances.get(workspacePath);
+    return this.instances.get(this.instanceKey(workspacePath));
   }
   
   
   static async remove(workspacePath: string): Promise<void> {
-    const manager = this.instances.get(workspacePath);
+    const key = this.instanceKey(workspacePath);
+    const manager = this.instances.get(key);
     if (manager) {
       await manager.dispose();
-      this.instances.delete(workspacePath);
+      this.instances.delete(key);
     }
   }
 
-  /** Drop all workspace LSP managers when entering/exiting Peer Device Mode. */
-  static async clearAllForPeerSwitch(): Promise<void> {
-    const paths = Array.from(this.instances.keys());
-    await Promise.all(paths.map((path) => this.remove(path)));
+  /**
+   * Drop all workspace LSP managers when the rendered device surface changes.
+   *
+   * Deliberately does **not** call `lsp_close_workspace`: that request would be
+   * sent to the device being left, shutting down language servers an agent
+   * turn there may still be using. Managers are recreated against the new
+   * transport on the next workspace bootstrap.
+   */
+  static detachAllForSurfaceSwitch(): void {
+    for (const manager of this.instances.values()) {
+      manager.detachForSurfaceSwitch();
+    }
+    this.instances.clear();
   }
   
   
@@ -114,12 +150,19 @@ export class WorkspaceLspManager {
       return;
     }
 
+    const scope = getActiveSurfaceScope();
+    this.assertRendersActiveSurface(scope, 'lsp_open_workspace');
+
     try {
 
-      await api.invoke('lsp_open_workspace', {
+      await this.invokeForActiveSurface('lsp_open_workspace', {
         request: { workspacePath: this.workspacePath }
       });
       
+
+      // The transport may have swapped during the round trip. Binding the event
+      // listener now would attach this manager to the device that replaced ours.
+      this.assertRendersActiveSurface(scope, 'lsp_open_workspace');
 
       this.eventUnlisten = api.listen<LspEvent>('lsp-event', (payload) => {
         this.handleLspEvent(payload);
@@ -128,15 +171,50 @@ export class WorkspaceLspManager {
       this.isInitialized = true;
       log.info('LSP initialized', { workspacePath: this.workspacePath });
     } catch (error) {
-      log.error('LSP initialization failed', { workspacePath: this.workspacePath, error });
+      if (isSurfaceChangedError(error)) {
+        log.debug('LSP initialization abandoned after a device surface switch', {
+          workspacePath: this.workspacePath,
+        });
+      } else {
+        log.error('LSP initialization failed', { workspacePath: this.workspacePath, error });
+      }
       throw error;
     }
+  }
+
+  /**
+   * A manager belongs to the device it was created for. Once the window renders
+   * another one, this manager must issue nothing further: its language servers
+   * keep serving the device we left, and its requests would otherwise be
+   * answered by the device we moved to.
+   */
+  private assertRendersActiveSurface(scope: SurfaceScope, action: string): void {
+    if (this.detached || this.surfaceId !== scope.surfaceId || !scope.isCurrent()) {
+      throw new SurfaceChangedError(this.surfaceId, scope.epoch, action);
+    }
+  }
+
+  /**
+   * The manager itself owns a surface, so checking only ApiClient's request
+   * epoch is insufficient: an old component can call a detached manager after
+   * the new surface is already active. All LSP traffic passes this ownership
+   * boundary before and after its await.
+   */
+  private async invokeForActiveSurface<T = any>(
+    action: string,
+    args?: Record<string, unknown>,
+  ): Promise<T> {
+    const scope = getActiveSurfaceScope();
+    this.assertRendersActiveSurface(scope, action);
+    const result = await api.invoke<T>(action, args);
+    this.assertRendersActiveSurface(scope, action);
+    return result;
   }
   
   
   private handleLspEvent(event: LspEvent) {
 
-    if (event.data.workspace_path !== this.workspacePath) {
+    if (this.detached || event.data.workspace_path !== this.workspacePath) {
       return;
     }
 
@@ -385,7 +463,9 @@ export class WorkspaceLspManager {
       try {
         await this.initialize();
       } catch (initError) {
-        log.error('Failed to initialize manager', { workspacePath: this.workspacePath, error: initError });
+        if (!isSurfaceChangedError(initError)) {
+          log.error('Failed to initialize manager', { workspacePath: this.workspacePath, error: initError });
+        }
         throw initError;
       }
     }
@@ -419,7 +499,7 @@ export class WorkspaceLspManager {
         setTimeout(() => reject(new Error('LSP open document timeout after 30s')), 30000);
       });
       
-      const openPromise = api.invoke('lsp_open_document', {
+      const openPromise = this.invokeForActiveSurface('lsp_open_document', {
         request: {
           workspacePath: this.workspacePath,
           uri,
@@ -443,7 +523,7 @@ export class WorkspaceLspManager {
   
   async changeDocument(uri: string, content: string): Promise<void> {
     try {
-      await api.invoke('lsp_change_document', {
+      await this.invokeForActiveSurface('lsp_change_document', {
         request: {
           workspacePath: this.workspacePath,
           uri,
@@ -458,7 +538,7 @@ export class WorkspaceLspManager {
   
   async saveDocument(uri: string): Promise<void> {
     try {
-      await api.invoke('lsp_save_document', {
+      await this.invokeForActiveSurface('lsp_save_document', {
         request: {
           workspacePath: this.workspacePath,
           uri
@@ -472,7 +552,7 @@ export class WorkspaceLspManager {
   
   async closeDocument(uri: string): Promise<void> {
     try {
-      await api.invoke('lsp_close_document', {
+      await this.invokeForActiveSurface('lsp_close_document', {
         request: {
           workspacePath: this.workspacePath,
           uri
@@ -486,7 +566,7 @@ export class WorkspaceLspManager {
   
   async getCompletions(language: string, uri: string, line: number, character: number): Promise<any[]> {
     try {
-      const result = await api.invoke<any[]>('lsp_get_completions_workspace', {
+      const result = await this.invokeForActiveSurface<any[]>('lsp_get_completions_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -505,7 +585,7 @@ export class WorkspaceLspManager {
   
   async getHover(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      return await api.invoke('lsp_get_hover_workspace', {
+      return await this.invokeForActiveSurface('lsp_get_hover_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -530,7 +610,7 @@ export class WorkspaceLspManager {
   
   async gotoDefinition(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      return await api.invoke('lsp_goto_definition_workspace', {
+      return await this.invokeForActiveSurface('lsp_goto_definition_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -548,7 +628,7 @@ export class WorkspaceLspManager {
   
   async findReferences(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      return await api.invoke('lsp_find_references_workspace', {
+      return await this.invokeForActiveSurface('lsp_find_references_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -566,7 +646,7 @@ export class WorkspaceLspManager {
   
   async getSignatureHelp(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      const result = await api.invoke('lsp_get_signature_help_workspace', {
+      const result = await this.invokeForActiveSurface('lsp_get_signature_help_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -601,7 +681,7 @@ export class WorkspaceLspManager {
   
   private async requestDiagnostics(uri: string): Promise<void> {
     try {
-      const diagnostics = await api.invoke<any[]>('lsp_get_diagnostics', {
+      const diagnostics = await this.invokeForActiveSurface<any[]>('lsp_get_diagnostics', {
         request: {
           workspacePath: this.workspacePath,
           uri
@@ -621,7 +701,7 @@ export class WorkspaceLspManager {
   
   async formatDocument(language: string, uri: string, tabSize: number = 2, insertSpaces: boolean = true): Promise<any> {
     try {
-      return await api.invoke('lsp_format_document_workspace', {
+      return await this.invokeForActiveSurface('lsp_format_document_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -646,7 +726,7 @@ export class WorkspaceLspManager {
     endCharacter: number
   ): Promise<any[]> {
     try {
-      return await api.invoke('lsp_get_inlay_hints_workspace', {
+      return await this.invokeForActiveSurface('lsp_get_inlay_hints_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -666,7 +746,7 @@ export class WorkspaceLspManager {
   
   async rename(language: string, uri: string, line: number, character: number, newName: string): Promise<any> {
     try {
-      return await api.invoke('lsp_rename_workspace', {
+      return await this.invokeForActiveSurface('lsp_rename_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -685,7 +765,7 @@ export class WorkspaceLspManager {
   
   async getCodeActions(language: string, uri: string, range: any, context: any): Promise<any> {
     try {
-      return await api.invoke('lsp_get_code_actions_workspace', {
+      return await this.invokeForActiveSurface('lsp_get_code_actions_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -703,7 +783,7 @@ export class WorkspaceLspManager {
   
   async getDocumentSymbols(language: string, uri: string): Promise<any> {
     try {
-      return await api.invoke('lsp_get_document_symbols_workspace', {
+      return await this.invokeForActiveSurface('lsp_get_document_symbols_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -719,7 +799,7 @@ export class WorkspaceLspManager {
   
   async getWorkspaceSymbols(query: string): Promise<any> {
     try {
-      return await api.invoke('lsp_get_workspace_symbols', {
+      return await this.invokeForActiveSurface('lsp_get_workspace_symbols', {
         request: {
           workspacePath: this.workspacePath,
           query
@@ -734,7 +814,7 @@ export class WorkspaceLspManager {
   
   async getDocumentHighlight(language: string, uri: string, line: number, character: number): Promise<any> {
     try {
-      return await api.invoke('lsp_get_document_highlight_workspace', {
+      return await this.invokeForActiveSurface('lsp_get_document_highlight_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -752,7 +832,7 @@ export class WorkspaceLspManager {
   
   async getSemanticTokens(language: string, uri: string): Promise<any> {
     try {
-      return await api.invoke('lsp_get_semantic_tokens_workspace', {
+      return await this.invokeForActiveSurface('lsp_get_semantic_tokens_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -775,7 +855,7 @@ export class WorkspaceLspManager {
     endCharacter: number
   ): Promise<any> {
     try {
-      return await api.invoke('lsp_get_semantic_tokens_range_workspace', {
+      return await this.invokeForActiveSurface('lsp_get_semantic_tokens_range_workspace', {
         request: {
           workspacePath: this.workspacePath,
           language,
@@ -795,7 +875,7 @@ export class WorkspaceLspManager {
   
   async getServerState(language: string): Promise<ServerState | null> {
     try {
-      return await api.invoke<ServerState>('lsp_get_server_state', {
+      return await this.invokeForActiveSurface<ServerState>('lsp_get_server_state', {
         request: {
           workspacePath: this.workspacePath,
           language
@@ -810,7 +890,7 @@ export class WorkspaceLspManager {
   
   async getAllServerStates(): Promise<Record<string, ServerState>> {
     try {
-      return await api.invoke<Record<string, ServerState>>('lsp_get_all_server_states', {
+      return await this.invokeForActiveSurface<Record<string, ServerState>>('lsp_get_all_server_states', {
         request: {
           workspacePath: this.workspacePath
         }
@@ -822,6 +902,12 @@ export class WorkspaceLspManager {
   }
   
   
+  /**
+   * Close the workspace on its host. Only for a real workspace close — a device
+   * surface switch must use `detachForSurfaceSwitch()`, because this runs before
+   * the transport swap and would shut down the language servers of the device
+   * being left.
+   */
   async dispose(): Promise<void> {
     try {
 
@@ -831,13 +917,30 @@ export class WorkspaceLspManager {
       }
 
 
-      await api.invoke('lsp_close_workspace', {
+      await this.invokeForActiveSurface('lsp_close_workspace', {
         request: { workspacePath: this.workspacePath }
       });
-      
+
       this.isInitialized = false;
     } catch (error) {
       log.error('Error during dispose', { workspacePath: this.workspacePath, error });
     }
+  }
+
+  /**
+   * Release this manager's frontend state without touching the host. Used when
+   * the rendered device surface changes: the language servers belong to the
+   * device we are leaving and must keep running for its agent.
+   *
+   * `detached` is what stops a component that still holds this instance from
+   * re-initializing it onto the transport of the device we switched to.
+   */
+  detachForSurfaceSwitch(): void {
+    this.detached = true;
+    if (this.eventUnlisten) {
+      this.eventUnlisten();
+      this.eventUnlisten = undefined;
+    }
+    this.isInitialized = false;
   }
 }

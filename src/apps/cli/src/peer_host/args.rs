@@ -34,17 +34,6 @@ pub(crate) fn optional_bool(obj: &Value, camel: &str) -> Option<bool> {
     field(obj, camel, &snake).and_then(|v| v.as_bool())
 }
 
-pub(crate) fn get_usize(obj: &Value, camel: &str) -> Result<usize, String> {
-    let snake = camel_to_snake(camel);
-    let value =
-        field(obj, camel, &snake).ok_or_else(|| format!("Missing or invalid '{camel}' field"))?;
-    value
-        .as_u64()
-        .map(|n| n as usize)
-        .or_else(|| value.as_i64().filter(|n| *n >= 0).map(|n| n as usize))
-        .ok_or_else(|| format!("Missing or invalid '{camel}' field"))
-}
-
 fn camel_to_snake(camel: &str) -> String {
     let mut out = String::with_capacity(camel.len() + 4);
     for (i, ch) in camel.chars().enumerate() {

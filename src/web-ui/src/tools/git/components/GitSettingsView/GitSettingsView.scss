@@ -342,6 +342,12 @@ $opacity-high: 0.8 !default;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-git-settings-view__loading-spinner {
+    animation: none;
+  }
+}
+
 @media (max-width: 768px) {
   .bitfun-git-settings-view {
     &__header {

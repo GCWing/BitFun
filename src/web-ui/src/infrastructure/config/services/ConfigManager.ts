@@ -382,8 +382,17 @@ class ConfigManagerImpl implements IConfigManager {
     if (path === 'ai.models') {
       return { hasFallback: true, value: [] };
     }
-    if (path === 'ai.func_agent_models' || path === 'ai.default_models') {
+    if (path === 'ai.default_models') {
       return { hasFallback: true, value: {} };
+    }
+    if (path === 'ai.task_models') {
+      return {
+        hasFallback: true,
+        value: {
+          session_title: { kind: 'fixed', model_id: 'fast' },
+          git_commit: { kind: 'fixed', model_id: 'fast' },
+        },
+      };
     }
     if (path === 'ai.agent_model_defaults') {
       return {
@@ -443,8 +452,11 @@ class ConfigManagerImpl implements IConfigManager {
       if (path === 'ai.models') {
         return [] as T;
       }
-      if (path === 'ai.func_agent_models') {
-        return {} as T;
+      if (path === 'ai.task_models') {
+        return {
+          session_title: { kind: 'fixed', model_id: 'fast' },
+          git_commit: { kind: 'fixed', model_id: 'fast' },
+        } as T;
       }
       if (path === 'ai.default_models') {
         return {} as T;
@@ -750,7 +762,7 @@ class ConfigManagerImpl implements IConfigManager {
       await this.getConfigs([
         'ai.models',
         'ai.agent_model_defaults',
-        'ai.func_agent_models',
+        'ai.task_models',
         'ai.default_models',
       ]);
     } catch (error) {

@@ -593,12 +593,6 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     .remove(&request.tool_id);
                 Ok(RuntimeIpcOperationResult::Unit)
             }
-            RuntimeIpcOperation::RecordLocalCommandTurn { request } => self
-                .runtime
-                .record_completed_local_command_turn(request)
-                .await
-                .map(|record| RuntimeIpcOperationResult::LocalCommandTurnRecorded { record })
-                .map_err(runtime_ipc_error),
         }
     }
 

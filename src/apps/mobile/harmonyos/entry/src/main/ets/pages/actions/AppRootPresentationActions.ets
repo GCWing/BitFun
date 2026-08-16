@@ -1,5 +1,6 @@
 import { RemotePermissionMode, RemoteSession } from '../../model/RemoteModels';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
+import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { ConversationIntent } from './ConversationIntent';
 import { AppRoute, ConversationSource } from '../navigation/AppRouteContract';
 
@@ -86,9 +87,9 @@ export interface SettingsPresentationActions {
   readonly reconnect: () => void;
   readonly openAccount: () => void;
   readonly cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string>;
-  readonly cloudSync: () => Promise<string>;
   readonly cloudLogout: () => Promise<void>;
   readonly cloudListDevices: () => Promise<CloudAccountDevice[]>;
+  readonly cloudSelectDevice: (device: CloudAccountDevice) => Promise<void>;
   readonly getPermissionMode: () => Promise<RemotePermissionMode>;
   readonly setPermissionMode: (mode: RemotePermissionMode) => Promise<RemotePermissionMode>;
   readonly testGeneral: (url: string, key: string, model: string, clear: boolean) => Promise<string>;
@@ -101,7 +102,7 @@ export interface ConnectPresentationActions {
   readonly clearPairing: () => void;
   readonly urlChanged: (url: string) => void;
   readonly userChanged: (user: string) => void;
-  readonly detected: (url: string) => boolean;
+  readonly detected: (url: string) => string;
   readonly inputVisible: (visible: boolean) => void;
   readonly paste: () => void;
   readonly scan: () => void;
@@ -136,14 +137,15 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
     },
     onSettings: {
       close: () => {}, addConnection: () => {}, disconnect: () => {}, reconnect: () => {}, openAccount: () => {},
-      cloudLogin: async () => '', cloudSync: async () => '', cloudLogout: async () => {},
-      cloudListDevices: async () => [], getPermissionMode: async () => 'ask',
+      cloudLogin: async () => '', cloudLogout: async () => {},
+      cloudListDevices: async () => [], cloudSelectDevice: async () => {},
+      getPermissionMode: async () => 'ask',
       setPermissionMode: async (mode: RemotePermissionMode) => mode,
       testGeneral: async () => '', saveGeneral: async () => ''
     },
     onConnect: {
       back: () => {}, connect: () => {}, clearPairing: () => {}, urlChanged: () => {}, userChanged: () => {},
-      detected: () => false, inputVisible: () => {}, paste: () => {}, scan: () => {},
+      detected: () => DetectedUrlAction.INVALID, inputVisible: () => {}, paste: () => {}, scan: () => {},
       cloudListDevices: async () => [], cloudSelectDevice: async () => {}
     },
     onFilePreview: { close: () => {}, refresh: () => {}, download: () => {}, openLink: () => {} },

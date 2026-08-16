@@ -1,0 +1,8 @@
+/** Observable card the page owns. Model must not import pages/state. */
+export interface WatchProvisionDisplay {
+  ask(deviceName: string, deviceId: string): void;
+  working(): void;
+  done(message: string): void;
+  fail(message: string): void;
+  hide(): void;
+}

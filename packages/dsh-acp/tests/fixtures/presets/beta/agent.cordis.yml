@@ -1,0 +1,5 @@
+# The mode a test switches TO: a disjoint tool set, so a recompose is visible.
+- id: beta-tool
+  name: ../../plugins/contribute.js
+  config:
+    tool: beta

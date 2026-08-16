@@ -2,7 +2,7 @@ import { Want } from '@kit.AbilityKit';
 import { Driver, ON, abilityDelegatorRegistry } from '@kit.TestKit';
 import { describe, it, expect } from '@ohos/hypium';
 
-const APP_BUNDLE: string = 'com.example.bitfun_mobile';
+const APP_BUNDLE: string = 'com.bitfun.app';
 const APP_ABILITY: string = 'EntryAbility';
 
 export default function deviceSmokeTest() {
@@ -21,7 +21,7 @@ export default function deviceSmokeTest() {
 
       await driver.click(130, 180);
       await driver.delayMs(300);
-      const remoteEntry = await driver.findComponent(ON.text('Remote'));
+      const remoteEntry = await driver.findComponent(ON.id('conversation-source-remote'));
       expect(remoteEntry !== undefined).assertTrue();
       await remoteEntry.click();
       await driver.delayMs(900);

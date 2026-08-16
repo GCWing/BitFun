@@ -1,5 +1,9 @@
 import { RemoteI18n } from '../i18n/RemoteI18n';
 import { RemoteDescriptor } from '../model/RemoteModels';
+import {
+  ConnectScanDecisionPolicy,
+  DetectedUrlAction
+} from './ConnectScanDecisionPolicy';
 import { PairIdentity } from './RelayHttpClient';
 import { RemoteDescriptorParser } from './RemoteDescriptorParser';
 
@@ -72,8 +76,18 @@ export class RemotePairingPolicy {
     };
   }
 
-  shouldPromptForAccount(descriptor: RemoteDescriptor): boolean {
-    return descriptor.accountAuth;
+  shouldPromptForAccount(
+    descriptor: RemoteDescriptor,
+    hasCloudAccountSession: boolean = false,
+    cloudUsername: string = ''
+  ): boolean {
+    return ConnectScanDecisionPolicy.decide(
+      descriptor.accountAuth,
+      hasCloudAccountSession,
+      cloudUsername,
+      descriptor.accountUsername,
+      ''
+    ) === DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD;
   }
 
   private isDefaultUserId(userId: string, deviceId: string): boolean {

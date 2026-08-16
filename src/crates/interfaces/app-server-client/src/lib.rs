@@ -174,6 +174,13 @@ impl AppServerClient {
             .await
     }
 
+    pub async fn project_reasoning_catalog(
+        &self,
+        request: ProjectReasoningCatalogRequest,
+    ) -> agent_client_protocol::Result<ProjectReasoningCatalogResponse> {
+        self.rpc(|cx| Ok(cx.send_request(request))).await
+    }
+
     pub async fn worktree_repository_status(
         &self,
         request: WorktreeRepositoryStatusRequest,
@@ -372,14 +379,6 @@ impl AppServerClient {
         &self,
         request: SubmitUserAnswersRequest,
     ) -> Result<SubmitUserAnswersResponse, ClientError> {
-        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
-            .await
-    }
-
-    pub async fn record_local_command_turn(
-        &self,
-        request: RecordLocalCommandTurnRequest,
-    ) -> Result<RecordLocalCommandTurnResponse, ClientError> {
         self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
             .await
     }

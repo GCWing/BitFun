@@ -1,9 +1,12 @@
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { notificationService } from '@/shared/notification-system';
-import type { DialogTurnData } from '@/shared/types/session-history';
-import { flowChatStore } from '../store/FlowChatStore';
-import type { DialogTurn, Session } from '../types/flow-chat';
+import {
+  closeSessionUsageModal,
+  openSessionUsageModal,
+  showSessionUsageModalReport,
+} from '../components/usage/sessionUsageModalState';
+import type { Session } from '../types/flow-chat';
 import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 
 const UNKNOWN_MODEL_ID = 'unknown_model';
@@ -18,54 +21,49 @@ export interface UsageReportCommandParams {
   noWorkspaceMessage: string;
   failedTitle: string;
   unknownErrorMessage: string;
-  loadingMarkdown: string;
   /**
    * Where the report comes from. Defaults to the local backend; a dispatch
    * projection supplies the target's `query` verb instead.
    */
   fetchReport?: () => Promise<SessionUsageReport>;
-  /**
-   * Persist the rendered turn to the backend session. Observer projections
-   * must not persist locally — their transcript cache captures the turn.
-   */
-  persistTurn?: boolean;
 }
 
 export interface UsageReportCommandResult {
-  inserted: boolean;
+  /** The report was produced and put on screen. */
+  shown: boolean;
   reason?: 'busy' | 'missing_workspace';
   report?: SessionUsageReport;
 }
 
+/**
+ * Produce the session usage report and show it.
+ *
+ * The report is not written into the transcript. It is a report *about* the
+ * session rather than an event in it, and the synthetic Turn it used to be read
+ * as a Turn arriving to everything downstream — see `sessionUsageModalState`.
+ */
 export async function runUsageReportCommand(
   params: UsageReportCommandParams
 ): Promise<UsageReportCommandResult> {
   if (params.isProcessing) {
     notificationService.warning(params.busyMessage);
-    return { inserted: false, reason: 'busy' };
+    return { shown: false, reason: 'busy' };
   }
 
   if (!params.session.workspacePath) {
     notificationService.error(params.noWorkspaceMessage);
-    return { inserted: false, reason: 'missing_workspace' };
+    return { shown: false, reason: 'missing_workspace' };
   }
 
-  const requestedAt = Date.now();
   const projectWorkspacePath = sessionProjectWorkspacePath(params.session);
   if (!projectWorkspacePath) {
     notificationService.error(params.noWorkspaceMessage);
-    return { inserted: false, reason: 'missing_workspace' };
+    return { shown: false, reason: 'missing_workspace' };
   }
-  const pendingReportId = `pending-${params.session.sessionId}-${requestedAt}`;
-  const pendingTurn = flowChatStore.addLocalUsageReportTurn({
+  openSessionUsageModal({
     sessionId: params.session.sessionId,
-    markdown: params.loadingMarkdown,
-    reportId: pendingReportId,
-    schemaVersion: 1,
-    generatedAt: requestedAt,
-    status: 'loading',
+    workspacePath: params.session.workspacePath,
   });
-  let provisionalTurnId = pendingTurn?.id;
 
   try {
     const rawReport = params.fetchReport
@@ -78,45 +76,15 @@ export async function runUsageReportCommand(
         includeHiddenSubagents: true,
       });
     const report = enrichUsageReportModelIdentity(rawReport, params.session);
-    const markdown = renderUsageReportMarkdown(report);
-    const turn = pendingTurn
-      ? updatePendingUsageReportTurn({
-        sessionId: params.session.sessionId,
-        dialogTurnId: pendingTurn.id,
-        markdown,
-        report,
-      })
-      : flowChatStore.addLocalUsageReportTurn({
-        sessionId: params.session.sessionId,
-        markdown,
-        reportId: report.reportId,
-        schemaVersion: report.schemaVersion,
-        generatedAt: report.generatedAt,
-        report: report as unknown as Record<string, any>,
-      });
-    provisionalTurnId = turn?.id ?? provisionalTurnId;
+    showSessionUsageModalReport({
+      sessionId: params.session.sessionId,
+      report,
+      markdown: renderUsageReportMarkdown(report),
+    });
 
-    if (turn && params.persistTurn !== false) {
-      const recorded = await sessionAPI.recordLocalCommandTurn(
-        toPersistedLocalReportTurn(turn),
-        projectWorkspacePath,
-        params.session.remoteConnectionId,
-        params.session.remoteSshHost,
-      );
-      if (!flowChatStore.commitLocalUsageReportTurn({
-        sessionId: params.session.sessionId,
-        dialogTurnId: turn.id,
-        ...recorded,
-      })) {
-        throw new Error('Failed to reconcile persisted usage report turn');
-      }
-    }
-
-    return { inserted: !!turn, report };
+    return { shown: true, report };
   } catch (error) {
-    if (provisionalTurnId) {
-      flowChatStore.deleteDialogTurn(params.session.sessionId, provisionalTurnId);
-    }
+    closeSessionUsageModal();
     notificationService.error(
       error instanceof Error ? error.message : params.unknownErrorMessage,
       {
@@ -156,42 +124,6 @@ export function enrichUsageReportModelIdentity(
       };
     }),
   };
-}
-
-function updatePendingUsageReportTurn(params: {
-  sessionId: string;
-  dialogTurnId: string;
-  markdown: string;
-  report: SessionUsageReport;
-}): DialogTurn | null {
-  flowChatStore.updateDialogTurn(
-    params.sessionId,
-    params.dialogTurnId,
-    turn => ({
-      ...turn,
-      status: 'completed',
-      userMessage: {
-        ...turn.userMessage,
-        content: params.markdown,
-        timestamp: params.report.generatedAt,
-        metadata: {
-          ...turn.userMessage.metadata,
-          reportId: params.report.reportId,
-          schemaVersion: params.report.schemaVersion,
-          generatedAt: params.report.generatedAt,
-          usageReportStatus: 'completed',
-          usageReport: params.report as unknown as Record<string, any>,
-        },
-      },
-      startTime: params.report.generatedAt,
-      endTime: params.report.generatedAt,
-    }),
-    { touchActivity: false },
-  );
-
-  return flowChatStore.getState().sessions
-    .get(params.sessionId)
-    ?.dialogTurns.find(turn => turn.id === params.dialogTurnId) ?? null;
 }
 
 export function renderUsageReportMarkdown(report: SessionUsageReport): string {
@@ -296,30 +228,6 @@ export function renderUsageReportMarkdown(report: SessionUsageReport): string {
   );
 
   return lines.join('\n');
-}
-
-function toPersistedLocalReportTurn(turn: DialogTurn): DialogTurnData {
-  const metadata = { ...turn.userMessage.metadata };
-  delete metadata.usageReportProvisional;
-  return {
-    turnId: turn.id,
-    // Local commands receive their storage identity only after persistence.
-    turnIndex: 0,
-    sessionId: turn.sessionId,
-    timestamp: turn.startTime,
-    kind: 'local_command',
-    userMessage: {
-      id: turn.userMessage.id,
-      content: turn.userMessage.content,
-      timestamp: turn.userMessage.timestamp,
-      metadata,
-    },
-    modelRounds: [],
-    startTime: turn.startTime,
-    endTime: turn.endTime,
-    durationMs: 0,
-    status: 'completed',
-  };
 }
 
 function formatNumber(value: number | undefined): string {

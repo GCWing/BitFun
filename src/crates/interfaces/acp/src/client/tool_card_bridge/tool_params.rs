@@ -21,6 +21,18 @@ pub(super) fn normalize_tool_params(
                 );
             }
         }
+        "RunCode" => {
+            if !normalized.contains_key("code") {
+                if let Some(value) = normalized
+                    .get("source")
+                    .or_else(|| normalized.get("script"))
+                    .or_else(|| normalized.get("program"))
+                    .cloned()
+                {
+                    normalized.insert("code".to_string(), value);
+                }
+            }
+        }
         "Read" | "Write" | "Edit" | "Delete" => {
             if !normalized.contains_key("file_path") {
                 if let Some(value) = normalized
@@ -36,14 +48,33 @@ pub(super) fn normalize_tool_params(
             }
             if tool_name == "Edit" {
                 if !normalized.contains_key("old_string") {
-                    if let Some(value) = normalized.get("oldString").cloned() {
+                    // `old_str`/`new_str` are the `str_replace_editor` family's
+                    // spelling; without them its card shows a path and no diff.
+                    if let Some(value) = normalized
+                        .get("oldString")
+                        .or_else(|| normalized.get("old_str"))
+                        .cloned()
+                    {
                         normalized.insert("old_string".to_string(), value);
                     }
                 }
                 if !normalized.contains_key("new_string") {
-                    if let Some(value) = normalized.get("newString").cloned() {
+                    if let Some(value) = normalized
+                        .get("newString")
+                        .or_else(|| normalized.get("new_str"))
+                        .cloned()
+                    {
                         normalized.insert("new_string".to_string(), value);
                     }
+                }
+            }
+            if tool_name == "Write" && !normalized.contains_key("content") {
+                if let Some(value) = normalized
+                    .get("file_text")
+                    .or_else(|| normalized.get("contents"))
+                    .cloned()
+                {
+                    normalized.insert("content".to_string(), value);
                 }
             }
         }

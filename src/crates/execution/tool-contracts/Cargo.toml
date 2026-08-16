@@ -17,6 +17,13 @@ bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 async-trait = { workspace = true }
 indexmap = { workspace = true }
 
+[features]
+default = []
+acp-bridge = []
+computer-use-contract = []
+element-token = []
+mcp-bridge = []
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
 

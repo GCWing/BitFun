@@ -53,6 +53,11 @@ export class RemotePageState {
   @Trace pendingSessionId: string = '';
   @Trace isConversationDismissed: boolean = false;
   @Trace sessionErrorText: string = '';
+  // Deliberately untraced: the memo behind visibleSessions(), not state anything
+  // renders. Tracing it would make reading the list a write to the list.
+  private visibleSessionsCache: RemoteSession[] = [];
+  private visibleSessionsSource: RemoteSession[] | undefined = undefined;
+  private visibleSessionsQuery: string = ' ';
   get activeSession(): SessionSummary { return this.conversation.activeSession; }
   get sessions(): RemoteSession[] { return this.conversation.sessions; }
   get persistedMessages(): ChatMessage[] { return this.conversation.persistedMessages; }
@@ -310,14 +315,30 @@ export class RemotePageState {
     this.closePickers();
   }
 
+  /**
+   * The sessions the sidebar may show, as a stable array.
+   *
+   * This is read straight into a `@Param`, so returning a fresh array each call
+   * marked the session list dirty on every rebuild of its parent — including
+   * the rebuild that a selection change causes, which is the one case where
+   * nothing about the list has moved. Handing back the same instance until the
+   * source or the query changes lets the list keep what it already computed.
+   */
   visibleSessions(): RemoteSession[] {
+    const source = this.conversation.sessions;
     const query = this.sessionQuery.trim().toLowerCase();
-    return this.conversation.sessions.filter((item: RemoteSession) => {
+    if (source === this.visibleSessionsSource && query === this.visibleSessionsQuery) {
+      return this.visibleSessionsCache;
+    }
+    this.visibleSessionsSource = source;
+    this.visibleSessionsQuery = query;
+    this.visibleSessionsCache = source.filter((item: RemoteSession) => {
       if (item.id.length === 0 || item.status === 'archived') {
         return false;
       }
       return query.length === 0 || item.title.toLowerCase().indexOf(query) >= 0;
     });
+    return this.visibleSessionsCache;
   }
 
   hasRunningActiveTurn(): boolean {

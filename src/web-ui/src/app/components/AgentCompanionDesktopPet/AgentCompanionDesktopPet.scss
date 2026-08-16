@@ -549,3 +549,13 @@
     transform: scale(1.08);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-agent-companion__pet--needs-attention::before,
+  .bitfun-agent-companion__bubble--typing::after,
+  .bitfun-agent-companion__bubble--attention,
+  .bitfun-agent-companion__bubble--attention::after {
+    animation: none !important;
+    transform: none;
+  }
+}

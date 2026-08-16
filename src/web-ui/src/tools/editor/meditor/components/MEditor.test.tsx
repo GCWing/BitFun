@@ -1,48 +1,97 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
-import { MEditor } from './MEditor';
+// @vitest-environment jsdom
+
+import React, { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  logError: vi.fn(),
+}))
 
 vi.mock('@/shared/utils/logger', () => ({
-  createLogger: vi.fn(),
-}));
+  createLogger: () => ({
+    error: mocks.logError,
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+  }),
+}))
 
-vi.mock('@/tools/editor/services/ActiveEditTargetService', () => ({
-  activeEditTargetService: {
-    bindTarget: vi.fn(),
-    clearActiveTarget: vi.fn(),
-    setActiveTarget: vi.fn(),
-  },
-}));
+import { MEditor, MEditorErrorBoundary } from './MEditor'
+
+function UnsupportedMarkdownRenderer(): never {
+  throw new SyntaxError('Invalid regular expression: invalid group specifier name')
+}
+
+describe('MEditorErrorBoundary', () => {
+  let container: HTMLDivElement
+  let root: Root
+  let consoleError: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    mocks.logError.mockReset()
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+    consoleError.mockRestore()
+  })
+
+  it('keeps the original markdown visible when the rich editor cannot render', () => {
+    act(() => {
+      root.render(
+        <MEditorErrorBoundary
+          editorProps={{ value: '# Recovery plan', readonly: true }}
+          forwardedRef={null}
+        >
+          <UnsupportedMarkdownRenderer />
+        </MEditorErrorBoundary>
+      )
+    })
+
+    const fallback = container.querySelector<HTMLTextAreaElement>(
+      '[data-bf-component="m-editor"][data-m-editor-fallback="true"] textarea'
+    )
+    expect(fallback?.value).toBe('# Recovery plan')
+    expect(fallback?.readOnly).toBe(true)
+    expect(mocks.logError).toHaveBeenCalledWith(
+      'Markdown editor render failed, showing source fallback',
+      expect.objectContaining({
+        message: 'Invalid regular expression: invalid group specifier name',
+      })
+    )
+  })
+
+  it('shows the compatibility warning only when IR mode requests a fallback', () => {
+    act(() => {
+      root.render(
+        <MEditor value={'Mix <span data-x="1">inline</span> HTML.'} mode="preview" />
+      )
+    })
+    expect(container.textContent).not.toContain('IR fallback warning')
+
+    act(() => {
+      root.render(
+        <MEditor value={'Mix <span data-x="1">inline</span> HTML.'} mode="ir" />
+      )
+    })
+    expect(container.textContent).toContain('IR fallback warning')
+  })
+})
 
 vi.mock('@/infrastructure/i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('../utils/tiptapMarkdown', () => ({
-  analyzeMarkdownEditability: () => ({ containsRenderOnlyBlocks: false }),
-}));
-
-vi.mock('./Preview', () => ({
-  Preview: ({ value }: { value: string }) => <div data-testid="preview">{value.length}</div>,
-}));
-
-vi.mock('./TiptapEditor', () => ({
-  TiptapEditor: () => <div data-testid="tiptap" />,
-}));
-
-vi.mock('./EditArea', () => ({
-  EditArea: () => <textarea data-testid="edit-area" />,
-}));
-
-describe('MEditor initial mode', () => {
-  it('renders a large preview directly without mounting Tiptap on the first frame', () => {
-    const markdown = 'x'.repeat(2 * 1024 * 1024);
-    const html = renderToStaticMarkup(
-      <MEditor value={markdown} mode="preview" progressivePreview readonly />,
-    );
-
-    expect(html).toContain('data-testid="preview"');
-    expect(html).not.toContain('data-testid="tiptap"');
-  });
-});
+  i18nService: {
+    t: (key: string) => key,
+  },
+  useI18n: () => ({
+    t: (key: string) => key === 'editor.markdownEditor.notice.sourcePreviewFallback'
+      ? 'IR fallback warning'
+      : key,
+  }),
+}))

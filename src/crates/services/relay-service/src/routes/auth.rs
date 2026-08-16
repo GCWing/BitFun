@@ -61,6 +61,12 @@ fn valid_login_request_id(value: &str) -> bool {
     uuid::Uuid::parse_str(value).is_ok()
 }
 
+/// Absent is legal — clients that predate the field still log in, and their
+/// stored kind is left untouched rather than overwritten with a guess.
+fn valid_optional_device_kind(value: Option<&str>) -> bool {
+    value.is_none_or(crate::db::is_valid_device_kind)
+}
+
 fn decoy_login_challenge(username: &str) -> LoginChallengeResponse {
     static SECRET: OnceLock<[u8; 32]> = OnceLock::new();
     let secret = SECRET.get_or_init(rand::random);
@@ -217,6 +223,10 @@ pub struct LoginRequest {
     pub password_hash: String,
     pub device_id: String,
     pub device_name: String,
+    /// `desktop` | `mobile` | `watch`. Absent from clients that predate the
+    /// field; see `device_kind_is_desktop` for how those rows are read.
+    #[serde(default)]
+    pub device_kind: Option<String>,
     #[serde(default)]
     pub request_id: Option<String>,
 }
@@ -225,6 +235,8 @@ pub struct LoginRequest {
 pub struct ProvisionDeviceRequest {
     pub device_id: String,
     pub device_name: String,
+    #[serde(default)]
+    pub device_kind: Option<String>,
     pub request_id: String,
 }
 
@@ -410,6 +422,7 @@ pub async fn login(
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     if !valid_device_id(&body.device_id)
         || !valid_bounded_text(&body.device_name, MAX_DEVICE_NAME_BYTES)
+        || !valid_optional_device_kind(body.device_kind.as_deref())
         || body
             .request_id
             .as_deref()
@@ -445,12 +458,19 @@ pub async fn login(
     )
     .await?;
 
-    DeviceRow::upsert(db, &body.device_id, &user.user_id, &body.device_name, None)
-        .await
-        .map_err(|e| {
-            tracing::error!("login: failed to upsert device: {e}");
-            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-        })?;
+    DeviceRow::upsert(
+        db,
+        &body.device_id,
+        &user.user_id,
+        &body.device_name,
+        body.device_kind.as_deref(),
+        None,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!("login: failed to upsert device: {e}");
+        err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+    })?;
 
     let token = match body.request_id.as_deref() {
         Some(request_id) => {
@@ -624,6 +644,7 @@ pub async fn provision_device(
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
         || !valid_bounded_text(&body.device_name, MAX_DEVICE_NAME_BYTES)
+        || !valid_optional_device_kind(body.device_kind.as_deref())
         || !valid_login_request_id(&body.request_id)
     {
         return Err(err(
@@ -654,11 +675,18 @@ pub async fn provision_device(
         return Err(err("forbidden", StatusCode::FORBIDDEN));
     }
 
+    // This route only ever bootstraps a machine over SSH, so an unreported
+    // kind is a desktop rather than an unknown.
     let provisioned = AuthToken::provision_new_device(
         db,
         &auth.user_id,
         &body.device_id,
         body.device_name.trim(),
+        Some(
+            body.device_kind
+                .as_deref()
+                .unwrap_or(crate::db::DEVICE_KIND_DESKTOP),
+        ),
         &body.request_id,
     )
     .await
@@ -716,7 +744,7 @@ mod tests {
         UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&db, "owner-device", "owner", "Owner", None)
+        DeviceRow::upsert(&db, "owner-device", "owner", "Owner", None, None)
             .await
             .unwrap();
         let token = AuthToken::create(&db, "owner", "owner-device")

@@ -228,7 +228,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("add_skill", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("analyze_work_state", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "apply_external_mcp_import_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
@@ -252,7 +251,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("archive_session", RemoteWorkspacePolicy::LegacyUnaudited),
     (
-        "browser_control_create_launcher",
+        "browser_control_enable_default_cdp",
         RemoteWorkspacePolicy::LocalOnly,
     ),
     (
@@ -284,6 +283,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("cancel_dialog_turn", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("interrupt_dialog_turn", RemoteWorkspacePolicy::LocalOnly),
     (
         "cancel_insights_generation",
         RemoteWorkspacePolicy::LocalOnly,
@@ -497,13 +497,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "expand_external_prompt_command_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
-    (
-        "explorer_get_children",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
+    ("explorer_get_children", RemoteWorkspacePolicy::RemoteRouted),
     (
         "explorer_get_children_paginated",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     (
         "explorer_get_file_tree",
@@ -531,10 +528,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "generate_commit_message",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    (
-        "generate_greeting_only",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
     ("generate_insights", RemoteWorkspacePolicy::RemoteRouted),
     (
         "generate_session_title",
@@ -559,6 +552,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "get_ai_model_catalog",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "project_ai_model_reasoning_catalog",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
@@ -608,11 +605,11 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "get_directory_children",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     (
         "get_directory_children_paginated",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     (
         "get_external_hook_catalog",
@@ -811,10 +808,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("get_tool_info", RemoteWorkspacePolicy::LegacyUnaudited),
     ("get_turn_files", RemoteWorkspacePolicy::LegacyUnaudited),
     ("get_watched_paths", RemoteWorkspacePolicy::LegacyUnaudited),
-    (
-        "get_work_state_summary",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
     ("git_add_files", RemoteWorkspacePolicy::RemoteRouted),
     ("git_add_worktree", RemoteWorkspacePolicy::RemoteUnsupported),
     ("git_checkout_branch", RemoteWorkspacePolicy::RemoteRouted),
@@ -1401,10 +1394,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
-        "quick_analyze_work_state",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
-    (
         "quick_commit_message",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -1421,10 +1410,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("read_mcp_resource", RemoteWorkspacePolicy::LegacyUnaudited),
     ("record_file_change", RemoteWorkspacePolicy::LegacyUnaudited),
-    (
-        "record_local_command_turn",
-        RemoteWorkspacePolicy::RemoteRouted,
-    ),
     (
         "refresh_model_client",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -1454,6 +1439,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "remove_project_permission_grant",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "recover_interrupted_dialog_turn",
+        RemoteWorkspacePolicy::LocalOnly,
     ),
     (
         "clear_project_permission_grants",
@@ -1695,7 +1684,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("rollback_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
     ("rollback_session", RemoteWorkspacePolicy::RemoteUnsupported),
-    ("rollback_to_turn", RemoteWorkspacePolicy::RemoteUnsupported),
+    (
+        "rollback_session_to_turn",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     ("run_init_agents_md", RemoteWorkspacePolicy::LegacyUnaudited),
     ("run_system_command", RemoteWorkspacePolicy::LegacyUnaudited),
     (
@@ -1733,7 +1725,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "search_file_contents",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    ("search_filenames", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("search_filenames", RemoteWorkspacePolicy::RemoteRouted),
     ("search_files", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "search_referenceable_sessions",
@@ -1783,6 +1775,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
+        "set_external_mcp_servers_enabled_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "set_external_source_conflict_choice_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
@@ -1803,7 +1799,15 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
+        "set_external_tool_targets_enabled_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "set_external_subagent_activation_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "set_external_subagents_enabled_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
@@ -1937,7 +1941,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "start_search_filenames_stream",
-        RemoteWorkspacePolicy::LegacyUnaudited,
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     ("start_subscription_login", RemoteWorkspacePolicy::LocalOnly),
     ("startup_window_control", RemoteWorkspacePolicy::LocalOnly),
@@ -2009,6 +2013,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "update_app_status",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "update_active_turn_permission_mode",
+        RemoteWorkspacePolicy::RemoteRouted,
     ),
     ("update_cron_job", RemoteWorkspacePolicy::LegacyUnaudited),
     (
@@ -2200,7 +2208,7 @@ mod tests {
 
     #[test]
     fn complete_rollback_commands_explicitly_reject_remote_workspaces() {
-        for command in ["rollback_session", "rollback_to_turn"] {
+        for command in ["rollback_session", "rollback_session_to_turn"] {
             assert_eq!(
                 remote_workspace_policy(command),
                 Some(RemoteWorkspacePolicy::RemoteUnsupported),
@@ -2277,7 +2285,6 @@ mod tests {
         "accept_session",
         "activate_session_goal",
         "add_skill",
-        "analyze_work_state",
         "apply_patch",
         "archive_all_sessions",
         "archive_session",
@@ -2330,8 +2337,6 @@ mod tests {
         "editor_ai_stream",
         "ensure_coordinator_session",
         "execute_tool",
-        "explorer_get_children",
-        "explorer_get_children_paginated",
         "explorer_get_file_tree",
         "export_config",
         "export_diagnostics_bundle",
@@ -2340,7 +2345,6 @@ mod tests {
         "fetch_mcp_app_resource",
         "fork_session",
         "generate_commit_message",
-        "generate_greeting_only",
         "generate_session_title",
         "get_acp_clients",
         "get_acp_session_commands",
@@ -2358,8 +2362,6 @@ mod tests {
         "get_current_workspace",
         "get_custom_agent_detail",
         "get_default_review_team_definition",
-        "get_directory_children",
-        "get_directory_children_paginated",
         "get_file_change_history",
         "get_file_diff",
         "get_file_editor_sync_hash",
@@ -2404,7 +2406,6 @@ mod tests {
         "get_tool_info",
         "get_turn_files",
         "get_watched_paths",
-        "get_work_state_summary",
         "grant_miniapp_path",
         "grant_miniapp_workspace",
         "import_agent_companion_pet_package",
@@ -2518,7 +2519,6 @@ mod tests {
         "predownload_acp_client_adapter",
         "preview_commit_message",
         "probe_acp_client_requirements",
-        "quick_analyze_work_state",
         "quick_commit_message",
         "read_background_command_output",
         "read_file_content",
@@ -2559,7 +2559,6 @@ mod tests {
         "save_session_turn",
         "scan_workspace_info",
         "search_file_contents",
-        "search_filenames",
         "search_files",
         "search_skill_market",
         "send_background_command_input",
@@ -2580,7 +2579,6 @@ mod tests {
         "start_mcp_remote_oauth",
         "start_mcp_server",
         "start_search_file_contents_stream",
-        "start_search_filenames_stream",
         "steer_dialog_turn",
         "stop_acp_client",
         "stop_file_watch",

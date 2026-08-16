@@ -30,8 +30,10 @@ path = "tests/terminal_process_contracts.rs"
 
 [dependencies]
 # Internal crates
-bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = [
+bitfun-core = { path = "../../crates/assembly/core", features = [
     "agent-runtime",
+    "document-read",
+    "subscription-auth",
     "remote-connect",
     "deep-research",
     "lsp",
@@ -50,14 +52,14 @@ bitfun-core = { path = "../../crates/assembly/core", default-features = false, f
 ] }
 bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-core-types = { path = "../../crates/contracts/core-types" }
-bitfun-acp = { path = "../../crates/interfaces/acp" }
-bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
+bitfun-acp = { path = "../../crates/interfaces/acp", default-features = false, features = ["client", "server"] }
+bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
 bitfun-agent-runtime-ipc = { path = "../../crates/adapters/agent-runtime-ipc" }
-bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
+bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports", features = ["agent-api", "git-port", "permission", "plugin-runtime", "workspace-ports"] }
 bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
-bitfun-services-core = { path = "../../crates/services/services-core", default-features = false, features = ["dispatch-workspace", "local-storage", "process-runtime", "runtime-ownership"] }
+bitfun-services-core = { path = "../../crates/services/services-core", features = ["dispatch-workspace", "local-storage", "process-runtime", "runtime-ownership"] }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
-bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false, features = ["external-sources"] }
+bitfun-product-domains = { path = "../../crates/contracts/product-domains", features = ["external-sources"] }
 bitfun-app-server = { path = "../../crates/interfaces/app-server" }
 bitfun-app-server-client = { path = "../../crates/interfaces/app-server-client" }
 bitfun-app-server-protocol = { path = "../../crates/interfaces/app-server-protocol" }
@@ -76,7 +78,6 @@ toml = { workspace = true }
 # Session management
 uuid = { workspace = true }
 chrono = { workspace = true }
-dashmap = { workspace = true }
 
 # Async trait
 async-trait = { workspace = true }
@@ -95,7 +96,6 @@ similar = { workspace = true }
 
 # Syntax highlighting for code blocks and tool cards
 syntect = { workspace = true }
-syntect-tui = { workspace = true }
 
 # Lazy initialization for syntax highlighter singleton
 once_cell = { workspace = true }
@@ -119,7 +119,7 @@ fs2 = { workspace = true }
 base64 = { workspace = true }
 image = { workspace = true }
 minisign-verify = "0.2"
-reqwest = { workspace = true, features = ["rustls"] }
+reqwest = { workspace = true, features = ["http2", "rustls", "stream"] }
 sha2 = { workspace = true }
 tar = { workspace = true }
 tempfile = "3"

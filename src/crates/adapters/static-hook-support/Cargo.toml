@@ -10,8 +10,8 @@ name = "bitfun_static_hook_support"
 crate-type = ["rlib"]
 
 [dependencies]
-bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, features = ["external-sources"] }
-bitfun-services-core = { path = "../../services/services-core", default-features = false }
+bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+bitfun-services-core = { path = "../../services/services-core" }
 serde_json = { workspace = true }
 toml = { workspace = true }
 hex = { workspace = true }

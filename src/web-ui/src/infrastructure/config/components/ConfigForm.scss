@@ -583,9 +583,57 @@ $config-input-height: 32px;
 
 .config-form-section-title {
   @extend .bitfun-config-form__section-title;
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+
+  &:disabled {
+    cursor: default;
+    opacity: 1;
+  }
+}
+
+.config-form-section-chevron {
+  margin-left: 8px;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: 14px;
+  transition: transform 150ms var(--bf-appearance-token-easing-standard);
+}
+
+.config-form-section-title[aria-expanded='false'] .config-form-section-chevron {
+  transform: rotate(-90deg);
+}
+
+.config-form-section-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 180ms var(--bf-appearance-token-easing-standard),
+    opacity 120ms ease;
+
+  &[data-open='true'] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  > .config-form {
+    min-height: 0;
+    overflow: hidden;
+  }
 }
 
 .config-form-section-description {
   @extend .bitfun-config-form__section-description;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .config-form-section-collapse,
+  .config-form-section-chevron {
+    transition: none;
+  }
+}

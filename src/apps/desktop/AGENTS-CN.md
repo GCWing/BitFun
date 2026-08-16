@@ -40,6 +40,7 @@ crate；`src/crates/assembly/core` 只保留产品装配与兼容桥接。
 ```bash
 pnpm run desktop:dev
 pnpm run desktop:preview:debug
+pnpm run prepare:dsh-profile   # 可选：本地 DeepSeek Harness 会话
 ```
 
 ## 快速构建

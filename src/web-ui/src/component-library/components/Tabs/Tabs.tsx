@@ -1,4 +1,14 @@
-import React, { useState, createContext, useContext, useMemo, useId } from 'react';
+import React, {
+  useState,
+  createContext,
+  useContext,
+  useMemo,
+  useId,
+  useRef,
+  useLayoutEffect,
+} from 'react';
+import { getInteractionMotion, type InteractionMotion } from '@/shared/utils/motionPreference';
+import { ViewTransitionBoundary } from '../ViewTransitionBoundary';
 import './Tabs.scss';
 
 export interface TabItem {
@@ -63,6 +73,11 @@ export const Tabs: React.FC<TabsProps> = ({
   style,
 }) => {
   const generatedId = useId();
+  const transitionIntentRef = useRef<{
+    key: string;
+    motion: InteractionMotion;
+    sourceKey: string;
+  } | null>(null);
   const [internalActiveKey, setInternalActiveKey] = useState<string>(
     defaultActiveKey || ''
   );
@@ -93,8 +108,15 @@ export const Tabs: React.FC<TabsProps> = ({
     }
   }, [activeKey, controlledActiveKey, tabs]);
 
-  const handleTabClick = (key: string, disabled?: boolean) => {
+  const handleTabClick = (
+    key: string,
+    disabled?: boolean,
+    motion: InteractionMotion = getInteractionMotion(),
+  ) => {
     if (disabled) return;
+    transitionIntentRef.current = key === activeKey
+      ? null
+      : { key, motion, sourceKey: activeKey };
     
     if (controlledActiveKey === undefined) {
       setInternalActiveKey(key);
@@ -127,7 +149,7 @@ export const Tabs: React.FC<TabsProps> = ({
       target = enabledTabs[enabledTabs.length - 1];
     } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      handleTabClick(tabs[currentIndex].key, tabs[currentIndex].disabled);
+      handleTabClick(tabs[currentIndex].key, tabs[currentIndex].disabled, 'instant');
       return;
     } else {
       return;
@@ -135,7 +157,7 @@ export const Tabs: React.FC<TabsProps> = ({
 
     if (!target) return;
     event.preventDefault();
-    handleTabClick(target.tab.key);
+    handleTabClick(target.tab.key, target.tab.disabled, 'instant');
     document.getElementById(getTabId(target.tab.key))?.focus();
   };
 
@@ -151,6 +173,18 @@ export const Tabs: React.FC<TabsProps> = ({
     activeKey,
     onChange: handleTabClick,
   };
+
+  const transitionIntent = transitionIntentRef.current;
+  const shouldAnimatePanel = transitionIntent?.key === activeKey
+    && transitionIntent.sourceKey !== activeKey
+    && transitionIntent.motion === 'pointer';
+
+  useLayoutEffect(() => {
+    const pendingIntent = transitionIntentRef.current;
+    if (pendingIntent && pendingIntent.sourceKey !== activeKey) {
+      transitionIntentRef.current = null;
+    }
+  }, [activeKey]);
 
   return (
     <TabsContext.Provider value={contextValue}>
@@ -199,15 +233,20 @@ export const Tabs: React.FC<TabsProps> = ({
           </div>
           {type === 'line' && <div className="bitfun-tabs__ink-bar" data-bf-component="tabs" data-bf-part="inkBar" />}
         </div>
-        <div
+        <ViewTransitionBoundary
+          viewKey={activeKey || '__empty-tab__'}
+          animate={shouldAnimatePanel}
           id={getPanelId(activeKey)}
           className="bitfun-tabs__content"
+          viewClassName="bitfun-tabs__content-view"
           role="tabpanel"
           aria-labelledby={getTabId(activeKey)}
           tabIndex={0}
-         data-bf-component="tabs" data-bf-part="content">
+          data-bf-component="tabs"
+          data-bf-part="content"
+        >
           {panes[activeKey]}
-        </div>
+        </ViewTransitionBoundary>
       </div>
     </TabsContext.Provider>
   );

@@ -217,7 +217,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const { t, formatRelativeTime } = useI18n('common');
   const { success, info, warning } = useNotification();
   const { workspacePath } = useCurrentWorkspace();
-  const { enterPeerMode } = usePeerDeviceMode();
+  const { peerMode, switchToDevice, switchToLocal } = usePeerDeviceMode();
   const openScene = useSceneStore((s) => s.openScene);
   const syncStatus = useAccountSyncStore((s) => s.status);
   const syncProgress = useAccountSyncStore((s) => s.progress);
@@ -1020,26 +1020,52 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
   const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
     if (!device.online) return;
-    if (localDeviceId && device.device_id === localDeviceId) return;
-    if (syncStatus === 'syncing') {
-      info(t('accountLogin.syncInProgressHint'));
-      return;
-    }
-    if (syncStatus === 'failed') {
-      warning(t('accountLogin.syncFailedPeerHint'));
+    // Picking this machine is a normal surface switch back, not a no-op: the
+    // window may currently be rendering a peer.
+    const isLocalDevice = Boolean(localDeviceId) && device.device_id === localDeviceId;
+    if (!isLocalDevice) {
+      if (syncStatus === 'syncing') {
+        info(t('accountLogin.syncInProgressHint'));
+        return;
+      }
+      if (syncStatus === 'failed') {
+        warning(t('accountLogin.syncFailedPeerHint'));
+      }
     }
     setLoading(true);
     setError(null);
     try {
-      await enterPeerMode(device.device_id, device.device_name);
-      success(t('accountLogin.enteredPeerMode', { name: device.device_name }));
-      onCloseDialog();
+      let outcome: 'activated' | 'superseded';
+      if (isLocalDevice) {
+        outcome = await switchToLocal();
+        if (outcome === 'activated') {
+          success(t('accountLogin.deviceSwitcher.switchedLocal'));
+        }
+      } else {
+        outcome = await switchToDevice(device.device_id, device.device_name);
+        if (outcome === 'activated') {
+          success(t('accountLogin.enteredPeerMode', { name: device.device_name }));
+        }
+      }
+      if (outcome === 'activated') {
+        onCloseDialog();
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [enterPeerMode, info, localDeviceId, onCloseDialog, success, syncStatus, t, warning]);
+  }, [
+    info,
+    localDeviceId,
+    onCloseDialog,
+    success,
+    switchToDevice,
+    switchToLocal,
+    syncStatus,
+    t,
+    warning,
+  ]);
 
   return (
     <>
@@ -1247,7 +1273,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               )}
               {!relayError && sortedDevices.map((d) => {
                 const isLocal = localDeviceId === d.device_id;
-                const isSelectable = !isLocal && d.online && syncStatus !== 'syncing';
+                // This machine is selectable while the window renders a peer,
+                // so the dialog can bring the UI back without disconnecting.
+                const isSelectable = isLocal
+                  ? peerMode.active
+                  : d.online && syncStatus !== 'syncing';
                 const removeLabel = isLocal
                   ? t('accountLogin.removeCurrentDevice')
                   : t('accountLogin.removeDevice');

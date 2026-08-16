@@ -478,6 +478,7 @@ impl AccountClient {
             "password_hash": password_hash,
             "device_id": device.device_id,
             "device_name": device.device_name,
+            "device_kind": "desktop",
             "request_id": uuid::Uuid::new_v4().to_string(),
         });
         let request = self
@@ -865,6 +866,11 @@ impl AccountClient {
     }
 
     /// Register a new account device and mint its full routing token.
+    ///
+    /// `device_kind` is what keeps the minted row out of the wrong lists: this
+    /// route serves both an SSH host being bootstrapped (`"desktop"`) and a
+    /// keyboard-less peer that cannot type a password (`"watch"`), and only the
+    /// caller knows which one it is holding.
     /// `request_id` makes an ambiguous HTTP response safe to replay.
     pub async fn provision_device_token(
         &self,
@@ -872,11 +878,13 @@ impl AccountClient {
         session: &AccountSession,
         device_id: &str,
         device_name: &str,
+        device_kind: &str,
         request_id: uuid::Uuid,
     ) -> Result<ProvisionedDeviceToken> {
         let body = serde_json::json!({
             "device_id": device_id,
             "device_name": device_name,
+            "device_kind": device_kind,
             "request_id": request_id.to_string(),
         });
         let resp = send_with_retry(

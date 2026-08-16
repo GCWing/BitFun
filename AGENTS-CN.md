@@ -12,7 +12,7 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 2. 日常开发使用下方主要产品循环；surface 专属的替代命令由最近的应用指南维护。
 3. 修改 Rust 文件后，优先使用 `pnpm run fmt:rs`，只格式化已改动或已暂存的 `.rs` 文件。只有在你明确需要更大范围格式化时才使用 `cargo fmt`。
 4. 改完后从离改动最近的 `AGENTS.md` 选择 focused 验证命令；下方仓库级验证章节只维护跨模块检查原则。
-5. Rust workspace 依赖应在根清单中统一版本，而由消费 crate 按自身职责声明所需 feature；仅测试所需的 feature 应放入 `dev-dependencies`，受 crate feature 控制的服务能力应只在对应 feature 中启用。禁止使用 `tokio/full` 绕过依赖边界设计。
+5. Rust workspace 依赖应在根清单中统一版本，而由消费 crate 按自身职责声明所需 feature；仅测试所需的 feature 应放入 `dev-dependencies`，受 crate feature 控制的服务能力应只在对应 feature 中启用。第三方依赖的默认 feature 若不是所有 consumer 的稳定契约，应在 `[workspace.dependencies]` 统一关闭，成员只增加自身需要的切片。仓内 crate 的 `default` 已由边界契约保证为空时，不在每条依赖边重复写 `default-features = false`；ACP 这类有意保留兼容默认的 crate 仍由窄 consumer 显式关闭。被单独复制到 Docker 构建上下文的 manifest 无法继承 workspace 根，必须继续维护显式版本和默认策略。禁止使用 `tokio/full` 绕过依赖边界设计。
 
 ## 分层模块索引
 
@@ -128,13 +128,72 @@ await api.invoke('your_command', { request: { ... } });
 - 桌面端专属集成应放在 `src/apps/desktop`，再通过类型化能力接口回流；需要事件投递时，使用已有生产 transport adapter。
 - 在共享 core 中避免使用 `tauri::AppHandle` 等宿主 API；优先使用 `bitfun_events::EventEmitter` 等共享抽象。
 
-### 远程兼容
+### 远程场景
 
-- 新增功能时，从一开始就要考虑远程工作区和远程控制同步适配。只支持本地的行为很容易让远程场景功能缺失。
-- 如果某个功能无法合理支持远程工作区，必须做能力屏蔽，或展示明确的不支持提示，不能让它以通用错误的形式失败。
-- 每个桌面端 Tauri 命令都必须在
- `src/apps/desktop/src/api/remote_workspace_policy.rs` 中声明远程工作区策略；
- 该文件的契约测试会拒绝没有显式策略的新命令，并禁止 legacy-unaudited 存量清单增长。
+BitFun 不是只在本地运行的桌面应用：工作区、执行这一轮的 runtime、以及正在操作的人，
+可能分别位于三台机器。下面四种场景是每次改动都要一并覆盖的一等目标，不是事后再补的适配。
+
+| 场景 | 含义 | 设计入口 |
+|---|---|---|
+| 远程工作区 | 当前工作区位于 SSH 主机、跳板机链路或 Docker 容器；文件、终端、搜索和 Agent 子进程都必须在那一侧执行 | [remote-workspace-transport.md](docs/architecture/remote-workspace-transport.md)、[remote-workspaces.md](docs/features/remote-workspaces.md) |
+| 远程控制 | 手机端 mobile web，或飞书 / Telegram / 微信 Bot，通过 Remote Connect relay 驱动 Desktop 或 CLI 宿主上的会话 | [`src/mobile-web`](src/mobile-web/AGENTS.md)、[services-integrations](src/crates/services/services-integrations/AGENTS.md) 的 `remote_connect`、[relay-service](src/crates/services/relay-service/AGENTS.md) |
+| 多端互控（Peer Device Mode） | 同账号的一台设备成为另一台的数据平面：控制端外壳仍在本地，invoke 和事件来自 peer | [peer-device-mode.md](docs/architecture/peer-device-mode.md)、[peer-device README](src/web-ui/src/infrastructure/peer-device/README.md) |
+| Dispatch 分离任务 | 控制端把持久化任务提交到另一台 BitFun 宿主后即可断开；目标端拥有 job、session、worktree、事件日志和权限信箱 | [detached-task-dispatch.md](docs/architecture/detached-task-dispatch.md) |
+
+四种场景共同适用的规则：
+
+- 远程路径要和功能一起设计。默认 UI、进程和文件系统在同一台机器上的能力属于未完成，
+  而不是“第一阶段”。
+- 不支持要显式暴露。确实无法支持时，应屏蔽入口或返回明确的不支持状态；静默回落本地、
+  假成功、空载荷和通用错误都算回归，其中回落本地还会把本地内容泄露给远端控制方。
+- 阻塞式交互必须可以远程应答。新增的权限确认、对话框和选择器都要经既有的 dialog /
+  权限信箱编排送达当前操作端；只能靠桌面窗口解除的阻塞会让远程控制和 Dispatch 任务死锁。
+- 要能扛断线。远程形态会重连、按 cursor 重放并重新 hydrate，因此优先使用可恢复 cursor
+  和幂等变更，不要依赖“客户端恰好在线”才存在的状态。
+- 远程工作区路径在任何客户端 OS 上都是 POSIX 路径。不得用宿主 `std::path` 语义切分或
+  拼接，也不得把控制端的路径直接拿到 peer 宿主上复用。
+
+各场景的具体约束：
+
+- **远程工作区**：每个桌面端 Tauri 命令都必须在
+  [`remote_workspace_policy.rs`](src/apps/desktop/src/api/remote_workspace_policy.rs)
+  中声明策略；该文件的契约测试会拒绝没有显式策略的新命令，并禁止 `LegacyUnaudited`
+  存量清单增长。
+- **远程控制**：mobile web 和 IM Bot 是通过 `RemoteCommand` wire 协议和 bot command
+  router / menu 触达会话的，不走 Web UI。新增或迁移会话级能力时——工作区与助手选择、
+  会话生命周期、模式、模型、审批、附件——要同步扩展这些形态，或让它们给出明确的
+  不支持回复。
+- **多端互控**：产品命令默认代理到 peer 执行。必须留在控制端的命令（窗口装饰、更新器、
+  账号身份、本地 OS 自动化）要在三份保持同步的清单中一起禁用：
+  [`peer_host_invoke.rs`](src/apps/desktop/src/api/peer_host_invoke.rs)、
+  [`deny.rs`](src/apps/cli/src/peer_host/deny.rs) 和
+  [`peer-device-adapter.ts`](src/web-ui/src/infrastructure/api/adapters/peer-device-adapter.ts)。
+  改动 session、account 或 hydrate 路径前，先读 peer-device README 的 invariants。
+- **Dispatch 分离任务**：任务在目标端以 CLI delivery profile 无界面运行，没有交互宿主，
+  也不保证控制端在线。控制端只是观察者，不是 runtime 或文件系统代理。不要引入依赖提交方
+  常驻的行为；dispatch 协议版本和目标端必备 capability 属于兼容契约——新的目标端要求要走
+  协商 capability，而不是默认假设。
+
+改动说明中要写清楚在哪些远程场景下验证过。只跑本地测试不能作为远程行为的证据。
+
+### 升级兼容性
+
+用户是原地升级的，而上述远程场景经常让两个不同版本的 BitFun 连在同一条链路上。
+任何改动都必须保证已有安装在升级后无需手工修复即可继续工作。
+
+- **落盘结构会被新旧两侧代码同时读取。** 配置、设置、会话、连接配置、worktree 和
+  dispatch 记录：新增字段要带默认值，反序列化要保持容错，绝不重新定义或收窄已经落盘
+  字段的语义。旧数据给不出的字段，不能变成必填。
+- **不要用删除或重置用户数据的方式来“恢复”解析不了的内容。** 应保留记录、降级功能并
+  给出明确状态。凭证缺失、配置读不出、超时或主机离线，都不构成丢弃会话、工作区或连接
+  的理由；销毁性删除只能是用户的显式操作。
+- **跨版本边界要协商，不能假设。** Peer HostInvoke、dispatch 协议、relay 与 mobile web、
+  IM Bot，对面都是你控制不了的构建版本。要先声明 capability 再使用——包版本相同不等于
+  行为相同——并且要让旧版本一侧留在可用路径上，而不是直接判失败。
+- **改名就是一次迁移。** 在所有受支持的对端都不可能再发送旧名称、旧 id 或旧结构之前，
+  必须继续兼容读取；被改名对象所引用的数据（vault 条目、工作区指针）要一并迁移。
+- **用测试证明。** 要覆盖旧数据反序列化和旧载荷往返，而不只是新结构。只验证当前代码
+  自己写出的数据，不算升级兼容性覆盖。
 
 ### Agent loop 行为
 

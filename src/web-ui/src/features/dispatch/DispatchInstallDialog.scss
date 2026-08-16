@@ -291,3 +291,9 @@
     transform: rotate(360deg);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .dispatch-install-dialog__spin {
+    animation: none;
+  }
+}

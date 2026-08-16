@@ -449,18 +449,6 @@ impl PeerTurnTracker {
             .unwrap_or_default()
     }
 
-    pub(crate) fn session_turns_for_cancellation(&self, session_id: &str) -> PeerTurnDrain {
-        self.inner
-            .lock()
-            .map(|inner| {
-                let keys = session_tree_keys(&inner, session_id);
-                let mut drain = peer_turn_drain_for_keys(&inner, &keys);
-                merge_completed_background_subagents(&inner, &mut drain, Some(session_id));
-                drain
-            })
-            .unwrap_or_default()
-    }
-
     pub(crate) fn interrupt_event_stream(&self, closed: bool) -> PeerTurnDrain {
         let Ok(mut inner) = self.inner.lock() else {
             return PeerTurnDrain::default();

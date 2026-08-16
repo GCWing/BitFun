@@ -108,7 +108,7 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
     current release builders assert a GLIBC 2.35 ceiling.
 
 20. **Release metadata has a byte mirror, not a second authority.**
-    `openbitfun-release-sync.sh` mirrors the signed descriptor into both its
+    `scripts/openbitfun-release-sync.sh` mirrors the signed descriptor into both its
     version directory and `/release/relay-image.json`. Desktop may fetch those
     bytes when GitHub is unreachable, but the same built-in minisign key must
     verify them.

@@ -246,7 +246,8 @@ export struct WideConversationHost {
 
         if (this.wideMasterPaneCollapsed) {
           SidebarToggleButton({ restore: true, controlSize: 44, onToggle: this.onRestoreMasterPane })
-            .position({ x: this.currentDetailOffset() + 12, y: 12 }).zIndex(2)
+            .position({ x: 12, y: 12 }).zIndex(2)
+            .hitTestBehavior(HitTestMode.Default)
             .transition(TransitionEffect.scale({ x: 0.9, y: 0.9 }).combine(TransitionEffect.opacity(0))
               .animation({ duration: 180, curve: Curve.EaseOut }))
         }

@@ -8,6 +8,7 @@ use bitfun_product_domains::external_hook_import::{
     MAX_EXTERNAL_HOOK_IMPORT_ASSET_BYTES, MAX_EXTERNAL_HOOK_IMPORT_ASSET_DEPTH,
     MAX_EXTERNAL_HOOK_IMPORT_TOTAL_ASSET_BYTES,
 };
+use bitfun_product_domains::external_subagents::ExternalSubagentToolCapability;
 pub use bitfun_services_core::bounded_fs::{
     collect_bounded_regular_files, read_bounded_file, read_bounded_text, BoundedDirectoryWalkError,
     BoundedDirectoryWalkLimit, BoundedDirectoryWalkLimits, BoundedFileRead, BoundedTextRead,
@@ -19,6 +20,29 @@ use std::path::{Component, Path, PathBuf};
 
 const MAX_MATCHER_BYTES: usize = 512;
 const MAX_EVENT_NAME_BYTES: usize = 160;
+
+const COMMON_EXTERNAL_SUBAGENT_TOOL_CAPABILITIES: &[(&str, ExternalSubagentToolCapability)] = &[
+    ("ls", ExternalSubagentToolCapability::DirectoryList),
+    ("list", ExternalSubagentToolCapability::DirectoryList),
+    ("read", ExternalSubagentToolCapability::ReadFile),
+    ("glob", ExternalSubagentToolCapability::GlobFiles),
+    ("grep", ExternalSubagentToolCapability::SearchText),
+    ("bash", ExternalSubagentToolCapability::ExecuteCommand),
+    ("edit", ExternalSubagentToolCapability::EditFile),
+    ("write", ExternalSubagentToolCapability::WriteFile),
+];
+
+/// Normalizes widely shared external Agent tool labels at the adapter boundary.
+/// Provider-specific aliases remain owned by their ecosystem adapter.
+pub fn common_external_subagent_tool_capability(
+    name: &str,
+) -> Option<ExternalSubagentToolCapability> {
+    COMMON_EXTERNAL_SUBAGENT_TOOL_CAPABILITIES
+        .iter()
+        .find_map(|(candidate, capability)| {
+            candidate.eq_ignore_ascii_case(name).then_some(*capability)
+        })
+}
 
 /// Distinguishes an absent path from metadata failures. Static adapters may
 /// ignore `NotFound`, but permission and transient filesystem failures must be
@@ -648,6 +672,29 @@ fn matcher_summary(value: Option<&Value>) -> ExternalHookMatcherSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitfun_product_domains::external_subagents::ExternalSubagentToolCapability;
+
+    #[test]
+    fn common_external_tool_names_map_without_source_specific_contract_behavior() {
+        use ExternalSubagentToolCapability::{EditFile, ExecuteCommand, WriteFile};
+
+        assert_eq!(
+            common_external_subagent_tool_capability("bash"),
+            Some(ExecuteCommand)
+        );
+        assert_eq!(
+            common_external_subagent_tool_capability("EDIT"),
+            Some(EditFile)
+        );
+        assert_eq!(
+            common_external_subagent_tool_capability("write"),
+            Some(WriteFile)
+        );
+        assert_eq!(
+            common_external_subagent_tool_capability("provider-specific-tool"),
+            None
+        );
+    }
 
     #[test]
     fn project_ancestors_are_bounded_and_returned_outer_to_inner() {

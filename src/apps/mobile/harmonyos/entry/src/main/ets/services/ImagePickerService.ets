@@ -3,6 +3,7 @@ import image from '@ohos.multimedia.image';
 import photoAccessHelper from '@ohos.file.photoAccessHelper';
 import util from '@ohos.util';
 import { RemoteI18n } from '../i18n/RemoteI18n';
+import { RemoteLogger } from './RemoteLogger';
 import { RemoteImageContext, SelectedImageAttachment } from '../model/RemoteModels';
 
 interface ImageMetadata {
@@ -24,8 +25,15 @@ interface ImageSize {
 
 export class ImagePickerService {
   private readonly maxImageBytes: number = 4 * 1024 * 1024;
+  /**
+   * What an image is allowed to weigh on the wire. A picture travels as base64
+   * inside an encrypted, base64-wrapped command, so it reaches the relay at
+   * roughly 1.8× its byte size — a budget in the hundreds of KB is what keeps a
+   * phone photo inside a request the relay will accept.
+   */
+  private readonly transportImageBudgetBytes: number = 800 * 1024;
   private readonly maxImageDimension: number = 1600;
-  private readonly compressionQualities: number[] = [82, 72, 62];
+  private readonly compressionQualities: number[] = [82, 72, 62, 50];
 
   async pickImages(maxCount: number, existingCount: number): Promise<SelectedImageAttachment[]> {
     const remaining = Math.max(0, maxCount - existingCount);
@@ -74,6 +82,7 @@ export class ImagePickerService {
 
     const base64 = new util.Base64Helper().encodeToStringSync(encoded.bytes);
     const name = this.imageName(uri, index);
+    RemoteLogger.info(`image picked original=${stat.size} encoded=${encoded.bytes.length} compressed=${encoded.compressed ? '1' : '0'} mime=${encoded.mimeType}`);
     return {
       id: `harmony-image-${Date.now()}-${index}`,
       uri,
@@ -87,7 +96,7 @@ export class ImagePickerService {
   }
 
   private async encodeImage(uri: string, originalSize: number): Promise<EncodedImage> {
-    if (originalSize <= this.maxImageBytes) {
+    if (originalSize <= this.transportImageBudgetBytes) {
       return this.readOriginalImage(uri, originalSize);
     }
 
@@ -140,7 +149,7 @@ export class ImagePickerService {
         });
         const bytes = new Uint8Array(packed);
         bestBytes = bytes;
-        if (bytes.length <= this.maxImageBytes) {
+        if (bytes.length <= this.transportImageBudgetBytes) {
           return {
             bytes,
             mimeType: 'image/jpeg',

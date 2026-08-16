@@ -8,6 +8,8 @@ use bitfun_ai_adapters::models_dev::{
     project_reasoning_catalog_with_limit_and_auto_binding, ModelsDevCatalog,
 };
 #[cfg(feature = "model-catalog")]
+use bitfun_core_types::ReasoningCatalogProjectionRequest;
+#[cfg(feature = "model-catalog")]
 use bitfun_core_types::{
     ModelsDevCatalogSource, ModelsDevCatalogStatus, ModelsDevRefreshResult, ModelsDevRefreshStatus,
 };
@@ -22,6 +24,7 @@ use bitfun_services_integrations::models_dev::{
 };
 #[cfg(feature = "model-catalog")]
 use log::debug;
+use sha2::{Digest, Sha256};
 
 use crate::infrastructure::ai::provider_catalog::trusted_models_dev_binding;
 use crate::infrastructure::ai::AIClient;
@@ -317,6 +320,25 @@ pub(crate) fn project_model_reasoning_catalog(
     )
 }
 
+#[cfg(feature = "model-catalog")]
+pub(crate) async fn project_reasoning_catalog_request(
+    request: ReasoningCatalogProjectionRequest,
+) -> ReasoningCatalogProjection {
+    let models_dev = load_models_dev_reasoning_catalog().await;
+    project_model_reasoning_catalog(
+        &AIModelConfig {
+            provider: request.provider,
+            model_name: request.model_name,
+            base_url: request.base_url,
+            context_window: request.context_window,
+            max_tokens: request.max_tokens,
+            reasoning: Some(request.reasoning),
+            ..Default::default()
+        },
+        models_dev.catalog.as_deref(),
+    )
+}
+
 pub(crate) fn resolve_reasoning_preset<'a>(
     projection: &'a ReasoningCatalogProjection,
     preset_id: &str,
@@ -326,6 +348,22 @@ pub(crate) fn resolve_reasoning_preset<'a>(
         .presets
         .iter()
         .find(|preset| preset.id == preset_id)
+}
+
+pub(crate) fn reasoning_preset_runtime_fingerprint(
+    preset: Option<&ReasoningPresetDescriptor>,
+) -> String {
+    let value = preset.map_or(serde_json::Value::Null, |preset| {
+        serde_json::json!({
+            "id": preset.id,
+            "actions": preset.actions,
+            "source": preset.source,
+            "execution_provider": preset.execution_provider,
+            "execution_model": preset.execution_model,
+        })
+    });
+    let encoded = serde_json::to_vec(&value).unwrap_or_default();
+    format!("{:x}", Sha256::digest(encoded))
 }
 
 /// Normalizes a session-scoped reasoning preset against one concrete model.
@@ -406,18 +444,45 @@ pub(crate) fn apply_selected_reasoning_preset(
 #[cfg(test)]
 mod tests {
     use bitfun_core_types::{
-        ReasoningCatalogBinding, ReasoningConfig, ReasoningPreset, ReasoningPresetAction,
-        ReasoningPresetSource,
+        ReasoningCatalogBinding, ReasoningCatalogProjectionRequest, ReasoningConfig,
+        ReasoningPreset, ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
     };
 
     use super::{
         apply_default_reasoning_preset, apply_selected_reasoning_preset,
         normalize_reasoning_preset_for_model, project_model_reasoning_catalog,
-        resolve_default_reasoning_preset, resolve_reasoning_preset, ModelsDevCatalog,
+        reasoning_preset_runtime_fingerprint, resolve_default_reasoning_preset,
+        resolve_reasoning_preset, ModelsDevCatalog,
     };
     use crate::infrastructure::ai::AIClient;
     use crate::service::config::types::AIModelConfig;
     use crate::util::types::AIConfig;
+
+    #[test]
+    fn runtime_fingerprint_detects_same_id_action_drift() {
+        let preset = ReasoningPresetDescriptor {
+            id: "high".to_string(),
+            label: "High".to_string(),
+            order: 1,
+            actions: vec![ReasoningPresetAction::Effort {
+                value: "high".to_string(),
+            }],
+            source: ReasoningPresetSource::ModelsDev,
+            execution_provider: Some("openai".to_string()),
+            execution_model: Some("model-v1".to_string()),
+        };
+        let mut changed = preset.clone();
+        changed.actions = vec![ReasoningPresetAction::BudgetTokens { value: 32_000 }];
+
+        assert_ne!(
+            reasoning_preset_runtime_fingerprint(Some(&preset)),
+            reasoning_preset_runtime_fingerprint(Some(&changed)),
+        );
+        assert_ne!(
+            reasoning_preset_runtime_fingerprint(None),
+            reasoning_preset_runtime_fingerprint(Some(&preset)),
+        );
+    }
 
     fn catalog() -> ModelsDevCatalog {
         ModelsDevCatalog::parse_str(
@@ -492,6 +557,45 @@ mod tests {
             [ReasoningPresetAction::Effort { value }] if value == "high"
         ));
         assert_eq!(resolve_default_reasoning_preset(&projection), Some(high));
+    }
+
+    #[test]
+    fn projection_request_shape_projects_explicit_models_dev_presets() {
+        let request = ReasoningCatalogProjectionRequest {
+            provider: "responses".to_string(),
+            model_name: "gateway-alias".to_string(),
+            base_url: "https://gateway.example.com/v1/responses".to_string(),
+            context_window: Some(128_000),
+            max_tokens: Some(8_192),
+            reasoning: ReasoningConfig {
+                catalog: ReasoningCatalogBinding::ModelsDev {
+                    provider: "openai".to_string(),
+                    model: "gpt-test".to_string(),
+                },
+                ..Default::default()
+            },
+        };
+        let projection = project_model_reasoning_catalog(
+            &AIModelConfig {
+                provider: request.provider,
+                model_name: request.model_name,
+                base_url: request.base_url,
+                context_window: request.context_window,
+                max_tokens: request.max_tokens,
+                reasoning: Some(request.reasoning),
+                ..Default::default()
+            },
+            Some(&catalog()),
+        );
+
+        assert_eq!(
+            projection
+                .presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect::<Vec<_>>(),
+            ["low", "high"]
+        );
     }
 
     #[test]

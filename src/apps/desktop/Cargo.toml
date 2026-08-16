@@ -19,18 +19,18 @@ serde_json = { workspace = true }
 
 [dependencies]
 # Internal crates
-bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+bitfun-core = { path = "../../crates/assembly/core", features = ["product-full"] }
 bitfun-relay-service = { path = "../../crates/services/relay-service" }
-bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
-bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
-bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false, features = ["appearance-market"] }
-bitfun-services-integrations = { path = "../../crates/services/services-integrations", default-features = false, features = ["canvas-runtime", "miniapp-market", "speech", "feedback", "privacy"] }
+bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
+bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports", features = ["agent-api", "permission", "workspace-ports"] }
+bitfun-product-domains = { path = "../../crates/contracts/product-domains", features = ["appearance-market"] }
+bitfun-services-integrations = { path = "../../crates/services/services-integrations", features = ["canvas-runtime", "miniapp-market", "speech", "feedback", "privacy"] }
 bitfun-core-types = { path = "../../crates/contracts/core-types" }
-bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
+bitfun-agent-tools = { path = "../../crates/execution/tool-contracts", features = ["element-token"] }
 bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
 bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-webdriver = { path = "../../crates/adapters/webdriver" }
-bitfun-acp = { path = "../../crates/interfaces/acp" }
+bitfun-acp = { path = "../../crates/interfaces/acp", default-features = false, features = ["client"] }
 
 # Tauri
 tauri = { workspace = true }
@@ -63,7 +63,7 @@ dirs = { workspace = true }
 similar = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
-reqwest = { workspace = true, features = ["rustls"] }
+reqwest = { workspace = true, features = ["http2", "json", "query", "rustls", "stream"] }
 semver = { workspace = true }
 zip = { workspace = true }
 tar = { workspace = true }
@@ -93,9 +93,9 @@ dispatch = { workspace = true }
 foreign-types = { workspace = true }
 libc = { workspace = true }
 objc2 = { workspace = true, features = ["exception"] }
-objc2-foundation = { workspace = true }
+objc2-foundation = { workspace = true, features = ["std", "NSArray", "NSData", "NSDictionary", "NSError", "NSString"] }
 objc2-app-kit = { workspace = true }
-objc2-vision = { workspace = true }
+objc2-vision = { workspace = true, features = ["std", "VNRecognizeTextRequest", "VNRequest", "VNObservation", "VNRequestHandler", "VNUtils", "VNTypes", "objc2-core-foundation"] }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
