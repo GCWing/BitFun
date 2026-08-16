@@ -83,12 +83,32 @@ struct JournalState {
     sessions: HashMap<String, SessionProjection>,
 }
 
+/// Durable sink for the materialized projection.
+///
+/// This projection is the only complete record of a Turn while it runs: client
+/// persistence lags it by a coalescing window, and the persisted Session view
+/// deliberately stores an executing Turn as idle so a restart cannot revive
+/// work. Keeping the projection in memory alone therefore means a Host restart
+/// loses the live state of work that is still running, and a client returning
+/// to that Session sees a Turn frozen at the last checkpoint.
+///
+/// Implementations own their write policy. `save` is called for every
+/// materialized event, so a store is expected to coalesce writes rather than
+/// touch the filesystem per token.
+pub trait SessionEventProjectionStore: Send + Sync {
+    fn save(&self, snapshot: &SessionEventProjectionSnapshot);
+    fn load(&self, session_id: &str) -> Option<SessionEventProjectionSnapshot>;
+    /// The Turn reached a terminal state; the persisted Session view owns it now.
+    fn discard(&self, session_id: &str);
+}
+
 /// Cloneable owner shared by the Runtime facade and its product delivery
 /// adapter. Product hosts record events only after their ordering/coalescing
 /// boundary, then expose snapshots through the same `AgentRuntime` instance.
 #[derive(Clone)]
 pub struct SessionEventJournal {
     state: Arc<Mutex<JournalState>>,
+    store: Option<Arc<dyn SessionEventProjectionStore>>,
 }
 
 impl std::fmt::Debug for SessionEventJournal {
@@ -116,7 +136,14 @@ impl SessionEventJournal {
                 sequence: 0,
                 sessions: HashMap::new(),
             })),
+            store: None,
         }
+    }
+
+    /// Attach durable storage so a projection outlives this Host process.
+    pub fn with_store(mut self, store: Arc<dyn SessionEventProjectionStore>) -> Self {
+        self.store = Some(store);
+        self
     }
 
     /// Record one event in the host's final ordered delivery stream.
@@ -161,19 +188,59 @@ impl SessionEventJournal {
             state.sequence = next_sequence;
             prune_terminal_projections(&mut state.sessions);
         }
+        if materialized {
+            if let Some(store) = self.store.as_ref() {
+                let session_id = event.session_id().unwrap_or_default().to_string();
+                let projection = state.sessions.get(&session_id);
+                let terminal = projection.is_some_and(|projection| projection.terminal);
+                let snapshot = projection_snapshot(&state, &session_id);
+                // Release the lock before touching the store: a slow flush must
+                // never stall the delivery stream it is recording.
+                drop(state);
+                if terminal {
+                    store.discard(&session_id);
+                } else {
+                    store.save(&snapshot);
+                }
+                return Some(SessionEventCursor { stream_id, cursor });
+            }
+        }
         materialized.then_some(SessionEventCursor { stream_id, cursor })
     }
 
     pub fn snapshot(&self, session_id: &str) -> SessionEventProjectionSnapshot {
         let state = lock_state(&self.state);
-        let projection = state.sessions.get(session_id);
-        SessionEventProjectionSnapshot {
-            session_id: session_id.to_string(),
-            stream_id: state.stream_id.clone(),
-            cursor: projection.map_or(0, |projection| projection.cursor),
-            active_turn_id: projection.and_then(|projection| projection.active_turn_id.clone()),
-            events: projection.map_or_else(Vec::new, |projection| projection.events.clone()),
+        if state.sessions.contains_key(session_id) {
+            return projection_snapshot(&state, session_id);
         }
+        drop(state);
+
+        // Nothing in memory. Either this Session never ran here, or this Host
+        // restarted while its Turn was executing. A stored projection keeps its
+        // original `stream_id`, so a client correctly treats it as a different
+        // Runtime process and replays it whole instead of comparing cursors
+        // across processes.
+        self.store
+            .as_ref()
+            .and_then(|store| store.load(session_id))
+            .unwrap_or_else(|| SessionEventProjectionSnapshot {
+                session_id: session_id.to_string(),
+                stream_id: lock_state(&self.state).stream_id.clone(),
+                cursor: 0,
+                active_turn_id: None,
+                events: Vec::new(),
+            })
+    }
+}
+
+fn projection_snapshot(state: &JournalState, session_id: &str) -> SessionEventProjectionSnapshot {
+    let projection = state.sessions.get(session_id);
+    SessionEventProjectionSnapshot {
+        session_id: session_id.to_string(),
+        stream_id: state.stream_id.clone(),
+        cursor: projection.map_or(0, |projection| projection.cursor),
+        active_turn_id: projection.and_then(|projection| projection.active_turn_id.clone()),
+        events: projection.map_or_else(Vec::new, |projection| projection.events.clone()),
     }
 }
 
@@ -478,9 +545,38 @@ fn compact_projection(projection: &mut SessionProjection) {
 mod tests {
     use super::{
         attach_session_event_cursor, lock_state, SessionEventCursor, SessionEventJournal,
+        SessionEventProjectionSnapshot, SessionEventProjectionStore,
         MAX_RETAINED_TERMINAL_SESSION_PROJECTIONS,
     };
     use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    /// In-memory stand-in for a durable store; records the calls a real one
+    /// would turn into filesystem writes.
+    #[derive(Default)]
+    struct RecordingStore {
+        saved: Mutex<HashMap<String, SessionEventProjectionSnapshot>>,
+        discarded: Mutex<Vec<String>>,
+    }
+
+    impl SessionEventProjectionStore for RecordingStore {
+        fn save(&self, snapshot: &SessionEventProjectionSnapshot) {
+            self.saved
+                .lock()
+                .unwrap()
+                .insert(snapshot.session_id.clone(), snapshot.clone());
+        }
+
+        fn load(&self, session_id: &str) -> Option<SessionEventProjectionSnapshot> {
+            self.saved.lock().unwrap().get(session_id).cloned()
+        }
+
+        fn discard(&self, session_id: &str) {
+            self.discarded.lock().unwrap().push(session_id.to_string());
+            self.saved.lock().unwrap().remove(session_id);
+        }
+    }
 
     fn turn_started(session_id: &str, turn_id: &str) -> AgenticEvent {
         AgenticEvent::DialogTurnStarted {
@@ -694,5 +790,67 @@ mod tests {
         ));
         assert_eq!(retained.cursor, 2);
         assert!(!retained.events.is_empty());
+    }
+
+    #[test]
+    fn persists_the_projection_of_a_running_turn() {
+        let store = Arc::new(RecordingStore::default());
+        let journal = SessionEventJournal::new().with_store(store.clone());
+
+        journal.record(&turn_started("session-1", "turn-1"));
+        journal.record(&text("session-1", "turn-1", "hello"));
+
+        let saved = store.load("session-1").expect("running turn is persisted");
+        assert_eq!(saved.active_turn_id.as_deref(), Some("turn-1"));
+        assert!(saved.cursor > 0);
+    }
+
+    #[test]
+    fn serves_a_stored_projection_after_a_host_restart() {
+        // The reported freeze: the Turn keeps running but the Host process that
+        // owned its in-memory projection is gone, so a returning client used to
+        // see only the lagging persisted checkpoint.
+        let store = Arc::new(RecordingStore::default());
+        let first = SessionEventJournal::new().with_store(store.clone());
+        first.record(&turn_started("session-1", "turn-1"));
+        first.record(&text("session-1", "turn-1", "hello"));
+        let before = first.snapshot("session-1");
+
+        let restarted = SessionEventJournal::new().with_store(store.clone());
+        let after = restarted.snapshot("session-1");
+
+        assert_eq!(after.active_turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(after.events.len(), before.events.len());
+        // Its own stream id survives, so a client treats it as a different
+        // Runtime process and replays it instead of comparing cursors.
+        assert_eq!(after.stream_id, before.stream_id);
+        assert_ne!(after.stream_id, restarted.snapshot("session-2").stream_id);
+    }
+
+    #[test]
+    fn stops_persisting_once_the_turn_is_terminal() {
+        let store = Arc::new(RecordingStore::default());
+        let journal = SessionEventJournal::new().with_store(store.clone());
+
+        journal.record(&turn_started("session-1", "turn-1"));
+        journal.record(&turn_completed("session-1", "turn-1"));
+
+        assert!(store
+            .discarded
+            .lock()
+            .unwrap()
+            .contains(&"session-1".to_string()));
+        assert!(store.load("session-1").is_none());
+    }
+
+    #[test]
+    fn a_journal_without_a_store_behaves_as_before() {
+        let journal = SessionEventJournal::new();
+        journal.record(&turn_started("session-1", "turn-1"));
+        assert_eq!(
+            journal.snapshot("session-1").active_turn_id.as_deref(),
+            Some("turn-1")
+        );
+        assert!(journal.snapshot("missing").events.is_empty());
     }
 }

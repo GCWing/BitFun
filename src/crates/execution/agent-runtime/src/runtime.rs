@@ -55,7 +55,8 @@ use bitfun_runtime_ports::{PermissionReply, PermissionReplySource, PermissionReq
 mod session_event_journal;
 pub use session_event_journal::{
     attach_session_event_cursor, SessionEventCursor, SessionEventJournal,
-    SessionEventProjectionSnapshot, RUNTIME_EVENT_CURSOR_KEY, RUNTIME_EVENT_STREAM_ID_KEY,
+    SessionEventProjectionSnapshot, SessionEventProjectionStore, RUNTIME_EVENT_CURSOR_KEY,
+    RUNTIME_EVENT_STREAM_ID_KEY,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
