@@ -1,11 +1,14 @@
 //! Compatibility wrapper for token usage persistence.
 
+use super::statistics::UsageAttributionResolver;
 use super::types::{
     ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,
     TokenUsageSummary,
 };
 use crate::infrastructure::PathManager;
+use crate::service::config::types::AIModelConfig;
 use anyhow::Result;
+use bitfun_services_core::token_usage::{aggregate_statistics, UsageGranularity, UsageStatistics};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -108,6 +111,40 @@ impl TokenUsageService {
             .get_summary(query)
             .await
             .map_err(anyhow::Error::msg)
+    }
+
+    /// Aggregate persisted records into dashboard statistics.
+    ///
+    /// Attribution (provider group, endpoint, estimated price) prefers the
+    /// current model configuration for each record's `model_config_id` and
+    /// falls back to the bundled models.dev catalog inferred from the
+    /// effective model name, so records survive config deletion.
+    pub async fn get_statistics(
+        &self,
+        query: TokenUsageQuery,
+        granularity: UsageGranularity,
+    ) -> Result<UsageStatistics> {
+        let records = self
+            .inner
+            .query_records(query)
+            .await
+            .map_err(anyhow::Error::msg)?;
+
+        let models_dev = crate::infrastructure::ai::reasoning_catalog::
+            load_models_dev_reasoning_catalog_without_refresh()
+            .await
+            .catalog;
+        let configs = crate::service::config::get_global_config_service()
+            .await
+            .map_err(anyhow::Error::msg)?
+            .get_config::<Vec<AIModelConfig>>(Some("ai.models"))
+            .await
+            .unwrap_or_default();
+        let resolver = UsageAttributionResolver::new(models_dev.as_deref(), &configs);
+
+        Ok(aggregate_statistics(&records, granularity, |record| {
+            resolver.attribute(record)
+        }))
     }
 
     pub async fn clear_model_stats(&self, model_id: &str) -> Result<()> {

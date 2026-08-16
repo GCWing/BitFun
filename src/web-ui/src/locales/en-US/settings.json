@@ -13,12 +13,14 @@
       "sessionPermissions": [],
       "quickActions": [],
       "review": [],
-      "memories": []
+      "memories": [],
+      "usageStatistics": []
     },
     "tabDescriptions": {
       "basics": "Logging, terminal shell, notifications, and launch at login.",
       "appearance": "Language, visual appearance, and UI font size.",
       "models": "AI models, API keys, providers, proxy, and session title.",
+      "usageStatistics": "Historical model call statistics: requests, tokens, and estimated cost by model, provider, and endpoint.",
       "worktrees": "Defaults for isolated Git worktrees and parallel sessions.",
       "sessionPersonalization": "Agent companion.",
       "sessionPermissions": "Tool permissions, execution, desktop control, and browser access.",
@@ -44,6 +46,7 @@
       "basics": "Basics",
       "appearance": "Appearance",
       "models": "Models",
+      "usageStatistics": "Usage Statistics",
       "worktrees": "Worktrees",
       "sessionPersonalization": "Personalization",
       "sessionPermissions": "Permissions",

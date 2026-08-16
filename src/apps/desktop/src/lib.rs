@@ -1856,6 +1856,8 @@ pub async fn run() {
             api::insights_api::load_insights_report,
             api::insights_api::has_insights_data,
             api::insights_api::cancel_insights_generation,
+            // Token usage statistics API
+            api::token_usage_api::get_token_usage_statistics,
             // SSH Remote API
             api::ssh_api::ssh_list_saved_connections,
             api::ssh_api::ssh_save_connection,

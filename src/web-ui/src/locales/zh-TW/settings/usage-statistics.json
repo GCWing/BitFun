@@ -1,0 +1,55 @@
+{
+  "title": "調用統計",
+  "subtitle": "歷史模型調用情況統計：按模型、分組與端點統計請求數、Token 用量與估算費用。",
+  "timeRange": {
+    "label": "時間範圍",
+    "last24Hours": "近24小時",
+    "today": "今日",
+    "thisWeek": "本週",
+    "thisMonth": "本月",
+    "all": "全部"
+  },
+  "granularity": {
+    "label": "粒度",
+    "hour": "按小時",
+    "day": "按天"
+  },
+  "refresh": "重新整理",
+  "loading": "正在載入調用統計…",
+  "loadFailed": "載入調用統計失敗，請重試。",
+  "empty": {
+    "title": "暫無調用資料",
+    "description": "開始與模型對話後，這裡會顯示模型調用統計。"
+  },
+  "summary": {
+    "requests": "請求數",
+    "tokens": "Token 總量",
+    "actualCost": "實際費用",
+    "standardCost": "標準費用"
+  },
+  "distributions": {
+    "byModel": "模型分佈",
+    "byGroup": "分組使用分佈",
+    "byEndpoint": "端點分佈"
+  },
+  "trend": {
+    "title": "Token 使用趨勢",
+    "legend": {
+      "input": "Input",
+      "output": "Output",
+      "cacheCreation": "Cache Creation",
+      "cacheRead": "Cache Read",
+      "cacheHitRate": "快取命中率"
+    }
+  },
+  "table": {
+    "model": "模型",
+    "group": "分組",
+    "endpoint": "端點",
+    "requests": "請求",
+    "tokens": "Token",
+    "actual": "實際",
+    "standard": "標準"
+  },
+  "footnote": "費用基於 models.dev 目錄價估算。BitFun 未提供分組級價格覆寫，因此實際費用與標準費用採用同一目錄價。"
+}
