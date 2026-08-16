@@ -9,6 +9,10 @@ const stateMachineMock = vi.hoisted(() => ({
   reset: vi.fn(),
   transition: vi.fn(async () => true),
 }));
+const agenticListenerMock = vi.hoisted(() => ({
+  getIsListening: vi.fn(() => true),
+  dispatchExternal: vi.fn(() => true),
+}));
 
 vi.mock('@/infrastructure/peer-device/peerModeFlag', () => ({
   isPeerDeviceModeActive: () => peerModeMock.active,
@@ -22,11 +26,16 @@ vi.mock('../liveSessionInteractionStore', () => ({
   installLiveSessionInteractionMailbox: vi.fn(),
 }));
 
+vi.mock('../AgenticEventListener', () => ({
+  agenticEventListener: agenticListenerMock,
+}));
+
 import {
   installPeerSessionRefresh,
   PEER_SESSION_REFRESH_INTERVAL_MS,
   requestPeerSessionRefresh,
 } from './PeerSessionRefreshModule';
+import { resetRuntimeSessionEventGateForTest } from '@/infrastructure/peer-device/runtimeSessionEventGate';
 
 describe('PeerSessionRefreshModule', () => {
   beforeEach(() => {
@@ -44,6 +53,7 @@ describe('PeerSessionRefreshModule', () => {
   });
 
   afterEach(() => {
+    resetRuntimeSessionEventGateForTest();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -76,6 +86,7 @@ describe('PeerSessionRefreshModule', () => {
       },
       eventBatcher: {
         flushNow: vi.fn(),
+        clear: vi.fn(),
       },
       contentBuffers: new Map(),
       activeTextItems: new Map(),
@@ -110,6 +121,7 @@ describe('PeerSessionRefreshModule', () => {
       },
       eventBatcher: {
         flushNow: vi.fn(),
+        clear: vi.fn(),
       },
       contentBuffers: new Map(),
       activeTextItems: new Map(),
@@ -166,8 +178,9 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
         getState: () => state,
         subscribeSelector: vi.fn(() => () => {}),
         refreshPeerSessionSnapshot,
+        reconcilePendingUserQuestions: vi.fn(),
       },
-      eventBatcher: { flushNow: vi.fn() },
+      eventBatcher: { flushNow: vi.fn(), clear: vi.fn() },
       contentBuffers: new Map(),
       activeTextItems: new Map(),
     } as any;
@@ -196,7 +209,7 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
     cleanup();
   });
 
-  it('does not churn the state machine while a turn is already streaming', async () => {
+  it('does not poll or churn while a turn is already streaming fresh events', async () => {
     stateMachineMock.get.mockReturnValue({
       getCurrentState: () => 'processing',
       getContext: () => ({ lastUpdateTime: Date.now(), version: 0 }),
@@ -212,7 +225,102 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
     await vi.advanceTimersByTimeAsync(1);
     await vi.advanceTimersByTimeAsync(PEER_SESSION_REFRESH_INTERVAL_MS);
 
-    expect(refresh).toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(stateMachineMock.reset).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('replays the Runtime projection before reconciling the blocking mailbox', async () => {
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'idle',
+      getContext: () => ({ lastUpdateTime: 0, version: 0 }),
+    });
+    const runtimeEventSnapshot = {
+      sessionId: 'session-1',
+      streamId: 'runtime-a',
+      cursor: 8,
+      activeTurnId: 'turn-live',
+      events: [
+        {
+          eventName: 'agentic://dialog-turn-started',
+          payload: { sessionId: 'session-1', turnId: 'turn-live' },
+        },
+        {
+          eventName: 'agentic://text-chunk',
+          payload: {
+            sessionId: 'session-1',
+            turnId: 'turn-live',
+            roundId: 'round-0',
+            text: 'materialized output',
+          },
+        },
+      ],
+    };
+    const refresh = vi.fn(async () => ({
+      applied: true,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+      runtimeEventSnapshot,
+      pendingUserQuestions: { revision: 2, questions: [] },
+    }));
+    const context = contextWithSnapshot(refresh);
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(agenticListenerMock.dispatchExternal).toHaveBeenNthCalledWith(
+      1,
+      'agentic://dialog-turn-started',
+      runtimeEventSnapshot.events[0].payload,
+    );
+    expect(agenticListenerMock.dispatchExternal).toHaveBeenNthCalledWith(
+      2,
+      'agentic://text-chunk',
+      runtimeEventSnapshot.events[1].payload,
+    );
+    expect(context.eventBatcher.clear).toHaveBeenCalled();
+    expect(context.flowChatStore.reconcilePendingUserQuestions).toHaveBeenCalledWith(
+      'session-1',
+      { revision: 2, questions: [] },
+    );
+    cleanup();
+  });
+
+  it('advances a healthy Runtime fence without resetting and replaying it', async () => {
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'processing',
+      getContext: () => ({ lastUpdateTime: Date.now(), version: 0 }),
+    });
+    const refresh = vi.fn(async () => ({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+      runtimeEventReplayRequired: false,
+      runtimeEventSnapshot: {
+        sessionId: 'session-1',
+        streamId: 'runtime-a',
+        cursor: 8,
+        activeTurnId: 'turn-live',
+        events: [{
+          eventName: 'agentic://text-chunk',
+          payload: {
+            sessionId: 'session-1',
+            turnId: 'turn-live',
+            roundId: 'round-0',
+            text: 'already rendered',
+          },
+        }],
+      },
+    }));
+    const context = contextWithSnapshot(refresh);
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(agenticListenerMock.dispatchExternal).not.toHaveBeenCalled();
+    expect(context.eventBatcher.clear).not.toHaveBeenCalled();
     expect(stateMachineMock.reset).not.toHaveBeenCalled();
     cleanup();
   });

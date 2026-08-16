@@ -11,8 +11,15 @@
  * requests when an event gap is detected.
  */
 
-import { isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
+import {
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+} from '@/infrastructure/peer-device/deviceSurface';
 import { isSurfaceReconcileEnabled } from '@/infrastructure/peer-device/deviceSurfaceReconcile';
+import {
+  beginRuntimeSessionAttachment,
+  subscribeRuntimeSessionEventGaps,
+} from '@/infrastructure/peer-device/runtimeSessionEventGate';
 import { createLogger } from '@/shared/utils/logger';
 import {
   isBackendSessionActivelyProcessing,
@@ -24,6 +31,7 @@ import {
 } from '../../state-machine/types';
 import type { AnyFlowItem, DialogTurn } from '../../types/flow-chat';
 import { installLiveSessionInteractionMailbox } from '../liveSessionInteractionStore';
+import { agenticEventListener } from '../AgenticEventListener';
 import type { FlowChatContext } from './types';
 
 const log = createLogger('PeerSessionRefresh');
@@ -130,7 +138,10 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
   let queued = false;
   let immediateTimer: ReturnType<typeof setTimeout> | null = null;
 
-  async function runRefresh(requestedSessionId?: string): Promise<void> {
+  async function runRefresh(
+    requestedSessionId?: string,
+    staleOnly = false,
+  ): Promise<void> {
     if (disposed || inFlight || !isSurfaceReconcileEnabled()) {
       if (inFlight) {
         queued = true;
@@ -138,6 +149,9 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       return;
     }
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return;
+    }
+    if (!agenticEventListener.getIsListening()) {
       return;
     }
 
@@ -164,12 +178,20 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       return;
     }
     const lastUpdateTime = machine?.getContext().lastUpdateTime ?? 0;
-    const replaceRunningSnapshot =
+    const forceRuntimeReplay =
       machineState === SessionExecutionState.IDLE ||
-      machineState === SessionExecutionState.ERROR ||
-      Date.now() - lastUpdateTime >= PEER_SESSION_STREAM_STALE_MS;
+      machineState === SessionExecutionState.ERROR;
+    const streamIsStale = Date.now() - lastUpdateTime >= PEER_SESSION_STREAM_STALE_MS;
+    if (staleOnly && !forceRuntimeReplay && !streamIsStale) {
+      return;
+    }
+    const replaceRunningSnapshot =
+      forceRuntimeReplay || streamIsStale;
     context.eventBatcher.flushNow();
     const machineVersion = machine?.getContext().version ?? 0;
+    const surfaceScope = getActiveSurfaceScope();
+    const attachment = beginRuntimeSessionAttachment(surfaceScope.surfaceId, sessionId);
+    let attachmentFinished = false;
 
     inFlight = true;
     try {
@@ -186,8 +208,79 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
             const currentMachine = stateMachineManager.get(sessionId);
             return (currentMachine?.getContext().version ?? 0) === machineVersion;
           },
+          shouldReplayRuntimeSnapshot: snapshot =>
+            forceRuntimeReplay || attachment.requiresReplay(snapshot),
         },
       );
+      surfaceScope.assertCurrent('attachRuntimeSession');
+
+      if (result.runtimeEventSnapshot) {
+        if (result.runtimeEventReplayRequired === false) {
+          // The rendered projection already includes this exact Runtime
+          // cursor. Advance the in-flight fence without resetting a healthy
+          // state machine every time the liveness timer runs.
+          attachment.finish({
+            streamId: result.runtimeEventSnapshot.streamId,
+            cursor: result.runtimeEventSnapshot.cursor,
+          });
+          attachmentFinished = true;
+          log.debug('Runtime session projection already current', {
+            sessionId,
+            cursor: result.runtimeEventSnapshot.cursor,
+          });
+          return;
+        }
+
+        // Establish an empty current-Turn base before replay. The journal is
+        // authoritative for everything after DialogTurnStarted, so no
+        // UI-written partial checkpoint is allowed to overlap it.
+        context.eventBatcher.clear();
+        context.contentBuffers.delete(sessionId);
+        context.activeTextItems.delete(sessionId);
+        stateMachineManager.reset(sessionId);
+        await alignStateMachineWithSnapshot(
+          context,
+          sessionId,
+          result.backendState,
+          result.runtimeEventSnapshot.activeTurnId ?? result.latestTurnId,
+        );
+
+        for (const event of result.runtimeEventSnapshot.events) {
+          surfaceScope.assertCurrent('replayRuntimeSessionProjection');
+          if (!agenticEventListener.dispatchExternal(event.eventName, event.payload)) {
+            throw new Error('Agentic event listener is unavailable during Runtime replay');
+          }
+        }
+        context.eventBatcher.flushNow();
+        context.flowChatStore.reconcilePendingUserQuestions(
+          sessionId,
+          result.pendingUserQuestions,
+        );
+        await alignStateMachineWithSnapshot(
+          context,
+          sessionId,
+          result.backendState,
+          result.runtimeEventSnapshot.activeTurnId ?? result.latestTurnId,
+        );
+        surfaceScope.assertCurrent('finishRuntimeSessionAttachment');
+        attachment.finish({
+          streamId: result.runtimeEventSnapshot.streamId,
+          cursor: result.runtimeEventSnapshot.cursor,
+        });
+        attachmentFinished = true;
+        log.debug('Runtime session projection attached', {
+          sessionId,
+          backendState: result.backendState,
+          cursor: result.runtimeEventSnapshot.cursor,
+          eventCount: result.runtimeEventSnapshot.events.length,
+        });
+        return;
+      }
+
+      // Older hosts have no cursor contract. Release their queued live events
+      // and retain the existing persisted-snapshot reconciliation fallback.
+      attachment.abort();
+      attachmentFinished = true;
       if (!result.applied) {
         // A snapshot that changed nothing — or that was refused because it
         // would have dropped projected content — still reports whether the
@@ -226,6 +319,10 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         latestTurnId: result.latestTurnId,
       });
     } catch (error) {
+      if (!attachmentFinished) {
+        attachment.abort({ discard: !surfaceScope.isCurrent() });
+        attachmentFinished = true;
+      }
       if (isSurfaceChangedError(error)) {
         // The snapshot belongs to a device this window stopped rendering. Its
         // own container keeps the projection; the surface now on screen
@@ -238,6 +335,9 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       // auto-exit from Peer Mode.
       log.warn('Peer session snapshot refresh failed', { sessionId, error });
     } finally {
+      if (!attachmentFinished) {
+        attachment.abort({ discard: !surfaceScope.isCurrent() });
+      }
       inFlight = false;
       if (queued && !disposed) {
         queued = false;
@@ -262,12 +362,29 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
   installedRefreshRequester = scheduleRefresh;
 
   const unsubscribeActiveSession = context.flowChatStore.subscribeSelector(
-    state => state.activeSessionId,
-    sessionId => scheduleRefresh(sessionId ?? undefined),
+    state => {
+      const sessionId = state.activeSessionId;
+      const session = sessionId ? state.sessions.get(sessionId) : undefined;
+      return JSON.stringify([
+        sessionId ?? '',
+        session?.historyState ?? '',
+        session?.workspacePath ?? '',
+        session?.isTransient === true,
+        session?.isHistorical === true,
+      ]);
+    },
+    () => scheduleRefresh(),
   );
   const interval = setInterval(() => {
-    void runRefresh();
+    void runRefresh(undefined, true);
   }, PEER_SESSION_REFRESH_INTERVAL_MS);
+  const unsubscribeRuntimeGaps = subscribeRuntimeSessionEventGaps(
+    (surfaceId, sessionId) => {
+      if (getActiveSurfaceScope().surfaceId === surfaceId) {
+        scheduleRefresh(sessionId);
+      }
+    },
+  );
 
   const handlePeerModeChanged = (): void => scheduleRefresh();
   const handleVisibilityChanged = (): void => {
@@ -294,6 +411,7 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
     }
     clearInterval(interval);
     unsubscribeActiveSession();
+    unsubscribeRuntimeGaps();
     if (typeof window !== 'undefined') {
       window.removeEventListener('peer-mode:changed', handlePeerModeChanged);
     }

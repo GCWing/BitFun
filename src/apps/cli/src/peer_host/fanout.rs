@@ -3,7 +3,9 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-use bitfun_agent_runtime::sdk::{AgentEventReceiver, PermissionRequestEvent};
+use bitfun_agent_runtime::sdk::{
+    attach_session_event_cursor, AgentEventReceiver, PermissionRequestEvent,
+};
 use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
 use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
@@ -68,6 +70,12 @@ fn continuity_is_current(continuity: &Option<(super::state::PeerTurnTracker, u64
     continuity
         .as_ref()
         .is_none_or(|(turns, generation)| turns.is_event_stream_generation_current(*generation))
+}
+
+fn settle_record_only_event(turns: &super::state::PeerTurnTracker, terminal: Option<&PeerTurnKey>) {
+    if let Some(turn) = terminal {
+        turns.finish_turn(turn);
+    }
 }
 
 static PEER_EVENT_FANOUT_TX: OnceLock<mpsc::Sender<QueuedPeerDeviceEvent>> = OnceLock::new();
@@ -397,15 +405,23 @@ async fn handle_agentic_event(state: &PeerHostState, event: AgenticEvent) -> Res
         }
     }
 
-    let Some(projected) = project_agentic_frontend_event(event) else {
+    let cursor = state.session_event_journal.record(&event);
+    let Some(mut projected) = project_agentic_frontend_event(event) else {
         if let Some(turn) = terminal_turn {
             state.turns.finish_turn(&turn);
         }
         return Ok(());
     };
+    if let Some(cursor) = cursor {
+        attach_session_event_cursor(&mut projected.payload, cursor);
+    }
     let targets = attached_controllers();
     if targets.is_empty() {
-        return Err("no attached Peer controller can receive Agent events".to_string());
+        // Controller presence is not Runtime ownership. Keep recording the
+        // materialized Turn while every controller is between devices, and
+        // release Peer ownership normally if this was the terminal event.
+        settle_record_only_event(&state.turns, terminal_turn.as_ref());
+        return Ok(());
     }
     let generation = state.turns.current_event_stream_generation()?;
     let owner = state
@@ -729,7 +745,8 @@ mod tests {
     use super::{
         continuity_is_current, drain_broadcast_receiver, enqueue_inherited_peer_device_event,
         enqueue_peer_device_event, event_turn_key, interrupted_turn_failure_projection,
-        retained_delivery_targets, QueuedPeerDeviceEvent, TerminalDeliveryGuard,
+        retained_delivery_targets, settle_record_only_event, QueuedPeerDeviceEvent,
+        TerminalDeliveryGuard,
     };
     use crate::peer_host::state::{PeerTurnKey, PeerTurnTracker};
 
@@ -762,6 +779,35 @@ mod tests {
             vec!["controller-2"]
         );
         assert!(retained_delivery_targets(&queued_targets, &[]).is_empty());
+    }
+
+    #[test]
+    fn record_only_gap_keeps_running_turn_owned_until_reattach() {
+        let tracker = PeerTurnTracker::new();
+        tracker.mark_event_stream_ready();
+        let turn = PeerTurnKey::new("session-1", "turn-1");
+        tracker.register_root(turn.clone()).expect("register root");
+        assert!(tracker.mark_started(&turn));
+
+        settle_record_only_event(&tracker, None);
+
+        assert!(tracker.owns("session-1", Some("turn-1")));
+    }
+
+    #[test]
+    fn record_only_terminal_releases_peer_turn_ownership() {
+        let tracker = PeerTurnTracker::new();
+        tracker.mark_event_stream_ready();
+        let turn = PeerTurnKey::new("session-1", "turn-1");
+        tracker.register_root(turn.clone()).expect("register root");
+        assert!(tracker.mark_started(&turn));
+        assert!(tracker
+            .claim_terminal_delivery(&turn)
+            .expect("claim terminal"));
+
+        settle_record_only_event(&tracker, Some(&turn));
+
+        assert!(!tracker.owns("session-1", Some("turn-1")));
     }
 
     #[test]

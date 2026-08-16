@@ -51,6 +51,13 @@ use crate::post_call_hooks::RuntimeHookRegistry;
 use crate::user_questions::{get_user_input_manager, PendingUserQuestionSnapshot};
 use bitfun_runtime_ports::{PermissionReply, PermissionReplySource, PermissionRequest};
 
+#[path = "session_event_journal.rs"]
+mod session_event_journal;
+pub use session_event_journal::{
+    attach_session_event_cursor, SessionEventCursor, SessionEventJournal,
+    SessionEventProjectionSnapshot, RUNTIME_EVENT_CURSOR_KEY, RUNTIME_EVENT_STREAM_ID_KEY,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RuntimeBuildError {
     #[error("agent submission port is required")]
@@ -222,6 +229,7 @@ pub struct AgentRuntime {
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
     event_source: Option<AgentEventSource>,
+    session_event_journal: Option<Arc<SessionEventJournal>>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
@@ -386,6 +394,13 @@ impl std::fmt::Debug for AgentRuntime {
                 &self.event_source.as_ref().map(|_| "<AgentEventSource>"),
             )
             .field(
+                "session_event_journal",
+                &self
+                    .session_event_journal
+                    .as_ref()
+                    .map(|_| "<SessionEventJournal>"),
+            )
+            .field(
                 "tool_registry",
                 &self.tool_registry.as_ref().map(|_| "<RuntimeToolRegistry>"),
             )
@@ -446,6 +461,7 @@ pub struct AgentRuntimeBuilder {
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
     event_source: Option<AgentEventSource>,
+    session_event_journal: Option<Arc<SessionEventJournal>>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
@@ -613,6 +629,11 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_session_event_journal(mut self, journal: Arc<SessionEventJournal>) -> Self {
+        self.session_event_journal = Some(journal);
+        self
+    }
+
     pub fn with_tool_registry(mut self, registry: Arc<dyn RuntimeToolRegistry>) -> Self {
         self.tool_registry = Some(registry);
         self
@@ -665,6 +686,7 @@ impl AgentRuntimeBuilder {
             services,
             event_stream,
             event_source,
+            session_event_journal,
             tool_registry,
             harness_registry,
             hook_registry,
@@ -702,6 +724,7 @@ impl AgentRuntimeBuilder {
             services,
             event_stream,
             event_source,
+            session_event_journal,
             tool_registry,
             harness_registry,
             hook_registry,
@@ -808,6 +831,13 @@ pub struct AgentRunHandle {
 }
 
 impl AgentRuntime {
+    /// Attach the host-owned Session event projection after a narrow Runtime
+    /// facade has been assembled from existing product ports.
+    pub fn with_session_event_journal(mut self, journal: Arc<SessionEventJournal>) -> Self {
+        self.session_event_journal = Some(journal);
+        self
+    }
+
     pub fn subscribe_events(&self) -> Result<AgentEventReceiver, RuntimeError> {
         self.event_source
             .as_ref()
@@ -856,6 +886,19 @@ impl AgentRuntime {
             user_questions,
             permissions,
         }
+    }
+
+    /// Materialized current-Turn projection owned by the Runtime Host.
+    ///
+    /// Unlike a live receiver, this remains available while no client is
+    /// subscribed and is therefore safe for GUI/TUI/Peer reattachment.
+    pub fn session_event_projection_snapshot(
+        &self,
+        session_id: &str,
+    ) -> Option<SessionEventProjectionSnapshot> {
+        self.session_event_journal
+            .as_ref()
+            .map(|journal| journal.snapshot(session_id))
     }
 
     pub fn permission_request_dialog_turn_id(

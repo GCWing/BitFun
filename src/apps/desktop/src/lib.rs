@@ -33,6 +33,7 @@ pub mod startup_trace;
 pub mod tray;
 mod webview_recovery;
 
+use bitfun_agent_runtime::sdk::{attach_session_event_cursor, SessionEventJournal};
 use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
 use bitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;
 use bitfun_core::infrastructure::ai::AIClientFactory;
@@ -643,6 +644,7 @@ pub async fn run() {
     startup_timings.record_elapsed("initialize_app_state", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
+    let session_event_journal = Arc::new(SessionEventJournal::new());
     let step_started = Instant::now();
     let desktop_runtime = match runtime::DesktopRuntimeContext::build(
         coordinator.clone(),
@@ -651,6 +653,7 @@ pub async fn run() {
         app_state.workspace_service.clone(),
         app_state.ssh_manager.clone(),
         app_state.acp_client_service.clone(),
+        session_event_journal.clone(),
     ) {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -1051,7 +1054,12 @@ pub async fn run() {
             let transport = Arc::new(TauriTransportAdapter::new(app_handle.clone()));
 
             let step_started = Instant::now();
-            start_event_loop_with_transport(event_queue, event_router, transport);
+            start_event_loop_with_transport(
+                event_queue,
+                event_router,
+                transport,
+                session_event_journal.clone(),
+            );
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "start_event_loop_with_transport",
@@ -2225,18 +2233,29 @@ fn configure_workspace_search_daemon_env() -> Option<std::path::PathBuf> {
 /// Deliver one event to the WebView and, when peer controllers are attached,
 /// fan it out to paired devices. Text chunks arrive here already coalesced by
 /// `TextChunkCoalescer`.
-async fn deliver_event_to_webview(transport: &TauriTransportAdapter, event: AgenticEvent) {
-    if let Err(e) = transport.emit_event(event.clone()).await {
+async fn deliver_event_to_webview(
+    transport: &TauriTransportAdapter,
+    event: AgenticEvent,
+    session_event_journal: &SessionEventJournal,
+) {
+    let cursor = session_event_journal.record(&event);
+    let Some(mut projected) = bitfun_events::project_agentic_frontend_event(event) else {
+        log::warn!("Unhandled AgenticEvent type in desktop delivery");
+        return;
+    };
+    if let Some(cursor) = cursor {
+        attach_session_event_cursor(&mut projected.payload, cursor);
+    }
+
+    if let Err(e) = transport
+        .emit_generic(&projected.event_name, projected.payload.clone())
+        .await
+    {
         log::error!("Failed to emit event: {:?}", e);
     }
 
     if !api::peer_host_invoke::attached_controllers().is_empty() {
-        if let Some(projected) = bitfun_events::project_agentic_frontend_event(event) {
-            api::remote_connect_api::fanout_peer_device_event(
-                projected.event_name,
-                projected.payload,
-            );
-        }
+        api::remote_connect_api::fanout_peer_device_event(projected.event_name, projected.payload);
     }
 }
 
@@ -2435,12 +2454,14 @@ fn start_event_loop_with_transport(
     event_queue: Arc<bitfun_core::agentic::events::EventQueue>,
     event_router: Arc<bitfun_core::agentic::events::EventRouter>,
     transport: Arc<TauriTransportAdapter>,
+    session_event_journal: Arc<SessionEventJournal>,
 ) {
     tokio::spawn(async move {
         event_loop_driver(event_queue, event_router, |event| {
             let transport = transport.clone();
+            let session_event_journal = session_event_journal.clone();
             async move {
-                deliver_event_to_webview(&transport, event).await;
+                deliver_event_to_webview(&transport, event, &session_event_journal).await;
             }
         })
         .await;

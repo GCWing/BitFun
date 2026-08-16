@@ -22,7 +22,7 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest, AgentSubmissionSource,
     AgentTurnCancellationRequest, AgentTurnInterruptionRequest, DialogSteerOutcome,
     PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PermissionReply, PermissionRequest,
-    RuntimeError, SessionInteractionSnapshot,
+    RuntimeError, SessionEventProjectionSnapshot, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -553,6 +553,11 @@ pub struct RestoreSessionViewResponse {
     pub session: SessionResponse,
     pub turns: Vec<DialogTurnData>,
     pub interaction_snapshot: SessionInteractionSnapshot,
+    /// Runtime-owned projection of the current Turn. New clients use this to
+    /// reattach without relying on UI-written intermediate checkpoints; older
+    /// hosts omit it and remain compatible with the persisted-turn fallback.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_event_snapshot: Option<FrontendSessionEventProjectionSnapshot>,
     pub current_context_usage: Option<SessionContextUsage>,
     pub turn_catalog: SessionTurnCatalog,
     pub context_restore_state: String,
@@ -560,6 +565,43 @@ pub struct RestoreSessionViewResponse {
     pub loaded_turn_count: usize,
     pub total_turn_count: usize,
     pub timings: SessionViewRestoreTiming,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendSessionEventProjectionSnapshot {
+    pub session_id: String,
+    pub stream_id: String,
+    pub cursor: u64,
+    pub active_turn_id: Option<String>,
+    pub events: Vec<FrontendProjectedAgenticEvent>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendProjectedAgenticEvent {
+    pub event_name: String,
+    pub payload: serde_json::Value,
+}
+
+fn frontend_event_projection_snapshot(
+    snapshot: SessionEventProjectionSnapshot,
+) -> FrontendSessionEventProjectionSnapshot {
+    FrontendSessionEventProjectionSnapshot {
+        session_id: snapshot.session_id,
+        stream_id: snapshot.stream_id,
+        cursor: snapshot.cursor,
+        active_turn_id: snapshot.active_turn_id,
+        events: snapshot
+            .events
+            .into_iter()
+            .filter_map(bitfun_events::project_agentic_frontend_event)
+            .map(|event| FrontendProjectedAgenticEvent {
+                event_name: event.event_name,
+                payload: event.payload,
+            })
+            .collect(),
+    }
 }
 
 #[derive(Debug, Default)]
@@ -3438,6 +3480,9 @@ pub async fn restore_session_view(
         let session = restored.session;
         let mut turns = restored.turns;
         let interaction_snapshot = restored.interaction_snapshot;
+        let runtime_event_snapshot = restored
+            .runtime_event_snapshot
+            .map(frontend_event_projection_snapshot);
         let current_context_usage = restored.current_context_usage;
         let total_turn_count = restored.total_turn_count;
         let turn_catalog = restored.turn_catalog;
@@ -3492,6 +3537,7 @@ pub async fn restore_session_view(
             session: session_to_response_with_turn_count(session, total_turn_count),
             turns,
             interaction_snapshot,
+            runtime_event_snapshot,
             current_context_usage,
             turn_catalog,
             context_restore_state: "pending".to_string(),
@@ -3909,6 +3955,7 @@ mod tests {
     use bitfun_core::service::session::{
         ModelRoundData, ToolCallData, ToolItemData, ToolResultData, TurnStatus, UserMessageData,
     };
+    use bitfun_events::AgenticEvent;
     use bitfun_product_domains::tool_permissions::{PermissionEffect, PermissionRule};
     use serde_json::json;
 
@@ -3923,6 +3970,31 @@ mod tests {
         };
 
         assert!(!mode_catalog_supports_external_sources(&request, Some(&desktop_host_path)).await);
+    }
+
+    #[test]
+    fn desktop_restore_projects_runtime_events_with_the_cursor_fence() {
+        let snapshot = frontend_event_projection_snapshot(SessionEventProjectionSnapshot {
+            session_id: "session-1".to_string(),
+            stream_id: "runtime-a".to_string(),
+            cursor: 9,
+            active_turn_id: Some("turn-1".to_string()),
+            events: vec![AgenticEvent::TextChunk {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                round_id: "round-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
+                text: "hello".to_string(),
+            }],
+        });
+
+        assert_eq!(snapshot.session_id, "session-1");
+        assert_eq!(snapshot.stream_id, "runtime-a");
+        assert_eq!(snapshot.cursor, 9);
+        assert_eq!(snapshot.active_turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(snapshot.events[0].event_name, "agentic://text-chunk");
+        assert_eq!(snapshot.events[0].payload["text"], "hello");
     }
 
     #[test]

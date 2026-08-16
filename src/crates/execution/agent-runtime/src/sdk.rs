@@ -45,6 +45,10 @@ pub use crate::post_call_hooks::{
     RuntimeHookRegistryBuildError,
 };
 pub use crate::runtime::{
+    attach_session_event_cursor, SessionEventCursor, SessionEventJournal,
+    SessionEventProjectionSnapshot, RUNTIME_EVENT_CURSOR_KEY, RUNTIME_EVENT_STREAM_ID_KEY,
+};
+pub use crate::runtime::{
     AgentEventStream, AgentRunHandle, AgentRunRequest, AgentSessionRestorePort,
     AgentSessionRestoreRequest, AgentSessionRestoreResult, RuntimeAgentRegistry,
     RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError, RuntimeToolRegistry,
@@ -291,6 +295,11 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_session_event_journal(mut self, journal: Arc<SessionEventJournal>) -> Self {
+        self.inner = self.inner.with_session_event_journal(journal);
+        self
+    }
+
     pub fn with_tool_registry(mut self, registry: Arc<dyn RuntimeToolRegistry>) -> Self {
         self.inner = self.inner.with_tool_registry(registry);
         self
@@ -317,6 +326,11 @@ impl AgentRuntimeBuilder {
 }
 
 impl AgentRuntime {
+    pub fn with_session_event_journal(mut self, journal: Arc<SessionEventJournal>) -> Self {
+        self.inner = self.inner.with_session_event_journal(journal);
+        self
+    }
+
     pub fn subscribe_events(&self) -> Result<AgentEventReceiver, RuntimeError> {
         self.inner.subscribe_events()
     }
@@ -747,6 +761,13 @@ impl AgentRuntime {
 
     pub fn session_interaction_snapshot(&self, session_id: &str) -> SessionInteractionSnapshot {
         self.inner.session_interaction_snapshot(session_id)
+    }
+
+    pub fn session_event_projection_snapshot(
+        &self,
+        session_id: &str,
+    ) -> Option<SessionEventProjectionSnapshot> {
+        self.inner.session_event_projection_snapshot(session_id)
     }
 
     pub async fn publish_event(&self, event: RuntimeEventEnvelope) -> Result<(), RuntimeError> {

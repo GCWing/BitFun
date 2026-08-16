@@ -9,7 +9,7 @@ use super::control::{
     attach_controller, detach_controller, parse_controller_device_id, peer_mode_ping_value,
 };
 use super::deny::{is_cli_unsupported_command, is_local_only_command};
-use super::state::{peer_host_state, try_peer_host_state};
+use super::state::peer_host_state;
 
 #[derive(Debug, Clone)]
 struct HostInvokeBridgeResult {
@@ -79,18 +79,7 @@ async fn handle_host_invoke_inner(command: &str, args: Value) -> HostInvokeBridg
     }
     if command == "peer_control_detach" {
         let controller_id = parse_controller_device_id(&args);
-        if detach_controller(&controller_id).await {
-            if let Some(state) = try_peer_host_state() {
-                if let Err(error) = state
-                    .cancel_and_drain_peer_turns("last Peer controller detached")
-                    .await
-                {
-                    return HostInvokeBridgeResult::err(format!(
-                        "Peer controller detached, but active work was not fully cancelled: {error}"
-                    ));
-                }
-            }
-        }
+        detach_controller(&controller_id).await;
         return HostInvokeBridgeResult::ok_value(json!({ "detached": true }));
     }
     if command == "peer_mode_ping" {

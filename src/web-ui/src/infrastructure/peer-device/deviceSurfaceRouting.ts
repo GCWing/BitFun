@@ -34,6 +34,7 @@ const SURFACE_SCOPED_EVENTS = new Set<string>([
   'permission://event',
   'account://settings-applied',
   'ai://model-catalog-updated',
+  'session_title_generated',
 ]);
 
 const SURFACE_SCOPED_PREFIXES = ['agentic://', 'backend-event-'];
@@ -111,6 +112,8 @@ export interface SurfaceEventRoute<T> {
   deliver: boolean;
   /** Payload with the routing tag removed. */
   payload: T;
+  /** `null` identifies events produced by this local Runtime Host. */
+  sourceDeviceId: string | null;
 }
 
 /**
@@ -123,7 +126,11 @@ export function routeSurfaceEvent<T>(event: string, payload: T): SurfaceEventRou
   const sourceDeviceId = readSourceDeviceId(payload);
 
   if (!isSurfaceScopedEvent(event)) {
-    return { deliver: true, payload: unwrapSurfacePayload(payload) };
+    return {
+      deliver: true,
+      payload: unwrapSurfacePayload(payload),
+      sourceDeviceId,
+    };
   }
 
   const unwrapped = unwrapSurfacePayload(payload);
@@ -138,5 +145,9 @@ export function routeSurfaceEvent<T>(event: string, payload: T): SurfaceEventRou
     }
   }
 
-  return { deliver: activeSurfaceDeviceId === sourceDeviceId, payload: unwrapped };
+  return {
+    deliver: activeSurfaceDeviceId === sourceDeviceId,
+    payload: unwrapped,
+    sourceDeviceId,
+  };
 }

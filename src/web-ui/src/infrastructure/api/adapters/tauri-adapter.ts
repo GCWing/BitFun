@@ -5,6 +5,8 @@ import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { ITransportAdapter, type TransportRequestTiming } from './base';
 import { createLogger } from '@/shared/utils/logger';
 import { routeSurfaceEvent } from '@/infrastructure/peer-device/deviceSurfaceRouting';
+import { surfaceIdForDevice } from '@/infrastructure/peer-device/deviceSurface';
+import { routeRuntimeSessionEvent } from '@/infrastructure/peer-device/runtimeSessionEventGate';
 import { sanitizeErrorForLog } from '../logSanitizer';
 
 const log = createLogger('TauriAdapter');
@@ -135,11 +137,21 @@ export class TauriTransportAdapter implements ITransportAdapter {
         if (!route.deliver) {
           return;
         }
-        try {
-          callback(route.payload);
-        } catch (error) {
-      log.error('Error in event listener callback', { event, error: sanitizeErrorForLog(error) });
-        }
+        routeRuntimeSessionEvent(
+          surfaceIdForDevice(route.sourceDeviceId),
+          event,
+          route.payload,
+          payload => {
+            try {
+              callback(payload);
+            } catch (error) {
+              log.error('Error in event listener callback', {
+                event,
+                error: sanitizeErrorForLog(error),
+              });
+            }
+          },
+        );
       }
     }).then(fn => {
       if (isUnlistened) {

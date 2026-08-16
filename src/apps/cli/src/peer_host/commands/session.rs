@@ -8,11 +8,12 @@ use serde_json::{json, Value};
 use bitfun_agent_runtime::sdk::{
     AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
     AgentSessionRestoreRequest, AgentSessionRestoreResult, PortErrorKind, RuntimeError,
-    SessionInteractionSnapshot,
+    SessionEventProjectionSnapshot, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::core::Session;
 use bitfun_core::agentic::get_agent_registry;
 use bitfun_core::util::errors::BitFunError;
+use bitfun_events::project_agentic_frontend_event;
 use bitfun_runtime_ports::{
     AgentSessionArchiveRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
     AgentSessionModeUpdateRequest, AgentSessionRenameRequest, AgentThreadGoalGetRequest,
@@ -35,6 +36,27 @@ fn session_storage_request(request: &Value) -> Result<SessionStoragePathRequest,
         workspace_path: PathBuf::from(workspace_path),
         remote_connection_id: optional_string(request, "remoteConnectionId"),
         remote_ssh_host: optional_string(request, "remoteSshHost"),
+    })
+}
+
+fn runtime_event_snapshot_to_json(snapshot: SessionEventProjectionSnapshot) -> Value {
+    let events = snapshot
+        .events
+        .into_iter()
+        .filter_map(project_agentic_frontend_event)
+        .map(|event| {
+            json!({
+                "eventName": event.event_name,
+                "payload": event.payload,
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "sessionId": snapshot.session_id,
+        "streamId": snapshot.stream_id,
+        "cursor": snapshot.cursor,
+        "activeTurnId": snapshot.active_turn_id,
+        "events": events,
     })
 }
 
@@ -292,6 +314,16 @@ pub(crate) async fn restore_session_view(
     // the same boundary as permission event fan-out/listing; otherwise a
     // controller could answer a same-session turn started by another surface.
     retain_peer_owned_interactions(&state.turns, &mut interaction_snapshot);
+    let runtime_event_snapshot = state
+        .agent_runtime
+        .session_event_projection_snapshot(&session_id)
+        .filter(|snapshot| {
+            snapshot
+                .active_turn_id
+                .as_ref()
+                .is_none_or(|turn_id| state.turns.owns(&session_id, Some(turn_id.as_str())))
+        })
+        .map(runtime_event_snapshot_to_json);
 
     let loaded_turn_count = turns.len();
     let is_partial = loaded_turn_count < total_turn_count;
@@ -299,6 +331,7 @@ pub(crate) async fn restore_session_view(
         "session": session_to_json(session, total_turn_count),
         "turns": turns,
         "interactionSnapshot": interaction_snapshot,
+        "runtimeEventSnapshot": runtime_event_snapshot,
         "turnCatalog": turn_catalog,
         "contextRestoreState": "pending",
         "isPartial": is_partial,
@@ -732,18 +765,20 @@ pub(crate) async fn save_session_turn(
 mod tests {
     use super::{
         overlay_live_session_state, peer_core_session_error, peer_runtime_session_error,
-        restored_session_to_json, retain_peer_owned_interactions, session_stats_validation_error,
+        restored_session_to_json, retain_peer_owned_interactions, runtime_event_snapshot_to_json,
+        session_stats_validation_error,
     };
     use crate::peer_host::state::{PeerTurnKey, PeerTurnTracker};
     use bitfun_agent_runtime::sdk::{
         AgentSessionRestoreResult, AgentSessionSummary, PendingUserQuestion,
         PendingUserQuestionSnapshot, PortError, PortErrorKind, RuntimeError,
-        SessionInteractionSnapshot, SessionState,
+        SessionEventProjectionSnapshot, SessionInteractionSnapshot, SessionState,
     };
     use bitfun_core::agentic::core::{
         ProcessingPhase, Session as CoreSession, SessionConfig, SessionState as CoreSessionState,
     };
     use bitfun_core::util::errors::BitFunError;
+    use bitfun_events::AgenticEvent;
 
     #[test]
     fn peer_writer_conflicts_keep_the_stable_transport_code() {
@@ -766,6 +801,31 @@ mod tests {
             "session_in_use: Session is already open for writing: session-1"
         );
         assert_eq!(runtime_error, core_error);
+    }
+
+    #[test]
+    fn peer_restore_projects_runtime_events_with_the_cursor_fence() {
+        let value = runtime_event_snapshot_to_json(SessionEventProjectionSnapshot {
+            session_id: "session-1".to_string(),
+            stream_id: "runtime-a".to_string(),
+            cursor: 7,
+            active_turn_id: Some("turn-1".to_string()),
+            events: vec![AgenticEvent::TextChunk {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                round_id: "round-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
+                text: "hello".to_string(),
+            }],
+        });
+
+        assert_eq!(value["sessionId"], "session-1");
+        assert_eq!(value["streamId"], "runtime-a");
+        assert_eq!(value["cursor"], 7);
+        assert_eq!(value["activeTurnId"], "turn-1");
+        assert_eq!(value["events"][0]["eventName"], "agentic://text-chunk");
+        assert_eq!(value["events"][0]["payload"]["text"], "hello");
     }
 
     #[test]

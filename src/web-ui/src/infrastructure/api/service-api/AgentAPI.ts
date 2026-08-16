@@ -184,6 +184,23 @@ export interface SessionInteractionSnapshot {
   permissions: PermissionRequestSnapshot;
 }
 
+export interface RuntimeProjectedAgenticEvent {
+  eventName: string;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Runtime-owned materialized projection of the current Turn. `streamId` and
+ * `cursor` fence this snapshot against concurrent live events.
+ */
+export interface SessionRuntimeEventSnapshot {
+  sessionId: string;
+  streamId: string;
+  cursor: number;
+  activeTurnId?: string | null;
+  events: RuntimeProjectedAgenticEvent[];
+}
+
 export type PermissionRequestEvent =
   | { event: 'asked'; request: PermissionRequest }
   | { event: 'replied'; requestId: string; reply: { reply: PermissionReplyKind }; source: string }
@@ -273,6 +290,8 @@ export interface RestoreSessionViewResponse {
   turns: DialogTurnData[];
   /** Absent when talking to an older Peer Host. */
   interactionSnapshot?: SessionInteractionSnapshot;
+  /** Absent when talking to a host without resumable Session attachment. */
+  runtimeEventSnapshot?: SessionRuntimeEventSnapshot | null;
   currentContextUsage?: SessionContextUsage | null;
   turnCatalog?: SessionTurnCatalog;
   contextRestoreState: 'ready' | 'pending';

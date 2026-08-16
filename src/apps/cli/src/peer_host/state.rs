@@ -3,8 +3,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_agent_runtime::sdk::PermissionRequest;
+use bitfun_agent_runtime::sdk::{AgentRuntime, SessionEventJournal};
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::filesystem::FileSystemService;
 use bitfun_core::service::workspace::WorkspaceService;
@@ -887,6 +887,7 @@ fn prune_idle_tree(inner: &mut PeerTurnTrackerInner, key: &PeerTurnKey) {
 #[derive(Clone)]
 pub(crate) struct PeerHostState {
     pub(crate) agent_runtime: AgentRuntime,
+    pub(crate) session_event_journal: Arc<SessionEventJournal>,
     pub(crate) local_workspace_snapshot: Arc<dyn bitfun_runtime_ports::LocalWorkspaceSnapshotPort>,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
     pub(crate) account_runtime:

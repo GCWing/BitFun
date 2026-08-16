@@ -160,6 +160,7 @@ flowchart LR
 - Phase 5 的 Embedded direct adapter 将通过 `AgentRuntime` 提供的 typed event/Permission subscription 直接订阅同一 Runtime owner，再映射为 `TuiRuntimePort` semantic event；它不得创建第二个 Core `EventQueue` owner 或把 Runtime 内部 receiver 暴露给 TUI。
 - Headless CLI、Peer Host、ACP 和 SDK Host 从各自独立 Runtime adapter 订阅，不能直接持有 Core-specific event source。
 - `bitfun-core` 的旧 event-source/builder API 仅保留为 deprecated 源码兼容 facade；它们委托给同一个 Core owner，不形成第二套运行时或第一方调用路径。
+- Desktop Rich Surface 的 Tauri delivery adapter、CLI Peer Host 的 DeviceEvent adapter 与各自窄 `AgentRuntime` facade 共享一个 Runtime-host-owned `SessionEventJournal`。事件在 host 排序/合并边界后写入，按 Session 获得单调 cursor，并通过 `restore_session_view.runtimeEventSnapshot` 提供当前 Turn 的物化 attach state；CLI 仍先执行 Peer-owned-Turn 边界。客户端用 Runtime-process `streamId` + cursor 对 snapshot 与并发 live events 做 fence。该合同只补足同一 Desktop/Peer Host 上 Rich Surface 的重挂载，不把 App Server 或 Shared Runtime IPC 宣称为已有跨连接 replay。
 - 各 adapter 继续拥有自己的失败投影：TUI 标记当前视图不可信，Headless CLI 返回非成功终态，Peer Host 中断其拥有的 turns，ACP 取消 turn 并返回协议错误，SDK Host 终结 Query 并提供 `RestartHost` recovery。
 - 当前 App Server 为每条 connection/stream 发送单调 sequence 和 connection-local cursor；`app/syncEvents` 返回当前连接的 cursor
   与 pending Permission snapshot，`session/sync` 恢复 Session state、transcript、workspace binding 和 pending Permission。它没有跨连接

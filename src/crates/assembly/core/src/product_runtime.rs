@@ -588,6 +588,18 @@ impl CoreProductAgentRuntime {
         )
     }
 
+    /// Build the Desktop/Rich-client Session facade with the Runtime-owned
+    /// materialized event projection used for client reattachment.
+    pub fn build_session_surface_with_event_journal(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        token_usage_service: Arc<TokenUsageService>,
+        event_journal: Arc<bitfun_agent_runtime::sdk::SessionEventJournal>,
+    ) -> Result<AgentRuntime, String> {
+        Self::build_session_surface(coordinator, scheduler, token_usage_service)
+            .map(|runtime| runtime.with_session_event_journal(event_journal))
+    }
+
     #[deprecated(note = "use build_with_event_source for first-party product runtimes")]
     pub fn build(
         coordinator: Arc<ConversationCoordinator>,

@@ -22,6 +22,7 @@ describe('isSurfaceScopedEvent', () => {
     expect(isSurfaceScopedEvent('backend-event-toolexecutionstarted')).toBe(true);
     expect(isSurfaceScopedEvent('terminal_event')).toBe(true);
     expect(isSurfaceScopedEvent('permission://event')).toBe(true);
+    expect(isSurfaceScopedEvent('session_title_generated')).toBe(true);
   });
 
   it('leaves control-plane events unscoped so they always pass', () => {

@@ -59,6 +59,11 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
      it to `SURFACE_SCOPED_EVENTS`/prefixes too, or local and peer streams will
      interleave in one store. Never route control-plane events (`account://…`)
      — they must always pass.
+   - **React subscriptions include the Surface activation.** A Session id is
+     not a complete subscription identity. Hooks that read per-Surface state
+     machines subscribe to the Surface epoch and return no snapshot during the
+     rebind render; otherwise React can pair A's old `turnId` with B's Session
+     for one render, including when both devices use the same Session id.
 
 1. **Cloud session/turn APIs stay on the controller** (`LOCAL_ONLY` in
    `peer-device-adapter.ts`). Peer history comes from HostInvoke
@@ -120,27 +125,42 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     Remote `SIGINT` / `SIGTSTP` map to PTY control bytes instead of silently
     succeeding without affecting the process.
 
-12. **Active chat has snapshot self-healing.** DeviceEvent has no ACK/replay, so
-    FlowChat reconciles the active session from `restore_session_view`
-    every 3s and immediately after a detected event gap. This is gated on
+12. **Active chat attaches to a Runtime-owned Turn projection.** DeviceEvent is
+    the low-latency path, not the owner of current-Turn state. Desktop and CLI
+    Peer Hosts materialize eligible current Turns after their ordered delivery
+    boundary and expose them
+    from `restore_session_view` as `runtimeEventSnapshot` with a per-Session
+    cursor and Runtime-process `streamId`. While restore is in flight,
+    `runtimeSessionEventGate` queues live events by
+    `(DeviceSurfaceId, SessionId)`; replay starts from an empty active-Turn base,
+    then the gate drops cursor-covered events and releases newer events in
+    order. Never compare cursors across different `streamId` values. This is
+    gated on
     `isSurfaceReconcileEnabled()`, **not** on Peer Mode: once a window has
     switched surface, a turn left running on the local device also needs the
-    repair, because its events were dropped by surface routing while another
-    device was rendered. The Peer Host must
+    same attach, because its live events were dropped by surface routing while
+    another device was rendered. Attach is requested as soon as active Session
+    hydration becomes ready; the 3s loop is only a liveness retry and an
+    older-Host fallback. The Peer Host must
     overlay its live in-memory session state on the persisted view; otherwise
     an in-progress turn is normalized as interrupted history and later chunks
-    are dropped by the controller state machine. Reconciliation must not
-    overwrite a local projection that changed while HostInvoke was in flight.
-    Continuous host output must create a persisted checkpoint within each 2s
-    coalescing window, and active snapshots may replace a running projection
-    early only when stream/tool content proves forward progress.
+    are dropped by the controller state machine. Surface epoch checks reject a
+    restore from a device no longer rendered. Older hosts may omit the Runtime
+    projection; their persisted snapshot must still never overwrite newer live
+    content.
+    **Controller presence is not Turn ownership.** A controller lease gates
+    submission and interaction responses, but once a Peer Host accepts a Turn,
+    the Host keeps executing and materializing it through a zero-controller
+    device-switch interval. Detach/presence loss must not cancel that Turn;
+    only an actual host event-stream continuity failure may fail it closed.
     **Blocking interactions are owner mailboxes, not one-shot UI events.** The
     Runtime retains native `AskUserQuestion` and interactive permission
     requests until answer/cancel/drop, and `restore_session_view` returns their
     additive, revisioned `interactionSnapshot` from both Desktop and CLI Peer
     Hosts. Keep its frontend projection per Surface, fence it with the captured
-    Surface epoch and newer event state, and use it only to reconstruct UI in
-    the owning Turn/round. Reattachment must never restart or cancel the
+    Surface epoch and newer event state, replay it after the Turn projection,
+    and use it only to reconstruct UI in the owning Turn/round. Reattachment
+    must never restart or cancel the
     running Session. Older peers may omit the field; absence is not an empty
     authoritative mailbox. Any new interaction that can suspend execution is
     incomplete until its owner exposes equivalent replayable attach state.

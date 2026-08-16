@@ -13,7 +13,8 @@ use bitfun_agent_runtime::sdk::{
     AgentLocalCommandTurnRecordRequest, AgentRuntime, AgentSessionArchiveStateRequest,
     AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionLineageRequest,
     AgentSessionLineageSnapshot, AgentSessionRenameRequest, AgentSessionUsageRequest,
-    PortErrorKind, RuntimeError, SessionInteractionSnapshot,
+    PortErrorKind, RuntimeError, SessionEventJournal, SessionEventProjectionSnapshot,
+    SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
 use bitfun_core::agentic::core::Session;
@@ -126,6 +127,7 @@ pub(crate) struct DesktopSessionViewRestore {
     pub session: Session,
     pub turns: Vec<DialogTurnData>,
     pub interaction_snapshot: SessionInteractionSnapshot,
+    pub runtime_event_snapshot: Option<SessionEventProjectionSnapshot>,
     pub current_context_usage: Option<SessionContextUsage>,
     pub total_turn_count: usize,
     pub turn_catalog: SessionTurnCatalog,
@@ -289,11 +291,13 @@ impl DesktopSessionApplication {
         workspace_service: Arc<WorkspaceService>,
         ssh_manager: Arc<RwLock<Option<SSHConnectionManager>>>,
         host_effects: Arc<dyn DesktopSessionHostEffects>,
+        session_event_journal: Arc<SessionEventJournal>,
     ) -> Result<Self, String> {
-        let agent_runtime = CoreProductAgentRuntime::build_session_surface(
+        let agent_runtime = CoreProductAgentRuntime::build_session_surface_with_event_journal(
             coordinator.clone(),
             scheduler.clone(),
             token_usage_service,
+            session_event_journal,
         )?;
         let compatibility = CoreAgentRuntimeCompatibility::build(coordinator.clone(), scheduler);
 
@@ -789,6 +793,9 @@ impl DesktopSessionApplication {
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?;
         overlay_live_session_state(&mut session, live_session);
         let interaction_snapshot = self.agent_runtime.session_interaction_snapshot(session_id);
+        let runtime_event_snapshot = self
+            .agent_runtime
+            .session_event_projection_snapshot(session_id);
         let current_context_usage = self
             .compatibility
             .load_persisted_session_metadata(&storage_path, session_id)
@@ -800,6 +807,7 @@ impl DesktopSessionApplication {
             session,
             turns,
             interaction_snapshot,
+            runtime_event_snapshot,
             current_context_usage,
             total_turn_count,
             turn_catalog,
