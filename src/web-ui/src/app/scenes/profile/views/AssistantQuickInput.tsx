@@ -16,7 +16,7 @@ import { IconButton, Textarea } from '@/component-library';
 import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
-import { useImeEnterGuard } from '@/flow_chat/hooks/useImeEnterGuard';
+import { useImeOwnedKeyGuard } from '@/flow_chat/hooks/useImeOwnedKeyGuard';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -39,7 +39,7 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
   const { setActiveWorkspace } = useWorkspaceContext();
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
-  const { isImeEnter, handleCompositionStart, handleCompositionEnd } = useImeEnterGuard();
+  const { isImeOwnedKey, handleCompositionStart, handleCompositionEnd } = useImeOwnedKeyGuard();
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value);
@@ -81,11 +81,11 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      if (isImeEnter(e)) return;
+      if (isImeOwnedKey(e)) return;
       e.preventDefault();
       void handleSend();
     }
-  }, [handleSend, isImeEnter]);
+  }, [handleSend, isImeOwnedKey]);
 
   const placeholder = assistantName
     ? t('input.assistantPlaceholder', { name: assistantName })
