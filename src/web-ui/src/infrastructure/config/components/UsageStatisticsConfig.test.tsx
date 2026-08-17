@@ -27,6 +27,33 @@ vi.mock('@/component-library', () => ({
   ConfigPageLoading: ({ text }: { text?: string }) => <div data-testid="usage-loading">{text}</div>,
   ConfigPageMessage: () => null,
   ConfigPageRefreshButton: () => <button type="button" data-testid="usage-refresh" />,
+  IconButton: ({
+    children,
+    tooltip: _tooltip,
+    size: _size,
+    variant: _variant,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    tooltip?: React.ReactNode;
+    size?: string;
+    variant?: string;
+  }) => <button {...props}>{children}</button>,
+  Input: ({
+    prefix,
+    suffix,
+    inputSize: _inputSize,
+    ...props
+  }: React.InputHTMLAttributes<HTMLInputElement> & {
+    prefix?: React.ReactNode;
+    suffix?: React.ReactNode;
+    inputSize?: string;
+  }) => (
+    <div>
+      {prefix}
+      <input {...props} />
+      {suffix}
+    </div>
+  ),
   Select: ({
     value,
     options,
@@ -225,7 +252,7 @@ describe('UsageStatisticsConfig', () => {
     // re-rendering the component with a new selection using the select element.
     // The first select is time range; the second is granularity.
     const selects = container.querySelectorAll('[data-testid="usage-select"]');
-    expect(selects.length).toBe(2);
+    expect(selects.length).toBe(3);
 
     await act(async () => {
       const nativeSet = Object.getOwnPropertyDescriptor(
@@ -245,6 +272,91 @@ describe('UsageStatisticsConfig', () => {
       granularity: 'hour',
       timeZone: 'UTC',
     });
+  });
+
+  it('debounces text filtering and refetches when the filter kind changes', async () => {
+    await render();
+    const input = container.querySelector(
+      '[data-testid="usage-filter-input"]',
+    ) as HTMLInputElement;
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      const nativeSet = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      nativeSet?.call(input, 'DeepSeek');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(resolve => window.setTimeout(resolve, 350));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getStatisticsMock).toHaveBeenCalledTimes(2);
+    expect(getStatisticsMock).toHaveBeenLastCalledWith({
+      timeRange: 'last24Hours',
+      granularity: 'hour',
+      timeZone: 'UTC',
+      filterKind: 'all',
+      filterQuery: 'DeepSeek',
+    });
+
+    const selects = container.querySelectorAll('[data-testid="usage-select"]');
+    await act(async () => {
+      const nativeSet = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        'value',
+      )?.set;
+      nativeSet?.call(selects[2], 'provider');
+      selects[2].dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getStatisticsMock).toHaveBeenCalledTimes(3);
+    expect(getStatisticsMock).toHaveBeenLastCalledWith({
+      timeRange: 'last24Hours',
+      granularity: 'hour',
+      timeZone: 'UTC',
+      filterKind: 'provider',
+      filterQuery: 'DeepSeek',
+    });
+  });
+
+  it('shows a distinct empty state when a filter has no matches', async () => {
+    getStatisticsMock
+      .mockResolvedValueOnce(SAMPLE_STATS)
+      .mockResolvedValueOnce({
+        ...SAMPLE_STATS,
+        totalRequests: 0,
+        byModel: [],
+        byGroup: [],
+        byEndpoint: [],
+        trend: [],
+      });
+
+    await render();
+    const input = container.querySelector(
+      '[data-testid="usage-filter-input"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      const nativeSet = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      nativeSet?.call(input, 'missing-model');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(resolve => window.setTimeout(resolve, 350));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('filter.empty.title');
+    expect(container.textContent).toContain('filter.empty.description');
   });
 
   it('surfaces load failures without crashing', async () => {

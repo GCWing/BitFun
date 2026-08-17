@@ -51,6 +51,7 @@ export type {
   UsageGranularity,
   UsageStatistics,
   UsageStatisticsEntry,
+  UsageStatisticsFilterKind,
   UsageTimeRange,
   UsageTrendPoint,
 } from './tokenUsageStatisticsApi';

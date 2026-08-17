@@ -8,7 +8,7 @@
 use super::types::TokenUsageRecord;
 use crate::service::config::types::AIModelConfig;
 use bitfun_services_core::token_usage::{
-    UsageAttribution, UsageAttributionStatus, UsageDimensionAttribution,
+    UsageAttribution, UsageAttributionStatus, UsageDimensionAttribution, UsageStatisticsFilterKind,
 };
 use std::collections::HashMap;
 
@@ -38,6 +38,33 @@ impl UsageAttributionResolver {
         match self.configs.get(&record.model_config_id) {
             Some(config) => self.attribute_resolved(record, config),
             None => self.attribute_missing(record),
+        }
+    }
+
+    pub fn matches_filter(
+        &self,
+        record: &TokenUsageRecord,
+        kind: UsageStatisticsFilterKind,
+        normalized_query: &str,
+    ) -> bool {
+        if normalized_query.is_empty() {
+            return true;
+        }
+
+        let config = self.configs.get(&record.model_config_id);
+        let provider_matches = config
+            .and_then(|config| non_empty(&config.name))
+            .is_some_and(|name| contains_normalized(name, normalized_query));
+        let model_matches = config
+            .and_then(|config| non_empty(&config.model_name))
+            .is_some_and(|name| contains_normalized(name, normalized_query))
+            || non_empty(&record.effective_model_name)
+                .is_some_and(|name| contains_normalized(name, normalized_query));
+
+        match kind {
+            UsageStatisticsFilterKind::All => provider_matches || model_matches,
+            UsageStatisticsFilterKind::Provider => provider_matches,
+            UsageStatisticsFilterKind::Model => model_matches,
         }
     }
 
@@ -139,6 +166,10 @@ impl UsageAttributionResolver {
 fn non_empty(value: &str) -> Option<&str> {
     let value = value.trim();
     (!value.is_empty()).then_some(value)
+}
+
+fn contains_normalized(value: &str, normalized_query: &str) -> bool {
+    value.to_lowercase().contains(normalized_query)
 }
 
 fn provider_instance_id(config: &AIModelConfig) -> Option<&str> {
@@ -361,6 +392,56 @@ mod tests {
         assert_ne!(first.model.key, second.model.key);
         assert_eq!(first.model.provider_name.as_deref(), Some("OpenBitFun"));
         assert_eq!(second.model.provider_name.as_deref(), Some("MiniMax"));
+    }
+
+    #[test]
+    fn provider_filter_uses_display_name_not_api_format() {
+        let resolver = UsageAttributionResolver::new(&[config(
+            "cfg-deepseek",
+            "DeepSeek",
+            "openai",
+            "deepseek-v4-flash",
+            "https://api.deepseek.com",
+            None,
+            Some("provider-deepseek"),
+        )]);
+        let record = record("cfg-deepseek", "deepseek-v4-flash");
+
+        assert!(resolver.matches_filter(&record, UsageStatisticsFilterKind::Provider, "deep"));
+        assert!(resolver.matches_filter(&record, UsageStatisticsFilterKind::Provider, "deepseek"));
+        assert!(!resolver.matches_filter(&record, UsageStatisticsFilterKind::Provider, "openai"));
+    }
+
+    #[test]
+    fn model_filter_matches_configured_and_effective_model_names() {
+        let resolver = UsageAttributionResolver::new(&[config(
+            "cfg-model",
+            "Custom Provider",
+            "anthropic",
+            "Configured-Model",
+            "https://api.example.com",
+            None,
+            Some("provider-custom"),
+        )]);
+        let record = record("cfg-model", "effective-model-alias");
+
+        assert!(resolver.matches_filter(&record, UsageStatisticsFilterKind::Model, "configured"));
+        assert!(resolver.matches_filter(
+            &record,
+            UsageStatisticsFilterKind::Model,
+            "effective-model"
+        ));
+        assert!(resolver.matches_filter(&record, UsageStatisticsFilterKind::All, "custom"));
+    }
+
+    #[test]
+    fn deleted_config_can_only_be_filtered_by_effective_model_name() {
+        let resolver = UsageAttributionResolver::new(&[]);
+        let record = record("deleted-config", "legacy-model");
+
+        assert!(resolver.matches_filter(&record, UsageStatisticsFilterKind::Model, "legacy"));
+        assert!(resolver.matches_filter(&record, UsageStatisticsFilterKind::All, "legacy"));
+        assert!(!resolver.matches_filter(&record, UsageStatisticsFilterKind::Provider, "legacy"));
     }
 
     #[test]

@@ -14,6 +14,21 @@
     "hour": "按小时",
     "day": "按天"
   },
+  "filter": {
+    "kind": {
+      "label": "筛选字段",
+      "all": "全部",
+      "provider": "供应商",
+      "model": "模型"
+    },
+    "placeholder": "筛选供应商或模型",
+    "inputLabel": "筛选调用统计",
+    "clear": "清除筛选",
+    "empty": {
+      "title": "没有匹配的调用数据",
+      "description": "当前筛选条件下没有调用记录。"
+    }
+  },
   "refresh": "刷新",
   "loading": "正在加载调用统计…",
   "loadFailed": "加载调用统计失败，请重试。",

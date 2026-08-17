@@ -11,6 +11,7 @@ export type UsageTimeRange =
   | 'custom';
 
 export type UsageGranularity = 'hour' | 'day';
+export type UsageStatisticsFilterKind = 'all' | 'provider' | 'model';
 
 export type UsageAttributionStatus =
   | 'resolved'
@@ -26,6 +27,8 @@ export interface TokenUsageStatisticsRequest {
   /** IANA time zone used for local-calendar ranges and trend buckets. */
   timeZone?: string;
   includeSubagent?: boolean;
+  filterKind?: UsageStatisticsFilterKind;
+  filterQuery?: string;
 }
 
 export interface UsageStatisticsEntry {
