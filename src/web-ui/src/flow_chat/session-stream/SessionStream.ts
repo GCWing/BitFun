@@ -13,6 +13,7 @@
  */
 
 import {
+  getActiveSurfaceScope,
   surfaceScopedKey,
   type DeviceSurfaceId,
 } from '@/infrastructure/peer-device/deviceSurface';
@@ -72,6 +73,11 @@ export class SessionStream {
     return this.ownership.executingTurnIds();
   }
 
+  /** Whether the persisted record may write this Turn (contract 2). */
+  persistedMayWrite(turnId: string): boolean {
+    return this.ownership.persistedMayWrite(turnId);
+  }
+
   /**
    * Offer a positioned write.
    *
@@ -121,7 +127,7 @@ export class SessionStream {
       // and every ownership fact from the old process is void — a Turn id it
       // reuses is a different Turn as far as this stream is concerned.
       this.ownership.reset();
-      this.gapAt = position.cursor > 1 ? position : null;
+      this.gapAt = null;
     } else if (order === 'ahead-with-gap') {
       // A real discontinuity, independent of whether this particular event is
       // admitted below.
@@ -282,4 +288,31 @@ export function discardSessionStreams(surfaceId: DeviceSurfaceId): void {
 export function resetSessionStreamsForTest(): void {
   streams.clear();
   nextSequence = 0;
+}
+
+/**
+ * Whether the persisted record may write this Turn on the rendered surface.
+ *
+ * The persisted copy of an executing Turn is deliberately stored idle so a
+ * restart never revives work, which makes it truncated and shaped like a
+ * finished Turn. Contract 2 is what stops that copy from being painted over
+ * the Turn the runtime stream owns.
+ *
+ * No stream means nothing live has been observed for this Session here, so
+ * there is no runtime-owned content to protect and history is free to write.
+ */
+export function persistedMayWriteTurn(
+  sessionId: string,
+  turnId: string,
+  hostExecutingTurnId?: string,
+): boolean {
+  // The Host's own state is the authority on which Turn is executing. This
+  // window may never have seen that Turn start — it opened mid-flight, or the
+  // Turn was established by replaying a snapshot rather than by routed live
+  // events — and "I did not witness it" is not evidence that it finished.
+  if (hostExecutingTurnId && hostExecutingTurnId === turnId) {
+    return false;
+  }
+  const stream = peekSessionStream(getActiveSurfaceScope().surfaceId, sessionId);
+  return stream ? stream.persistedMayWrite(turnId) : true;
 }

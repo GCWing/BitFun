@@ -102,7 +102,6 @@ criteria — a migration step that does not remove its entry has not finished.
 
 | Removed | Replaced by |
 |---|---|
-| `snapshotDropsProjectedTurnContent` | positions cannot regress (contract 1) |
 | `replaceRunningSnapshot` | there is no replace operation (contract 1) |
 | `runtimeProjectionCaughtUp` | the applied position is the answer (contract 1) |
 | `prepareRuntimeTurnReplay` / `asRuntimeReplayTurn` | an executing Turn has one writer (contract 2) |
@@ -113,6 +112,27 @@ criteria — a migration step that does not remove its entry has not finished.
 The 3s poll is **not** on this list. Events that never arrive advance no
 cursor, so no discontinuity is observable; the poll remains the liveness probe
 that notices a stream has gone quiet. It stops being a repair mechanism.
+
+### Two gaps the contract does not yet close
+
+Both were found by deleting a heuristic and watching a behavioural test fail.
+They are why `snapshotDropsProjectedTurnContent` and
+`isRunningSnapshotForwardProgress` survive, inside
+`persistedReadMayReplaceTurn`, as the last content comparison in the merge:
+
+- **A Host that serves no runtime projection.** Contract 2 hands an executing
+  Turn to the runtime stream, but an older Host has no such stream. Its
+  persisted checkpoint is the only progress that exists, so forward progress
+  from it is still admitted when `runtimeEventSnapshot` is absent.
+- **A partial history read.** History positions are turn ordinals, and a
+  windowed or not-yet-checkpointed read can name a Turn while carrying none of
+  its work. Such a read holds no position for the content it omitted, so
+  writing the Turn from it is lossy rather than advancing. Closing this needs
+  the read to report its own completeness; until then "would this write lose
+  content" is the only question available.
+
+Deleting either guard without first closing its gap reintroduces a real defect,
+not just a test failure.
 
 ## Migration
 

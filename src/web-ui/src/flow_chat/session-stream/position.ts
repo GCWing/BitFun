@@ -48,16 +48,22 @@ export function isRuntimePosition(value: unknown): value is RuntimePosition {
 /**
  * Where `candidate` sits relative to what has already been applied.
  *
- * `applied` being `null` means nothing has been applied yet, so the first
- * position of a stream continues it and any later one leaves a gap — a client
- * joining mid-stream has missed the beginning and must say so.
+ * `applied` being `null` adopts `candidate` as the baseline rather than
+ * reporting a gap. Cursors are per Session and never reset, so a window that
+ * opens an existing Session sees its first live event at a high cursor — that
+ * is not a discontinuity in anything this client applied, and treating it as
+ * one made every freshly opened Session schedule a repair, fence its own live
+ * events behind that request, and appear to stall until the response released
+ * them (regression: 2026-08-17).
+ *
+ * What came before the baseline is history, and the hydrate path owns it.
  */
 export function comparePositions(
   applied: RuntimePosition | null,
   candidate: RuntimePosition,
 ): PositionOrder {
   if (!applied) {
-    return candidate.cursor <= 1 ? 'next' : 'ahead-with-gap';
+    return 'next';
   }
   if (applied.streamId !== candidate.streamId) {
     return 'unrelated';

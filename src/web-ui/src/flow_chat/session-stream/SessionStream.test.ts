@@ -34,9 +34,12 @@ describe('position ordering', () => {
     expect(comparePositions(at(4), at(2))).toBe('not-ahead');
   });
 
-  it('treats joining mid-stream as a gap', () => {
+  it('adopts a baseline when joining mid-stream instead of reporting a gap', () => {
+    // Cursors are per Session and never reset, so opening an existing Session
+    // legitimately starts at a high cursor. Nothing this client applied is
+    // missing; what came before is history.
     expect(comparePositions(null, at(1))).toBe('next');
-    expect(comparePositions(null, at(6))).toBe('ahead-with-gap');
+    expect(comparePositions(null, at(6))).toBe('next');
   });
 });
 

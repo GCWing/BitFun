@@ -20,11 +20,16 @@ Already owned by the contract (`flow_chat/session-stream/`):
 - Surface-scoped Session identity in invariant 0: a stream is keyed by
   `(DeviceSurfaceId, SessionId)` by construction.
 
-Still to migrate, in order: the snapshot writer
-(`replaceRunningSnapshot`, `snapshotDropsProjectedTurnContent`,
-`isRunningSnapshotForwardProgress` — replaced by "the persisted record may
-write a Turn only when it is not executing"), the interaction mailbox, then
-history.
+Also owned: which read may write a Turn. `replaceRunningSnapshot` is gone —
+the persisted record (snapshot merge *and* disk hydrate) may not write the Turn
+the runtime stream owns, and the Host's declared executing Turn is part of that
+ownership. `snapshotDropsProjectedTurnContent` and
+`isRunningSnapshotForwardProgress` survive inside `persistedReadMayReplaceTurn`
+for the two gaps the contract does not yet close (a Host with no runtime
+projection, and a partial history read); see the contract doc before touching
+them.
+
+Still to migrate, in order: the interaction mailbox, then history positions.
 
 ## Invariants (do not regress)
 

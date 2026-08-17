@@ -36,6 +36,7 @@ import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { normalizeRemoteSessionScope } from '@/shared/utils/remoteSessionScope';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { isSurfaceReconcileEnabled } from '@/infrastructure/peer-device/deviceSurfaceReconcile';
+import { persistedMayWriteTurn } from '@/flow_chat/session-stream/SessionStream';
 import {
   getActiveSurfaceId,
   getActiveSurfaceScope,
@@ -694,6 +695,44 @@ function snapshotDropsProjectedTurnContent(
   }
 
   return false;
+}
+
+/**
+ * Whether a persisted-record read may replace the Turn already projected.
+ *
+ * Contract 2 of docs/architecture/session-projection.md: the runtime stream
+ * owns an executing Turn, so its persisted copy — deliberately stored idle so a
+ * restart never revives work, and therefore truncated, token-less, and shaped
+ * like a finished Turn — must not be painted over it. Doing so showed a
+ * completed Turn on a controller while the Host was still streaming
+ * (regression: 2026-08-17).
+ *
+ * Two cases keep a content comparison, and both are places the contract does
+ * not yet reach:
+ *
+ * - An older Host serves no runtime projection at all. With no runtime stream
+ *   to own the Turn, its checkpoint is the only progress there is, so forward
+ *   progress is still admitted.
+ * - A settled Turn belongs to the persisted record, but a windowed or
+ *   not-yet-checkpointed read can name a Turn while carrying none of its work.
+ *   A history read carries no position for content it omitted, so "does this
+ *   write lose content" is still the only question available. This guard is
+ *   deletable once a read reports its own completeness.
+ */
+function persistedReadMayReplaceTurn(
+  sessionId: string,
+  projected: DialogTurn,
+  incoming: DialogTurn,
+  hostExecutingTurnId: string | undefined,
+  hostServesRuntimeProjection: boolean,
+): boolean {
+  if (!persistedMayWriteTurn(sessionId, incoming.id, hostExecutingTurnId)) {
+    return (
+      !hostServesRuntimeProjection &&
+      isRunningSnapshotForwardProgress(projected, incoming)
+    );
+  }
+  return !snapshotDropsProjectedTurnContent(projected, incoming);
 }
 
 /** Empty current-Turn shell so Runtime journal replay cannot overlap a persist checkpoint. */
@@ -7322,7 +7361,6 @@ export class FlowChatStore {
     sessionId: string,
     workspacePath: string,
     options?: {
-      replaceRunningSnapshot?: boolean;
       requireActiveSession?: boolean;
       shouldApply?: () => boolean;
       shouldReplayRuntimeSnapshot?: (snapshot: SessionRuntimeEventSnapshot) => boolean;
@@ -7386,8 +7424,6 @@ export class FlowChatStore {
       restored.interactionSnapshot?.sessionId === sessionId
         ? restored.interactionSnapshot.userQuestions
         : undefined;
-    const replaceExistingTurns =
-      !backendActive || options?.replaceRunningSnapshot === true;
     let applied = false;
 
     this.setState(prev => {
@@ -7452,11 +7488,17 @@ export class FlowChatStore {
           mergedTurns.push(snapshotTurn);
           turnsChanged = true;
         } else if (
-          (runtimeReplaySnapshot && snapshotTurn.id === runtimeReplaySnapshot.activeTurnId)
+          // The Runtime journal replay *is* the runtime writer, so it always
+          // establishes its own active Turn.
+          runtimeReplaySnapshot && snapshotTurn.id === runtimeReplaySnapshot.activeTurnId
             ? true
-            : replaceExistingTurns
-            ? !snapshotDropsProjectedTurnContent(mergedTurns[existingIndex], snapshotTurn)
-            : isRunningSnapshotForwardProgress(mergedTurns[existingIndex], snapshotTurn)
+            : persistedReadMayReplaceTurn(
+                sessionId,
+                mergedTurns[existingIndex],
+                snapshotTurn,
+                activeTurnId,
+                Boolean(runtimeEventSnapshot),
+              )
         ) {
           mergedTurns[existingIndex] = snapshotTurn;
           turnsChanged = true;
@@ -8056,10 +8098,17 @@ export class FlowChatStore {
           restoredSessionInfo?.agentType || session.mode || session.config.agentType;
         const mergedTurns = dialogTurns.map(loaded => {
           const existing = session.dialogTurns.find(turn => turn.id === loaded.id);
+          // Disk hydrate is the persisted record, so the same ownership rule
+          // applies: it may not overwrite the Turn the runtime stream owns.
           if (
             existing &&
-            loaded.id === activeTurnId &&
-            snapshotDropsProjectedTurnContent(existing, loaded)
+            !persistedReadMayReplaceTurn(
+              sessionId,
+              existing,
+              loaded,
+              activeTurnId,
+              Boolean(restoredRuntimeEventSnapshot),
+            )
           ) {
             return existing;
           }

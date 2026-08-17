@@ -272,6 +272,17 @@ async function tryIncrementalCatchUp(
   }
 
   const attachment = beginRuntimeSessionAttachment(surfaceScope.surfaceId, sessionId);
+  // A fence that is neither settled nor handed off holds this Session's live
+  // events forever, which reads as the chat freezing and then flooding when
+  // something else finally opens a read. Every exit below either settles it or
+  // states which read inherits it, and the `finally` covers the rest.
+  let fenceResolved = false;
+  const handOffToSnapshotPath = (): boolean => {
+    // The caller runs the snapshot path immediately when we return false, and
+    // its own `beginRead` inherits the held events rather than racing them.
+    fenceResolved = true;
+    return false;
+  };
   try {
     const backfill = await agentAPI.loadSessionEventBackfill(
       sessionId,
@@ -280,13 +291,12 @@ async function tryIncrementalCatchUp(
     );
     surfaceScope.assertCurrent('runtimeSessionBackfill');
     if (!attachment.isCurrent()) {
-      // A newer attach owns the fence and carries our queue with it.
+      // A newer read owns the fence and carries our queue with it.
+      fenceResolved = true;
       return true;
     }
     if (backfill.kind !== 'delta') {
-      // Leave the fence in place: the snapshot path begins its own attachment
-      // and inherits the queued events rather than racing them.
-      return false;
+      return handOffToSnapshotPath();
     }
 
     for (const event of backfill.events) {
@@ -321,13 +331,14 @@ async function tryIncrementalCatchUp(
     });
     if (!caughtUp) {
       markRuntimeSessionProjectionStale(surfaceScope.surfaceId, sessionId);
-      return false;
+      return handOffToSnapshotPath();
     }
 
     attachment.finish(
       { streamId: backfill.streamId, cursor: backfill.cursor },
       { projectionCaughtUp: true },
     );
+    fenceResolved = true;
     log.debug('Runtime session projection caught up incrementally', {
       sessionId,
       from: applied.cursor,
@@ -339,13 +350,17 @@ async function tryIncrementalCatchUp(
     if (isSurfaceChangedError(error)) {
       throw error;
     }
-    // Never strand the queued live events on a failed repair.
-    attachment.abort();
     log.debug('Incremental catch-up failed; falling back to a snapshot', {
       sessionId,
       error,
     });
     return false;
+  } finally {
+    if (!fenceResolved) {
+      // Release the held events rather than stranding them. On a superseded
+      // read this is a no-op, which is why it is safe unconditionally.
+      attachment.abort();
+    }
   }
 }
 
@@ -501,8 +516,6 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       }
     }
 
-    const replaceRunningSnapshot =
-      forceRuntimeReplay || streamIsStale;
     context.eventBatcher.flushNow();
     const machineVersion = machine?.getContext().version ?? 0;
     const attachment = beginRuntimeSessionAttachment(surfaceScope.surfaceId, sessionId);
@@ -514,7 +527,6 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         sessionId,
         workspacePath,
         {
-          replaceRunningSnapshot,
           // A background session on this surface still owns its projection.
           // Requiring the focused tab aborted the dropped-event repair for
           // every non-active running chat after a multi-session switch.
