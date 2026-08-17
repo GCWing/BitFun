@@ -11,12 +11,6 @@ use bitfun_core::service::remote_connect::DeviceIdentity;
 #[derive(Default)]
 struct ControllerRegistry {
     ids: HashSet<String>,
-    generation: u64,
-}
-
-#[derive(Clone, Copy)]
-pub(crate) struct ControllerLease {
-    generation: u64,
 }
 
 static CONTROL_SUBSCRIBERS: OnceLock<Mutex<ControllerRegistry>> = OnceLock::new();
@@ -78,11 +72,7 @@ pub(crate) async fn controller_delivery_lease(
 
 fn detach_from_registry(registry: &mut ControllerRegistry, device_id: &str) -> bool {
     let was_attached = registry.ids.remove(device_id);
-    let lost_all = was_attached && registry.ids.is_empty();
-    if lost_all {
-        registry.generation = registry.generation.wrapping_add(1);
-    }
-    lost_all
+    was_attached && registry.ids.is_empty()
 }
 
 fn retain_online_in_registry(registry: &mut ControllerRegistry, online: &HashSet<&str>) -> bool {
@@ -90,30 +80,7 @@ fn retain_online_in_registry(registry: &mut ControllerRegistry, online: &HashSet
     registry
         .ids
         .retain(|device_id| online.contains(device_id.as_str()));
-    let lost_all = had_controllers && registry.ids.is_empty();
-    if lost_all {
-        registry.generation = registry.generation.wrapping_add(1);
-    }
-    lost_all
-}
-
-pub(crate) fn attached_controller_lease() -> Result<ControllerLease, String> {
-    let registry = control_subscribers()
-        .lock()
-        .map_err(|_| "Peer controller registry is unavailable".to_string())?;
-    if registry.ids.is_empty() {
-        return Err("A Peer controller must attach before starting a dialog turn".to_string());
-    }
-    Ok(ControllerLease {
-        generation: registry.generation,
-    })
-}
-
-pub(crate) fn is_controller_lease_current(lease: ControllerLease) -> bool {
-    control_subscribers()
-        .lock()
-        .map(|registry| !registry.ids.is_empty() && registry.generation == lease.generation)
-        .unwrap_or(false)
+    had_controllers && registry.ids.is_empty()
 }
 
 pub(crate) fn attached_controllers() -> Vec<String> {
@@ -134,6 +101,7 @@ pub(crate) fn peer_mode_ping_value() -> Value {
         "peer": true,
         "device_id": device_id,
         "capabilities": {
+            "idempotent_dialog_submit": true,
             "targeted_session_rollback": true,
         },
     })
@@ -160,25 +128,16 @@ mod tests {
 
     use super::{
         attach_controller, controller_delivery_lease, detach_controller, detach_from_registry,
-        retain_online_in_registry, ControllerLease, ControllerRegistry,
+        retain_online_in_registry, ControllerRegistry,
     };
-
-    fn lease_is_current(registry: &ControllerRegistry, lease: ControllerLease) -> bool {
-        !registry.ids.is_empty() && registry.generation == lease.generation
-    }
 
     #[test]
     fn only_the_last_detach_reports_loss_of_all_controllers() {
         let mut registry = ControllerRegistry {
             ids: HashSet::from(["controller-1".to_string(), "controller-2".to_string()]),
-            generation: 0,
         };
-        let lease = ControllerLease { generation: 0 };
-
         assert!(!detach_from_registry(&mut registry, "controller-1"));
-        assert!(lease_is_current(&registry, lease));
         assert!(detach_from_registry(&mut registry, "controller-2"));
-        assert!(!lease_is_current(&registry, lease));
         assert!(!detach_from_registry(&mut registry, "controller-2"));
     }
 
@@ -186,32 +145,11 @@ mod tests {
     fn presence_removal_reports_when_the_last_controller_goes_offline() {
         let mut registry = ControllerRegistry {
             ids: HashSet::from(["controller-1".to_string(), "controller-2".to_string()]),
-            generation: 0,
         };
         let first_online = HashSet::from(["controller-1"]);
         assert!(!retain_online_in_registry(&mut registry, &first_online));
 
         assert!(retain_online_in_registry(&mut registry, &HashSet::new()));
-    }
-
-    #[test]
-    fn reattach_does_not_revalidate_a_lease_from_before_the_last_detach() {
-        let mut registry = ControllerRegistry {
-            ids: HashSet::from(["controller-1".to_string()]),
-            generation: 7,
-        };
-        let old_lease = ControllerLease { generation: 7 };
-
-        assert!(detach_from_registry(&mut registry, "controller-1"));
-        registry.ids.insert("controller-2".to_string());
-
-        assert!(!lease_is_current(&registry, old_lease));
-        assert!(lease_is_current(
-            &registry,
-            ControllerLease {
-                generation: registry.generation,
-            }
-        ));
     }
 
     #[tokio::test]

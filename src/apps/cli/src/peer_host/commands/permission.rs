@@ -7,7 +7,6 @@ use bitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session
 use bitfun_core::service::workspace::WorkspaceKind;
 
 use crate::peer_host::args::{get_string, request_value};
-use crate::peer_host::control::attached_controller_lease;
 use crate::peer_host::state::PeerHostState;
 
 fn permission_reply(request: &Value) -> Result<PermissionReply, String> {
@@ -64,16 +63,12 @@ pub(crate) fn list_pending_permission_requests(state: &PeerHostState) -> Result<
     let requests = state
         .agent_runtime
         .pending_permission_requests()
-        .map_err(|error| error.into_message())?
-        .into_iter()
-        .filter(|request| state.turns.owns_permission_request(request))
-        .collect::<Vec<_>>();
+        .map_err(|error| error.into_message())?;
     serde_json::to_value(requests)
         .map_err(|error| format!("Failed to serialize permission requests: {error}"))
 }
 
 pub(crate) fn subscribe_permission_requests() -> Result<Value, String> {
-    attached_controller_lease()?;
     Ok(Value::Null)
 }
 
@@ -81,22 +76,12 @@ pub(crate) async fn respond_permission(
     state: &PeerHostState,
     args: &Value,
 ) -> Result<Value, String> {
-    let lease = attached_controller_lease()?;
     let request = request_value(args);
     let request_id = get_string(request, "requestId")?;
-    let pending = state
-        .agent_runtime
-        .pending_permission_requests()
-        .map_err(|error| error.into_message())?
-        .into_iter()
-        .find(|pending| pending.request_id == request_id)
-        .ok_or_else(|| format!("Permission request not found: {request_id}"))?;
-    if !state.turns.owns_permission_request(&pending) {
-        return Err("The permission request is not owned by the Peer controller".to_string());
-    }
-    if !crate::peer_host::control::is_controller_lease_current(lease) {
-        return Err("Peer controller continuity was lost before permission response".to_string());
-    }
+    // Any attached surface of the account may answer any pending request on
+    // this host. The Runtime mailbox is the arbiter: it resolves exactly once,
+    // so a request answered in this host's TUI is simply gone by the time a
+    // second answer arrives, and `respond_permission` reports that itself.
     let reply = permission_reply(request)?;
     state
         .agent_runtime
@@ -110,22 +95,8 @@ pub(crate) async fn respond_permission_batch(
     state: &PeerHostState,
     args: &Value,
 ) -> Result<Value, String> {
-    let lease = attached_controller_lease()?;
     let request = request_value(args);
     let request_id = get_string(request, "requestId")?;
-    let pending = state
-        .agent_runtime
-        .pending_permission_requests()
-        .map_err(|error| error.into_message())?
-        .into_iter()
-        .find(|pending| pending.request_id == request_id)
-        .ok_or_else(|| format!("Permission request not found: {request_id}"))?;
-    if !state.turns.owns_permission_request(&pending) {
-        return Err("The permission request is not owned by the Peer controller".to_string());
-    }
-    if !crate::peer_host::control::is_controller_lease_current(lease) {
-        return Err("Peer controller continuity was lost before permission response".to_string());
-    }
     let reply = permission_reply(request)?;
     let resolved_request_ids = state
         .agent_runtime
@@ -155,7 +126,6 @@ pub(crate) async fn remove_project_permission_grant(
     state: &PeerHostState,
     args: &Value,
 ) -> Result<Value, String> {
-    attached_controller_lease()?;
     let request = request_value(args);
     let workspace_id = get_string(request, "workspaceId")?;
     let project_id = permission_project_id_for_workspace(state, &workspace_id).await?;
@@ -175,7 +145,6 @@ pub(crate) async fn clear_project_permission_grants(
     state: &PeerHostState,
     args: &Value,
 ) -> Result<Value, String> {
-    attached_controller_lease()?;
     let request = request_value(args);
     let workspace_id = get_string(request, "workspaceId")?;
     let project_id = permission_project_id_for_workspace(state, &workspace_id).await?;
