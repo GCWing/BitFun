@@ -22,29 +22,28 @@ import {
 import './UsageStatisticsConfig.scss';
 
 // ---------------------------------------------------------------------------
-// Chart palette — appearance tokens only (theme audit safe).
+// Chart palette — appearance tokens only (literal vars so the theme color
+// audit can statically resolve every reference).
 // ---------------------------------------------------------------------------
 
-const TOKEN = (name: string): string => `var(--bf-appearance-token-${name})`;
-
 const SERIES_COLORS = {
-  input: TOKEN('color-accent-500'),
-  output: TOKEN('color-success'),
-  cacheCreation: TOKEN('color-warning'),
-  cacheRead: TOKEN('color-cyan-500'),
-  cacheHitRate: TOKEN('color-purple-500'),
+  input: 'var(--bf-appearance-token-color-accent-500)',
+  output: 'var(--bf-appearance-token-color-success)',
+  cacheCreation: 'var(--bf-appearance-token-color-warning)',
+  cacheRead: 'var(--bf-appearance-token-color-cyan-500)',
+  cacheHitRate: 'var(--bf-appearance-token-color-purple-500)',
 } as const;
 
 const DONUT_PALETTE = [
-  TOKEN('color-accent-500'),
-  TOKEN('color-purple-500'),
-  TOKEN('color-cyan-500'),
-  TOKEN('color-success'),
-  TOKEN('color-warning'),
-  TOKEN('color-indigo-500'),
-  TOKEN('color-error'),
-  TOKEN('color-accent-300'),
-  TOKEN('color-purple-200'),
+  'var(--bf-appearance-token-color-accent-500)',
+  'var(--bf-appearance-token-color-purple-500)',
+  'var(--bf-appearance-token-color-cyan-500)',
+  'var(--bf-appearance-token-color-success)',
+  'var(--bf-appearance-token-color-warning)',
+  'var(--bf-appearance-token-color-indigo-500)',
+  'var(--bf-appearance-token-color-error)',
+  'var(--bf-appearance-token-color-accent-300)',
+  'var(--bf-appearance-token-color-purple-200)',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -98,7 +97,7 @@ const DonutChart: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) 
           cy="70"
           r={radius}
           fill="none"
-          stroke={TOKEN('element-bg-soft')}
+          stroke="var(--bf-appearance-token-element-bg-soft)"
           strokeWidth="16"
         />
         {entries.map((entry, index) => {
@@ -129,7 +128,7 @@ const DonutChart: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) 
             cy="70"
             r={radius}
             fill="none"
-            stroke={TOKEN('element-bg-soft')}
+            stroke="var(--bf-appearance-token-element-bg-soft)"
             strokeWidth="16"
           />
         )}
