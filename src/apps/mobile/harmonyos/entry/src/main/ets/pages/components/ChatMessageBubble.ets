@@ -537,6 +537,7 @@ export struct ChatMessageBubble {
     let activityChildScopes: boolean[] = [];
     let activityStart = 0;
     let activityHasThinking = false;
+    let activityHasTool = false;
     const activeItemIndex = activeScope ? this.lastRenderableItemIndex(items) : -1;
 
     const flushTools = () => {
@@ -571,6 +572,9 @@ export struct ChatMessageBubble {
         });
       } else if (activityItems.length === 1) {
         const entry = activityItems[0];
+        // Tools buffered before this group ran before it, so they have to be
+        // emitted first; otherwise they would render below it.
+        flushTools();
         groups.push({
           type: 'item',
           items: [entry],
@@ -582,6 +586,7 @@ export struct ChatMessageBubble {
           path: `${prefix}-${activityStart}`
         });
       } else {
+        flushTools();
         groups.push({
           type: 'activity_group',
           items: activityItems,
@@ -598,10 +603,14 @@ export struct ChatMessageBubble {
       activityStreaming = [];
       activityChildScopes = [];
       activityHasThinking = false;
+      activityHasTool = false;
     };
 
     items.forEach((entry: ConversationUiMessageItem, index: number) => {
       if (this.shouldFoldIntoActivityGroup(entry)) {
+        if (ActivityGroupPolicy.startsNewActivityGroup(this.isThinkingEntry(entry), activityHasTool)) {
+          flushActivity();
+        }
         if (activityItems.length === 0) {
           activityStart = index;
         }
@@ -610,6 +619,7 @@ export struct ChatMessageBubble {
         activityStreaming.push(this.itemShouldStream(entry, index, activeItemIndex));
         activityChildScopes.push(this.itemChildActiveScope(entry, index, activeItemIndex));
         activityHasThinking = activityHasThinking || this.isThinkingEntry(entry);
+        activityHasTool = activityHasTool || !!entry.tool;
         return;
       }
 

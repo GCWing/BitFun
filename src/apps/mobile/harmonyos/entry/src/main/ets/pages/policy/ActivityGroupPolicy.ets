@@ -16,6 +16,16 @@ export class ActivityGroupPolicy {
     return ToolCollapsePolicy.shouldFoldIntoSummary(tool);
   }
 
+  /**
+   * A group renders every thinking part above every tool it holds, so a
+   * thinking entry that arrives after a tool has to open a new group.
+   * Folding it into the current one would hoist it above tools that had
+   * already run by the time the model wrote it.
+   */
+  static startsNewActivityGroup(isThinking: boolean, groupHasTool: boolean): boolean {
+    return isThinking && groupHasTool;
+  }
+
   static thinkingHeaderCount(thinkingPartCount: number): number {
     if (thinkingPartCount <= 0) {
       return 0;
