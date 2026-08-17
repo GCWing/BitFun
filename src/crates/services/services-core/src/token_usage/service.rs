@@ -1,9 +1,11 @@
+#[cfg(feature = "token-usage-statistics")]
 use super::time_zone::{local_date_start_utc, parse_time_zone};
 use super::types::{
     ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,
     TokenUsageSummary,
 };
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
+#[cfg(feature = "token-usage-statistics")]
 use chrono_tz::Tz;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
@@ -386,8 +388,7 @@ impl TokenUsageService {
         session_ids: Option<&HashSet<String>>,
     ) -> Result<Vec<TokenUsageRecord>, String> {
         let _usage_guard = self.usage_lifecycle.read().await;
-        let time_zone = parse_time_zone(query.time_zone.as_deref())?;
-        let time_bounds = time_bounds_at(&query.time_range, time_zone, Utc::now())?;
+        let time_bounds = resolve_time_bounds(&query, Utc::now())?;
         let record_paths = self.record_paths_for_range(time_bounds).await?;
         let offset = query.offset.unwrap_or(0);
         let limit = query.limit.unwrap_or(usize::MAX);
@@ -636,6 +637,35 @@ impl TokenUsageService {
     }
 }
 
+#[cfg(feature = "token-usage-statistics")]
+fn resolve_time_bounds(
+    query: &TokenUsageQuery,
+    now: DateTime<Utc>,
+) -> Result<Option<(DateTime<Utc>, DateTime<Utc>)>, String> {
+    let time_zone = parse_time_zone(query.time_zone.as_deref())?;
+    time_bounds_at(&query.time_range, time_zone, now)
+}
+
+#[cfg(not(feature = "token-usage-statistics"))]
+fn resolve_time_bounds(
+    query: &TokenUsageQuery,
+    now: DateTime<Utc>,
+) -> Result<Option<(DateTime<Utc>, DateTime<Utc>)>, String> {
+    if query
+        .time_zone
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty() && !matches!(value, "UTC" | "Etc/UTC" | "Etc/GMT"))
+    {
+        return Err(
+            "IANA token usage time zones require the token-usage-statistics feature".to_string(),
+        );
+    }
+
+    time_bounds_utc_at(&query.time_range, now)
+}
+
+#[cfg(feature = "token-usage-statistics")]
 fn time_bounds_at(
     time_range: &TimeRange,
     time_zone: Tz,
@@ -664,6 +694,38 @@ fn time_bounds_at(
     start_date
         .map(|date| local_date_start_utc(date, time_zone).map(|start| (start, now)))
         .transpose()
+}
+
+#[cfg(not(feature = "token-usage-statistics"))]
+fn time_bounds_utc_at(
+    time_range: &TimeRange,
+    now: DateTime<Utc>,
+) -> Result<Option<(DateTime<Utc>, DateTime<Utc>)>, String> {
+    let start_date =
+        match time_range {
+            TimeRange::Today => Some(now.date_naive()),
+            TimeRange::ThisWeek => {
+                Some(now.date_naive() - Duration::days(now.weekday().num_days_from_monday() as i64))
+            }
+            TimeRange::ThisMonth => Some(now.date_naive().with_day(1).ok_or_else(|| {
+                "Unable to resolve the first day of the current month".to_string()
+            })?),
+            TimeRange::All => None,
+            TimeRange::Custom { start, end } => {
+                if end <= start {
+                    return Err("Token usage time range end must be after start".to_string());
+                }
+                return Ok(Some((*start, *end)));
+            }
+        };
+
+    Ok(start_date.map(|date| {
+        let start = date
+            .and_hms_opt(0, 0, 0)
+            .expect("midnight is valid")
+            .and_utc();
+        (start, now)
+    }))
 }
 
 fn records_date_key(date: DateTime<Utc>) -> String {
@@ -758,6 +820,7 @@ mod tests {
         assert_eq!(records[0].session_id, "parent-session");
     }
 
+    #[cfg(feature = "token-usage-statistics")]
     #[test]
     fn today_uses_the_requested_local_calendar() {
         let now = Utc.with_ymd_and_hms(2026, 8, 16, 1, 30, 0).unwrap();
@@ -768,6 +831,21 @@ mod tests {
         assert_eq!(
             bounds.0,
             Utc.with_ymd_and_hms(2026, 8, 15, 16, 0, 0).unwrap()
+        );
+        assert_eq!(bounds.1, now);
+    }
+
+    #[cfg(not(feature = "token-usage-statistics"))]
+    #[test]
+    fn local_storage_only_keeps_utc_calendar_ranges() {
+        let now = Utc.with_ymd_and_hms(2026, 8, 16, 1, 30, 0).unwrap();
+        let bounds = time_bounds_utc_at(&TimeRange::Today, now)
+            .expect("today bounds")
+            .expect("bounded range");
+
+        assert_eq!(
+            bounds.0,
+            Utc.with_ymd_and_hms(2026, 8, 16, 0, 0, 0).unwrap()
         );
         assert_eq!(bounds.1, now);
     }
@@ -811,7 +889,7 @@ mod tests {
                 model_id: None,
                 session_id: None,
                 time_range: TimeRange::Custom { start, end },
-                time_zone: Some("Asia/Shanghai".to_string()),
+                time_zone: None,
                 limit: None,
                 offset: None,
                 include_subagent: true,

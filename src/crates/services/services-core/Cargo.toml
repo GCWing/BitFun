@@ -79,7 +79,6 @@ local-storage = [
     "dep:bitfun-core-types",
     "dep:bitfun-events",
     "dep:chrono",
-    "dep:chrono-tz",
     "dep:fs2",
     "dep:libc",
     "dep:regex",
@@ -94,6 +93,7 @@ local-storage = [
     "windows/Win32_Foundation",
     "windows/Win32_Storage_FileSystem",
 ]
+token-usage-statistics = ["local-storage", "dep:chrono-tz"]
 process-runtime = [
     "dep:libc",
     "dep:tokio",
