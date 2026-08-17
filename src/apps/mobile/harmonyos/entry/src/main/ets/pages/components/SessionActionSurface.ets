@@ -55,8 +55,6 @@ export struct SessionActionSurface {
           SymbolGlyph($r('sys.symbol.xmark'))
             .fontSize(16)
             .fontColor([MUTED])
-            .width(20)
-            .height(20)
         }
         .width(40)
         .height(40)

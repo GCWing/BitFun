@@ -123,7 +123,7 @@ export struct ConnectAccountDevicePage {
       Text(RemoteI18n.t('connect.scanPairCodeAction'))
         .fontSize(16).fontWeight(FontWeight.Medium).fontColor(INK).layoutWeight(1)
       SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(13).fontColor([MUTED]).width(16).height(16).opacity(0.44)
+        .fontSize(13).fontColor([MUTED]).opacity(0.44)
     }
     .width('100%').height(58).padding({ left: 16, right: 16 })
     .backgroundColor(CARD).borderRadius(8).border({ width: 1, color: LINE })
@@ -168,7 +168,7 @@ export struct ConnectAccountDevicePage {
           .backgroundColor(SOFT).borderRadius(14)
       } else if (device.online) {
         SymbolGlyph($r('sys.symbol.chevron_right'))
-          .fontSize(13).fontColor([MUTED]).width(16).height(16).opacity(0.44)
+          .fontSize(13).fontColor([MUTED]).opacity(0.44)
       }
     }
     .width('100%').height(60).padding({ left: 4, right: 4 })

@@ -375,8 +375,6 @@ export struct ModelServiceSettingsPanel {
       SymbolGlyph($r('sys.symbol.chevron_right'))
         .fontSize(14)
         .fontColor([MUTED])
-        .width(18)
-        .height(18)
     }
     .width('100%')
     .height(62)

@@ -118,8 +118,6 @@ export struct RemoteControlSettingsSheet {
       SymbolGlyph($r('sys.symbol.chevron_right'))
         .fontSize(14)
         .fontColor([MUTED])
-        .width(18)
-        .height(18)
         .opacity(0.52)
     }
     .width('100%')
@@ -272,8 +270,6 @@ export struct RemoteControlSettingsSheet {
         SymbolGlyph($r('sys.symbol.chevron_right'))
           .fontSize(14)
           .fontColor([MUTED])
-          .width(18)
-          .height(18)
           .opacity(0.52)
       }
       .width('100%')
@@ -761,8 +757,6 @@ export struct RemoteControlSettingsSheet {
       SymbolGlyph($r('sys.symbol.xmark'))
         .fontSize(21)
         .fontColor([INK])
-        .width(24)
-        .height(24)
     }
     .width(50)
     .height(50)

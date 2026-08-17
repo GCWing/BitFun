@@ -61,18 +61,19 @@ export struct ThinkingBlock {
       Row({ space: 8 }) {
         if (this.isRunning()) {
           this.RunningDots()
-        } else if (this.expanded) {
-          SymbolGlyph($r('sys.symbol.chevron_down'))
-            .fontSize(14)
-            .fontColor([MUTED])
-            .width(16)
-            .height(16)
         } else {
-          SymbolGlyph($r('sys.symbol.chevron_right'))
-            .fontSize(14)
-            .fontColor([MUTED])
-            .width(16)
-            .height(16)
+          // The Stack holds the 16vp slot so the label does not shift between
+          // the running and collapsed states. The glyph itself stays unsized:
+          // a chevron's natural advance box is only half as wide as it is
+          // tall, and SymbolGlyph draws the glyph against the left edge of a
+          // box forced wider than that.
+          Stack({ alignContent: Alignment.Center }) {
+            SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
+              .fontSize(14)
+              .fontColor([MUTED])
+          }
+          .width(16)
+          .height(16)
         }
         Text(this.isRunning() ? RemoteI18n.t('chat.thinkingInProgress') : RemoteI18n.t('chat.thinkingComplete'))
           .fontSize(13)
