@@ -35,6 +35,13 @@
   "cacheHitRate": {
     "title": "Model Cache Hit Rate"
   },
+  "attribution": {
+    "deletedConfig": "Deleted configuration",
+    "unknownConfig": "Unknown configuration",
+    "unknownProvider": "Unknown provider",
+    "unknownModel": "Unknown model",
+    "unknownEndpoint": "Unknown endpoint"
+  },
   "trend": {
     "title": "Token Usage Trend",
     "legend": {

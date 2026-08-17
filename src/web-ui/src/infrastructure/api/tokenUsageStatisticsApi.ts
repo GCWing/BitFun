@@ -12,6 +12,11 @@ export type UsageTimeRange =
 
 export type UsageGranularity = 'hour' | 'day';
 
+export type UsageAttributionStatus =
+  | 'resolved'
+  | 'config_missing'
+  | 'config_id_missing';
+
 export interface TokenUsageStatisticsRequest {
   timeRange: UsageTimeRange;
   granularity: UsageGranularity;
@@ -24,7 +29,12 @@ export interface TokenUsageStatisticsRequest {
 }
 
 export interface UsageStatisticsEntry {
+  /** Stable aggregation identity; display names are not unique. */
+  key: string;
   name: string;
+  /** Supplier display name for model entries. */
+  providerName: string | null;
+  attributionStatus: UsageAttributionStatus;
   requests: number;
   tokens: number;
   /** Cache hit ratio (0.0..=1.0) when any request reported cache telemetry. */

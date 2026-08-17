@@ -35,6 +35,13 @@
   "cacheHitRate": {
     "title": "模型缓存命中率"
   },
+  "attribution": {
+    "deletedConfig": "已删除配置",
+    "unknownConfig": "未知配置",
+    "unknownProvider": "未知供应商",
+    "unknownModel": "未知模型",
+    "unknownEndpoint": "未知端点"
+  },
   "trend": {
     "title": "Token 使用趋势",
     "legend": {

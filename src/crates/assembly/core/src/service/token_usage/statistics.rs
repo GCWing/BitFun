@@ -1,118 +1,153 @@
 //! Attribution resolution for usage statistics.
 //!
 //! Maps a raw `TokenUsageRecord` to the dimensions shown on the usage
-//! statistics page: the provider group (分组) and the endpoint label (端点).
-//! Resolution prefers the model configuration that was in effect for the
-//! request (`model_config_id` -> provider / base URL) and falls back to the
-//! bundled models.dev catalog inferred from the effective model name, so
-//! records whose config was later deleted still render meaningfully.
+//! statistics page. Model and provider identities are resolved strictly from
+//! `model_config_id`; deleted configurations remain isolated instead of being
+//! guessed from an ambiguous effective model name.
 
 use super::types::TokenUsageRecord;
 use crate::service::config::types::AIModelConfig;
-use bitfun_ai_adapters::models_dev::ModelsDevCatalog;
-use bitfun_services_core::token_usage::UsageAttribution;
+use bitfun_services_core::token_usage::{
+    UsageAttribution, UsageAttributionStatus, UsageDimensionAttribution,
+};
 use std::collections::HashMap;
+
+const PROVIDER_INSTANCE_METADATA_KEY: &str = "provider_instance_id";
+const UNKNOWN_MODEL: &str = "unknown";
+const UNKNOWN_ENDPOINT: &str = "/unknown";
 
 /// Resolver owning every lookup table used while attributing usage records.
 #[derive(Debug, Default)]
 pub struct UsageAttributionResolver {
     /// Model configs by `AIModelConfig.id`.
     configs: HashMap<String, AIModelConfig>,
-    /// Provider id -> display name from the models.dev catalog.
-    provider_names: HashMap<String, String>,
-    /// Effective model name -> (provider id, provider api base URL).
-    model_providers: HashMap<String, (String, String)>,
 }
 
 impl UsageAttributionResolver {
-    pub fn new(models_dev: Option<&ModelsDevCatalog>, configs: &[AIModelConfig]) -> Self {
-        let mut resolver = Self {
+    pub fn new(configs: &[AIModelConfig]) -> Self {
+        Self {
             configs: configs
                 .iter()
                 .filter(|config| !config.id.is_empty())
                 .map(|config| (config.id.clone(), config.clone()))
                 .collect(),
-            ..Self::default()
-        };
-
-        if let Some(catalog) = models_dev {
-            for provider_id in catalog.provider_ids() {
-                if let Some(facts) = catalog.provider_facts(&provider_id) {
-                    resolver
-                        .provider_names
-                        .insert(provider_id.clone(), facts.name);
-                }
-            }
-            for (provider_id, model) in catalog.all_models() {
-                let api = catalog
-                    .provider_facts(&provider_id)
-                    .and_then(|facts| facts.api)
-                    .unwrap_or_default();
-                resolver
-                    .model_providers
-                    .entry(model.id.clone())
-                    .or_insert_with(|| (provider_id.clone(), api));
-            }
         }
-
-        resolver
     }
 
     pub fn attribute(&self, record: &TokenUsageRecord) -> UsageAttribution {
-        let config = self.configs.get(&record.model_config_id);
-        UsageAttribution {
-            group: self.resolve_group(record, config),
-            endpoint: self.resolve_endpoint(record, config),
+        match self.configs.get(&record.model_config_id) {
+            Some(config) => self.attribute_resolved(record, config),
+            None => self.attribute_missing(record),
         }
     }
 
-    fn resolve_group(&self, record: &TokenUsageRecord, config: Option<&AIModelConfig>) -> String {
-        if let Some(config) = config {
-            let provider = config.provider.trim();
-            if !provider.is_empty() {
-                return self
-                    .provider_names
-                    .get(provider)
-                    .cloned()
-                    .unwrap_or_else(|| provider.to_string());
-            }
-        }
-        if let Some((provider_id, _)) = self.model_providers.get(&record.effective_model_name) {
-            return self
-                .provider_names
-                .get(provider_id)
-                .cloned()
-                .unwrap_or_else(|| provider_id.clone());
-        }
-        "unknown".to_string()
-    }
-
-    fn resolve_endpoint(
+    fn attribute_resolved(
         &self,
         record: &TokenUsageRecord,
-        config: Option<&AIModelConfig>,
-    ) -> String {
-        if let Some(config) = config {
-            if let Some(request_url) = config
-                .request_url
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            {
-                return endpoint_from_base_url(request_url, "");
-            }
-            let base_url = config.base_url.trim();
-            if !base_url.is_empty() {
-                return endpoint_from_base_url(base_url, provider_endpoint_path(&config.provider));
-            }
+        config: &AIModelConfig,
+    ) -> UsageAttribution {
+        let model_name = non_empty(&config.model_name)
+            .or_else(|| non_empty(&record.effective_model_name))
+            .unwrap_or(UNKNOWN_MODEL)
+            .to_string();
+        let provider_name = non_empty(&config.name).map(str::to_string);
+        let group_name = provider_name
+            .clone()
+            .unwrap_or_else(|| UNKNOWN_MODEL.to_string());
+        let group_key = provider_instance_id(config)
+            .map(|id| format!("provider:{id}"))
+            .unwrap_or_else(|| format!("model-config:{}", config.id));
+        let endpoint = self.resolve_endpoint(config);
+        let endpoint_key = if endpoint == UNKNOWN_ENDPOINT {
+            format!("model-config:{}:unknown-endpoint", config.id)
+        } else {
+            format!("endpoint:{endpoint}")
+        };
+
+        UsageAttribution {
+            model: UsageDimensionAttribution {
+                key: format!("model-config:{}", config.id),
+                name: model_name,
+                provider_name,
+                attribution_status: UsageAttributionStatus::Resolved,
+            },
+            group: UsageDimensionAttribution {
+                key: group_key,
+                name: group_name,
+                provider_name: None,
+                attribution_status: UsageAttributionStatus::Resolved,
+            },
+            endpoint: UsageDimensionAttribution {
+                key: endpoint_key,
+                name: endpoint,
+                provider_name: None,
+                attribution_status: UsageAttributionStatus::Resolved,
+            },
         }
-        if let Some((_, api)) = self.model_providers.get(&record.effective_model_name) {
-            if !api.is_empty() {
-                return endpoint_from_base_url(api, "/v1/chat/completions");
-            }
-        }
-        "/unknown".to_string()
     }
+
+    fn attribute_missing(&self, record: &TokenUsageRecord) -> UsageAttribution {
+        let config_id = record.model_config_id.trim();
+        let model_name = non_empty(&record.effective_model_name)
+            .unwrap_or(UNKNOWN_MODEL)
+            .to_string();
+        let (key, status) = if config_id.is_empty() {
+            (
+                format!("missing-config-id:{model_name}"),
+                UsageAttributionStatus::ConfigIdMissing,
+            )
+        } else {
+            (
+                format!("missing-config:{config_id}"),
+                UsageAttributionStatus::ConfigMissing,
+            )
+        };
+
+        UsageAttribution {
+            model: UsageDimensionAttribution {
+                key: key.clone(),
+                name: model_name.clone(),
+                provider_name: None,
+                attribution_status: status,
+            },
+            group: UsageDimensionAttribution {
+                key: key.clone(),
+                name: model_name,
+                provider_name: None,
+                attribution_status: status,
+            },
+            endpoint: UsageDimensionAttribution {
+                key,
+                name: UNKNOWN_ENDPOINT.to_string(),
+                provider_name: None,
+                attribution_status: status,
+            },
+        }
+    }
+
+    fn resolve_endpoint(&self, config: &AIModelConfig) -> String {
+        if let Some(request_url) = config.request_url.as_deref().and_then(non_empty) {
+            return endpoint_from_base_url(request_url, "");
+        }
+        if let Some(base_url) = non_empty(&config.base_url) {
+            return endpoint_from_base_url(base_url, provider_endpoint_path(&config.provider));
+        }
+        UNKNOWN_ENDPOINT.to_string()
+    }
+}
+
+fn non_empty(value: &str) -> Option<&str> {
+    let value = value.trim();
+    (!value.is_empty()).then_some(value)
+}
+
+fn provider_instance_id(config: &AIModelConfig) -> Option<&str> {
+    config
+        .metadata
+        .as_ref()?
+        .get(PROVIDER_INSTANCE_METADATA_KEY)?
+        .as_str()
+        .and_then(non_empty)
 }
 
 /// Canonical request path for a provider's API format.
@@ -164,41 +199,21 @@ fn strip_scheme(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_ai_adapters::models_dev::ModelsDevCatalog;
-
-    fn catalog() -> ModelsDevCatalog {
-        ModelsDevCatalog::parse_str(
-            r#"{
-                "deepseek": {
-                    "id": "deepseek", "name": "DeepSeek",
-                    "api": "https://api.deepseek.com",
-                    "models": {
-                        "deepseek-v4-flash": {
-                            "modalities": {"input": ["text"], "output": ["text"]},
-                            "cost": {"input": 0.27, "output": 1.1, "cache_read": 0.027, "cache_write": 0.27}
-                        },
-                        "deepseek-v4-pro": {
-                            "modalities": {"input": ["text"], "output": ["text"]},
-                            "cost": {"input": 2.0, "output": 8.0}
-                        }
-                    }
-                }
-            }"#,
-        )
-        .expect("catalog")
-    }
 
     fn config(
         id: &str,
+        name: &str,
         provider: &str,
+        model_name: &str,
         base_url: &str,
         request_url: Option<&str>,
+        provider_instance_id: Option<&str>,
     ) -> AIModelConfig {
         AIModelConfig {
             id: id.to_string(),
-            name: "config".to_string(),
+            name: name.to_string(),
             provider: provider.to_string(),
-            model_name: "deepseek-v4-flash".to_string(),
+            model_name: model_name.to_string(),
             base_url: base_url.to_string(),
             request_url: request_url.map(|value| value.to_string()),
             api_key: String::new(),
@@ -210,7 +225,8 @@ mod tests {
             category: crate::service::config::types::ModelCategory::GeneralChat,
             capabilities: Vec::new(),
             recommended_for: Vec::new(),
-            metadata: None,
+            metadata: provider_instance_id
+                .map(|id| serde_json::json!({ PROVIDER_INSTANCE_METADATA_KEY: id })),
             reasoning: None,
             inline_think_in_text: true,
             custom_headers: None,
@@ -241,68 +257,165 @@ mod tests {
     }
 
     #[test]
-    fn config_wins_for_group_and_endpoint() {
-        let resolver = UsageAttributionResolver::new(
-            Some(&catalog()),
-            &[config(
-                "cfg-1",
-                "deepseek",
-                "https://api.deepseek.com",
-                Some("https://api.deepseek.com/chat/completions"),
-            )],
-        );
+    fn config_identity_resolves_model_supplier_group_and_endpoint() {
+        let resolver = UsageAttributionResolver::new(&[config(
+            "cfg-1",
+            "DeepSeek",
+            "openai",
+            "deepseek-v4-flash",
+            "https://api.deepseek.com",
+            Some("https://api.deepseek.com/chat/completions"),
+            Some("provider-deepseek"),
+        )]);
         let attribution = resolver.attribute(&record("cfg-1", "deepseek-v4-flash"));
-        assert_eq!(attribution.group, "DeepSeek");
-        assert_eq!(attribution.endpoint, "api.deepseek.com/chat/completions");
+
+        assert_eq!(attribution.model.key, "model-config:cfg-1");
+        assert_eq!(attribution.model.name, "deepseek-v4-flash");
+        assert_eq!(attribution.model.provider_name.as_deref(), Some("DeepSeek"));
+        assert_eq!(
+            attribution.model.attribution_status,
+            UsageAttributionStatus::Resolved
+        );
+        assert_eq!(attribution.group.key, "provider:provider-deepseek");
+        assert_eq!(attribution.group.name, "DeepSeek");
+        assert_eq!(
+            attribution.endpoint.name,
+            "api.deepseek.com/chat/completions"
+        );
     }
 
     #[test]
     fn request_url_absent_derives_endpoint_from_base_url_and_provider() {
-        let resolver = UsageAttributionResolver::new(
-            Some(&catalog()),
-            &[config(
-                "cfg-1",
-                "deepseek",
-                "https://api.deepseek.com",
-                None,
-            )],
-        );
-        let attribution = resolver.attribute(&record("cfg-1", "deepseek-v4-flash"));
-        assert_eq!(attribution.endpoint, "api.deepseek.com/v1/chat/completions");
-    }
-
-    #[test]
-    fn missing_config_falls_back_to_catalog_inference() {
-        let resolver = UsageAttributionResolver::new(Some(&catalog()), &[]);
-        let attribution = resolver.attribute(&record("deleted-config", "deepseek-v4-pro"));
-        assert_eq!(attribution.group, "DeepSeek");
-        assert_eq!(attribution.endpoint, "api.deepseek.com/v1/chat/completions");
-    }
-
-    #[test]
-    fn unknown_model_yields_unknown_attribution() {
-        let resolver = UsageAttributionResolver::new(Some(&catalog()), &[]);
-        let attribution = resolver.attribute(&record("deleted-config", "custom-model"));
-        assert_eq!(attribution.group, "unknown");
-        assert_eq!(attribution.endpoint, "/unknown");
-    }
-
-    #[test]
-    fn empty_catalog_still_resolves_config_provider() {
-        let resolver = UsageAttributionResolver::new(
+        let resolver = UsageAttributionResolver::new(&[config(
+            "cfg-1",
+            "MiniMax",
+            "anthropic",
+            "MiniMax-M3",
+            "https://api.minimax.io/anthropic",
             None,
-            &[config(
-                "cfg-1",
-                "my-provider",
-                "https://gateway.example.com/v1",
-                None,
-            )],
-        );
+            Some("provider-minimax"),
+        )]);
         let attribution = resolver.attribute(&record("cfg-1", "deepseek-v4-flash"));
-        assert_eq!(attribution.group, "my-provider");
         assert_eq!(
-            attribution.endpoint,
-            "gateway.example.com/v1/chat/completions"
+            attribution.endpoint.name,
+            "api.minimax.io/anthropic/v1/messages"
+        );
+    }
+
+    #[test]
+    fn same_provider_instance_groups_multiple_model_configs() {
+        let resolver = UsageAttributionResolver::new(&[
+            config(
+                "cfg-1",
+                "MiniMax",
+                "anthropic",
+                "MiniMax-M3",
+                "https://api.minimax.io/anthropic",
+                None,
+                Some("provider-minimax"),
+            ),
+            config(
+                "cfg-2",
+                "MiniMax",
+                "anthropic",
+                "MiniMax-M2.7",
+                "https://api.minimax.io/anthropic",
+                None,
+                Some("provider-minimax"),
+            ),
+        ]);
+
+        let first = resolver.attribute(&record("cfg-1", "MiniMax-M3"));
+        let second = resolver.attribute(&record("cfg-2", "MiniMax-M2.7"));
+        assert_ne!(first.model.key, second.model.key);
+        assert_eq!(first.group.key, second.group.key);
+        assert_eq!(first.group.name, "MiniMax");
+    }
+
+    #[test]
+    fn same_named_models_from_different_suppliers_keep_distinct_keys() {
+        let resolver = UsageAttributionResolver::new(&[
+            config(
+                "cfg-openbitfun",
+                "OpenBitFun",
+                "anthropic",
+                "MiniMax-M3",
+                "https://gateway.example.com",
+                None,
+                Some("provider-openbitfun"),
+            ),
+            config(
+                "cfg-minimax",
+                "MiniMax",
+                "anthropic",
+                "MiniMax-M3",
+                "https://api.minimax.io/anthropic",
+                None,
+                Some("provider-minimax"),
+            ),
+        ]);
+
+        let first = resolver.attribute(&record("cfg-openbitfun", "MiniMax-M3"));
+        let second = resolver.attribute(&record("cfg-minimax", "MiniMax-M3"));
+        assert_eq!(first.model.name, second.model.name);
+        assert_ne!(first.model.key, second.model.key);
+        assert_eq!(first.model.provider_name.as_deref(), Some("OpenBitFun"));
+        assert_eq!(second.model.provider_name.as_deref(), Some("MiniMax"));
+    }
+
+    #[test]
+    fn missing_provider_instance_id_does_not_merge_config_groups() {
+        let resolver = UsageAttributionResolver::new(&[
+            config(
+                "cfg-1",
+                "Legacy Provider",
+                "openai",
+                "model-a",
+                "https://api.example.com",
+                None,
+                None,
+            ),
+            config(
+                "cfg-2",
+                "Legacy Provider",
+                "openai",
+                "model-b",
+                "https://api.example.com",
+                None,
+                None,
+            ),
+        ]);
+
+        let first = resolver.attribute(&record("cfg-1", "model-a"));
+        let second = resolver.attribute(&record("cfg-2", "model-b"));
+        assert_ne!(first.group.key, second.group.key);
+    }
+
+    #[test]
+    fn missing_config_stays_isolated_without_catalog_inference() {
+        let resolver = UsageAttributionResolver::new(&[]);
+        let attribution = resolver.attribute(&record("deleted-config", "deepseek-v4-pro"));
+
+        assert_eq!(attribution.model.key, "missing-config:deleted-config");
+        assert_eq!(attribution.model.name, "deepseek-v4-pro");
+        assert_eq!(attribution.model.provider_name, None);
+        assert_eq!(
+            attribution.model.attribution_status,
+            UsageAttributionStatus::ConfigMissing
+        );
+        assert_eq!(attribution.group.key, "missing-config:deleted-config");
+        assert_eq!(attribution.endpoint.name, UNKNOWN_ENDPOINT);
+    }
+
+    #[test]
+    fn missing_config_id_has_a_distinct_status() {
+        let resolver = UsageAttributionResolver::new(&[]);
+        let attribution = resolver.attribute(&record("", "custom-model"));
+
+        assert_eq!(attribution.model.key, "missing-config-id:custom-model");
+        assert_eq!(
+            attribution.model.attribution_status,
+            UsageAttributionStatus::ConfigIdMissing
         );
     }
 }
