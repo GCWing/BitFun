@@ -229,6 +229,7 @@ agent-runtime = [
     "bitfun-services-core/runtime-ownership",
     "bitfun-services-core/workspace-text-runtime",
     "bitfun-services-core/session-git",
+    "bitfun-services-core/token-usage-statistics",
     "filesystem",
     "local-storage",
     "process-runtime",
