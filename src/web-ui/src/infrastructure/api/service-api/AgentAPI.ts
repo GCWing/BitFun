@@ -215,6 +215,11 @@ export type SessionEventBackfill =
       streamId: string;
       cursor: number;
       events: RuntimeProjectedAgenticEvent[];
+      /**
+       * Replaying events rebuilds a blocking interaction's card; only the
+       * mailbox makes it answerable.
+       */
+      interactionSnapshot?: SessionInteractionSnapshot | null;
     }
   | { kind: 'snapshotRequired' };
 

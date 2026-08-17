@@ -613,11 +613,18 @@ pub enum FrontendSessionEventBackfill {
         stream_id: String,
         cursor: u64,
         events: Vec<FrontendProjectedAgenticEvent>,
+        /// Replaying events rebuilds a blocking interaction's card; only the
+        /// mailbox makes it answerable. A catch-up that skipped this left the
+        /// card on screen with no surface able to resolve it.
+        interaction_snapshot: SessionInteractionSnapshot,
     },
     SnapshotRequired,
 }
 
-fn session_event_backfill_to_response(backfill: Option<SessionEventBackfill>) -> serde_json::Value {
+fn session_event_backfill_to_response(
+    backfill: Option<SessionEventBackfill>,
+    interaction_snapshot: SessionInteractionSnapshot,
+) -> serde_json::Value {
     let projected = match backfill {
         Some(SessionEventBackfill::Delta {
             stream_id,
@@ -626,6 +633,7 @@ fn session_event_backfill_to_response(backfill: Option<SessionEventBackfill>) ->
         }) => FrontendSessionEventBackfill::Delta {
             stream_id,
             cursor,
+            interaction_snapshot,
             events: events
                 .into_iter()
                 .filter_map(bitfun_events::project_agentic_frontend_event)
@@ -3619,6 +3627,9 @@ pub async fn load_session_event_backfill(
             &request.stream_id,
             request.cursor,
         ),
+        runtime
+            .session_application()
+            .session_interaction_snapshot(&request.session_id),
     ))
 }
 

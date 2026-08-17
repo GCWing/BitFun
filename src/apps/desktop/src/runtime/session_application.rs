@@ -760,6 +760,13 @@ impl DesktopSessionApplication {
             .map_err(desktop_core_session_error)
     }
 
+    pub(crate) fn session_interaction_snapshot(
+        &self,
+        session_id: &str,
+    ) -> SessionInteractionSnapshot {
+        self.agent_runtime.session_interaction_snapshot(session_id)
+    }
+
     /// Incremental catch-up for a client that already applied up to `cursor`.
     ///
     /// Workspace-agnostic: the journal belongs to this Runtime Host, not to any

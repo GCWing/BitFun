@@ -297,6 +297,17 @@ async function tryIncrementalCatchUp(
     }
     context.eventBatcher.flushNow();
 
+    // Replaying events rebuilds a blocking interaction's card, but only the
+    // Runtime mailbox rebinds it to something that can answer. Skipping this
+    // left an AskUserQuestion on screen that no click could resolve after a
+    // device switch.
+    context.flowChatStore.reconcilePendingUserQuestions(
+      sessionId,
+      backfill.interactionSnapshot?.sessionId === sessionId
+        ? backfill.interactionSnapshot.userQuestions
+        : undefined,
+    );
+
     // Delivery is still not acceptance. If the state machine dropped one of
     // these, escalate to the snapshot path in this same tick instead of
     // recording a cursor the screen does not actually reflect.
@@ -459,22 +470,35 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
     if (staleOnly && !forceRuntimeReplay && !streamIsStale && !projectionStale) {
       return;
     }
-    inFlight = true;
-    try {
-      // Ask what was missed before rebuilding anything. A repair that applies
-      // the exact events after our cursor cannot drop content, so the snapshot
-      // path below is now the fallback for a cursor the Host can no longer
-      // serve — not the normal way back to live.
-      if (await tryIncrementalCatchUp(context, surfaceScope, sessionId)) {
-        return;
+    // Repair only what is actually broken. This path installs an event fence
+    // and makes a Host round trip, so running it on an ordinary lifecycle
+    // refresh held the live stream behind a relay RPC — the model's reply sat
+    // in the fence queue waiting for a request that had nothing to repair
+    // (regression: send-to-first-token latency, and the fence churn that left
+    // an interactive card unanswerable after a device switch).
+    //
+    // `forceRuntimeReplay` is deliberately excluded: an idle or errored
+    // machine has no live projection to continue, and wants the snapshot.
+    const canRepairIncrementally =
+      !forceRuntimeReplay && (projectionStale || streamIsStale);
+    if (canRepairIncrementally) {
+      inFlight = true;
+      try {
+        // Ask what was missed before rebuilding anything. A repair that
+        // applies the exact events after our cursor cannot drop content, so
+        // the snapshot path below is the fallback for a cursor the Host can no
+        // longer serve — not the normal way back to live.
+        if (await tryIncrementalCatchUp(context, surfaceScope, sessionId)) {
+          return;
+        }
+      } catch (error) {
+        if (isSurfaceChangedError(error)) {
+          return;
+        }
+        throw error;
+      } finally {
+        inFlight = false;
       }
-    } catch (error) {
-      if (isSurfaceChangedError(error)) {
-        return;
-      }
-      throw error;
-    } finally {
-      inFlight = false;
     }
 
     const replaceRunningSnapshot =

@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use bitfun_agent_runtime::sdk::{
     AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
     AgentSessionRestoreRequest, AgentSessionRestoreResult, PortErrorKind, RuntimeError,
-    SessionEventBackfill, SessionEventProjectionSnapshot,
+    SessionEventBackfill, SessionEventProjectionSnapshot, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::core::Session;
 use bitfun_core::agentic::get_agent_registry;
@@ -67,7 +67,10 @@ fn runtime_event_snapshot_to_json(snapshot: SessionEventProjectionSnapshot) -> V
 ///
 /// A Host with no journal cannot prove contiguity either, so it answers the
 /// same way an aged-out cursor does: take a snapshot.
-fn session_event_backfill_to_json(backfill: Option<SessionEventBackfill>) -> Value {
+fn session_event_backfill_to_json(
+    backfill: Option<SessionEventBackfill>,
+    interaction_snapshot: SessionInteractionSnapshot,
+) -> Value {
     match backfill {
         Some(SessionEventBackfill::Delta {
             stream_id,
@@ -78,6 +81,10 @@ fn session_event_backfill_to_json(backfill: Option<SessionEventBackfill>) -> Val
             "streamId": stream_id,
             "cursor": cursor,
             "events": frontend_events(events),
+            // Replaying events rebuilds the card; only the mailbox makes it
+            // answerable. A catch-up that skipped this left a blocking
+            // interaction on screen that no surface could resolve.
+            "interactionSnapshot": interaction_snapshot,
         }),
         Some(SessionEventBackfill::SnapshotRequired) | None => json!({
             "kind": "snapshotRequired",
@@ -98,6 +105,9 @@ pub(crate) fn load_session_event_backfill(
         state
             .agent_runtime
             .session_events_since(&session_id, &stream_id, cursor),
+        state
+            .agent_runtime
+            .session_interaction_snapshot(&session_id),
     ))
 }
 
