@@ -115,6 +115,13 @@ export default function conversationPresentationUnitTest() {
       expect(ActivityGroupPolicy.shouldFoldEntry(false, false, toolStatus('3', 'Grep', 'running'))).assertFalse();
       expect(ActivityGroupPolicy.thinkingHeaderCount(0)).assertEqual(0);
     });
+
+    it('opens a new group when thinking resumes after a tool has run', 0, () => {
+      expect(ActivityGroupPolicy.startsNewActivityGroup(true, true)).assertTrue();
+      expect(ActivityGroupPolicy.startsNewActivityGroup(true, false)).assertFalse();
+      expect(ActivityGroupPolicy.startsNewActivityGroup(false, true)).assertFalse();
+      expect(ActivityGroupPolicy.startsNewActivityGroup(false, false)).assertFalse();
+    });
   });
 
   describe('ConversationMessageRenderPolicy', () => {
