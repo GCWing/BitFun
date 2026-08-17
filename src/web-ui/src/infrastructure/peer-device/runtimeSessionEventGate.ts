@@ -120,8 +120,12 @@ function drain(events: QueuedRuntimeEvent[], shouldDeliver: (event: QueuedRuntim
 }
 
 export interface RuntimeSessionAttachmentHandle {
+  isCurrent(): boolean;
   requiresReplay(snapshot: { streamId: string; cursor: number }): boolean;
-  finish(snapshot: { streamId: string; cursor: number }): void;
+  finish(
+    snapshot: { streamId: string; cursor: number },
+    options?: { projectionCaughtUp?: boolean },
+  ): void;
   abort(options?: { discard?: boolean }): void;
 }
 
@@ -132,11 +136,44 @@ export function subscribeRuntimeSessionEventGaps(
   return () => gapListeners.delete(listener);
 }
 
+/**
+ * Mark the rendered projection as behind the Host journal.
+ *
+ * Delivery to a product listener is not acceptance. A TextChunk / ToolEvent
+ * that the state machine drops still advances the live cursor, and a later
+ * snapshot at that same cursor would otherwise skip replay — leaving
+ * in-progress tool cards frozen while the Host has moved on.
+ */
+export function markRuntimeSessionProjectionStale(
+  surfaceId: DeviceSurfaceId,
+  sessionId: string,
+): void {
+  const key = attachmentKey(surfaceId, sessionId);
+  const current = progress.get(key);
+  const alreadyStale = current?.hasGap === true;
+  progress.set(key, current
+    ? { ...current, hasGap: true }
+    : { streamId: '', cursor: 0, hasGap: true });
+  if (alreadyStale) {
+    return;
+  }
+  for (const listener of gapListeners) {
+    listener(surfaceId, sessionId);
+  }
+}
+
 export function isRuntimeSessionAttachmentInFlight(
   surfaceId: DeviceSurfaceId,
   sessionId: string,
 ): boolean {
   return attachments.has(attachmentKey(surfaceId, sessionId));
+}
+
+export function isRuntimeSessionProjectionStale(
+  surfaceId: DeviceSurfaceId,
+  sessionId: string,
+): boolean {
+  return progress.get(attachmentKey(surfaceId, sessionId))?.hasGap === true;
 }
 
 export function beginRuntimeSessionAttachment(
@@ -145,15 +182,16 @@ export function beginRuntimeSessionAttachment(
 ): RuntimeSessionAttachmentHandle {
   const key = attachmentKey(surfaceId, sessionId);
   const previous = attachments.get(key);
+  // Transfer the fence. Delivering the previous queue here would apply
+  // events against a state machine that the newer attach is about to reset,
+  // then the new finish() would cover those same cursors and skip replay.
+  const carried = previous?.queued ?? [];
   if (previous) {
     attachments.delete(key);
-    // Overlapping attachment is not expected, but live events must never be
-    // silently lost if a newer reconciliation supersedes an older one.
-    drain(previous.queued, () => true);
   }
 
   const generation = ++nextGeneration;
-  const attachment: RuntimeSessionAttachment = { generation, queued: [] };
+  const attachment: RuntimeSessionAttachment = { generation, queued: carried };
   attachments.set(key, attachment);
 
   const takeOwnedQueue = (): QueuedRuntimeEvent[] | null => {
@@ -166,6 +204,10 @@ export function beginRuntimeSessionAttachment(
   };
 
   return {
+    isCurrent() {
+      const current = attachments.get(key);
+      return Boolean(current && current.generation === generation);
+    },
     requiresReplay(snapshot) {
       const current = progress.get(key);
       return (
@@ -175,12 +217,13 @@ export function beginRuntimeSessionAttachment(
         current.cursor < snapshot.cursor
       );
     },
-    finish(snapshot) {
+    finish(snapshot, options) {
       const queued = takeOwnedQueue();
       if (!queued) {
         return;
       }
-      progress.set(key, { ...snapshot, hasGap: false });
+      const projectionCaughtUp = options?.projectionCaughtUp !== false;
+      progress.set(key, { ...snapshot, hasGap: !projectionCaughtUp });
       drain(queued, event => (
         event.streamId !== snapshot.streamId ||
         event.cursor === undefined ||

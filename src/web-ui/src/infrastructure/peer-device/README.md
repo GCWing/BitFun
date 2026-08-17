@@ -158,6 +158,25 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     projection; their persisted snapshot must still never overwrite newer live
     content.
 
+    **Delivery is not acceptance, and persist is not the current Turn.** A
+    live event that the state machine drops still advances the gate cursor.
+    Mark that projection stale so the next attach replays the journal instead
+    of treating the cursor as current and leaving in-progress tool cards
+    frozen. `finish()` may cover live events only after replay (or an
+    equivalent apply) proves the painted tools/text have caught up with the
+    Host journal — a matching cursor is not that proof. Overlapping attach
+    transfers the fence instead of draining it onto a state machine that is
+    about to reset. A 3s `staleOnly` tick, a hidden document, or a
+    `FINISHING` machine must not skip repair while `hasGap` is set; TextChunk
+    heartbeats are not evidence that a dropped ToolEnd was applied.
+    `loadSessionHistory` and `refreshPeerSessionSnapshot` both read
+    `runtimeEventSnapshot`: the persisted checkpoint of an executing Turn is
+    only identity, never the painted rounds. A session-object identity change
+    during restore must still return the journal — hiding it used to abort
+    attach and freeze the receiver while the Host kept streaming.
+    A CLI Peer Host still filters Host-local turns with `owns()`; that is a
+    CLI Host limitation, not a reason for a Desktop receiver to freeze.
+
     **The subscription and the attach loop must never be able to disable each
     other.** The agentic subscription is this window's only live view of a
     running Turn, and a surface switch tears it down. Rebuilding it used to be

@@ -851,6 +851,45 @@ describe('shouldProcessEvent', () => {
     expect(stateMachineManager.get(mockSessionId)?.getContext().currentDialogTurnId).toBe(mockTurnId);
   });
 
+  it('keeps accepting latest-turn data while idle recovery is still in flight', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        mockSessionId,
+        {
+          sessionId: mockSessionId,
+          title: 'Test Session',
+          dialogTurns: [{
+            id: mockTurnId,
+            sessionId: mockSessionId,
+            userMessage: {
+              id: 'user-1',
+              content: 'Continue review',
+              timestamp: 1000,
+            },
+            modelRounds: [],
+            status: 'processing',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: mockSessionId,
+    }));
+    vi.spyOn(stateMachineManager, 'get').mockReturnValue({
+      getCurrentState: () => SessionExecutionState.IDLE,
+      getContext: () => ({ currentDialogTurnId: mockTurnId }),
+    } as any);
+
+    expect(
+      shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'ToolEvent'),
+    ).toBe(true);
+  });
+
   it('does not recover idle data for an old non-latest turn', () => {
     FlowChatStore.getInstance().setState(() => ({
       sessions: new Map([[

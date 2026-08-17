@@ -16,8 +16,11 @@ import {
   isSurfaceChangedError,
 } from '@/infrastructure/peer-device/deviceSurface';
 import { isSurfaceReconcileEnabled } from '@/infrastructure/peer-device/deviceSurfaceReconcile';
+import type { SessionRuntimeEventSnapshot } from '@/infrastructure/api/service-api/AgentAPI';
 import {
   beginRuntimeSessionAttachment,
+  isRuntimeSessionProjectionStale,
+  markRuntimeSessionProjectionStale,
   subscribeRuntimeSessionEventGaps,
 } from '@/infrastructure/peer-device/runtimeSessionEventGate';
 import { createLogger } from '@/shared/utils/logger';
@@ -29,7 +32,7 @@ import {
   SessionExecutionEvent,
   SessionExecutionState,
 } from '../../state-machine/types';
-import type { AnyFlowItem, DialogTurn, Session } from '../../types/flow-chat';
+import type { AnyFlowItem, DialogTurn, FlowToolItem, Session } from '../../types/flow-chat';
 import { installLiveSessionInteractionMailbox } from '../liveSessionInteractionStore';
 import { agenticEventListener } from '../AgenticEventListener';
 import { pendingQueueManager } from './PendingQueueModule';
@@ -83,6 +86,12 @@ export function requestPeerSessionRefresh(sessionId?: string): void {
   installedRefreshRequester?.(sessionId);
 }
 
+/** Cursor delivery is not acceptance — force the next attach to replay. */
+export function requestRuntimeProjectionRepair(sessionId: string): void {
+  markRuntimeSessionProjectionStale(getActiveSurfaceScope().surfaceId, sessionId);
+  requestPeerSessionRefresh(sessionId);
+}
+
 function streamKey(
   roundId: string,
   item: Pick<AnyFlowItem, 'attemptId' | 'attemptIndex'>,
@@ -124,6 +133,97 @@ function isTerminalTurn(turn: DialogTurn | undefined): boolean {
   return turn?.status === 'completed' ||
     turn?.status === 'cancelled' ||
     turn?.status === 'error';
+}
+
+const JOURNAL_TERMINAL_TOOL_EVENTS = new Set([
+  'Completed',
+  'Failed',
+  'Cancelled',
+  'Rejected',
+]);
+
+function readJournalToolEvent(payload: Record<string, unknown>): {
+  eventType: string;
+  toolId: string;
+} | null {
+  const raw = payload.toolEvent ?? payload.tool_event;
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const eventType = record.event_type ?? record.eventType;
+  const toolId = record.tool_id ?? record.toolId;
+  if (typeof eventType !== 'string' || !eventType || typeof toolId !== 'string' || !toolId) {
+    return null;
+  }
+  return { eventType, toolId };
+}
+
+function collectTurnTools(turn: DialogTurn): FlowToolItem[] {
+  const tools: FlowToolItem[] = [];
+  const pushTool = (item: AnyFlowItem): void => {
+    if (item.type === 'tool') {
+      tools.push(item as FlowToolItem);
+    }
+  };
+  for (const round of turn.modelRounds) {
+    for (const item of round.items) {
+      pushTool(item);
+    }
+    for (const attempt of round.attempts ?? []) {
+      for (const item of attempt.items) {
+        pushTool(item);
+      }
+    }
+  }
+  return tools;
+}
+
+function toolStatusMatchesJournal(status: FlowToolItem['status'], eventType: string): boolean {
+  switch (eventType) {
+    case 'Completed':
+      return status === 'completed';
+    case 'Failed':
+      return status === 'error';
+    case 'Cancelled':
+      return status === 'cancelled' || status === 'confirmed';
+    case 'Rejected':
+      return status === 'rejected';
+    default:
+      return false;
+  }
+}
+
+/** Host journal terminal tools must already be painted before we cover their cursors. */
+export function runtimeProjectionCaughtUp(
+  session: Session | undefined,
+  snapshot: SessionRuntimeEventSnapshot,
+): boolean {
+  const turnId = snapshot.activeTurnId;
+  if (!session || !turnId) {
+    return false;
+  }
+  const turn = session.dialogTurns.find(candidate => candidate.id === turnId);
+  if (!turn) {
+    return false;
+  }
+  const tools = collectTurnTools(turn);
+  for (const event of snapshot.events) {
+    if (event.eventName !== 'agentic://tool-event') {
+      continue;
+    }
+    const toolEvent = readJournalToolEvent(event.payload);
+    if (!toolEvent || !JOURNAL_TERMINAL_TOOL_EVENTS.has(toolEvent.eventType)) {
+      continue;
+    }
+    const item = tools.find(tool => (
+      tool.id === toolEvent.toolId || tool.toolCall?.id === toolEvent.toolId
+    ));
+    if (!item || !toolStatusMatchesJournal(item.status, toolEvent.eventType)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 async function alignStateMachineWithSnapshot(
@@ -195,7 +295,13 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       }
       return;
     }
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    // Hidden only skips the 3s liveness poll. A named repair or first attach
+    // must still run — otherwise a dropped ToolEnd stays frozen in the background.
+    if (
+      staleOnly &&
+      typeof document !== 'undefined' &&
+      document.visibilityState === 'hidden'
+    ) {
       return;
     }
     // A dead subscription is the strongest reason to reconcile, not a reason to
@@ -226,9 +332,11 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       state.sessions.get(sessionId)?.dialogTurns ?? [],
     );
 
+    const surfaceScope = getActiveSurfaceScope();
+    const projectionStale = isRuntimeSessionProjectionStale(surfaceScope.surfaceId, sessionId);
     const machine = stateMachineManager.get(sessionId);
     const machineState = machine?.getCurrentState() ?? SessionExecutionState.IDLE;
-    if (machineState === SessionExecutionState.FINISHING) {
+    if (machineState === SessionExecutionState.FINISHING && !projectionStale) {
       return;
     }
     const lastUpdateTime = machine?.getContext().lastUpdateTime ?? 0;
@@ -236,14 +344,13 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       machineState === SessionExecutionState.IDLE ||
       machineState === SessionExecutionState.ERROR;
     const streamIsStale = Date.now() - lastUpdateTime >= PEER_SESSION_STREAM_STALE_MS;
-    if (staleOnly && !forceRuntimeReplay && !streamIsStale) {
+    if (staleOnly && !forceRuntimeReplay && !streamIsStale && !projectionStale) {
       return;
     }
     const replaceRunningSnapshot =
       forceRuntimeReplay || streamIsStale;
     context.eventBatcher.flushNow();
     const machineVersion = machine?.getContext().version ?? 0;
-    const surfaceScope = getActiveSurfaceScope();
     const attachment = beginRuntimeSessionAttachment(surfaceScope.surfaceId, sessionId);
     let attachmentFinished = false;
 
@@ -270,6 +377,10 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         },
       );
       surfaceScope.assertCurrent('attachRuntimeSession');
+      if (!attachment.isCurrent()) {
+        attachmentFinished = true;
+        return;
+      }
       const restoredSession = context.flowChatStore.getState().sessions.get(sessionId);
       if (restoredSession) {
         pendingQueueManager.reconcileAgainstLiveTurns(
@@ -279,18 +390,20 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       }
 
       if (result.runtimeEventSnapshot) {
-        if (result.runtimeEventReplayRequired === false) {
-          // The rendered projection already includes this exact Runtime
-          // cursor. Advance the in-flight fence without resetting a healthy
-          // state machine every time the liveness timer runs.
+        const snapshot = result.runtimeEventSnapshot;
+        const alreadyCurrent = result.runtimeEventReplayRequired === false
+          && runtimeProjectionCaughtUp(restoredSession, snapshot);
+        if (alreadyCurrent) {
+          // Cursor match is not enough: the UI must already show journal
+          // terminal tools before we cover those events.
           attachment.finish({
-            streamId: result.runtimeEventSnapshot.streamId,
-            cursor: result.runtimeEventSnapshot.cursor,
-          });
+            streamId: snapshot.streamId,
+            cursor: snapshot.cursor,
+          }, { projectionCaughtUp: true });
           attachmentFinished = true;
           log.debug('Runtime session projection already current', {
             sessionId,
-            cursor: result.runtimeEventSnapshot.cursor,
+            cursor: snapshot.cursor,
           });
           return;
         }
@@ -301,15 +414,23 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         context.eventBatcher.clear();
         context.contentBuffers.delete(sessionId);
         context.activeTextItems.delete(sessionId);
+        const replayTurnId = snapshot.activeTurnId ?? result.latestTurnId;
+        if (replayTurnId) {
+          context.flowChatStore.prepareRuntimeTurnReplay?.(sessionId, replayTurnId);
+        }
         stateMachineManager.reset(sessionId);
         await alignStateMachineWithSnapshot(
           context,
           sessionId,
           result.backendState,
-          result.runtimeEventSnapshot.activeTurnId ?? result.latestTurnId,
+          snapshot.activeTurnId ?? result.latestTurnId,
         );
+        if (!attachment.isCurrent()) {
+          attachmentFinished = true;
+          return;
+        }
 
-        for (const event of result.runtimeEventSnapshot.events) {
+        for (const event of snapshot.events) {
           surfaceScope.assertCurrent('replayRuntimeSessionProjection');
           if (!agenticEventListener.dispatchExternal(event.eventName, event.payload)) {
             throw new Error('Agentic event listener is unavailable during Runtime replay');
@@ -324,19 +445,29 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
           context,
           sessionId,
           result.backendState,
-          result.runtimeEventSnapshot.activeTurnId ?? result.latestTurnId,
+          snapshot.activeTurnId ?? result.latestTurnId,
         );
         surfaceScope.assertCurrent('finishRuntimeSessionAttachment');
+        if (!attachment.isCurrent()) {
+          attachmentFinished = true;
+          return;
+        }
+        const projectedSession = context.flowChatStore.getState().sessions.get(sessionId);
+        const projectionCaughtUp = runtimeProjectionCaughtUp(projectedSession, snapshot);
         attachment.finish({
-          streamId: result.runtimeEventSnapshot.streamId,
-          cursor: result.runtimeEventSnapshot.cursor,
-        });
+          streamId: snapshot.streamId,
+          cursor: snapshot.cursor,
+        }, { projectionCaughtUp });
         attachmentFinished = true;
+        if (!projectionCaughtUp) {
+          markRuntimeSessionProjectionStale(surfaceScope.surfaceId, sessionId);
+        }
         log.debug('Runtime session projection attached', {
           sessionId,
           backendState: result.backendState,
-          cursor: result.runtimeEventSnapshot.cursor,
-          eventCount: result.runtimeEventSnapshot.events.length,
+          cursor: snapshot.cursor,
+          eventCount: snapshot.events.length,
+          projectionCaughtUp,
         });
         return;
       }
@@ -383,8 +514,11 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         latestTurnId: result.latestTurnId,
       });
     } catch (error) {
-      if (!attachmentFinished) {
+      if (!attachmentFinished && attachment.isCurrent()) {
         attachment.abort({ discard: !surfaceScope.isCurrent() });
+        if (surfaceScope.isCurrent()) {
+          markRuntimeSessionProjectionStale(surfaceScope.surfaceId, sessionId);
+        }
         attachmentFinished = true;
       }
       if (isSurfaceChangedError(error)) {
@@ -399,8 +533,11 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       // auto-exit from Peer Mode.
       log.warn('Peer session snapshot refresh failed', { sessionId, error });
     } finally {
-      if (!attachmentFinished) {
+      if (!attachmentFinished && attachment.isCurrent()) {
         attachment.abort({ discard: !surfaceScope.isCurrent() });
+        if (surfaceScope.isCurrent()) {
+          markRuntimeSessionProjectionStale(surfaceScope.surfaceId, sessionId);
+        }
       }
       inFlight = false;
       drainFollowUpRefresh();

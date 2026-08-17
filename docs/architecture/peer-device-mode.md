@@ -90,7 +90,19 @@ boundaries; noisy tool progress is compacted.
 
 `restore_session_view` returns this additive `runtimeEventSnapshot`; the CLI
 Peer Host applies its existing Peer-owned-Turn filter before recording or
-returning the projection. During an attach, the frontend fences live events for
+returning the projection. The persisted Session record of an executing Turn is
+a lagging checkpoint, not the live projection: `loadSessionHistory` and
+`refreshPeerSessionSnapshot` must not paint that checkpoint's in-progress
+tool rows. A restore that races a live store update must still return the
+journal so attach can replay. Delivery of a live event to a product listener
+is not acceptance — a dropped ToolEvent / TextChunk marks the projection
+stale so the next attach replays instead of treating the cursor as current.
+`finish()` covers those cursors only after the painted projection has caught
+up with journal terminal tools; a matching cursor alone is not enough.
+Overlapping attach transfers the in-flight fence rather than delivering it
+onto a state machine that is about to reset. Hidden-document and
+fresh-TextChunk liveness skips apply only to the 3s poll, not to a dirty
+projection. During an attach, the frontend fences live events for
 `(DeviceSurfaceId, SessionId)`,
 replays the snapshot into an empty current-Turn projection, and then releases
 only events newer than the snapshot cursor. A different `streamId` is a new

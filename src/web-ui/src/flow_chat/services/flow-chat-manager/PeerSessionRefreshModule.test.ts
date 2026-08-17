@@ -30,13 +30,19 @@ vi.mock('../AgenticEventListener', () => ({
   agenticEventListener: agenticListenerMock,
 }));
 
+import { FlowChatStore } from '../../store/FlowChatStore';
 import {
   installPeerSessionRefresh,
   isSessionProjectionAttachable,
   PEER_SESSION_REFRESH_INTERVAL_MS,
   requestPeerSessionRefresh,
+  runtimeProjectionCaughtUp,
 } from './PeerSessionRefreshModule';
-import { resetRuntimeSessionEventGateForTest } from '@/infrastructure/peer-device/runtimeSessionEventGate';
+import { processToolEvent } from './ToolEventModule';
+import {
+  markRuntimeSessionProjectionStale,
+  resetRuntimeSessionEventGateForTest,
+} from '@/infrastructure/peer-device/runtimeSessionEventGate';
 
 describe('PeerSessionRefreshModule', () => {
   beforeEach(() => {
@@ -140,6 +146,7 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     peerModeMock.active = true;
+    resetRuntimeSessionEventGateForTest();
     vi.stubGlobal('document', {
       visibilityState: 'visible',
       addEventListener: vi.fn(),
@@ -149,6 +156,7 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
   });
 
   afterEach(() => {
+    resetRuntimeSessionEventGateForTest();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -180,6 +188,7 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
         subscribeSelector: vi.fn(() => () => {}),
         refreshPeerSessionSnapshot,
         reconcilePendingUserQuestions: vi.fn(),
+        prepareRuntimeTurnReplay: vi.fn(),
       },
       eventBatcher: { flushNow: vi.fn(), clear: vi.fn() },
       contentBuffers: new Map(),
@@ -228,6 +237,141 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
 
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(stateMachineMock.reset).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('still attaches a fresh streaming turn when the projection is stale', async () => {
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'processing',
+      getContext: () => ({ lastUpdateTime: Date.now(), version: 0 }),
+    });
+    const refresh = vi.fn(async () => ({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+    }));
+
+    const cleanup = installPeerSessionRefresh(contextWithSnapshot(refresh));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    markRuntimeSessionProjectionStale('local', 'session-1');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    cleanup();
+  });
+
+  it('repairs a named session while the document is hidden', async () => {
+    const documentStub = {
+      visibilityState: 'visible' as Document['visibilityState'],
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal('document', documentStub);
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'processing',
+      getContext: () => ({ lastUpdateTime: Date.now(), version: 0 }),
+    });
+    const refresh = vi.fn(async () => ({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+    }));
+
+    const cleanup = installPeerSessionRefresh(contextWithSnapshot(refresh));
+    await vi.advanceTimersByTimeAsync(1);
+    refresh.mockClear();
+
+    documentStub.visibilityState = 'hidden';
+    await vi.advanceTimersByTimeAsync(PEER_SESSION_REFRESH_INTERVAL_MS);
+    expect(refresh).not.toHaveBeenCalled();
+
+    requestPeerSessionRefresh('session-1');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it('attaches during FINISHING when the projection is stale', async () => {
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'finishing',
+      getContext: () => ({ lastUpdateTime: Date.now(), version: 0 }),
+    });
+    const refresh = vi.fn(async () => ({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+    }));
+
+    const cleanup = installPeerSessionRefresh(contextWithSnapshot(refresh));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refresh).not.toHaveBeenCalled();
+
+    markRuntimeSessionProjectionStale('local', 'session-1');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it('replays when the cursor matches but a journal ToolEnd is still running in the UI', async () => {
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'processing',
+      getContext: () => ({ lastUpdateTime: Date.now(), version: 0 }),
+    });
+    const runtimeEventSnapshot = {
+      sessionId: 'session-1',
+      streamId: 'runtime-a',
+      cursor: 8,
+      activeTurnId: 'turn-live',
+      events: [{
+        eventName: 'agentic://tool-event',
+        payload: {
+          sessionId: 'session-1',
+          turnId: 'turn-live',
+          roundId: 'round-0',
+          toolEvent: {
+            event_type: 'Completed',
+            tool_id: 'read-1',
+            tool_name: 'Read',
+          },
+        },
+      }],
+    };
+    const refresh = vi.fn(async () => ({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+      runtimeEventReplayRequired: false,
+      runtimeEventSnapshot,
+    }));
+    const context = contextWithSnapshot(refresh);
+    const session = context.flowChatStore.getState().sessions.get('session-1');
+    session.dialogTurns[0].modelRounds[0].items = [{
+      id: 'read-1',
+      type: 'tool',
+      toolName: 'Read',
+      status: 'running',
+      timestamp: 1,
+      toolCall: { id: 'read-1', input: { file_path: 'README.md' } },
+    }];
+
+    expect(runtimeProjectionCaughtUp(session, runtimeEventSnapshot)).toBe(false);
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(agenticListenerMock.dispatchExternal).toHaveBeenCalledWith(
+      'agentic://tool-event',
+      runtimeEventSnapshot.events[0].payload,
+    );
+    expect(context.flowChatStore.prepareRuntimeTurnReplay).toHaveBeenCalledWith(
+      'session-1',
+      'turn-live',
+    );
     cleanup();
   });
 
@@ -281,6 +425,10 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
       runtimeEventSnapshot.events[1].payload,
     );
     expect(context.eventBatcher.clear).toHaveBeenCalled();
+    expect(context.flowChatStore.prepareRuntimeTurnReplay).toHaveBeenCalledWith(
+      'session-1',
+      'turn-live',
+    );
     expect(context.flowChatStore.reconcilePendingUserQuestions).toHaveBeenCalledWith(
       'session-1',
       { revision: 2, questions: [] },
@@ -323,6 +471,41 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
     expect(agenticListenerMock.dispatchExternal).not.toHaveBeenCalled();
     expect(context.eventBatcher.clear).not.toHaveBeenCalled();
     expect(stateMachineMock.reset).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('replays the Runtime journal even when persist merge was skipped', async () => {
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'processing',
+      getContext: () => ({ lastUpdateTime: Date.now(), version: 0 }),
+    });
+    const runtimeEventSnapshot = {
+      sessionId: 'session-1',
+      streamId: 'runtime-a',
+      cursor: 20,
+      activeTurnId: 'turn-live',
+      events: [{
+        eventName: 'agentic://tool-event',
+        payload: { sessionId: 'session-1', turnId: 'turn-live', toolId: 'read-1' },
+      }],
+    };
+    const refresh = vi.fn(async () => ({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+      runtimeEventReplayRequired: true,
+      runtimeEventSnapshot,
+    }));
+    const context = contextWithSnapshot(refresh);
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(agenticListenerMock.dispatchExternal).toHaveBeenCalledWith(
+      'agentic://tool-event',
+      runtimeEventSnapshot.events[0].payload,
+    );
     cleanup();
   });
 });
@@ -679,6 +862,174 @@ describe('PeerSessionRefreshModule attach eligibility after a surface switch', (
       '/repo/BitFun',
       expect.objectContaining({ requireActiveSession: false }),
     );
+    cleanup();
+  });
+});
+
+describe('PeerSessionRefreshModule journal apply', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    peerModeMock.active = true;
+    resetRuntimeSessionEventGateForTest();
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'processing',
+      getContext: () => ({ lastUpdateTime: Date.now(), version: 0 }),
+    });
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    FlowChatStore.getInstance().setState(prev => ({
+      ...prev,
+      sessions: new Map(),
+      activeSessionId: null,
+    }));
+  });
+
+  afterEach(() => {
+    resetRuntimeSessionEventGateForTest();
+    agenticListenerMock.dispatchExternal.mockReset();
+    agenticListenerMock.dispatchExternal.mockReturnValue(true);
+    FlowChatStore.getInstance().setState(prev => ({
+      ...prev,
+      sessions: new Map(),
+      activeSessionId: null,
+    }));
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('replays a cursor-covered ToolEnd until the card is completed', async () => {
+    const store = FlowChatStore.getInstance();
+    store.setState(prev => ({
+      ...prev,
+      activeSessionId: 'session-1',
+      sessions: new Map([[
+        'session-1',
+        {
+          sessionId: 'session-1',
+          title: 'Live',
+          workspacePath: '/repo/BitFun',
+          historyState: 'ready',
+          isHistorical: false,
+          isTransient: false,
+          dialogTurns: [{
+            id: 'turn-live',
+            sessionId: 'session-1',
+            userMessage: { id: 'user-1', content: 'Read it', timestamp: 1 },
+            modelRounds: [{
+              id: 'round-0',
+              index: 0,
+              items: [{
+                id: 'read-1',
+                type: 'tool',
+                toolName: 'Read',
+                status: 'running',
+                timestamp: 2,
+                toolCall: { id: 'read-1', input: { file_path: 'README.md' } },
+              }],
+              isStreaming: true,
+              isComplete: false,
+              status: 'streaming',
+              startTime: 2,
+            }],
+            status: 'processing',
+            startTime: 1,
+          }],
+          status: 'active',
+          config: { agentType: 'agentic' },
+          createdAt: 1,
+          lastActiveAt: 2,
+          error: null,
+          sessionKind: 'normal',
+        } as any,
+      ]]),
+    }));
+
+    const runtimeEventSnapshot = {
+      sessionId: 'session-1',
+      streamId: 'runtime-a',
+      cursor: 4,
+      activeTurnId: 'turn-live',
+      events: [
+        {
+          eventName: 'agentic://tool-event',
+          payload: {
+            sessionId: 'session-1',
+            turnId: 'turn-live',
+            roundId: 'round-0',
+            toolEvent: {
+              event_type: 'Started',
+              tool_id: 'read-1',
+              tool_name: 'Read',
+              params: { file_path: 'README.md' },
+            },
+          },
+        },
+        {
+          eventName: 'agentic://tool-event',
+          payload: {
+            sessionId: 'session-1',
+            turnId: 'turn-live',
+            roundId: 'round-0',
+            toolEvent: {
+              event_type: 'Completed',
+              tool_id: 'read-1',
+              tool_name: 'Read',
+              result: 'ok',
+            },
+          },
+        },
+      ],
+    };
+
+    agenticListenerMock.dispatchExternal.mockImplementation((eventName: string, payload: any) => {
+      if (eventName === 'agentic://tool-event') {
+        processToolEvent(
+          {
+            flowChatStore: store,
+            eventBatcher: { getBufferSize: () => 0, flushNow: () => {} },
+            saveDebouncers: new Map(),
+            lastSaveTimestamps: new Map(),
+            lastSaveHashes: new Map(),
+            turnSaveInFlight: new Map(),
+            turnSavePending: new Set(),
+          } as any,
+          payload.sessionId,
+          payload.turnId,
+          payload.roundId,
+          payload.toolEvent,
+        );
+      }
+      return true;
+    });
+
+    vi.spyOn(store, 'refreshPeerSessionSnapshot').mockResolvedValue({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+      runtimeEventReplayRequired: false,
+      runtimeEventSnapshot,
+    });
+
+    const cleanup = installPeerSessionRefresh({
+      flowChatStore: store,
+      eventBatcher: { flushNow: vi.fn(), clear: vi.fn() },
+      contentBuffers: new Map(),
+      activeTextItems: new Map(),
+    } as any);
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(store.findToolItem('session-1', 'turn-live', 'read-1')?.status).toBe('completed');
+    expect(runtimeProjectionCaughtUp(
+      store.getState().sessions.get('session-1'),
+      runtimeEventSnapshot,
+    )).toBe(true);
     cleanup();
   });
 });
