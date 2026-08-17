@@ -5,8 +5,9 @@ pub mod types;
 
 pub use service::TokenUsageService;
 pub use statistics::{
-    aggregate_statistics, aggregate_statistics_with_time_zone, UsageAttribution, UsageGranularity,
-    UsageStatistics, UsageStatisticsEntry, UsageTrendPoint,
+    aggregate_statistics, aggregate_statistics_with_time_zone, UsageAttribution,
+    UsageAttributionStatus, UsageDimensionAttribution, UsageGranularity, UsageStatistics,
+    UsageStatisticsEntry, UsageTrendPoint,
 };
 pub use types::{
     ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,

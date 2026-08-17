@@ -88,11 +88,69 @@ function truncateName(name: string, max = 28): string {
   return name.length > max ? `${name.slice(0, max - 1)}…` : name;
 }
 
+type DistributionKind = 'model' | 'group' | 'endpoint';
+
+interface UsageEntryDisplay {
+  primary: string;
+  secondary?: string;
+}
+
+function unresolvedConfigLabel(
+  entry: UsageStatisticsEntry,
+  t: (key: string) => string,
+): string | undefined {
+  if (entry.attributionStatus === 'config_missing') return t('attribution.deletedConfig');
+  if (entry.attributionStatus === 'config_id_missing') return t('attribution.unknownConfig');
+  return undefined;
+}
+
+function getEntryDisplay(
+  entry: UsageStatisticsEntry,
+  kind: DistributionKind,
+  t: (key: string) => string,
+): UsageEntryDisplay {
+  const unresolvedLabel = unresolvedConfigLabel(entry, t);
+
+  if (kind === 'model') {
+    return {
+      primary: entry.name || t('attribution.unknownModel'),
+      secondary: unresolvedLabel || entry.providerName || t('attribution.unknownProvider'),
+    };
+  }
+  if (kind === 'group' && unresolvedLabel) {
+    return {
+      primary: unresolvedLabel,
+      secondary: entry.name || t('attribution.unknownModel'),
+    };
+  }
+  if (kind === 'endpoint' && unresolvedLabel) {
+    return {
+      primary: t('attribution.unknownEndpoint'),
+      secondary: unresolvedLabel,
+    };
+  }
+  return {
+    primary: entry.name || (
+      kind === 'endpoint'
+        ? t('attribution.unknownEndpoint')
+        : t('attribution.unknownProvider')
+    ),
+  };
+}
+
+function entryTitle(display: UsageEntryDisplay): string {
+  return display.secondary ? `${display.primary} · ${display.secondary}` : display.primary;
+}
+
 // ---------------------------------------------------------------------------
 // Donut chart
 // ---------------------------------------------------------------------------
 
-const DonutChart: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) => {
+const DonutChart: React.FC<{
+  kind: DistributionKind;
+  entries: UsageStatisticsEntry[];
+}> = ({ kind, entries }) => {
+  const { t } = useI18n('settings/usage-statistics');
   const totalTokens = entries.reduce((sum, entry) => sum + entry.tokens, 0);
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
@@ -110,11 +168,12 @@ const DonutChart: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) 
           strokeWidth="16"
         />
         {entries.map((entry, index) => {
+          const display = getEntryDisplay(entry, kind, t);
           const fraction = totalTokens > 0 ? entry.tokens / totalTokens : 0;
           const dash = Math.max(fraction * circumference - 1.5, 0);
           const segment = (
             <circle
-              key={entry.name}
+              key={entry.key}
               cx="70"
               cy="70"
               r={radius}
@@ -125,7 +184,7 @@ const DonutChart: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) 
               strokeDashoffset={-cumulative}
               transform="rotate(-90 70 70)"
             >
-              <title>{`${entry.name}: ${formatTokens(entry.tokens)}`}</title>
+              <title>{`${entryTitle(display)}: ${formatTokens(entry.tokens)}`}</title>
             </circle>
           );
           cumulative += fraction * circumference;
@@ -167,7 +226,7 @@ const DonutChart: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) 
 // ---------------------------------------------------------------------------
 
 const DISTRIBUTION_HEADER_KEY: Record<
-  'model' | 'group' | 'endpoint',
+  DistributionKind,
   string
 > = {
   model: 'table.model',
@@ -176,7 +235,7 @@ const DISTRIBUTION_HEADER_KEY: Record<
 };
 
 const DistributionPanel: React.FC<{
-  kind: 'model' | 'group' | 'endpoint';
+  kind: DistributionKind;
   entries: UsageStatisticsEntry[];
 }> = ({ kind, entries }) => {
   const { t } = useI18n('settings/usage-statistics');
@@ -190,7 +249,7 @@ const DistributionPanel: React.FC<{
     <div className="bitfun-usage-stats__panel">
       <div className="bitfun-usage-stats__panel-title">{t(titleKey)}</div>
       <div className="bitfun-usage-stats__panel-body">
-        <DonutChart entries={entries} />
+        <DonutChart kind={kind} entries={entries} />
         <div className="bitfun-usage-stats__table">
           <div className="bitfun-usage-stats__table-head">
             <span>{t(DISTRIBUTION_HEADER_KEY[kind])}</span>
@@ -198,23 +257,35 @@ const DistributionPanel: React.FC<{
             <span>{t('table.tokens')}</span>
           </div>
           <div className="bitfun-usage-stats__table-body">
-            {entries.map((entry, index) => (
-              <div
-                className="bitfun-usage-stats__table-row"
-                key={entry.name}
-                title={entry.name}
-              >
-                <span className="bitfun-usage-stats__table-name">
-                  <i
-                    className="bitfun-usage-stats__table-swatch"
-                    style={{ background: DONUT_PALETTE[index % DONUT_PALETTE.length] }}
-                  />
-                  {truncateName(entry.name)}
-                </span>
-                <span>{entry.requests}</span>
-                <span>{formatTokens(entry.tokens)}</span>
-              </div>
-            ))}
+            {entries.map((entry, index) => {
+              const display = getEntryDisplay(entry, kind, t);
+              return (
+                <div
+                  className="bitfun-usage-stats__table-row"
+                  key={entry.key}
+                  title={entryTitle(display)}
+                >
+                  <span className="bitfun-usage-stats__table-name">
+                    <i
+                      className="bitfun-usage-stats__table-swatch"
+                      style={{ background: DONUT_PALETTE[index % DONUT_PALETTE.length] }}
+                    />
+                    <span className="bitfun-usage-stats__entry-copy">
+                      <span className="bitfun-usage-stats__entry-primary">
+                        {truncateName(display.primary)}
+                      </span>
+                      {display.secondary && (
+                        <span className="bitfun-usage-stats__entry-secondary">
+                          {truncateName(display.secondary)}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  <span>{entry.requests}</span>
+                  <span>{formatTokens(entry.tokens)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -238,16 +309,30 @@ const ModelCacheHitRatePanel: React.FC<{ entries: UsageStatisticsEntry[] }> = ({
       <div className="bitfun-usage-stats__panel-title">{t('cacheHitRate.title')}</div>
       <div className="bitfun-usage-stats__hit-rate-list">
         {entries.map((entry, index) => {
+          const display = getEntryDisplay(entry, 'model', t);
           const rate = entry.cacheHitRate;
           const pct = rate === null || !Number.isFinite(rate)
             ? 0
             : Math.min(Math.max(rate * 100, 0), 100);
           const color = DONUT_PALETTE[index % DONUT_PALETTE.length];
           return (
-            <div className="bitfun-usage-stats__hit-rate-row" key={entry.name} title={entry.name}>
+            <div
+              className="bitfun-usage-stats__hit-rate-row"
+              key={entry.key}
+              title={entryTitle(display)}
+            >
               <span className="bitfun-usage-stats__hit-rate-name">
                 <i className="bitfun-usage-stats__table-swatch" style={{ background: color }} />
-                {truncateName(entry.name)}
+                <span className="bitfun-usage-stats__entry-copy">
+                  <span className="bitfun-usage-stats__entry-primary">
+                    {truncateName(display.primary)}
+                  </span>
+                  {display.secondary && (
+                    <span className="bitfun-usage-stats__entry-secondary">
+                      {truncateName(display.secondary)}
+                    </span>
+                  )}
+                </span>
               </span>
               <div className="bitfun-usage-stats__hit-rate-track">
                 <div
@@ -527,7 +612,7 @@ const GRANULARITY_OPTIONS: { value: UsageGranularity; key: string }[] = [
 ];
 
 const UsageStatisticsConfig: React.FC = () => {
-  const { t } = useI18n('settings/usage-statistics');
+  const { t, resolvedTimeZone: timeZone } = useI18n('settings/usage-statistics');
   const [timeRange, setTimeRange] = useState<UsageTimeRange>('last24Hours');
   const [granularity, setGranularity] = useState<UsageGranularity>('hour');
   const [stats, setStats] = useState<UsageStatistics | null>(null);
@@ -535,11 +620,6 @@ const UsageStatisticsConfig: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<{ type: 'error'; text: string } | null>(null);
   const requestIdRef = useRef(0);
-  const timeZone = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    [],
-  );
-
   const load = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
     if (background) {

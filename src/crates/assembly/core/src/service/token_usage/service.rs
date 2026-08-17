@@ -115,10 +115,9 @@ impl TokenUsageService {
 
     /// Aggregate persisted records into dashboard statistics.
     ///
-    /// Attribution (provider group, endpoint, estimated price) prefers the
-    /// current model configuration for each record's `model_config_id` and
-    /// falls back to the bundled models.dev catalog inferred from the
-    /// effective model name, so records survive config deletion.
+    /// Attribution resolves the current model configuration for each record's
+    /// `model_config_id`. Records whose configuration was deleted remain in
+    /// isolated unresolved buckets rather than being guessed by model name.
     pub async fn get_statistics(
         &self,
         query: TokenUsageQuery,
@@ -131,17 +130,13 @@ impl TokenUsageService {
             .await
             .map_err(anyhow::Error::msg)?;
 
-        let models_dev = crate::infrastructure::ai::reasoning_catalog::
-            load_models_dev_reasoning_catalog_without_refresh()
-            .await
-            .catalog;
         let configs = crate::service::config::get_global_config_service()
             .await
             .map_err(anyhow::Error::msg)?
             .get_config::<Vec<AIModelConfig>>(Some("ai.models"))
             .await
             .unwrap_or_default();
-        let resolver = UsageAttributionResolver::new(models_dev.as_deref(), &configs);
+        let resolver = UsageAttributionResolver::new(&configs);
 
         Ok(
             bitfun_services_core::token_usage::aggregate_statistics_with_time_zone(
