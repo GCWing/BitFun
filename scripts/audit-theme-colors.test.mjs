@@ -223,8 +223,8 @@ test('FlowChat heading scale derives from runtime typography without static 4xl 
   );
   assert.match(
     navScope,
-    /--bf-appearance-token-font-size-4xl:\s*max\(24px, calc\(var\(--bf-appearance-token-flowchat-font-size-3xl\) \+ 3px\)\);/,
-    'Nav scope should preserve its old 4xl-minus-one behavior from FlowChat 3xl',
+    /--bf-appearance-token-font-size-4xl:\s*max\(25px, calc\(var\(--bf-appearance-token-flowchat-font-size-3xl\) \+ 4px\)\);/,
+    'Nav scope should derive product 4xl from FlowChat 3xl without a static root alias',
   );
 });
 
