@@ -42,6 +42,17 @@
     flex: 0 0 auto;
     display: flex;
     align-items: center;
+    gap: 6px;
+  }
+
+  &__identity-name {
+    max-width: 96px;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__header-title-wrap {

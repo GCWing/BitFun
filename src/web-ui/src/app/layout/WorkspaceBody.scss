@@ -60,7 +60,10 @@ $_workbench-gap: 6px;
   position: absolute;
   top: 0;
   bottom: $_workbench-gap;
-  left: calc(#{$_workbench-gap} + var(--nav-width));
+  // Anchor the resize target to the scene surface edge. The target extends
+  // into the scene so it never covers the navigation scrollbar immediately
+  // to its left.
+  left: calc(#{$_workbench-gap} + var(--nav-width) + #{$_workbench-gap});
   z-index: 10;
   width: $_workbench-gap;
   cursor: ew-resize;
@@ -69,7 +72,7 @@ $_workbench-gap: 6px;
   &::after {
     content: '';
     position: absolute;
-    inset: 38px auto 0 50%;
+    inset: 38px auto 0 0;
     width: 1px;
     border-radius: $size-radius-full;
     background: var(--bf-appearance-token-border-subtle);
@@ -80,15 +83,13 @@ $_workbench-gap: 6px;
   }
 }
 
-// Active resizing state — keep line visible while dragging
-.bitfun-is-resizing-nav .bitfun-workspace-body__nav-divider::after {
-  content: '';
-  opacity: 1;
-  width: 3px;
-  background: var(--bf-appearance-token-color-accent-500);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 50%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-workspace-body__nav-divider:hover::after {
+    opacity: 1;
+  }
 }
 
+// Active resizing state — keep line visible while dragging
 .bitfun-is-resizing-nav .bitfun-workspace-body__nav-divider::after {
   width: 2px;
   opacity: 1;
@@ -131,6 +132,11 @@ $_workbench-gap: 6px;
 }
 
 .bitfun-workspace-body__nav-panel {
+  // The workbench keeps a visual gap between navigation and scene. Let the
+  // panel fill that gap so native scrollbars terminate at the visible scene
+  // border without changing the logical resize width or moving the scene.
+  width: calc(100% + #{$_workbench-gap});
+  max-width: none;
   min-width: 0;
 }
 

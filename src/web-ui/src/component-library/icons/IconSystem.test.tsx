@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
   BitFunIcon,
+  HarnessCreativeIcon,
   NavigationExtensionsCompatibilityIcon,
   NavigationMiniAppIcon,
   NavigationSessionContextAddIcon,
@@ -20,7 +21,7 @@ import {
 } from './index';
 
 describe('BitFun icon system', () => {
-  it('keeps first-party navigation semantics stable and uniquely registered', () => {
+  it('keeps first-party icon semantics stable and uniquely registered', () => {
     expect(bitFunIconNames).toEqual([
       'session-group-assistant',
       'session-group-remote-workspace',
@@ -34,6 +35,7 @@ describe('BitFun icon system', () => {
       'navigation-session-context-add',
       'navigation-mini-app',
       'navigation-extensions-compatibility',
+      'harness-creative',
     ]);
     expect(new Set(bitFunIconNames).size).toBe(bitFunIconNames.length);
     expect(new Set(bitFunIconNames.map(name => bitFunIconMetadata[name].semantic)).size)
@@ -59,16 +61,30 @@ describe('BitFun icon system', () => {
         <NavigationSessionContextAddIcon />
         <NavigationMiniAppIcon />
         <NavigationExtensionsCompatibilityIcon />
+        <HarnessCreativeIcon />
       </>,
     );
 
     for (const name of bitFunIconNames) {
       expect(markup).toContain(`data-bf-icon="${name}"`);
     }
-    expect(markup.match(/data-bf-source="bitfun-svg"/g)).toHaveLength(12);
+    expect(markup.match(/data-bf-source="bitfun-svg"/g)).toHaveLength(13);
     expect(markup).toContain('stroke="currentColor"');
     expect(markup).toContain('stroke-linecap="round"');
     expect(markup).toContain('fill="currentColor"');
+  });
+
+  it('keeps the Creative Harness reference redraw in the proprietary icon registry', () => {
+    const metadata = bitFunIconMetadata['harness-creative'];
+    const markup = renderToStaticMarkup(<HarnessCreativeIcon />);
+
+    expect(metadata.semantic).toBe('harness.profile.creative');
+    expect(metadata.source).toMatchObject({
+      type: 'bitfun-svg',
+      origin: 'bitfun-reference-redraw',
+    });
+    expect(markup).toContain('data-bf-icon="harness-creative"');
+    expect(markup).toContain('data-bf-source="bitfun-svg"');
   });
 
   it('provides filled selected variants for every session-group type used in navigation', () => {

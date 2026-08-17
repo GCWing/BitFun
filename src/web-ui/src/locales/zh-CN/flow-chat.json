@@ -704,7 +704,8 @@
       "profiles": {
         "minimal": { "name": "极简", "promise": "直接执行，最少编排与校验" },
         "balanced": { "name": "标准", "promise": "先规划再执行，关键处校验" },
-        "ultimate": { "name": "极致", "promise": "深度规划、多方协作、全面校验" }
+        "ultimate": { "name": "极致", "promise": "深度规划、多方协作、全面校验" },
+        "creative": { "name": "创造", "promise": "开发 Mini App，定制并改造 BitFun" }
       }
     },
     "specialistAgents": {
@@ -1340,6 +1341,40 @@
     "backgroundCommandStopAll": "全部终止",
     "backgroundCommandStopFailed": "终止后台命令失败。",
     "pullRequests": "拉取请求"
+  },
+  "subagentIdentity": {
+    "names": {
+      "name01": "星豆",
+      "name02": "月芽",
+      "name03": "云团",
+      "name04": "微光",
+      "name05": "极光",
+      "name06": "糯米",
+      "name07": "布丁",
+      "name08": "软糖",
+      "name09": "泡芙",
+      "name10": "豆包",
+      "name11": "啵啵",
+      "name12": "点点",
+      "name13": "咔哒",
+      "name14": "滴答",
+      "name15": "啾啾",
+      "name16": "薄荷",
+      "name17": "榛果",
+      "name18": "蓝莓",
+      "name19": "桃桃",
+      "name20": "柚子",
+      "name21": "像素",
+      "name22": "小齿轮",
+      "name23": "火花",
+      "name24": "光标",
+      "name25": "电波",
+      "name26": "团团",
+      "name27": "圆圆",
+      "name28": "绵绵",
+      "name29": "乐乐",
+      "name30": "悠悠"
+    }
   },
   "backgroundCommandInput": {
     "title": "输入命令内容",

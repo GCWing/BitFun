@@ -704,7 +704,8 @@
       "profiles": {
         "minimal": { "name": "Minimal", "promise": "Acts directly, with the least planning and checking" },
         "balanced": { "name": "Standard", "promise": "Plans first, then verifies what matters" },
-        "ultimate": { "name": "Ultimate", "promise": "Deep planning, more collaboration, full verification" }
+        "ultimate": { "name": "Ultimate", "promise": "Deep planning, more collaboration, full verification" },
+        "creative": { "name": "Creative", "promise": "Builds Mini Apps and customizes BitFun itself" }
       }
     },
     "specialistAgents": {
@@ -1340,6 +1341,40 @@
     "backgroundCommandStopAll": "Stop all",
     "backgroundCommandStopFailed": "Failed to stop background command.",
     "pullRequests": "Pull requests"
+  },
+  "subagentIdentity": {
+    "names": {
+      "name01": "Starbit",
+      "name02": "Moonbud",
+      "name03": "Cloudlet",
+      "name04": "Glimmer",
+      "name05": "Aurora",
+      "name06": "Mochi",
+      "name07": "Pudding",
+      "name08": "Gummy",
+      "name09": "Puff",
+      "name10": "Bunbun",
+      "name11": "Bubbles",
+      "name12": "Dottie",
+      "name13": "Clicky",
+      "name14": "Tocky",
+      "name15": "Chirpy",
+      "name16": "Minty",
+      "name17": "Hazel",
+      "name18": "Berry",
+      "name19": "Peachy",
+      "name20": "Yuzu",
+      "name21": "Pixel",
+      "name22": "Coglet",
+      "name23": "Sparky",
+      "name24": "Blinky",
+      "name25": "Wavy",
+      "name26": "Pompom",
+      "name27": "Rollo",
+      "name28": "Fluffy",
+      "name29": "Jolly",
+      "name30": "Mellow"
+    }
   },
   "backgroundCommandInput": {
     "title": "Send command input",

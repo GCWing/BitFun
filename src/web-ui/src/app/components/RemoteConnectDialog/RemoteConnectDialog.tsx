@@ -22,6 +22,7 @@ import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { AccountPanel } from './AccountPanel';
 import {
   remoteConnectAPI,
+  remotePairingStateName,
   type ConnectionResult,
   type RemoteConnectStatus,
   type LanNetworkInterface,
@@ -232,7 +233,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   // ── Derived state ────────────────────────────────────────────────
 
-  const isRelayConnected = status?.pairing_state === 'connected';
+  const isRelayConnected = remotePairingStateName(status?.pairing_state) === 'connected';
   const isBotConnected = !!status?.bot_connected;
   const connectedNetworkTab = methodToNetworkTab(status?.active_method);
   const connectedBotTab = botInfoToBotTab(status?.bot_connected);
@@ -306,7 +307,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     // Relay and bot connections can coexist. Restore both selected subtabs
     // before choosing which group to show, otherwise the bot-first open path
     // can leave a connected BitFun Server relay rendering the default LAN UI.
-    if (nextStatus.pairing_state === 'connected') {
+    if (remotePairingStateName(nextStatus.pairing_state) === 'connected') {
       const connectedTab = methodToNetworkTab(nextStatus.active_method);
       if (connectedTab) setNetworkTab(connectedTab);
     }
@@ -323,7 +324,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         if (!isOpenRef.current || pollGenerationRef.current !== pollGeneration) return;
         applyStatus(s);
         const done = target === 'relay'
-          ? s.pairing_state === 'connected'
+          ? remotePairingStateName(s.pairing_state) === 'connected'
           : !!s.bot_connected;
         if (done) {
           if (pollRef.current) clearInterval(pollRef.current);
@@ -362,11 +363,13 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             setActiveGroup('bot');
             return;
           }
-          if (s.pairing_state === 'connected') {
+          if (remotePairingStateName(s.pairing_state) === 'connected') {
             setActiveGroup('network');
             return;
           }
-          if (['waiting_for_scan', 'verifying', 'handshaking'].includes(s.pairing_state)) {
+          if (['waiting_for_scan', 'verifying', 'handshaking'].includes(
+            remotePairingStateName(s.pairing_state),
+          )) {
             const tab = methodToNetworkTab(s.active_method);
             setActiveGroup('network');
             if (tab) setNetworkTab(tab);

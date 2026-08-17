@@ -58,6 +58,12 @@ import {
   hasOpaqueWorkspaceMutationRisk,
 } from '../../utils/modifiedFilePaths';
 import { getMotionAwareScrollBehavior } from '../../utils/motionPreference';
+import { sessionLineageLifecycleForSession } from '../../utils/sessionLineage';
+import {
+  getSubagentNameDefinition,
+  SubagentAvatar,
+  useSubagentIdentity,
+} from '../../subagent-identity';
 
 function findReviewChildByRequestId(
   parentSessionId: string | null | undefined,
@@ -167,6 +173,17 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     childRelationship.kind === 'subagent'
     ? childRelationship.kind
     : 'btw';
+  const subagentIdentity = useSubagentIdentity(
+    childKind === 'subagent' ? childSessionId : undefined,
+  );
+  const subagentIdentityName = useMemo(() => {
+    if (!subagentIdentity) return undefined;
+    const definition = getSubagentNameDefinition(subagentIdentity.nameId);
+    return t(definition.labelKey, { defaultValue: definition.fallback });
+  }, [subagentIdentity, t]);
+  const subagentAvatarStatus = childKind === 'subagent' && childSession
+    ? sessionLineageLifecycleForSession(childSession)
+    : 'idle';
   const childBadgeLabel = viewKind === 'review-check'
     ? t('toolCards.taskTool.reviewCoverageLabel')
     : t(`childSession.kinds.${childKind}.short`, {
@@ -1001,6 +1018,22 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       >
         <div className="btw-session-panel__header" data-bf-component="btw-session-panel" data-bf-part="header">
           <div className="btw-session-panel__header-left" data-bf-component="btw-session-panel" data-bf-part="headerMain">
+            {subagentIdentity ? (
+              <>
+                <SubagentAvatar
+                  identity={subagentIdentity}
+                  name={subagentIdentityName}
+                  size={24}
+                  status={subagentAvatarStatus}
+                />
+                <span
+                  className="btw-session-panel__identity-name"
+                  data-bf-part="subagentName"
+                >
+                  {subagentIdentityName}
+                </span>
+              </>
+            ) : null}
             <span className="btw-session-panel__badge" data-bf-component="btw-session-panel" data-bf-part="badge">{childBadgeLabel}</span>
           </div>
           <div className="btw-session-panel__header-title-wrap">

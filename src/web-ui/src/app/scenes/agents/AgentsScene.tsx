@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, IconButton, Search, Select, confirmDanger } from '@/component-library';
+import { HarnessCreativeIcon } from '@/component-library/icons';
 import {
   GalleryDetailModal,
   GalleryEmpty,
@@ -80,6 +81,7 @@ const HARNESS_PROFILES = [
   { id: 'minimal', icon: Zap, connected: true },
   { id: 'balanced', icon: Scale, connected: true },
   { id: 'ultimate', icon: Orbit, connected: false },
+  { id: 'creative', icon: HarnessCreativeIcon, connected: false },
 ] as const;
 
 type CapabilityTab = 'model' | 'tools' | 'skills' | 'subagents';
@@ -285,7 +287,8 @@ const AgentsHomeView: React.FC = () => {
 
   const handleHarnessProfileClick = useCallback((profileId: typeof HARNESS_PROFILES[number]['id']) => {
     const name = t(`harnessZone.profiles.${profileId}.name`);
-    if (profileId !== 'ultimate') {
+    const profile = HARNESS_PROFILES.find(candidate => candidate.id === profileId);
+    if (profile?.connected) {
       notification.success(t('harnessZone.connectedNotice', { name }), { duration: 2600 });
       return;
     }
@@ -687,7 +690,7 @@ const AgentsHomeView: React.FC = () => {
           data-testid="agents-harness-zone"
           title={t('harnessZone.title')}
           subtitle={t('harnessZone.subtitle')}
-          tools={<span className="gallery-zone-count">3</span>}
+          tools={<span className="gallery-zone-count">{HARNESS_PROFILES.length}</span>}
         >
           <GalleryGrid minCardWidth={280} data-bf-scene="agents" data-bf-part="harnessGrid">
             {HARNESS_PROFILES.map(({ id, icon: Icon, connected }, index) => (

@@ -4,6 +4,7 @@ export type { BitFunIconMetadata, BitFunIconProps } from './types';
 export type { BitFunIconSource } from './types';
 export { BITFUN_ICON_SIZE } from './tokens';
 export {
+  HarnessCreativeIcon,
   NavigationExtensionsCompatibilityIcon,
   NavigationMiniAppIcon,
   NavigationSessionContextAddIcon,

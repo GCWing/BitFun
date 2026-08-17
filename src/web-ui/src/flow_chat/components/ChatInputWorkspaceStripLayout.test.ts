@@ -83,6 +83,19 @@ describe('status track layout', () => {
     expect(readLocalFile('ModelSelector.tsx')).not.toContain('reasoningControlHost');
   });
 
+  it('orders the add entry, Harness, and selected Agent/Mode in semantic DOM', () => {
+    const chatInput = readLocalFile('ChatInput.tsx');
+    const harnessIndex = chatInput.indexOf('<HarnessProfileSelector');
+    const agentBoostIndex = chatInput.indexOf('data-testid="chat-input-agent-boost"');
+    const agentModeChipIndex = chatInput.indexOf('data-testid="chat-input-agent-mode-chip"');
+
+    expect(harnessIndex).toBeGreaterThan(-1);
+    expect(agentBoostIndex).toBeGreaterThan(-1);
+    expect(harnessIndex).toBeGreaterThan(agentBoostIndex);
+    expect(agentModeChipIndex).toBeGreaterThan(harnessIndex);
+    expect(chatInput).toContain('harnessProfilePolicy.userConfigurable ? (');
+  });
+
   it('carries the Harness gear and the model pair inside the capsule', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
     const stylesheet = readChatInputStylesheet();
@@ -102,7 +115,9 @@ describe('status track layout', () => {
     const stylesheet = readLocalFile('HarnessProfileSelector.scss');
 
     expect(component).toMatch(/minimal: Scan,[\s\S]*?balanced: Grid2X2,[\s\S]*?ultimate: Grid3X3,/);
-    expect(component).toContain("data-harness-density={profile ? PROFILE_GEARS[profile] : 0}");
+    expect(component).toContain(
+      'data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}',
+    );
     expect(component).toContain('className="bitfun-harness-selector__density-core"');
     expect(stylesheet).toMatch(
       /@media \(max-width: 560px\)[\s\S]*?__trigger-value \{\n {4}display: none;/,

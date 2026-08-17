@@ -1,0 +1,49 @@
+// @vitest-environment jsdom
+
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { SubagentAvatar } from './SubagentAvatar';
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+describe('SubagentAvatar', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it('renders the allocated raster avatar and lifecycle state', () => {
+    act(() => {
+      root.render(
+        <SubagentAvatar
+          identity={{
+            rootSessionId: 'root',
+            sessionId: 'child',
+            avatarId: 'robot-08',
+            nameId: 'name-18',
+          }}
+          name="Berry"
+          size={28}
+          status="running"
+        />,
+      );
+    });
+
+    const avatar = container.querySelector('[data-bf-component="subagent-avatar"]');
+    expect(avatar?.getAttribute('data-bf-avatar-id')).toBe('robot-08');
+    expect(avatar?.getAttribute('data-bf-name-id')).toBe('name-18');
+    expect(avatar?.getAttribute('data-bf-state')).toBe('running');
+    expect(avatar?.getAttribute('style')).toContain('28px');
+    expect(container.querySelector('img')?.getAttribute('src')).toContain('robot-08');
+  });
+});

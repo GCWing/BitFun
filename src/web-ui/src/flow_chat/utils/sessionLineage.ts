@@ -40,7 +40,7 @@ function metadataLifecycle(metadata: SessionLineageEntry): SessionLineageLifecyc
   return metadata.status === 'completed' ? 'completed' : 'idle';
 }
 
-function sessionLifecycle(session: Session): SessionLineageLifecycle {
+export function sessionLineageLifecycleForSession(session: Session): SessionLineageLifecycle {
   if (session.needsUserAttention) return 'waiting';
   if (session.status === 'error' || session.hasUnreadCompletion === 'error') return 'error';
 
@@ -93,7 +93,7 @@ function nodeFromSession(session: Session): FlatSessionLineageNode {
     title: session.title?.trim() || session.subagentType || session.mode || 'Agent',
     agentType: session.mode || session.config.agentType,
     subagentType: session.subagentType,
-    lifecycle: sessionLifecycle(session),
+    lifecycle: sessionLineageLifecycleForSession(session),
     createdAt: session.createdAt,
     workspacePath: session.workspacePath,
     remoteConnectionId: session.remoteConnectionId,
@@ -188,7 +188,10 @@ export function hasActiveSessionLineageDescendants(
   if (!rootSessionId) return false;
 
   for (const session of liveSessions.values()) {
-    if (session.sessionId === rootSessionId || !isActiveSessionLineageLifecycle(sessionLifecycle(session))) {
+    if (
+      session.sessionId === rootSessionId ||
+      !isActiveSessionLineageLifecycle(sessionLineageLifecycleForSession(session))
+    ) {
       continue;
     }
 

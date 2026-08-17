@@ -68,6 +68,7 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
             type="button"
             className="bitfun-remote-disclaimer__btn bitfun-remote-disclaimer__btn--primary"
             onClick={onAgree}
+            data-testid="remote-connect-disclaimer-agree"
           >
             {t('remoteConnect.disclaimerAgree')}
           </button>

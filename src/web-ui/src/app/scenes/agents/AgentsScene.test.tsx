@@ -288,10 +288,13 @@ describeWithJsdom('AgentsScene', () => {
     const minimal = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-minimal"]');
     const balanced = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-balanced"]');
     const ultimate = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-ultimate"]');
+    const creative = container.querySelector<HTMLButtonElement>('[data-testid="agents-harness-creative"]');
     expect(minimal).toBeTruthy();
     expect(minimal?.dataset.bfState).toBe('connected');
     expect(balanced?.dataset.bfState).toBe('connected');
     expect(ultimate?.dataset.bfState).toBe('coming-soon');
+    expect(creative?.dataset.bfState).toBe('coming-soon');
+    expect(creative?.querySelector('[data-bf-icon="harness-creative"]')).toBeTruthy();
 
     await act(async () => {
       minimal?.click();
@@ -303,6 +306,14 @@ describeWithJsdom('AgentsScene', () => {
     expect(notificationSuccessMock).toHaveBeenCalledWith(
       'harnessZone.connectedNotice',
       expect.objectContaining({ duration: 2600 }),
+    );
+
+    await act(async () => {
+      creative?.click();
+    });
+    expect(notificationInfoMock).toHaveBeenCalledWith(
+      'harnessZone.comingSoonNotice',
+      expect.objectContaining({ duration: 3200 }),
     );
   });
 

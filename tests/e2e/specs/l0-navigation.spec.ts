@@ -196,6 +196,49 @@ describe('L0 Navigation Panel', () => {
       await saveStepScreenshot('l0-navigation-grouped-session-alignment');
     });
 
+    it('should align extension child icons with the parent label', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const extensionsEntry = await $('[data-testid="agent-skill-entry"]');
+      await extensionsEntry.waitForDisplayed({ timeout: 10000 });
+      if (await extensionsEntry.getAttribute('aria-expanded') !== 'true') {
+        await extensionsEntry.click();
+      }
+
+      await browser.waitUntil(
+        async () => await extensionsEntry.getAttribute('aria-expanded') === 'true',
+        { timeout: 5000, timeoutMsg: 'Extensions group did not expand' },
+      );
+
+      const alignment = await browser.execute(() => {
+        const parent = document.querySelector<HTMLElement>('[data-testid="agent-skill-entry"]');
+        const parentLabel = parent?.querySelector<HTMLElement>(':scope > span:last-child');
+        const childIcons = Array.from(document.querySelectorAll<SVGGraphicsElement>(
+          '[data-testid="agent-skill-tabs"] .bitfun-nav-panel__top-action-icon-slot > svg',
+        ));
+        if (!parentLabel || childIcons.length === 0) {
+          return null;
+        }
+
+        return {
+          parentLabelLeft: parentLabel.getBoundingClientRect().left,
+          childIconLefts: childIcons.map(icon => icon.getBoundingClientRect().left),
+        };
+      });
+
+      expect(alignment).not.toBeNull();
+      if (!alignment) {
+        return;
+      }
+
+      expect(alignment.childIconLefts).toHaveLength(3);
+      for (const childIconLeft of alignment.childIconLefts) {
+        expect(Math.abs(childIconLeft - alignment.parentLabelLeft)).toBeLessThanOrEqual(1);
+      }
+      console.log('[L0] Extension child icon alignment:', alignment);
+      await saveStepScreenshot('l0-navigation-extension-child-icon-alignment');
+    });
+
     it('should place Task Board below AI Assistant and open it', async function () {
       expect(hasWorkspace).toBe(true);
 
@@ -331,6 +374,55 @@ describe('L0 Navigation Panel', () => {
       expect(dividerLayout.footerBorderStyle).toBe('none');
       expect(dividerLayout.footerBorderWidth).toBe('0px');
       console.log('[L0] Navigation divider layout:', dividerLayout);
+    });
+
+    it('should align navigation scroll and resize controls with the scene border', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const boundaryLayout = await browser.execute(() => {
+        const navArea = document.querySelector<HTMLElement>('.bitfun-workspace-body__nav-area');
+        const panel = document.querySelector<HTMLElement>('.bitfun-nav-panel');
+        const sections = document.querySelector<HTMLElement>('.bitfun-nav-panel__sections');
+        const divider = document.querySelector<HTMLElement>('.bitfun-workspace-body__nav-divider');
+        const sceneViewport = document.querySelector<HTMLElement>('.bitfun-scene-viewport');
+        if (!navArea || !panel || !sections || !divider || !sceneViewport) {
+          return null;
+        }
+
+        const navAreaRect = navArea.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const sectionsRect = sections.getBoundingClientRect();
+        const dividerRect = divider.getBoundingClientRect();
+        const sceneViewportRect = sceneViewport.getBoundingClientRect();
+        const dividerLineStyle = window.getComputedStyle(divider, '::after');
+        const dividerLineLeft = Number.parseFloat(dividerLineStyle.left);
+
+        return {
+          navAreaRight: navAreaRect.right,
+          panelRight: panelRect.right,
+          sectionsRight: sectionsRect.right,
+          dividerLeft: dividerRect.left,
+          dividerRight: dividerRect.right,
+          dividerLineCenter: dividerRect.left + dividerLineLeft,
+          sceneLeft: sceneViewportRect.left,
+        };
+      });
+
+      expect(boundaryLayout).not.toBeNull();
+      if (!boundaryLayout) {
+        return;
+      }
+
+      // Preserve the workbench breathing room instead of moving the scene
+      // border left to meet controls that were positioned against navArea.
+      expect(boundaryLayout.sceneLeft - boundaryLayout.navAreaRight).toBeGreaterThan(0);
+      expect(Math.abs(boundaryLayout.panelRight - boundaryLayout.sceneLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(boundaryLayout.sectionsRight - boundaryLayout.sceneLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(boundaryLayout.dividerLeft - boundaryLayout.sceneLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(boundaryLayout.dividerLineCenter - boundaryLayout.sceneLeft)).toBeLessThanOrEqual(1);
+      expect(boundaryLayout.dividerRight).toBeGreaterThan(boundaryLayout.sceneLeft);
+      console.log('[L0] Navigation boundary alignment:', boundaryLayout);
+      await saveStepScreenshot('l0-navigation-boundary-alignment');
     });
 
     it('navigation items should be clickable', async function () {

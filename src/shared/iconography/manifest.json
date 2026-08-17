@@ -204,6 +204,23 @@
       },
       "license": "BitFun Proprietary",
       "tags": ["extensions", "compatibility", "navigation", "grid", "create"]
+    },
+    {
+      "id": "harness-creative",
+      "exportName": "HarnessCreativeIcon",
+      "semantic": "harness.profile.creative",
+      "category": "harness",
+      "displayName": "Creative Harness",
+      "description": "Creative Harness profile represented by a modular grid and brush",
+      "source": {
+        "type": "bitfun-svg",
+        "path": "svg/harness-creative.svg",
+        "origin": "bitfun-reference-redraw",
+        "referenceId": "creative-harness-grid-brush-2026-08-17",
+        "revision": 1
+      },
+      "license": "BitFun Proprietary",
+      "tags": ["harness", "creative", "grid", "brush"]
     }
   ]
 }

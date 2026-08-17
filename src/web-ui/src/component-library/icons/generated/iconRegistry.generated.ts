@@ -260,6 +260,28 @@ export const NavigationExtensionsCompatibilityIcon = /* @__PURE__ */ createBitFu
   ],
 );
 
+export const HarnessCreativeIcon = /* @__PURE__ */ createBitFunSvgIconComponent(
+  'harness-creative',
+  [
+    {
+      "d": "M4.4 2.8H8.4C9.28 2.8 10 3.52 10 4.4V8.4C10 9.28 9.28 10 8.4 10H4.4C3.52 10 2.8 9.28 2.8 8.4V4.4C2.8 3.52 3.52 2.8 4.4 2.8ZM14.6 2.8H18.6C19.48 2.8 20.2 3.52 20.2 4.4V8.4C20.2 9.28 19.48 10 18.6 10H14.6C13.72 10 13 9.28 13 8.4V4.4C13 3.52 13.72 2.8 14.6 2.8ZM4.4 13H8.4C9.28 13 10 13.72 10 14.6V18.6C10 19.48 9.28 20.2 8.4 20.2H4.4C3.52 20.2 2.8 19.48 2.8 18.6V14.6C2.8 13.72 3.52 13 4.4 13Z",
+      "fill": "none",
+      "stroke": "currentColor",
+      "strokeWidth": 1.7,
+      "strokeLinecap": "round",
+      "strokeLinejoin": "round"
+    },
+    {
+      "d": "M11.9 20.9C13.68 18.94 13.82 17.72 14.68 16.32C15.5 14.98 16.84 14.38 18.04 14.94C19.24 15.5 19.68 16.84 19.04 18.24C18.12 20.24 15.54 21.24 11.9 20.9ZM18.48 15.24L21.3 12.42",
+      "fill": "none",
+      "stroke": "currentColor",
+      "strokeWidth": 1.75,
+      "strokeLinecap": "round",
+      "strokeLinejoin": "round"
+    }
+  ],
+);
+
 export const bitFunIconComponents = {
   'session-group-assistant': SessionGroupAssistantIcon,
   'session-group-remote-workspace': SessionGroupRemoteWorkspaceIcon,
@@ -273,6 +295,7 @@ export const bitFunIconComponents = {
   'navigation-session-context-add': NavigationSessionContextAddIcon,
   'navigation-mini-app': NavigationMiniAppIcon,
   'navigation-extensions-compatibility': NavigationExtensionsCompatibilityIcon,
+  'harness-creative': HarnessCreativeIcon,
 } as const;
 
 export type BitFunIconName = keyof typeof bitFunIconComponents;
@@ -290,6 +313,7 @@ export const bitFunIconNames = [
   'navigation-session-context-add',
   'navigation-mini-app',
   'navigation-extensions-compatibility',
+  'harness-creative',
 ] as const satisfies readonly BitFunIconName[];
 
 export const bitFunIconMetadata = {
@@ -562,6 +586,28 @@ export const bitFunIconMetadata = {
       "navigation",
       "grid",
       "create"
+    ]
+  },
+  'harness-creative': {
+    "id": "harness-creative",
+    "exportName": "HarnessCreativeIcon",
+    "semantic": "harness.profile.creative",
+    "category": "harness",
+    "displayName": "Creative Harness",
+    "description": "Creative Harness profile represented by a modular grid and brush",
+    "source": {
+      "type": "bitfun-svg",
+      "path": "svg/harness-creative.svg",
+      "origin": "bitfun-reference-redraw",
+      "referenceId": "creative-harness-grid-brush-2026-08-17",
+      "revision": 1
+    },
+    "license": "BitFun Proprietary",
+    "tags": [
+      "harness",
+      "creative",
+      "grid",
+      "brush"
     ]
   },
 } as const satisfies Record<BitFunIconName, BitFunIconMetadata>;

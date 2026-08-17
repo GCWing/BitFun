@@ -4,9 +4,7 @@ import {
   Settings,
   Info,
   PictureInPicture2,
-  Smartphone,
   Palette,
-  ChevronUp,
 } from 'lucide-react';
 import { Tooltip, Modal, PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -14,13 +12,10 @@ import { useSceneStore } from '../../../stores/sceneStore';
 import { activateProductAction } from '@/app/global-search/productActionActivator';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useNotification } from '@/shared/notification-system';
-import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import GithubStarButton from './GithubStarButton';
-import {
-  RemoteConnectDisclaimerContent,
-} from '../../RemoteConnectDialog/RemoteConnectDisclaimer';
+import { RemoteConnectDisclaimerContent } from '../../RemoteConnectDialog/RemoteConnectDisclaimer';
 import {
   getRemoteConnectDisclaimerAgreed,
   setRemoteConnectDisclaimerAgreed,
@@ -28,6 +23,7 @@ import {
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
+import DeviceStatusControl from './DeviceStatusControl';
 
 const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
 const AboutDialog = lazy(() =>
@@ -39,7 +35,6 @@ const PersistentFooterActions: React.FC = () => {
   const activeTabId = useSceneStore((s) => s.activeTabId);
   const { enableToolbarMode } = useToolbarModeContext();
   const { warning } = useNotification();
-  const { loggedIn: accountLoggedIn, deviceName: accountDeviceName } = useAccountLoginState();
 
   useEffect(() => {
     const onAutoExit = (event: Event) => {
@@ -57,6 +52,7 @@ const PersistentFooterActions: React.FC = () => {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
+  const [deviceOverviewOpen, setDeviceOverviewOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const menuPopoverRef = useRef<HTMLDivElement>(null);
   const menuLayout = useAnchoredPopoverPosition({
@@ -71,7 +67,9 @@ const PersistentFooterActions: React.FC = () => {
   const [showRemoteConnect, setShowRemoteConnect] = useState(false);
   const [remoteInitialGroup, setRemoteInitialGroup] = useState<'network' | 'bot' | 'account' | undefined>(undefined);
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
-  const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
+  const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(
+    () => getRemoteConnectDisclaimerAgreed(),
+  );
 
   // Periodic token-expiry check. Only auto-open the dialog if the token has
   // actually expired while the app is running — not on startup. Lands on the
@@ -100,9 +98,17 @@ const PersistentFooterActions: React.FC = () => {
     if (menuOpen) {
       closeMenu();
     } else {
+      setDeviceOverviewOpen(false);
       setMenuOpen(true);
     }
   };
+
+  const handleDeviceOverviewOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen && menuOpen) {
+      closeMenu();
+    }
+    setDeviceOverviewOpen(nextOpen);
+  }, [closeMenu, menuOpen]);
 
   const handleOpenSettings = useCallback(() => {
     closeMenu();
@@ -145,35 +151,16 @@ const PersistentFooterActions: React.FC = () => {
   }, []);
 
   const isSettingsActive = activeTabId === 'settings';
-  const deviceStatusLabel = accountLoggedIn
-    ? accountDeviceName || t('accountLogin.thisDevice')
-    : t('accountLogin.connectDevices');
-  const deviceStatusTooltip = accountLoggedIn
-    ? `${deviceStatusLabel} · ${t('accountLogin.online')}`
-    : t('accountLogin.loginValueProp');
 
   return (
     <>
       <div className="bitfun-nav-panel__footer" data-bf-component="nav-panel" data-bf-part="footer">
         <div className="bitfun-nav-panel__footer-left">
-          <Tooltip content={deviceStatusTooltip} placement="right" followCursor>
-            <button
-              type="button"
-              className={`bitfun-nav-panel__footer-device-status${accountLoggedIn ? ' is-connected' : ''}`}
-              aria-label={deviceStatusTooltip}
-              onClick={handleRemoteConnect}
-              data-testid="nav-footer-device-status"
-              data-bf-component="nav-panel"
-              data-bf-part="deviceStatus"
-              data-bf-state={accountLoggedIn ? 'connected' : 'disconnected'}
-            >
-              <Smartphone size={15} aria-hidden="true" />
-              <span className="bitfun-nav-panel__footer-device-status-label">
-                {deviceStatusLabel}
-              </span>
-              <span className="bitfun-nav-panel__footer-device-status-dot" aria-hidden="true" />
-            </button>
-          </Tooltip>
+          <DeviceStatusControl
+            open={deviceOverviewOpen}
+            onOpenChange={handleDeviceOverviewOpenChange}
+            onManageDevices={handleRemoteConnect}
+          />
         </div>
 
         <div className="bitfun-nav-panel__footer-right">
@@ -199,14 +186,7 @@ const PersistentFooterActions: React.FC = () => {
                 data-bf-part="settingsEntry"
                 data-bf-state={menuOpen ? 'open' : isSettingsActive ? 'active' : undefined}
               >
-                {menuOpen ? (
-                  <Settings size={15} aria-hidden="true" />
-                ) : (
-                  <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-                    <Settings size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-                    <ChevronUp size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
-                  </span>
-                )}
+                <Settings size={15} aria-hidden="true" />
               </button>
             </Tooltip>
 

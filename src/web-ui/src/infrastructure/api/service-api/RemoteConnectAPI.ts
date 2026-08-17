@@ -20,6 +20,30 @@ export interface ConnectionMethodInfo {
   description: string;
 }
 
+export type RemotePairingState =
+  | 'idle'
+  | 'waiting_for_scan'
+  | 'handshaking'
+  | 'verifying'
+  | 'connected'
+  | 'disconnected'
+  | { failed: { reason: string } };
+
+export function remotePairingStateName(
+  state: RemotePairingState | null | undefined,
+): Exclude<RemotePairingState, { failed: { reason: string } }> | 'failed' {
+  if (state === null || state === undefined) return 'idle';
+  return typeof state === 'string' ? state : 'failed';
+}
+
+export function remotePairingFailureReason(
+  state: RemotePairingState | null | undefined,
+): string | null {
+  return typeof state === 'object' && state !== null
+    ? state.failed.reason
+    : null;
+}
+
 export interface ConnectionResult {
   method: string;
   qr_data: string | null;
@@ -27,12 +51,12 @@ export interface ConnectionResult {
   qr_url: string | null;
   bot_pairing_code: string | null;
   bot_link: string | null;
-  pairing_state: string;
+  pairing_state: RemotePairingState;
 }
 
 export interface RemoteConnectStatus {
   is_connected: boolean;
-  pairing_state: string;
+  pairing_state: RemotePairingState;
   active_method: string | null;
   peer_device_name: string | null;
   peer_user_id: string | null;
