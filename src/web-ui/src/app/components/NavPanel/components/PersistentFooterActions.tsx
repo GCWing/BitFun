@@ -234,7 +234,7 @@ const PersistentFooterActions: React.FC = () => {
                     data-testid="nav-settings-theme-item"
                     data-bf-component="nav-panel"
                     data-bf-part="footerMenuItem"
-                    data-bf-action="theme-configuration"
+                    data-bf-action="appearance-configuration"
                   >
                     <Palette size={14} aria-hidden="true" />
                     <span>{t('nav.settingsMenu.themeConfiguration')}</span>

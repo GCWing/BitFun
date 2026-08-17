@@ -81,6 +81,7 @@ import { languageSelectorAppearanceDescriptor } from '@/infrastructure/i18n/appe
 import { peerDeviceAppearanceDescriptor } from '@/infrastructure/peer-device/appearance';
 import { updateAppearanceDescriptor } from '@/infrastructure/update/appearance';
 import { componentPreviewAppearanceDescriptor } from '@/component-library/preview/appearance';
+import { iconCatalogAppearanceDescriptor } from '@/component-library/preview/IconCatalogPreview.appearance';
 import { announcementAppearanceDescriptor } from '@/shared/announcement-system/appearance';
 import { contextMenuAppearanceDescriptor } from '@/shared/context-menu-system/appearance';
 import { contextListAppearanceDescriptor } from '@/shared/context-system/appearance';
@@ -116,6 +117,10 @@ import { terminalAppearanceDescriptor } from '@/app/scenes/terminal/appearance';
 import { aboutDialogAppearanceDescriptor } from '@/app/components/AboutDialog/appearance';
 import { navPanelAppearanceDescriptor } from '@/app/components/NavPanel/appearance';
 import { sessionsSectionAppearanceDescriptor } from '@/app/components/NavPanel/sections/sessions/appearance';
+import { deviceOverviewAppearanceDescriptor } from '@/app/components/NavPanel/components/DeviceStatusControl.appearance';
+import { sessionNavigationAppearanceDescriptor } from '@/app/components/NavPanel/components/WorkspaceSessionGroupingToggle.appearance';
+import { assistantAvatarAppearanceDescriptor } from '@/app/components/AssistantAvatar/appearance';
+import { harnessProfileCardAppearanceDescriptor } from '@/app/scenes/agents/components/HarnessProfileCard.appearance';
 import { contentCanvasAppearanceDescriptor } from '@/app/components/panels/content-canvas/appearance';
 import { filesPanelAppearanceDescriptor } from '@/app/components/panels/FilesPanel.appearance';
 import { reviewPlatformAppearanceDescriptor } from '@/app/components/panels/review-platform/appearance';
@@ -266,6 +271,7 @@ import { smartRecommendationsAppearanceDescriptor } from '@/flow_chat/components
 import { sessionRuntimeStatusEntryAppearanceDescriptor } from '@/flow_chat/components/usage/SessionRuntimeStatusEntry.appearance';
 import { runtimeStatusSlotAppearanceDescriptor } from '@/flow_chat/components/modern/RuntimeStatusSlot.appearance';
 import { sessionMenuAppearanceDescriptor } from '@/flow_chat/components/session-menu/SessionMenu.appearance';
+import { subagentAvatarAppearanceDescriptor } from '@/flow_chat/subagent-identity/SubagentAvatar.appearance';
 import {
   dispatchInstallDialogAppearanceDescriptor,
   dispatchResultDialogAppearanceDescriptor,
@@ -364,6 +370,12 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(peerDeviceAppearanceDescriptor)
     .registerComponent(updateAppearanceDescriptor)
     .registerComponent(componentPreviewAppearanceDescriptor)
+    .registerComponent(iconCatalogAppearanceDescriptor)
+    .registerComponent(assistantAvatarAppearanceDescriptor)
+    .registerComponent(deviceOverviewAppearanceDescriptor)
+    .registerComponent(sessionNavigationAppearanceDescriptor)
+    .registerComponent(harnessProfileCardAppearanceDescriptor)
+    .registerComponent(subagentAvatarAppearanceDescriptor)
     .registerComponent(announcementAppearanceDescriptor)
     .registerComponent(contextMenuAppearanceDescriptor)
     .registerComponent(contextListAppearanceDescriptor)

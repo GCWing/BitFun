@@ -6,8 +6,11 @@ export const sessionsSectionAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'root' },
     { id: 'loading' },
     { id: 'retry' },
+    { id: 'aggregateLoading' },
+    { id: 'aggregateRetry' },
     { id: 'row' },
     { id: 'rowMain' },
+    { id: 'assistantAvatar' },
     { id: 'edit' },
     { id: 'actions' },
     { id: 'menu' },
@@ -18,5 +21,6 @@ export const sessionsSectionAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'editing', selector: { kind: 'self', suffix: '[data-bf-state~="editing"]' } },
     { id: 'menuOpen', selector: { kind: 'self', suffix: '[data-bf-state~="menuOpen"]' } },
     { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
+    { id: 'partial', selector: { kind: 'self', suffix: '[data-bf-state~="partial"]' } },
   ],
 };

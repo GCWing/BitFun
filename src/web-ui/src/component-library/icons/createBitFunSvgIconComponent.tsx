@@ -45,7 +45,6 @@ export function createBitFunSvgIconComponent(
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      data-bf-component="icon"
       data-bf-icon={id}
       data-bf-source="bitfun-svg"
       aria-hidden={decorative ? 'true' : undefined}

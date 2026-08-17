@@ -1028,6 +1028,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
                 />
                 <span
                   className="btw-session-panel__identity-name"
+                  data-bf-component="btw-session-panel"
                   data-bf-part="subagentName"
                 >
                   {subagentIdentityName}

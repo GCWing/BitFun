@@ -9,7 +9,7 @@ export const sessionMenuAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   ],
   facets: [
     { id: 'itemKind', attribute: 'data-bf-item-kind', values: ['create', 'session'] },
-    { id: 'sessionKind', attribute: 'data-bf-session-kind', values: ['code', 'cowork'] },
+    { id: 'sessionKind', attribute: 'data-bf-session-kind', values: ['code', 'cowork', 'unified'] },
   ],
   states: [
     { id: 'open', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="open"]' } },

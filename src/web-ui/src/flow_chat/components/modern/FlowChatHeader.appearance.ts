@@ -21,6 +21,7 @@ export const flowChatHeaderAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'sessionTreeHeader' },
     { id: 'sessionTreeBody' },
     { id: 'sessionTreeNode' },
+    { id: 'sessionTreeNodeTitle' },
     { id: 'sessionTreeMenu' },
     { id: 'sessionTreeMenuItem' },
     { id: 'sessionTreeState' },
