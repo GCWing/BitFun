@@ -8,11 +8,19 @@
 
 use bitfun_events::{AgenticEvent, ToolEventData};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 const MAX_PROJECTED_EVENTS_PER_SESSION: usize = 2048;
 const MAX_RETAINED_TERMINAL_SESSION_PROJECTIONS: usize = 64;
+
+/// How many raw materialized events stay individually replayable per Session.
+///
+/// This is the incremental catch-up window, deliberately separate from the
+/// compacted projection above it. It only has to cover an ordinary delivery
+/// gap — a network blip, a device switch, a backgrounded window — not an
+/// arbitrarily long detachment; anything older is answered with a snapshot.
+const MAX_REPLAYABLE_TAIL_EVENTS: usize = 1024;
 
 /// Reserved metadata carried only by the product delivery envelope. Existing
 /// frontend event payload fields remain unchanged for older clients.
@@ -68,13 +76,87 @@ pub struct SessionEventProjectionSnapshot {
     pub events: Vec<AgenticEvent>,
 }
 
+/// One materialized event, kept verbatim next to the cursor it was assigned.
+struct JournaledEvent {
+    cursor: u64,
+    event: AgenticEvent,
+}
+
 #[derive(Default)]
 struct SessionProjection {
     cursor: u64,
     active_turn_id: Option<String>,
     events: Vec<AgenticEvent>,
+    /// Append-only, uncompacted view of the same events `events` compacts.
+    ///
+    /// The compacted projection answers "what does this Turn look like now";
+    /// it cannot answer "what did I miss after cursor N", because accumulating
+    /// a text chunk mutates an entry written at an older cursor and a new Turn
+    /// clears the whole vector. Entries here are never merged or rewritten, so
+    /// a suffix of this queue is exactly what a client behind by a few events
+    /// needs — and nothing else has to be inferred.
+    tail: VecDeque<JournaledEvent>,
     terminal: bool,
     last_touched: u64,
+}
+
+impl SessionProjection {
+    fn push_tail(&mut self, cursor: u64, event: &AgenticEvent) {
+        self.tail.push_back(JournaledEvent {
+            cursor,
+            event: event.clone(),
+        });
+        while self.tail.len() > MAX_REPLAYABLE_TAIL_EVENTS {
+            self.tail.pop_front();
+        }
+    }
+
+    /// Events after `cursor`, or `None` when the retained tail cannot prove it
+    /// is contiguous with what the client already applied.
+    fn tail_since(&self, cursor: u64) -> Option<Vec<AgenticEvent>> {
+        if cursor > self.cursor {
+            // A cursor ahead of this stream's own progress is not a gap this
+            // journal can reason about.
+            return None;
+        }
+        if cursor == self.cursor {
+            return Some(Vec::new());
+        }
+        // The client's next expected event must still be retained; if the
+        // oldest entry is newer than that, the events between were dropped.
+        match self.tail.front() {
+            Some(oldest) if oldest.cursor <= cursor.saturating_add(1) => Some(
+                self.tail
+                    .iter()
+                    .filter(|entry| entry.cursor > cursor)
+                    .map(|entry| entry.event.clone())
+                    .collect(),
+            ),
+            _ => None,
+        }
+    }
+
+    fn clear_replay_content(&mut self) {
+        self.events.clear();
+        self.tail.clear();
+        self.active_turn_id = None;
+    }
+}
+
+/// Everything a client missed after a cursor it already applied.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum SessionEventBackfill {
+    /// Contiguous with the client's cursor: apply these in order and it is
+    /// caught up, with no snapshot and no projection rebuild.
+    Delta {
+        stream_id: String,
+        cursor: u64,
+        events: Vec<AgenticEvent>,
+    },
+    /// The client's cursor predates the retained tail, or belongs to an older
+    /// Runtime process. Only a full snapshot can restore it.
+    SnapshotRequired,
 }
 
 struct JournalState {
@@ -164,8 +246,7 @@ impl SessionEventJournal {
         let mut state = lock_state(&self.state);
         if matches!(event, AgenticEvent::SessionDeleted { .. }) {
             if let Some(projection) = state.sessions.get_mut(&session_id) {
-                projection.events.clear();
-                projection.active_turn_id = None;
+                projection.clear_replay_content();
                 projection.terminal = true;
             }
             return None;
@@ -189,6 +270,7 @@ impl SessionEventJournal {
             if materialized {
                 projection.cursor = projection.cursor.saturating_add(1);
                 projection.last_touched = next_sequence;
+                projection.push_tail(projection.cursor, event);
             }
             (projection.cursor, materialized)
         };
@@ -215,6 +297,37 @@ impl SessionEventJournal {
             }
         }
         materialized.then_some(SessionEventCursor { stream_id, cursor })
+    }
+
+    /// Serve everything recorded after `cursor` on `stream_id`.
+    ///
+    /// This is the ordinary path back to live: a client that missed events
+    /// asks what it missed and applies the answer in order. It replaces
+    /// inferring a gap from painted content, because a gap is now either
+    /// contiguous with the retained tail or explicitly `SnapshotRequired` —
+    /// never a guess. A cursor from another Runtime process is never compared
+    /// with this one's.
+    pub fn events_since(
+        &self,
+        session_id: &str,
+        stream_id: &str,
+        cursor: u64,
+    ) -> SessionEventBackfill {
+        let state = lock_state(&self.state);
+        if state.stream_id != stream_id {
+            return SessionEventBackfill::SnapshotRequired;
+        }
+        let Some(projection) = state.sessions.get(session_id) else {
+            return SessionEventBackfill::SnapshotRequired;
+        };
+        match projection.tail_since(cursor) {
+            Some(events) => SessionEventBackfill::Delta {
+                stream_id: state.stream_id.clone(),
+                cursor: projection.cursor,
+                events,
+            },
+            None => SessionEventBackfill::SnapshotRequired,
+        }
     }
 
     pub fn snapshot(&self, session_id: &str) -> SessionEventProjectionSnapshot {
@@ -480,8 +593,7 @@ fn prune_terminal_projections(sessions: &mut HashMap<String, SessionProjection>)
         if let Some(projection) = sessions.get_mut(&session_id) {
             // Keep the per-Session cursor tombstone monotonic while releasing
             // replay content that persisted idle history can reconstruct.
-            projection.events.clear();
-            projection.active_turn_id = None;
+            projection.clear_replay_content();
         }
     }
 }
@@ -568,9 +680,9 @@ fn compact_projection(projection: &mut SessionProjection) {
 #[cfg(test)]
 mod tests {
     use super::{
-        attach_session_event_cursor, lock_state, SessionEventCursor, SessionEventJournal,
-        SessionEventProjectionStore, StoredSessionEvents,
-        MAX_RETAINED_TERMINAL_SESSION_PROJECTIONS,
+        attach_session_event_cursor, lock_state, SessionEventBackfill, SessionEventCursor,
+        SessionEventJournal, SessionEventProjectionStore, StoredSessionEvents,
+        MAX_REPLAYABLE_TAIL_EVENTS, MAX_RETAINED_TERMINAL_SESSION_PROJECTIONS,
     };
     use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
     use std::collections::HashMap;
@@ -883,5 +995,116 @@ mod tests {
             Some("turn-1")
         );
         assert!(journal.snapshot("missing").events.is_empty());
+    }
+
+    fn delta(backfill: SessionEventBackfill) -> Vec<AgenticEvent> {
+        match backfill {
+            SessionEventBackfill::Delta { events, .. } => events,
+            SessionEventBackfill::SnapshotRequired => {
+                panic!("expected a contiguous delta, got SnapshotRequired")
+            }
+        }
+    }
+
+    #[test]
+    fn a_delta_replays_each_chunk_the_projection_merged_away() {
+        // The compacted projection accumulates both chunks into one entry, so
+        // it cannot express "you only missed the second half". The tail can.
+        let journal = SessionEventJournal::with_stream_id("runtime-a".to_string());
+        journal.record(&turn_started("session", "turn"));
+        journal.record(&text("session", "turn", "hel"));
+        journal.record(&text("session", "turn", "lo"));
+
+        assert_eq!(journal.snapshot("session").events.len(), 2);
+
+        let missed = delta(journal.events_since("session", "runtime-a", 2));
+        assert_eq!(missed.len(), 1);
+        assert!(matches!(
+            &missed[0],
+            AgenticEvent::TextChunk { text, .. } if text == "lo"
+        ));
+    }
+
+    #[test]
+    fn a_caught_up_client_is_told_it_missed_nothing() {
+        let journal = SessionEventJournal::with_stream_id("runtime-a".to_string());
+        journal.record(&turn_started("session", "turn"));
+        journal.record(&text("session", "turn", "hello"));
+
+        match journal.events_since("session", "runtime-a", 2) {
+            SessionEventBackfill::Delta { cursor, events, .. } => {
+                assert_eq!(cursor, 2);
+                assert!(events.is_empty());
+            }
+            SessionEventBackfill::SnapshotRequired => panic!("no gap should need a snapshot"),
+        }
+    }
+
+    #[test]
+    fn a_turn_boundary_stays_contiguous_for_a_detached_client() {
+        // The exact shape of a controller that was away while its Turn ended:
+        // the projection cleared for the next Turn, but the events that settled
+        // the old one are still individually replayable.
+        let journal = SessionEventJournal::with_stream_id("runtime-a".to_string());
+        journal.record(&turn_started("session", "turn-1"));
+        journal.record(&text("session", "turn-1", "answer"));
+        journal.record(&turn_completed("session", "turn-1"));
+        journal.record(&turn_started("session", "turn-2"));
+
+        assert_eq!(
+            journal.snapshot("session").active_turn_id.as_deref(),
+            Some("turn-2"),
+        );
+
+        let missed = delta(journal.events_since("session", "runtime-a", 2));
+        assert!(matches!(
+            missed.as_slice(),
+            [
+                AgenticEvent::DialogTurnCompleted { turn_id: completed, .. },
+                AgenticEvent::DialogTurnStarted { turn_id: started, .. },
+            ] if completed == "turn-1" && started == "turn-2"
+        ));
+    }
+
+    #[test]
+    fn a_client_behind_the_retained_tail_is_told_to_take_a_snapshot() {
+        let journal = SessionEventJournal::with_stream_id("runtime-a".to_string());
+        journal.record(&turn_started("session", "turn"));
+        // One event more than the tail retains, so the event this client is
+        // waiting for has already been dropped from the front.
+        for index in 0..=MAX_REPLAYABLE_TAIL_EVENTS {
+            journal.record(&text("session", "turn", &format!("chunk-{index} ")));
+        }
+        let latest = journal.snapshot("session").cursor;
+
+        assert!(matches!(
+            journal.events_since("session", "runtime-a", 1),
+            SessionEventBackfill::SnapshotRequired,
+        ));
+        // A client only slightly behind is still served incrementally.
+        assert_eq!(
+            delta(journal.events_since("session", "runtime-a", latest - 2)).len(),
+            2,
+        );
+    }
+
+    #[test]
+    fn cursors_are_never_compared_across_runtime_processes_or_unknown_sessions() {
+        let journal = SessionEventJournal::with_stream_id("runtime-b".to_string());
+        journal.record(&turn_started("session", "turn"));
+
+        assert!(matches!(
+            journal.events_since("session", "runtime-a", 1),
+            SessionEventBackfill::SnapshotRequired,
+        ));
+        assert!(matches!(
+            journal.events_since("other-session", "runtime-b", 0),
+            SessionEventBackfill::SnapshotRequired,
+        ));
+        // A cursor ahead of this stream's own progress is not a gap either.
+        assert!(matches!(
+            journal.events_since("session", "runtime-b", 9),
+            SessionEventBackfill::SnapshotRequired,
+        ));
     }
 }
