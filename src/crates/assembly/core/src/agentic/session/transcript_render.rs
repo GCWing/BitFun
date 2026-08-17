@@ -633,6 +633,8 @@ mod search_projection_tests {
             has_final_response: Some(true),
             error: None,
             error_detail: None,
+            recovery: None,
+            recovery_epoch: None,
             status: TurnStatus::Completed,
         };
 
