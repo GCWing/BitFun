@@ -399,7 +399,7 @@ request/result/event 映射及私有 IPC 的协议与连接控制；Agent Runtim
 
 - CLI 不依赖 SDK Host，GUI/TUI 也不依赖公开 SDK package。
 - 交互式 TUI 的启动页和会话页直接依赖 `CliAgentRuntimeClient`；Embedded 与 Shared Runtime 调用都进入该 client。TUI controller 不直接依赖 Rust Runtime SDK、Runtime 实现或 IPC operation。
-- 非 Runtime 能力由 controller 直接调用 owner-owned 的稳定 service/API；每个使用 controller-local owner 的调用点单独裁剪 Remote workspace scope。CLI 不依赖 App Server implementation/client，也不复制 management DTO；当前可复用 behavior-light protocol 合同，后续若下沉 semantic payload，必须与 JSON-RPC envelope 分离。
+- 非 Runtime 能力由 controller 直接调用 owner-owned 的稳定 service/API；每个使用 controller-local owner 的调用点单独裁剪 Remote workspace scope。CLI 仅在 `bitfun server` 的独立 stdio Server Host 装配点（`src/apps/cli/src/server_host.rs`）依赖 App Server implementation；该 Host 是独立 Host 表面，注入显式 allowlist 与 canonical workspace scope 收敛能力，而非 TUI/Headless 的默认路径。TUI、controller 与 Headless CLI 仍不依赖 App Server implementation/client，也不复制 management DTO；Headless CLI 默认保持 Embedded。当前可复用 behavior-light protocol 合同，后续若下沉 semantic payload，必须与 JSON-RPC envelope 分离。
 - App Server wiring 独立于 TUI composition；TUI 重构不以 App Server parity 或兼容性作为验收条件。
 - Web 当前独立使用自己的 loopback WebSocket App Server Host，不进入 TUI backend composition。Shared 当前只有 private Runtime IPC v17；Shared App Server 只存在于第 1.3 节的 Phase 6 candidate 图中。
 - Headless CLI 和 Peer Host 使用同一 Runtime 订阅入口，但分别保留确定性退出与 Peer fanout 语义；共享订阅入口不等于共享 renderer 或产品生命周期。

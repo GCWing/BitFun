@@ -322,13 +322,13 @@ fn interactive_tui_separates_runtime_deployment_from_domain_services() {
         "CliAgentRuntimeClient must own Embedded/Shared deployment and expose Remote workspace scope"
     );
     assert!(
-        !CLI_MANIFEST.contains("bitfun-app-server =")
+        CLI_MANIFEST.contains("bitfun-app-server =")
             && !CLI_MANIFEST.contains("bitfun-app-server-client =")
             && !CLI_MANIFEST.contains("bitfun-app-server-protocol")
             && !CLI_MANIFEST.contains("bitfun-tui-management =")
             && !CHAT_MODE.contains("trait ModelService")
             && !CHAT_MODE.contains("trait ExternalSourceService"),
-        "CLI must consume stable contracts and must not depend on App Server wire DTOs or a shared TUI management crate"
+        "CLI may host the App Server stdio surface but must not depend on the typed App Server client transport, wire DTOs, or a shared TUI management crate"
     );
     for runtime_operation in [
         "pub(crate) async fn list_sessions(",
