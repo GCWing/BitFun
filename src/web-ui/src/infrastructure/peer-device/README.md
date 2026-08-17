@@ -3,6 +3,29 @@
 Controller-side React/transport layer for Peer Device Mode. Architecture:
 [`docs/architecture/peer-device-mode.md`](../../../../../docs/architecture/peer-device-mode.md).
 
+## Migrating to the Session Projection contract
+
+The invariants below are pairwise rules between writers that carry no shared
+position. They are being replaced by one contract —
+[`docs/architecture/session-projection.md`](../../../../../docs/architecture/session-projection.md)
+— under which a write is admitted by its position in the order rather than by
+what it would do to painted content. **This list shrinking is the measure of
+that migration**; a change that adds a rule here is going the wrong way.
+
+Already owned by the contract (`flow_chat/session-stream/`):
+
+- The stream position, the delivery gap, and the attach fence in invariant 12.
+  `runtimeSessionEventGate` is now an adapter over `SessionStream`, not a
+  second owner of that state.
+- Surface-scoped Session identity in invariant 0: a stream is keyed by
+  `(DeviceSurfaceId, SessionId)` by construction.
+
+Still to migrate, in order: the snapshot writer
+(`replaceRunningSnapshot`, `snapshotDropsProjectedTurnContent`,
+`isRunningSnapshotForwardProgress` — replaced by "the persisted record may
+write a Turn only when it is not executing"), the interaction mailbox, then
+history.
+
 ## Invariants (do not regress)
 
 0. **A surface switch is a view change, not a teardown.** Attachments and the
