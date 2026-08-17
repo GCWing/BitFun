@@ -287,12 +287,23 @@ export default function conversationPresentationUnitTest() {
   });
 
   describe('Conversation source naming', () => {
-    it('uses the same local/remote pair across the switcher and remote chrome', 0, () => {
-      expect(RemoteI18n.t('sidebar.local')).assertEqual('本地');
-      expect(RemoteI18n.t('sidebar.code')).assertEqual('远程');
-      expect(RemoteI18n.t('sidebar.code')).assertEqual(RemoteI18n.t('remote.title'));
+    it('keeps the remote chrome naming consistent', 0, () => {
+      expect(RemoteI18n.t('remote.title')).assertEqual('远程');
       expect(RemoteI18n.t('connect.accountDevicesSubtitle')).assertEqual('远程');
       expect(RemoteI18n.t('chat.remoteSession')).assertEqual('远程会话');
+    });
+
+    it('names the sidebar by what things are, not by where they run', 0, () => {
+      // The sidebar used to ask "local or remote" before it would show anything.
+      // It now stacks a conversation timeline over a set of workspaces, so the
+      // labels name those two kinds rather than an execution location, and the
+      // local/remote pair the switcher needed is gone.
+      expect(RemoteI18n.t('sidebar.conversations')).assertEqual('最近对话');
+      expect(RemoteI18n.t('sidebar.workspaces')).assertEqual('工作区');
+      expect(RemoteI18n.t('sidebar.connectDesktop')).assertEqual('连接电脑');
+      expect(RemoteI18n.t('sidebar.local')).assertEqual('sidebar.local');
+      expect(RemoteI18n.t('sidebar.code')).assertEqual('sidebar.code');
+      expect(RemoteI18n.t('sidebar.recent')).assertEqual('sidebar.recent');
     });
 
     it('does not keep leftover pending-copy keys that claim general chat is unavailable', 0, () => {

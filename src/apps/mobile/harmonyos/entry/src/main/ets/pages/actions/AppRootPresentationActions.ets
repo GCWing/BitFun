@@ -2,14 +2,12 @@ import { RemotePermissionMode, RemoteSession } from '../../model/RemoteModels';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { ConversationIntent } from './ConversationIntent';
-import { AppRoute, ConversationSource } from '../navigation/AppRouteContract';
+import { AppRoute } from '../navigation/AppRouteContract';
 
 export interface AppRootPresentationActions {
   readonly onNavigationBack: (route: AppRoute) => boolean;
   readonly onConversationIntent: (route: AppRoute, intent: ConversationIntent) => void;
   readonly onCloseSidebar: () => void;
-  readonly onWideConversationSource: (source: ConversationSource) => void;
-  readonly onCompactConversationSource: (source: ConversationSource) => void;
   readonly onCompactLayoutEntered: () => void;
   readonly onLayoutModeChanged: (wideLayout: boolean) => void;
   readonly onRemoteHome: RemoteHomePresentationActions;
@@ -115,8 +113,6 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
     onNavigationBack: () => false,
     onConversationIntent: () => {},
     onCloseSidebar: () => {},
-    onWideConversationSource: () => {},
-    onCompactConversationSource: () => {},
     onCompactLayoutEntered: () => {},
     onLayoutModeChanged: () => {},
     onRemoteHome: {

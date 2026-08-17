@@ -21,13 +21,10 @@ export default function deviceSmokeTest() {
 
       await driver.click(130, 180);
       await driver.delayMs(300);
-      const remoteEntry = await driver.findComponent(ON.id('conversation-source-remote'));
-      expect(remoteEntry !== undefined).assertTrue();
-      await remoteEntry.click();
-      await driver.delayMs(900);
-
-      const remoteTitle = await driver.findComponent(ON.text('远程'));
-      expect(remoteTitle !== undefined).assertTrue();
+      // The sidebar carries conversations and workspaces in one scroll now, so
+      // the workspace section is present without a source switch ahead of it.
+      const workspaceSection = await driver.findComponent(ON.id('sidebar-workspace-section'));
+      expect(workspaceSection !== undefined).assertTrue();
     });
   });
 }
