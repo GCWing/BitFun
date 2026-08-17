@@ -3,7 +3,7 @@
 use crate::api::app_state::AppState;
 use bitfun_core::service::token_usage::{
     types::{TimeRange, TokenUsageQuery},
-    UsageGranularity, UsageStatistics,
+    UsageGranularity, UsageStatistics, UsageStatisticsFilter, UsageStatisticsFilterKind,
 };
 use chrono::{DateTime, Duration, Utc};
 use log::error;
@@ -26,6 +26,10 @@ pub struct TokenUsageStatisticsRequest {
     pub time_zone: Option<String>,
     #[serde(default)]
     pub include_subagent: bool,
+    #[serde(default)]
+    pub filter_kind: UsageStatisticsFilterKind,
+    #[serde(default)]
+    pub filter_query: Option<String>,
 }
 
 fn resolve_time_range(request: &TokenUsageStatisticsRequest) -> Result<TimeRange, String> {
@@ -55,6 +59,18 @@ fn resolve_time_range(request: &TokenUsageStatisticsRequest) -> Result<TimeRange
     }
 }
 
+fn resolve_filter(request: &TokenUsageStatisticsRequest) -> Option<UsageStatisticsFilter> {
+    request
+        .filter_query
+        .as_deref()
+        .map(str::trim)
+        .filter(|query| !query.is_empty())
+        .map(|query| UsageStatisticsFilter {
+            kind: request.filter_kind,
+            query: query.to_string(),
+        })
+}
+
 #[tauri::command]
 pub async fn get_token_usage_statistics(
     request: TokenUsageStatisticsRequest,
@@ -65,6 +81,7 @@ pub async fn get_token_usage_statistics(
         "day" => UsageGranularity::Day,
         _ => UsageGranularity::Hour,
     };
+    let filter = resolve_filter(&request);
     let query = TokenUsageQuery {
         model_id: None,
         session_id: None,
@@ -77,10 +94,46 @@ pub async fn get_token_usage_statistics(
 
     state
         .token_usage_service
-        .get_statistics(query, granularity)
+        .get_statistics(query, granularity, filter)
         .await
         .map_err(|e| {
             error!("Failed to load token usage statistics: {}", e);
             format!("Failed to load token usage statistics: {}", e)
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_request_without_filter_fields_defaults_to_unfiltered() {
+        let request: TokenUsageStatisticsRequest = serde_json::from_value(serde_json::json!({
+            "timeRange": "today",
+            "granularity": "hour"
+        }))
+        .expect("request");
+
+        assert_eq!(request.filter_kind, UsageStatisticsFilterKind::All);
+        assert_eq!(resolve_filter(&request), None);
+    }
+
+    #[test]
+    fn filter_fields_deserialize_and_trim_query() {
+        let request: TokenUsageStatisticsRequest = serde_json::from_value(serde_json::json!({
+            "timeRange": "today",
+            "granularity": "hour",
+            "filterKind": "provider",
+            "filterQuery": "  DeepSeek  "
+        }))
+        .expect("request");
+
+        assert_eq!(
+            resolve_filter(&request),
+            Some(UsageStatisticsFilter {
+                kind: UsageStatisticsFilterKind::Provider,
+                query: "DeepSeek".to_string(),
+            })
+        );
+    }
 }

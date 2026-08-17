@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, CalendarRange } from 'lucide-react';
+import { BarChart3, CalendarRange, Search, X } from 'lucide-react';
 import {
   ConfigPageLoading,
   ConfigPageMessage,
   ConfigPageRefreshButton,
+  IconButton,
+  Input,
   Select,
 } from '@/component-library';
 import {
@@ -11,6 +13,7 @@ import {
   type UsageGranularity,
   type UsageStatistics,
   type UsageStatisticsEntry,
+  type UsageStatisticsFilterKind,
   type UsageTimeRange,
 } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
@@ -611,15 +614,42 @@ const GRANULARITY_OPTIONS: { value: UsageGranularity; key: string }[] = [
   { value: 'day', key: 'granularity.day' },
 ];
 
+const FILTER_KIND_OPTIONS: { value: UsageStatisticsFilterKind; key: string }[] = [
+  { value: 'all', key: 'filter.kind.all' },
+  { value: 'provider', key: 'filter.kind.provider' },
+  { value: 'model', key: 'filter.kind.model' },
+];
+
+const FILTER_DEBOUNCE_MS = 300;
+
 const UsageStatisticsConfig: React.FC = () => {
   const { t, resolvedTimeZone: timeZone } = useI18n('settings/usage-statistics');
   const [timeRange, setTimeRange] = useState<UsageTimeRange>('last24Hours');
   const [granularity, setGranularity] = useState<UsageGranularity>('hour');
+  const [filterKind, setFilterKind] = useState<UsageStatisticsFilterKind>('all');
+  const [filterInput, setFilterInput] = useState('');
+  const [filterQuery, setFilterQuery] = useState('');
   const [stats, setStats] = useState<UsageStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<{ type: 'error'; text: string } | null>(null);
   const requestIdRef = useRef(0);
+  const hasLoadedRef = useRef(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setFilterQuery(filterInput.trim());
+    }, FILTER_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [filterInput]);
+
+  const clearFilter = useCallback(() => {
+    setFilterInput('');
+    setFilterQuery('');
+  }, []);
+
+  const activeFilterKind: UsageStatisticsFilterKind = filterQuery ? filterKind : 'all';
+
   const load = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
     if (background) {
@@ -633,9 +663,11 @@ const UsageStatisticsConfig: React.FC = () => {
         timeRange,
         granularity,
         timeZone,
+        ...(filterQuery ? { filterKind: activeFilterKind, filterQuery } : {}),
       });
       if (requestId !== requestIdRef.current) return;
       setStats(result);
+      hasLoadedRef.current = true;
     } catch {
       if (requestId !== requestIdRef.current) return;
       setMessage({ type: 'error', text: t('loadFailed') });
@@ -645,13 +677,14 @@ const UsageStatisticsConfig: React.FC = () => {
         setRefreshing(false);
       }
     }
-  }, [timeRange, granularity, timeZone, t]);
+  }, [timeRange, granularity, timeZone, activeFilterKind, filterQuery, t]);
 
   useEffect(() => {
-    void load();
+    void load(hasLoadedRef.current);
   }, [load]);
 
   const empty = stats !== null && stats.totalRequests === 0;
+  const filteredEmpty = empty && filterQuery.length > 0;
 
   const summaryCards = useMemo(() => {
     if (!stats) return [];
@@ -686,6 +719,7 @@ const UsageStatisticsConfig: React.FC = () => {
           <label className="bitfun-usage-stats__filter">
             <CalendarRange size={14} aria-hidden />
             <Select
+              className="bitfun-usage-stats__filter-select"
               size="small"
               value={timeRange}
               options={TIME_RANGE_OPTIONS.map((option) => ({
@@ -698,6 +732,7 @@ const UsageStatisticsConfig: React.FC = () => {
           </label>
           <label className="bitfun-usage-stats__filter">
             <Select
+              className="bitfun-usage-stats__filter-select"
               size="small"
               value={granularity}
               options={GRANULARITY_OPTIONS.map((option) => ({
@@ -708,6 +743,42 @@ const UsageStatisticsConfig: React.FC = () => {
               triggerAriaLabel={t('granularity.label')}
             />
           </label>
+          <div className="bitfun-usage-stats__filter-query">
+            <Select
+              className="bitfun-usage-stats__filter-select"
+              size="small"
+              value={filterKind}
+              options={FILTER_KIND_OPTIONS.map((option) => ({
+                value: option.value,
+                label: t(option.key),
+              }))}
+              onChange={(value) => setFilterKind(value as UsageStatisticsFilterKind)}
+              triggerAriaLabel={t('filter.kind.label')}
+            />
+            <Input
+              className="bitfun-usage-stats__filter-input"
+              inputSize="small"
+              value={filterInput}
+              onChange={(event) => setFilterInput(event.target.value)}
+              placeholder={t('filter.placeholder')}
+              aria-label={t('filter.inputLabel')}
+              data-testid="usage-filter-input"
+              maxLength={100}
+              prefix={<Search size={14} aria-hidden />}
+              suffix={filterInput ? (
+                <IconButton
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  tooltip={t('filter.clear')}
+                  aria-label={t('filter.clear')}
+                  onClick={clearFilter}
+                >
+                  <X size={12} aria-hidden />
+                </IconButton>
+              ) : undefined}
+            />
+          </div>
           <ConfigPageRefreshButton
             tooltip={t('refresh')}
             onClick={() => void load(true)}
@@ -728,8 +799,8 @@ const UsageStatisticsConfig: React.FC = () => {
           >
             <BarChart3 size={26} aria-hidden />
             <div>
-              <h4>{t('empty.title')}</h4>
-              <p>{t('empty.description')}</p>
+              <h4>{t(filteredEmpty ? 'filter.empty.title' : 'empty.title')}</h4>
+              <p>{t(filteredEmpty ? 'filter.empty.description' : 'empty.description')}</p>
             </div>
           </div>
         ) : stats ? (
