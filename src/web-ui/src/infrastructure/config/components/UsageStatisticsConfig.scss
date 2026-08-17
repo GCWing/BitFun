@@ -78,6 +78,10 @@
     border-radius: 10px;
     background: var(--bf-appearance-token-color-bg-elevated);
     min-width: 0;
+
+    &--full {
+      grid-column: 1 / -1;
+    }
   }
 
   &__panel-title {
@@ -130,7 +134,7 @@
   &__table-head,
   &__table-row {
     display: grid;
-    grid-template-columns: minmax(76px, 1fr) 44px 62px 74px;
+    grid-template-columns: minmax(76px, 1fr) 44px 62px;
     gap: 8px;
     align-items: center;
   }
@@ -184,7 +188,49 @@
     border-radius: 2px;
   }
 
-  &__hit-rate {
+  // ---------------------------------------------------------------------
+  // Per-model cache hit rate panel
+  // ---------------------------------------------------------------------
+  &__hit-rate-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__hit-rate-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 88px 56px;
+    gap: 10px;
+    align-items: center;
+    font-size: 12px;
+  }
+
+  &__hit-rate-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+
+  &__hit-rate-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bf-appearance-token-element-bg-soft);
+    overflow: hidden;
+  }
+
+  &__hit-rate-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  &__hit-rate-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
     color: var(--bf-appearance-token-color-success);
   }
 

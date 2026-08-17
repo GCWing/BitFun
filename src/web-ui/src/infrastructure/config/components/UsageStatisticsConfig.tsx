@@ -60,7 +60,11 @@ function formatTokens(value: number): string {
 
 function formatHitRate(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return '–';
-  return `${Math.round(value * 100)}%`;
+  // Only a true full hit (cached == reported input) shows as 100%.
+  if (value >= 1) return '100%';
+  // Truncate to two decimals — never round up.
+  const truncated = Math.floor(value * 10_000) / 100;
+  return `${truncated.toFixed(2)}%`;
 }
 
 function formatBucketLabel(bucket: string, granularity: UsageGranularity): string {
@@ -188,7 +192,6 @@ const DistributionPanel: React.FC<{
             <span>{t(DISTRIBUTION_HEADER_KEY[kind])}</span>
             <span>{t('table.requests')}</span>
             <span>{t('table.tokens')}</span>
-            <span>{t('table.cacheHitRate')}</span>
           </div>
           <div className="bitfun-usage-stats__table-body">
             {entries.map((entry, index) => (
@@ -206,13 +209,54 @@ const DistributionPanel: React.FC<{
                 </span>
                 <span>{entry.requests}</span>
                 <span>{formatTokens(entry.tokens)}</span>
-                <span className="bitfun-usage-stats__hit-rate">
-                  {formatHitRate(entry.cacheHitRate)}
-                </span>
               </div>
             ))}
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Per-model average cache hit rate panel
+// ---------------------------------------------------------------------------
+
+const ModelCacheHitRatePanel: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) => {
+  const { t } = useI18n('settings/usage-statistics');
+
+  return (
+    <div
+      className="bitfun-usage-stats__panel"
+      data-bf-component="usage-statistics"
+      data-bf-part="modelHitRate"
+    >
+      <div className="bitfun-usage-stats__panel-title">{t('cacheHitRate.title')}</div>
+      <div className="bitfun-usage-stats__hit-rate-list">
+        {entries.map((entry, index) => {
+          const rate = entry.cacheHitRate;
+          const pct = rate === null || !Number.isFinite(rate)
+            ? 0
+            : Math.min(Math.max(rate * 100, 0), 100);
+          const color = DONUT_PALETTE[index % DONUT_PALETTE.length];
+          return (
+            <div className="bitfun-usage-stats__hit-rate-row" key={entry.name} title={entry.name}>
+              <span className="bitfun-usage-stats__hit-rate-name">
+                <i className="bitfun-usage-stats__table-swatch" style={{ background: color }} />
+                {truncateName(entry.name)}
+              </span>
+              <div className="bitfun-usage-stats__hit-rate-track">
+                <div
+                  className="bitfun-usage-stats__hit-rate-fill"
+                  style={{ width: `${pct}%`, background: color }}
+                />
+              </div>
+              <span className="bitfun-usage-stats__hit-rate-value">
+                {formatHitRate(entry.cacheHitRate)}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -609,10 +653,14 @@ const UsageStatisticsConfig: React.FC = () => {
             </div>
 
             <div className="bitfun-usage-stats__grid" data-bf-part="distributions">
+              <ModelCacheHitRatePanel entries={stats.byModel} />
               <DistributionPanel kind="model" entries={stats.byModel} />
               <DistributionPanel kind="group" entries={stats.byGroup} />
               <DistributionPanel kind="endpoint" entries={stats.byEndpoint} />
-              <div className="bitfun-usage-stats__panel" data-bf-part="trendPanel">
+              <div
+                className="bitfun-usage-stats__panel bitfun-usage-stats__panel--full"
+                data-bf-part="trendPanel"
+              >
                 <div className="bitfun-usage-stats__panel-title">{t('trend.title')}</div>
                 <TrendChart points={stats.trend} granularity={stats.granularity} />
               </div>
