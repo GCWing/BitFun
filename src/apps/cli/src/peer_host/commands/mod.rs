@@ -131,6 +131,7 @@ pub(crate) async fn dispatch(
 
         // System
         "get_system_info" => system::get_system_info().await,
+        "get_token_usage_statistics" => system::get_token_usage_statistics(state, args).await,
 
         other => Err(format!(
             "command '{other}' is not supported on CLI peer host"

@@ -1,4 +1,13 @@
-import { invoke } from '@tauri-apps/api/core';
+import { api } from './service-api/ApiClient';
+
+const TOKEN_USAGE_UNSUPPORTED_MARKER = 'token_usage_statistics_unsupported';
+
+export class TokenUsageStatisticsUnavailableError extends Error {
+  constructor() {
+    super('Usage statistics are not supported by the active host');
+    this.name = 'TokenUsageStatisticsUnavailableError';
+  }
+}
 
 // ============ Types (strict 1:1 mirror of Rust types) ============
 
@@ -77,6 +86,13 @@ export const tokenUsageStatisticsApi = {
   async getStatistics(
     request: TokenUsageStatisticsRequest
   ): Promise<UsageStatistics> {
-    return invoke('get_token_usage_statistics', { request });
+    try {
+      return await api.invoke('get_token_usage_statistics', { request });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes(TOKEN_USAGE_UNSUPPORTED_MARKER)) {
+        throw new TokenUsageStatisticsUnavailableError();
+      }
+      throw error;
+    }
   },
 };

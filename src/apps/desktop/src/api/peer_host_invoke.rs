@@ -367,6 +367,7 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
         "capabilities": {
             "idempotent_dialog_submit": true,
             "targeted_session_rollback": true,
+            "token_usage_statistics": true,
         },
     }))
 }
@@ -477,6 +478,12 @@ mod tests {
         assert_eq!(
             value
                 .pointer("/capabilities/targeted_session_rollback")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
+                .pointer("/capabilities/token_usage_statistics")
                 .and_then(Value::as_bool),
             Some(true)
         );

@@ -1,6 +1,6 @@
 {
   "title": "Usage Statistics",
-  "subtitle": "Historical model call statistics: requests, tokens, and cache hit rates across your models, providers, and endpoints.",
+  "subtitle": "Historical model calls stored on this device. Usage is not merged or synced across devices; view requests, tokens, and cache hit rates by model, provider, and endpoint.",
   "timeRange": {
     "label": "Time range",
     "last24Hours": "Last 24 Hours",
@@ -32,6 +32,7 @@
   "refresh": "Refresh",
   "loading": "Loading usage statistics…",
   "loadFailed": "Failed to load usage statistics. Please try again.",
+  "unsupported": "The connected device uses an older BitFun version that does not support usage statistics.",
   "empty": {
     "title": "No usage data yet",
     "description": "Model call statistics will appear here once you start chatting with a model."

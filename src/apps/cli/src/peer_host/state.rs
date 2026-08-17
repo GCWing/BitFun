@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use bitfun_agent_runtime::sdk::{AgentRuntime, SessionEventJournal};
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::filesystem::FileSystemService;
+use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
 use bitfun_runtime_ports::{AgentSubmissionSource, AgentTurnCancellationRequest};
 
@@ -887,6 +888,7 @@ pub(crate) struct PeerHostState {
     pub(crate) turns: PeerTurnTracker,
     pub(crate) workspace_service: Arc<WorkspaceService>,
     pub(crate) filesystem_service: Arc<FileSystemService>,
+    pub(crate) token_usage_service: Arc<TokenUsageService>,
 }
 
 impl PeerHostState {

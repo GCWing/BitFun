@@ -154,6 +154,10 @@ mod tests {
                     value.pointer("/capabilities/targeted_session_rollback"),
                     Some(&json!(true))
                 );
+                assert_eq!(
+                    value.pointer("/capabilities/token_usage_statistics"),
+                    Some(&json!(true))
+                );
             }
             other => panic!("unexpected response: {other:?}"),
         }
