@@ -1,13 +1,20 @@
 import { RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, SOFT, SUBTLE } from './Theme';
-import { ConversationSource } from '../navigation/AppRouteContract';
-import { ConversationSourceSwitcher } from './ConversationSourceSwitcher';
+import { CARD, INK, LINE, MUTED, PAGE_BG, PAGE_BG_FADE, SOFT, SUBTLE } from './Theme';
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SessionActionPresentation, SessionActionSurface } from './SessionActionSurface';
 import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../policy/SessionActionPolicy';
 import { SessionDetailsView } from './SessionDetailsView';
 import { SidebarGlyph } from './SidebarGlyphs';
+
+/**
+ * How many conversations show before the rest go behind an overflow row.
+ *
+ * The conversations and the workspaces share one scroll now, so the list can no
+ * longer take every pixel it wants: six rows leave the workspace section
+ * visible on a phone without scrolling to find it.
+ */
+const RECENT_BATCH: number = 6;
 
 @ComponentV2
 export struct AppSidebar {
@@ -15,17 +22,13 @@ export struct AppSidebar {
   @Param pinnedSessionId: string = '';
   @Param selectedSessionId: string = '';
   @Param connectionState: string = 'idle';
-  @Param activeSection: string = 'chat';
   @Param accountUserId: string = '';
-  @Param showConversationSourceSwitcher: boolean = false;
   @Param showCollapseButton: boolean = false;
   @Param showViewSettingsButton: boolean = false;
-  @Param showCustomContent: boolean = false;
-  @Param conversationSource: ConversationSource = ConversationSource.General;
+  @Param showWorkspaceSection: boolean = false;
   @Event onClose: () => void = () => {};
   @Event onNewChat: () => void = () => {};
   @Event onEnterCode: () => void = () => {};
-  @Event onConversationSource: (source: ConversationSource) => void = (_source: ConversationSource) => {};
   @Event onCollapse: () => void = () => {};
   @Event onOpenViewSettings: () => void = () => {};
   @Event onSearchQueryChange: (query: string) => void = (_query: string) => {};
@@ -43,12 +46,14 @@ export struct AppSidebar {
   @Local showSearch: boolean = false;
   @Local sessionSearchQuery: string = '';
   @Local archivedSessionsExpanded: boolean = false;
+  @Local visibleRecentCount: number = RECENT_BATCH;
   /**
-   * Session content for the current conversation source. The shell around it
-   * (header, source switcher, content origin, footer) stays identical for every
-   * source so switching Local/Remote never moves shared chrome.
+   * The workspace section, appended below the conversations.
+   *
+   * It is a slot rather than a component this file constructs because the
+   * sidebar has no business knowing about remote state; the host wires it.
    */
-  @BuilderParam contentSlot: () => void = this.LocalSessionContent;
+  @BuilderParam contentSlot: () => void = this.EmptySlot;
 
   build() {
     this.SidebarContent()
@@ -63,32 +68,39 @@ export struct AppSidebar {
         this.SignedOutHeader()
       }
 
-      Column({ space: 0 }) {
-        if (this.showConversationSourceSwitcher) {
-          ConversationSourceSwitcher({
-            activeSource: this.conversationSource,
-            onSelectSource: this.onConversationSource
-          })
-        } else {
-          this.NavRow(RemoteI18n.t('sidebar.code'), this.activeSection === 'remote', () => {
-            this.onEnterCode();
-          })
-        }
-      }
-      .width('100%')
-      .margin({ top: 18 })
-
       Stack({ alignContent: Alignment.Bottom }) {
-        Column() {
-          if (this.showCustomContent) {
-            this.contentSlot()
-          } else {
-            this.LocalSessionContent()
+        // Conversations and workspaces scroll together. They are different
+        // kinds of thing — a timeline and a set of places — so they stack
+        // rather than compete for the same pane, and neither needs a label
+        // saying whether it runs here or on a desktop.
+        Scroll() {
+          Column() {
+            this.ConversationSection()
+            if (this.showWorkspaceSection) {
+              this.contentSlot()
+            }
           }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+          .padding({ bottom: 84 })
         }
         .width('100%')
         .height('100%')
-        .alignItems(HorizontalAlign.Start)
+        .align(Alignment.TopStart)
+        .scrollable(ScrollDirection.Vertical)
+        .scrollBar(BarState.Off)
+
+        // The footer floats over the scroll, so rows have to fade out under it
+        // rather than run into it. Without this a workspace row mid-scroll gets
+        // visually sliced by the chat button sitting on top of it.
+        Column()
+          .width('100%')
+          .height(92)
+          .hitTestBehavior(HitTestMode.None)
+          .linearGradient({
+            angle: 180,
+            colors: [[PAGE_BG_FADE, 0.0], [PAGE_BG, 0.62]]
+          })
 
         if (this.isAccountAuthenticated()) {
           this.AuthenticatedFooter()
@@ -108,7 +120,11 @@ export struct AppSidebar {
   }
 
   @Builder
-  LocalSessionContent() {
+  private EmptySlot() {
+  }
+
+  @Builder
+  ConversationSection() {
     Column() {
       if (this.visiblePinnedSessions().length > 0) {
         Text(RemoteI18n.t('sidebar.pinned'))
@@ -119,53 +135,53 @@ export struct AppSidebar {
         }, (session: RemoteSession) => session.id)
       }
 
-      Text(RemoteI18n.t('sidebar.recent'))
+      Text(RemoteI18n.t('sidebar.conversations'))
         .fontSize(14)
         .fontWeight(FontWeight.Medium)
         .fontColor(MUTED)
         .width('100%')
         .margin({ top: 16, bottom: 6 })
 
-      List({ space: 2 }) {
-        if (this.visibleRecentSessions().length === 0) {
-          ListItem() {
-            this.EmptyRecent()
-          }
-        }
-        Repeat<RemoteSession>(this.visibleRecentSessions())
-          .each((obj: RepeatItem<RemoteSession>) => {
-            ListItem() {
-              this.RecentRow(obj)
-            }
-          })
-          .key((item: RemoteSession) => item.id)
-          .virtualScroll({ totalCount: this.visibleRecentSessions().length })
-        if (this.archivedSessionCount() > 0) {
-          ListItem() {
-            this.ArchivedDisclosureRow()
-          }
-        }
-        if (this.archivedSessionsExpanded) {
-          Repeat<RemoteSession>(this.visibleArchivedSessions())
-            .each((obj: RepeatItem<RemoteSession>) => {
-              ListItem() {
-                this.RecentRow(obj)
-              }
-            })
-            .key((item: RemoteSession) => item.id)
-            .virtualScroll({ totalCount: this.visibleArchivedSessions().length })
-        }
+      if (this.visibleRecentSessions().length === 0) {
+        this.EmptyRecent()
       }
-      .width('100%')
-      .layoutWeight(1)
-      .margin({ left: 0 })
-      .padding({ bottom: 84 })
-      .scrollBar(BarState.Off)
-      .divider(null)
+      ForEach(this.cappedRecentSessions(), (session: RemoteSession) => {
+        this.RecentRow(session)
+      }, (session: RemoteSession) => session.id)
+      if (this.visibleRecentCount < this.visibleRecentSessions().length) {
+        this.MoreConversationsRow()
+      }
+      if (this.archivedSessionCount() > 0) {
+        this.ArchivedDisclosureRow()
+      }
+      if (this.archivedSessionsExpanded) {
+        ForEach(this.visibleArchivedSessions(), (session: RemoteSession) => {
+          this.RecentRow(session)
+        }, (session: RemoteSession) => session.id)
+      }
     }
     .width('100%')
-    .height('100%')
     .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private MoreConversationsRow() {
+    Row({ space: 8 }) {
+      Text('···')
+        .fontSize(13)
+        .fontColor(MUTED)
+      Text(RemoteI18n.f('sidebar.moreSessions',
+        String(this.visibleRecentSessions().length - this.visibleRecentCount)))
+        .fontSize(13)
+        .fontColor(MUTED)
+    }
+    .width('100%')
+    .height(40)
+    .padding({ left: 12 })
+    .alignItems(VerticalAlign.Center)
+    .onClick(() => {
+      this.visibleRecentCount += RECENT_BATCH;
+    })
   }
 
   @Builder
@@ -337,24 +353,6 @@ export struct AppSidebar {
   }
 
   @Builder
-  NavRow(label: string, isActive: boolean, action: () => void) {
-    Row({ space: 14 }) {
-      SidebarGlyph({ kind: 'remote', connectionState: this.connectionState })
-      Text(label)
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(INK)
-        .layoutWeight(1)
-    }
-    .width('100%')
-    .height(46)
-    .padding({ left: 12, right: 8 })
-    .backgroundColor(isActive ? SOFT : '#00000000')
-    .borderRadius(12)
-    .onClick(action)
-  }
-
-  @Builder
   ArchivedDisclosureRow() {
     Row({ space: 12 }) {
       SymbolGlyph($r('sys.symbol.archivebox'))
@@ -440,28 +438,28 @@ export struct AppSidebar {
   }
 
   @Builder
-  RecentRow(obj: RepeatItem<RemoteSession>) {
+  RecentRow(item: RemoteSession) {
     Row({ space: 8 }) {
-      Text(obj.item.title || RemoteI18n.t('sidebar.untitled'))
+      Text(item.title || RemoteI18n.t('sidebar.untitled'))
         .fontSize(15)
         .fontWeight(FontWeight.Regular)
         .fontColor(INK)
         .layoutWeight(1)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
-      this.SessionMoreButton(obj.item)
+      this.SessionMoreButton(item)
     }
     .width('100%')
     .height(44)
     .padding({ left: 12, right: 4 })
-    .backgroundColor(this.selectedSessionId === obj.item.id || this.activeActionSessionId === obj.item.id ?
+    .backgroundColor(this.selectedSessionId === item.id || this.activeActionSessionId === item.id ?
       SOFT : '#00000000')
     .borderRadius(10)
     .onClick(() => {
-      this.openSession(obj.item);
+      this.openSession(item);
     })
-    .gesture(LongPressGesture({ repeat: false }).onAction(() => this.openSessionActions(obj.item)))
-    .bindPopup(this.showCollapseButton && this.activeActionSessionId === obj.item.id, {
+    .gesture(LongPressGesture({ repeat: false }).onAction(() => this.openSessionActions(item)))
+    .bindPopup(this.showCollapseButton && this.activeActionSessionId === item.id, {
       builder: () => { this.SessionActionPopover() },
       placement: Placement.Right,
       popupColor: '#00000000',
@@ -556,6 +554,11 @@ export struct AppSidebar {
       }
       return query.length === 0 || session.title.toLowerCase().indexOf(query) >= 0;
     });
+  }
+
+  private cappedRecentSessions(): RemoteSession[] {
+    const recent = this.visibleRecentSessions();
+    return recent.length <= this.visibleRecentCount ? recent : recent.slice(0, this.visibleRecentCount);
   }
 
   private visibleArchivedSessions(): RemoteSession[] {

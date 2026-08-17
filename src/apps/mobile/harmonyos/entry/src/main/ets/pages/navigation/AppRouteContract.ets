@@ -6,11 +6,6 @@ export enum AppRoute {
   RemoteChat = 'RemoteChat'
 }
 
-export enum ConversationSource {
-  General = 'general',
-  Remote = 'remote'
-}
-
 export class ChatRouteParam {
   sessionId: string;
 
@@ -60,21 +55,26 @@ export class AppRouteContract {
     return route === AppRoute.GeneralChat || route === AppRoute.RemoteChat;
   }
 
-  static conversationSource(route: AppRoute): ConversationSource {
-    if (route === AppRoute.RemoteHome || route === AppRoute.RemoteCreate || route === AppRoute.RemoteChat) {
-      return ConversationSource.Remote;
-    }
-    return ConversationSource.General;
+  /**
+   * Whether a route belongs to the remote surfaces.
+   *
+   * Stated as the complement of the general composer routes so the two
+   * predicates cannot drift apart: a route is one or the other, never both.
+   */
+  static isRemoteRoute(route: AppRoute): boolean {
+    return !AppRouteContract.isGeneralComposerRoute(route);
   }
 
-  static routeForConversationSource(
-    source: ConversationSource,
+  /**
+   * Where "connect a desktop" lands.
+   *
+   * Resuming beats landing: if there is a remote session already in flight, go
+   * back to it rather than dropping the user on a picker they did not ask for.
+   */
+  static remoteSurfaceDestination(
     remoteAvailable: boolean,
     activeRemoteSessionId: string
   ): AppNavigationPathSpec {
-    if (source === ConversationSource.General) {
-      return new AppNavigationPathSpec(AppRoute.ChatHome);
-    }
     if (remoteAvailable && activeRemoteSessionId.length > 0) {
       return new AppNavigationPathSpec(AppRoute.RemoteChat, activeRemoteSessionId);
     }

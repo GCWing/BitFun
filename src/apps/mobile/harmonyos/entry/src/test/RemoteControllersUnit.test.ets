@@ -140,8 +140,7 @@ import {
   AppNavigationBackAction,
   AppNavigationPathSpec,
   AppRoute,
-  AppRouteContract,
-  ConversationSource
+  AppRouteContract
 } from '../main/ets/pages/navigation/AppRouteContract';
 import { TimeFormat } from '../main/ets/services/TimeFormat';
 import { X25519 } from '../main/ets/services/X25519';
@@ -2198,24 +2197,29 @@ export default function remoteControllersUnitTest() {
         .assertEqual(AppNavigationBackAction.AllowSystem);
     });
 
-    it('derives conversation sources and wide source destinations', 0, () => {
-      expect(AppRouteContract.conversationSource(AppRoute.ChatHome)).assertEqual(ConversationSource.General);
-      expect(AppRouteContract.conversationSource(AppRoute.GeneralChat)).assertEqual(ConversationSource.General);
-      expect(AppRouteContract.conversationSource(AppRoute.RemoteHome)).assertEqual(ConversationSource.Remote);
-      expect(AppRouteContract.conversationSource(AppRoute.RemoteChat)).assertEqual(ConversationSource.Remote);
+    it('splits remote routes from the general composer without overlap', 0, () => {
+      // The two predicates are complements by construction. Asserting both
+      // directions on every route is what keeps a later edit from creating a
+      // route that is somehow neither, or both.
+      expect(AppRouteContract.isRemoteRoute(AppRoute.ChatHome)).assertFalse();
+      expect(AppRouteContract.isRemoteRoute(AppRoute.GeneralChat)).assertFalse();
+      expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteHome)).assertTrue();
+      expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteCreate)).assertTrue();
+      expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteChat)).assertTrue();
+      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertTrue();
+      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.RemoteCreate)).assertFalse();
+    });
 
-      const general = AppRouteContract.routeForConversationSource(ConversationSource.General, true, 'remote-1');
-      const remoteHome = AppRouteContract.routeForConversationSource(ConversationSource.Remote, false, 'remote-1');
-      const connectedRemoteHome = AppRouteContract.routeForConversationSource(ConversationSource.Remote, true, '');
-      const remoteChat = AppRouteContract.routeForConversationSource(ConversationSource.Remote, true, 'remote-1');
-      expect(general.name).assertEqual(AppRoute.ChatHome);
-      expect(general.hasSessionParam()).assertFalse();
-      expect(remoteHome.name).assertEqual(AppRoute.RemoteHome);
-      expect(remoteHome.hasSessionParam()).assertFalse();
-      expect(connectedRemoteHome.name).assertEqual(AppRoute.RemoteHome);
-      expect(connectedRemoteHome.hasSessionParam()).assertFalse();
-      expect(remoteChat.name).assertEqual(AppRoute.RemoteChat);
-      expect(remoteChat.routeParam().sessionId).assertEqual('remote-1');
+    it('resumes an in-flight remote session instead of landing on the picker', 0, () => {
+      const offline = AppRouteContract.remoteSurfaceDestination(false, 'remote-1');
+      const connectedWithoutSession = AppRouteContract.remoteSurfaceDestination(true, '');
+      const resumable = AppRouteContract.remoteSurfaceDestination(true, 'remote-1');
+      expect(offline.name).assertEqual(AppRoute.RemoteHome);
+      expect(offline.hasSessionParam()).assertFalse();
+      expect(connectedWithoutSession.name).assertEqual(AppRoute.RemoteHome);
+      expect(connectedWithoutSession.hasSessionParam()).assertFalse();
+      expect(resumable.name).assertEqual(AppRoute.RemoteChat);
+      expect(resumable.routeParam().sessionId).assertEqual('remote-1');
     });
 
     it('routes an in-place remote session selection to an explicit chat destination', 0, () => {

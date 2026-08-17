@@ -9,8 +9,7 @@ import { CONNECT_INTENT_SCAN } from '../state/AppShellState';
 import {
   AppNavigationBackAction,
   AppRoute,
-  AppRouteContract,
-  ConversationSource
+  AppRouteContract
 } from '../navigation/AppRouteContract';
 import {
   AppRootRuntimeComposition,
@@ -216,23 +215,17 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     });
   }
 
-  async switchWideConversationSource(source: ConversationSource): Promise<void> {
-    if (AppRouteContract.conversationSource(this.appShellViewModel.currentRoute()) === source) {
+  async enterRemoteSurfaceWide(): Promise<void> {
+    if (AppRouteContract.isRemoteRoute(this.appShellViewModel.currentRoute())) {
       return;
     }
     if (this.conversationController.visibleVoiceListening()) {
       await this.stopVoiceInput(false);
     }
-    if (source === ConversationSource.General) {
-      this.remoteChatPollingLifecycleController.stop();
-      this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.ChatHome);
-      return;
-    }
     this.generalChatDraftLifecycleController.persistVisible(this.generalChatPageState.chatInput);
     const activeRemoteSessionId = this.remotePageState.isConversationDismissed ? '' :
       (this.remotePageState.activeSession.sessionId || '');
-    const target = AppRouteContract.routeForConversationSource(
-      source,
+    const target = AppRouteContract.remoteSurfaceDestination(
       RemoteUiState.canUseRemote((this.remotePageState.connectionState as ConnectionState)),
       activeRemoteSessionId
     );
@@ -247,23 +240,18 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   /**
-   * Compact counterpart of switchWideConversationSource. Switching source is a
-   * change of context, not a command to start something: it resumes the session
-   * the user was last in, and otherwise rests on the Remote landing surface
-   * rather than opening the create composer for them.
+   * Compact counterpart of enterRemoteSurfaceWide. Reaching the remote surface
+   * is a change of context, not a command to start something: it resumes the
+   * session the user was last in, and otherwise rests on the Remote landing
+   * surface rather than opening the create composer for them.
    */
-  async switchCompactConversationSource(source: ConversationSource): Promise<void> {
+  async enterRemoteSurfaceCompact(): Promise<void> {
     this.closeAppSidebar();
-    if (AppRouteContract.conversationSource(this.appShellViewModel.currentRoute()) === source) {
+    if (AppRouteContract.isRemoteRoute(this.appShellViewModel.currentRoute())) {
       return;
     }
     if (this.conversationController.visibleVoiceListening()) {
       await this.stopVoiceInput(false);
-    }
-    if (source === ConversationSource.General) {
-      this.remoteChatPollingLifecycleController.stop();
-      this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.ChatHome);
-      return;
     }
     this.generalChatDraftLifecycleController.persistVisible(this.generalChatPageState.chatInput);
     const activeRemoteSessionId = RemoteUiState.canUseRemote((this.remotePageState.connectionState as ConnectionState)) &&

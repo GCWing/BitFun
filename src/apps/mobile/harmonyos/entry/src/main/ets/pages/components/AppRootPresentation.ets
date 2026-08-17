@@ -153,12 +153,8 @@ export struct AppRootPresentation {
         .visibility(this.isWideLayout() ? Visibility.Hidden : Visibility.Visible)
 
       if (this.isWideLayout()) {
-        Column() {
-          this.RouteContent(this.shellState.activeRoute)
-        }
-        .width('100%')
-        .height('100%')
-        .backgroundColor(PAGE_BG)
+        Column() { this.WideRouteContent() }
+          .width('100%').height('100%').backgroundColor(PAGE_BG)
       }
     }
     .width('100%')
@@ -171,32 +167,48 @@ export struct AppRootPresentation {
       .onBackPressed(() => this.actions.onNavigationBack(name as AppRoute))
   }
 
+  /**
+   * The wide column, and the only place the wide surface is built. The route is
+   * read here rather than taken as a @Builder parameter: a parameterised
+   * builder re-evaluates its arguments only when its own body re-runs, so the
+   * column used to keep whatever route it was first built with and a workspace
+   * session opened behind a pane that never followed.
+   */
+  @Builder
+  WideRouteContent() {
+    WideConversationHost({
+      route: this.shellState.activeRoute,
+      shellState: this.shellState,
+      remotePageState: this.remotePageState,
+      remoteCreateState: this.remoteCreateState,
+      generalPageState: this.generalPageState,
+      filePreviewState: this.filePreviewState,
+      remoteSurfaceState: this.remoteSurfaceState,
+      actions: this.actions,
+      filePreviewLayout: this.filePreviewLayout(),
+      wideMasterPaneWidth: this.wideMasterPaneWidth,
+      wideMasterDetailGap: this.wideMasterDetailGap,
+      wideDetailContentOffset: this.wideDetailContentOffset,
+      wideDetailContentWidth: this.wideDetailContentWidth,
+      wideCollapsedDetailContentOffset: this.wideCollapsedDetailContentOffset,
+      wideCollapsedDetailContentWidth: this.wideCollapsedDetailContentWidth,
+      wideMasterPaneCollapsed: this.wideMasterPaneCollapsed,
+      wideMasterPaneMotionActive: this.wideMasterPaneMotionActive,
+      onCollapseMasterPane: () => this.collapseWideMasterPane(),
+      onRestoreMasterPane: () => this.restoreWideMasterPane(),
+      onOpenRemoteViewSettings: () => { this.showRemoteViewSettings = true; }
+    })
+  }
+
+  /**
+   * Navigation content, which is the compact surface only. Wide layout keeps
+   * the stack for its paths and its back handling but draws the surface in
+   * WideRouteContent, so building it here too would put an invisible second
+   * copy behind the visible one — per nav bar, and per pushed destination.
+   */
   @Builder
   RouteContent(route: AppRoute) {
-    if (this.isWideLayout() && this.isConversationRoute(route)) {
-      WideConversationHost({
-        route,
-        shellState: this.shellState,
-        remotePageState: this.remotePageState,
-        remoteCreateState: this.remoteCreateState,
-        generalPageState: this.generalPageState,
-        filePreviewState: this.filePreviewState,
-        remoteSurfaceState: this.remoteSurfaceState,
-        actions: this.actions,
-        filePreviewLayout: this.filePreviewLayout(),
-        wideMasterPaneWidth: this.wideMasterPaneWidth,
-        wideMasterDetailGap: this.wideMasterDetailGap,
-        wideDetailContentOffset: this.wideDetailContentOffset,
-        wideDetailContentWidth: this.wideDetailContentWidth,
-        wideCollapsedDetailContentOffset: this.wideCollapsedDetailContentOffset,
-        wideCollapsedDetailContentWidth: this.wideCollapsedDetailContentWidth,
-        wideMasterPaneCollapsed: this.wideMasterPaneCollapsed,
-        wideMasterPaneMotionActive: this.wideMasterPaneMotionActive,
-        onCollapseMasterPane: () => this.collapseWideMasterPane(),
-        onRestoreMasterPane: () => this.restoreWideMasterPane(),
-        onOpenRemoteViewSettings: () => { this.showRemoteViewSettings = true; }
-      })
-    } else {
+    if (!this.isWideLayout()) {
       ConversationRouteSurface({
         route,
         remotePageState: this.remotePageState,
@@ -288,11 +300,6 @@ export struct AppRootPresentation {
       this.verticalCreases,
       this.wideMasterPaneWidth
     );
-  }
-
-  private isConversationRoute(route: AppRoute): boolean {
-    return route === AppRoute.ChatHome || route === AppRoute.GeneralChat ||
-      route === AppRoute.RemoteHome || route === AppRoute.RemoteCreate || route === AppRoute.RemoteChat;
   }
 
   private bindResponsiveQueries(): void {
