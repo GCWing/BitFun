@@ -27,8 +27,14 @@ export struct ConnectAccountDevicePage {
     Column() {
       Row({ space: 16 }) {
         Stack() {
+          // No .width/.height here on purpose. A chevron's natural advance box
+          // is about half as wide as it is tall, and SymbolGlyph draws the glyph
+          // left-anchored inside a box you force wider than that — so forcing a
+          // square 26vp box pushed this arrow ~7vp left of the circle's centre.
+          // Left unsized, the Stack centres the natural box and the arrow sits
+          // where the circle says it should.
           SymbolGlyph($r('sys.symbol.chevron_left'))
-            .fontSize(23).fontColor([INK]).width(26).height(26)
+            .fontSize(23).fontColor([INK])
         }
         .width(48).height(48).backgroundColor(SOFT).borderRadius(24)
         .onClick(() => this.onBack())
