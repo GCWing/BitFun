@@ -9,13 +9,12 @@ mod subscriber;
 pub use bitfun_services_core::token_usage::types;
 pub use bitfun_services_core::token_usage::{
     aggregate_statistics, ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery,
-    TokenUsageRecord, TokenUsageSummary, UsageAttribution, UsageAttributionStatus,
-    UsageDimensionAttribution, UsageGranularity, UsageStatistics, UsageStatisticsEntry,
-    UsageStatisticsFilter, UsageStatisticsFilterKind, UsageTrendPoint,
+    TokenUsageRecord, TokenUsageStatisticsRequest, TokenUsageSummary, UsageAttribution,
+    UsageAttributionStatus, UsageDimensionAttribution, UsageGranularity, UsageStatistics,
+    UsageStatisticsEntry, UsageStatisticsFilter, UsageStatisticsFilterKind, UsageTrendPoint,
 };
 pub use service::{
     get_global_token_usage_service, set_global_token_usage_service, TokenUsageService,
-    TokenUsageStatisticsRequest,
 };
 pub use statistics::UsageAttributionResolver;
 pub use subscriber::TokenUsageSubscriber;

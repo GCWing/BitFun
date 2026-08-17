@@ -26,8 +26,9 @@ crate.
   (declarative instruction discovery). Consumers enable those or the narrower
   `lsp`, `workspace-runtime`, `workspace-identity`, `runtime-ownership`,
   `permission`, `dispatch-workspace`, `markdown`, `session-git`, and
-  `workspace-text-runtime` extensions
-  only for behavior they use. In particular, session metadata consumers must
+  `workspace-text-runtime` extensions only for behavior they use. Products
+  needing IANA time-zone ranges and dashboard aggregation additionally select
+  `token-usage-statistics`. In particular, session metadata consumers must
   not compile libgit2 unless they use the memory-workspace baseline/diff API.
   Keep Tokio and platform API capabilities owner-scoped too: the empty profile
   carries no Tokio dependency, `lsp` and `workspace-runtime`
@@ -76,6 +77,7 @@ cargo test -p bitfun-services-core --no-default-features --features diff --lib d
 cargo test -p bitfun-services-core --no-default-features --features workspace-text-runtime --lib workspace_text::tests::
 cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_contracts session_metadata_contracts::
 cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_write_lock_contracts
+cargo test -p bitfun-services-core --no-default-features --features token-usage-statistics --lib token_usage::
 cargo test -p bitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
 pnpm run check:core-boundaries
 ```

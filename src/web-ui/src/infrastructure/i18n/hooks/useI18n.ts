@@ -92,10 +92,7 @@ export function useI18n(
     []
   );
 
-  const resolvedTimeZone = useMemo(
-    () => i18nService.getResolvedTimeZone(),
-    [currentLanguage],
-  );
+  const resolvedTimeZone = i18nService.getResolvedTimeZone();
 
   const formatNumber = useCallback(
     (number: number, options?: Intl.NumberFormatOptions) => {

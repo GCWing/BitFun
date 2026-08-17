@@ -523,6 +523,11 @@ export function runManifestParserSelfTest({
       ],
     ],
     [servicesCoreManifest, 'session-git', ['local-storage', 'dep:git2']],
+    [
+      servicesCoreManifest,
+      'token-usage-statistics',
+      ['local-storage', 'dep:chrono-tz'],
+    ],
     [servicesCoreManifest, 'workspace-identity', ['dep:dunce', 'dep:sha2']],
     [
       coreManifest,
@@ -1157,6 +1162,7 @@ export function runManifestParserSelfTest({
     ['bitfun-core-types', ['local-storage', 'lsp']],
     ['bitfun-events', ['local-storage']],
     ['chrono', ['filesystem', 'local-storage']],
+    ['chrono-tz', ['token-usage-statistics']],
     ['fs2', ['json-io', 'local-storage', 'runtime-ownership']],
     ['git2', ['session-git']],
     ['globset', ['workspace-instructions']],

@@ -165,7 +165,7 @@ const SERVICES_CORE_TOKIO_FEATURES = new Map([
 ]);
 const SERVICES_CORE_BASE_TOKIO_FEATURES = [];
 const SERVICES_INTEGRATIONS_TOKIO_AGGREGATES = new Set(['product-full']);
-const SERVICES_CORE_TOKIO_AGGREGATES = new Set(['session-git']);
+const SERVICES_CORE_TOKIO_AGGREGATES = new Set(['session-git', 'token-usage-statistics']);
 const CORE_TOKIO_FEATURES = new Map([
   ['agent-runtime', ['io-util', 'macros', 'rt', 'time']],
   ['mcp-runtime', ['io-util', 'macros', 'rt', 'rt-multi-thread', 'time']],
