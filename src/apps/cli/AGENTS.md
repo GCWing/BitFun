@@ -53,7 +53,11 @@ reference Runtime IPC or Runtime implementation types, and they must not import
 `bitfun-app-server-protocol` wire DTOs. Non-Runtime projections come from the
 stable contracts layer (`bitfun-core-types` / `bitfun-product-domains`) or the
 existing owner API. Controller-local calls reject Remote workspace scope before
-touching local state. App Server wiring is independent and does not constrain
+touching local state. The `server` command is an independent stdio Server Host assembled in
+`server_host.rs`, which is the only module allowed to import the
+`bitfun-app-server` implementation; it injects an explicit method allowlist,
+canonical cwd scope, transport limits, and the stdin EOF disconnect lifecycle.
+App Server wiring is independent and does not constrain
 the TUI path. Side-effecting operations need stable identities, controller/idle
 rules, bounded frames, and outcome-unknown handling before a connection can retry.
 

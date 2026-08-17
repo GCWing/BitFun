@@ -5590,14 +5590,32 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
   const cliManifestPattern = cliManifestRule?.patterns[0]?.regex;
   if (
     !cliManifestPattern ||
-    !cliManifestPattern.test('bitfun-app-server = { path = "..." }') ||
+    cliManifestPattern.test('bitfun-app-server = { path = "..." }') ||
     !cliManifestPattern.test('bitfun-app-server-client = { path = "..." }') ||
     !cliManifestPattern.test('bitfun-tui-management = { path = "..." }') ||
     !cliManifestPattern.test('bitfun-app-server-protocol = { path = "..." }') ||
     cliManifestPattern.test('bitfun-agent-runtime-ipc = { path = "..." }')
   ) {
-    throw new Error('CLI manifest guard must forbid App Server, wire DTOs, and shared TUI management implementations while allowing contracts and Runtime IPC');
+    throw new Error('CLI manifest guard must allow the App Server stdio host while forbidding the typed client transport, wire DTOs, and shared TUI management implementations, and allowing contracts and Runtime IPC');
   }
+  const cliServerHostRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/apps/cli/src',
+  );
+  const cliServerHostPattern = cliServerHostRule?.patterns[0];
+  if (!cliServerHostPattern) {
+    throw new Error('CLI source must carry a bitfun_app_server import guard');
+  }
+  if (!cliServerHostPattern.regex.test('use bitfun_app_server::BitfunAppServer;')) {
+    throw new Error('CLI app-server import guard must match implementation imports');
+  }
+  if (
+    !cliServerHostPattern.allowPaths ||
+    cliServerHostPattern.allowPaths.length !== 1 ||
+    cliServerHostPattern.allowPaths[0] !== 'src/apps/cli/src/server_host.rs'
+  ) {
+    throw new Error('CLI app-server import guard must allow only the reviewed stdio Server Host assembly point');
+  }
+
   const runtimeIpcOperationPattern = runtimeIpcOperationRule?.patterns[0]?.regex;
   if (
     !runtimeIpcOperationPattern ||

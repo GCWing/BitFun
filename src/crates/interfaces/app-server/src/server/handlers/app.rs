@@ -9,16 +9,20 @@ use bitfun_app_server_protocol::{MIN_PROTOCOL_VERSION, PROTOCOL_VERSION};
 
 use crate::management::EXTERNAL_SOURCES_CAPABILITY;
 use crate::role::{AppClient, AppServer};
-
-const MAX_FRAME_BYTES: u64 = 16 * 1024 * 1024;
-const EVENT_BUFFER_CAPACITY: u32 = 1024;
+use crate::server::host_policy::{AppServerHostLimits, AppServerHostPolicy};
 
 pub(in crate::server) fn builder(
     runtime: std::sync::Arc<crate::agent::BitfunAppRuntime>,
     event_state: std::sync::Arc<crate::server::ConnectionEventState>,
     management: Option<std::sync::Arc<crate::management::AppManagementService>>,
+    host_policy: Option<std::sync::Arc<AppServerHostPolicy>>,
+    limits: AppServerHostLimits,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
-    let capabilities = registered_capabilities(management.as_deref());
+    let capabilities = registered_capabilities(
+        management.as_deref(),
+        runtime.context_reload().is_some(),
+        host_policy.as_deref(),
+    );
     let external_source_snapshot_available = capabilities.iter().any(|capability| {
         capability.id == EXTERNAL_SOURCES_CAPABILITY
             && matches!(capability.availability, CapabilityAvailability::Available)
@@ -49,8 +53,8 @@ pub(in crate::server) fn builder(
                     },
                     capabilities.clone(),
                     TransportLimits {
-                        max_frame_bytes: MAX_FRAME_BYTES,
-                        event_buffer_capacity: EVENT_BUFFER_CAPACITY,
+                        max_frame_bytes: limits.max_frame_bytes,
+                        event_buffer_capacity: limits.event_buffer_capacity,
                     },
                 )))
             },
@@ -89,8 +93,11 @@ pub(in crate::server) fn builder(
 
 fn registered_capabilities(
     management: Option<&crate::management::AppManagementService>,
+    context_reload_available: bool,
+    host_policy: Option<&AppServerHostPolicy>,
 ) -> Vec<CapabilityDescriptor> {
-    let mut capabilities = [
+    let mut capabilities = Vec::new();
+    for (id, methods) in [
         (
             "agent",
             vec![
@@ -191,34 +198,50 @@ fn registered_capabilities(
             ],
         ),
         ("eventSync", vec!["app/syncEvents", "app/eventStreamState"]),
-    ]
-    .into_iter()
-    .map(|(id, methods)| CapabilityDescriptor {
-        id: id.to_string(),
-        availability: CapabilityAvailability::Available,
-        methods: methods.into_iter().map(str::to_string).collect(),
-    })
-    .collect::<Vec<_>>();
-    capabilities.extend(
-        management
-            .map(|service| service.capabilities())
-            .unwrap_or_else(|| {
-                crate::management::AppManagementCapabilities::unavailable(
-                    "The Host did not provide management owners",
-                )
-            })
-            .descriptors(),
-    );
+    ] {
+        let mut methods = methods;
+        if !context_reload_available {
+            methods.retain(|method| *method != "session/reloadContext");
+        }
+        if let Some(host_policy) = host_policy {
+            methods.retain(|method| host_policy.allows(method));
+        }
+        if methods.is_empty() {
+            continue;
+        }
+        capabilities.push(CapabilityDescriptor {
+            id: id.to_string(),
+            availability: CapabilityAvailability::Available,
+            methods: methods.into_iter().map(str::to_string).collect(),
+        });
+    }
+    let management_capabilities = management
+        .map(|service| service.capabilities())
+        .unwrap_or_else(|| {
+            crate::management::AppManagementCapabilities::unavailable(
+                "The Host did not provide management owners",
+            )
+        });
+    for mut descriptor in management_capabilities.descriptors() {
+        if let Some(host_policy) = host_policy {
+            descriptor
+                .methods
+                .retain(|method| host_policy.allows(method));
+        }
+        if descriptor.methods.is_empty() {
+            continue;
+        }
+        capabilities.push(descriptor);
+    }
     capabilities
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn missing_host_management_service_declares_capabilities_unavailable() {
-        let capabilities = registered_capabilities(None);
+        let capabilities = registered_capabilities(None, true, None);
         for id in [
             "tui.modes",
             "tui.models",

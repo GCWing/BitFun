@@ -15,6 +15,7 @@ pub(super) async fn run(
     management: Option<Arc<AppManagementService>>,
     cx: ConnectionTo<AppClient>,
     event_state: Arc<crate::server::ConnectionEventState>,
+    disconnect: Option<Arc<crate::server::host_policy::AppServerDisconnect>>,
 ) -> Result<()> {
     let mut rx = runtime.event_source().subscribe();
     let mut permission_rx = runtime.runtime().subscribe_permission_requests().ok();
@@ -68,6 +69,17 @@ pub(super) async fn run(
             }
         };
         tokio::select! {
+            _ = async {
+                match &disconnect {
+                    Some(disconnect) => disconnect.wait().await,
+                    None => std::future::pending::<()>().await,
+                }
+            } => {
+                log::info!(
+                    "App-server connection closed -- stopping event forwarding so the Host can run its disconnect lifecycle"
+                );
+                break;
+            }
             recv = rx.recv() => match recv {
                 Ok(envelope) => {
                     let notification = SessionEventNotification {

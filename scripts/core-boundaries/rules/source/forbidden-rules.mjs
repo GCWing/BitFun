@@ -22,13 +22,13 @@ export const forbiddenContentRules = [
   {
     path: 'src/apps/cli/Cargo.toml',
     reason:
-      'CLI/TUI consumes stable contracts and must not depend on App Server implementation, client transport, wire DTOs, or a shared TUI management crate',
+      'CLI/TUI consumes stable contracts; the `server` command may host the App Server stdio surface, but the CLI must not depend on the typed App Server client transport, wire DTOs, or a shared TUI management crate',
     patterns: [
       {
         regex:
-          /^\s*bitfun-(?:app-server|app-server-client|app-server-protocol|tui-management)\s*=/m,
+          /^\s*bitfun-(?:app-server-client|app-server-protocol|tui-management)\s*=/m,
         message:
-          'bitfun-cli must not depend on App Server implementation, client transport, wire DTOs, or a shared TUI management crate',
+          'bitfun-cli must not depend on the typed App Server client transport, wire DTOs, or a shared TUI management crate',
       },
     ],
   },
@@ -4092,6 +4092,19 @@ export const forbiddenContentUnderRules = [
           /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_client|bitfun_agent_runtime::runtime)\b/,
         message:
           'product entrypoints must not consume raw plugin runtime client contracts; project through the capability surface contract first',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/cli/src',
+    reason:
+      'only the reviewed stdio Server Host assembly point may import the App Server implementation; TUI, controller, and headless CLI must stay on stable contracts',
+    patterns: [
+      {
+        regex: /\bbitfun_app_server\b/,
+        message:
+          'bitfun-app-server implementation imports belong only in src/apps/cli/src/server_host.rs, the reviewed stdio Server Host assembly point',
+        allowPaths: ['src/apps/cli/src/server_host.rs'],
       },
     ],
   },
