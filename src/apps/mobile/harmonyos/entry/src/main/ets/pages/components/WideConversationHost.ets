@@ -197,7 +197,7 @@ export struct WideConversationHost {
       onOpenWorkspace: (path: string) => {
         this.actions.onRemoteHome.selectWorkspace(path);
       },
-      onConnect: this.actions.onSidebar.enterCode
+      onConnect: this.actions.onSidebar.connectDesktop
     })
   }
 
