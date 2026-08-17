@@ -61,8 +61,7 @@ import { AppRootPresentationActions } from '../actions/AppRootPresentationAction
 import {
   AppNavigationBackAction,
   AppRoute,
-  AppRouteContract,
-  ConversationSource
+  AppRouteContract
 } from '../navigation/AppRouteContract';
 import { AppShellState, CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../state/AppShellState';
 import {
@@ -118,6 +117,8 @@ export abstract class AppRootRuntimeComposition {
   abstract currentActiveTurnId(): string;
   abstract disconnect(clearPairing: boolean): Promise<void>;
   abstract enterCompactLayout(): void;
+  abstract enterRemoteSurfaceCompact(): Promise<void>;
+  abstract enterRemoteSurfaceWide(): Promise<void>;
   abstract exitActiveChat(): void;
   abstract failRemoteConnection(err: Object): void;
   abstract handleNavigationBack(route: AppRoute): boolean;
@@ -135,8 +136,6 @@ export abstract class AppRootRuntimeComposition {
   abstract selectWorkspace(path: string): Promise<void>;
   abstract showVoiceInputError(message: string): void;
   abstract stopVoiceInput(showStatus: boolean): Promise<void>;
-  abstract switchCompactConversationSource(source: ConversationSource): Promise<void>;
-  abstract switchWideConversationSource(source: ConversationSource): Promise<void>;
   abstract toggleVoiceInput(): Promise<void>;
 
   readonly sessionManager: RemoteSessionManager = new RemoteSessionManager();
@@ -787,12 +786,6 @@ export abstract class AppRootRuntimeComposition {
     onConversationIntent: (route: AppRoute, intent: ConversationIntent): void =>
       this.conversationIntentDispatcher.dispatch(route, intent),
     onCloseSidebar: (): void => this.closeAppSidebar(),
-    onWideConversationSource: (source: ConversationSource): void => {
-      this.switchWideConversationSource(source);
-    },
-    onCompactConversationSource: (source: ConversationSource): void => {
-      this.switchCompactConversationSource(source);
-    },
     onCompactLayoutEntered: (): void => this.enterCompactLayout(),
     onLayoutModeChanged: (wideLayout: boolean): void => this.appShellState.setWideLayout(wideLayout),
     onRemoteHome: {
@@ -845,6 +838,7 @@ export abstract class AppRootRuntimeComposition {
       close: (): void => this.closeAppSidebar(),
       newChat: (): void => { this.closeAppSidebar(); this.conversationController.prepareNewGeneralChat(); },
       enterCode: (): void => { this.closeAppSidebar(); this.enterCodeEntry(); },
+      connectDesktop: (): void => { this.closeAppSidebar(); this.openConnectSheet(); },
       settings: (): void => { this.closeAppSidebar(); this.appShellState.openSettings('general'); },
       openAccount: (): void => {
         this.closeAppSidebar();
@@ -913,10 +907,10 @@ export abstract class AppRootRuntimeComposition {
   enterRemoteSurface(): void {
     this.appShellState.setConnectSheetVisible(false);
     if (this.appShellState.wideLayout) {
-      void this.switchWideConversationSource(ConversationSource.Remote);
+      void this.enterRemoteSurfaceWide();
       return;
     }
-    void this.switchCompactConversationSource(ConversationSource.Remote);
+    void this.enterRemoteSurfaceCompact();
   }
 
   openConnectSheet(intent: string = CONNECT_INTENT_AUTO): void {

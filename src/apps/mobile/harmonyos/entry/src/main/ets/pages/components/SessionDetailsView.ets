@@ -39,8 +39,6 @@ export struct SessionDetailsView {
           SymbolGlyph($r('sys.symbol.xmark'))
             .fontSize(17)
             .fontColor([MUTED])
-            .width(20)
-            .height(20)
         }
         .width(44)
         .height(44)

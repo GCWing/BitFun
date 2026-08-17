@@ -4,7 +4,7 @@ import {
   emptyAppRootPresentationActions
 } from '../actions/AppRootPresentationActions';
 import { WideLayoutGeometry } from '../layout/WideLayoutGeometry';
-import { AppRoute, ConversationSource } from '../navigation/AppRouteContract';
+import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
 import { FilePreviewLayout, FilePreviewPlacement } from '../policy/FilePreviewPlacementPolicy';
 import { AppShellState } from '../state/AppShellState';
 import { FilePreviewState } from '../state/FilePreviewState';
@@ -20,6 +20,7 @@ import {
   RemoteSurfaceState
 } from './remote/RemoteSurfaceHost';
 import { SidebarToggleButton } from './SidebarToggleButton';
+import { SidebarWorkspaceSection } from './SidebarWorkspaceSection';
 import { FLOATING_PANEL_BG, LINE, PAGE_BG } from './Theme';
 
 const WIDE_DETAIL_CONTENT_MAX_WIDTH: number = 920;
@@ -66,7 +67,7 @@ export struct WideConversationHost {
   private GeneralChatContent() {
     Row() {
       if (!this.wideMasterPaneCollapsed) {
-        this.MasterPane(ConversationSource.General, false)
+        this.MasterPane()
         this.MasterDetailGap()
       }
       this.ConversationDetail(false)
@@ -78,7 +79,7 @@ export struct WideConversationHost {
   private RemoteHomeContent() {
     Row() {
       if (!this.wideMasterPaneCollapsed) {
-        this.MasterPane(ConversationSource.Remote, false)
+        this.MasterPane()
         this.MasterDetailGap()
       }
       this.RemoteHomeDetail()
@@ -124,7 +125,7 @@ export struct WideConversationHost {
   private RemoteCreateContent() {
     Row() {
       if (!this.wideMasterPaneCollapsed) {
-        this.MasterPane(ConversationSource.Remote, false)
+        this.MasterPane()
         this.MasterDetailGap()
       }
       this.ConversationDetail(false)
@@ -133,37 +134,31 @@ export struct WideConversationHost {
   }
 
   @Builder
-  private MasterPane(source: ConversationSource, showSelectedSession: boolean) {
+  private MasterPane() {
     Column() {
       Column() {
         AppSidebar({
-          sessions: source === ConversationSource.Remote ? [] : this.generalPageState.recentSessions(),
+          sessions: this.generalPageState.recentSessions(),
           pinnedSessionId: this.generalPageState.pinnedSessionId(),
-          selectedSessionId: source === ConversationSource.Remote ? '' :
-            this.generalPageState.conversation.activeSession.sessionId,
+          selectedSessionId: AppRouteContract.isGeneralComposerRoute(this.route) ?
+            this.generalPageState.conversation.activeSession.sessionId : '',
           connectionState: this.remotePageState.connectionState,
           accountUserId: this.remotePageState.accountUserId,
-          activeSection: source === ConversationSource.Remote ? 'remote' : 'chat',
-          showConversationSourceSwitcher: true,
           showCollapseButton: true,
-          showViewSettingsButton: source === ConversationSource.Remote,
-          showCustomContent: source === ConversationSource.Remote,
-          conversationSource: source,
+          showViewSettingsButton: false,
+          showWorkspaceSection: true,
           contentSlot: () => {
-            this.RemoteMasterContent(showSelectedSession)
+            this.WorkspaceMasterContent()
           },
           onClose: this.actions.onSidebar.close,
-          onNewChat: source === ConversationSource.Remote ?
-            this.actions.onRemoteHome.createAssistant : this.actions.onSidebar.newChat,
-          onEnterCode: () => this.actions.onWideConversationSource(ConversationSource.Remote),
-          onConversationSource: this.actions.onWideConversationSource,
+          onNewChat: this.actions.onSidebar.newChat,
+          onEnterCode: this.actions.onSidebar.enterCode,
           onCollapse: this.onCollapseMasterPane,
           onOpenViewSettings: this.onOpenRemoteViewSettings,
           onSearchQueryChange: (query: string) => {
-            if (source === ConversationSource.Remote) this.actions.onRemoteHome.queryChanged(query);
+            this.actions.onRemoteHome.queryChanged(query);
           },
-          onOpenSettings: source === ConversationSource.Remote ?
-            this.actions.onRemoteHome.openSettings : this.actions.onSidebar.settings,
+          onOpenSettings: this.actions.onSidebar.settings,
           onOpenAccount: this.actions.onSidebar.openAccount,
           onOpenSession: this.actions.onSidebar.openSession,
           onArchiveSession: this.actions.onSidebar.archive,
@@ -183,14 +178,26 @@ export struct WideConversationHost {
   }
 
   @Builder
-  private RemoteMasterContent(showSelectedSession: boolean) {
-    RemoteSurfaceHost({
-      mode: RemoteSurfaceMode.Master,
-      remotePageState: this.remotePageState,
-      presentationState: this.remoteSurfaceState,
-      actions: this.actions,
-      showSelectedSession,
-      compact: false
+  private WorkspaceMasterContent() {
+    SidebarWorkspaceSection({
+      sessions: this.remotePageState.visibleSessions(),
+      recentWorkspaces: this.remotePageState.recentWorkspaces,
+      workspaceName: this.remotePageState.workspaceName,
+      workspacePath: this.remotePageState.workspacePath,
+      workspaceKind: this.remotePageState.workspaceKind,
+      connectionState: this.remotePageState.connectionState,
+      selectedSessionId: AppRouteContract.isRemoteRoute(this.route) ?
+        this.remotePageState.activeSession.sessionId : '',
+      runningSessionId: this.remotePageState.hasRunningActiveTurn() ?
+        this.remotePageState.activeSession.sessionId : '',
+      onOpenSession: this.actions.onRemoteHome.openSessionInPlace,
+      onCreateInWorkspace: (path: string) => {
+        this.actions.onRemoteHome.createInWorkspaceInPlace(path, 'code');
+      },
+      onOpenWorkspace: (path: string) => {
+        this.actions.onRemoteHome.selectWorkspace(path);
+      },
+      onConnect: this.actions.onSidebar.connectDesktop
     })
   }
 
@@ -198,7 +205,7 @@ export struct WideConversationHost {
   private RemoteChatContent() {
     if (this.filePreviewLayout.placement === FilePreviewPlacement.WideTriplePane) {
       Row() {
-        this.MasterPane(ConversationSource.Remote, true)
+        this.MasterPane()
         this.PaneGap(this.filePreviewLayout.masterConversationGap)
         this.ConversationDetail(false, this.filePreviewLayout.conversationPaneWidth)
         this.PaneGap(this.filePreviewLayout.conversationPreviewGap)
@@ -208,7 +215,7 @@ export struct WideConversationHost {
     } else {
       Row() {
         if (!this.wideMasterPaneCollapsed) {
-          this.MasterPane(ConversationSource.Remote, true)
+          this.MasterPane()
           this.MasterDetailGap()
         }
         this.ConversationDetail(false)

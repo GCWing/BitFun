@@ -1,8 +1,10 @@
 import { ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ToolFileReference, ToolFileReferenceResolver } from '../../services/ToolFileReferenceResolver';
+import { ActivityGroupPolicy, ActivityRowPlan, ActivityThinkingPart } from '../policy/ActivityGroupPolicy';
 import { ToolCollapseGroup, ToolCollapsePolicy } from '../policy/ToolCollapsePolicy';
 import { CARD, FILE_LINK, GREEN, INK, LINE, MUTED, RED, SOFT } from './Theme';
+import { ThinkingBlock } from './ThinkingBlock';
 import { ToolGlyph } from './ToolGlyphs';
 import { ToolConfirmationPanel, ToolQuestionAnswerPanel } from './ToolInteractionPanels';
 
@@ -45,6 +47,7 @@ interface ToolRenderEntry {
   type: string;
   key: string;
   tool?: ConversationUiToolStatus;
+  thinking?: ActivityThinkingPart;
   tools: ConversationUiToolStatus[];
   readCount: number;
   searchCount: number;
@@ -55,6 +58,8 @@ interface ToolRenderEntry {
 @ComponentV2
 export struct ToolStatusList {
   @Param tools: ConversationUiToolStatus[] = [];
+  /** Reasoning that ran between these tools; folded away with them. */
+  @Param thinkingParts: ActivityThinkingPart[] = [];
   @Param isBusy: boolean = false;
   @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
     (_toolId: string, _updatedInput?: Object) => {};
@@ -72,6 +77,8 @@ export struct ToolStatusList {
       ForEach(this.toolRenderEntries(), (entry: ToolRenderEntry, index: number) => {
         if (entry.type === 'summary') {
           this.CollapsedToolSummary(entry)
+        } else if (entry.thinking) {
+          this.ThinkingRow(entry.thinking)
         } else if (entry.tool) {
           this.ToolRow(entry.tool, index)
         }
@@ -98,6 +105,17 @@ export struct ToolStatusList {
     .padding({ left: 0, right: 0 })
     .onClick(() => {
       this.expanded = !this.expanded;
+    })
+  }
+
+  @Builder
+  ThinkingRow(part: ActivityThinkingPart) {
+    ThinkingBlock({
+      text: part.text,
+      status: part.status,
+      keepExpandedWhenDone: false,
+      streaming: part.streaming,
+      streamKey: part.streamKey
     })
   }
 
@@ -340,11 +358,32 @@ export struct ToolStatusList {
     const groups = this.expanded ?
       ToolCollapsePolicy.expandedGroups(this.tools) :
       ToolCollapsePolicy.collapsedGroups(this.tools);
+    const parts = ActivityGroupPolicy.mergeThinkingParts(this.thinkingParts);
+    // Without a summary row there is nothing to expand, so the reasoning has to
+    // stay on screen or it would be lost.
+    const showThinking = this.expanded || !ActivityGroupPolicy.hasSummaryRow(groups);
     const entries: ToolRenderEntry[] = [];
-    groups.forEach((group: ToolCollapseGroup) => {
-      entries.push(this.entryFromGroup(group));
+    ActivityGroupPolicy.weaveRows(groups, parts, showThinking).forEach((row: ActivityRowPlan) => {
+      if (row.kind === 'thinking') {
+        entries.push(this.thinkingEntry(parts[row.index], row.index));
+        return;
+      }
+      entries.push(this.entryFromGroup(groups[row.index]));
     });
     return entries;
+  }
+
+  private thinkingEntry(part: ActivityThinkingPart, index: number): ToolRenderEntry {
+    return {
+      type: 'thinking',
+      key: `thinking-${index}-${part.beforeToolIndex}-${part.streamKey}`,
+      thinking: part,
+      tools: [],
+      readCount: 0,
+      searchCount: 0,
+      commandCount: 0,
+      otherCount: 0
+    };
   }
 
   private entryFromGroup(group: ToolCollapseGroup): ToolRenderEntry {
@@ -422,23 +461,6 @@ export struct ToolStatusList {
 
   private collapsedSummaryTitle(entry: ToolRenderEntry): string {
     return RemoteI18n.f('chat.toolsRan', `${entry.tools.length}`);
-  }
-
-  private collapsedSummaryDetail(entry: ToolRenderEntry): string {
-    const parts: string[] = [];
-    if (entry.readCount > 0) {
-      parts.push(`读取 ${entry.readCount}`);
-    }
-    if (entry.searchCount > 0) {
-      parts.push(`搜索 ${entry.searchCount}`);
-    }
-    if (entry.commandCount > 0) {
-      parts.push(`命令 ${entry.commandCount}`);
-    }
-    if (entry.otherCount > 0) {
-      parts.push(`其他 ${entry.otherCount}`);
-    }
-    return parts.join(' · ');
   }
 
   private normalizedToolName(tool: ConversationUiToolStatus): string {
@@ -622,41 +644,41 @@ export struct ToolStatusList {
     const raw = tool.name || 'Tool';
     const normalized = this.normalizedToolName(tool);
     if (raw === 'TodoWrite' || normalized === 'todo_write' || normalized === 'todowrite') {
-      return '更新任务列表';
+      return RemoteI18n.t('chat.toolOpTodoWrite');
     }
     if (raw === 'Task' || normalized === 'task') {
-      return '发起任务';
+      return RemoteI18n.t('chat.toolOpTask');
     }
     if (this.isFileReadTool(tool)) {
-      return '读取文件';
+      return RemoteI18n.t('chat.toolOpRead');
     }
     if (raw === 'Write' || raw === 'Create' || normalized === 'write' || normalized === 'write_file' ||
       normalized === 'create_file') {
-      return '写入文件';
+      return RemoteI18n.t('chat.toolOpWrite');
     }
     if (raw === 'Delete' || normalized === 'delete' || normalized === 'delete_file') {
-      return '删除文件';
+      return RemoteI18n.t('chat.toolOpDelete');
     }
     if (raw === 'GetFileDiff' || normalized === 'get_file_diff' || normalized === 'getfilediff') {
-      return '查看变更';
+      return RemoteI18n.t('chat.toolOpDiff');
     }
     if (this.isFileMutationTool(tool)) {
-      return '修改文件';
+      return RemoteI18n.t('chat.toolOpEdit');
     }
     if (this.isCommandTool(tool)) {
-      return '运行命令';
+      return RemoteI18n.t('chat.toolOpCommand');
     }
     if (raw === 'WebSearch' || normalized === 'websearch' || normalized === 'web_search') {
-      return '网页搜索';
+      return RemoteI18n.t('chat.toolOpWebSearch');
     }
     if (this.isWebTool(tool)) {
-      return '访问网页';
+      return RemoteI18n.t('chat.toolOpWebFetch');
     }
     if (this.isSearchTool(tool)) {
-      return '搜索代码';
+      return RemoteI18n.t('chat.toolOpSearch');
     }
     if (raw === 'AskUserQuestion') {
-      return '请求确认';
+      return RemoteI18n.t('chat.toolOpAskUser');
     }
     return raw;
   }
@@ -696,11 +718,12 @@ export struct ToolStatusList {
     const name = tool.name || '';
     if ((name === 'TodoWrite' || this.normalizedToolName(tool) === 'todowrite') &&
       payload.todos && payload.todos.length > 0) {
-      return payload.todos[0].content || '任务列表';
+      return payload.todos[0].content || RemoteI18n.t('chat.toolTodoFallback');
     }
 
     if (name === 'Task') {
-      return payload.description || payload.task || payload.prompt || payload.content || '子任务';
+      return payload.description || payload.task || payload.prompt || payload.content ||
+        RemoteI18n.t('chat.toolTaskFallback');
     }
 
     const path = payload.file_path || payload.filePath || payload.path || '';
@@ -748,7 +771,8 @@ export struct ToolStatusList {
       return `${RemoteI18n.t('chat.toolRunning')} “${this.compactText(this.operationTarget(tool), 24)}”`;
     }
     if (this.hasToolError(tool)) {
-      return `${this.operationLabel(tool)}失败 · ${this.compactText(this.operationTarget(tool), 24)}`;
+      return `${RemoteI18n.f('chat.toolFailed', this.operationLabel(tool))} · ` +
+        `${this.compactText(this.operationTarget(tool), 24)}`;
     }
     if (this.isPendingConfirmation(tool) || this.isQuestionTool(tool)) {
       return `${this.displayStatus(tool.status || 'pending')} · ${this.operationLabel(tool)}`;

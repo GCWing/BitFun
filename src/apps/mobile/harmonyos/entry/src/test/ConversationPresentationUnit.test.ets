@@ -14,7 +14,11 @@ import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { AppRoute } from '../main/ets/pages/navigation/AppRouteContract';
 import { ConversationHeaderPolicy } from '../main/ets/pages/policy/ConversationHeaderPolicy';
 import { ThinkingPresentationPolicy } from '../main/ets/pages/policy/ThinkingPresentationPolicy';
-import { ActivityGroupPolicy } from '../main/ets/pages/policy/ActivityGroupPolicy';
+import {
+  ActivityGroupPolicy,
+  ActivityRowPlan,
+  ActivityThinkingPart
+} from '../main/ets/pages/policy/ActivityGroupPolicy';
 import { AssistantProcessLayoutPolicy } from '../main/ets/pages/policy/AssistantProcessLayoutPolicy';
 import { ConversationMessageRenderPolicy } from '../main/ets/pages/policy/ConversationMessageRenderPolicy';
 import { ToolCollapsePolicy } from '../main/ets/pages/policy/ToolCollapsePolicy';
@@ -114,6 +118,61 @@ export default function conversationPresentationUnitTest() {
       expect(ActivityGroupPolicy.shouldFoldEntry(false, false, toolStatus('2', 'AskUserQuestion', 'completed'))).assertFalse();
       expect(ActivityGroupPolicy.shouldFoldEntry(false, false, toolStatus('3', 'Grep', 'running'))).assertFalse();
       expect(ActivityGroupPolicy.thinkingHeaderCount(0)).assertEqual(0);
+    });
+
+    it('merges an uninterrupted stretch of reasoning but keeps it where it happened', 0, () => {
+      const parts = ActivityGroupPolicy.mergeThinkingParts([
+        thinkingPart(0, 'first'),
+        thinkingPart(0, 'still first'),
+        thinkingPart(2, 'after two tools')
+      ]);
+      expect(parts.length).assertEqual(2);
+      expect(parts[0].text).assertEqual('first\n\nstill first');
+      expect(parts[0].beforeToolIndex).assertEqual(0);
+      expect(parts[1].text).assertEqual('after two tools');
+      expect(parts[1].beforeToolIndex).assertEqual(2);
+    });
+
+    it('hides reasoning behind the tool summary and unfolds it in transcript order', 0, () => {
+      const tools = [
+        toolStatus('1', 'Grep', 'completed'),
+        toolStatus('2', 'Read', 'completed'),
+        toolStatus('3', 'ExecCommand', 'completed')
+      ];
+      const parts = ActivityGroupPolicy.mergeThinkingParts([
+        thinkingPart(0, 'before any tool'),
+        thinkingPart(2, 'after two tools')
+      ]);
+
+      const collapsed = ToolCollapsePolicy.collapsedGroups(tools);
+      expect(ActivityGroupPolicy.hasSummaryRow(collapsed)).assertTrue();
+      const collapsedRows = ActivityGroupPolicy.weaveRows(collapsed, parts, false);
+      expect(collapsedRows.length).assertEqual(1);
+      expect(collapsedRows[0].kind).assertEqual('group');
+
+      const expandedRows = ActivityGroupPolicy.weaveRows(
+        ToolCollapsePolicy.expandedGroups(tools),
+        parts,
+        true
+      );
+      expect(rowPlanTrace(expandedRows)).assertEqual('group0 thinking0 group1 group2 thinking1 group3');
+    });
+
+    it('keeps reasoning on screen when a lone tool has no summary to unfold', 0, () => {
+      const groups = ToolCollapsePolicy.collapsedGroups([toolStatus('1', 'Grep', 'completed')]);
+      expect(ActivityGroupPolicy.hasSummaryRow(groups)).assertFalse();
+      const rows = ActivityGroupPolicy.weaveRows(groups, [thinkingPart(0, 'why')], true);
+      expect(rowPlanTrace(rows)).assertEqual('thinking0 group0');
+    });
+
+    it('trails reasoning that came after the last tool', 0, () => {
+      const tools = [toolStatus('1', 'Grep', 'completed'), toolStatus('2', 'Read', 'completed')];
+      const rows = ActivityGroupPolicy.weaveRows(
+        ToolCollapsePolicy.expandedGroups(tools),
+        [thinkingPart(2, 'wrapping up')],
+        true
+      );
+      expect(rowPlanTrace(rows)).assertEqual('group0 group1 group2 thinking0');
     });
   });
 
@@ -287,12 +346,30 @@ export default function conversationPresentationUnitTest() {
   });
 
   describe('Conversation source naming', () => {
-    it('uses the same local/remote pair across the switcher and remote chrome', 0, () => {
-      expect(RemoteI18n.t('sidebar.local')).assertEqual('本地');
-      expect(RemoteI18n.t('sidebar.code')).assertEqual('远程');
-      expect(RemoteI18n.t('sidebar.code')).assertEqual(RemoteI18n.t('remote.title'));
+    it('keeps the remote chrome naming consistent', 0, () => {
+      expect(RemoteI18n.t('remote.title')).assertEqual('远程');
       expect(RemoteI18n.t('connect.accountDevicesSubtitle')).assertEqual('远程');
       expect(RemoteI18n.t('chat.remoteSession')).assertEqual('远程会话');
+    });
+
+    it('names the sidebar by what things are, not by where they run', 0, () => {
+      // The sidebar used to ask "local or remote" before it would show anything.
+      // It now stacks a conversation timeline over a set of workspaces, so the
+      // labels name those two kinds rather than an execution location, and the
+      // local/remote pair the switcher needed is gone.
+      expect(RemoteI18n.t('sidebar.conversations')).assertEqual('最近对话');
+      expect(RemoteI18n.t('sidebar.workspaces')).assertEqual('工作区');
+      expect(RemoteI18n.t('sidebar.connectDesktop')).assertEqual('连接电脑');
+      expect(RemoteI18n.t('sidebar.local')).assertEqual('sidebar.local');
+      expect(RemoteI18n.t('sidebar.code')).assertEqual('sidebar.code');
+      expect(RemoteI18n.t('sidebar.recent')).assertEqual('sidebar.recent');
+    });
+
+    it('labels the workspace-header plus by the connection it adds, not a workspace it cannot create', 0, () => {
+      // Workspaces come from the desktop; the phone has no create-workspace
+      // call. The button opens the connect sheet, so that is what it says.
+      expect(RemoteI18n.t('sidebar.addConnection')).assertEqual('添加连接');
+      expect(RemoteI18n.t('sidebar.addWorkspace')).assertEqual('sidebar.addWorkspace');
     });
 
     it('does not keep leftover pending-copy keys that claim general chat is unavailable', 0, () => {
@@ -476,6 +553,24 @@ export default function conversationPresentationUnitTest() {
       expect(projection.desktopName).assertEqual('Studio');
     });
   });
+}
+
+function thinkingPart(beforeToolIndex: number, text: string): ActivityThinkingPart {
+  return {
+    beforeToolIndex,
+    text,
+    status: 'done',
+    streaming: false,
+    streamKey: `k-${beforeToolIndex}-${text}`
+  };
+}
+
+function rowPlanTrace(rows: ActivityRowPlan[]): string {
+  const parts: string[] = [];
+  rows.forEach((row: ActivityRowPlan) => {
+    parts.push(`${row.kind}${row.index}`);
+  });
+  return parts.join(' ');
 }
 
 function toolStatus(id: string, name: string, status: string): ConversationUiToolStatus {

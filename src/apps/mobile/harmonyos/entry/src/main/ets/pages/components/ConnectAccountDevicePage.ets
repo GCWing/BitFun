@@ -27,8 +27,14 @@ export struct ConnectAccountDevicePage {
     Column() {
       Row({ space: 16 }) {
         Stack() {
+          // No .width/.height here on purpose. A chevron's natural advance box
+          // is about half as wide as it is tall, and SymbolGlyph draws the glyph
+          // left-anchored inside a box you force wider than that — so forcing a
+          // square 26vp box pushed this arrow ~7vp left of the circle's centre.
+          // Left unsized, the Stack centres the natural box and the arrow sits
+          // where the circle says it should.
           SymbolGlyph($r('sys.symbol.chevron_left'))
-            .fontSize(23).fontColor([INK]).width(26).height(26)
+            .fontSize(23).fontColor([INK])
         }
         .width(48).height(48).backgroundColor(SOFT).borderRadius(24)
         .onClick(() => this.onBack())
@@ -117,7 +123,7 @@ export struct ConnectAccountDevicePage {
       Text(RemoteI18n.t('connect.scanPairCodeAction'))
         .fontSize(16).fontWeight(FontWeight.Medium).fontColor(INK).layoutWeight(1)
       SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(13).fontColor([MUTED]).width(16).height(16).opacity(0.44)
+        .fontSize(13).fontColor([MUTED]).opacity(0.44)
     }
     .width('100%').height(58).padding({ left: 16, right: 16 })
     .backgroundColor(CARD).borderRadius(8).border({ width: 1, color: LINE })
@@ -162,7 +168,7 @@ export struct ConnectAccountDevicePage {
           .backgroundColor(SOFT).borderRadius(14)
       } else if (device.online) {
         SymbolGlyph($r('sys.symbol.chevron_right'))
-          .fontSize(13).fontColor([MUTED]).width(16).height(16).opacity(0.44)
+          .fontSize(13).fontColor([MUTED]).opacity(0.44)
       }
     }
     .width('100%').height(60).padding({ left: 4, right: 4 })

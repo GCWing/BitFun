@@ -34,11 +34,13 @@ export struct SubagentTaskCard {
     Column({ space: 8 }) {
       Row({ space: 8 }) {
         Stack({ alignContent: Alignment.Center }) {
+          // The Stack is the slot that keeps the title from shifting between
+          // the two states; the glyph must stay unsized, or a chevron_right
+          // (whose natural box is half as wide as it is tall) gets drawn
+          // against the left edge of a box forced square.
           SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
             .fontSize(14)
             .fontColor([MUTED])
-            .width(16)
-            .height(16)
         }
         .width(18)
         .height(32)

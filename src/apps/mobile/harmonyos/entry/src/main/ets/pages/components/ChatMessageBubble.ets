@@ -1,5 +1,5 @@
 import { ConversationUiImage, ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
-import { ActivityGroupPolicy } from '../policy/ActivityGroupPolicy';
+import { ActivityGroupPolicy, ActivityThinkingPart } from '../policy/ActivityGroupPolicy';
 import { AssistantProcessLayoutPolicy } from '../policy/AssistantProcessLayoutPolicy';
 import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
 import { ThinkingPresentationPolicy } from '../policy/ThinkingPresentationPolicy';
@@ -192,7 +192,14 @@ export struct ChatMessageBubble {
   @Builder
   ActivityGroup(group: StructuredRenderGroup, omitActiveThinking: boolean = false) {
     Column({ space: 6 }) {
-      if (!omitActiveThinking &&
+      if (this.activityGroupTools(group).length > 0) {
+        // Reasoning and the tools it drove are one stretch of work, so they fold
+        // behind a single summary row instead of stacking two cards.
+        this.Tools(
+          this.activityGroupTools(group),
+          omitActiveThinking ? [] : this.activityThinkingParts(group)
+        )
+      } else if (!omitActiveThinking &&
         ActivityGroupPolicy.thinkingHeaderCount(this.activityThinkingCount(group)) > 0 &&
         (this.activityThinkingText(group).length > 0 || this.activityThinkingStreaming(group))) {
         this.Thinking(
@@ -201,9 +208,6 @@ export struct ChatMessageBubble {
           `${this.item.id}-${group.path}-activity-thinking`,
           this.activityThinkingStreaming(group)
         )
-      }
-      if (this.activityGroupTools(group).length > 0) {
-        this.Tools(this.activityGroupTools(group))
       }
     }
     .width('100%')
@@ -280,9 +284,10 @@ export struct ChatMessageBubble {
   }
 
   @Builder
-  Tools(tools: ConversationUiToolStatus[]) {
+  Tools(tools: ConversationUiToolStatus[], thinkingParts: ActivityThinkingPart[] = []) {
     ToolStatusList({
       tools,
+      thinkingParts,
       isBusy: this.isBusy,
       onApproveTool: (toolId: string, updatedInput?: Object) => {
         this.onApproveTool(toolId, updatedInput);
@@ -571,6 +576,9 @@ export struct ChatMessageBubble {
         });
       } else if (activityItems.length === 1) {
         const entry = activityItems[0];
+        // Tools buffered before this group ran before it, so they have to be
+        // emitted first; otherwise they would render below it.
+        flushTools();
         groups.push({
           type: 'item',
           items: [entry],
@@ -582,6 +590,7 @@ export struct ChatMessageBubble {
           path: `${prefix}-${activityStart}`
         });
       } else {
+        flushTools();
         groups.push({
           type: 'activity_group',
           items: activityItems,
@@ -689,6 +698,27 @@ export struct ChatMessageBubble {
       }
     });
     return tools;
+  }
+
+  private activityThinkingParts(group: StructuredRenderGroup): ActivityThinkingPart[] {
+    const raw: ActivityThinkingPart[] = [];
+    let toolsSeen = 0;
+    group.items.forEach((entry: ConversationUiMessageItem, index: number) => {
+      if (this.isThinkingEntry(entry)) {
+        raw.push({
+          beforeToolIndex: toolsSeen,
+          text: entry.content || '',
+          status: group.itemStatuses[index] || '',
+          streaming: group.itemStreaming[index] || false,
+          streamKey: `${this.item.id}-${group.path}-thinking-${index}`
+        });
+        return;
+      }
+      if (entry.tool) {
+        toolsSeen += 1;
+      }
+    });
+    return ActivityGroupPolicy.mergeThinkingParts(raw);
   }
 
   private activityThinkingCount(group: StructuredRenderGroup): number {
