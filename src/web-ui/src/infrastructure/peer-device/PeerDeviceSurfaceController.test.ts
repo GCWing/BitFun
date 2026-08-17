@@ -131,6 +131,7 @@ class FakeConnectionManager {
       capabilities: {
         idempotentDialogSubmit: true,
         targetedSessionRollback: true,
+        tokenUsageStatistics: true,
       },
       consecutiveFailures: 0,
       lostReason: null,

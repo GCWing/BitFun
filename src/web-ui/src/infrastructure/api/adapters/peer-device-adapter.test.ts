@@ -333,6 +333,39 @@ describe('PeerDeviceTransportAdapter queue', () => {
     expect(deviceRpc).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects usage statistics before RPC when the Peer host lacks the capability', async () => {
+    const deviceRpc = vi.fn();
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(adapter.request('get_token_usage_statistics', {
+      request: { timeRange: 'today', granularity: 'hour' },
+    })).rejects.toEqual(expect.objectContaining<Partial<PeerProductCommandError>>({
+      name: 'PeerProductCommandError',
+      message: expect.stringContaining('token_usage_statistics_unsupported'),
+    }));
+    expect(deviceRpc).not.toHaveBeenCalled();
+  });
+
+  it('forwards usage statistics after capability negotiation', async () => {
+    const statistics = { totalRequests: 3, totalTokens: 120 };
+    const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
+      resp: 'host_invoke_result',
+      ok: true,
+      value: statistics,
+    }));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+    adapter.setHostCapabilities({
+      supportsIdempotentDialogSubmit: false,
+      supportsTargetedSessionRollback: false,
+      supportsTokenUsageStatistics: true,
+    });
+
+    await expect(adapter.request('get_token_usage_statistics', {
+      request: { timeRange: 'today', granularity: 'hour' },
+    })).resolves.toEqual(statistics);
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves a session conflict returned by the Peer Host without replaying it', async () => {
     const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
       resp: 'host_invoke_result',

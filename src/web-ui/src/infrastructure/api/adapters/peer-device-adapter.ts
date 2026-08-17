@@ -351,6 +351,8 @@ export interface PeerDeviceTransportHooks {
   supportsIdempotentDialogSubmit?: boolean;
   /** Enables targeted rollback only when the target host owns the transaction. */
   supportsTargetedSessionRollback?: boolean;
+  /** Enables host-local usage statistics only when the target implements it. */
+  supportsTokenUsageStatistics?: boolean;
 }
 
 interface HostInvokeResultEnvelope {
@@ -479,7 +481,9 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
   setHostCapabilities(
     capabilities: Pick<
       PeerDeviceTransportHooks,
-      'supportsIdempotentDialogSubmit' | 'supportsTargetedSessionRollback'
+      | 'supportsIdempotentDialogSubmit'
+      | 'supportsTargetedSessionRollback'
+      | 'supportsTokenUsageStatistics'
     >,
   ): void {
     this.hooks = { ...this.hooks, ...capabilities };
@@ -548,6 +552,15 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     ) {
       throw new PeerProductCommandError(
         'The connected Peer host does not support targeted Session rollback',
+      );
+    }
+
+    if (
+      action === 'get_token_usage_statistics' &&
+      this.hooks.supportsTokenUsageStatistics !== true
+    ) {
+      throw new PeerProductCommandError(
+        'token_usage_statistics_unsupported: The connected Peer host does not support usage statistics',
       );
     }
 

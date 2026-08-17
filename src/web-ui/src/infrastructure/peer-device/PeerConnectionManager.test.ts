@@ -24,7 +24,11 @@ describe('PeerConnectionManager attach', () => {
     expect(connection.getState()).toMatchObject({
       deviceName: 'Studio',
       health: 'ready',
-      capabilities: { idempotentDialogSubmit: true, targetedSessionRollback: false },
+      capabilities: {
+        idempotentDialogSubmit: true,
+        targetedSessionRollback: false,
+        tokenUsageStatistics: true,
+      },
     });
     expect(manager.get('peer-1')).toBe(connection);
   });
@@ -356,7 +360,12 @@ function createRpc(options: { failCommands?: Set<string> } = {}) {
       return JSON.stringify({
         resp: 'host_invoke_result',
         ok: true,
-        value: { capabilities: { idempotent_dialog_submit: true } },
+        value: {
+          capabilities: {
+            idempotent_dialog_submit: true,
+            token_usage_statistics: true,
+          },
+        },
       });
     }
     return JSON.stringify({ resp: 'host_invoke_result', ok: true, value: null });

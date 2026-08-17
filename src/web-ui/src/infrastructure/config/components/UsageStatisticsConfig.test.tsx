@@ -8,8 +8,15 @@ import type { UsageStatistics } from '@/infrastructure/api';
 
 const getStatisticsMock = vi.hoisted(() => vi.fn());
 const translateMock = vi.hoisted(() => vi.fn((key: string) => key));
+const TokenUsageStatisticsUnavailableErrorMock = vi.hoisted(() => class extends Error {
+  constructor() {
+    super('Usage statistics are not supported by the active host');
+    this.name = 'TokenUsageStatisticsUnavailableError';
+  }
+});
 
 vi.mock('@/infrastructure/api', () => ({
+  TokenUsageStatisticsUnavailableError: TokenUsageStatisticsUnavailableErrorMock,
   tokenUsageStatisticsApi: {
     getStatistics: getStatisticsMock,
   },
@@ -25,7 +32,13 @@ vi.mock('@/infrastructure/i18n', () => ({
 
 vi.mock('@/component-library', () => ({
   ConfigPageLoading: ({ text }: { text?: string }) => <div data-testid="usage-loading">{text}</div>,
-  ConfigPageMessage: () => null,
+  ConfigPageMessage: ({
+    message,
+  }: {
+    message: { type: string; text: string } | null;
+  }) => message ? (
+    <div data-testid="usage-message" data-message-type={message.type}>{message.text}</div>
+  ) : null,
   ConfigPageRefreshButton: () => <button type="button" data-testid="usage-refresh" />,
   IconButton: ({
     children,
@@ -236,6 +249,16 @@ describe('UsageStatisticsConfig', () => {
 
     expect(container.querySelector('[data-bf-part="empty"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="summary"]')).toBeNull();
+  });
+
+  it('shows a distinct informational state for an older Peer host', async () => {
+    getStatisticsMock.mockRejectedValue(new TokenUsageStatisticsUnavailableErrorMock());
+
+    await render();
+
+    const message = container.querySelector('[data-testid="usage-message"]');
+    expect(message?.getAttribute('data-message-type')).toBe('info');
+    expect(message?.textContent).toBe('unsupported');
   });
 
   it('refetches when the time range selection changes', async () => {

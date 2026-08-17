@@ -9,11 +9,82 @@ use crate::infrastructure::PathManager;
 use crate::service::config::types::AIModelConfig;
 use anyhow::Result;
 use bitfun_services_core::token_usage::{UsageGranularity, UsageStatistics, UsageStatisticsFilter};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const TOKEN_USAGE_DIR: &str = "token_usage";
+
+/// Surface-neutral request for the settings usage dashboard.
+///
+/// Desktop Tauri, Server RPC, and Peer Host adapters deserialize the same
+/// request and delegate here so range and filter semantics stay identical.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenUsageStatisticsRequest {
+    /// One of "last24Hours" | "today" | "thisWeek" | "thisMonth" | "all" | "custom".
+    pub time_range: String,
+    /// One of "hour" | "day".
+    pub granularity: String,
+    #[serde(default)]
+    pub start: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub end: Option<DateTime<Utc>>,
+    /// IANA time zone used for local-calendar ranges and trend buckets.
+    #[serde(default)]
+    pub time_zone: Option<String>,
+    #[serde(default)]
+    pub include_subagent: bool,
+    #[serde(default)]
+    pub filter_kind: bitfun_services_core::token_usage::UsageStatisticsFilterKind,
+    #[serde(default)]
+    pub filter_query: Option<String>,
+}
+
+fn resolve_statistics_time_range(
+    request: &TokenUsageStatisticsRequest,
+) -> std::result::Result<TimeRange, String> {
+    match request.time_range.as_str() {
+        "today" => Ok(TimeRange::Today),
+        "thisWeek" => Ok(TimeRange::ThisWeek),
+        "thisMonth" => Ok(TimeRange::ThisMonth),
+        "all" => Ok(TimeRange::All),
+        "custom" => {
+            let start = request
+                .start
+                .ok_or_else(|| "custom time range requires a start timestamp".to_string())?;
+            let end = request.end.unwrap_or_else(Utc::now);
+            if end <= start {
+                return Err("custom time range end must be after start".to_string());
+            }
+            Ok(TimeRange::Custom { start, end })
+        }
+        _ => {
+            // Default and "last24Hours": the trailing 24 hours.
+            let end = Utc::now();
+            Ok(TimeRange::Custom {
+                start: end - Duration::hours(24),
+                end,
+            })
+        }
+    }
+}
+
+fn resolve_statistics_filter(
+    request: &TokenUsageStatisticsRequest,
+) -> Option<UsageStatisticsFilter> {
+    request
+        .filter_query
+        .as_deref()
+        .map(str::trim)
+        .filter(|query| !query.is_empty())
+        .map(|query| UsageStatisticsFilter {
+            kind: request.filter_kind,
+            query: query.to_string(),
+        })
+}
 
 pub struct TokenUsageService {
     inner: bitfun_services_core::token_usage::TokenUsageService,
@@ -157,6 +228,32 @@ impl TokenUsageService {
         )
     }
 
+    /// Resolve a surface request and aggregate this BitFun host's persisted
+    /// usage. The request is intentionally workspace-agnostic: Peer transport
+    /// selects the host, while SSH workspace routing does not change it.
+    pub async fn get_statistics_for_request(
+        &self,
+        request: TokenUsageStatisticsRequest,
+    ) -> Result<UsageStatistics> {
+        let time_range = resolve_statistics_time_range(&request).map_err(anyhow::Error::msg)?;
+        let granularity = match request.granularity.as_str() {
+            "day" => UsageGranularity::Day,
+            _ => UsageGranularity::Hour,
+        };
+        let filter = resolve_statistics_filter(&request);
+        let query = TokenUsageQuery {
+            model_id: None,
+            session_id: None,
+            time_range,
+            time_zone: request.time_zone,
+            limit: None,
+            offset: None,
+            include_subagent: request.include_subagent,
+        };
+
+        self.get_statistics(query, granularity, filter).await
+    }
+
     pub async fn clear_model_stats(&self, model_id: &str) -> Result<()> {
         self.inner
             .clear_model_stats(model_id)
@@ -189,4 +286,57 @@ pub fn set_global_token_usage_service(service: Arc<TokenUsageService>) {
 /// Access the process-wide token usage service, if installed.
 pub fn get_global_token_usage_service() -> Option<Arc<TokenUsageService>> {
     GLOBAL_TOKEN_USAGE_SERVICE.get().cloned()
+}
+
+#[cfg(test)]
+mod request_tests {
+    use super::*;
+    use bitfun_services_core::token_usage::UsageStatisticsFilterKind;
+
+    #[test]
+    fn legacy_request_without_filter_fields_defaults_to_unfiltered() {
+        let request: TokenUsageStatisticsRequest = serde_json::from_value(serde_json::json!({
+            "timeRange": "today",
+            "granularity": "hour"
+        }))
+        .expect("request");
+
+        assert_eq!(request.filter_kind, UsageStatisticsFilterKind::All);
+        assert_eq!(resolve_statistics_filter(&request), None);
+    }
+
+    #[test]
+    fn filter_fields_deserialize_and_trim_query() {
+        let request: TokenUsageStatisticsRequest = serde_json::from_value(serde_json::json!({
+            "timeRange": "today",
+            "granularity": "hour",
+            "filterKind": "provider",
+            "filterQuery": "  DeepSeek  "
+        }))
+        .expect("request");
+
+        assert_eq!(
+            resolve_statistics_filter(&request),
+            Some(UsageStatisticsFilter {
+                kind: UsageStatisticsFilterKind::Provider,
+                query: "DeepSeek".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn custom_range_rejects_non_increasing_bounds() {
+        let request: TokenUsageStatisticsRequest = serde_json::from_value(serde_json::json!({
+            "timeRange": "custom",
+            "granularity": "day",
+            "start": "2026-08-17T12:00:00Z",
+            "end": "2026-08-17T12:00:00Z"
+        }))
+        .expect("request");
+
+        assert_eq!(
+            resolve_statistics_time_range(&request).unwrap_err(),
+            "custom time range end must be after start"
+        );
+    }
 }
