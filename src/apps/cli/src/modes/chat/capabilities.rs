@@ -52,10 +52,24 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let skills = tokio::task::block_in_place(|| {
-            rt_handle.block_on(self.agent.list_skills(self.agent_type.clone(), false))
+            rt_handle.block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Skill management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let registry =
+                    bitfun_core::agentic::tools::implementations::skills::get_skill_registry();
+                let skills = registry
+                    .get_user_invocable_skills_for_workspace(
+                        Some(&workspace),
+                        Some(&self.agent_type),
+                    )
+                    .await;
+                Ok::<_, anyhow::Error>(skills.into_iter().map(skill_summary).collect::<Vec<_>>())
+            })
         });
         let skills = match skills {
-            Ok(response) => response.skills,
+            Ok(skills) => skills,
             Err(error) => {
                 chat_state.add_system_message(format!("Could not load skills: {error}"));
                 return;
@@ -90,10 +104,26 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let skills = tokio::task::block_in_place(|| {
-            rt_handle.block_on(self.agent.list_skills(self.agent_type.clone(), true))
+            rt_handle.block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Skill management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let registry =
+                    bitfun_core::agentic::tools::implementations::skills::get_skill_registry();
+                let skills = registry
+                    .get_mode_skill_infos_for_workspace(Some(&workspace), &self.agent_type)
+                    .await;
+                Ok::<_, anyhow::Error>(
+                    skills
+                        .into_iter()
+                        .map(mode_skill_summary)
+                        .collect::<Vec<_>>(),
+                )
+            })
         });
         let skills = match skills {
-            Ok(response) => response.skills,
+            Ok(skills) => skills,
             Err(error) => {
                 chat_state.add_system_message(format!("Could not load skills: {error}"));
                 return;
@@ -155,13 +185,37 @@ impl ChatMode {
         let skill = selected.clone();
 
         let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(self.agent.set_skill_enabled(
-                mode_id,
-                skill.key,
-                enabled,
-                skill.default_enabled,
-                skill.level,
-            ))
+            rt_handle.block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Skill management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                match skill.level.as_str() {
+                    "user" => {
+                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_user_mode_skill_state(
+                            &mode_id, &skill.key, enabled, skill.default_enabled,
+                        )
+                        .await
+                        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                    }
+                    "project" => {
+                        let mut document = bitfun_core::agentic::tools::implementations::skills::mode_overrides::load_project_mode_skills_document_local(&workspace)
+                            .await
+                            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_mode_skill_disabled_in_document(
+                            &mut document, &mode_id, &skill.key, !enabled,
+                        )
+                        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::save_project_mode_skills_document_local(
+                            &workspace, &document,
+                        )
+                        .await
+                        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                    }
+                    level => anyhow::bail!("Unsupported skill level '{level}'"),
+                }
+                Ok::<(), anyhow::Error>(())
+            })
         });
 
         match result {
@@ -212,10 +266,28 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let subagents = tokio::task::block_in_place(|| {
-            rt_handle.block_on(self.agent.list_subagents(self.agent_type.clone(), false))
+            rt_handle.block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Subagent management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let values = bitfun_core::agentic::agents::get_agent_registry()
+                    .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
+                        parent_agent_type: Some(&self.agent_type),
+                        workspace_root: Some(&workspace),
+                        list_scope: bitfun_core::agentic::agents::SubagentListScope::TaskVisible,
+                        include_disabled: false,
+                        external_sources_supported: true,
+                    })
+                    .await;
+                Ok::<_, anyhow::Error>((
+                    values.into_iter().map(subagent_summary).collect::<Vec<_>>(),
+                    false,
+                ))
+            })
         });
         let subagents = match subagents {
-            Ok(response) => response.subagents,
+            Ok((subagents, _has_external)) => subagents,
             Err(error) => {
                 chat_state.add_system_message(format!("Could not load subagents: {error}"));
                 return;
@@ -250,18 +322,46 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         let subagents = tokio::task::block_in_place(|| {
-            rt_handle.block_on(self.agent.list_subagents(self.agent_type.clone(), true))
+            rt_handle.block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Subagent management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let values = bitfun_core::agentic::agents::get_agent_registry()
+                    .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
+                        parent_agent_type: Some(&self.agent_type),
+                        workspace_root: Some(&workspace),
+                        list_scope:
+                            bitfun_core::agentic::agents::SubagentListScope::RegistryManagement,
+                        include_disabled: true,
+                        external_sources_supported: true,
+                    })
+                    .await;
+                let has_external = values.iter().any(|info| {
+                    info.subagent_source
+                        == Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                });
+                Ok::<_, anyhow::Error>((
+                    values
+                        .into_iter()
+                        .filter(|info| {
+                            info.subagent_source
+                                != Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                        })
+                        .map(subagent_summary)
+                        .collect::<Vec<_>>(),
+                    has_external,
+                ))
+            })
         });
-        let response = match subagents {
-            Ok(response) => response,
+        let (subagents, has_external_subagents) = match subagents {
+            Ok((subagents, has_external)) => (subagents, has_external),
             Err(error) => {
                 chat_state.add_system_message(format!("Could not load subagents: {error}"));
                 return;
             }
         };
-        let has_external_subagents = response.has_external;
-        let subagent_items: Vec<SubagentItem> = response
-            .subagents
+        let subagent_items: Vec<SubagentItem> = subagents
             .into_iter()
             .map(Self::subagent_item_from_summary)
             .collect();
@@ -324,10 +424,17 @@ impl ChatMode {
         let subagent = selected.clone();
 
         let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(
-                self.agent
-                    .set_subagent_enabled(mode_id, subagent.id, enabled),
-            )
+            rt_handle.block_on(async {
+                if self.agent.is_remote_workspace() {
+                    anyhow::bail!("Subagent management is unavailable for a Remote workspace")
+                }
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                bitfun_core::agentic::agents::get_agent_registry()
+                    .update_subagent_override(&mode_id, &subagent.id, enabled, Some(&workspace))
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                Ok::<(), anyhow::Error>(())
+            })
         });
 
         match result {
@@ -353,5 +460,64 @@ impl ChatMode {
             source: info.source,
             enabled: info.enabled,
         }
+    }
+}
+
+fn skill_summary(
+    info: bitfun_core::agentic::tools::implementations::skills::SkillInfo,
+) -> SkillSummary {
+    SkillSummary {
+        key: info.key,
+        name: info.name,
+        description: info.description,
+        level: info.level.as_str().to_string(),
+        source_slot: Some(info.source_slot),
+        source_label: Some(info.source_label),
+        enabled: true,
+        selected_for_runtime: true,
+        default_enabled: true,
+        is_shadowed: info.is_shadowed,
+        shadowed_by_key: info.shadowed_by_key,
+        argument_hint: info.argument_hint,
+    }
+}
+
+fn mode_skill_summary(
+    info: bitfun_core::agentic::tools::implementations::skills::ModeSkillInfo,
+) -> SkillSummary {
+    let skill = info.skill;
+    SkillSummary {
+        key: skill.key,
+        name: skill.name,
+        description: skill.description,
+        level: skill.level.as_str().to_string(),
+        source_slot: Some(skill.source_slot),
+        source_label: Some(skill.source_label),
+        enabled: info.effective_enabled,
+        selected_for_runtime: info.selected_for_runtime,
+        default_enabled: info.default_enabled,
+        is_shadowed: skill.is_shadowed,
+        shadowed_by_key: skill.shadowed_by_key,
+        argument_hint: skill.argument_hint,
+    }
+}
+
+fn subagent_summary(info: bitfun_core::agentic::agents::AgentInfo) -> SubagentSummary {
+    let is_external =
+        info.subagent_source == Some(bitfun_core::agentic::agents::SubAgentSource::External);
+    SubagentSummary {
+        key: info.key,
+        id: info.id,
+        name: info.name,
+        description: info.description,
+        source: format!(
+            "{:?}",
+            info.subagent_source
+                .unwrap_or(bitfun_core::agentic::agents::SubAgentSource::Builtin)
+        )
+        .to_ascii_lowercase(),
+        enabled: info.effective_enabled,
+        is_external,
+        supports_follow_up: info.supports_follow_up,
     }
 }

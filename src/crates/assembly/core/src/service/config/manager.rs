@@ -278,7 +278,6 @@ impl ConfigManager {
 
     /// Creates the first config file using the already initialized defaults.
     async fn create_default_config(&mut self) -> BitFunResult<()> {
-        Self::add_default_func_agent_models_config(&mut self.config.ai.func_agent_models);
         self.config.version = env!("CARGO_PKG_VERSION").to_string();
         self.save_config().await?;
         debug!("Created default config file");
@@ -338,8 +337,6 @@ impl ConfigManager {
         match serde_json::from_value::<GlobalConfig>(config_value.clone()) {
             Ok(mut config) => {
                 load_diagnostics.extend(normalize_typed_config(&mut config));
-                Self::add_default_func_agent_models_config(&mut config.ai.func_agent_models);
-
                 load_diagnostics.extend(isolate_invalid_ai_models(&mut config).await?);
                 load_diagnostics.extend(reconcile_model_references(&mut config).diagnostics);
 
@@ -425,7 +422,6 @@ impl ConfigManager {
         })?;
 
         let mut load_diagnostics = normalize_typed_config(&mut config);
-        Self::add_default_func_agent_models_config(&mut config.ai.func_agent_models);
         load_diagnostics.extend(isolate_invalid_ai_models(&mut config).await?);
         load_diagnostics.extend(reconcile_model_references(&mut config).diagnostics);
 
@@ -455,7 +451,6 @@ impl ConfigManager {
     ) -> BitFunResult<()> {
         let backup_path = self.backup_raw_config(raw_content, reason).await?;
         self.config = self.providers.get_default_config();
-        Self::add_default_func_agent_models_config(&mut self.config.ai.func_agent_models);
         self.config.version = env!("CARGO_PKG_VERSION").to_string();
         self.config.schema_version = CURRENT_CONFIG_SCHEMA_VERSION;
         self.load_diagnostics = vec![ConfigDiagnostic {
@@ -474,23 +469,6 @@ impl ConfigManager {
             backup_path.display()
         );
         Ok(())
-    }
-
-    /// Adds default configuration for functional agents (`func_agent_models`).
-    fn add_default_func_agent_models_config(
-        func_agent_models: &mut std::collections::HashMap<String, String>,
-    ) {
-        let func_agents_using_fast = vec![
-            "compression",
-            "startchat-func-agent",
-            "session-title-func-agent",
-            "git-func-agent",
-        ];
-        for key in func_agents_using_fast {
-            if !func_agent_models.contains_key(key) {
-                func_agent_models.insert(key.to_string(), "fast".to_string());
-            }
-        }
     }
 
     /// Saves the configuration file.
@@ -1198,6 +1176,24 @@ mod tests {
         assert!(value.get("memories").is_none());
         assert!(value["ai"].get("agent_models").is_none());
         assert!(value["ai"].get("allow_tool_json_repair").is_none());
+        assert!(value["ai"].get("task_models").is_none());
+    }
+
+    #[test]
+    fn persistence_keeps_only_non_default_task_model_fields() {
+        let mut config = GlobalConfig::default();
+        config.ai.task_models.session_title =
+            crate::service::config::types::TaskModelSelection::Inherit;
+
+        let value =
+            config_value_for_persistence(&config).expect("config should serialize for persistence");
+
+        assert_eq!(
+            value["ai"].get("task_models"),
+            Some(&serde_json::json!({
+                "session_title": { "kind": "inherit" }
+            }))
+        );
     }
 
     #[test]

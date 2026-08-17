@@ -150,7 +150,7 @@ impl ConfigService {
             || path.starts_with("ai.models")
             || path.starts_with("ai.default_models")
             || path.starts_with("ai.agent_model_defaults")
-            || path.starts_with("ai.func_agent_models")
+            || path.starts_with("ai.task_models")
     }
 
     /// Resets configuration.
@@ -499,11 +499,10 @@ impl ConfigService {
     }
 
     /// Bring `ai.default_models`, `ai.agent_model_defaults`, and
-    /// `ai.func_agent_models` back into a consistent state with `ai.models`.
+    /// `ai.task_models` back into a consistent state with `ai.models`.
     ///
     /// This is the single integrity guard the rest of the system relies on:
-    /// - any func-agent mapping pointing at a model that no longer exists or
-    ///   that became disabled is dropped;
+    /// - invalid task-model selectors are reset to their defaults;
     /// - `default_models.primary` / `.fast` are repointed to the first enabled
     ///   model when their current target is missing or disabled (or cleared
     ///   when no enabled model exists at all);
@@ -526,7 +525,7 @@ impl ConfigService {
         let report = ReconcileModelsReport {
             invalidated_model_ids: reconciliation.invalidated_model_ids,
             default_models_changed: reconciliation.default_models_changed,
-            func_agent_models_changed: reconciliation.func_agent_models_changed,
+            task_models_changed: reconciliation.task_models_changed,
             agent_model_defaults_changed: reconciliation.agent_model_defaults_changed,
         };
 
@@ -534,17 +533,17 @@ impl ConfigService {
             log::debug!("Reconcile ({caller}): no changes");
         } else {
             info!(
-                "Reconcile ({caller}): invalidated={:?}, default_changed={}, func_agent_changed={}, agent_defaults_changed={}",
+                "Reconcile ({caller}): invalidated={:?}, default_changed={}, task_models_changed={}, agent_defaults_changed={}",
                 report.invalidated_model_ids,
                 report.default_models_changed,
-                report.func_agent_models_changed,
+                report.task_models_changed,
                 report.agent_model_defaults_changed
             );
             super::global::GlobalConfigManager::broadcast_update(
                 super::global::ConfigUpdateEvent::ModelsReconciled {
                     invalidated_model_ids: report.invalidated_model_ids.clone(),
                     default_models_changed: report.default_models_changed,
-                    func_agent_models_changed: report.func_agent_models_changed,
+                    task_models_changed: report.task_models_changed,
                     agent_model_defaults_changed: report.agent_model_defaults_changed,
                 },
             )
@@ -578,7 +577,7 @@ impl bitfun_runtime_ports::ConfigReadPort for ConfigService {
 pub struct ReconcileModelsReport {
     pub invalidated_model_ids: Vec<String>,
     pub default_models_changed: bool,
-    pub func_agent_models_changed: bool,
+    pub task_models_changed: bool,
     pub agent_model_defaults_changed: bool,
 }
 
@@ -586,7 +585,7 @@ impl ReconcileModelsReport {
     pub fn is_noop(&self) -> bool {
         self.invalidated_model_ids.is_empty()
             && !self.default_models_changed
-            && !self.func_agent_models_changed
+            && !self.task_models_changed
             && !self.agent_model_defaults_changed
     }
 }
@@ -868,11 +867,14 @@ mod tests {
             after.ai.default_models.speech_recognition.as_deref(),
             Some("reused-model")
         );
-        assert!(after
-            .ai
-            .func_agent_models
-            .values()
-            .all(|model_id| { !matches!(model_id.as_str(), "reused-model") }));
+        assert_ne!(
+            after.ai.task_models.session_title.fixed_model_id(),
+            Some("reused-model")
+        );
+        assert_ne!(
+            after.ai.task_models.git_commit.fixed_model_id(),
+            Some("reused-model")
+        );
     }
 
     #[tokio::test]

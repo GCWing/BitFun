@@ -456,6 +456,8 @@
     "restoreMain": "Restore Main Window",
     "inUseTitle": "Session open elsewhere",
     "inUseMessage": "This session is open in another BitFun instance. Close it there, then retry.",
+    "surfaceSwitchDroppedTitle": "Message not sent",
+    "surfaceSwitchDropped": "The device switched before this message was sent, and its queue is full. Send it again.",
     "retry": "Retry"
   },
   "scroll": {
@@ -482,6 +484,7 @@
     "clickToCollapse": "Click to collapse",
     "fillToInput": "Fill to input",
     "cannotRollback": "Cannot rollback",
+    "rollbackDisabledBusy": "Wait until the session is idle before rolling back.",
     "rollbackDisabledRemote": "Remote workspaces do not support complete rollback because remote file snapshots are not recorded. No files or messages will be changed.",
     "rollbackTo": "Rollback to before turn {{index}} (delete this and following turns)",
     "rollbackDialogTitle": "Rollback to before turn {{index}}?",
@@ -494,6 +497,7 @@
     "cancelEdit": "Cancel",
     "editPlaceholder": "Edit your message...",
     "cannotEdit": "Cannot edit this message",
+    "editDisabledBusy": "Wait until the session is idle before editing and rerunning.",
     "editDisabledImages": "Image messages cannot be edited yet",
     "editDisabledRemote": "Editing and rerunning requires complete rollback, which is unavailable because remote file snapshots are not recorded.",
     "editDisabledLocalCommand": "Local command messages cannot be edited",
@@ -532,6 +536,8 @@
     "sendShortcut": "Send (⏎)",
     "stop": "Stop",
     "stopGeneration": "Stop Generation (Esc)",
+    "continueInterrupted": "Continue interrupted work",
+    "continueInterruptedFailed": "Could not continue the interrupted work. Please try again.",
     "processingCapsule": "Processing",
     "cancelShortcut": "Cancel",
     "clear": "Clear",
@@ -761,9 +767,14 @@
       "noSession": "Open or start a session before changing its permission mode.",
       "turnScope": "Next message only",
       "currentTurnOverride": "Permissions: {{mode}} (next message only)",
+      "activeTurnScope": "This turn",
+      "currentActiveTurnOverride": "Permissions: {{mode}} (this turn only)",
       "nextTurnOnly": "Use {{mode}} for the next message only",
       "nextTurnOnlyShort": "Once",
+      "activeTurnOnly": "Use {{mode}} for the rest of this turn",
+      "activeTurnOnlyShort": "This turn",
       "fullAccessWarningMessageNextTurn": "Full access allows tools by default without asking each time. This applies to the next message only; project and enforced rules still apply.",
+      "fullAccessWarningMessageActiveTurn": "Full access allows tools by default without asking each time. This applies to later model rounds in the current turn; project and enforced rules still apply.",
       "openDefaultSettings": "Open permission settings"
     },
     "addModeTooltip": "Add Plan or Debug",
@@ -921,6 +932,8 @@
   "fileMention": {
     "searchResults": "Search Results",
     "loading": "Loading...",
+    "browseUnavailable": "Workspace files are unavailable. Check the connection and try again.",
+    "searchUnavailable": "Workspace search is unavailable. Check the connection and try again.",
     "noMatchingFiles": "No matching files found",
     "emptyDirectory": "Empty directory",
     "rootDirectory": "Root",
@@ -1681,6 +1694,20 @@
       "commandInterrupted": "Command interrupted",
       "executionFailed": "Command execution failed"
     },
+    "runCode": {
+      "title": "Run Code",
+      "programLabel": "Program",
+      "outputLabel": "Output",
+      "writing": "Writing the program...",
+      "running": "Running the program...",
+      "completed": "Program finished",
+      "failed": "Program failed",
+      "cancelled": "Program cancelled",
+      "rejected": "Program rejected",
+      "copyCode": "Copy code",
+      "codeCopied": "Code copied",
+      "copyCodeFailed": "Failed to copy code"
+    },
     "approval": {
       "waiting": "Waiting for confirmation",
       "confirm": "Allow",
@@ -2424,6 +2451,9 @@
     "fastModel": "Fast Model",
     "fastMode": "Fast mode",
     "fastModeDescription": "1.5x speed with higher credit usage",
+    "acpMode": "Mode",
+    "acpModeLocked": "This conversation has already started, so its mode is fixed.",
+    "acpModeFailed": "Failed to switch mode",
     "switchFailed": "Failed to switch model",
     "modelNotConfigured": "Not Configured",
     "contextUsage": {

@@ -945,9 +945,28 @@
   }
 
   .m-editor-render-only-block,
-  .m-editor-raw-html-block {
+  .m-editor-raw-html-block,
+  .m-editor-frontmatter {
     margin: $size-gap-3 0;
+    overflow: hidden;
+    border: 1px solid var(--bf-appearance-token-border-base);
+    border-radius: $size-radius-base;
+    background: var(--bf-appearance-token-element-bg-soft);
     color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  .m-editor-frontmatter__header {
+    display: flex;
+    align-items: center;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    user-select: none;
+  }
+
+  .m-editor-frontmatter__label {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: $font-weight-semibold;
   }
 
   .m-editor-raw-html-inline {
@@ -980,12 +999,14 @@
   }
 
   .m-editor-render-only-block__body,
-  .m-editor-raw-html-block__body {
+  .m-editor-raw-html-block__body,
+  .m-editor-frontmatter__body {
     min-width: 0;
   }
 
   .m-editor-render-only-block__pane,
-  .m-editor-raw-html-block__pane {
+  .m-editor-raw-html-block__pane,
+  .m-editor-frontmatter__pane {
     min-width: 0;
     min-height: 0;
   }
@@ -993,22 +1014,27 @@
   .m-editor-render-only-block__pane--editor,
   .m-editor-render-only-block__pane--preview,
   .m-editor-raw-html-block__pane--editor,
-  .m-editor-raw-html-block__pane--preview {
+  .m-editor-raw-html-block__pane--preview,
+  .m-editor-frontmatter__pane--editor,
+  .m-editor-frontmatter__pane--preview {
     padding: 0;
   }
 
   .m-editor-render-only-block[data-editing='true'] .m-editor-render-only-block__pane--preview,
-  .m-editor-raw-html-block[data-editing='true'] .m-editor-raw-html-block__pane--preview {
+  .m-editor-raw-html-block[data-editing='true'] .m-editor-raw-html-block__pane--preview,
+  .m-editor-frontmatter[data-editing='true'] .m-editor-frontmatter__pane--preview {
     display: none;
   }
 
   .m-editor-render-only-block[data-editing='false'] .m-editor-render-only-block__pane--editor,
-  .m-editor-raw-html-block[data-editing='false'] .m-editor-raw-html-block__pane--editor {
+  .m-editor-raw-html-block[data-editing='false'] .m-editor-raw-html-block__pane--editor,
+  .m-editor-frontmatter[data-editing='false'] .m-editor-frontmatter__pane--editor {
     display: none;
   }
 
   .m-editor-render-only-block__textarea,
-  .m-editor-raw-html-block__textarea {
+  .m-editor-raw-html-block__textarea,
+  .m-editor-frontmatter__textarea {
     margin: 0;
     font-family: var(--bf-appearance-token-font-family-mono);
     font-size: var(--bf-appearance-token-font-size-sm);
@@ -1035,12 +1061,53 @@
   }
 
   .m-editor-render-only-block__preview,
-  .m-editor-raw-html-block__preview {
+  .m-editor-raw-html-block__preview,
+  .m-editor-frontmatter__preview {
     min-height: 180px;
     cursor: text;
     user-select: text;
     -webkit-user-select: text;
     -webkit-user-drag: none;
+  }
+
+  .m-editor-frontmatter__textarea {
+    min-height: 0;
+    box-sizing: border-box;
+    resize: none;
+    overflow-y: hidden;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+
+    &:focus {
+      border-color: transparent;
+      box-shadow: inset 0 0 0 1px var(--bf-appearance-token-border-base);
+    }
+  }
+
+  .m-editor-frontmatter__preview {
+    min-height: 0;
+  }
+
+  .m-editor-frontmatter__preview > .m-editor-frontmatter__source {
+    margin: 0;
+    padding: $size-gap-3;
+    overflow-x: auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-family: var(--bf-appearance-token-font-family-mono);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    line-height: 1.55;
+    white-space: pre;
+
+    &:hover {
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
   }
 
   .m-editor-render-only-block__preview .m-editor-render-only-block__markdown,
@@ -1069,7 +1136,8 @@
   }
 
   .m-editor-render-only-block__source-fallback,
-  .m-editor-raw-html-block__source-fallback {
+  .m-editor-raw-html-block__source-fallback,
+  .m-editor-frontmatter__source-fallback {
     display: none;
     margin: 0;
     font-family: var(--bf-appearance-token-font-family-mono);

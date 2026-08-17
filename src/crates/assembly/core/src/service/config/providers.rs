@@ -80,15 +80,17 @@ fn ai_validation_error_location(message: &str) -> (String, String) {
             "AI_STREAM_TTFT_TIMEOUT_INVALID".to_string(),
         );
     }
-    if message.starts_with("Function Agent '") {
-        if let Some((_, suffix)) = message.split_once("Function Agent '") {
-            if let Some((agent, _)) = suffix.split_once('\'') {
-                return (
-                    format!("ai.func_agent_models.{agent}"),
-                    "FUNC_AGENT_MODEL_INVALID".to_string(),
-                );
-            }
-        }
+    if message.contains("session-title task model") {
+        return (
+            "ai.task_models.session_title".to_string(),
+            "TASK_MODEL_INVALID".to_string(),
+        );
+    }
+    if message.contains("Git commit task model") {
+        return (
+            "ai.task_models.git_commit".to_string(),
+            "TASK_MODEL_INVALID".to_string(),
+        );
     }
 
     ("ai".to_string(), "VALIDATION_ERROR".to_string())
@@ -279,19 +281,36 @@ impl ConfigProvider for AIConfigProvider {
                 }
             }
 
-            for (func_agent_name, model_id) in &ai_config.func_agent_models {
-                if !ai_config
-                    .models
-                    .iter()
-                    .any(|m| m.enabled && m.id == *model_id)
-                    && model_id != "primary"
-                    && model_id != "fast"
-                {
+            let valid_task_model = |model_id: &str| {
+                matches!(model_id, "primary" | "fast")
+                    || ai_config
+                        .models
+                        .iter()
+                        .any(|model| model.enabled && model.id == model_id)
+            };
+            if let Some(model_id) = ai_config.task_models.session_title.fixed_model_id() {
+                if !valid_task_model(model_id) {
                     return Err(BitFunError::validation(format!(
-                        "Function Agent '{}' configured model '{}' does not exist",
-                        func_agent_name, model_id
+                        "The session-title task model '{}' does not exist",
+                        model_id
                     )));
                 }
+            }
+            match &ai_config.task_models.git_commit {
+                crate::service::config::types::TaskModelSelection::Inherit => {
+                    return Err(BitFunError::validation(
+                        "The Git commit task model cannot inherit a session model".to_string(),
+                    ));
+                }
+                crate::service::config::types::TaskModelSelection::Fixed { model_id }
+                    if !valid_task_model(model_id) =>
+                {
+                    return Err(BitFunError::validation(format!(
+                        "The Git commit task model '{}' does not exist",
+                        model_id
+                    )));
+                }
+                crate::service::config::types::TaskModelSelection::Fixed { .. } => {}
             }
         } else {
             return Err(BitFunError::validation(

@@ -216,19 +216,6 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     });
   }
 
-  enterCodeEntry(): void {
-    if (this.settingsController.hasCloudAccountSession() && this.remotePageState.accountUserId.trim().length > 0) {
-      this.appShellState.setConnectSheetVisible(true);
-      return;
-    }
-    if (RemoteUiState.canUseRemote((this.remotePageState.connectionState as ConnectionState))) {
-      this.appShellState.setConnectSheetVisible(false);
-      this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
-      return;
-    }
-    this.appShellState.setConnectSheetVisible(true);
-  }
-
   async switchWideConversationSource(source: ConversationSource): Promise<void> {
     if (AppRouteContract.conversationSource(this.appShellViewModel.currentRoute()) === source) {
       return;
@@ -329,7 +316,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   openAddConnectionFromSettings(): void {
     this.appShellState.setSettingsVisible(false);
     setTimeout(() => {
-      this.appShellState.setConnectSheetVisible(true, CONNECT_INTENT_SCAN);
+      this.openConnectSheet(CONNECT_INTENT_SCAN);
     }, 220);
   }
 

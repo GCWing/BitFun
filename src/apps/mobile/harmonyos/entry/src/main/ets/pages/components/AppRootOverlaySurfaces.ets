@@ -122,6 +122,7 @@ export struct AppSettingsSurface {
         cloudLogin: this.actions.onSettings.cloudLogin,
         cloudLogout: this.actions.onSettings.cloudLogout,
         cloudListDevices: this.actions.onSettings.cloudListDevices,
+        cloudSelectDevice: this.actions.onSettings.cloudSelectDevice,
         getPermissionMode: this.actions.onSettings.getPermissionMode,
         setPermissionMode: this.actions.onSettings.setPermissionMode,
         openAccountOnAppear: this.shellState.settingsMode === 'account',

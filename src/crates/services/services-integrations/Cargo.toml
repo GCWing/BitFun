@@ -49,6 +49,7 @@ notify = { workspace = true, optional = true }
 oxc = { workspace = true, optional = true }
 qrcode = { workspace = true, features = ["image", "svg"], optional = true }
 rand = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["http2"], optional = true }
 semver = { workspace = true, optional = true }
 rmcp = { workspace = true, optional = true }
@@ -121,7 +122,13 @@ canvas-runtime = [
     "uuid",
 ]
 debug-log = ["anyhow", "chrono", "reqwest", "reqwest/json", "reqwest/rustls", "tokio/rt", "uuid"]
-deep-research = ["bitfun-agent-runtime", "tokio/fs"]
+deep-research = [
+    "anyhow",
+    "async-trait",
+    "dep:bitfun-agent-runtime",
+    "bitfun-agent-runtime/deep-research",
+    "bitfun-runtime-ports/workspace-ports",
+]
 git = [
     "async-trait",
     "bitfun-runtime-ports/git-port",
@@ -226,7 +233,8 @@ plugin-source = [
     "windows",
 ]
 hook-import = [
-    "bitfun-agent-runtime",
+    "dep:bitfun-agent-runtime",
+    "bitfun-agent-runtime/native-hook-settings",
     "bitfun-product-domains/external-sources",
     "bitfun-services-core/local-storage",
     "dep:bitfun-product-domains",
@@ -292,6 +300,7 @@ remote-ssh = [
     "bitfun-runtime-ports/remote-exec-port",
     "bitfun-runtime-ports/remote-workspace-ports",
     "bitfun-runtime-ports/workspace-ports",
+    "regex",
     "sha2",
     "terminal-core",
     "thiserror",

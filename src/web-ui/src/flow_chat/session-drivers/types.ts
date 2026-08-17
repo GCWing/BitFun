@@ -18,6 +18,7 @@ import type { Session } from '../types/flow-chat';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import type { SessionDriverId } from './resolve';
+import type { SurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 
 export type { SessionDriverId } from './resolve';
 
@@ -44,6 +45,8 @@ export interface SendMessageOptions {
   onSessionConflictRetryStart?: () => void;
   onSessionConflictRetrySuccess?: () => void;
   fromSessionConflictRetry?: boolean;
+  /** Identifies the edit-rerun mutation lease allowed to submit this Turn. */
+  sessionMutationLeaseId?: string;
 }
 
 /** The message content of one submission, before flavor routing. */
@@ -69,6 +72,8 @@ export type SubmissionPlan =
   | { kind: 'reject'; reason: string };
 
 export interface StartTurnInput {
+  /** Device activation that owns every projection write in this submission. */
+  surfaceScope: SurfaceScope;
   sessionId: string;
   message: string;
   displayMessage?: string;
@@ -88,6 +93,19 @@ export interface StartTurnInput {
  */
 export interface TurnTracker {
   createdLocalTurnId: string | null;
+  /**
+   * Set once a host has accepted the turn. Until then the turn exists only as a
+   * local projection, so a submission interrupted by a device-surface switch
+   * must recover the message rather than assume it is running somewhere.
+   */
+  hostAcceptedTurn: boolean;
+  /**
+   * Set immediately before `start_dialog_turn` / ACP start is invoked.
+   * The host may accept the turn before the client sees the ACK — a surface
+   * switch that aborts the invoke must not re-queue a message the host is
+   * already executing.
+   */
+  hostSubmitStarted?: boolean;
 }
 
 /**
@@ -134,6 +152,8 @@ export type PermissionReplyKindLike = 'once' | 'always' | 'reject';
  * driver takes over: workspace identity, agent type, and the initial title.
  */
 export interface SessionCreationSeed {
+  /** Device activation that owns the created session projection. */
+  surfaceScope: SurfaceScope;
   config: SessionConfig;
   agentType: string;
   sessionName: string;

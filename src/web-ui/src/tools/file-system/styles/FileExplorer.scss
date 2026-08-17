@@ -132,6 +132,10 @@ $_indent-width: 8px;
 
 }
 
+.bitfun-file-explorer__tree--virtual > div {
+  scrollbar-gutter: stable;
+}
+
 .bitfun-file-explorer__node {
   user-select: none;
 }

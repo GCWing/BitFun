@@ -10,7 +10,7 @@ name = "bitfun_sdk_host"
 
 [dependencies]
 async-trait = { workspace = true }
-bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
+bitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api"] }
@@ -20,7 +20,12 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
+ts-rs = { workspace = true, optional = true }
 uuid = { workspace = true }
+
+[features]
+default = []
+ts = ["dep:ts-rs", "bitfun-core-types/ts"]
 
 [dev-dependencies]
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission"] }

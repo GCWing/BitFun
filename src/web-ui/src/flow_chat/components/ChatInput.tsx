@@ -7,7 +7,7 @@ import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, u
 import { createPortal } from 'react-dom';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
+import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star, Play } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import {
@@ -23,7 +23,7 @@ import {
   useSessionStateMachine,
   useSessionStateMachineActions,
 } from '../hooks/useSessionStateMachine';
-import { SessionExecutionEvent } from '../state-machine/types';
+import { SessionExecutionEvent, SessionExecutionState } from '../state-machine/types';
 import { ModelSelector } from './ModelSelector';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { useAcpPlan } from '../hooks/useAcpPlan';
@@ -73,6 +73,7 @@ import {
   sessionComposerStore,
   type PendingLargePasteMap,
 } from '../store/sessionComposerStore';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import {
   failedSubmissionRecoveryTarget,
   shouldRecordContextMutation,
@@ -93,6 +94,7 @@ import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
+import { interruptedTurnRecoveryGate } from '@/flow_chat/services/interruptedTurnRecoveryGate';
 import {
   getDeepReviewLaunchErrorMessage,
 } from '../services/DeepReviewService';
@@ -109,6 +111,7 @@ import {
 } from '../utils/sessionWorktree';
 import { chatInputSessionSubscriptionKey } from '../utils/chatInputSessionSubscription';
 import { isRemoteWorkspaceSession, sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
+import { findWorkspaceForSession } from '../utils/workspaceScope';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { Tooltip, IconButton, confirmDanger, confirmWarning } from '@/component-library';
 import { PendingQueuePanel } from './PendingQueuePanel';
@@ -197,6 +200,8 @@ import type {
   SessionExecutionProfile,
   SessionPermissionMode,
 } from '@/infrastructure/api/service-api/AgentAPI';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import { selectInterruptedTurnRecovery } from '../utils/interruptedTurnRecovery';
 import {
   chatInputPermissionMode,
   permissionModeFromConfig,
@@ -437,6 +442,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isSceneActive = true,
   registration,
 }) => {
+  const deviceSurfaceScope = getActiveSurfaceScope();
   const { t } = useTranslation('flow-chat');
   const { t: tWorktrees } = useI18n('worktrees');
   const canLaunchReview = isTauriRuntime();
@@ -486,10 +492,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // other open session.
   const [sessionPermissionMode, setSessionPermissionMode] =
     useState<SessionPermissionMode | null>(null);
-  // Armed for the next submission only, never persisted. Cleared once a
-  // submission has carried it, or when the target session changes.
-  const [turnPermissionMode, setTurnPermissionMode] =
+  // One-off state has two owners: the idle composer arms a future submission,
+  // while an executing turn keeps a mutable override until it ends.
+  const [armedTurnPermissionMode, setArmedTurnPermissionMode] =
     useState<SessionPermissionMode | null>(null);
+  const [activeTurnPermissionMode, setActiveTurnPermissionMode] =
+    useState<SessionPermissionMode | null>(null);
+  const permissionModeRequestGenerationRef = useRef(0);
+  const permissionModeLifecycleRef = useRef<{
+    sessionId: string | null;
+    activeTurnId: string | null;
+  }>({ sessionId: null, activeTurnId: null });
   const { addMessage: addToHistory, getSessionHistory } = useInputHistoryStore();
   
   const contexts = useContextStore(state => state.contexts);
@@ -648,7 +661,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     respond: respondPermission,
     respondBatch: respondPermissionBatch,
   } = usePermissionRequests(effectiveTargetSessionId || undefined);
-  useSessionStateMachine(effectiveTargetSessionId);
+  const sessionMachine = useSessionStateMachine(effectiveTargetSessionId);
+  const activePermissionTurnId =
+    sessionMachine?.currentState === SessionExecutionState.PROCESSING
+      ? sessionMachine.context.currentDialogTurnId
+      : null;
+  const activePermissionTurnIdRef = useRef<string | null>(activePermissionTurnId);
+  activePermissionTurnIdRef.current = activePermissionTurnId;
+  const armedTurnPermissionModeRef = useRef<SessionPermissionMode | null>(
+    armedTurnPermissionMode,
+  );
+  armedTurnPermissionModeRef.current = armedTurnPermissionMode;
   const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
   // isMultiLine: true when content overflows a single line (scrollHeight > threshold or has newlines)
   const [isMultiLine, setIsMultiLine] = useState(false);
@@ -954,6 +977,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const workspacePathRef = useRef(sessionBoundWorkspacePath);
   workspacePathRef.current = sessionBoundWorkspacePath;
   const { openedWorkspaces } = useWorkspaceContext();
+  const mentionWorkspace = useMemo(() => (
+    effectiveTargetSession
+      ? findWorkspaceForSession(effectiveTargetSession, openedWorkspaces.values())
+      : workspace ?? undefined
+  ), [effectiveTargetSession, openedWorkspaces, workspace]);
+  const sessionBoundRemoteConnectionId = (
+    hasRegisteredWorkspace
+      ? registration?.remoteConnectionId
+      : (
+          effectiveTargetSession?.remoteConnectionId
+          || effectiveTargetSession?.config?.remoteConnectionId
+          || mentionWorkspace?.connectionId
+        )
+  )?.trim() || undefined;
 
   const chatStripRepositoryPath = useMemo(() => {
     const fromSession = hasRegisteredWorkspace
@@ -1031,8 +1068,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const permissionMode: ChatInputPermissionMode = isAcpTargetSession
     ? 'acp'
     : chatInputPermissionMode(sessionPermissionMode ?? globalPermissionMode);
+  const temporaryPermissionMode = activePermissionTurnId
+    ? activeTurnPermissionMode
+    : armedTurnPermissionMode;
   const permissionModeOverridden =
-    !isAcpTargetSession && (turnPermissionMode !== null || sessionPermissionMode !== null);
+    !isAcpTargetSession && (temporaryPermissionMode !== null || sessionPermissionMode !== null);
   const activeSessionMode = effectiveTargetSessionId
     ? acpTargetAgentType || flowChatState.sessions.get(effectiveTargetSessionId)?.mode
     : undefined;
@@ -1646,15 +1686,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [canUseSkillsForTarget, inlineTriggerState, isAcpInputSession]);
 
   const previousComposerSessionIdRef = useRef<string | null>(null);
+  const previousComposerSurfaceEpochRef = useRef(deviceSurfaceScope.epoch);
 
   React.useLayoutEffect(() => {
     const previousSessionId = previousComposerSessionIdRef.current;
+    const surfaceChanged = previousComposerSurfaceEpochRef.current !== deviceSurfaceScope.epoch;
     const draft = sessionComposerStore.getState().activateDraft(
       previousSessionId,
       effectiveTargetSessionId,
       useContextStore.getState().contexts,
+      !surfaceChanged,
     );
     previousComposerSessionIdRef.current = effectiveTargetSessionId;
+    previousComposerSurfaceEpochRef.current = deviceSurfaceScope.epoch;
 
     const nextValue = draft.value;
     const nextContexts = draft.contexts;
@@ -1684,7 +1728,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       query: '',
       selectedIndex: 0,
     });
-  }, [effectiveTargetSessionId, replaceContexts]);
+  }, [deviceSurfaceScope.epoch, effectiveTargetSessionId, replaceContexts]);
 
   useEffect(() => {
     let previousContexts = useContextStore.getState().contexts;
@@ -1743,8 +1787,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     contexts,
     onClearContexts: clearContexts,
     onSuccess: onSendMessage,
-    turnPermissionMode,
-    onTurnPermissionModeConsumed: () => setTurnPermissionMode(null),
+    // A busy session queues new input. Its active override must not leak into
+    // that future turn's submission metadata.
+    turnPermissionMode: activePermissionTurnId ? null : armedTurnPermissionMode,
+    onTurnPermissionModeConsumed: () => setArmedTurnPermissionMode(null),
     onSessionConflictRetryStart: ({ sessionId }) => {
       sessionConflictRetryBaselinesRef.current.set(
         sessionId,
@@ -2051,37 +2097,63 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, []);
 
-  // Reads the session's own selection whenever the target session changes, so
-  // switching conversations shows that conversation's mode rather than the last
-  // one the user touched.
+  // Reconcile persistent session state and the exact active-turn override.
+  // A request generation prevents a late response from a previous session or
+  // completed turn from repainting the current control.
   React.useEffect(() => {
-    let cancelled = false;
+    const generation = ++permissionModeRequestGenerationRef.current;
+    const previous = permissionModeLifecycleRef.current;
+    const sessionChanged = previous.sessionId !== effectiveTargetSessionId;
+    const activeTurnChanged = previous.activeTurnId !== activePermissionTurnId;
+    permissionModeLifecycleRef.current = {
+      sessionId: effectiveTargetSessionId,
+      activeTurnId: activePermissionTurnId,
+    };
+
+    if (sessionChanged) {
+      setArmedTurnPermissionMode(null);
+      setActiveTurnPermissionMode(null);
+    } else if (activeTurnChanged) {
+      // A locally submitted one-off becomes the active turn's initial mode.
+      // Keep it armed until start_dialog_turn acknowledges so a failed send
+      // can still be retried with the user's selection.
+      setActiveTurnPermissionMode(
+        activePermissionTurnId ? armedTurnPermissionModeRef.current : null,
+      );
+    }
+
     if (!effectiveTargetSessionId || isAcpTargetSession) {
       setSessionPermissionMode(null);
-      setTurnPermissionMode(null);
+      setArmedTurnPermissionMode(null);
+      setActiveTurnPermissionMode(null);
       return undefined;
     }
-    setTurnPermissionMode(null);
     void (async () => {
       try {
         const response = await agentAPI.getSessionPermissionMode({
           sessionId: effectiveTargetSessionId,
+          turnId: activePermissionTurnId ?? undefined,
           workspacePath: effectiveTargetSession?.workspacePath,
           remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
           remoteSshHost: effectiveTargetSession?.remoteSshHost,
         });
-        if (!cancelled) setSessionPermissionMode(response.mode ?? null);
+        if (permissionModeRequestGenerationRef.current !== generation) return;
+        setSessionPermissionMode(response.mode ?? null);
+        if (activePermissionTurnId && response.activeTurnId === activePermissionTurnId) {
+          setActiveTurnPermissionMode(response.turnMode ?? null);
+        }
       } catch (error) {
         log.warn('Failed to read session permission mode', error);
         // Falling back to the global default is the safe read: it never shows a
         // wider mode than the session actually runs with.
-        if (!cancelled) setSessionPermissionMode(null);
+        if (permissionModeRequestGenerationRef.current === generation) {
+          setSessionPermissionMode(null);
+        }
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return undefined;
   }, [
+    activePermissionTurnId,
     effectiveTargetSessionId,
     effectiveTargetSession?.workspacePath,
     effectiveTargetSession?.remoteConnectionId,
@@ -2096,22 +2168,43 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       notificationService.error(t('chatInput.permissionMode.noSession'));
       return;
     }
+    const targetSessionId = effectiveTargetSessionId;
+    const targetTurnId = activePermissionTurnIdRef.current;
+    const generation = ++permissionModeRequestGenerationRef.current;
     const previousMode = sessionPermissionMode;
+    const previousActiveTurnMode = activeTurnPermissionMode;
     setSessionPermissionMode(nextMode);
+    setArmedTurnPermissionMode(null);
+    setActiveTurnPermissionMode(null);
     setPermissionModeSaving(true);
     try {
       const response = await agentAPI.updateSessionPermissionMode({
-        sessionId: effectiveTargetSessionId,
+        sessionId: targetSessionId,
         mode: nextMode,
+        turnId: targetTurnId ?? undefined,
         workspacePath: effectiveTargetSession?.workspacePath,
         remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
         remoteSshHost: effectiveTargetSession?.remoteSshHost,
       });
-      setSessionPermissionMode(response.mode ?? null);
+      if (
+        permissionModeRequestGenerationRef.current === generation
+        && effectiveTargetSessionIdRef.current === targetSessionId
+      ) {
+        setSessionPermissionMode(response.mode ?? null);
+        setActiveTurnPermissionMode(null);
+      }
     } catch (error) {
       log.error('Failed to change session permission mode', error);
-      setSessionPermissionMode(previousMode);
-      notificationService.error(t('chatInput.permissionMode.changeFailed'));
+      if (
+        permissionModeRequestGenerationRef.current === generation
+        && effectiveTargetSessionIdRef.current === targetSessionId
+      ) {
+        setSessionPermissionMode(previousMode);
+        if (activePermissionTurnIdRef.current === targetTurnId) {
+          setActiveTurnPermissionMode(previousActiveTurnMode);
+        }
+        notificationService.error(t('chatInput.permissionMode.changeFailed'));
+      }
     } finally {
       setPermissionModeSaving(false);
     }
@@ -2120,6 +2213,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSession?.workspacePath,
     effectiveTargetSession?.remoteConnectionId,
     effectiveTargetSession?.remoteSshHost,
+    activeTurnPermissionMode,
     sessionPermissionMode,
     t,
   ]);
@@ -2128,14 +2222,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // one-off turn still runs every tool without asking.
   const confirmFullAccessIfNeeded = useCallback(async (
     nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
-    scope: 'session' | 'turn',
+    scope: 'session' | 'next-turn' | 'active-turn',
   ) => {
     if (nextMode !== 'full_access') return true;
     return confirmDanger(
       t('chatInput.permissionMode.fullAccessWarningTitle'),
-      t(scope === 'turn'
-        ? 'chatInput.permissionMode.fullAccessWarningMessageNextTurn'
-        : 'chatInput.permissionMode.fullAccessWarningMessage'),
+      t(scope === 'active-turn'
+        ? 'chatInput.permissionMode.fullAccessWarningMessageActiveTurn'
+        : scope === 'next-turn'
+          ? 'chatInput.permissionMode.fullAccessWarningMessageNextTurn'
+          : 'chatInput.permissionMode.fullAccessWarningMessage'),
       {
         confirmText: t('chatInput.permissionMode.fullAccessConfirm'),
         cancelText: t('chatInput.permissionMode.cancel'),
@@ -2152,9 +2248,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const backendMode = toBackendPermissionMode(
       nextMode as Exclude<ChatInputPermissionMode, 'acp' | 'reject'>,
     );
-    // An armed one-off would otherwise keep masking the session mode the user
-    // just chose, making the write look like it did nothing.
-    setTurnPermissionMode(null);
     await applySessionPermissionMode(backendMode);
   }, [
     applySessionPermissionMode,
@@ -2163,11 +2256,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     permissionModeSaving,
   ]);
 
-  /**
-   * Arms a mode for the next submission without touching the session. Picking
-   * the already-armed mode disarms it, so an accidental arm is undoable
-   * without disturbing the session's own selection.
-   */
+  /** Updates the active turn when one exists; otherwise arms the next send. */
   const handlePermissionModeForNextTurn = useCallback(async (
     nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
   ) => {
@@ -2175,13 +2264,76 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const backendMode = toBackendPermissionMode(
       nextMode as Exclude<ChatInputPermissionMode, 'acp' | 'reject'>,
     );
-    if (turnPermissionMode === backendMode) {
-      setTurnPermissionMode(null);
+    const targetTurnId = activePermissionTurnIdRef.current;
+    const currentMode = targetTurnId
+      ? activeTurnPermissionMode
+      : armedTurnPermissionMode;
+    const nextTemporaryMode = currentMode === backendMode ? null : backendMode;
+    if (
+      nextTemporaryMode === 'full_access'
+      && !(await confirmFullAccessIfNeeded(
+        nextMode,
+        targetTurnId ? 'active-turn' : 'next-turn',
+      ))
+    ) return;
+    if (
+      activePermissionTurnIdRef.current !== targetTurnId
+      || effectiveTargetSessionIdRef.current !== effectiveTargetSessionId
+    ) return;
+
+    if (!targetTurnId) {
+      setArmedTurnPermissionMode(nextTemporaryMode);
       return;
     }
-    if (!(await confirmFullAccessIfNeeded(nextMode, 'turn'))) return;
-    setTurnPermissionMode(backendMode);
-  }, [confirmFullAccessIfNeeded, isAcpTargetSession, permissionModeSaving, turnPermissionMode]);
+    if (!effectiveTargetSessionId) return;
+
+    const targetSessionId = effectiveTargetSessionId;
+    const generation = ++permissionModeRequestGenerationRef.current;
+    const previousMode = activeTurnPermissionMode;
+    setActiveTurnPermissionMode(nextTemporaryMode);
+    setPermissionModeSaving(true);
+    try {
+      const response = await agentAPI.updateActiveTurnPermissionMode({
+        sessionId: targetSessionId,
+        turnId: targetTurnId,
+        mode: nextTemporaryMode,
+        workspacePath: effectiveTargetSession?.workspacePath,
+        remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
+        remoteSshHost: effectiveTargetSession?.remoteSshHost,
+      });
+      if (
+        permissionModeRequestGenerationRef.current === generation
+        && effectiveTargetSessionIdRef.current === targetSessionId
+        && activePermissionTurnIdRef.current === targetTurnId
+      ) {
+        setSessionPermissionMode(response.mode ?? null);
+        setActiveTurnPermissionMode(response.turnMode ?? null);
+      }
+    } catch (error) {
+      log.error('Failed to change active turn permission mode', error);
+      if (
+        permissionModeRequestGenerationRef.current === generation
+        && effectiveTargetSessionIdRef.current === targetSessionId
+        && activePermissionTurnIdRef.current === targetTurnId
+      ) {
+        setActiveTurnPermissionMode(previousMode);
+        notificationService.error(t('chatInput.permissionMode.changeFailed'));
+      }
+    } finally {
+      setPermissionModeSaving(false);
+    }
+  }, [
+    activeTurnPermissionMode,
+    armedTurnPermissionMode,
+    confirmFullAccessIfNeeded,
+    effectiveTargetSession?.remoteConnectionId,
+    effectiveTargetSession?.remoteSshHost,
+    effectiveTargetSession?.workspacePath,
+    effectiveTargetSessionId,
+    isAcpTargetSession,
+    permissionModeSaving,
+    t,
+  ]);
 
   // The reset row follows the user-level default, so give it a way to reach the
   // page that owns that default instead of making the user hunt for it.
@@ -2192,12 +2344,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleResetPermissionModeToDefault = useCallback(async () => {
     if (permissionModeSaving || isAcpTargetSession) return;
-    // Drop the armed one-off first; otherwise it would keep masking the
-    // session mode the user just asked to restore.
-    setTurnPermissionMode(null);
-    if (sessionPermissionMode === null) return;
+    if (sessionPermissionMode === null && temporaryPermissionMode === null) return;
     await applySessionPermissionMode(null);
-  }, [applySessionPermissionMode, isAcpTargetSession, permissionModeSaving, sessionPermissionMode]);
+  }, [
+    applySessionPermissionMode,
+    isAcpTargetSession,
+    permissionModeSaving,
+    sessionPermissionMode,
+    temporaryPermissionMode,
+  ]);
 
   const dispatchPermissionMode: ChatInputPermissionMode =
     permissionModeFromDispatchApprovalPolicy(
@@ -4191,9 +4346,72 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [effectiveTargetSessionId, harnessProfileLocked, isHarnessProfileChangePending, sessionModeSelectionTarget, t]);
   
+  const interruptedTurnRecovery = useMemo(
+    () => selectInterruptedTurnRecovery(effectiveTargetSession, {
+      draft: inputState.value,
+      hasComposerAttachments: contexts.length > 0,
+      executionIdle:
+        derivedState?.sendButtonMode === 'send'
+        && !caps.transferInFlight,
+      desktopRuntime: isTauriRuntime(),
+      peerMode: isPeerDeviceModeActive(),
+      acpSession: Boolean(acpSessionForInput || isAcpTargetSession),
+      modeChangePending: isModeChangePending,
+      modelChangePending: isModelSwitching,
+    }),
+    [
+      acpSessionForInput,
+      caps.transferInFlight,
+      contexts.length,
+      derivedState?.sendButtonMode,
+      effectiveTargetSession,
+      inputState.value,
+      isAcpTargetSession,
+      isModeChangePending,
+      isModelSwitching,
+    ],
+  );
+  useSyncExternalStore(
+    interruptedTurnRecoveryGate.subscribe,
+    interruptedTurnRecoveryGate.getSnapshot,
+    interruptedTurnRecoveryGate.getSnapshot,
+  );
+  const isInterruptedTurnRecoveryInFlight =
+    interruptedTurnRecoveryGate.isSessionInFlight(effectiveTargetSessionId);
+
+  const handleRecoverInterruptedTurn = useCallback(async () => {
+    const candidate = interruptedTurnRecovery;
+    if (!candidate || !interruptedTurnRecoveryGate.tryBegin(candidate)) return;
+    try {
+      await agentAPI.recoverInterruptedDialogTurn({
+        sessionId: candidate.sessionId,
+        dialogTurnId: candidate.turnId,
+        executionGeneration: candidate.executionGeneration,
+        workspacePath:
+          effectiveTargetSession?.projectWorkspacePath
+          || effectiveTargetSession?.workspacePath
+          || effectiveTargetSession?.config.projectWorkspacePath
+          || effectiveTargetSession?.config.workspacePath,
+      });
+    } catch (error) {
+      log.error('Failed to recover interrupted dialog turn', {
+        sessionId: candidate.sessionId,
+        turnId: candidate.turnId,
+        error,
+      });
+      notificationService.error(t('input.continueInterruptedFailed'));
+      interruptedTurnRecoveryGate.clearExact(candidate);
+    }
+  }, [
+    effectiveTargetSession,
+    interruptedTurnRecovery,
+    t,
+  ]);
+
   const handleSendOrCancel = useCallback(async (messageOverride?: string) => {
     if (!derivedState) return;
     if (caps.transferInFlight) return;
+    if (isInterruptedTurnRecoveryInFlight) return;
     
     const { sendButtonMode } = derivedState;
     const draftTrimmed = (messageOverride ?? inputState.value).trim();
@@ -4406,6 +4624,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isModeChangePending,
     isHarnessProfileChangePending,
     caps.transferInFlight,
+    isInterruptedTurnRecoveryInFlight,
     inputState.value,
     derivedState,
     dispatchInput,
@@ -4453,10 +4672,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
   }, [canSwitchModes, selectableCodeModes, slashCommandState.query]);
 
-  publishModeSelectionRef.current = publishModeSelection;
-  requestModeChangeRef.current = requestSessionModeChange;
-
   const requestModeChange = useCallback((modeId: string) => {
+    if (isInterruptedTurnRecoveryInFlight) {
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      return;
+    }
     if (!canSwitchModes) {
       dispatchMode({ type: 'CLOSE_DROPDOWN' });
       return;
@@ -4474,7 +4694,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     requestSessionModeChange(modeId);
     dispatchMode({ type: 'CLOSE_DROPDOWN' });
-  }, [canSwitchModes, currentMode, effectiveTargetSessionId, requestSessionModeChange, switchableModes]);
+  }, [
+    canSwitchModes,
+    currentMode,
+    effectiveTargetSessionId,
+    isInterruptedTurnRecoveryInFlight,
+    requestSessionModeChange,
+    switchableModes,
+  ]);
+
+  publishModeSelectionRef.current = publishModeSelection;
+  requestModeChangeRef.current = requestModeChange;
 
   const toggleDefaultMode = useCallback(async (modeId: string, modeName: string) => {
     const previousDefaultModeId = userDefaultModeId;
@@ -5260,6 +5490,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!derivedState) return <span className="bitfun-chat-input__send-action" data-bf-component="chat-input" data-bf-part="sendButton" data-bf-action="send" data-bf-state="disabled"><IconButton className="bitfun-chat-input__send-button" disabled size="small"><ArrowUp size={11} /></IconButton></span>;
 
     const { sendButtonMode, hasQueuedInput } = derivedState;
+
+    if (interruptedTurnRecovery) {
+      return (
+        <span
+          className="bitfun-chat-input__send-action"
+          data-bf-component="chat-input"
+          data-bf-part="sendButton"
+          data-bf-action="continue-interrupted"
+          data-bf-state={isInterruptedTurnRecoveryInFlight ? 'disabled' : undefined}
+        >
+          <IconButton
+            className="bitfun-chat-input__send-button"
+            onClick={() => void handleRecoverInterruptedTurn()}
+            disabled={isInterruptedTurnRecoveryInFlight}
+            data-testid="chat-input-continue-interrupted-btn"
+            tooltip={t('input.continueInterrupted')}
+            size="small"
+          >
+            {isInterruptedTurnRecoveryInFlight
+              ? <Loader2 size={11} className="bitfun-spin" />
+              : <Play size={11} fill="currentColor" />}
+          </IconButton>
+        </span>
+      );
+    }
     
     if (sendButtonMode === 'cancel') {
       return (
@@ -5348,6 +5603,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <ContextDropZone
         acceptedTypes={['file', 'directory', 'image', 'code-snippet', 'mermaid-diagram']}
         className="bitfun-chat-input-drop-zone"
+        disabled={isInterruptedTurnRecoveryInFlight}
         onContextAdded={(context) => {
           if (context.type === 'image' && currentImageCount >= CHAT_INPUT_CONFIG.image.maxCount) {
             notificationService.warning(t('input.maxImagesWarning', { count: CHAT_INPUT_CONFIG.image.maxCount }), { duration: 3000 });
@@ -5500,7 +5756,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onCompositionStart={handleImeCompositionStart}
                 onCompositionEnd={handleImeCompositionEnd}
                 placeholder=""
-                disabled={caps.transferInFlight}
+                disabled={caps.transferInFlight || isInterruptedTurnRecoveryInFlight}
                 contexts={contexts}
                 onRemoveContext={removeContext}
                 onMentionStateChange={setMentionState}
@@ -5513,9 +5769,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 isOpen={mentionState.isActive}
                 searchQuery={mentionState.query}
                 workspacePath={sessionBoundWorkspacePath}
+                remoteConnectionId={sessionBoundRemoteConnectionId}
                 workspaceId={hasRegisteredWorkspace
                   ? undefined
-                  : effectiveTargetSession?.workspaceId || workspace?.id}
+                  : effectiveTargetSession?.workspaceId || mentionWorkspace?.id}
                 excludeSessionId={effectiveTargetSessionId || undefined}
                 anchorRef={mentionAnchorRef}
                 onSelect={(context: FileContext | DirectoryContext | SessionReferenceContext) => {
@@ -5900,8 +6157,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           aria-label={t('chatInput.resetToAgentic')}
                           onClick={e => {
                             e.stopPropagation();
-                            requestSessionModeChange('agentic');
-                            dispatchMode({ type: 'CLOSE_DROPDOWN' });
+                            requestModeChange('agentic');
                           }}
                         >
                           <X size={12} strokeWidth={2.5} />
@@ -6279,11 +6535,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     externalSelection={dispatchModelSelection}
                     modeDefaultModelId={targetModeInfo?.model}
                     persistSharedModeDefault={Boolean(targetModeInfo && targetModeInfo.source !== 'external')}
+                    disabled={isInterruptedTurnRecoveryInFlight}
                   />
                   </div>
                 ) : null}
 
-                {!caps.transferInFlight ? (
+                {!caps.transferInFlight && !isInterruptedTurnRecoveryInFlight ? (
                   <ComposerVoiceInputButton controller={voiceInput} />
                 ) : null}
                 {voiceInput.phase === 'idle' ? renderActionButton() : null}
@@ -6312,13 +6569,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             : {
                 mode: permissionMode,
                 saving: permissionModeSaving,
-                scopeLabel: turnPermissionMode
-                  ? t('chatInput.permissionMode.turnScope')
+                scopeLabel: activePermissionTurnId
+                  ? t('chatInput.permissionMode.activeTurnScope')
+                  : temporaryPermissionMode
+                    ? t('chatInput.permissionMode.turnScope')
                   : t('chatInput.permissionMode.sessionScope'),
                 overridden: permissionModeOverridden,
-                nextTurnMode: turnPermissionMode
-                  ? chatInputPermissionMode(turnPermissionMode)
+                nextTurnMode: temporaryPermissionMode
+                  ? chatInputPermissionMode(temporaryPermissionMode)
                   : null,
+                activeTurn: activePermissionTurnId !== null,
                 onChangeForNextTurn: isAcpTargetSession
                   ? undefined
                   : handlePermissionModeForNextTurn,

@@ -157,6 +157,52 @@ export interface PermissionRequest {
   displayMetadata?: Record<string, unknown>;
 }
 
+export interface PendingUserQuestion {
+  toolId: string;
+  sessionId: string;
+  dialogTurnId?: string;
+  modelRoundId?: string;
+  questions: unknown;
+  registeredAtMs: number;
+}
+
+export interface PendingUserQuestionSnapshot {
+  revision: number;
+  questions: PendingUserQuestion[];
+}
+
+export interface PermissionRequestSnapshot {
+  revision: number;
+  requests: PermissionRequest[];
+}
+
+/**
+ * Runtime-owned blocking interactions required to re-attach a UI Surface to
+ * a Session after push events were missed while another device was rendered.
+ */
+export interface SessionInteractionSnapshot {
+  sessionId: string;
+  userQuestions: PendingUserQuestionSnapshot;
+  permissions: PermissionRequestSnapshot;
+}
+
+export interface RuntimeProjectedAgenticEvent {
+  eventName: string;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Runtime-owned materialized projection of the current Turn. `streamId` and
+ * `cursor` fence this snapshot against concurrent live events.
+ */
+export interface SessionRuntimeEventSnapshot {
+  sessionId: string;
+  streamId: string;
+  cursor: number;
+  activeTurnId?: string | null;
+  events: RuntimeProjectedAgenticEvent[];
+}
+
 export type PermissionRequestEvent =
   | { event: 'asked'; request: PermissionRequest }
   | { event: 'replied'; requestId: string; reply: { reply: PermissionReplyKind }; source: string }
@@ -244,6 +290,10 @@ export interface SessionViewRestoreTiming {
 export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
+  /** Absent when talking to an older Peer Host. */
+  interactionSnapshot?: SessionInteractionSnapshot;
+  /** Absent when talking to a host without resumable Session attachment. */
+  runtimeEventSnapshot?: SessionRuntimeEventSnapshot | null;
   currentContextUsage?: SessionContextUsage | null;
   turnCatalog?: SessionTurnCatalog;
   contextRestoreState: 'ready' | 'pending';
@@ -284,6 +334,56 @@ export type LoadSessionTurnWindowResponse =
       status: 'not-found';
       catalog: SessionTurnCatalog;
     };
+
+export interface RollbackSessionToTurnRequest {
+  workspacePath: string;
+  sessionId: string;
+  targetTurnId: string;
+  expectedStorageTurnIndex?: number;
+  expectedCatalogRevision?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export type RollbackSessionToTurnOutcome =
+  | {
+      status: 'completed';
+      sessionId: string;
+      transcript: unknown;
+      composer: { kind: 'preserve' } | { kind: 'clear' } | { kind: 'replace'; text: string };
+      retiredTurnIds: string[];
+      changed: boolean;
+      hiddenTurnCount: number;
+      boundaryStorageTurnIndex?: number;
+      targetTurnId?: string;
+      restoredFiles: string[];
+      reloadRequired?: boolean;
+      reloadReason?: string;
+    }
+  | {
+      status: 'recovery_required';
+      sessionId: string;
+      mutationId: string;
+      affectedFiles: string[];
+      reason: string;
+    };
+
+type RollbackSessionToTurnCompletedOutcome = Extract<
+  RollbackSessionToTurnOutcome,
+  { status: 'completed' }
+>;
+type RollbackSessionToTurnRecoveryOutcome = Extract<
+  RollbackSessionToTurnOutcome,
+  { status: 'recovery_required' }
+>;
+type RollbackSessionToTurnWireOutcome =
+  | (Omit<RollbackSessionToTurnCompletedOutcome, 'retiredTurnIds' | 'restoredFiles'> & {
+      retiredTurnIds?: string[];
+      restoredFiles?: string[];
+    })
+  | (Omit<RollbackSessionToTurnRecoveryOutcome, 'affectedFiles'> & {
+      affectedFiles?: string[];
+    });
 
 export interface EnsureAssistantBootstrapRequest {
   sessionId: string;
@@ -331,6 +431,8 @@ export interface SessionPermissionModeRequest {
   sessionId: string;
   /** Omit or pass null to clear the override and follow the global default. */
   mode?: SessionPermissionMode | null;
+  /** Exact active turn whose temporary override should be read or cleared. */
+  turnId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -339,6 +441,12 @@ export interface SessionPermissionModeRequest {
 
 export interface SessionPermissionModeResponse {
   mode: SessionPermissionMode | null;
+  turnMode?: SessionPermissionMode | null;
+  activeTurnId?: string | null;
+}
+
+export interface ActiveTurnPermissionModeRequest extends SessionPermissionModeRequest {
+  turnId: string;
 }
 
 export interface UpdateSessionModeRequest {
@@ -474,6 +582,27 @@ export interface AgenticEvent {
   sessionId: string;
   turnId?: string;
   [key: string]: any;
+}
+
+export interface InterruptedDialogTurnEvent extends AgenticEvent {
+  turnId: string;
+  executionGeneration: number;
+  modelId?: string;
+}
+
+export interface RecoverInterruptedDialogTurnRequest {
+  sessionId: string;
+  dialogTurnId: string;
+  executionGeneration: number;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export interface RecoverInterruptedDialogTurnResponse {
+  sessionId: string;
+  turnId: string;
+  executionGeneration: number;
 }
 
 export type DialogTurnStartedEvent = AgenticEvent;
@@ -817,6 +946,27 @@ export class AgentAPI {
     }
   }
 
+  async interruptDialogTurn(sessionId: string, dialogTurnId: string): Promise<void> {
+    try {
+      await api.invoke<void>('interrupt_dialog_turn', { request: { sessionId, dialogTurnId } });
+    } catch (error) {
+      throw createTauriCommandError('interrupt_dialog_turn', error, { sessionId, dialogTurnId });
+    }
+  }
+
+  async recoverInterruptedDialogTurn(
+    request: RecoverInterruptedDialogTurnRequest,
+  ): Promise<RecoverInterruptedDialogTurnResponse> {
+    try {
+      return await api.invoke<RecoverInterruptedDialogTurnResponse>(
+        'recover_interrupted_dialog_turn',
+        { request },
+      );
+    } catch (error) {
+      throw createTauriCommandError('recover_interrupted_dialog_turn', error, request);
+    }
+  }
+
   /**
    * Inject a user "steering" message into the currently running dialog turn.
    * Mirrors Codex CLI's Esc-to-steer behavior: the message is queued on the
@@ -960,6 +1110,32 @@ export class AgentAPI {
     }
   }
 
+  async rollbackSessionToTurn(
+    request: RollbackSessionToTurnRequest,
+  ): Promise<RollbackSessionToTurnOutcome> {
+    try {
+      const outcome = await api.invoke<RollbackSessionToTurnWireOutcome>('rollback_session_to_turn', {
+        request,
+      });
+      if (outcome.status === 'completed') {
+        return {
+          ...outcome,
+          retiredTurnIds: outcome.retiredTurnIds ?? [],
+          restoredFiles: outcome.restoredFiles ?? [],
+        };
+      }
+      return {
+        ...outcome,
+        affectedFiles: outcome.affectedFiles ?? [],
+      };
+    } catch (error) {
+      throw createTauriCommandError('rollback_session_to_turn', error, {
+        sessionId: request.sessionId,
+        targetTurnId: request.targetTurnId,
+      });
+    }
+  }
+
   async setSessionMemoryMode(
     request: SetSessionMemoryModeRequest
   ): Promise<SetSessionMemoryModeResponse> {
@@ -1029,6 +1205,20 @@ export class AgentAPI {
       );
     } catch (error) {
       throw createTauriCommandError('update_session_permission_mode', error, request);
+    }
+  }
+
+  /** Updates the temporary mode for one exact active turn. */
+  async updateActiveTurnPermissionMode(
+    request: ActiveTurnPermissionModeRequest,
+  ): Promise<SessionPermissionModeResponse> {
+    try {
+      return await api.invoke<SessionPermissionModeResponse>(
+        'update_active_turn_permission_mode',
+        { request },
+      );
+    } catch (error) {
+      throw createTauriCommandError('update_active_turn_permission_mode', error, request);
     }
   }
 
@@ -1248,6 +1438,14 @@ export class AgentAPI {
    
   onDialogTurnCancelled(callback: (event: AgenticEvent) => void): () => void {
     return api.listen<AgenticEvent>('agentic://dialog-turn-cancelled', callback);
+  }
+
+  onDialogTurnInterrupted(callback: (event: InterruptedDialogTurnEvent) => void): () => void {
+    return api.listen<InterruptedDialogTurnEvent>('agentic://dialog-turn-interrupted', callback);
+  }
+
+  onDialogTurnRecovered(callback: (event: InterruptedDialogTurnEvent) => void): () => void {
+    return api.listen<InterruptedDialogTurnEvent>('agentic://dialog-turn-recovered', callback);
   }
 
    

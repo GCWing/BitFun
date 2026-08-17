@@ -73,6 +73,7 @@ import { RemoteWorkspaceCoordinator } from '../main/ets/services/RemoteWorkspace
 import { RemoteWorkspaceDataSource } from '../main/ets/services/RemoteWorkspaceRepository';
 import { RemoteToolActionClient, RemoteToolActionController } from '../main/ets/services/RemoteToolActionController';
 import { RemoteUiState } from '../main/ets/services/RemoteUiState';
+import { TranscriptIntegrityPolicy } from '../main/ets/services/TranscriptIntegrityPolicy';
 import {
   VoiceInputLifecycleCallbacks,
   VoiceInputLifecycleController,
@@ -89,8 +90,8 @@ import { ConversationController } from '../main/ets/pages/viewmodel/Conversation
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
   REMOTE_CHAT_COMPOSER_CAPABILITIES
-} from '../main/ets/pages/components/ChatComposerCapabilities';
-import { ChatSurface } from '../main/ets/pages/components/ChatSurface';
+} from '../main/ets/pages/state/ChatComposerCapabilities';
+import { ChatSurface } from '../main/ets/pages/state/ChatSurface';
 import { ConversationViewContract } from '../main/ets/pages/components/ConversationViewContract';
 import {
   AppNavigationBackAction,
@@ -288,6 +289,46 @@ export default function conversationStateUnitTest() {
       expect(merged.length).assertEqual(1);
       expect(merged[0].text).assertEqual('Final answer');
       expect(merged[0].thinking || '').assertEqual('');
+    });
+
+    it('does not let an empty poll stub wipe a richer assistant body', 0, () => {
+      const rich = chatMessage('assistant-rich-1', 'assistant', 'Done with the edit');
+      rich.thinking = 'Plan the change first';
+      rich.tools = [{ id: 'tool-1', name: 'Grep', status: 'completed' }];
+      rich.items = [{
+        type: 'thinking',
+        content: 'Plan the change first'
+      }, {
+        type: 'tool',
+        tool: { id: 'tool-1', name: 'Grep', status: 'completed' }
+      }];
+      const stub = chatMessage('assistant-rich-1', 'assistant', '');
+      stub.thinking = '';
+      stub.tools = [];
+      stub.items = [];
+      const merged = RemoteUiState.mergeMessages([rich], [stub]);
+
+      expect(TranscriptIntegrityPolicy.isHollowAssistant(stub)).assertTrue();
+      expect(TranscriptIntegrityPolicy.hasDisplayableBody(merged[0])).assertTrue();
+      expect(merged[0].text).assertEqual('Done with the edit');
+      expect(merged[0].thinking).assertEqual('Plan the change first');
+      expect(merged[0].tools ? merged[0].tools.length : 0).assertEqual(1);
+      expect(merged[0].items ? merged[0].items.length : 0).assertEqual(2);
+    });
+
+    it('keeps structured items when later text arrives without them', 0, () => {
+      const rich = chatMessage('assistant-rich-2', 'assistant', '');
+      rich.thinking = 'Still reasoning';
+      rich.items = [{ type: 'thinking', content: 'Still reasoning' }];
+      rich.tools = [{ id: 'tool-2', name: 'Read', status: 'completed' }];
+      const merged = RemoteUiState.mergeMessages([rich], [
+        chatMessage('assistant-rich-2', 'assistant', 'Final answer')
+      ]);
+
+      expect(merged[0].text).assertEqual('Final answer');
+      expect(merged[0].thinking || '').assertEqual('');
+      expect(merged[0].items ? merged[0].items.length : 0).assertEqual(1);
+      expect(merged[0].tools ? merged[0].tools.length : 0).assertEqual(1);
     });
 
     it('owns optimistic merge and active turn cleanup rules', 0, () => {
@@ -1094,6 +1135,9 @@ export default function conversationStateUnitTest() {
       expect(generalProjection.surface).assertEqual(ChatSurface.General);
       expect(generalProjection.chatInput).assertEqual('general draft');
       expect(generalProjection.inlineStatusText).assertEqual('Configure model');
+      expect(generalProjection.showSuggestionsWhenEmpty).assertFalse();
+      expect(generalProjection.composerCapabilities.supportsAttachments).assertTrue();
+      expect(generalProjection.composerCapabilities.showAddButton).assertTrue();
     });
   });
 

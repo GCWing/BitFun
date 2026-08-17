@@ -7,6 +7,7 @@ pub mod ai;
 pub mod errors;
 pub mod harness_profile;
 pub mod lsp;
+pub mod model;
 pub mod session;
 pub mod session_usage;
 pub mod speech;
@@ -28,14 +29,18 @@ pub use ai::{
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
 pub use harness_profile::{
-    HarnessProfileId, HarnessSelectionSource, SessionExecutionProfile,
-    BALANCED_HARNESS_PROFILE_ID, HARNESS_SELECTION_ADAPTER, HARNESS_SELECTION_CLI,
-    HARNESS_SELECTION_COMPATIBILITY, HARNESS_SELECTION_DEFAULT, HARNESS_SELECTION_USER,
-    MINIMAL_HARNESS_PROFILE_ID, ULTIMATE_HARNESS_PROFILE_ID,
+    HarnessProfileId, HarnessSelectionSource, SessionExecutionProfile, BALANCED_HARNESS_PROFILE_ID,
+    HARNESS_SELECTION_ADAPTER, HARNESS_SELECTION_CLI, HARNESS_SELECTION_COMPATIBILITY,
+    HARNESS_SELECTION_DEFAULT, HARNESS_SELECTION_USER, MINIMAL_HARNESS_PROFILE_ID,
+    ULTIMATE_HARNESS_PROFILE_ID,
+};
+pub use model::{
+    ModelEditProjection, ModelListProjection, ModelMutation, ModelSummary, SecretUpdate,
+    TuiModelCatalogProjection,
 };
 pub use session::{
     validate_session_id, SessionAgentRouteOwner, SessionContinuationPolicy, SessionKind,
-    SessionModelBindingPolicy,
+    SessionModelBindingPolicy, SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY,
 };
 pub use session_usage::*;
 pub use speech::*;

@@ -8,7 +8,7 @@ import {
   WatchProvisionProtocol,
   WatchProvisionRequest
 } from './WatchProvisionProtocol';
-import { WatchProvisionState } from '../pages/state/WatchProvisionState';
+import { WatchProvisionDisplay } from './WatchProvisionDisplay';
 
 const DATASYNC_PERMISSION: Permissions = 'ohos.permission.DISTRIBUTED_DATASYNC';
 
@@ -55,7 +55,7 @@ export interface WatchProvisionPort {
  * implicit and never remembered.
  */
 export class WatchProvisionController {
-  private readonly state: WatchProvisionState;
+  private readonly state: WatchProvisionDisplay;
   private readonly port: WatchProvisionPort;
   private store?: WatchHandoffStore;
   private starting: boolean = false;
@@ -69,7 +69,7 @@ export class WatchProvisionController {
    */
   private readonly answered: Set<string> = new Set<string>();
 
-  constructor(state: WatchProvisionState, port: WatchProvisionPort) {
+  constructor(state: WatchProvisionDisplay, port: WatchProvisionPort) {
     this.state = state;
     this.port = port;
   }

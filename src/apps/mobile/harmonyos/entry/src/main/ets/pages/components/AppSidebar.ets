@@ -111,7 +111,7 @@ export struct AppSidebar {
   LocalSessionContent() {
     Column() {
       if (this.visiblePinnedSessions().length > 0) {
-        Text('置顶')
+        Text(RemoteI18n.t('sidebar.pinned'))
           .fontSize(14).fontWeight(FontWeight.Medium).fontColor(MUTED)
           .width('100%').margin({ top: 16, bottom: 6 })
         ForEach(this.visiblePinnedSessions(), (session: RemoteSession) => {

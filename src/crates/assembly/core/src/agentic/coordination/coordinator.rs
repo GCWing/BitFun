@@ -38,10 +38,18 @@ use crate::agentic::memories::{start_memory_startup_task, MemoryStartupRequest};
 use crate::agentic::permission_policy::resolve_effective_permission_policy;
 use crate::agentic::round_preempt::DialogRoundInjectionSource;
 use crate::agentic::session::revert::{
-    resolve_redo, resolve_undo, SessionRevertPhase, SessionRevertTransition,
+    resolve_redo, resolve_targeted, resolve_undo, SessionRevertPhase, SessionRevertTransition,
 };
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
-use crate::agentic::session::{SessionManager, SessionReferenceLocator};
+use crate::agentic::session::{
+    SessionManager, SessionReferenceLocator, TurnAdmissionSessionFacts,
+    INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY,
+    INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY,
+    INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY,
+};
 use crate::agentic::side_question::build_btw_user_input;
 use crate::agentic::skill_agent_snapshot::{
     diff_skill_agent_snapshot, resolve_skill_agent_snapshot, TurnSkillAgentSnapshot,
@@ -1077,6 +1085,66 @@ fn lineage_post_admission_cancellation_error(
     ))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DialogTurnStopDisposition {
+    Cancelled,
+    Interrupted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InterruptedTurnIntentState {
+    Pending,
+    Committed,
+    Revoked,
+}
+
+fn interrupted_turn_intent_is_pending(
+    intents: &DashMap<String, InterruptedTurnIntentState>,
+    key: &str,
+) -> bool {
+    intents
+        .get(key)
+        .is_some_and(|state| *state == InterruptedTurnIntentState::Pending)
+}
+
+fn commit_interrupted_turn_intent(
+    intents: &DashMap<String, InterruptedTurnIntentState>,
+    key: &str,
+) -> bool {
+    let Some(mut state) = intents.get_mut(key) else {
+        return false;
+    };
+    match *state {
+        InterruptedTurnIntentState::Pending => {
+            *state = InterruptedTurnIntentState::Committed;
+            true
+        }
+        InterruptedTurnIntentState::Committed => true,
+        InterruptedTurnIntentState::Revoked => false,
+    }
+}
+
+fn revoke_interrupted_turn_intent_or_observe_commit(
+    intents: &DashMap<String, InterruptedTurnIntentState>,
+    key: &str,
+) -> bool {
+    let Some(mut state) = intents.get_mut(key) else {
+        return false;
+    };
+    match *state {
+        InterruptedTurnIntentState::Pending => {
+            *state = InterruptedTurnIntentState::Revoked;
+            false
+        }
+        InterruptedTurnIntentState::Committed => true,
+        InterruptedTurnIntentState::Revoked => false,
+    }
+}
+
+fn turn_stop_key(session_id: &str, turn_id: &str) -> String {
+    format!("{session_id}\u{1f}{turn_id}")
+}
+
 /// Conversation coordinator
 pub struct ConversationCoordinator {
     session_manager: Arc<SessionManager>,
@@ -1096,7 +1164,7 @@ pub struct ConversationCoordinator {
     /// Parent-owned terminal outcomes consumed only through AgentWait.
     background_subagent_outcomes: Arc<BackgroundSubagentOutcomeStore>,
     /// Notifies DialogScheduler of turn outcomes; injected after construction
-    scheduler_notify_tx: OnceLock<mpsc::Sender<(String, TurnOutcome)>>,
+    scheduler_notify_tx: OnceLock<mpsc::UnboundedSender<(String, TurnOutcome)>>,
     /// Round-boundary user steering source (mid-turn user message injection); injected after construction
     round_injection_source: OnceLock<Arc<dyn DialogRoundInjectionSource>>,
     /// In-flight dialog turn tracker per session, used to serialize cancel→start
@@ -1112,6 +1180,9 @@ pub struct ConversationCoordinator {
     /// Manual-compaction turns need an atomic planning/cancel/commit decision
     /// before the normal cancellation path may expose the Session as idle.
     manual_compaction_controls: Arc<DashMap<String, Arc<ManualCompactionCommitGate>>>,
+    /// Recoverable stop intent observed by the spawned execution owner when
+    /// cancellation reaches its terminal persistence boundary.
+    interrupted_turn_intents: Arc<DashMap<String, InterruptedTurnIntentState>>,
     thread_goal_runtime: Arc<ThreadGoalRuntime>,
     terminal_port: OnceLock<Arc<dyn TerminalPort>>,
     remote_exec_port: OnceLock<Arc<dyn RemoteExecPort>>,
@@ -2151,6 +2222,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             active_turns_per_session: Arc::new(DashMap::new()),
             turn_settlements: Arc::new(TurnSettlementTracker::default()),
             manual_compaction_controls: Arc::new(DashMap::new()),
+            interrupted_turn_intents: Arc::new(DashMap::new()),
             thread_goal_runtime: Arc::new(ThreadGoalRuntime::new()),
             terminal_port: OnceLock::new(),
             remote_exec_port: OnceLock::new(),
@@ -2315,7 +2387,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     /// Inject the DialogScheduler notification channel after construction.
     /// Called once during app initialization after the scheduler is created.
-    pub fn set_scheduler_notifier(&self, tx: mpsc::Sender<(String, TurnOutcome)>) {
+    pub fn set_scheduler_notifier(&self, tx: mpsc::UnboundedSender<(String, TurnOutcome)>) {
         let _ = self.scheduler_notify_tx.set(tx);
     }
 
@@ -2798,11 +2870,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     async fn persist_completed_dialog_turn(
+        event_queue: &EventQueue,
         session_manager: &SessionManager,
-        scheduler_notify_tx: Option<&mpsc::Sender<(String, TurnOutcome)>>,
+        scheduler_notify_tx: Option<&mpsc::UnboundedSender<(String, TurnOutcome)>>,
         session_id: &str,
         turn_id: &str,
         execution_result: &ExecutionResult,
+        recovery_generation: Option<u32>,
     ) -> (crate::service::session::TurnStatus, String) {
         let final_response = match &execution_result.final_message.content {
             MessageContent::Text(text) => text.clone(),
@@ -2815,25 +2889,84 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_id, turn_id, execution_result.total_rounds
         );
 
-        if let Err(error) = session_manager
-            .complete_dialog_turn(
-                session_id,
-                turn_id,
-                final_response.clone(),
-                &execution_result.new_messages,
-                TurnStats {
-                    total_rounds: execution_result.total_rounds,
-                    total_tools: 0, // TODO: get from execution_result
-                    total_tokens: 0,
-                    duration_ms: 0,
-                },
-            )
-            .await
-        {
+        let stats = TurnStats {
+            total_rounds: execution_result.total_rounds,
+            total_tools: execution_result.total_tools,
+            total_tokens: 0,
+            duration_ms: execution_result.duration_ms,
+        };
+        let persistence_result = match recovery_generation {
+            Some(execution_generation) => {
+                session_manager
+                    .complete_recovered_dialog_turn(
+                        session_id,
+                        turn_id,
+                        execution_generation,
+                        final_response.clone(),
+                        &execution_result.new_messages,
+                        stats,
+                    )
+                    .await
+            }
+            None => {
+                session_manager
+                    .complete_dialog_turn(
+                        session_id,
+                        turn_id,
+                        final_response.clone(),
+                        &execution_result.new_messages,
+                        stats,
+                    )
+                    .await
+            }
+        };
+        if let Err(error) = persistence_result {
             error!(
                 "Failed to complete dialog turn: session_id={}, turn_id={}, error={}",
                 session_id, turn_id, error
             );
+            if recovery_generation.is_some() {
+                // A recovered generation is Runtime-owned. Never acknowledge
+                // completion when its authoritative Turn payload was not made
+                // durable; put the same generation back behind the recovery
+                // gate so the user can retry without losing its prior rounds.
+                let status = Self::persist_interrupted_dialog_turn(
+                    event_queue,
+                    session_manager,
+                    scheduler_notify_tx,
+                    session_id,
+                    turn_id,
+                    &execution_result.new_messages,
+                    None,
+                )
+                .await;
+                return (status, String::new());
+            }
+        }
+
+        if recovery_generation.is_some() {
+            if let Err(error) = event_queue
+                .enqueue(
+                    AgenticEvent::DialogTurnCompleted {
+                        session_id: session_id.to_string(),
+                        turn_id: turn_id.to_string(),
+                        total_rounds: execution_result.total_rounds,
+                        total_tools: execution_result.total_tools,
+                        duration_ms: execution_result.duration_ms,
+                        partial_recovery_reason: execution_result.partial_recovery_reason.clone(),
+                        success: Some(execution_result.success),
+                        finish_reason: Some(execution_result.effective_finish_reason.clone()),
+                        has_final_response: Some(execution_result.has_final_response),
+                    },
+                    None,
+                )
+                .await
+            {
+                error!(
+                    "Failed to emit recovered DialogTurnCompleted event: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
         }
 
         match session_manager
@@ -2856,7 +2989,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         if let Some(tx) = scheduler_notify_tx {
-            if let Err(error) = tx.try_send((
+            if let Err(error) = tx.send((
                 session_id.to_string(),
                 TurnOutcome::Completed {
                     turn_id: turn_id.to_string(),
@@ -2879,20 +3012,168 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     async fn persist_cancelled_dialog_turn(
         event_queue: &EventQueue,
         session_manager: &SessionManager,
-        scheduler_notify_tx: Option<&mpsc::Sender<(String, TurnOutcome)>>,
+        scheduler_notify_tx: Option<&mpsc::UnboundedSender<(String, TurnOutcome)>>,
         session_id: &str,
         turn_id: &str,
         emit_lifecycle_events: bool,
+    ) -> crate::service::session::TurnStatus {
+        Self::persist_cancelled_dialog_turn_with_messages(
+            event_queue,
+            session_manager,
+            scheduler_notify_tx,
+            session_id,
+            turn_id,
+            emit_lifecycle_events,
+            &[],
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn report_terminal_persistence_failure(
+        event_queue: &EventQueue,
+        session_manager: &SessionManager,
+        scheduler_notify_tx: Option<&mpsc::UnboundedSender<(String, TurnOutcome)>>,
+        session_id: &str,
+        turn_id: &str,
+        terminal_kind: &str,
+        persistence_error: &BitFunError,
+        emit_lifecycle_events: bool,
+    ) -> crate::service::session::TurnStatus {
+        let error = BitFunError::OutcomeUnknown(format!(
+            "Failed to persist authoritative {terminal_kind} outcome: session_id={session_id}, turn_id={turn_id}; {persistence_error}"
+        ));
+        let error_text = error.to_string();
+        error!("{error_text}");
+
+        if emit_lifecycle_events {
+            if let Err(queue_error) = event_queue
+                .enqueue(
+                    AgenticEvent::DialogTurnFailed {
+                        session_id: session_id.to_string(),
+                        turn_id: turn_id.to_string(),
+                        error: error_text.clone(),
+                        error_category: Some(error.error_category()),
+                        error_detail: Some(error.error_detail()),
+                    },
+                    Some(EventPriority::Critical),
+                )
+                .await
+            {
+                error!(
+                    "Failed to emit terminal persistence failure: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, queue_error
+                );
+            }
+        }
+
+        if let Err(state_error) = session_manager
+            .update_session_state_for_turn_if_processing(
+                session_id,
+                turn_id,
+                SessionState::Error {
+                    error: error_text.clone(),
+                    recoverable: true,
+                },
+            )
+            .await
+        {
+            error!(
+                "Failed to set Session Error after terminal persistence failure: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, state_error
+            );
+        }
+
+        if let Some(tx) = scheduler_notify_tx {
+            if let Err(notify_error) = tx.send((
+                session_id.to_string(),
+                TurnOutcome::Failed {
+                    turn_id: turn_id.to_string(),
+                    error: error_text,
+                },
+            )) {
+                error!(
+                    "Failed to notify scheduler of terminal persistence failure: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, notify_error
+                );
+            }
+        }
+
+        crate::service::session::TurnStatus::Error
+    }
+
+    async fn persist_cancelled_dialog_turn_with_messages(
+        event_queue: &EventQueue,
+        session_manager: &SessionManager,
+        scheduler_notify_tx: Option<&mpsc::UnboundedSender<(String, TurnOutcome)>>,
+        session_id: &str,
+        turn_id: &str,
+        emit_lifecycle_events: bool,
+        generation_messages: &[Message],
+    ) -> crate::service::session::TurnStatus {
+        Self::persist_cancelled_dialog_turn_with_messages_and_policy(
+            event_queue,
+            session_manager,
+            scheduler_notify_tx,
+            session_id,
+            turn_id,
+            emit_lifecycle_events,
+            generation_messages,
+            false,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn persist_cancelled_dialog_turn_with_messages_and_policy(
+        event_queue: &EventQueue,
+        session_manager: &SessionManager,
+        scheduler_notify_tx: Option<&mpsc::UnboundedSender<(String, TurnOutcome)>>,
+        session_id: &str,
+        turn_id: &str,
+        emit_lifecycle_events: bool,
+        generation_messages: &[Message],
+        preserve_recovery_on_persist_failure: bool,
     ) -> crate::service::session::TurnStatus {
         info!(
             "Dialog turn cancelled: session={}, turn={}",
             session_id, turn_id
         );
 
+        if let Err(error) = session_manager
+            .cancel_dialog_turn_with_messages(session_id, turn_id, generation_messages)
+            .await
+        {
+            error!(
+                "Failed to cancel dialog turn in persistence: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, error
+            );
+            if preserve_recovery_on_persist_failure {
+                return Box::pin(Self::persist_interrupted_dialog_turn(
+                    event_queue,
+                    session_manager,
+                    scheduler_notify_tx,
+                    session_id,
+                    turn_id,
+                    generation_messages,
+                    None,
+                ))
+                .await;
+            }
+            return Self::report_terminal_persistence_failure(
+                event_queue,
+                session_manager,
+                scheduler_notify_tx,
+                session_id,
+                turn_id,
+                "cancelled",
+                &error,
+                emit_lifecycle_events,
+            )
+            .await;
+        }
+
         if emit_lifecycle_events {
-            // The execution engine only emits DialogTurnCancelled when cancellation is
-            // detected between rounds. If cancellation interrupted streaming mid-round,
-            // no event was emitted. Emit it here unconditionally; duplicates are harmless.
             if let Err(error) = event_queue
                 .enqueue(
                     AgenticEvent::DialogTurnCancelled {
@@ -2908,16 +3189,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     session_id, turn_id, error
                 );
             }
-        }
-
-        if let Err(error) = session_manager
-            .cancel_dialog_turn(session_id, turn_id)
-            .await
-        {
-            error!(
-                "Failed to cancel dialog turn in persistence: session_id={}, turn_id={}, error={}",
-                session_id, turn_id, error
-            );
         }
 
         match session_manager
@@ -2940,7 +3211,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         if let Some(tx) = scheduler_notify_tx {
-            if let Err(error) = tx.try_send((
+            if let Err(error) = tx.send((
                 session_id.to_string(),
                 TurnOutcome::Cancelled {
                     turn_id: turn_id.to_string(),
@@ -2956,19 +3227,192 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         crate::service::session::TurnStatus::Cancelled
     }
 
+    async fn persist_interrupted_dialog_turn(
+        event_queue: &EventQueue,
+        session_manager: &SessionManager,
+        scheduler_notify_tx: Option<&mpsc::UnboundedSender<(String, TurnOutcome)>>,
+        session_id: &str,
+        turn_id: &str,
+        generation_messages: &[Message],
+        interruption_intents: Option<&DashMap<String, InterruptedTurnIntentState>>,
+    ) -> crate::service::session::TurnStatus {
+        info!(
+            "Dialog turn interrupted: session={}, turn={}",
+            session_id, turn_id
+        );
+        let recovery = match session_manager
+            .mark_dialog_turn_interrupted_with_messages(session_id, turn_id, generation_messages)
+            .await
+        {
+            Ok(recovery) => recovery,
+            Err(error) => {
+                error!(
+                    "Failed to persist recoverable interruption; falling back to cancellation: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+                return Self::persist_cancelled_dialog_turn_with_messages(
+                    event_queue,
+                    session_manager,
+                    scheduler_notify_tx,
+                    session_id,
+                    turn_id,
+                    true,
+                    generation_messages,
+                )
+                .await;
+            }
+        };
+
+        match session_manager
+            .update_session_state_for_turn_if_processing(session_id, turn_id, SessionState::Idle)
+            .await
+        {
+            Ok(true) => {}
+            Ok(false) => debug!(
+                "Interrupted turn no longer owns Processing state: session_id={}, turn_id={}",
+                session_id, turn_id
+            ),
+            Err(error) => error!(
+                "Failed to settle interrupted Session as Idle: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, error
+            ),
+        }
+
+        if let Some(interruption_intents) = interruption_intents {
+            let key = turn_stop_key(session_id, turn_id);
+            if !commit_interrupted_turn_intent(interruption_intents, &key) {
+                interruption_intents.remove(&key);
+                info!(
+                    "Interrupted turn was superseded by hard cancellation before settlement: session_id={}, turn_id={}",
+                    session_id, turn_id
+                );
+                return Self::persist_cancelled_dialog_turn_with_messages_and_policy(
+                    event_queue,
+                    session_manager,
+                    scheduler_notify_tx,
+                    session_id,
+                    turn_id,
+                    true,
+                    generation_messages,
+                    true,
+                )
+                .await;
+            }
+        }
+
+        if let Some(tx) = scheduler_notify_tx {
+            if let Err(error) = tx.send((
+                session_id.to_string(),
+                TurnOutcome::Interrupted {
+                    turn_id: turn_id.to_string(),
+                    execution_generation: recovery.execution_generation,
+                },
+            )) {
+                error!(
+                    "Failed to notify scheduler of turn interruption: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
+        }
+
+        if let Err(error) = event_queue
+            .enqueue_with_guaranteed_legacy_storage(
+                AgenticEvent::DialogTurnInterrupted {
+                    session_id: session_id.to_string(),
+                    turn_id: turn_id.to_string(),
+                    execution_generation: recovery.execution_generation,
+                    model_id: recovery.model_id.clone(),
+                },
+                Some(EventPriority::Critical),
+            )
+            .await
+        {
+            error!(
+                "Failed to emit DialogTurnInterrupted event: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, error
+            );
+        }
+
+        crate::service::session::TurnStatus::Cancelled
+    }
+
     async fn persist_failed_dialog_turn(
         event_queue: &EventQueue,
         session_manager: &SessionManager,
-        scheduler_notify_tx: Option<&mpsc::Sender<(String, TurnOutcome)>>,
+        scheduler_notify_tx: Option<&mpsc::UnboundedSender<(String, TurnOutcome)>>,
         session_id: &str,
         turn_id: &str,
         error: &BitFunError,
         emit_lifecycle_events: bool,
     ) -> crate::service::session::TurnStatus {
+        Self::persist_failed_dialog_turn_with_messages(
+            event_queue,
+            session_manager,
+            scheduler_notify_tx,
+            session_id,
+            turn_id,
+            error,
+            emit_lifecycle_events,
+            &[],
+            false,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn persist_failed_dialog_turn_with_messages(
+        event_queue: &EventQueue,
+        session_manager: &SessionManager,
+        scheduler_notify_tx: Option<&mpsc::UnboundedSender<(String, TurnOutcome)>>,
+        session_id: &str,
+        turn_id: &str,
+        error: &BitFunError,
+        emit_lifecycle_events: bool,
+        generation_messages: &[Message],
+        preserve_recovery_on_persist_failure: bool,
+    ) -> crate::service::session::TurnStatus {
         let error_text = error.to_string();
         let recoverable = !matches!(error, BitFunError::AIClient(_) | BitFunError::Timeout(_));
 
         error!("Dialog turn execution failed: {}", error_text);
+
+        if let Err(persist_error) = session_manager
+            .fail_dialog_turn_with_messages(
+                session_id,
+                turn_id,
+                error_text.clone(),
+                generation_messages,
+            )
+            .await
+        {
+            error!(
+                "Failed to mark dialog turn as failed: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, persist_error
+            );
+            if preserve_recovery_on_persist_failure {
+                return Self::persist_interrupted_dialog_turn(
+                    event_queue,
+                    session_manager,
+                    scheduler_notify_tx,
+                    session_id,
+                    turn_id,
+                    generation_messages,
+                    None,
+                )
+                .await;
+            }
+            return Self::report_terminal_persistence_failure(
+                event_queue,
+                session_manager,
+                scheduler_notify_tx,
+                session_id,
+                turn_id,
+                "failed",
+                &persist_error,
+                emit_lifecycle_events,
+            )
+            .await;
+        }
 
         if emit_lifecycle_events {
             if let Err(queue_error) = event_queue
@@ -2989,16 +3433,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     session_id, turn_id, queue_error
                 );
             }
-        }
-
-        if let Err(persist_error) = session_manager
-            .fail_dialog_turn(session_id, turn_id, error_text.clone())
-            .await
-        {
-            error!(
-                "Failed to mark dialog turn as failed: session_id={}, turn_id={}, error={}",
-                session_id, turn_id, persist_error
-            );
         }
 
         match session_manager
@@ -3028,7 +3462,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         if let Some(tx) = scheduler_notify_tx {
-            if let Err(notify_error) = tx.try_send((
+            if let Err(notify_error) = tx.send((
                 session_id.to_string(),
                 TurnOutcome::Failed {
                     turn_id: turn_id.to_string(),
@@ -3346,7 +3780,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let kickoff_query = Self::assistant_bootstrap_kickoff_query(is_chinese);
         let expected_reply_language = if is_chinese { "Chinese" } else { "English" };
         let workspace_binding = WorkspaceBinding::new(None, workspace_root.clone());
-        let model_id = self
+        let (model_id, _) = self
             .execution_engine
             .resolve_model_id_for_turn(
                 &session,
@@ -3354,6 +3788,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 Some(&workspace_binding),
                 kickoff_query,
                 0,
+                None,
+                None,
             )
             .await?;
 
@@ -4052,7 +4488,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             final_response: String::new(),
                         }
                     };
-                    if let Err(error) = tx.try_send((session_id.clone(), outcome)) {
+                    if let Err(error) = tx.send((session_id.clone(), outcome)) {
                         error!(
                         "Failed to notify scheduler of delegated command settlement: session_id={}, turn_id={}, error={}",
                         session_id, turn_id, error
@@ -5001,7 +5437,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             agent_type: runtime_agent_type,
             execution_profile: session.config.execution_profile.clone(),
             workspace: manual_workspace,
-            context: HashMap::new(),
+            context: HashMap::from([(
+                "cancel_lifecycle_owner".to_string(),
+                "coordinator".to_string(),
+            )]),
             subagent_parent_info: None,
             permission_delegation: None,
             permission_runtime_ceiling: None,
@@ -5011,7 +5450,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             terminal_port,
             remote_exec_port,
             round_injection: None,
-            emit_lifecycle_events: true,
+            emit_lifecycle_events: false,
             recover_partial_on_cancel: false,
         };
         let session_max_tokens = session.config.max_context_tokens;
@@ -5595,11 +6034,84 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_message_metadata = Some(metadata);
         }
 
+        // Resolve and freeze the concrete model before the Turn becomes
+        // visible. Symbolic selectors such as `auto` may change between
+        // generations; a recovered generation must keep the model selected
+        // for the first generation.
+        let (resolved_model_id, resolved_model_binding_fingerprint) = self
+            .execution_engine
+            .resolve_model_id_for_turn(
+                &session,
+                &effective_agent_type,
+                session_workspace.as_ref(),
+                &original_user_input,
+                turn_index,
+                None,
+                None,
+            )
+            .await?;
+        let reasoning_preset = self
+            .session_manager
+            .reconcile_session_reasoning_preset_for_turn(&session_id, "turn_admission")
+            .await?;
+        let (resolved_reasoning_preset, resolved_reasoning_fingerprint) =
+            SessionManager::resolve_effective_reasoning_preset_for_turn(
+                &resolved_model_id,
+                reasoning_preset.as_deref(),
+            )
+            .await?;
+        let admission_facts = TurnAdmissionSessionFacts::from_session(&session)
+            .with_reasoning_preset(reasoning_preset.clone());
+
+        // Persist the first generation's effective permission as the maximum
+        // authority a recovered generation may use. Ordinary rounds still read
+        // current turn/session/global settings; recovery may tighten this
+        // baseline per round, but can never widen it.
+        let submission_permission_mode = resolve_submission_permission_mode(
+            permission_mode_from_metadata(user_message_metadata.as_ref()),
+            session.config.permission_mode,
+            default_permission_mode_from_global_config().await,
+        );
+        let mut metadata = Self::ensure_user_message_metadata_object(user_message_metadata.take());
+        if let Some(object) = metadata.as_object_mut() {
+            object.insert(
+                INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY.to_string(),
+                serde_json::Value::String(submission_permission_mode.mode.as_str().to_string()),
+            );
+            object.insert(
+                INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY.to_string(),
+                serde_json::Value::String(resolved_model_id.clone()),
+            );
+            object.insert(
+                INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY.to_string(),
+                serde_json::Value::String(resolved_model_binding_fingerprint.clone()),
+            );
+            object.insert(
+                INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY.to_string(),
+                resolved_reasoning_preset
+                    .clone()
+                    .map(serde_json::Value::String)
+                    .unwrap_or(serde_json::Value::Null),
+            );
+            object.insert(
+                INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY.to_string(),
+                reasoning_preset
+                    .clone()
+                    .map(serde_json::Value::String)
+                    .unwrap_or(serde_json::Value::Null),
+            );
+            object.insert(
+                INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY.to_string(),
+                serde_json::Value::String(resolved_reasoning_fingerprint.clone()),
+            );
+        }
+        user_message_metadata = Some(metadata);
+
         // Start new dialog turn (sets state to Processing internally)
         // Pass frontend turnId, generate if not provided
         let turn_id = self
             .session_manager
-            .start_dialog_turn_with_prepended_messages(
+            .start_dialog_turn_with_prepended_messages_if_session_matches(
                 &session_id,
                 effective_agent_type.clone(),
                 effective_user_input.clone(),
@@ -5607,8 +6119,25 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 image_contexts,
                 prepended_messages,
                 user_message_metadata.clone(),
+                &admission_facts,
             )
             .await?;
+        if let Some(turn_mode) = permission_mode_from_metadata(user_message_metadata.as_ref()) {
+            // A one-off selection is mutable runtime state for this exact turn,
+            // not a frozen submission property. Each model round reads the
+            // latest value and the turn guard removes it on every exit path.
+            if !self.session_manager.set_active_turn_permission_mode(
+                &session_id,
+                &turn_id,
+                turn_mode,
+            ) {
+                self.session_manager
+                    .reset_session_state_if_processing(&session_id, &turn_id);
+                return Err(BitFunError::Session(format!(
+                    "Failed to install active turn permission mode: session_id={session_id}, turn_id={turn_id}"
+                )));
+            }
+        }
         start_memory_startup_task(MemoryStartupRequest {
             session_id: session_id.clone(),
             session_kind: session.kind,
@@ -5742,11 +6271,39 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "edit_constraint_revocation_authorized".to_string(),
             revocation_authorized.to_string(),
         );
+        // The coordinator persists and emits exactly one terminal cancellation
+        // kind after settlement: ordinary Cancelled or recoverable Interrupted.
+        context_vars.insert(
+            "cancel_lifecycle_owner".to_string(),
+            "coordinator".to_string(),
+        );
 
         // Pass model_id for token usage tracking
         if let Some(model_id) = &session.config.model_id {
             context_vars.insert("model_name".to_string(), model_id.clone());
         }
+        context_vars.insert(
+            INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY.to_string(),
+            resolved_model_id,
+        );
+        context_vars.insert(
+            INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY.to_string(),
+            resolved_model_binding_fingerprint,
+        );
+        context_vars.insert(
+            INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY.to_string(),
+            serde_json::to_string(&resolved_reasoning_preset)
+                .expect("Option<String> reasoning preset must serialize"),
+        );
+        context_vars.insert(
+            INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY.to_string(),
+            serde_json::to_string(&reasoning_preset)
+                .expect("Option<String> reasoning selection must serialize"),
+        );
+        context_vars.insert(
+            INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY.to_string(),
+            resolved_reasoning_fingerprint,
+        );
 
         // Pass snapshot session ID
         if let Some(snapshot_id) = &session.snapshot_session_id {
@@ -5804,19 +6361,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 auto_approve_ask.to_string(),
             );
         }
-        // Resolve the permission mode once per submission. Downstream rounds and
-        // delegated subagents read this value instead of re-resolving the layers
-        // with partial context, so a mid-turn configuration or session change
-        // cannot split one turn across two modes.
-        let submission_permission_mode = resolve_submission_permission_mode(
-            permission_mode_from_metadata(user_message_metadata.as_ref()),
-            session.config.permission_mode,
-            default_permission_mode_from_global_config().await,
-        );
-        context_vars.insert(
-            PERMISSION_MODE_CONTEXT_KEY.to_string(),
-            submission_permission_mode.mode.as_str().to_string(),
-        );
         if needs_computer_links_for_source(submission_policy.trigger_source) {
             context_vars.insert(
                 TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY.to_string(),
@@ -5877,7 +6421,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .unwrap_or_default();
             tokio::spawn(async move {
                 let allow_ai = is_ai_session_title_generation_enabled().await;
-                let resolved = sm.resolve_session_title(&msg, Some(20), allow_ai).await;
+                let resolved = sm
+                    .resolve_session_title(&sid, &msg, Some(20), allow_ai)
+                    .await;
 
                 match sm
                     .update_session_title_if_current(&sid, &expected_title, &resolved.title)
@@ -5917,6 +6463,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let runtime_agent_type_clone = runtime_agent_type;
         let user_message_metadata_clone = user_message_metadata;
         let scheduler_notify_tx = self.scheduler_notify_tx.get().cloned();
+        let interrupted_turn_intents = Arc::clone(&self.interrupted_turn_intents);
+        let interrupted_turn_key = turn_stop_key(&session_id, &turn_id);
 
         tokio::spawn(async move {
             // Keep the exact approved external prompt/tool/permission/model
@@ -5962,6 +6510,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     // synchronously reset to Idle so the user is never stuck.
                     self.session_manager
                         .reset_session_state_if_processing(&self.session_id, &self.turn_id);
+                    // Clear after the state transition. This ordering prevents
+                    // an overlapping API update from validating Processing
+                    // immediately after cleanup and publishing a stale entry.
+                    self.session_manager
+                        .clear_active_turn_permission_mode(&self.session_id, &self.turn_id);
                 }
             }
 
@@ -6008,28 +6561,51 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             {
                 Ok(execution_result) => Some(
                     Self::persist_completed_dialog_turn(
+                        event_queue.as_ref(),
                         session_manager.as_ref(),
                         scheduler_notify_tx.as_ref(),
                         &session_id_clone,
                         &turn_id_clone,
                         &execution_result,
+                        None,
                     )
                     .await
                     .0,
                 ),
                 Err(e) => {
+                    let generation_messages = execution_engine
+                        .take_generation_messages(&session_id_clone, &turn_id_clone);
                     if matches!(&e, BitFunError::Cancelled(_)) {
-                        Some(
-                            Self::persist_cancelled_dialog_turn(
-                                event_queue.as_ref(),
-                                session_manager.as_ref(),
-                                scheduler_notify_tx.as_ref(),
-                                &session_id_clone,
-                                &turn_id_clone,
-                                true,
+                        if interrupted_turn_intent_is_pending(
+                            interrupted_turn_intents.as_ref(),
+                            &interrupted_turn_key,
+                        ) {
+                            Some(
+                                Self::persist_interrupted_dialog_turn(
+                                    event_queue.as_ref(),
+                                    session_manager.as_ref(),
+                                    scheduler_notify_tx.as_ref(),
+                                    &session_id_clone,
+                                    &turn_id_clone,
+                                    &generation_messages,
+                                    Some(interrupted_turn_intents.as_ref()),
+                                )
+                                .await,
                             )
-                            .await,
-                        )
+                        } else {
+                            Some(
+                                Self::persist_cancelled_dialog_turn_with_messages(
+                                    event_queue.as_ref(),
+                                    session_manager.as_ref(),
+                                    scheduler_notify_tx.as_ref(),
+                                    &session_id_clone,
+                                    &turn_id_clone,
+                                    true,
+                                    &generation_messages,
+                                )
+                                .await,
+                            )
+                        }
                     } else {
                         Some(
                             Self::persist_failed_dialog_turn(
@@ -6064,6 +6640,521 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         active_registration.disarm();
 
         Ok(())
+    }
+
+    /// Recover the latest settled interrupted user turn in place.
+    ///
+    /// This is intentionally separate from `start_dialog_turn_internal`: a
+    /// recovery must not rerun prompt-submit hooks, rematerialize references,
+    /// append another user message, or allocate another dialog turn.
+    pub async fn recover_interrupted_dialog_turn(
+        &self,
+        request: &bitfun_runtime_ports::AgentDialogTurnRecoveryRequest,
+    ) -> BitFunResult<bitfun_runtime_ports::AgentDialogTurnRecoveryOutcome> {
+        bitfun_core_types::validate_session_id(&request.session_id)
+            .map_err(BitFunError::Validation)?;
+        bitfun_core_types::validate_session_id(&request.turn_id)
+            .map_err(|message| BitFunError::Validation(format!("Invalid turn_id: {message}")))?;
+        self.ensure_session_runtime_ownership(&request.session_id, None)?;
+
+        let session = self
+            .session_manager
+            .get_session(&request.session_id)
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session not found: {}", request.session_id))
+            })?;
+        if session.kind != SessionKind::Standard {
+            return Err(BitFunError::Validation(
+                "Interrupted turn recovery is supported only for standard user sessions"
+                    .to_string(),
+            ));
+        }
+        if request.remote_connection_id.is_some()
+            || request.remote_ssh_host.is_some()
+            || session.config.remote_connection_id.is_some()
+            || session.config.remote_ssh_host.is_some()
+        {
+            return Err(BitFunError::Validation(
+                "Interrupted turn recovery is unavailable for remote workspaces".to_string(),
+            ));
+        }
+        if let Some(requested_workspace) = request.workspace_path.as_deref() {
+            let matches_session_workspace = session.config.workspace_path.as_deref()
+                == Some(requested_workspace)
+                || session.config.project_workspace_path.as_deref() == Some(requested_workspace);
+            if !matches_session_workspace {
+                return Err(BitFunError::Validation(
+                    "Interrupted turn recovery workspace does not match the session".to_string(),
+                ));
+            }
+        }
+        if !matches!(session.state, SessionState::Idle) {
+            return Err(BitFunError::Validation(format!(
+                "Session must be idle before recovering an interrupted turn: {:?}",
+                session.state
+            )));
+        }
+        let goal_storage_path = self
+            .require_main_session_storage_path(&request.session_id)
+            .await?;
+        if self
+            .thread_goal_store()
+            .get_thread_goal(&request.session_id, goal_storage_path.as_path())
+            .await?
+            .is_some_and(|goal| {
+                matches!(
+                    goal.status,
+                    ThreadGoalStatus::Active | ThreadGoalStatus::Paused
+                )
+            })
+        {
+            return Err(BitFunError::Validation(
+                "Use the Thread Goal controls to resume goal work".to_string(),
+            ));
+        }
+
+        // The interruption event may reach the UI just before the old spawn
+        // drops its tail-write guards. Recovery is strict: never overlap those
+        // writes with a new execution generation.
+        self.ensure_session_execution_drained(&request.session_id, Duration::from_secs(30))
+            .await?;
+
+        let session_workspace = Self::build_workspace_binding(&session.config).await;
+        if session_workspace
+            .as_ref()
+            .is_some_and(WorkspaceBinding::is_remote)
+        {
+            return Err(BitFunError::Validation(
+                "Interrupted turn recovery is unavailable for remote workspaces".to_string(),
+            ));
+        }
+        let primary_agent_binding =
+            Self::resolve_session_primary_agent(&session, &session.agent_type, &session_workspace)
+                .await?;
+        if primary_agent_binding.route_owner != SessionAgentRouteOwner::Local {
+            return Err(BitFunError::Validation(
+                "Interrupted turn recovery is unavailable for externally owned agent routes"
+                    .to_string(),
+            ));
+        }
+        let runtime_agent_type = primary_agent_binding.runtime_agent_key;
+        let external_agent_generation_lease = primary_agent_binding.lease;
+        let workspace_services = Self::build_workspace_services(&session_workspace).await;
+        let persisted_subagent_context = self
+            .load_persisted_subagent_continuation_context(&session)
+            .await;
+        let session_workspace_path = session_workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path_string());
+        let session_storage_path = session_workspace
+            .as_ref()
+            .map(|workspace| workspace.session_storage_dir().to_path_buf());
+        // This is the compare-and-set boundary. After it succeeds, no fallible
+        // preparation remains before the execution is registered and spawned.
+        let plan = self
+            .session_manager
+            .reopen_interrupted_dialog_turn(
+                &request.session_id,
+                &request.turn_id,
+                request.execution_generation,
+            )
+            .await?;
+        info!(
+            "Recovering interrupted dialog turn: session_id={}, turn_id={}, execution_generation={}, resume_count={}",
+            plan.session_id, plan.turn_id, plan.execution_generation, plan.resume_count
+        );
+        // Recovery admission is serialized by the scheduler, but settings may
+        // have changed while the previous generation drained. Re-read the
+        // authoritative Session after the CAS before deriving permission and
+        // execution facts.
+        let session = self
+            .session_manager
+            .get_session(&request.session_id)
+            .unwrap_or(session);
+
+        let original_user_input = plan
+            .user_message_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("original_text"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(&plan.user_input)
+            .to_string();
+        let runtime_tool_restrictions = runtime_tool_restrictions_for_session_lifetime(
+            miniapp_agent_run_tool_restrictions(
+                plan.user_message_metadata.as_ref(),
+                session.created_by.as_deref(),
+            ),
+            self.session_manager
+                .is_transient_session(&request.session_id),
+        );
+        let mut context_vars = HashMap::new();
+        context_vars.insert(
+            "max_context_tokens".to_string(),
+            session.config.max_context_tokens.to_string(),
+        );
+        context_vars.insert(
+            "enable_tools".to_string(),
+            session.config.enable_tools.to_string(),
+        );
+        context_vars.insert("original_user_input".to_string(), original_user_input);
+        context_vars.insert("turn_index".to_string(), plan.turn_index.to_string());
+        context_vars.insert(
+            "initial_round_index".to_string(),
+            plan.initial_round_index.to_string(),
+        );
+        context_vars.insert(
+            "edit_constraint_revocation_authorized".to_string(),
+            "false".to_string(),
+        );
+        context_vars.insert(
+            "cancel_lifecycle_owner".to_string(),
+            "coordinator".to_string(),
+        );
+        context_vars.insert(
+            INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY.to_string(),
+            plan.resolved_permission_mode.as_str().to_string(),
+        );
+        if let Some(model_id) = &session.config.model_id {
+            context_vars.insert("model_name".to_string(), model_id.clone());
+        }
+        context_vars.insert(
+            INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY.to_string(),
+            plan.resolved_model_id.clone(),
+        );
+        context_vars.insert(
+            INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY.to_string(),
+            plan.model_binding_fingerprint.clone(),
+        );
+        if let Some(reasoning_value) = plan
+            .user_message_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY))
+        {
+            context_vars.insert(
+                INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY.to_string(),
+                reasoning_value.to_string(),
+            );
+        }
+        if let Some(reasoning_selection) = plan
+            .user_message_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY))
+        {
+            context_vars.insert(
+                INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY.to_string(),
+                reasoning_selection.to_string(),
+            );
+        }
+        if let Some(reasoning_fingerprint) = plan
+            .user_message_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY))
+            .and_then(serde_json::Value::as_str)
+        {
+            context_vars.insert(
+                INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY.to_string(),
+                reasoning_fingerprint.to_string(),
+            );
+        }
+        if let Some(snapshot_id) = &session.snapshot_session_id {
+            context_vars.insert("snapshot_session_id".to_string(), snapshot_id.clone());
+        }
+        if let Some(user_input_available) = metadata_bool(
+            plan.user_message_metadata.as_ref(),
+            USER_INPUT_AVAILABLE_CONTEXT_KEY,
+        ) {
+            context_vars.insert(
+                USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+                user_input_available.to_string(),
+            );
+        }
+        if let Some(auto_approve_ask) = metadata_bool(
+            plan.user_message_metadata.as_ref(),
+            AUTO_APPROVE_ASK_CONTEXT_KEY,
+        ) {
+            context_vars.insert(
+                AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
+                auto_approve_ask.to_string(),
+            );
+        }
+
+        let execution_context = ExecutionContext {
+            session_id: plan.session_id.clone(),
+            dialog_turn_id: plan.turn_id.clone(),
+            turn_index: plan.turn_index,
+            agent_type: plan.agent_type.clone(),
+            execution_profile: session.config.execution_profile.clone(),
+            workspace: session_workspace,
+            context: context_vars,
+            subagent_parent_info: persisted_subagent_context.subagent_parent_info,
+            permission_delegation: persisted_subagent_context.permission_delegation,
+            permission_runtime_ceiling: None,
+            delegation_policy: DelegationPolicy::top_level(),
+            runtime_tool_restrictions,
+            workspace_services,
+            terminal_port: self.terminal_port(),
+            remote_exec_port: self.remote_exec_port(),
+            round_injection: self.round_injection_source.get().cloned(),
+            // Recovered terminal lifecycle is published only after the Runtime-owned
+            // Turn payload is durably committed by the coordinator.
+            emit_lifecycle_events: false,
+            recover_partial_on_cancel: false,
+        };
+
+        let active_counter = self
+            .active_turns_per_session
+            .entry(plan.session_id.clone())
+            .or_insert_with(|| Arc::new(AtomicUsize::new(0)))
+            .clone();
+        active_counter.fetch_add(1, Ordering::SeqCst);
+        let turn_settlement_registration = self
+            .turn_settlements
+            .register_accepted(plan.session_id.clone(), plan.turn_id.clone());
+        let cancellation_token = CancellationToken::new();
+        self.execution_engine
+            .register_cancel_token(&plan.turn_id, cancellation_token);
+
+        let session_manager = self.session_manager.clone();
+        let execution_engine = self.execution_engine.clone();
+        let event_queue = self.event_queue.clone();
+        let scheduler_notify_tx = self.scheduler_notify_tx.get().cloned();
+        let interrupted_turn_intents = Arc::clone(&self.interrupted_turn_intents);
+        let interrupted_turn_key = turn_stop_key(&plan.session_id, &plan.turn_id);
+        let session_id = plan.session_id.clone();
+        let turn_id = plan.turn_id.clone();
+        let turn_index = plan.turn_index;
+        let effective_agent_type = plan.agent_type.clone();
+        let user_input = plan.user_input.clone();
+        let user_message_metadata = plan.user_message_metadata.clone();
+        let execution_generation = plan.execution_generation;
+        let messages = plan.messages;
+
+        tokio::spawn(async move {
+            let _external_agent_generation_lease = external_agent_generation_lease;
+            let _turn_settlement_registration = turn_settlement_registration;
+            struct RecoveredExecutionGuard {
+                session_manager: Arc<SessionManager>,
+                session_id: String,
+                turn_id: String,
+                active_counter: Arc<AtomicUsize>,
+            }
+            impl Drop for RecoveredExecutionGuard {
+                fn drop(&mut self) {
+                    self.active_counter.fetch_sub(1, Ordering::SeqCst);
+                    self.session_manager
+                        .reset_session_state_if_processing(&self.session_id, &self.turn_id);
+                    self.session_manager
+                        .clear_active_turn_permission_mode(&self.session_id, &self.turn_id);
+                }
+            }
+            let _guard = RecoveredExecutionGuard {
+                session_manager: session_manager.clone(),
+                session_id: session_id.clone(),
+                turn_id: turn_id.clone(),
+                active_counter,
+            };
+
+            let recovered_dequeue_ack = match event_queue
+                .enqueue_with_legacy_dequeue_ack(
+                    AgenticEvent::DialogTurnRecovered {
+                        session_id: session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        execution_generation,
+                    },
+                    // Preserve FIFO with any normal-priority data already
+                    // queued by the interrupted generation. The frontend keeps
+                    // the Turn quarantined until this fence arrives, so stale
+                    // text/tool events cannot cross into the recovered one.
+                    Some(EventPriority::Normal),
+                )
+                .await
+            {
+                Ok((_, acknowledgement)) => acknowledgement,
+                Err(error) => {
+                    error!(
+                        "Failed to enqueue DialogTurnRecovered fence: session_id={}, turn_id={}, error={}",
+                        session_id, turn_id, error
+                    );
+                    Self::persist_interrupted_dialog_turn(
+                        event_queue.as_ref(),
+                        session_manager.as_ref(),
+                        scheduler_notify_tx.as_ref(),
+                        &session_id,
+                        &turn_id,
+                        &[],
+                        None,
+                    )
+                    .await;
+                    return;
+                }
+            };
+            let fence_failure =
+                match tokio::time::timeout(Duration::from_secs(5), recovered_dequeue_ack.wait())
+                    .await
+                {
+                    Ok(Ok(())) => None,
+                    Ok(Err(error)) => Some(error.to_string()),
+                    Err(_) => Some("timed out waiting for legacy dequeue".to_string()),
+                };
+            if let Some(error) = fence_failure {
+                error!(
+                    "DialogTurnRecovered fence failed before dequeue: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+                Self::persist_interrupted_dialog_turn(
+                    event_queue.as_ref(),
+                    session_manager.as_ref(),
+                    scheduler_notify_tx.as_ref(),
+                    &session_id,
+                    &turn_id,
+                    &[],
+                    None,
+                )
+                .await;
+                return;
+            }
+            if let Err(error) = event_queue
+                .enqueue(
+                    AgenticEvent::SessionStateChanged {
+                        session_id: session_id.clone(),
+                        new_state: "processing".to_string(),
+                    },
+                    Some(EventPriority::Normal),
+                )
+                .await
+            {
+                error!(
+                    "Failed to emit recovered SessionStateChanged event: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
+
+            let _ = session_manager
+                .update_session_state_for_turn_if_processing(
+                    &session_id,
+                    &turn_id,
+                    SessionState::Processing {
+                        current_turn_id: turn_id.clone(),
+                        phase: ProcessingPhase::Thinking,
+                    },
+                )
+                .await;
+
+            let workspace_turn_status = match execution_engine
+                .execute_dialog_turn(runtime_agent_type, messages, execution_context)
+                .await
+            {
+                Ok(execution_result) => Some(
+                    Self::persist_completed_dialog_turn(
+                        event_queue.as_ref(),
+                        session_manager.as_ref(),
+                        scheduler_notify_tx.as_ref(),
+                        &session_id,
+                        &turn_id,
+                        &execution_result,
+                        Some(execution_generation),
+                    )
+                    .await
+                    .0,
+                ),
+                Err(error) if matches!(&error, BitFunError::Cancelled(_)) => {
+                    let generation_messages =
+                        execution_engine.take_generation_messages(&session_id, &turn_id);
+                    if interrupted_turn_intent_is_pending(
+                        interrupted_turn_intents.as_ref(),
+                        &interrupted_turn_key,
+                    ) {
+                        Some(
+                            Self::persist_interrupted_dialog_turn(
+                                event_queue.as_ref(),
+                                session_manager.as_ref(),
+                                scheduler_notify_tx.as_ref(),
+                                &session_id,
+                                &turn_id,
+                                &generation_messages,
+                                Some(interrupted_turn_intents.as_ref()),
+                            )
+                            .await,
+                        )
+                    } else {
+                        Some(
+                            Self::persist_cancelled_dialog_turn_with_messages_and_policy(
+                                event_queue.as_ref(),
+                                session_manager.as_ref(),
+                                scheduler_notify_tx.as_ref(),
+                                &session_id,
+                                &turn_id,
+                                true,
+                                &generation_messages,
+                                true,
+                            )
+                            .await,
+                        )
+                    }
+                }
+                Err(error)
+                    if ExecutionEngine::is_frozen_reasoning_contract_error(&error)
+                        || ExecutionEngine::is_frozen_model_contract_error(&error) =>
+                {
+                    let generation_messages =
+                        execution_engine.take_generation_messages(&session_id, &turn_id);
+                    warn!(
+                        "Recovered dialog turn execution contract changed before execution; preserving recovery eligibility: session_id={}, turn_id={}, error={}",
+                        session_id, turn_id, error
+                    );
+                    Some(
+                        Self::persist_interrupted_dialog_turn(
+                            event_queue.as_ref(),
+                            session_manager.as_ref(),
+                            scheduler_notify_tx.as_ref(),
+                            &session_id,
+                            &turn_id,
+                            &generation_messages,
+                            None,
+                        )
+                        .await,
+                    )
+                }
+                Err(error) => {
+                    let generation_messages =
+                        execution_engine.take_generation_messages(&session_id, &turn_id);
+                    Some(
+                        Self::persist_failed_dialog_turn_with_messages(
+                            event_queue.as_ref(),
+                            session_manager.as_ref(),
+                            scheduler_notify_tx.as_ref(),
+                            &session_id,
+                            &turn_id,
+                            &error,
+                            true,
+                            &generation_messages,
+                            true,
+                        )
+                        .await,
+                    )
+                }
+            };
+
+            Self::finalize_persisted_turn_in_workspace_if_needed(
+                session_manager.as_ref(),
+                &session_id,
+                &turn_id,
+                turn_index,
+                &effective_agent_type,
+                &user_input,
+                session_workspace_path.as_deref(),
+                session_storage_path.as_deref(),
+                workspace_turn_status,
+                user_message_metadata,
+            )
+            .await;
+        });
+
+        Ok(bitfun_runtime_ports::AgentDialogTurnRecoveryOutcome {
+            session_id: plan.session_id,
+            turn_id: plan.turn_id,
+            execution_generation: plan.execution_generation,
+        })
     }
 
     /// P0-8: Wait until all in-flight spawn tasks for this session have
@@ -6244,6 +7335,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id,
             true,
             Duration::from_millis(1500),
+            DialogTurnStopDisposition::Cancelled,
+        )
+        .await
+    }
+
+    pub async fn interrupt_dialog_turn(
+        &self,
+        session_id: &str,
+        dialog_turn_id: &str,
+        drain_timeout: Duration,
+    ) -> BitFunResult<()> {
+        self.cancel_dialog_turn_with_descendant_policy(
+            session_id,
+            dialog_turn_id,
+            true,
+            drain_timeout,
+            DialogTurnStopDisposition::Interrupted,
         )
         .await
     }
@@ -6254,11 +7362,82 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         dialog_turn_id: &str,
         cancel_descendants: bool,
         drain_timeout: Duration,
+        disposition: DialogTurnStopDisposition,
     ) -> BitFunResult<()> {
         info!(
-            "Received cancel request: dialog_turn_id={}, session_id={}, cancel_descendants={}",
-            dialog_turn_id, session_id, cancel_descendants
+            "Received stop request: dialog_turn_id={}, session_id={}, cancel_descendants={}, disposition={:?}",
+            dialog_turn_id, session_id, cancel_descendants, disposition
         );
+
+        if disposition == DialogTurnStopDisposition::Interrupted {
+            let session = self
+                .session_manager
+                .get_session(session_id)
+                .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+            if session.kind != SessionKind::Standard {
+                return Err(BitFunError::Validation(
+                    "Recoverable interruption is supported only for standard user sessions"
+                        .to_string(),
+                ));
+            }
+            if session.config.remote_connection_id.is_some()
+                || session.config.remote_ssh_host.is_some()
+            {
+                return Err(BitFunError::Validation(
+                    "Recoverable interruption is not available for remote workspaces".to_string(),
+                ));
+            }
+            if session.config.agent_route_owner != SessionAgentRouteOwner::Local {
+                return Err(BitFunError::Validation(
+                    "Recoverable interruption is unavailable for externally owned agent routes"
+                        .to_string(),
+                ));
+            }
+            if !matches!(
+                session.state,
+                SessionState::Processing { ref current_turn_id, .. }
+                    if current_turn_id == dialog_turn_id
+            ) {
+                if session.dialog_turn_ids.last().map(String::as_str) == Some(dialog_turn_id)
+                    && self
+                        .session_manager
+                        .latest_dialog_turn_holds_dispatch(session_id)
+                        .await?
+                {
+                    debug!(
+                        "Ignoring duplicate interruption for an already interrupted turn: session_id={}, turn_id={}",
+                        session_id, dialog_turn_id
+                    );
+                    return Ok(());
+                }
+                return Err(BitFunError::Validation(format!(
+                    "Dialog turn is not the active turn: {dialog_turn_id}"
+                )));
+            }
+            let goal_storage_path = self.require_main_session_storage_path(session_id).await?;
+            if self
+                .thread_goal_store()
+                .get_thread_goal(session_id, goal_storage_path.as_path())
+                .await?
+                .is_some_and(|goal| {
+                    matches!(
+                        goal.status,
+                        ThreadGoalStatus::Active | ThreadGoalStatus::Paused
+                    )
+                })
+            {
+                return Err(BitFunError::Validation(
+                    "Use the Thread Goal controls to pause or resume goal work".to_string(),
+                ));
+            }
+            self.interrupted_turn_intents.insert(
+                turn_stop_key(session_id, dialog_turn_id),
+                InterruptedTurnIntentState::Pending,
+            );
+        } else {
+            self.interrupted_turn_intents
+                .remove(&turn_stop_key(session_id, dialog_turn_id));
+        }
 
         if let Some(control) = self.manual_compaction_controls.get(dialog_turn_id) {
             if !control.try_cancel() && control.commit_started() {
@@ -6283,14 +7462,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // cancellation still targets the currently processing turn. A delayed
         // cancel request for an older turn must not clear a newer turn.
         debug!("Conditionally updating session state to Idle for cancelled turn");
-        let state_update_result = self
-            .session_manager
-            .update_session_state_for_turn_if_processing(
-                session_id,
-                dialog_turn_id,
-                SessionState::Idle,
-            )
-            .await;
+        let state_update_result = if disposition == DialogTurnStopDisposition::Cancelled {
+            self.session_manager
+                .update_session_state_for_turn_if_processing(
+                    session_id,
+                    dialog_turn_id,
+                    SessionState::Idle,
+                )
+                .await
+        } else {
+            Ok(false)
+        };
 
         // A persistence failure can occur after SessionManager has already
         // changed the in-memory state. Cancellation has been admitted at that
@@ -6372,11 +7554,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 drain_timeout.as_millis(),
                 session_id, dialog_turn_id, pending
             );
+            if disposition == DialogTurnStopDisposition::Interrupted {
+                let key = turn_stop_key(session_id, dialog_turn_id);
+                // Atomically revoke a still-pending interrupt, or observe that
+                // the execution owner already committed the durable recovery
+                // fact. A separate persistence read leaves a read-to-revoke
+                // race where hard cancellation can overwrite a committed
+                // Interrupted turn while its terminal event is still in flight.
+                if revoke_interrupted_turn_intent_or_observe_commit(
+                    self.interrupted_turn_intents.as_ref(),
+                    &key,
+                ) {
+                    self.interrupted_turn_intents.remove(&key);
+                    info!(
+                        "Interrupted turn committed before execution tail drained: session_id={}, turn_id={}",
+                        session_id, dialog_turn_id
+                    );
+                    return Ok(());
+                }
+                return Err(BitFunError::Timeout(format!(
+                    "Interrupted turn did not settle within {}ms: session_id={}, turn_id={}",
+                    drain_timeout.as_millis(),
+                    session_id,
+                    dialog_turn_id
+                )));
+            }
         } else {
             debug!(
                 "Cancelled turn fully drained: session_id={}, dialog_turn_id={}",
                 session_id, dialog_turn_id
             );
+        }
+
+        if disposition == DialogTurnStopDisposition::Interrupted {
+            self.interrupted_turn_intents
+                .remove(&turn_stop_key(session_id, dialog_turn_id));
         }
 
         if let Some(error) = state_update_error {
@@ -6425,6 +7637,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             &current_turn_id,
             cancel_descendants,
             drain_timeout,
+            DialogTurnStopDisposition::Cancelled,
         )
         .await?;
 
@@ -6865,6 +8078,141 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 Ok((AgentSessionComposerUpdate::Clear, true, 0))
             }
         }
+    }
+
+    pub(crate) async fn apply_targeted_session_revert_locked(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        target_turn_id: &str,
+        expected_storage_turn_index: Option<usize>,
+        expected_catalog_revision: Option<&str>,
+    ) -> BitFunResult<(
+        AgentSessionComposerUpdate,
+        usize,
+        usize,
+        Vec<String>,
+        Vec<String>,
+    )> {
+        let workspace_path = self.local_revert_workspace(session_id)?;
+        let persistence = self.session_manager.persistence_manager();
+        let current = persistence
+            .load_session_revert_state(session_storage_path, session_id)
+            .await?;
+        if current
+            .as_ref()
+            .is_some_and(|state| state.phase != SessionRevertPhase::Staged)
+        {
+            return Err(BitFunError::OutcomeUnknown(format!(
+                "Session rollback requires reconciliation of an unfinished revert: session_id={session_id}"
+            )));
+        }
+        let turns = persistence
+            .load_session_turns(session_storage_path, session_id)
+            .await?;
+        let visible_turns = current
+            .as_ref()
+            .map(|state| {
+                turns
+                    .iter()
+                    .filter(|turn| turn.turn_index < state.boundary_turn)
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| turns.clone());
+        let catalog = persistence
+            .load_session_turn_catalog(
+                session_storage_path,
+                session_id,
+                &visible_turns,
+                visible_turns.len(),
+            )
+            .await?;
+        if expected_catalog_revision.is_some_and(|revision| revision != catalog.revision) {
+            return Err(BitFunError::Validation(format!(
+                "Session rollback target is stale: session_id={session_id}"
+            )));
+        }
+        let target = visible_turns
+            .iter()
+            .find(|turn| turn.turn_id == target_turn_id)
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Session rollback target was not found: session_id={session_id} turn_id={target_turn_id}"
+                ))
+            })?;
+        if expected_storage_turn_index.is_some_and(|index| index != target.turn_index) {
+            return Err(BitFunError::Validation(format!(
+                "Session rollback target storage identity is stale: session_id={session_id} turn_id={target_turn_id}"
+            )));
+        }
+        let boundary_turn = target.turn_index;
+        let retired_turn_ids = turns
+            .iter()
+            .filter(|turn| turn.turn_index >= boundary_turn)
+            .map(|turn| turn.turn_id.clone())
+            .collect();
+        let transition = resolve_targeted(&turns, target_turn_id, current.as_ref()).ok_or_else(|| {
+            BitFunError::Validation(format!(
+                "Session rollback target is not a user Turn: session_id={session_id} turn_id={target_turn_id}"
+            ))
+        })?;
+        let SessionRevertTransition::Stage {
+            mut state,
+            replacement_prompt,
+            hidden_turn_count,
+        } = transition
+        else {
+            unreachable!("targeted rollback always stages a boundary")
+        };
+        let snapshot_manager =
+            crate::service::snapshot::get_or_create_snapshot_manager(workspace_path.clone(), None)
+                .await
+                .map_err(|error| BitFunError::service(error.to_string()))?;
+
+        state.phase = SessionRevertPhase::Applying;
+        snapshot_manager
+            .prepare_workspace_revert(session_id, &mut state)
+            .await
+            .map_err(|error| BitFunError::service(error.to_string()))?;
+        persistence
+            .save_session_revert_state(session_storage_path, session_id, &state)
+            .await?;
+        let restored_files = snapshot_manager
+            .apply_workspace_revert(session_id, &state)
+            .await
+            .map_err(|error| {
+                BitFunError::OutcomeUnknown(format!(
+                    "Session rollback was staged but workspace reconciliation failed: session_id={session_id}, error={error}"
+                ))
+            })?;
+        self.session_manager
+            .apply_staged_revert_context_locked(session_storage_path, session_id, boundary_turn)
+            .await
+            .map_err(|error| {
+                BitFunError::OutcomeUnknown(format!(
+                    "Session rollback updated the workspace but runtime context reconciliation failed: session_id={session_id}, error={error}"
+                ))
+            })?;
+        state.phase = SessionRevertPhase::Staged;
+        persistence
+            .save_session_revert_state(session_storage_path, session_id, &state)
+            .await?;
+        self.commit_session_revert_locked(session_storage_path, session_id)
+            .await?;
+
+        Ok((
+            replacement_prompt
+                .map(|text| AgentSessionComposerUpdate::Replace { text })
+                .unwrap_or(AgentSessionComposerUpdate::Preserve),
+            hidden_turn_count,
+            boundary_turn,
+            restored_files
+                .into_iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+            retired_turn_ids,
+        ))
     }
 
     pub(crate) async fn reconcile_session_revert_locked(
@@ -7830,7 +9178,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_input_text,
             created_by,
             subagent_parent_info,
-            context,
+            mut context,
             permission_runtime_ceiling,
             delegation_policy,
             runtime_tool_restrictions,
@@ -7842,6 +9190,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             execution_lease,
             external_generation_lease: _external_generation_lease,
         } = request;
+        context.insert(
+            "cancel_lifecycle_owner".to_string(),
+            "coordinator".to_string(),
+        );
         let prepared_target_session_id = target_session_id.clone();
         let deep_review_run_manifest = context
             .get("deep_review_run_manifest")
@@ -8453,6 +9805,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             SubagentExecutionOutcome::Completed(join_result) => match join_result {
                 Ok(result) => result,
                 Err(error) => {
+                    let _ = self
+                        .execution_engine
+                        .take_generation_messages(&session_id, &dialog_turn_id);
                     let join_error = BitFunError::tool(format!(
                         "Subagent '{}' failed to join: {}",
                         agent_type, error
@@ -8545,6 +9900,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     }
                 }
 
+                let _ = self
+                    .execution_engine
+                    .take_generation_messages(&session_id, &dialog_turn_id);
+
                 Self::persist_cancelled_dialog_turn(
                     self.event_queue.as_ref(),
                     self.session_manager.as_ref(),
@@ -8618,11 +9977,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 {
                     Ok(Ok(Ok(exec_result))) => {
                         let (_status, response_text) = Self::persist_completed_dialog_turn(
+                            self.event_queue.as_ref(),
                             self.session_manager.as_ref(),
                             None,
                             &session_id,
                             &dialog_turn_id,
                             &exec_result,
+                            None,
                         )
                         .await;
                         Self::finalize_persisted_turn_in_workspace_if_needed(
@@ -8672,6 +10033,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         None
                     }
                 };
+                let _ = self
+                    .execution_engine
+                    .take_generation_messages(&session_id, &dialog_turn_id);
 
                 if let Some(mut partial_result) = partial_timeout_result {
                     warn!(
@@ -8748,15 +10112,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let (workspace_turn_status, response_text) = match result {
             Ok(exec_result) => {
                 Self::persist_completed_dialog_turn(
+                    self.event_queue.as_ref(),
                     self.session_manager.as_ref(),
                     None,
                     &session_id,
                     &dialog_turn_id,
                     &exec_result,
+                    None,
                 )
                 .await
             }
             Err(e) => {
+                let _ = self
+                    .execution_engine
+                    .take_generation_messages(&session_id, &dialog_turn_id);
                 let turn_status = if matches!(&e, BitFunError::Cancelled(_)) {
                     Self::persist_cancelled_dialog_turn(
                         self.event_queue.as_ref(),
@@ -10560,7 +11929,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let allow_ai = is_ai_session_title_generation_enabled().await;
         let resolved = self
             .session_manager
-            .resolve_session_title(user_message, max_length, allow_ai)
+            .resolve_session_title(session_id, user_message, max_length, allow_ai)
             .await;
 
         self.session_manager
@@ -12401,6 +13770,32 @@ impl bitfun_runtime_ports::AgentTurnCancellationPort for ConversationCoordinator
             requested,
         })
     }
+
+    async fn interrupt_turn(
+        &self,
+        request: bitfun_runtime_ports::AgentTurnInterruptionRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentTurnInterruptionResult> {
+        let wait_timeout = Duration::from_millis(request.wait_timeout_ms.unwrap_or(30_000));
+        self.interrupt_dialog_turn(&request.session_id, &request.turn_id, wait_timeout)
+            .await
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    match error {
+                        BitFunError::Validation(_) => {
+                            bitfun_runtime_ports::PortErrorKind::InvalidRequest
+                        }
+                        BitFunError::NotFound(_) => bitfun_runtime_ports::PortErrorKind::NotFound,
+                        _ => bitfun_runtime_ports::PortErrorKind::Backend,
+                    },
+                    error.to_string(),
+                )
+            })?;
+        Ok(bitfun_runtime_ports::AgentTurnInterruptionResult {
+            session_id: request.session_id,
+            turn_id: request.turn_id,
+            requested: true,
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -12852,17 +14247,19 @@ mod tests {
     use super::{
         append_skill_agent_listing_diff_reminders, apply_primary_agent_model_default,
         btw_session_memory_mode, build_subagent_session_relationship,
-        lineage_active_turn_after_transcript, lineage_post_admission_cancellation_error,
+        commit_interrupted_turn_intent, lineage_active_turn_after_transcript,
+        lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         permission_mode_from_metadata, resolve_agent_session_create_created_by,
         resolve_agent_submission_turn_id, resolve_subagent_model_selection,
-        resolve_submission_permission_mode, runtime_port_error_preserving_message,
-        runtime_session_summary, runtime_tool_restrictions_for_session_lifetime,
-        runtime_transcript_messages_from_turns, session_storage_workspace_locator,
-        turn_review_manifest_for_agent, validate_required_lineage_turns_settled,
-        ActiveSubagentExecution, BackgroundSubagentWaitMode, ContextCompactionOutcome,
-        ConversationCoordinator, ManualCompactionCommitGate, SessionMemoryMode,
+        resolve_submission_permission_mode, revoke_interrupted_turn_intent_or_observe_commit,
+        runtime_port_error_preserving_message, runtime_session_summary,
+        runtime_tool_restrictions_for_session_lifetime, runtime_transcript_messages_from_turns,
+        session_storage_workspace_locator, turn_review_manifest_for_agent,
+        validate_required_lineage_turns_settled, ActiveSubagentExecution,
+        BackgroundSubagentWaitMode, ContextCompactionOutcome, ConversationCoordinator,
+        InterruptedTurnIntentState, ManualCompactionCommitGate, SessionMemoryMode,
         SessionReferenceLocator, SessionRelationshipKind, SubagentExecutionRequest,
         TEST_AGENT_MODEL_DEFAULTS,
     };
@@ -12877,7 +14274,8 @@ mod tests {
     };
     use crate::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
-        ExecutionEngine, ExecutionEngineConfig, RoundExecutor, StreamProcessor,
+        restrict_recovered_permission_mode, ExecutionEngine, ExecutionEngineConfig, RoundExecutor,
+        StreamProcessor,
     };
     use crate::agentic::goal_mode::thread_goal_patch;
     use crate::agentic::persistence::PersistenceManager;
@@ -12900,6 +14298,50 @@ mod tests {
     use bitfun_agent_runtime::permission::PermissionRequestManager;
     use bitfun_runtime_services::test_support::FakeRuntimePort;
     use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
+
+    #[test]
+    fn interrupted_turn_intent_commit_wins_over_timeout_revocation() {
+        let intents = dashmap::DashMap::new();
+        intents.insert(
+            "session\u{1f}turn".to_string(),
+            InterruptedTurnIntentState::Pending,
+        );
+
+        assert!(commit_interrupted_turn_intent(
+            &intents,
+            "session\u{1f}turn"
+        ));
+        assert!(revoke_interrupted_turn_intent_or_observe_commit(
+            &intents,
+            "session\u{1f}turn"
+        ));
+        assert_eq!(
+            *intents.get("session\u{1f}turn").unwrap(),
+            InterruptedTurnIntentState::Committed
+        );
+    }
+
+    #[test]
+    fn interrupted_turn_timeout_revocation_blocks_late_commit() {
+        let intents = dashmap::DashMap::new();
+        intents.insert(
+            "session\u{1f}turn".to_string(),
+            InterruptedTurnIntentState::Pending,
+        );
+
+        assert!(!revoke_interrupted_turn_intent_or_observe_commit(
+            &intents,
+            "session\u{1f}turn"
+        ));
+        assert!(!commit_interrupted_turn_intent(
+            &intents,
+            "session\u{1f}turn"
+        ));
+        assert_eq!(
+            *intents.get("session\u{1f}turn").unwrap(),
+            InterruptedTurnIntentState::Revoked
+        );
+    }
 
     #[cfg(not(feature = "remote-workspace"))]
     #[tokio::test]
@@ -13652,6 +15094,25 @@ mod tests {
         );
         assert_eq!(turn_scoped.mode, PermissionMode::Ask);
         assert_eq!(turn_scoped.source, PermissionModeSource::Turn);
+    }
+
+    #[test]
+    fn recovered_permission_never_exceeds_original_or_current_mode() {
+        assert_eq!(
+            restrict_recovered_permission_mode(PermissionMode::FullAccess, PermissionMode::Ask),
+            PermissionMode::Ask
+        );
+        assert_eq!(
+            restrict_recovered_permission_mode(PermissionMode::Ask, PermissionMode::FullAccess),
+            PermissionMode::Ask
+        );
+        assert_eq!(
+            restrict_recovered_permission_mode(
+                PermissionMode::FullAccess,
+                PermissionMode::AutoApprove,
+            ),
+            PermissionMode::AutoApprove
+        );
     }
 
     #[test]
@@ -14437,6 +15898,57 @@ mod tests {
             .expect("apply staged context");
         drop(mutation);
         storage_path
+    }
+
+    #[tokio::test]
+    async fn stale_targeted_revert_keeps_an_existing_staged_suffix() {
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let session_id = format!("targeted-stale-{}", uuid::Uuid::new_v4());
+        let storage_path =
+            create_staged_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id)
+                .await;
+        let marker_before = session_manager
+            .persistence_manager()
+            .load_session_revert_state(&storage_path, &session_id)
+            .await
+            .expect("load staged marker")
+            .expect("staged marker");
+
+        let error = coordinator
+            .apply_targeted_session_revert_locked(
+                &storage_path,
+                &session_id,
+                "turn-0",
+                Some(0),
+                Some("stale-catalog-revision"),
+            )
+            .await
+            .expect_err("stale target must fail before mutation");
+        assert!(matches!(
+            error,
+            crate::util::errors::BitFunError::Validation(_)
+        ));
+
+        let marker_after = session_manager
+            .persistence_manager()
+            .load_session_revert_state(&storage_path, &session_id)
+            .await
+            .expect("reload staged marker")
+            .expect("staged marker must remain");
+        assert_eq!(marker_after, marker_before);
+        let turns = session_manager
+            .persistence_manager()
+            .load_session_turns(&storage_path, &session_id)
+            .await
+            .expect("load physical turns");
+        assert_eq!(
+            turns
+                .iter()
+                .map(|turn| turn.turn_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["turn-0", "turn-1"]
+        );
     }
 
     #[tokio::test]

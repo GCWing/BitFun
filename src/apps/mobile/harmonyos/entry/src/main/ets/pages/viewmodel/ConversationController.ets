@@ -1,101 +1,43 @@
 import {
-  RecentWorkspaceEntry,
-  RemoteImageContext,
   RemoteQuestionAnswerPayload,
   RemoteSession,
-  SessionSummary,
-  SelectedImageAttachment
+  SelectedImageAttachment,
+  SessionSummary
 } from '../../model/RemoteModels';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
-import { ChatTimelineState, ChatTimelineStore } from '../../services/ChatTimelineStore';
-import { ClipboardService } from '../../services/ClipboardService';
-import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
-import { ImagePickerService } from '../../services/ImagePickerService';
-import { GeneralChatCommandController } from '../../services/general-chat/GeneralChatCommandController';
-import { GeneralChatConversationViewModel } from './GeneralChatConversationViewModel';
-import { GeneralChatDraftLifecycleController } from '../../services/general-chat/GeneralChatDraftLifecycleController';
-import {
-  GeneralChatServiceState,
-  GeneralChatServiceStatus
-} from '../../services/general-chat/GeneralChatServiceState';
-import { RemoteChatCache } from '../../services/RemoteChatCache';
-import { RemoteChatCommandController } from '../../services/RemoteChatCommandController';
-import {
-  RemoteChatPollingCursor,
-  RemoteChatPollingLifecycleController,
-  RemoteChatPollingSnapshot
-} from '../../services/RemoteChatPollingLifecycleController';
-import { RemoteFileDownloadController } from '../../services/RemoteFileDownloadController';
-import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { RemoteLogger } from '../../services/RemoteLogger';
-import { RemoteModelController } from '../../services/RemoteModelController';
-import { RemoteToolActionController } from '../../services/RemoteToolActionController';
-import { RemoteUiState } from '../../services/RemoteUiState';
-import { RemoteSessionManager } from '../../services/RemoteSessionManager';
-import { RemoteWorkspaceCoordinator } from '../../services/RemoteWorkspaceCoordinator';
 import { VoiceInputRouteSnapshot } from '../../services/VoiceInputLifecycleController';
 import { AppRootRouteState } from '../navigation/AppRootRouteState';
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
 import { RemotePageState } from '../state/RemotePageState';
-import { ConversationViewModel } from './ConversationViewModel';
-import { AppShellViewModel } from './AppShellViewModel';
-import { FilePreviewController } from './FilePreviewController';
-import { RemoteConnectionController } from './RemoteConnectionController';
-import { RemoteSessionViewModel } from './RemoteSessionViewModel';
-import { SettingsController } from './SettingsController';
-const GENERAL_CHAT_HOME_DRAFT_ID: string = 'new-chat';
+import { RemoteChatPollingSnapshot } from '../../services/RemoteChatPollingLifecycleController';
+import {
+  ConversationControllerHooks,
+  RemoteConversationDependencies,
+  RemoteConversationHooks
+} from './ConversationRuntime';
+import { RemoteCreateFlowController } from './RemoteCreateFlowController';
+import { RemoteTranscriptController } from './RemoteTranscriptController';
+import { VisibleConversationController } from './VisibleConversationController';
 
-export interface ConversationControllerHooks {
-  readonly currentRoute: () => AppRoute;
-}
+export {
+  ConversationControllerHooks,
+  RemoteConversationDependencies,
+  RemoteConversationHooks
+} from './ConversationRuntime';
 
-export interface RemoteConversationHooks {
-  readonly isConversationContext: (sessionId: string) => boolean;
-  readonly isFilePreviewVisible: () => boolean;
-  readonly stopVoiceInput: () => Promise<void>;
-  readonly showToast: (message: string) => boolean;
-  readonly selectAssistantWorkspace: (path: string) => Promise<void>;
-}
-
-export interface RemoteConversationDependencies {
-  readonly timeline: ConversationViewModel;
-  readonly chat: RemoteChatCommandController;
-  readonly chatCache: RemoteChatCache;
-  readonly polling: RemoteChatPollingLifecycleController;
-  readonly models: RemoteModelController;
-  readonly files: RemoteFileDownloadController;
-  readonly tools: RemoteToolActionController;
-  readonly connection: RemoteConnectionController;
-  readonly imagePicker: ImagePickerService;
-  readonly clipboard: ClipboardService;
-  readonly sessions: RemoteSessionViewModel;
-  readonly sessionManager: RemoteSessionManager;
-  readonly workspace: RemoteWorkspaceCoordinator;
-  readonly settings: SettingsController;
-  readonly appShell: AppShellViewModel;
-  readonly filePreview: FilePreviewController;
-  readonly generalCommands: GeneralChatCommandController;
-  readonly generalConversation: GeneralChatConversationViewModel;
-  readonly generalDrafts: GeneralChatDraftLifecycleController;
-  readonly hooks: RemoteConversationHooks;
-}
-
-/** Owns route-dependent composer and voice presentation state. */
+/** Owns route-dependent composer state and delegates feature work. */
 export class ConversationController {
   private readonly general: GeneralChatPageState;
   private readonly remote: RemotePageState;
   private readonly remoteCreate: RemoteCreateSessionState;
   private readonly hooks: ConversationControllerHooks;
   private readonly remoteRuntime?: RemoteConversationDependencies;
-  private knownPollVersionValue: number = 0;
-  private knownModelCatalogVersion: number = 0;
-  private knownRemoteMessageCount: number = 0;
-  private isSyncingAfterTurn: boolean = false;
-  private isRebuildingRemoteTranscript: boolean = false;
-  private remoteCreateWorkspaceLoadVersion: number = 0;
+  private readonly transcript: RemoteTranscriptController;
+  private readonly createFlow: RemoteCreateFlowController;
+  private readonly visible: VisibleConversationController;
 
   constructor(
     general: GeneralChatPageState,
@@ -109,6 +51,21 @@ export class ConversationController {
     this.remoteCreate = remoteCreate;
     this.hooks = hooks;
     this.remoteRuntime = remoteRuntime;
+    this.transcript = new RemoteTranscriptController(remote, remoteRuntime, (message: string) => {
+      this.showHomeToast(message);
+    });
+    this.createFlow = new RemoteCreateFlowController(remote, remoteCreate, remoteRuntime);
+    this.visible = new VisibleConversationController(
+      general,
+      remote,
+      remoteRuntime,
+      this.transcript,
+      this.createFlow,
+      (route: AppRoute, value: string) => this.setChatInput(route, value),
+      (statusText: string) => this.setVisibleStatusText(statusText),
+      (route: AppRoute) => this.isGeneralComposerRoute(route),
+      (message: string) => this.showHomeToast(message)
+    );
   }
 
   visibleChatInput(): string {
@@ -192,902 +149,108 @@ export class ConversationController {
     return AppRouteContract.isGeneralComposerRoute(route);
   }
 
-  knownPollVersion(): number {
-    return this.knownPollVersionValue;
-  }
-
-  resetKnownRemoteState(): void {
-    this.knownPollVersionValue = 0;
-    this.knownModelCatalogVersion = 0;
-    this.knownRemoteMessageCount = 0;
-  }
-
+  knownPollVersion(): number { return this.transcript.knownPollVersion(); }
+  resetKnownRemoteState(): void { this.transcript.resetKnownRemoteState(); }
   updateKnownMessageCount(pollVersion: number, knownMessageCount: number): void {
-    this.knownRemoteMessageCount = knownMessageCount;
-    this.updateChatPollingCursor(pollVersion, knownMessageCount);
+    this.transcript.updateKnownMessageCount(pollVersion, knownMessageCount);
   }
-
   updateKnownModelCatalogVersion(version: number): void {
-    this.knownModelCatalogVersion = version;
-    this.requireRemoteRuntime().polling.updateKnownModelCatalogVersion(version);
+    this.transcript.updateKnownModelCatalogVersion(version);
   }
-
-  async loadRemoteMessages(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    await runtime.chat.loadMessages(
-      this.remote.activeSession.sessionId || '',
-      runtime.hooks.isConversationContext
-    );
-  }
-
-  async selectRemoteModel(modelId: string): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    await runtime.models.selectModel(
-      modelId,
-      this.remote.activeSession.sessionId || '',
-      this.remote.isBusy,
-      runtime.connection.ensureAvailable()
-    );
-  }
-
-  async loadOlderRemoteMessages(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    await runtime.chat.loadOlderMessages(
-      this.remote.activeSession.sessionId || '',
-      this.knownPollVersionValue,
-      this.remote.hasMoreMessages,
-      this.remote.isBusy
-    );
-  }
-
-  async sendRemoteMessage(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (this.remote.isVoiceListening) {
-      await runtime.hooks.stopVoiceInput();
-    }
-    const rawText = this.remote.chatInput.trim();
-    const images = this.remote.selectedImages.slice();
-    const text = rawText.length > 0 ? rawText :
-      (images.length > 0 ? RemoteI18n.t('chat.analyzeImageDefault') : '');
-    const sessionId = this.remote.activeSession.sessionId || '';
-    if ((!text && images.length === 0) || !sessionId || this.remote.isBusy ||
-      !runtime.connection.ensureAvailable()) {
-      return;
-    }
-    // Sending into a turn that is still running is allowed, but the desktop
-    // queues it rather than interrupting, so say so once — otherwise the
-    // message just sits in the transcript with nothing appearing to happen.
-    const queuedBehindRunningTurn = this.hasRunningRemoteTurn();
-    this.remote.clearComposer();
-    const localMessage = RemoteUiState.localUserMessage(text, images);
-    runtime.timeline.appendOptimisticMessage(localMessage);
-    const pendingActiveId = runtime.timeline.setPendingActiveTurn(localMessage.id);
-    this.syncRemoteTimeline();
-    RemoteLogger.info(`chat send queued session=${this.shortSessionId(sessionId)} pending=${pendingActiveId} behindRunningTurn=${queuedBehindRunningTurn ? '1' : '0'}`);
-    if (queuedBehindRunningTurn) {
-      this.showHomeToast(RemoteI18n.t('chat.queuedAfterRunningTurn'));
-    }
-    this.startRemotePolling();
-    runtime.polling.nudge();
-    const imageContexts: RemoteImageContext[] = images.length > 0 ?
-      runtime.imagePicker.toRemoteContexts(images) : [];
-    await runtime.chat.sendPreparedMessage(
-      sessionId,
-      text,
-      this.remote.activeSession.agentType,
-      rawText,
-      images,
-      imageContexts,
-      localMessage.id,
-      pendingActiveId,
-      this.remote.isBusy,
-      true
-    );
-  }
-
-  async stopRemoteTask(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    const sessionId = this.remote.activeSession.sessionId || '';
-    if (!sessionId) {
-      return;
-    }
-    await runtime.chat.stopTask(
-      sessionId,
-      this.remote.activeTurnMessage.id,
-      this.remoteActiveTurnId(),
-      runtime.connection.ensureAvailable()
-    );
-  }
-
-  async renameRemoteSession(title: string): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    const nextTitle = title.trim();
-    if (!this.remote.activeSession.sessionId || nextTitle.length === 0 ||
-      nextTitle === this.remote.activeSession.title || this.remote.isBusy) {
-      return;
-    }
-    await runtime.chat.renameActiveSession(
-      this.remote.activeSession,
-      nextTitle,
-      this.remote.isBusy,
-      runtime.connection.ensureAvailable()
-    );
-  }
-
-  async copyRemoteMessage(text: string): Promise<void> {
-    if (text.trim().length === 0) {
-      return;
-    }
-    try {
-      await this.requireRemoteRuntime().clipboard.writeText(text);
-      this.remote.setStatusText(RemoteI18n.t('status.messageCopied'));
-    } catch (err) {
-      this.remote.setStatusText(ConnectionErrorPolicy.errorText(err));
-    }
-  }
-
-  async downloadRemoteFile(path: string): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    await runtime.files.download(
-      path,
-      this.remote.activeSession.sessionId || '',
-      this.remote.isBusy,
-      runtime.connection.ensureAvailable()
-    );
-  }
-
-  retryRemoteMessage(text: string): void {
-    if (this.remote.isBusy || !this.requireRemoteRuntime().connection.ensureAvailable()) {
-      return;
-    }
-    this.remote.setChatInput(text);
-    this.sendRemoteMessage();
-  }
-
+  async loadRemoteMessages(): Promise<void> { await this.transcript.loadRemoteMessages(); }
+  async selectRemoteModel(modelId: string): Promise<void> { await this.transcript.selectRemoteModel(modelId); }
+  async loadOlderRemoteMessages(): Promise<void> { await this.transcript.loadOlderRemoteMessages(); }
+  async sendRemoteMessage(): Promise<void> { await this.transcript.sendRemoteMessage(); }
+  async stopRemoteTask(): Promise<void> { await this.transcript.stopRemoteTask(); }
+  async renameRemoteSession(title: string): Promise<void> { await this.transcript.renameRemoteSession(title); }
+  async copyRemoteMessage(text: string): Promise<void> { await this.transcript.copyRemoteMessage(text); }
+  async downloadRemoteFile(path: string): Promise<void> { await this.transcript.downloadRemoteFile(path); }
+  retryRemoteMessage(text: string): void { this.transcript.retryRemoteMessage(text); }
   async approveRemoteTool(toolId: string, updatedInput?: Object): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    await runtime.tools.approve(
-      toolId, this.remote.activeSession.sessionId || '', runtime.connection.ensureAvailable(), updatedInput
-    );
+    await this.transcript.approveRemoteTool(toolId, updatedInput);
   }
-
-  async rejectRemoteTool(toolId: string): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    await runtime.tools.reject(
-      toolId, this.remote.activeSession.sessionId || '', runtime.connection.ensureAvailable()
-    );
-  }
-
-  async cancelRemoteTool(toolId: string): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    await runtime.tools.cancel(
-      toolId, this.remote.activeSession.sessionId || '', runtime.connection.ensureAvailable()
-    );
-  }
-
+  async rejectRemoteTool(toolId: string): Promise<void> { await this.transcript.rejectRemoteTool(toolId); }
+  async cancelRemoteTool(toolId: string): Promise<void> { await this.transcript.cancelRemoteTool(toolId); }
   async answerRemoteQuestion(toolId: string, answers: RemoteQuestionAnswerPayload): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    await runtime.tools.answer(
-      toolId, this.remote.activeSession.sessionId || '', runtime.connection.ensureAvailable(), answers
-    );
+    await this.transcript.answerRemoteQuestion(toolId, answers);
   }
-
-  resetRemoteTimeline(sessionId: string): void {
-    const runtime = this.requireRemoteRuntime();
-    runtime.timeline.reset(sessionId);
-    this.knownPollVersionValue = 0;
-    this.syncRemoteTimeline();
-  }
-
-  syncRemoteTimeline(): void {
-    const runtime = this.requireRemoteRuntime();
-    const state: ChatTimelineState = runtime.timeline.snapshotState();
-    this.remote.setTimelineProjection(
-      state.persistedMessages,
-      state.optimisticMessages,
-      state.activeTurn || RemoteUiState.emptyActiveTurn(),
-      this.remote.hasMoreMessages,
-      runtime.timeline.viewState(this.remote.hasMoreMessages)
-    );
-    this.remote.setModelCatalog(state.modelCatalog, state.selectedModelId);
-  }
-
-  startRemotePolling(): void {
-    this.requireRemoteRuntime().polling.startActiveSession({
-      sessionId: this.remote.activeSession.sessionId || '',
-      cursor: this.currentChatPollingCursor(),
-      activeTurn: this.remote.activeTurnMessage
-    });
-  }
-
+  resetRemoteTimeline(sessionId: string): void { this.transcript.resetRemoteTimeline(sessionId); }
+  syncRemoteTimeline(): void { this.transcript.syncRemoteTimeline(); }
+  startRemotePolling(): void { this.transcript.startRemotePolling(); }
   applyRemoteSnapshot(snapshot: RemoteChatPollingSnapshot): void {
-    const runtime = this.requireRemoteRuntime();
-    if (!runtime.hooks.isConversationContext(snapshot.sessionId)) {
-      return;
-    }
-    if (snapshot.historyRewritten) {
-      this.rebuildRemoteTranscript(snapshot.sessionId);
-      return;
-    }
-    runtime.timeline.applySnapshot(snapshot);
-    this.syncRemoteTimeline();
-    if (snapshot.newMessages.length > 0) {
-      this.cacheRemoteTranscript(snapshot.sessionId);
-    }
-    this.knownPollVersionValue = snapshot.cursor.pollVersion;
-    this.knownModelCatalogVersion = snapshot.cursor.knownModelCatalogVersion;
-    this.knownRemoteMessageCount = snapshot.cursor.knownMessageCount;
-    if (snapshot.title.length > 0) {
-      this.remote.setActiveSession({
-        sessionId: this.remote.activeSession.sessionId,
-        title: snapshot.title,
-        workspacePath: this.remote.activeSession.workspacePath,
-        agentType: this.remote.activeSession.agentType
-      });
-    }
-    if (snapshot.modelCatalog) {
-      runtime.models.applyCatalog(snapshot.modelCatalog);
-    }
-    this.remote.setStatusText(this.hasRunningRemoteTurn()
-      ? RemoteI18n.t('status.desktopProcessing')
-      : RemoteI18n.t('status.messagesSynced'));
-    if (snapshot.shouldSyncAfterTurnEnded) {
-      this.syncAfterRemoteTurnEnded();
-    }
+    this.transcript.applyRemoteSnapshot(snapshot);
   }
-
-  /**
-   * Writes the transcript now on screen back to disk.
-   *
-   * Fire-and-forget on purpose: the snapshot is already rendered, and a cache
-   * that cannot be written only costs the next open a fetch it used to pay for
-   * anyway.
-   */
-  private cacheRemoteTranscript(sessionId: string): void {
-    const runtime = this.requireRemoteRuntime();
-    const state: ChatTimelineState = runtime.timeline.snapshotState();
-    runtime.chatCache.sync(sessionId, state.persistedMessages);
-  }
-
-  /**
-   * Refetches a transcript the desktop no longer agrees with.
-   *
-   * Tails are handed out by index, so once the desktop reports fewer messages
-   * than this session had counted there is no offset left that means the same
-   * thing on both ends. Everything stored for the session goes, including the
-   * poll cursor, which `reloadMessages` resets by way of `onMessageCountKnown`.
-   */
-  private rebuildRemoteTranscript(sessionId: string): void {
-    const runtime = this.requireRemoteRuntime();
-    if (this.isRebuildingRemoteTranscript) {
-      return;
-    }
-    this.isRebuildingRemoteTranscript = true;
-    RemoteLogger.info(`remote transcript rewritten upstream session=${this.shortSessionId(sessionId)}`);
-    runtime.chatCache.forget(sessionId)
-      .then((): Promise<void> => runtime.chat.reloadMessages(sessionId, runtime.hooks.isConversationContext))
-      .then((): void => {
-        this.isRebuildingRemoteTranscript = false;
-      })
-      .catch((): void => {
-        this.isRebuildingRemoteTranscript = false;
-      });
-  }
-
-  hasRunningRemoteTurn(): boolean {
-    return this.remote.activeTurnMessage.id.length > 0 &&
-      (this.remote.activeTurnMessage.status || '').toLowerCase() === 'active';
-  }
-
-  remoteActiveTurnId(): string {
-    return ChatTimelineStore.cancelableTurnId(this.remote.activeTurnMessage);
-  }
-
-  projectedRemoteTimelineItems(): ChatTimelineItem[] {
-    return this.requireRemoteRuntime().timeline.viewState(this.remote.hasMoreMessages);
-  }
+  hasRunningRemoteTurn(): boolean { return this.transcript.hasRunningRemoteTurn(); }
+  remoteActiveTurnId(): string { return this.transcript.remoteActiveTurnId(); }
+  projectedRemoteTimelineItems(): ChatTimelineItem[] { return this.transcript.projectedRemoteTimelineItems(); }
 
   async createRemoteSession(agentType: string, inPlace: boolean = false): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    runtime.filePreview.close();
-    await runtime.sessions.createSession(
-      agentType,
-      '',
-      inPlace ? (sessionId: string): void => this.routeRemoteSessionInPlace(sessionId) :
-        (sessionId: string): void => this.routeCreatedRemoteSession(sessionId)
-    );
+    await this.createFlow.createRemoteSession(agentType, inPlace);
   }
-
-  openRemoteCreateSession(): void {
-    const runtime = this.requireRemoteRuntime();
-    if (!runtime.connection.ensureAvailable()) {
-      return;
-    }
-    const deviceId = this.remote.controlTargetDeviceId || this.remote.desktopId;
-    const deviceName = this.remote.controlTargetDeviceName || this.remote.desktopName;
-    this.remoteCreate.prepare(deviceId, deviceName, this.remote.selectedModelId);
-    if (deviceId.length > 0) {
-      this.remoteCreate.setDevices([{
-        deviceId,
-        deviceName: deviceName || deviceId,
-        online: true
-      }]);
-    }
-    this.remoteCreate.setWorkspaces(this.remote.recentWorkspaces);
-    runtime.appShell.pushRoute(AppRoute.RemoteCreate);
-    this.loadRemoteCreateChoices();
-    this.loadRemoteCreateModelCatalog();
-  }
-
-  closeRemoteCreateSession(): void {
-    const runtime = this.requireRemoteRuntime();
-    this.remoteCreateWorkspaceLoadVersion += 1;
-    runtime.hooks.stopVoiceInput();
-    this.remoteCreate.closeMenu();
-    runtime.appShell.popRoute(AppRoute.RemoteHome);
-  }
-
-  async loadRemoteCreateChoices(): Promise<void> {
-    await Promise.all([
-      this.loadRemoteCreateDevices(),
-      this.loadRemoteCreateWorkspaces()
-    ]);
-  }
-
-  async loadRemoteCreateModelCatalog(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (this.remote.modelCatalog.models.length > 0) {
-      return;
-    }
-    try {
-      const catalog = await runtime.sessionManager.getModelCatalog();
-      const selectedModelId = RemoteUiState.selectedModelIdForCatalog(catalog, this.remote.selectedModelId);
-      this.remote.setModelCatalog(catalog, selectedModelId);
-      this.remoteCreate.setSelectedModelId(selectedModelId);
-    } catch (_err) {
-      // Model selection remains hidden when the remote does not expose a catalog.
-    }
-  }
-
-  async loadRemoteCreateDevices(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    this.remoteCreate.isLoadingDevices = this.remoteCreate.devices.length === 0;
-    try {
-      const phoneDeviceId = runtime.connection.getDeviceId();
-      const accountDevices = await runtime.settings.listCloudAccountDevices();
-      const devices = accountDevices.filter((device: CloudAccountDevice): boolean =>
-        device.online && device.deviceId !== phoneDeviceId
-      );
-      const currentId = this.remoteCreate.selectedDeviceId;
-      if (currentId.length > 0 &&
-        !devices.some((device: CloudAccountDevice): boolean => device.deviceId === currentId)) {
-        devices.unshift({
-          deviceId: currentId,
-          deviceName: this.remoteCreate.selectedDeviceName || currentId,
-          online: true
-        });
-      }
-      this.remoteCreate.setDevices(devices);
-    } catch (_err) {
-      const currentId = this.remoteCreate.selectedDeviceId;
-      if (currentId.length > 0) {
-        this.remoteCreate.setDevices([{
-          deviceId: currentId,
-          deviceName: this.remoteCreate.selectedDeviceName || currentId,
-          online: true
-        }]);
-      } else {
-        this.remoteCreate.setDevices([]);
-      }
-      this.remoteCreate.errorText = RemoteI18n.t('remote.create.deviceLoadFailed');
-    }
-  }
-
-  async loadRemoteCreateWorkspaces(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    const loadVersion = ++this.remoteCreateWorkspaceLoadVersion;
-    const deviceId = this.remoteCreate.selectedDeviceId;
-    this.remoteCreate.isLoadingWorkspaces = this.remoteCreate.workspaces.length === 0;
-    try {
-      const workspaces = await runtime.workspace.recentWorkspaces();
-      if (loadVersion !== this.remoteCreateWorkspaceLoadVersion ||
-        deviceId !== this.remoteCreate.selectedDeviceId) {
-        return;
-      }
-      this.remoteCreate.setWorkspaces(workspaces);
-    } catch (_err) {
-      if (loadVersion !== this.remoteCreateWorkspaceLoadVersion ||
-        deviceId !== this.remoteCreate.selectedDeviceId) {
-        return;
-      }
-      this.remoteCreate.setWorkspaces([]);
-      this.remoteCreate.errorText = RemoteI18n.t('remote.create.workspaceLoadFailed');
-    }
-  }
-
-  toggleRemoteCreateDevices(): void {
-    this.remoteCreate.toggleMenu('devices');
-    if (this.remoteCreate.openMenu === 'devices' && this.remoteCreate.devices.length === 0) {
-      this.loadRemoteCreateDevices();
-    }
-  }
-
-  toggleRemoteCreateWorkspaces(): void {
-    this.remoteCreate.toggleMenu('workspaces');
-    if (this.remoteCreate.openMenu === 'workspaces' && this.remoteCreate.workspaces.length === 0) {
-      this.loadRemoteCreateWorkspaces();
-    }
-  }
-
+  openRemoteCreateSession(): void { this.createFlow.openRemoteCreateSession(); }
+  closeRemoteCreateSession(): void { this.createFlow.closeRemoteCreateSession(); }
+  async loadRemoteCreateChoices(): Promise<void> { await this.createFlow.loadRemoteCreateChoices(); }
+  async loadRemoteCreateModelCatalog(): Promise<void> { await this.createFlow.loadRemoteCreateModelCatalog(); }
+  async loadRemoteCreateDevices(): Promise<void> { await this.createFlow.loadRemoteCreateDevices(); }
+  async loadRemoteCreateWorkspaces(): Promise<void> { await this.createFlow.loadRemoteCreateWorkspaces(); }
+  toggleRemoteCreateDevices(): void { this.createFlow.toggleRemoteCreateDevices(); }
+  toggleRemoteCreateWorkspaces(): void { this.createFlow.toggleRemoteCreateWorkspaces(); }
   async selectRemoteCreateDevice(device: CloudAccountDevice): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (device.deviceId === this.remoteCreate.selectedDeviceId) {
-      this.remoteCreate.closeMenu();
-      return;
-    }
-    const draft = this.remoteCreate.draft;
-    this.remoteCreate.closeMenu();
-    this.remoteCreate.isLoadingWorkspaces = true;
-    try {
-      await runtime.settings.selectCloudAccountDevice(device, false);
-      this.remoteCreate.selectDevice(device);
-      this.remoteCreate.setDraft(draft);
-      await this.loadRemoteCreateWorkspaces();
-    } catch (err) {
-      this.remoteCreate.isLoadingWorkspaces = false;
-      this.remoteCreate.errorText = err instanceof Error ? err.message :
-        RemoteI18n.t('remote.settings.deviceSwitchFailed');
-    }
+    await this.createFlow.selectRemoteCreateDevice(device);
   }
-
-  selectRemoteCreateWorkspace(path: string): void {
-    const workspace = this.remoteCreate.workspaces
-      .find((item: RecentWorkspaceEntry): boolean => item.path === path);
-    this.remoteCreate.selectWorkspace(workspace);
-  }
-
-  async submitRemoteCreateSession(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    const instruction = this.remoteCreate.draft.trim();
-    if (instruction.length === 0 || this.remoteCreate.isSubmitting || !runtime.connection.ensureAvailable()) {
-      return;
-    }
-    const context = this.remoteCreate.submissionContext();
-    const activeDeviceId = this.remote.controlTargetDeviceId || this.remote.desktopId;
-    if (context.deviceId.length === 0 || context.deviceId !== activeDeviceId) {
-      this.remoteCreate.errorText = RemoteI18n.t('remote.create.deviceMismatch');
-      return;
-    }
-    this.remoteCreate.isSubmitting = true;
-    this.remoteCreate.errorText = '';
-    this.remoteCreate.closeMenu();
-    try {
-      if (context.workspacePath.length > 0) {
-        await runtime.sessions.createSessionInWorkspace(
-          context.workspacePath,
-          this.remote.workspacePath,
-          instruction,
-          context.agentType,
-          undefined,
-          this.remoteCreate.selectedModelId
-        );
-      } else {
-        await this.bindAssistantWorkspace();
-        await runtime.sessions.createSession(
-          context.agentType,
-          instruction,
-          undefined,
-          this.remoteCreate.selectedModelId
-        );
-      }
-      if (runtime.appShell.isRoute(AppRoute.RemoteCreate)) {
-        this.remoteCreate.errorText = this.remote.statusText || RemoteI18n.t('remote.create.submitFailed');
-      }
-    } catch (err) {
-      this.remoteCreate.errorText = err instanceof Error ? err.message :
-        RemoteI18n.t('remote.create.submitFailed');
-    } finally {
-      this.remoteCreate.isSubmitting = false;
-    }
-  }
-
-  /**
-   * The chat option creates a Claw session, and the desktop always binds those
-   * to its assistant workspace. Follow it there first, otherwise the app stays
-   * bound to the code workspace it was on and the new chat is listed, titled
-   * and file-scoped as if it had been created inside that workspace.
-   */
-  private async bindAssistantWorkspace(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (this.remote.workspaceKind === 'assistant') {
-      return;
-    }
-    try {
-      const assistants = await runtime.workspace.assistants();
-      if (assistants.length === 0) {
-        return;
-      }
-      await runtime.hooks.selectAssistantWorkspace(assistants[0].path);
-    } catch (err) {
-      RemoteLogger.warn(`assistant workspace bind failed: ${String(err)}`);
-    }
-  }
-
+  selectRemoteCreateWorkspace(path: string): void { this.createFlow.selectRemoteCreateWorkspace(path); }
+  async submitRemoteCreateSession(): Promise<void> { await this.createFlow.submitRemoteCreateSession(); }
   async createRemoteSessionInWorkspace(
     path: string,
     agentType: string = 'code',
     inPlace: boolean = false
   ): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    runtime.filePreview.close();
-    await runtime.sessions.createSessionInWorkspace(
-      path,
-      this.remote.workspacePath,
-      '',
-      agentType,
-      inPlace ? (sessionId: string): void => this.routeRemoteSessionInPlace(sessionId) :
-        (sessionId: string): void => this.routeCreatedRemoteSession(sessionId)
-    );
+    await this.createFlow.createRemoteSessionInWorkspace(path, agentType, inPlace);
   }
-
   async openRemoteSession(item: RemoteSession, inPlace: boolean = false): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    runtime.filePreview.close();
-    await runtime.sessions.openSession(
-      item,
-      this.remote.workspacePath,
-      inPlace ? (sessionId: string): void => this.routeRemoteSessionInPlace(sessionId) :
-        (sessionId: string): void => this.routeCreatedRemoteSession(sessionId)
-    );
+    await this.createFlow.openRemoteSession(item, inPlace);
   }
-
   applyRemoteActiveSession(session: SessionSummary): void {
-    const runtime = this.requireRemoteRuntime();
-    const current = this.remote.activeSession;
-    if (runtime.hooks.isFilePreviewVisible() &&
-      (current.sessionId !== session.sessionId || current.workspacePath !== session.workspacePath)) {
-      runtime.filePreview.close();
-    }
-    this.remote.setActiveSession(session);
+    this.createFlow.applyRemoteActiveSession(session);
   }
-
   async deleteRemoteSession(item: RemoteSession): Promise<void> {
-    await this.requireRemoteRuntime().sessions.deleteSession(item, this.remote.workspacePath);
+    await this.createFlow.deleteRemoteSession(item);
+  }
+  routeCreatedRemoteSession(sessionId: string): void {
+    this.createFlow.routeCreatedRemoteSession(sessionId);
   }
 
   openHomeSession(session: RemoteSession, inPlace: boolean = false): void {
-    this.requireRemoteRuntime().filePreview.close();
-    if (session.agentType === 'chat') {
-      this.openGeneralSession(session);
-      return;
-    }
-    this.openRemoteSession(session, inPlace);
+    this.visible.openHomeSession(session, inPlace);
   }
-
-  async deleteHomeSession(session: RemoteSession): Promise<void> {
-    if (session.agentType !== 'chat') {
-      await this.deleteRemoteSession(session);
-      return;
-    }
-    await this.requireRemoteRuntime().generalCommands.deleteSession(session, this.general.isBusy);
-  }
-
-  activeGeneralChatAsRemoteSession(): RemoteSession {
-    const active = this.general.activeSession;
-    return {
-      id: active.sessionId,
-      title: active.title,
-      agentType: 'chat',
-      status: 'ready',
-      updatedAt: '',
-      createdAt: '',
-      messageCount: this.general.timelineItems.length,
-      workspacePath: active.workspacePath
-    };
-  }
-
-  activeGeneralUploadedFileCount(): number {
-    let count = 0;
-    this.general.timelineItems.forEach((item: ChatTimelineItem) => {
-      if (item.message && item.message.images) {
-        count += item.message.images.length;
-      }
-    });
-    return count;
-  }
-
+  async deleteHomeSession(session: RemoteSession): Promise<void> { await this.visible.deleteHomeSession(session); }
+  activeGeneralChatAsRemoteSession(): RemoteSession { return this.visible.activeGeneralChatAsRemoteSession(); }
+  activeGeneralUploadedFileCount(): number { return this.visible.activeGeneralUploadedFileCount(); }
   async archiveHomeSession(session: RemoteSession, archived: boolean): Promise<void> {
-    await this.requireRemoteRuntime().generalCommands.archiveSession(session, archived, this.general.isBusy);
+    await this.visible.archiveHomeSession(session, archived);
   }
-
-  async exportHomeSession(session: RemoteSession): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    await runtime.generalCommands.exportSession(
-      session,
-      this.general.isBusy,
-      async (text: string): Promise<void> => runtime.clipboard.writeText(text)
-    );
-  }
-
-  async openGeneralSession(item: RemoteSession): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (this.general.isBusy) {
-      return;
-    }
-    runtime.polling.stop();
-    runtime.generalConversation.stop(false);
-    await runtime.generalCommands.openSession(
-      item,
-      this.general.isBusy,
-      async (sessionId: string): Promise<string> => runtime.generalDrafts.restore(sessionId),
-      (_sessionId: string): void => runtime.appShell.replaceRouteWithoutAnimation(AppRoute.ChatHome)
-    );
-  }
-
-  async startGeneralChat(text: string): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    const trimmed = text.trim();
-    if (trimmed.length === 0 || this.general.isBusy) {
-      return;
-    }
-    runtime.polling.stop();
-    runtime.generalConversation.stop(false);
-    runtime.generalDrafts.cancel();
-    const created = await runtime.generalCommands.createSession(
-      trimmed,
-      this.general.isBusy,
-      async (): Promise<void> => runtime.generalDrafts.clearHomeNow(),
-      (_sessionId: string): void => runtime.appShell.replaceRouteWithoutAnimation(AppRoute.ChatHome)
-    );
-    if (created) {
-      await runtime.generalConversation.sendMessage();
-    }
-  }
-
-  async sendVisibleMessage(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (runtime.appShell.isGeneralChatVisible()) {
-      if ((this.general.activeSession.sessionId || '').length === 0) {
-        this.startVisibleGeneralChat();
-        return;
-      }
-      await runtime.generalConversation.sendMessage();
-      return;
-    }
-    await this.sendRemoteMessage();
-  }
-
-  async stopVisibleTask(): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (runtime.appShell.isGeneralChatVisible()) {
-      runtime.generalConversation.stop(true);
-      return;
-    }
-    await this.stopRemoteTask();
-  }
-
-  closeActiveChat(): void {
-    const runtime = this.requireRemoteRuntime();
-    runtime.filePreview.close();
-    runtime.hooks.stopVoiceInput();
-    if (runtime.appShell.isRoute(AppRoute.GeneralChat)) {
-      runtime.generalDrafts.persistVisible(this.general.chatInput);
-      runtime.generalConversation.stop(true);
-      runtime.appShell.popRoute(AppRoute.ChatHome);
-      this.restoreGeneralChatDraft(GENERAL_CHAT_HOME_DRAFT_ID);
-      return;
-    }
-    runtime.polling.stop();
-    this.remote.setConversationDismissed(true);
-    runtime.appShell.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
-  }
-
-  async renameVisibleSession(title: string): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (runtime.appShell.isGeneralChatVisible()) {
-      await runtime.generalCommands.renameActiveSession(this.general.activeSession, title);
-      return;
-    }
-    await this.renameRemoteSession(title);
-  }
-
-  async retryVisibleMessage(text: string): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (runtime.appShell.isGeneralChatVisible()) {
-      const prepared = await runtime.generalCommands.retryMessage(
-        this.general.activeSession.sessionId || '', text, this.general.isBusy
-      );
-      if (prepared) {
-        await runtime.generalConversation.sendMessage();
-      }
-      return;
-    }
-    this.retryRemoteMessage(text);
-  }
-
-  downloadVisibleFile(path: string): void {
-    if (this.requireRemoteRuntime().appShell.isGeneralChatVisible()) {
-      this.general.setStatus(RemoteI18n.t('generalChat.fileDownloadMock'));
-      return;
-    }
-    this.downloadRemoteFile(path);
-  }
-
-  async selectVisibleModel(modelId: string): Promise<void> {
-    const runtime = this.requireRemoteRuntime();
-    if (runtime.appShell.isGeneralChatVisible()) {
-      await runtime.settings.selectModel(modelId);
-      return;
-    }
-    await this.selectRemoteModel(modelId);
-  }
-
-  startVisibleGeneralChat(): void {
-    const rawText = this.general.chatInput.trim();
-    const text = rawText.length > 0 ? rawText :
-      (this.general.selectedImages.length > 0 ? RemoteI18n.t('chat.analyzeImageDefault') : '');
-    if (text.length === 0 || this.general.isBusy) {
-      return;
-    }
-    if (this.general.serviceState === GeneralChatServiceState.Unconfigured) {
-      const statusText = GeneralChatServiceStatus.userMessage(this.general.serviceState);
-      this.general.setStatus(statusText);
-      this.showHomeToast(statusText);
-      return;
-    }
-    this.startGeneralChat(text);
-  }
-
-  generalChatHomeStatusText(): string {
-    if (this.general.serviceState === GeneralChatServiceState.Ready ||
-      this.general.serviceState === GeneralChatServiceState.Sending ||
-      this.general.serviceState === GeneralChatServiceState.Streaming) {
-      return '';
-    }
-    return GeneralChatServiceStatus.userMessage(this.general.serviceState, this.general.statusText);
-  }
-
-  prepareNewGeneralChat(): void {
-    const runtime = this.requireRemoteRuntime();
-    runtime.hooks.stopVoiceInput();
-    runtime.generalConversation.stop(true);
-    runtime.generalDrafts.clearHome();
-    this.general.clearComposer();
-    this.general.clearActiveSession();
-    this.resetGeneralTimeline('');
-    runtime.appShell.replaceRouteWithoutAnimation(AppRoute.ChatHome);
-  }
-
+  async exportHomeSession(session: RemoteSession): Promise<void> { await this.visible.exportHomeSession(session); }
+  async openGeneralSession(item: RemoteSession): Promise<void> { await this.visible.openGeneralSession(item); }
+  async startGeneralChat(text: string): Promise<void> { await this.visible.startGeneralChat(text); }
+  async sendVisibleMessage(): Promise<void> { await this.visible.sendVisibleMessage(); }
+  async stopVisibleTask(): Promise<void> { await this.visible.stopVisibleTask(); }
+  closeActiveChat(): void { this.visible.closeActiveChat(); }
+  async renameVisibleSession(title: string): Promise<void> { await this.visible.renameVisibleSession(title); }
+  async retryVisibleMessage(text: string): Promise<void> { await this.visible.retryVisibleMessage(text); }
+  downloadVisibleFile(path: string): void { this.visible.downloadVisibleFile(path); }
+  async selectVisibleModel(modelId: string): Promise<void> { await this.visible.selectVisibleModel(modelId); }
+  startVisibleGeneralChat(): void { this.visible.startVisibleGeneralChat(); }
+  generalChatHomeStatusText(): string { return this.visible.generalChatHomeStatusText(); }
+  prepareNewGeneralChat(): void { this.visible.prepareNewGeneralChat(); }
   onVisibleChatInputChange(route: AppRoute, value: string): void {
-    this.setChatInput(route, value);
-    if (this.isGeneralComposerRoute(route)) {
-      this.requireRemoteRuntime().generalDrafts.scheduleVisible(value);
-    }
+    this.visible.onVisibleChatInputChange(route, value);
   }
-
-  visibleGeneralChatDraftId(): string {
-    return this.requireRemoteRuntime().appShell.isGeneralChatVisible() ?
-      this.general.activeSession.sessionId || GENERAL_CHAT_HOME_DRAFT_ID : '';
-  }
-
+  visibleGeneralChatDraftId(): string { return this.visible.visibleGeneralChatDraftId(); }
   async restoreGeneralChatDraft(draftId: string): Promise<void> {
-    this.general.setChatInput(await this.requireRemoteRuntime().generalDrafts.restore(draftId));
+    await this.visible.restoreGeneralChatDraft(draftId);
   }
-
-  latestUserMessageText(): string {
-    if (this.requireRemoteRuntime().appShell.isGeneralChatVisible()) {
-      return this.general.latestUserMessageText();
-    }
-    const candidates = this.remote.persistedMessages.concat(this.remote.optimisticMessages);
-    for (let index = candidates.length - 1; index >= 0; index--) {
-      if (candidates[index].role === 'user' && candidates[index].text.trim().length > 0) {
-        return candidates[index].text;
-      }
-    }
-    return '';
-  }
-
-  resetGeneralTimeline(sessionId: string): void {
-    this.requireRemoteRuntime().timeline.reset(sessionId);
-    this.syncGeneralTimeline();
-  }
-
-  syncGeneralTimeline(): void {
-    const runtime = this.requireRemoteRuntime();
-    const state: ChatTimelineState = runtime.timeline.snapshotState();
-    const projectedItems = runtime.timeline.viewState(false);
-    this.general.setTimelineProjection(
-      state.persistedMessages,
-      state.optimisticMessages,
-      state.activeTurn || RemoteUiState.emptyActiveTurn(),
-      false,
-      projectedItems
-    );
-    const itemSummary = projectedItems.map((item: ChatTimelineItem) => {
-      const message = item.message;
-      return `${item.type}:${item.id}:${message ? message.status : ''}:${message ? message.text.length : 0}`;
-    }).join(',');
-    RemoteLogger.info(`general chat projection revision=${this.general.timelineRevision} persisted=${state.persistedMessages.length} active=${state.activeTurn ? state.activeTurn.id : 'none'} items=${itemSummary}`);
-  }
-
-  showHomeToast(message: string): void {
-    const runtime = this.requireRemoteRuntime();
-    if (!runtime.hooks.showToast(message)) {
-      this.setVisibleStatusText(message);
-    }
-  }
-
-  private currentChatPollingCursor(): RemoteChatPollingCursor {
-    return {
-      pollVersion: this.knownPollVersionValue,
-      knownMessageCount: this.knownRemoteMessageCount,
-      knownModelCatalogVersion: this.knownModelCatalogVersion
-    };
-  }
-
-  private updateChatPollingCursor(pollVersion: number, knownMessageCount: number): void {
-    this.knownPollVersionValue = pollVersion;
-    this.knownRemoteMessageCount = knownMessageCount;
-    this.requireRemoteRuntime().polling.updateCursor({
-      pollVersion,
-      knownMessageCount,
-      knownModelCatalogVersion: this.knownModelCatalogVersion
-    });
-  }
-
-  private async syncAfterRemoteTurnEnded(): Promise<void> {
-    if (this.isSyncingAfterTurn) {
-      return;
-    }
-    this.isSyncingAfterTurn = true;
-    try {
-      // Deliberately not the cached path: this exists to pick up whatever the
-      // desktop settled on after the turn finished, which is exactly what the
-      // cache does not know yet.
-      const runtime = this.requireRemoteRuntime();
-      await runtime.chat.reloadMessages(
-        this.remote.activeSession.sessionId || '',
-        runtime.hooks.isConversationContext
-      );
-    } finally {
-      this.isSyncingAfterTurn = false;
-    }
-  }
-
-  private shortSessionId(sessionId: string): string {
-    return sessionId.length <= 8 ? sessionId :
-      sessionId.slice(0, 4) + '...' + sessionId.slice(sessionId.length - 4);
-  }
-
-  routeCreatedRemoteSession(sessionId: string): void {
-    const runtime = this.requireRemoteRuntime();
-    runtime.filePreview.close();
-    this.remote.setConversationDismissed(false);
-    if (runtime.appShell.isRoute(AppRoute.RemoteChat)) {
-      // Already on the screen this session belongs on. Swapping the path entry
-      // would rebuild the destination — and with it the sidebar — for a change
-      // that only page state describes. See replaceRouteWithoutAnimation.
-      return;
-    }
-    if (runtime.appShell.isRoute(AppRoute.RemoteCreate)) {
-      runtime.appShell.replaceCurrentRoute(AppRoute.RemoteChat, sessionId);
-      return;
-    }
-    runtime.appShell.pushRoute(AppRoute.RemoteChat, sessionId);
-  }
-
-  private routeRemoteSessionInPlace(sessionId: string): void {
-    const runtime = this.requireRemoteRuntime();
-    runtime.filePreview.close();
-    this.remote.setConversationDismissed(false);
-    const target = AppRouteContract.remoteSessionDestination(sessionId);
-    runtime.appShell.replaceRouteWithoutAnimation(target.name, target.routeParam().sessionId);
-  }
-
-  private requireRemoteRuntime(): RemoteConversationDependencies {
-    if (!this.remoteRuntime) {
-      throw new Error('Remote conversation dependencies are not configured.');
-    }
-    return this.remoteRuntime;
-  }
+  latestUserMessageText(): string { return this.visible.latestUserMessageText(); }
+  resetGeneralTimeline(sessionId: string): void { this.visible.resetGeneralTimeline(sessionId); }
+  syncGeneralTimeline(): void { this.visible.syncGeneralTimeline(); }
+  showHomeToast(message: string): void { this.visible.showHomeToast(message); }
 }

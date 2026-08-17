@@ -213,7 +213,7 @@ CLI 只消费 typed summary 与 typed action：
 | 变更范围 | 最小验证 |
 | --- | --- |
 | TUI state/input/render | focused reducer/input/render test + `cargo test -p bitfun-cli` |
-| Agent Runtime SDK/port | `cargo test -p bitfun-agent-runtime` + owner focused test |
+| Agent Runtime SDK/port | `cargo test -p bitfun-agent-runtime --no-default-features --features agent-runtime --lib` + owner focused test |
 | Shared IPC | protocol round-trip、controller/idle、timeout/outcome-unknown、disconnect cancel |
 | Core turn/tool | 权限 allow/ask/deny、取消、事件、上下文、持久化恢复 |
 | `exec` output | stdout/stderr、单一最终状态、session conflict、Ctrl+C、Patch |

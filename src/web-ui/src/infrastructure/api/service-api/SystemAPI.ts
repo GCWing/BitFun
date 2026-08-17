@@ -52,6 +52,9 @@ export class SystemAPI {
 
    
   async checkForUpdates(): Promise<CheckForUpdatesResponse> {
+    if (import.meta.env.DEV) {
+      throw new Error('Update checks are disabled in development mode');
+    }
     try {
       return await api.invoke('check_for_updates', { 
         request: {} 

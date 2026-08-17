@@ -374,6 +374,7 @@ export interface ChatMessageItemResponse {
 export interface ImageAttachment {
   name: string;
   data_url: string;
+  mime_type?: string;
 }
 
 export interface SelectedImageAttachment extends ImageAttachment {

@@ -12,7 +12,7 @@
  *   deduped via `steeringId`.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Pencil,
@@ -29,6 +29,7 @@ import { stateMachineManager } from '../state-machine';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { pendingQueueManager } from '../services/flow-chat-manager/PendingQueueModule';
 import { FlowChatManager } from '../services/FlowChatManager';
+import { interruptedTurnRecoveryGate } from '../services/interruptedTurnRecoveryGate';
 import { insertSteeringItemIfAbsent } from '../services/flow-chat-manager/EventHandlerModule';
 import { notificationService } from '../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -45,6 +46,12 @@ interface PendingQueuePanelProps {
 
 export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelProps): JSX.Element | null {
   const { t } = useTranslation('flow-chat');
+  useSyncExternalStore(
+    interruptedTurnRecoveryGate.subscribe,
+    interruptedTurnRecoveryGate.getSnapshot,
+    interruptedTurnRecoveryGate.getSnapshot,
+  );
+  const recoveryInFlight = interruptedTurnRecoveryGate.isSessionInFlight(sessionId);
   const [items, setItems] = useState<QueuedMessage[]>(() =>
     sessionId ? pendingQueueManager.list(sessionId) : [],
   );
@@ -121,7 +128,7 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
 
   const handleSendNow = useCallback(
     async (item: QueuedMessage) => {
-      if (!sessionId) return;
+      if (!sessionId || recoveryInFlight) return;
       const machine = stateMachineManager.get(sessionId);
       const dialogTurnId = machine?.getContext().currentDialogTurnId ?? null;
 
@@ -180,13 +187,15 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
           log.warn('Send now item is no longer queued', { sessionId, itemId: item.id });
           return;
         }
-        await FlowChatManager.getInstance().drainPendingQueueForSession(sessionId);
+        await FlowChatManager.getInstance().drainPendingQueueForSession(sessionId, {
+          allowInterruptedRecoveryAbandon: true,
+        });
       } catch (err) {
         log.error('Send now fallback failed', { sessionId, itemId: item.id, err });
         notificationService.error(t('pendingQueue.errors.sendNowFailed'), { duration: 4000 });
       }
     },
-    [isAcpSession, sessionId, t],
+    [isAcpSession, recoveryInFlight, sessionId, t],
   );
 
   const visibleItems = useMemo(() => items, [items]);
@@ -358,7 +367,7 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                         data-bf-part="action"
                         size="small"
                         className="bitfun-pending-queue-panel__btn bitfun-pending-queue-panel__btn--primary"
-                        disabled={isSending}
+                        disabled={isSending || recoveryInFlight}
                         onClick={() => {
                           void handleSendNow(item);
                         }}

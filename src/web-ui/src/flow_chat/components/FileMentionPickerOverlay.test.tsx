@@ -22,7 +22,13 @@ vi.mock('@/infrastructure/api', () => ({
   },
   workspaceAPI: {
     getDirectoryChildren: vi.fn().mockResolvedValue([]),
-    searchFilenamesOnly: vi.fn().mockResolvedValue([]),
+    searchFilenamesOnlyStreamDetailed: vi.fn().mockResolvedValue({
+      searchId: 'search-1',
+      searchKind: 'filenames',
+      limit: 30,
+      truncated: false,
+      totalResults: 0,
+    }),
   },
 }));
 
@@ -32,15 +38,19 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
   },
 }));
 
-const Harness: React.FC = () => {
+const Harness: React.FC<{
+  searchQuery?: string;
+  remoteConnectionId?: string;
+}> = ({ searchQuery = '', remoteConnectionId = 'remote-connection-1' }) => {
   const anchorRef = useRef<HTMLButtonElement>(null);
   return (
     <div>
       <button ref={anchorRef} type="button">anchor</button>
       <FileMentionPicker
         isOpen
-        searchQuery=""
+        searchQuery={searchQuery}
         workspacePath="/workspace"
+        remoteConnectionId={remoteConnectionId}
         anchorRef={anchorRef}
         onSelect={vi.fn()}
         onClose={vi.fn()}
@@ -61,6 +71,7 @@ describe('FileMentionPicker overlay', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     act(() => root.unmount());
     document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     container.remove();
@@ -76,9 +87,32 @@ describe('FileMentionPicker overlay', () => {
     const picker = document.querySelector<HTMLElement>('.file-mention-picker--overlay');
     expect(picker?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
     expect(picker?.style.visibility).toBe('visible');
+    expect(workspaceAPI.getDirectoryChildren).toHaveBeenCalledWith(
+      '/workspace',
+      'remote-connection-1',
+    );
   });
 
-  it('shows the workspace-relative path after the file name', async () => {
+  it('shows the current directory name before its parent path', async () => {
+    vi.mocked(workspaceAPI.getDirectoryChildren).mockResolvedValueOnce([
+      {
+        path: '/workspace/src',
+        name: 'src',
+        isDirectory: true,
+      },
+    ]);
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+
+    const item = document.querySelector<HTMLElement>('[data-bf-part="item"]');
+    expect(document.querySelector('[data-bf-part="currentDirectoryName"]')?.textContent).toBe('workspace');
+    expect(document.querySelector('[data-bf-part="parentDirectoryPath"]')).toBeNull();
+    expect(item?.querySelector('[data-bf-part="itemName"]')?.textContent).toBe('src');
+    expect(item?.querySelector('[data-bf-part="itemDetail"]')).toBeNull();
+
     vi.mocked(workspaceAPI.getDirectoryChildren).mockResolvedValueOnce([
       {
         path: '/workspace/src/App.tsx',
@@ -88,16 +122,117 @@ describe('FileMentionPicker overlay', () => {
     ]);
 
     await act(async () => {
+      item?.click();
+      await Promise.resolve();
+    });
+
+    expect(document.querySelector('[data-bf-part="currentDirectoryName"]')?.textContent).toBe('src');
+    expect(document.querySelector('[data-bf-part="parentDirectoryPath"]')?.textContent).toBe('workspace');
+    const nestedItem = document.querySelector('[data-bf-part="item"]');
+    expect(nestedItem?.querySelector('[data-bf-part="itemName"]')?.textContent).toBe('App.tsx');
+    expect(nestedItem?.querySelector('[data-bf-part="itemDetail"]')).toBeNull();
+  });
+
+  it('does not present a remote browse failure as an empty directory', async () => {
+    vi.mocked(workspaceAPI.getDirectoryChildren).mockRejectedValueOnce(
+      new Error('remote connection unavailable'),
+    );
+
+    await act(async () => {
       root.render(<Harness />);
       await Promise.resolve();
     });
 
-    const item = document.querySelector('[data-bf-part="item"]');
-    const itemName = item?.querySelector('[data-bf-part="itemName"]');
-    const itemPath = item?.querySelector('[data-bf-part="itemDetail"]');
-    expect(itemName?.textContent).toBe('App.tsx');
-    expect(itemName?.classList.contains('file-mention-picker__item-name--with-path')).toBe(true);
-    expect(itemPath?.textContent).toBe('src/App.tsx');
-    expect(itemPath?.classList.contains('file-mention-picker__item-path')).toBe(true);
+    expect(document.querySelector('[data-bf-part="empty"][data-bf-state~="error"]')?.textContent)
+      .toBe('fileMention.browseUnavailable');
+    expect(document.querySelector('[data-bf-part="empty"]:not([data-bf-state~="error"])')).toBeNull();
+  });
+
+  it('shows streamed remote matches before the recursive search completes', async () => {
+    vi.useFakeTimers();
+    let reportProgress: ((event: {
+      searchId: string;
+      searchKind: 'filenames';
+      results: Array<{
+        path: string;
+        name: string;
+        isDirectory: boolean;
+        fileNameMatch: {
+          path: string;
+          name: string;
+          isDirectory: boolean;
+          matchType: 'fileName';
+        };
+        contentMatches: [];
+      }>;
+    }) => void) | undefined;
+    let finishSearch: (() => void) | undefined;
+
+    vi.mocked(workspaceAPI.searchFilenamesOnlyStreamDetailed).mockImplementationOnce((
+      _rootPath,
+      _pattern,
+      _caseSensitive,
+      _useRegex,
+      _wholeWord,
+      _searchIdOrSignal,
+      _maxResults,
+      _includeDirectories,
+      callbacks,
+    ) => {
+      reportProgress = callbacks.onProgress;
+      return new Promise(resolve => {
+        finishSearch = () => resolve({
+          searchId: 'search-remote-1',
+          searchKind: 'filenames',
+          limit: 30,
+          truncated: false,
+          totalResults: 1,
+        });
+      });
+    });
+
+    await act(async () => {
+      root.render(<Harness searchQuery="手写" />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    expect(workspaceAPI.searchFilenamesOnlyStreamDetailed).toHaveBeenCalled();
+    expect(
+      vi.mocked(workspaceAPI.searchFilenamesOnlyStreamDetailed).mock.calls[0]?.[10],
+    ).toBe('remote-connection-1');
+
+    await act(async () => {
+      reportProgress?.({
+        searchId: 'search-remote-1',
+        searchKind: 'filenames',
+        results: [{
+          path: '/workspace/手写笔画标注项目',
+          name: '手写笔画标注项目',
+          isDirectory: true,
+          fileNameMatch: {
+            path: '/workspace/手写笔画标注项目',
+            name: '手写笔画标注项目',
+            isDirectory: true,
+            matchType: 'fileName',
+          },
+          contentMatches: [],
+        }],
+      });
+      await Promise.resolve();
+    });
+
+    expect(document.querySelector('[data-bf-part="itemName"]')?.textContent)
+      .toBe('手写笔画标注项目');
+    expect(document.querySelector('[data-bf-part="root"]')?.getAttribute('data-bf-state'))
+      .toBe('loading');
+
+    await act(async () => {
+      finishSearch?.();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
   });
 });

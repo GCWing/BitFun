@@ -9,9 +9,9 @@ use super::round_executor::{ModelRoundLifecycle, RoundExecutor};
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
     build_prompt_context_for_workspace, get_agent_registry, get_embedded_prompt,
-    minimal_harness_tool_policy, PrependedPromptReminders, PromptBuilder, PromptBuilderContext,
-    RuntimeContextNeeds, ToolListingSections, UserContextPolicy, UserContextSection,
-    MINIMAL_HARNESS_REQUIRED_TOOLS,
+    minimal_harness_tool_policy, render_direct_tool_listing_body, PrependedPromptReminders,
+    PromptBuilder, PromptBuilderContext, RuntimeContextNeeds, ToolListingSections,
+    UserContextPolicy, UserContextSection, MINIMAL_HARNESS_REQUIRED_TOOLS,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::coordination::scheduler::agent_dialog_turn_image_contexts;
@@ -32,7 +32,12 @@ use crate::agentic::image_analysis::{
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{
     ContextCompressor, SessionManager, SystemPromptCacheIdentity, TokenAnchor, TokenAnchorInput,
-    UserContextCacheIdentity,
+    UserContextCacheIdentity, INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY,
+    INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY,
+    INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY,
 };
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
@@ -44,6 +49,7 @@ use crate::agentic::tools::{
 };
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
+use crate::infrastructure::ai::reasoning_catalog::reasoning_preset_runtime_fingerprint;
 use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{
@@ -61,10 +67,13 @@ use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use bitfun_agent_runtime::harness_profile::{resolve_harness_profile, MINIMAL_PROMPT_POLICY_ID};
 use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
+use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_runtime::thread_goal_tools::ensure_thread_goal_tools;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use bitfun_core_types::{SessionModelBindingPolicy, MINIMAL_HARNESS_PROFILE_ID};
+use bitfun_runtime_ports::{resolve_permission_mode, PermissionMode, PermissionModeLayers};
+use dashmap::DashMap;
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -72,6 +81,17 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+
+fn execution_engine_owns_cancel_lifecycle(context: &HashMap<String, String>) -> bool {
+    !super::types::coordinator_owns_cancel_lifecycle(context)
+}
+
+fn initial_round_index(context: &std::collections::HashMap<String, String>) -> usize {
+    context
+        .get("initial_round_index")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0)
+}
 use tool_runtime::context::PrimaryModelFacts;
 
 fn ensure_primary_session_goal_tools(allowed_tools: &mut Vec<String>, is_subagent: bool) {
@@ -149,6 +169,39 @@ fn runtime_context_needs_for_manifest(manifest: &ResolvedToolManifest) -> Runtim
 fn tool_manifest_fingerprint(tool_definitions: Option<&[ToolDefinition]>) -> String {
     let serialized = serde_json::to_vec(&tool_definitions).unwrap_or_default();
     format!("{:x}", Sha256::digest(serialized))
+}
+
+fn resolve_round_permission_mode(
+    active_turn_mode: Option<PermissionMode>,
+    fixed_context_mode: Option<PermissionMode>,
+    session_mode: Option<PermissionMode>,
+    global_default: PermissionMode,
+) -> PermissionMode {
+    resolve_permission_mode(
+        PermissionModeLayers::new(global_default)
+            .with_session(session_mode)
+            .with_turn(active_turn_mode.or(fixed_context_mode)),
+    )
+    .mode
+}
+
+pub(crate) fn restrict_recovered_permission_mode(
+    original: PermissionMode,
+    current: PermissionMode,
+) -> PermissionMode {
+    const fn rank(mode: PermissionMode) -> u8 {
+        match mode {
+            PermissionMode::Ask => 0,
+            PermissionMode::AutoApprove => 1,
+            PermissionMode::FullAccess => 2,
+        }
+    }
+
+    if rank(current) < rank(original) {
+        current
+    } else {
+        original
+    }
 }
 
 /// Execution engine configuration
@@ -540,6 +593,7 @@ pub struct ExecutionEngine {
     session_manager: Arc<SessionManager>,
     context_compressor: Arc<ContextCompressor>,
     config: ExecutionEngineConfig,
+    generation_messages: DashMap<(String, String), Vec<Message>>,
 }
 
 impl ExecutionEngine {
@@ -552,6 +606,47 @@ impl ExecutionEngine {
         "Tool use is disabled for finalize. Respond with plain text only.";
     const FINALIZE_USER_FOLLOWUP: &'static str =
         "Provide a final answer. You MUST not call any tools.";
+
+    async fn context_vars_for_round(
+        &self,
+        base: &HashMap<String, String>,
+        session_id: &str,
+        turn_id: &str,
+    ) -> HashMap<String, String> {
+        let mut context_vars = base.clone();
+        let fixed_context_mode = base
+            .get(PERMISSION_MODE_CONTEXT_KEY)
+            .map(|value| PermissionMode::parse(value).unwrap_or(PermissionMode::Ask));
+        let active_turn_mode = self
+            .session_manager
+            .active_turn_permission_mode(session_id, turn_id);
+        let global_default = match get_global_config_service().await {
+            Ok(service) => service
+                .get_config(None)
+                .await
+                .map(|config: crate::service::config::types::GlobalConfig| {
+                    PermissionMode::from_config(&config.tool_permissions)
+                })
+                .unwrap_or(PermissionMode::Ask),
+            Err(_) => PermissionMode::Ask,
+        };
+        let current = resolve_round_permission_mode(
+            active_turn_mode,
+            fixed_context_mode,
+            self.session_manager.session_permission_mode(session_id),
+            global_default,
+        );
+        let resolved = base
+            .get(INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY)
+            .and_then(|value| PermissionMode::parse(value))
+            .map(|original| restrict_recovered_permission_mode(original, current))
+            .unwrap_or(current);
+        context_vars.insert(
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            resolved.as_str().to_string(),
+        );
+        context_vars
+    }
 
     pub fn new(
         round_executor: Arc<RoundExecutor>,
@@ -566,7 +661,22 @@ impl ExecutionEngine {
             session_manager,
             context_compressor,
             config,
+            generation_messages: DashMap::new(),
         }
+    }
+
+    fn remember_generation_message(&self, session_id: &str, turn_id: &str, message: &Message) {
+        self.generation_messages
+            .entry((session_id.to_string(), turn_id.to_string()))
+            .or_default()
+            .push(message.clone());
+    }
+
+    pub(crate) fn take_generation_messages(&self, session_id: &str, turn_id: &str) -> Vec<Message> {
+        self.generation_messages
+            .remove(&(session_id.to_string(), turn_id.to_string()))
+            .map(|(_, messages)| messages)
+            .unwrap_or_default()
     }
 
     fn estimate_request_tokens_internal(
@@ -1089,6 +1199,160 @@ impl ExecutionEngine {
             .unwrap_or_else(|| "auto".to_string())
     }
 
+    fn resolve_model_id_for_turn_selection(
+        ai_config: &crate::service::config::types::AIConfig,
+        configured_model_id: &str,
+        frozen_model_id: Option<&str>,
+    ) -> BitFunResult<String> {
+        if let Some(frozen_model_id) = frozen_model_id
+            .map(str::trim)
+            .filter(|model_id| !model_id.is_empty())
+        {
+            return ai_config
+                .resolve_model_reference(frozen_model_id)
+                .ok_or_else(|| {
+                    BitFunError::Validation(format!(
+                        "Frozen dialog turn model contract is unavailable: {frozen_model_id}"
+                    ))
+                });
+        }
+
+        let resolved_configured_model_id =
+            Self::resolve_configured_model_id(ai_config, configured_model_id);
+        if configured_model_id == "auto"
+            || configured_model_id == "default"
+            || resolved_configured_model_id == "auto"
+        {
+            ai_config.resolve_model_selection("primary").ok_or_else(|| {
+                BitFunError::AIClient(
+                    "Auto dialog turn model could not resolve a concrete primary model".to_string(),
+                )
+            })
+        } else {
+            Ok(resolved_configured_model_id)
+        }
+    }
+
+    fn validate_frozen_reasoning_contract(
+        context: &ExecutionContext,
+        ai_client: &crate::infrastructure::ai::AIClient,
+    ) -> BitFunResult<()> {
+        let Some(expected_value) = context
+            .context
+            .get(INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY)
+        else {
+            return Ok(());
+        };
+        let expected = serde_json::from_str::<Option<String>>(expected_value).map_err(|error| {
+            BitFunError::Validation(format!(
+                "Frozen dialog turn reasoning contract is malformed: {error}"
+            ))
+        })?;
+        let actual_descriptor = ai_client
+            .selected_reasoning_preset()
+            .or_else(|| ai_client.model_reasoning_preset());
+        let actual = actual_descriptor.map(|preset| preset.id.as_str());
+        if actual != expected.as_deref() {
+            return Err(BitFunError::Validation(format!(
+                "Frozen dialog turn reasoning contract changed before execution: expected={:?}, actual={actual:?}",
+                expected.as_deref(),
+            )));
+        }
+        let expected_fingerprint = context
+            .context
+            .get(INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY)
+            .ok_or_else(|| {
+                BitFunError::Validation(
+                    "Frozen dialog turn reasoning contract has no runtime fingerprint".to_string(),
+                )
+            })?;
+        if reasoning_preset_runtime_fingerprint(actual_descriptor) != expected_fingerprint.as_str()
+        {
+            return Err(BitFunError::Validation(
+                "Frozen dialog turn reasoning contract changed before execution: runtime fingerprint mismatch"
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    async fn resolve_reasoning_selection_for_turn(
+        &self,
+        session_id: &str,
+        context: &ExecutionContext,
+    ) -> BitFunResult<Option<String>> {
+        if let Some(frozen_selection) = context
+            .context
+            .get(INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY)
+        {
+            return serde_json::from_str::<Option<String>>(frozen_selection).map_err(|error| {
+                BitFunError::Validation(format!(
+                    "Frozen dialog turn reasoning selection is malformed: {error}"
+                ))
+            });
+        }
+
+        self.session_manager
+            .reconcile_session_reasoning_preset_for_turn(session_id, "turn_resolution")
+            .await
+    }
+
+    pub(crate) fn is_frozen_reasoning_contract_error(error: &BitFunError) -> bool {
+        matches!(error, BitFunError::Validation(message) if message.starts_with("Frozen dialog turn reasoning contract changed before execution:"))
+    }
+
+    async fn validate_frozen_model_contract(context: &ExecutionContext) -> BitFunResult<()> {
+        let Some(expected_model_id) = context
+            .context
+            .get(INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY)
+        else {
+            return Ok(());
+        };
+        let expected_fingerprint = context
+            .context
+            .get(INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY)
+            .ok_or_else(|| {
+                BitFunError::Validation(
+                    "Frozen dialog turn model contract has no binding fingerprint".to_string(),
+                )
+            })?;
+        let ai_config = SessionManager::load_ai_config_for_model_resolution()
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(
+                    "Frozen dialog turn model contract cannot be validated because AI configuration is unavailable"
+                        .to_string(),
+                )
+            })?;
+        let canonical_model_id = ai_config
+            .resolve_model_reference(expected_model_id)
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Frozen dialog turn model contract is unavailable: {expected_model_id}"
+                ))
+            })?;
+        let model = ai_config
+            .models
+            .iter()
+            .find(|model| model.enabled && model.id == canonical_model_id)
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Frozen dialog turn model contract is unavailable: {expected_model_id}"
+                ))
+            })?;
+        let actual_fingerprint = model_runtime_binding_fingerprint(model);
+        if actual_fingerprint != expected_fingerprint.as_str() {
+            return Err(BitFunError::Validation(format!(
+                "Frozen dialog turn model contract changed before execution: model_id={expected_model_id}"
+            )));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn is_frozen_model_contract_error(error: &BitFunError) -> bool {
+        matches!(error, BitFunError::Validation(message) if message.starts_with("Frozen dialog turn model contract"))
+    }
+
     async fn resolve_primary_model_context(
         model_id: &str,
         model_binding_policy: SessionModelBindingPolicy,
@@ -1149,6 +1413,14 @@ impl ExecutionEngine {
             } else {
                 None
             },
+            direct_tool_listing: (!manifest.deferred_tool_names.is_empty()).then(|| {
+                render_direct_tool_listing_body(
+                    manifest
+                        .tool_definitions
+                        .iter()
+                        .map(|definition| definition.name.as_str()),
+                )
+            }),
             deferred_tool_listing: if has_tool_definition("GetToolSpec") {
                 GetToolSpecTool::build_deferred_tools_context_section(
                     &manifest.deferred_tool_summaries,
@@ -1557,17 +1829,16 @@ impl ExecutionEngine {
         workspace: Option<&WorkspaceBinding>,
         original_user_input: &str,
         turn_index: usize,
-    ) -> BitFunResult<String> {
-        let config_service = get_global_config_service().await.map_err(|e| {
-            BitFunError::AIClient(format!(
-                "Failed to get config service for model resolution: {}",
-                e
-            ))
-        })?;
-        let ai_config: crate::service::config::types::AIConfig = config_service
-            .get_config(Some("ai"))
+        frozen_model_id: Option<&str>,
+        frozen_model_binding_fingerprint: Option<&str>,
+    ) -> BitFunResult<(String, String)> {
+        let ai_config = SessionManager::load_ai_config_for_model_resolution()
             .await
-            .unwrap_or_default();
+            .ok_or_else(|| {
+                BitFunError::AIClient(
+                    "Failed to get config service for model resolution".to_string(),
+                )
+            })?;
         if matches!(
             session.config.model_binding_policy,
             SessionModelBindingPolicy::ApprovedImmutable
@@ -1610,7 +1881,7 @@ impl ExecutionEngine {
                     model_id
                 )));
             }
-            return Ok(model_id.to_string());
+            return Ok((model_id.to_string(), expected_fingerprint.to_string()));
         }
 
         let agent_registry = get_agent_registry();
@@ -1626,39 +1897,50 @@ impl ExecutionEngine {
             .filter(|model_id| !model_id.is_empty())
             .map(str::to_string)
             .unwrap_or(fallback_model_id.clone());
-        let resolved_configured_model_id =
-            Self::resolve_configured_model_id(&ai_config, &configured_model_id);
-
-        let model_id = if configured_model_id == "auto"
-            || configured_model_id == "default"
-            || resolved_configured_model_id == "auto"
+        let model_id = Self::resolve_model_id_for_turn_selection(
+            &ai_config,
+            &configured_model_id,
+            frozen_model_id,
+        )?;
+        let model = ai_config
+            .models
+            .iter()
+            .find(|model| model.enabled && model.id == model_id)
+            .ok_or_else(|| {
+                if frozen_model_id.is_some() {
+                    BitFunError::Validation(format!(
+                        "Frozen dialog turn model contract is unavailable: {model_id}"
+                    ))
+                } else {
+                    BitFunError::AIClient(format!(
+                        "Dialog turn model configuration is unavailable: {model_id}"
+                    ))
+                }
+            })?;
+        let model_binding_fingerprint = model_runtime_binding_fingerprint(model);
+        if frozen_model_binding_fingerprint
+            .is_some_and(|expected| expected != model_binding_fingerprint)
         {
-            let fallback_model = "primary";
-            let resolved_model_id = ai_config.resolve_model_selection(fallback_model);
+            return Err(BitFunError::Validation(format!(
+                "Frozen dialog turn model contract changed before execution: model_id={model_id}"
+            )));
+        }
+        if frozen_model_id.is_some() {
+            info!(
+                "Using frozen dialog turn model: session_id={}, turn_index={}, resolved_model_id={}",
+                session.session_id, turn_index, model_id
+            );
+        } else if configured_model_id == "auto" || configured_model_id == "default" {
+            info!(
+                "Auto model resolved without locking session: session_id={}, turn_index={}, user_input_chars={}, strategy=primary, resolved_model_id={}",
+                session.session_id,
+                turn_index,
+                original_user_input.chars().count(),
+                model_id
+            );
+        }
 
-            if let Some(resolved_model_id) = resolved_model_id {
-                info!(
-                    "Auto model resolved without locking session: session_id={}, turn_index={}, user_input_chars={}, strategy={}, resolved_model_id={}",
-                    session.session_id,
-                    turn_index,
-                    original_user_input.chars().count(),
-                    fallback_model,
-                    resolved_model_id
-                );
-
-                resolved_model_id
-            } else {
-                warn!(
-                    "Auto model strategy unresolved, keeping symbolic selector: session_id={}, strategy={}",
-                    session.session_id, fallback_model
-                );
-                fallback_model.to_string()
-            }
-        } else {
-            resolved_configured_model_id
-        };
-
-        Ok(model_id)
+        Ok((model_id, model_binding_fingerprint))
     }
 
     /// Omit from model request: UI-only verification frames and legacy auto desktop snapshots.
@@ -1668,6 +1950,11 @@ impl ExecutionEngine {
             Some(MessageSemanticKind::ComputerUseVerificationScreenshot)
                 | Some(MessageSemanticKind::ComputerUsePostActionSnapshot)
         )
+    }
+
+    fn is_stale_interrupted_continue(msg: &Message, current_turn_id: &str) -> bool {
+        msg.internal_reminder_kind() == Some(InternalReminderKind::InterruptedContinue)
+            && msg.metadata.turn_id.as_deref() != Some(current_turn_id)
     }
 
     /// True if this message would contribute at least one image to the model (before pruning).
@@ -1734,6 +2021,13 @@ impl ExecutionEngine {
             .session_manager
             .persistent_model_exchange_trace_dir(&input.context.session_id)
             .await;
+        let round_context_vars = self
+            .context_vars_for_round(
+                input.execution_context_vars,
+                &input.context.session_id,
+                &input.context.dialog_turn_id,
+            )
+            .await;
         let round_context = RoundContext {
             session_id: input.context.session_id.clone(),
             subagent_parent_info: input.context.subagent_parent_info.clone(),
@@ -1752,7 +2046,7 @@ impl ExecutionEngine {
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
             execution_profile: input.context.execution_profile.clone(),
-            context_vars: input.execution_context_vars.clone(),
+            context_vars: round_context_vars,
             permission_constraints: input.permission_constraints,
             permission_runtime_ceiling: input.context.permission_runtime_ceiling.clone(),
             delegation_policy: input.context.delegation_policy,
@@ -1816,7 +2110,9 @@ impl ExecutionEngine {
                 prepended_reminders_injected = true;
             }
 
-            if Self::skip_message_for_model_send(msg) {
+            if Self::skip_message_for_model_send(msg)
+                || Self::is_stale_interrupted_continue(msg, current_turn_id)
+            {
                 continue;
             }
             let keep_this_message_images = attach_images && keep_image_messages.contains(&msg_idx);
@@ -2277,13 +2573,21 @@ impl ExecutionEngine {
             .get("original_user_input")
             .cloned()
             .unwrap_or_default();
-        let model_id = self
+        let (model_id, _) = self
             .resolve_model_id_for_turn(
                 session,
                 &context.agent_type,
                 context.workspace.as_ref(),
                 &original_user_input,
                 context.turn_index,
+                context
+                    .context
+                    .get(INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY)
+                    .map(String::as_str),
+                context
+                    .context
+                    .get(INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY)
+                    .map(String::as_str),
             )
             .await?;
 
@@ -2291,8 +2595,7 @@ impl ExecutionEngine {
             BitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
         })?;
         let reasoning_preset = match self
-            .session_manager
-            .reconcile_session_reasoning_preset_for_turn(&session.session_id, "turn_resolution")
+            .resolve_reasoning_selection_for_turn(&session.session_id, context)
             .await
         {
             Ok(reasoning_preset) => reasoning_preset,
@@ -2324,12 +2627,27 @@ impl ExecutionEngine {
                 .get_client_resolved_with_reasoning_preset(&model_id, reasoning_preset.as_deref())
                 .await
         };
-        let ai_client = ai_client_result.map_err(|e| {
-            BitFunError::AIClient(format!(
-                "Failed to get AI client (model_id={}): {}",
-                model_id, e
-            ))
-        })?;
+        let ai_client = match ai_client_result {
+            Ok(ai_client) => ai_client,
+            Err(error) => {
+                if context
+                    .context
+                    .contains_key(INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY)
+                {
+                    // Re-check the frozen binding after a factory failure so a
+                    // config race is classified as recoverable contract drift,
+                    // while credentials/provider/client construction failures
+                    // remain ordinary execution failures.
+                    Self::validate_frozen_model_contract(context).await?;
+                }
+                return Err(BitFunError::AIClient(format!(
+                    "Failed to get AI client (model_id={}): {}",
+                    model_id, error
+                )));
+            }
+        };
+        Self::validate_frozen_model_contract(context).await?;
+        Self::validate_frozen_reasoning_contract(context, ai_client.as_ref())?;
 
         let primary_model_facts = Self::resolve_primary_model_context(
             &model_id,
@@ -3076,21 +3394,15 @@ impl ExecutionEngine {
         context: ExecutionContext,
     ) -> BitFunResult<ExecutionResult> {
         let start_time = std::time::Instant::now();
-        let initial_count = initial_messages.len();
-
         let dialog_turn_id = context.dialog_turn_id.clone();
+        self.generation_messages
+            .remove(&(context.session_id.clone(), dialog_turn_id.clone()));
 
         info!("Starting dialog turn: dialog_turn_id={}", dialog_turn_id);
 
         // Execute actual logic
         let result = self
-            .execute_dialog_turn_impl(
-                agent_type,
-                initial_messages,
-                context,
-                start_time,
-                initial_count,
-            )
+            .execute_dialog_turn_impl(agent_type, initial_messages, context, start_time)
             .await;
 
         // Cleanup cancellation token
@@ -3112,9 +3424,9 @@ impl ExecutionEngine {
         initial_messages: Vec<Message>,
         context: ExecutionContext,
         start_time: std::time::Instant,
-        initial_count: usize,
     ) -> BitFunResult<ExecutionResult> {
         let dialog_turn_id = context.dialog_turn_id.clone();
+        let initial_count = initial_messages.len();
 
         debug!(
             "Executing dialog turn implementation: dialog_turn_id={}",
@@ -3200,13 +3512,21 @@ impl ExecutionEngine {
             }
         }
 
-        let model_id = self
+        let (model_id, _) = self
             .resolve_model_id_for_turn(
                 &session,
                 &agent_type,
                 context.workspace.as_ref(),
                 &original_user_input,
                 context.turn_index,
+                context
+                    .context
+                    .get(INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY)
+                    .map(String::as_str),
+                context
+                    .context
+                    .get(INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY)
+                    .map(String::as_str),
             )
             .await?;
         info!(
@@ -3221,8 +3541,7 @@ impl ExecutionEngine {
 
         // Get AI client by model ID
         let reasoning_preset = match self
-            .session_manager
-            .reconcile_session_reasoning_preset_for_turn(&session.session_id, "turn_resolution")
+            .resolve_reasoning_selection_for_turn(&session.session_id, &context)
             .await
         {
             Ok(reasoning_preset) => reasoning_preset,
@@ -3254,12 +3573,23 @@ impl ExecutionEngine {
                 .get_client_resolved_with_reasoning_preset(&model_id, reasoning_preset.as_deref())
                 .await
         };
-        let ai_client = ai_client_result.map_err(|e| {
-            BitFunError::AIClient(format!(
-                "Failed to get AI client (model_id={}): {}",
-                model_id, e
-            ))
-        })?;
+        let ai_client = match ai_client_result {
+            Ok(ai_client) => ai_client,
+            Err(error) => {
+                if context
+                    .context
+                    .contains_key(INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY)
+                {
+                    Self::validate_frozen_model_contract(&context).await?;
+                }
+                return Err(BitFunError::AIClient(format!(
+                    "Failed to get AI client (model_id={}): {}",
+                    model_id, error
+                )));
+            }
+        };
+        Self::validate_frozen_model_contract(&context).await?;
+        Self::validate_frozen_reasoning_contract(&context, ai_client.as_ref())?;
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
         let primary_model_facts = Self::resolve_primary_model_context(
@@ -3463,8 +3793,12 @@ impl ExecutionEngine {
         // Add System Prompt to the beginning of message list (only for this execution, not persisted)
         let mut messages = vec![turn_prompt_scaffold.system_prompt_message.clone()];
         messages.extend(initial_messages);
+        // Keep this generation's append-only transcript separate from the
+        // mutable request history. Context compression may replace `messages`
+        // wholesale, but durable recovered-Turn completion must still append
+        // every assistant/tool/injection message produced by this generation.
 
-        let mut round_index = 0;
+        let mut round_index = initial_round_index(&context.context);
         let mut completed_rounds = 0usize;
         let mut total_tools = 0;
         let mut last_partial_recovery_reason: Option<String> = None;
@@ -3884,7 +4218,13 @@ impl ExecutionEngine {
             );
 
             // Create round context
-            let round_context_vars = execution_context_vars.clone();
+            let round_context_vars = self
+                .context_vars_for_round(
+                    &execution_context_vars,
+                    &context.session_id,
+                    &context.dialog_turn_id,
+                )
+                .await;
             let loaded_deferred_tool_specs =
                 collect_product_loaded_deferred_tool_specs(&messages, &deferred_tools);
 
@@ -4102,6 +4442,11 @@ impl ExecutionEngine {
 
             // Add assistant message to history
             messages.push(round_result.assistant_message.clone());
+            self.remember_generation_message(
+                &context.session_id,
+                &context.dialog_turn_id,
+                &round_result.assistant_message,
+            );
 
             // Update the in-memory message caches immediately so subsequent rounds see it.
             if let Err(e) = self
@@ -4115,6 +4460,11 @@ impl ExecutionEngine {
             // Add tool result messages to history
             for tool_result_msg in round_result.tool_result_messages.iter() {
                 messages.push(tool_result_msg.clone());
+                self.remember_generation_message(
+                    &context.session_id,
+                    &context.dialog_turn_id,
+                    tool_result_msg,
+                );
 
                 // Update the in-memory message caches immediately so subsequent rounds see it.
                 if let Err(e) = self
@@ -4127,13 +4477,23 @@ impl ExecutionEngine {
             }
 
             #[cfg(feature = "agent-runtime")]
-            activate_conditional_instructions_after_round(
-                self.session_manager.as_ref(),
-                &context,
-                &round_result,
-                &mut messages,
-            )
-            .await;
+            {
+                let previous_message_count = messages.len();
+                activate_conditional_instructions_after_round(
+                    self.session_manager.as_ref(),
+                    &context,
+                    &round_result,
+                    &mut messages,
+                )
+                .await;
+                for message in &messages[previous_message_count..] {
+                    self.remember_generation_message(
+                        &context.session_id,
+                        &context.dialog_turn_id,
+                        message,
+                    );
+                }
+            }
 
             debug!(
                 "Updated round messages in memory: round_index={}, assistant + {} tool results",
@@ -4221,6 +4581,11 @@ impl ExecutionEngine {
                         )
                         .with_turn_id(context.dialog_turn_id.clone());
                         messages.push(user_msg.clone());
+                        self.remember_generation_message(
+                            &context.session_id,
+                            &context.dialog_turn_id,
+                            &user_msg,
+                        );
                         if let Err(e) = self
                             .session_manager
                             .add_message(&context.session_id, user_msg)
@@ -4277,6 +4642,11 @@ impl ExecutionEngine {
                     )
                     .with_turn_id(context.dialog_turn_id.clone());
                     messages.push(user_msg.clone());
+                    self.remember_generation_message(
+                        &context.session_id,
+                        &context.dialog_turn_id,
+                        &user_msg,
+                    );
                     if let Err(e) = self
                         .session_manager
                         .add_message(&context.session_id, user_msg)
@@ -4368,6 +4738,11 @@ impl ExecutionEngine {
                         }
                         .with_turn_id(context.dialog_turn_id.clone());
                         messages.push(user_msg.clone());
+                        self.remember_generation_message(
+                            &context.session_id,
+                            &context.dialog_turn_id,
+                            &user_msg,
+                        );
                         if let Err(e) = self
                             .session_manager
                             .add_message(&context.session_id, user_msg)
@@ -4432,6 +4807,11 @@ impl ExecutionEngine {
                                 )
                                 .with_turn_id(context.dialog_turn_id.clone());
                                 messages.push(user_msg.clone());
+                                self.remember_generation_message(
+                                    &context.session_id,
+                                    &context.dialog_turn_id,
+                                    &user_msg,
+                                );
                                 if let Err(e) = self
                                     .session_manager
                                     .add_message(&context.session_id, user_msg)
@@ -4504,6 +4884,11 @@ impl ExecutionEngine {
                             )
                             .with_turn_id(context.dialog_turn_id.clone());
                             messages.push(user_msg.clone());
+                            self.remember_generation_message(
+                                &context.session_id,
+                                &context.dialog_turn_id,
+                                &user_msg,
+                            );
                             if let Err(e) = self
                                 .session_manager
                                 .add_message(&context.session_id, user_msg)
@@ -4533,6 +4918,11 @@ impl ExecutionEngine {
                     )
                     .with_turn_id(context.dialog_turn_id.clone());
                     messages.push(user_msg.clone());
+                    self.remember_generation_message(
+                        &context.session_id,
+                        &context.dialog_turn_id,
+                        &user_msg,
+                    );
                     if let Err(e) = self
                         .session_manager
                         .add_message(&context.session_id, user_msg)
@@ -4567,7 +4957,9 @@ impl ExecutionEngine {
                     dialog_turn_id
                 );
 
-                if context.emit_lifecycle_events {
+                if context.emit_lifecycle_events
+                    && execution_engine_owns_cancel_lifecycle(&context.context)
+                {
                     self.emit_event(
                         AgenticEvent::DialogTurnCancelled {
                             session_id: context.session_id.clone(),
@@ -4704,6 +5096,11 @@ impl ExecutionEngine {
                             );
                         for anchor_message in finalize_cache_anchor_messages {
                             messages.push(anchor_message.clone());
+                            self.remember_generation_message(
+                                &context.session_id,
+                                &context.dialog_turn_id,
+                                &anchor_message,
+                            );
                             if let Err(e) = self
                                 .session_manager
                                 .add_message(&context.session_id, anchor_message)
@@ -4718,6 +5115,11 @@ impl ExecutionEngine {
                         last_usage = Some(usage);
                     }
                     messages.push(msg.clone());
+                    self.remember_generation_message(
+                        &context.session_id,
+                        &context.dialog_turn_id,
+                        &msg,
+                    );
                     if let Err(e) = self
                         .session_manager
                         .add_message(&context.session_id, msg)
@@ -4759,11 +5161,20 @@ impl ExecutionEngine {
                 success,
             ) {
                 if let Some(workspace) = context.workspace.as_ref() {
-                    bitfun_services_integrations::deep_research::run_for_session_workspace(
-                        workspace.root_path(),
-                        &context.session_id,
-                    )
-                    .await;
+                    if let Some(workspace_services) = context.workspace_services.as_ref() {
+                        bitfun_services_integrations::deep_research::run_for_session_workspace(
+                            workspace_services.fs.as_ref(),
+                            &workspace.root_path().to_string_lossy(),
+                            &context.session_id,
+                        )
+                        .await;
+                    } else {
+                        warn!(
+                            "citation_renumber: skipped because workspace filesystem services are unavailable: session_id={}, workspace={}",
+                            context.session_id,
+                            workspace.root_path().display()
+                        );
+                    }
                 }
             }
         }
@@ -4780,7 +5191,7 @@ impl ExecutionEngine {
                         total_rounds: completed_rounds,
                         total_tools,
                         duration_ms,
-                        partial_recovery_reason: last_partial_recovery_reason,
+                        partial_recovery_reason: last_partial_recovery_reason.clone(),
                         success: Some(success),
                         finish_reason: Some(effective_finish_reason.to_string()),
                         has_final_response: Some(has_final_response),
@@ -4808,30 +5219,35 @@ impl ExecutionEngine {
             warn!("Dialog turn completed but token stats not available");
         }
 
-        // Calculate newly generated messages
-        let safe_initial_count = initial_count.min(messages.len()); // Ensure no out-of-bounds
-        let new_messages = messages[safe_initial_count..].to_vec();
-
-        if safe_initial_count != initial_count {
-            warn!(
-                "initial_count ({}) exceeds messages length ({}), adjusted to {}",
-                initial_count,
-                messages.len(),
-                safe_initial_count
-            );
-        }
-
         Ok(ExecutionResult {
-            final_message: messages
-                .iter()
-                .rev()
-                .find(|message| message.role == MessageRole::Assistant)
-                .cloned()
+            final_message: self
+                .generation_messages
+                .get(&(context.session_id.clone(), context.dialog_turn_id.clone()))
+                .and_then(|generated| {
+                    generated
+                        .iter()
+                        .rev()
+                        .find(|message| message.role == MessageRole::Assistant)
+                        .cloned()
+                })
+                .or_else(|| {
+                    messages
+                        .iter()
+                        .rev()
+                        .find(|message| message.role == MessageRole::Assistant)
+                        .cloned()
+                })
                 .unwrap_or_else(|| Message::assistant(String::new())),
             total_rounds: completed_rounds,
             success,
-            new_messages,
+            new_messages: self
+                .take_generation_messages(&context.session_id, &context.dialog_turn_id),
             finish_reason,
+            total_tools,
+            duration_ms,
+            partial_recovery_reason: last_partial_recovery_reason,
+            effective_finish_reason: effective_finish_reason.to_string(),
+            has_final_response,
         })
     }
 
@@ -4888,8 +5304,9 @@ mod tests {
     use super::{
         activate_conditional_instructions_after_round, ensure_primary_session_goal_tools,
         manual_compaction_terminal_error, missing_required_minimal_tool_definitions,
-        runtime_context_needs_for_manifest, skill_agent_listing_reminders_for_profile,
-        ContextHealthSnapshot, ExecutionEngine, RoundResult, TurnPromptScaffold,
+        resolve_round_permission_mode, runtime_context_needs_for_manifest,
+        skill_agent_listing_reminders_for_profile, ContextHealthSnapshot, ExecutionEngine,
+        RoundResult, TurnPromptScaffold,
     };
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, ToolListingSections, UserContextPolicy,
@@ -4911,7 +5328,9 @@ mod tests {
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use crate::util::types::ToolDefinition;
     use bitfun_agent_runtime::thread_goal_tools::THREAD_GOAL_TOOL_NAMES;
-    use bitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind};
+    use bitfun_runtime_ports::{
+        PermissionMode, WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind,
+    };
     use serde_json::json;
     use sha2::{Digest, Sha256};
     use std::collections::HashMap;
@@ -4948,6 +5367,7 @@ mod tests {
         let sections = ToolListingSections {
             skill_listing: Some("<available_skills>pdf</available_skills>".to_string()),
             agent_listing: Some("<available_agents>Explore</available_agents>".to_string()),
+            direct_tool_listing: None,
             deferred_tool_listing: None,
         };
 
@@ -4962,6 +5382,7 @@ mod tests {
         let sections = ToolListingSections {
             skill_listing: Some("<available_skills>pdf</available_skills>".to_string()),
             agent_listing: Some("<available_agents>Explore</available_agents>".to_string()),
+            direct_tool_listing: None,
             deferred_tool_listing: None,
         };
 
@@ -5026,6 +5447,46 @@ mod tests {
     }
 
     #[test]
+    fn recovered_execution_starts_after_existing_model_rounds() {
+        let mut context = std::collections::HashMap::new();
+        context.insert("initial_round_index".to_string(), "3".to_string());
+
+        assert_eq!(super::initial_round_index(&context), 3);
+        assert_eq!(
+            super::initial_round_index(&std::collections::HashMap::new()),
+            0
+        );
+    }
+
+    #[test]
+    fn interrupted_continue_reminder_is_visible_only_to_its_own_turn() {
+        let reminder = Message::internal_reminder(
+            InternalReminderKind::InterruptedContinue,
+            "continue the interrupted work".to_string(),
+        )
+        .with_turn_id("turn-interrupted".to_string());
+
+        assert!(!ExecutionEngine::is_stale_interrupted_continue(
+            &reminder,
+            "turn-interrupted"
+        ));
+        assert!(ExecutionEngine::is_stale_interrupted_continue(
+            &reminder, "turn-new"
+        ));
+    }
+
+    #[test]
+    fn coordinator_owned_cancellation_suppresses_early_cancelled_event() {
+        let mut context = std::collections::HashMap::new();
+        assert!(super::execution_engine_owns_cancel_lifecycle(&context));
+        context.insert(
+            super::super::types::CANCEL_LIFECYCLE_OWNER_CONTEXT_KEY.to_string(),
+            "coordinator".to_string(),
+        );
+        assert!(!super::execution_engine_owns_cancel_lifecycle(&context));
+    }
+
+    #[test]
     fn primary_session_tool_policy_restores_goal_tools_but_subagents_stay_scoped() {
         let mut primary_tools = vec!["Read".to_string()];
         ensure_primary_session_goal_tools(&mut primary_tools, false);
@@ -5036,6 +5497,37 @@ mod tests {
         let mut subagent_tools = vec!["Read".to_string()];
         ensure_primary_session_goal_tools(&mut subagent_tools, true);
         assert_eq!(subagent_tools, vec!["Read".to_string()]);
+    }
+
+    #[test]
+    fn round_permission_mode_prefers_mutable_turn_then_fixed_child_then_session() {
+        assert_eq!(
+            resolve_round_permission_mode(
+                Some(PermissionMode::Ask),
+                Some(PermissionMode::FullAccess),
+                Some(PermissionMode::AutoApprove),
+                PermissionMode::FullAccess,
+            ),
+            PermissionMode::Ask,
+        );
+        assert_eq!(
+            resolve_round_permission_mode(
+                None,
+                Some(PermissionMode::FullAccess),
+                Some(PermissionMode::Ask),
+                PermissionMode::AutoApprove,
+            ),
+            PermissionMode::FullAccess,
+        );
+        assert_eq!(
+            resolve_round_permission_mode(
+                None,
+                None,
+                Some(PermissionMode::AutoApprove),
+                PermissionMode::Ask,
+            ),
+            PermissionMode::AutoApprove,
+        );
     }
 
     #[test]
@@ -5596,6 +6088,57 @@ mod tests {
             ExecutionEngine::resolve_configured_model_id(&ai_config, "fast"),
             "model-primary"
         );
+    }
+
+    #[test]
+    fn frozen_turn_model_wins_when_the_auto_default_changes() {
+        let mut ai_config = AIConfig {
+            models: vec![
+                build_model("model-original", "Original", "claude-sonnet-4.5"),
+                build_model("model-new-default", "New default", "gpt-5.4"),
+            ],
+            ..Default::default()
+        };
+        ai_config.default_models.primary = Some("model-new-default".to_string());
+
+        assert_eq!(
+            ExecutionEngine::resolve_model_id_for_turn_selection(
+                &ai_config,
+                "auto",
+                Some("model-original"),
+            )
+            .expect("the original resolved model remains available"),
+            "model-original"
+        );
+    }
+
+    #[test]
+    fn auto_turn_model_must_resolve_to_a_concrete_model_before_persistence() {
+        let ai_config = AIConfig::default();
+
+        let error = ExecutionEngine::resolve_model_id_for_turn_selection(&ai_config, "auto", None)
+            .expect_err("a symbolic selector cannot become the frozen Turn model");
+
+        assert!(error.to_string().contains("primary model"), "{error}");
+    }
+
+    #[test]
+    fn frozen_turn_model_must_still_be_available_for_recovery() {
+        let mut model = build_model("model-original", "Original", "claude-sonnet-4.5");
+        model.enabled = false;
+        let ai_config = AIConfig {
+            models: vec![model],
+            ..Default::default()
+        };
+
+        let error = ExecutionEngine::resolve_model_id_for_turn_selection(
+            &ai_config,
+            "auto",
+            Some("model-original"),
+        )
+        .expect_err("a disabled frozen model cannot execute another generation");
+
+        assert!(error.to_string().contains("unavailable"), "{error}");
     }
 
     #[test]

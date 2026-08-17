@@ -8,10 +8,12 @@ use serde_json::{json, Value};
 use bitfun_agent_runtime::sdk::{
     AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
     AgentSessionRestoreRequest, AgentSessionRestoreResult, PortErrorKind, RuntimeError,
+    SessionEventProjectionSnapshot, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::core::Session;
 use bitfun_core::agentic::get_agent_registry;
 use bitfun_core::util::errors::BitFunError;
+use bitfun_events::project_agentic_frontend_event;
 use bitfun_product_domains::product_search::SessionContentSearchRequest;
 use bitfun_runtime_ports::{
     AgentSessionArchiveRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
@@ -21,7 +23,7 @@ use bitfun_runtime_ports::{
 
 use crate::diagnostics::{OUTCOME_UNKNOWN_ERROR_CODE, SESSION_IN_USE_ERROR_CODE};
 use crate::peer_host::args::{get_string, optional_bool, optional_string, request_value};
-use crate::peer_host::state::PeerHostState;
+use crate::peer_host::state::{PeerHostState, PeerTurnTracker};
 
 use super::snapshot::{local_snapshot_session_stats, require_local_snapshot_workspace};
 
@@ -35,6 +37,27 @@ fn session_storage_request(request: &Value) -> Result<SessionStoragePathRequest,
         workspace_path: PathBuf::from(workspace_path),
         remote_connection_id: optional_string(request, "remoteConnectionId"),
         remote_ssh_host: optional_string(request, "remoteSshHost"),
+    })
+}
+
+fn runtime_event_snapshot_to_json(snapshot: SessionEventProjectionSnapshot) -> Value {
+    let events = snapshot
+        .events
+        .into_iter()
+        .filter_map(project_agentic_frontend_event)
+        .map(|event| {
+            json!({
+                "eventName": event.event_name,
+                "payload": event.payload,
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "sessionId": snapshot.session_id,
+        "streamId": snapshot.stream_id,
+        "cursor": snapshot.cursor,
+        "activeTurnId": snapshot.active_turn_id,
+        "events": events,
     })
 }
 
@@ -72,6 +95,22 @@ fn validated_session_id(request: &Value) -> Result<String, String> {
     let session_id = get_string(request, "sessionId")?;
     bitfun_agent_runtime::session_control::validate_session_id(&session_id)?;
     Ok(session_id)
+}
+
+fn retain_peer_owned_interactions(
+    turns: &PeerTurnTracker,
+    snapshot: &mut SessionInteractionSnapshot,
+) {
+    snapshot.user_questions.questions.retain(|question| {
+        question
+            .dialog_turn_id
+            .as_deref()
+            .is_some_and(|turn_id| turns.owns(&question.session_id, Some(turn_id)))
+    });
+    snapshot
+        .permissions
+        .requests
+        .retain(|request| turns.owns_permission_request(request));
 }
 
 fn system_time_to_unix_secs(time: SystemTime) -> u64 {
@@ -289,12 +328,32 @@ pub(crate) async fn restore_session_view(
         .loaded_session_snapshot(&session_id)
         .map_err(|e| format!("Failed to read live session state: {e}"))?;
     overlay_live_session_state(&mut session, live_session);
+    let mut interaction_snapshot = state
+        .agent_runtime
+        .session_interaction_snapshot(&session_id);
+    // A CLI Peer controller may only resume interactions owned by turns it
+    // submitted (or their tracked descendants). Keep snapshot recovery inside
+    // the same boundary as permission event fan-out/listing; otherwise a
+    // controller could answer a same-session turn started by another surface.
+    retain_peer_owned_interactions(&state.turns, &mut interaction_snapshot);
+    let runtime_event_snapshot = state
+        .agent_runtime
+        .session_event_projection_snapshot(&session_id)
+        .filter(|snapshot| {
+            snapshot
+                .active_turn_id
+                .as_ref()
+                .is_none_or(|turn_id| state.turns.owns(&session_id, Some(turn_id.as_str())))
+        })
+        .map(runtime_event_snapshot_to_json);
 
     let loaded_turn_count = turns.len();
     let is_partial = loaded_turn_count < total_turn_count;
     Ok(json!({
         "session": session_to_json(session, total_turn_count),
         "turns": turns,
+        "interactionSnapshot": interaction_snapshot,
+        "runtimeEventSnapshot": runtime_event_snapshot,
         "turnCatalog": turn_catalog,
         "contextRestoreState": "pending",
         "isPartial": is_partial,
@@ -729,16 +788,20 @@ pub(crate) async fn save_session_turn(
 mod tests {
     use super::{
         overlay_live_session_state, peer_core_session_error, peer_runtime_session_error,
-        restored_session_to_json, session_stats_validation_error,
+        restored_session_to_json, retain_peer_owned_interactions, runtime_event_snapshot_to_json,
+        session_stats_validation_error,
     };
+    use crate::peer_host::state::{PeerTurnKey, PeerTurnTracker};
     use bitfun_agent_runtime::sdk::{
-        AgentSessionRestoreResult, AgentSessionSummary, PortError, PortErrorKind, RuntimeError,
-        SessionState,
+        AgentSessionRestoreResult, AgentSessionSummary, PendingUserQuestion,
+        PendingUserQuestionSnapshot, PortError, PortErrorKind, RuntimeError,
+        SessionEventProjectionSnapshot, SessionInteractionSnapshot, SessionState,
     };
     use bitfun_core::agentic::core::{
         ProcessingPhase, Session as CoreSession, SessionConfig, SessionState as CoreSessionState,
     };
     use bitfun_core::util::errors::BitFunError;
+    use bitfun_events::AgenticEvent;
 
     #[test]
     fn peer_writer_conflicts_keep_the_stable_transport_code() {
@@ -761,6 +824,31 @@ mod tests {
             "session_in_use: Session is already open for writing: session-1"
         );
         assert_eq!(runtime_error, core_error);
+    }
+
+    #[test]
+    fn peer_restore_projects_runtime_events_with_the_cursor_fence() {
+        let value = runtime_event_snapshot_to_json(SessionEventProjectionSnapshot {
+            session_id: "session-1".to_string(),
+            stream_id: "runtime-a".to_string(),
+            cursor: 7,
+            active_turn_id: Some("turn-1".to_string()),
+            events: vec![AgenticEvent::TextChunk {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                round_id: "round-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
+                text: "hello".to_string(),
+            }],
+        });
+
+        assert_eq!(value["sessionId"], "session-1");
+        assert_eq!(value["streamId"], "runtime-a");
+        assert_eq!(value["cursor"], 7);
+        assert_eq!(value["activeTurnId"], "turn-1");
+        assert_eq!(value["events"][0]["eventName"], "agentic://text-chunk");
+        assert_eq!(value["events"][0]["payload"]["text"], "hello");
     }
 
     #[test]
@@ -819,7 +907,7 @@ mod tests {
 
         let snapshot_source = include_str!("snapshot.rs");
         let rollback = snapshot_source
-            .split_once("pub(crate) async fn rollback_to_turn")
+            .split_once("pub(crate) async fn rollback_session_to_turn")
             .expect("Peer rollback")
             .1
             .split_once("#[cfg(test)]")
@@ -891,5 +979,48 @@ mod tests {
                 ..
             } if current_turn_id == "turn_1"
         ));
+    }
+
+    #[test]
+    fn view_restore_exposes_only_peer_owned_user_questions() {
+        let tracker = PeerTurnTracker::new();
+        tracker.mark_event_stream_ready();
+        let owned_turn = PeerTurnKey::new("session-1", "peer-turn");
+        tracker
+            .register_root(owned_turn)
+            .expect("register Peer-owned turn");
+        let question = |tool_id: &str, turn_id: Option<&str>| {
+            PendingUserQuestion::new(
+                tool_id,
+                "session-1",
+                turn_id.map(str::to_string),
+                Some("round-1".to_string()),
+                serde_json::json!({"questions": []}),
+            )
+        };
+        let mut snapshot = SessionInteractionSnapshot {
+            session_id: "session-1".to_string(),
+            user_questions: PendingUserQuestionSnapshot {
+                revision: 3,
+                questions: vec![
+                    question("owned", Some("peer-turn")),
+                    question("local", Some("local-turn")),
+                    question("unscoped", None),
+                ],
+            },
+            permissions: Default::default(),
+        };
+
+        retain_peer_owned_interactions(&tracker, &mut snapshot);
+
+        assert_eq!(
+            snapshot
+                .user_questions
+                .questions
+                .iter()
+                .map(|question| question.tool_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["owned"]
+        );
     }
 }

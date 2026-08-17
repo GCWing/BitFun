@@ -12,6 +12,123 @@ A's workspace list, sessions, assistants, chat, and tools behave like using
 BitFun on B's machine. The authority is **B's live local BitFun state** via
 HostInvoke / DeviceEvent fan-out — not a merged cloud session history.
 
+## Attachment vs rendered surface
+
+Two concepts, deliberately independent:
+
+| | Attachment | Rendered surface |
+|---|---|---|
+| What it is | A live control link to a peer | The one device this window draws |
+| How many | Any number, concurrently | Exactly one |
+| Ends when | Explicit disconnect, peer offline, logout | Replaced by the next switch |
+| Effect on the peer's agent | Keeps it running and fanning out | None |
+
+This split is what makes several devices usable at once: dispatch a turn on B,
+switch the UI back to A, dispatch another turn on A, and both keep running.
+The frontend entry points are `switchToDevice` / `switchToLocal` /
+`disconnectDevice` on `PeerDeviceContext`; the sidebar `DeviceSurfaceSwitcher`
+lists this machine plus every online peer.
+
+Two rules follow, and both are load-bearing:
+
+- **A surface switch never mutates the device being left.** Everything in
+  `resetProductSurface()` is frontend-only. Sending `terminal_shutdown_all` or
+  `lsp_close_workspace` during a switch lands on the *previous* transport and
+  kills work an agent there still depends on.
+- **Product events are routed by their source device.** The controller re-emits
+  peer DeviceEvents under their original event name, so with peers attached in
+  the background one bus carries several agent streams. The desktop controller
+  tags each re-emitted payload with `__bitfunSourceDeviceId`
+  (`remote_connect_api::PEER_EVENT_SOURCE_KEY`; non-object payloads are wrapped
+  under `__bitfunSourcePayload`), and `deviceSurfaceRouting.ts` — applied inside
+  `TauriTransportAdapter.listen` — delivers a surface-scoped event only when its
+  producing device is the rendered one. Untagged events are local by definition.
+  Control-plane events (`account://…`, window chrome, updater) are never scoped
+  and always pass.
+
+### Surface identity and activation
+
+The rendered device is a first-class `DeviceSurfaceId` (`local` or a peer
+device id), not an implicit property of one mutable global transport. Cache,
+request, capability, workspace, session-state-machine, processing-status,
+pending-message, and composer-draft identity includes that surface. FlowChat
+and workspace state are stored in per-surface containers: switching selects a
+container immediately, then reconciles it with its host; it does not erase the
+container belonging to the device being left.
+
+Every surface activation creates a monotonic epoch and `AbortSignal`.
+Product invokes capture that epoch, including through `ApiClient`; a response
+or retry that outlives it raises `SurfaceChangedError` and is abandoned as
+control flow. Controller-plane commands are exempt because their authority
+remains the controller regardless of the rendered surface. Transport/event
+routing and container selection commit synchronously in `activateSurface` so
+no observer can see B's state while requests still target A.
+
+`PeerDeviceSurfaceController` serializes activation outside React. Rapid
+requests coalesce to the last target, a committed-but-superseded hydrate is
+invalidated before the next target proceeds, and a real activation failure
+rolls back to the previously rendered reachable surface. Separately,
+`PeerConnectionManager` owns each attachment's
+`connecting`/`ready`/`degraded`/`lost` lifecycle, keepalive and bounded backoff;
+React only subscribes to snapshots. Attachment disposal is the only operation
+that discards a peer's cached surface state.
+
+Because the local surface can now miss its own events while another device is
+rendered, Session attachment is no longer Peer-only. After this window's first
+surface switch, `isSurfaceReconcileEnabled()` attaches whichever surface is
+rendered, local included.
+
+### Running-Turn attachment
+
+The live WebView/DeviceEvent broadcast is a low-latency delivery path, not the
+owner of a running Turn. Desktop and CLI Peer Runtime Hosts keep a materialized
+projection of each eligible current Turn even when no client is subscribed. Events enter
+that projection after the host's ordering/coalescing boundary and receive a
+per-Session monotonic cursor plus a Runtime-process `streamId`. Text and
+thinking chunks are materialized without collapsing segments across tool
+boundaries; noisy tool progress is compacted.
+
+`restore_session_view` returns this additive `runtimeEventSnapshot`; the CLI
+Peer Host applies its existing Peer-owned-Turn filter before recording or
+returning the projection. During an attach, the frontend fences live events for
+`(DeviceSurfaceId, SessionId)`,
+replays the snapshot into an empty current-Turn projection, and then releases
+only events newer than the snapshot cursor. A different `streamId` is a new
+Runtime process and its cursors are never compared with the old stream. The
+Surface epoch rejects a response from a device that is no longer rendered.
+This makes attach independent of client-written intermediate checkpoints and
+closes the snapshot/live race without restarting, cancelling, or moving the
+Turn. Older Hosts may omit the field and use the persisted-snapshot fallback.
+Controller presence is an admission boundary, not the lifetime owner: after a
+Peer Host accepts a Turn, that Host continues executing and materializing it
+while zero controllers are attached. A later controller attaches to the same
+Runtime projection; controller loss alone must not cancel or interrupt the
+Turn. Actual host event-stream loss remains a fail-closed continuity error.
+
+### Blocking-interaction reattachment
+
+A push event is a notification, not the owner of an interaction that can block
+an Agent turn. The owning Runtime keeps every native `AskUserQuestion` and
+interactive permission request in a live mailbox until it is answered or
+cancelled; an `AskUserQuestion` registration is also removed if its owning Tool
+future is dropped. `restore_session_view` returns an additive
+`interactionSnapshot` containing the Session-filtered mailbox and monotonic
+revisions. Desktop and CLI Peer Hosts expose the same field; older Hosts may
+omit it and remain on the event-only compatibility path.
+
+The frontend projects that mailbox into the active Surface container. Permission
+requests are retained for inactive Surfaces by source device, while missed
+`AskUserQuestion` cards are reconstructed in their exact Dialog Turn and model
+round. Snapshot responses are fenced by the Surface epoch and by event/revision
+ordering, so an old response cannot erase a newer request or revive one that was
+already answered. Reattachment only repairs presentation state: it never
+restarts, cancels, or moves the Session, Dialog Turn, or Tool future.
+
+This is the contract for any new blocking interaction: its execution owner must
+retain replayable request state and expose it through an attach/snapshot path.
+A one-shot frontend event plus an unresolved channel is not a complete
+multi-device implementation.
+
 ## Cloud account sync vs Peer Remote
 
 | Concern | Account cloud sync | Peer Device Mode |
@@ -38,8 +155,12 @@ FS) and must not be mixed with Peer Device Mode.
 ## Boundaries
 
 - Not SSH `WorkspaceKind.Remote` (local session mirror + remote FS).
-- Enter via Account Login → Online Devices → click peer.
-- Exit via sidebar Peer Remote status row `Disconnect` (device name + disconnect).
+- Switch via the sidebar device switcher, or Account Login → Online Devices →
+  click a device. Both list this machine, so returning to it is a switch like
+  any other.
+- Selecting this machine only changes what is rendered; peers stay attached and
+  keep working. `Disconnect` in the switcher is the separate, explicit action
+  that ends a peer's control link and cancels the work it runs for us.
 - Local-only commands (window chrome, updater, account login/logout, peer
   control plane) never execute on the peer on behalf of a controller.
 - Unsupported or denied commands fail loudly; they must not fall back to the
@@ -65,6 +186,9 @@ FS) and must not be mixed with Peer Device Mode.
   only when the initial `peer_mode_ping` advertises
   `idempotent_dialog_submit`, so mixed-version peers remain single-shot.
   Other mutations remain single-shot because a timed-out outcome is unknown.
+  Identity-based Session rollback is sent only when `peer_mode_ping` advertises
+  `targeted_session_rollback`; older peers fail explicitly and never fall back
+  to controller-local files, history, or the removed numeric rollback command.
   The desktop `account_device_rpc` command enforces the requested deadline
   around the native HTTP future; the controller's Promise deadline is not
   merely a UI timer. Failed session-list loads leave the spinner and expose an
@@ -88,17 +212,19 @@ FS) and must not be mixed with Peer Device Mode.
   controllers; controller re-emits the same event names locally. This includes
   SSH-backed remote PTY Ready / Data / Exit events created on B, not only B's
   local terminal service events.
-- Because DeviceEvent delivery has no ACK/replay contract, the controller also
-  reconciles its active chat session from the Peer Host every 3s, immediately
-  after session/visibility changes, and after detecting a dropped data event.
-  Realtime events remain the primary path; snapshot reconciliation repairs a
-  controller that attached after turn/round lifecycle events or crossed a
-  transient relay gap. The host overlays its authoritative in-memory session
-  state onto the persisted view so an executing turn is not misclassified as
-  interrupted history. Continuous host output is checkpointed at least once
-  per 2s coalescing window. A controller accepts an active snapshot before the
-  stale-stream deadline only when its rounds, streams, and tools provably move
-  forward; an older persisted snapshot cannot overwrite newer DeviceEvents.
+- Relay DeviceEvent delivery itself has no ACK/replay contract. The active chat
+  therefore attaches immediately when the selected Session becomes hydrated,
+  after Surface/visibility changes, and after a detected data gap. The Peer
+  Host's `runtimeEventSnapshot` plus `(streamId, cursor)` is the resumable
+  current-Turn contract: live events are fenced while the snapshot is in
+  flight, the materialized Turn is replayed, and only later cursors are
+  released. The 3s reconciliation remains a liveness retry and an older-Host
+  persisted-snapshot fallback, not the source of Turn continuity. The host
+  still overlays its authoritative in-memory Session state so an executing
+  Turn is not misclassified as interrupted history. Native blocking
+  interactions are reconciled from the Runtime-owned `interactionSnapshot`
+  after event replay, because a Turn can wait indefinitely without emitting
+  another text chunk or producing a newer persisted checkpoint.
 - CLI Peer Host forwards only turns submitted through Peer Host and linked
   child turns. A background-result follow-up inherits ownership only when its
   Core-internal metadata identifies the exact tracked parent and source child
@@ -168,6 +294,9 @@ and may represent a different operating system.
   `src/apps/cli/src/account_sync.rs`.
 - Frontend mode + transport: `src/web-ui/src/infrastructure/peer-device/`,
   `adapters/peer-device-adapter.ts`
+- Surface routing / switcher: `deviceSurfaceRouting.ts`,
+  `deviceSurfaceReconcile.ts`, `deviceActivity.ts`,
+  `DeviceSurfaceSwitcher.tsx`, `useAccountDeviceRoster.ts`
 - Peer directory picker: `pickWorkspaceDirectory.ts`, `PeerDirectoryBrowser.tsx`,
   `PeerDirectoryPickerHost.tsx`
 

@@ -11,6 +11,9 @@ client = [
     "bitfun-agent-tools/acp-bridge",
     "dep:futures",
     "dep:serde",
+    "dep:dirs",
+    "dep:semver",
+    "dep:tar",
     "dep:bitfun-core",
     "bitfun-core/agent-runtime",
     "bitfun-core/ssh-remote",
@@ -18,6 +21,7 @@ client = [
 server = [
     "dep:bitfun-agent-tools",
     "dep:bitfun-agent-runtime",
+    "bitfun-agent-runtime/agent-runtime",
     "dep:bitfun-core-types",
     "dep:bitfun-core",
     "dep:sha2",
@@ -54,6 +58,9 @@ tokio-util = { workspace = true, features = ["compat"] }
 futures = { workspace = true, optional = true }
 async-trait = { workspace = true }
 serde = { workspace = true, optional = true }
+dirs = { workspace = true, optional = true }
+semver = { workspace = true, optional = true }
+tar = { workspace = true, optional = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }

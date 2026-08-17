@@ -198,8 +198,16 @@ fn apply_session_model_migration(
 
 impl ChatMode {
     fn logout(&self, chat_state: &mut ChatState, rt_handle: &tokio::runtime::Handle) {
-        let snapshot =
-            tokio::task::block_in_place(|| rt_handle.block_on(self.agent.account_snapshot()));
+        let snapshot = tokio::task::block_in_place(|| {
+            rt_handle.block_on(async {
+                let account = self.account_runtime.as_ref().ok_or_else(|| {
+                    anyhow!("Account management is unavailable for this TUI Host")
+                })?;
+                Ok::<_, anyhow::Error>(crate::account::account_snapshot_projection(
+                    account.snapshot().await,
+                ))
+            })
+        });
         match snapshot {
             Ok(snapshot) if !snapshot.logged_in => {
                 chat_state.add_system_message("Not logged in.".to_string());
@@ -211,7 +219,20 @@ impl ChatMode {
             }
             Ok(_) => {}
         }
-        match tokio::task::block_in_place(|| rt_handle.block_on(self.agent.account_logout())) {
+        match tokio::task::block_in_place(|| {
+            rt_handle.block_on(async {
+                let account = self.account_runtime.as_ref().ok_or_else(|| {
+                    anyhow!("Account management is unavailable for this TUI Host")
+                })?;
+                account.logout().await?;
+                account
+                    .mark_sync_cancelled(format!("tui-account-{}", uuid::Uuid::new_v4()))
+                    .await;
+                Ok::<_, anyhow::Error>(crate::account::account_snapshot_projection(
+                    account.snapshot().await,
+                ))
+            })
+        }) {
             Ok(_) => chat_state.add_system_message("Logged out.".to_string()),
             Err(error) => chat_state.add_system_message(format!("Logout failed: {error}")),
         }
@@ -448,7 +469,15 @@ impl ChatMode {
         let session_model_id = chat_state.current_model_id.clone();
         let result: Option<String> = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
-                let catalog = self.agent.list_models().await.ok()?;
+                if self.agent.is_remote_workspace() {
+                    return None;
+                }
+                let config_owner = bitfun_core::service::config::get_global_config_service()
+                    .await
+                    .ok()?;
+                let models = config_owner.get_ai_models().await.ok()?;
+                let config = config_owner.get_config(None).await.ok()?;
+                let catalog = crate::model_selection::model_list_projection(&models, &config);
                 let model_id = crate::model_selection::resolve_tui_model_id(
                     &catalog,
                     session_model_id.as_deref(),
@@ -480,7 +509,15 @@ impl ChatMode {
     ) {
         let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
-                let catalog = self.agent.list_models().await.ok()?;
+                if self.agent.is_remote_workspace() {
+                    return None;
+                }
+                let config_owner = bitfun_core::service::config::get_global_config_service()
+                    .await
+                    .ok()?;
+                let models = config_owner.get_ai_models().await.ok()?;
+                let config = config_owner.get_config(None).await.ok()?;
+                let catalog = crate::model_selection::model_list_projection(&models, &config);
                 let current_model_id = crate::model_selection::resolve_tui_model_id(
                     &catalog,
                     chat_state.current_model_id.as_deref(),

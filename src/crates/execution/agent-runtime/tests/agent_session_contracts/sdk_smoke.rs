@@ -3,7 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    build_descriptor_harness_registry, AgentEventStream, AgentRunRequest, AgentRuntimeBuilder,
+    build_descriptor_harness_registry, AgentEventStream, AgentModeCatalogEntry,
+    AgentModeCatalogPort, AgentModeCatalogQuery, AgentRunRequest, AgentRuntimeBuilder,
     AgentRuntimeSdkCompatibility, AgentRuntimeSdkStability, AgentSessionClosePort,
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
@@ -49,11 +50,32 @@ struct FakeSessionClosePort {
     requests: Mutex<Vec<AgentTransientSessionDiscardRequest>>,
 }
 
+#[derive(Debug, Default)]
+struct FakeModeCatalog {
+    queries: Mutex<Vec<AgentModeCatalogQuery>>,
+}
+
+#[async_trait]
+impl AgentModeCatalogPort for FakeModeCatalog {
+    async fn list_modes(
+        &self,
+        query: AgentModeCatalogQuery,
+    ) -> PortResult<Vec<AgentModeCatalogEntry>> {
+        self.queries.lock().unwrap().push(query);
+        Ok(vec![AgentModeCatalogEntry {
+            id: "Explore".to_string(),
+            description: "Inspect the workspace".to_string(),
+            model_id: Some("model-a".to_string()),
+            is_external: false,
+        }])
+    }
+}
+
 #[test]
 fn sdk_facade_exposes_versioned_preview_compatibility_contract() {
     let compatibility = AgentRuntimeSdkCompatibility::current();
 
-    assert_eq!(compatibility.api_version, 5);
+    assert_eq!(compatibility.api_version, 6);
     assert_eq!(compatibility.crate_version, env!("CARGO_PKG_VERSION"));
     assert_eq!(compatibility.stability, AgentRuntimeSdkStability::Preview);
 }
@@ -289,6 +311,50 @@ async fn sdk_facade_runs_with_fake_provider_and_local_event_stream() {
         events.snapshot()
     );
     assert_eq!(events.len(), 1);
+}
+
+#[tokio::test]
+async fn sdk_facade_delegates_mode_catalog_queries_to_the_injected_owner() {
+    let catalog = Arc::new(FakeModeCatalog::default());
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(Arc::new(FakeSdkAgentProvider::default()))
+        .with_mode_catalog(catalog.clone())
+        .build()
+        .expect("sdk runtime");
+
+    let query = AgentModeCatalogQuery {
+        workspace_root: Some("/workspace/project".to_string()),
+        include_external: true,
+    };
+    let modes = runtime
+        .list_agent_modes(query.clone())
+        .await
+        .expect("mode catalog");
+
+    assert_eq!(modes.len(), 1);
+    assert_eq!(modes[0].id, "Explore");
+    assert_eq!(catalog.queries.lock().unwrap().as_slice(), &[query]);
+}
+
+#[tokio::test]
+async fn sdk_facade_fails_closed_without_a_mode_catalog_owner() {
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(Arc::new(FakeSdkAgentProvider::default()))
+        .build()
+        .expect("sdk runtime");
+
+    let error = runtime
+        .list_agent_modes(AgentModeCatalogQuery {
+            workspace_root: None,
+            include_external: false,
+        })
+        .await
+        .expect_err("missing mode catalog must fail closed");
+
+    assert!(matches!(
+        error,
+        RuntimeError::Port(port) if port.kind == PortErrorKind::NotAvailable
+    ));
 }
 
 #[tokio::test]

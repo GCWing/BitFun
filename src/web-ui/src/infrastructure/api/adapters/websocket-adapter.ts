@@ -2,6 +2,15 @@
 
 import { ITransportAdapter } from './base';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  JsonRpcPeer,
+  JsonRpcProtocolError,
+  JsonRpcRemoteError,
+  JsonRpcTimeoutError,
+  JsonRpcTransportError,
+  WebSocketMessageTransport,
+  type JsonRpcNotification,
+} from '../../../../../crates/adapters/transport/typescript/src/index.js';
 import type {
   AgentSessionArchiveStateRequest,
   AgentSessionForkAtTurnRequest,
@@ -29,7 +38,7 @@ const log = createLogger('WebSocketAdapter');
 /**
  * Typed mapping from the frontend's snake_case agent commands to the app-server
  * JSON-RPC method names, carrying the request/response types from the generated
- * schema (`@/generated/api`, source: `bitfun-app-server/src/schema/`).
+ * schema (`@/generated/api`, source: `bitfun-app-server-protocol`).
  *
  * The service layer (`AgentAPI` and friends) speaks Tauri command names
  * (`create_session`, `start_dialog_turn`, ...) because that is the desktop
@@ -349,12 +358,6 @@ function unwrapArray(result: any, key: string): any {
   return result;
 }
 
-interface PendingRequest {
-  resolve: (value: any) => void;
-  reject: (error: any) => void;
-  timeout: NodeJS.Timeout;
-}
-
 export function webSocketResponseError(value: unknown): Error {
   const record = value && typeof value === 'object'
     ? value as { code?: unknown; message?: unknown; data?: unknown }
@@ -390,12 +393,29 @@ export function decodeWsNotification(message: any): DecodedWsNotification | null
   return null;
 }
 
+const WEB_JSON_RPC_LIMITS = {
+  maxMessageBytes: 1024 * 1024,
+  maxPendingRequests: 128,
+  maxPendingBytes: 8 * 1024 * 1024,
+  maxOutboundBytes: 2 * 1024 * 1024,
+};
+
+const WEB_SOCKET_SEND_BUFFER_BYTES = 2 * 1024 * 1024;
+const WEB_SOCKET_DRAIN_TIMEOUT_MS = 5_000;
+
+interface WebSocketRpcGeneration {
+  socket: WebSocket;
+  transport: WebSocketMessageTransport;
+  peer: JsonRpcPeer;
+  allowReconnect: boolean;
+}
+
 export class WebSocketTransportAdapter implements ITransportAdapter {
   private ws: WebSocket | null = null;
   private url: string;
   private eventListeners: Map<string, Set<(data: any) => void>> = new Map();
-  private pendingRequests: Map<string, PendingRequest> = new Map();
   private messageIdCounter = 0;
+  private rpcGeneration: WebSocketRpcGeneration | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -418,9 +438,15 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
         let settled = false;
 
         ws.onopen = () => {
+          if (this.ws !== ws) {
+            ws.close();
+            return;
+          }
           log.info('Connected successfully');
           this.reconnectAttempts = 0;
-          this.setupMessageHandler();
+          const generation = this.createRpcGeneration(ws);
+          this.rpcGeneration = generation;
+          this.setupMessageHandler(generation);
           if (!settled) {
             settled = true;
             resolve();
@@ -441,7 +467,23 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
             settled = true;
             reject(new Error('WebSocket connection closed before open'));
           }
-          this.handleDisconnect();
+          const generation = this.rpcGeneration?.socket === ws
+            ? this.rpcGeneration
+            : null;
+          if (generation !== null) {
+            generation.transport.carrierClosed(
+              new Error('WebSocket connection closed'),
+            );
+            if (this.rpcGeneration === generation) {
+              this.rpcGeneration = null;
+            }
+          }
+          if (this.ws === ws) {
+            this.ws = null;
+          }
+          if (generation?.allowReconnect !== false) {
+            this.handleDisconnect();
+          }
         };
       } catch (error) {
         log.error('Failed to create WebSocket', error);
@@ -482,89 +524,106 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
       this.clearReconnectTimer();
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;
-        this.connect().catch(error => {
+        this.ensureConnected().catch(error => {
           log.error('Reconnection failed', error);
         });
       }, delay);
     } else {
       log.error('Max reconnection attempts reached');
-      
-      this.pendingRequests.forEach((pending) => {
-        clearTimeout(pending.timeout);
-        pending.reject(new Error('WebSocket disconnected'));
-      });
-      this.pendingRequests.clear();
     }
   }
   
    
-  private setupMessageHandler(): void {
-    if (!this.ws) return;
+  private setupMessageHandler(generation: WebSocketRpcGeneration): void {
+    const ws = generation.socket;
 
-    this.ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-
-        // JSON-RPC 2.0 response: carries `id` matching a pending request.
-        // Shape: `{ jsonrpc: "2.0", id, result | error }`.
-        if (message.id !== undefined && this.pendingRequests.has(message.id)) {
-          const pending = this.pendingRequests.get(message.id)!;
-          clearTimeout(pending.timeout);
-
-          if (message.error) {
-            pending.reject(webSocketResponseError(message.error));
-          } else {
-            pending.resolve(message.result);
-          }
-
-          this.pendingRequests.delete(message.id);
-          return;
-        }
-
-        // JSON-RPC 2.0 notification: `{ jsonrpc: "2.0", method, params }`.
-        // The server pushes `agent/frontendEvent` notifications carrying the
-        // projected frontend event name and payload, so dispatch on
-        // `params.event` exactly like the legacy `WsMessage::Event{event,payload}`.
-        const notification = decodeWsNotification(message);
-        if (notification) {
-          const eventName = notification.event;
-          const payload = notification.payload;
-          const listeners = this.eventListeners.get(eventName);
-          if (listeners && listeners.size > 0) {
-            listeners.forEach(callback => {
-              try {
-                callback(payload);
-              } catch (error) {
-                log.error('Error in event listener', { event: eventName, error });
-              }
-            });
-          }
-          return;
-        }
-
-        // Legacy `agentic://<type>` pass-through (kept for any notification the
-        // server still sends with a bare `type` field in the old shape).
-        const mappedEventName = this.mapLegacyTypeToEventName(message.type);
-        if (mappedEventName) {
-          const listeners = this.eventListeners.get(mappedEventName);
-          if (listeners && listeners.size > 0) {
-            listeners.forEach(callback => {
-              try {
-                callback(message);
-              } catch (error) {
-                log.error('Error in WebSocket type-mapped event listener', {
-                  event: mappedEventName,
-                  rawType: message.type,
-                  error,
-                });
-              }
-            });
-          }
-        }
-      } catch (error) {
-        log.error('Failed to parse message', { data: event.data, error });
+    ws.onmessage = (event) => {
+      if (this.rpcGeneration !== generation) {
+        return;
       }
+      if (typeof event.data !== 'string') {
+        void generation.peer.abort(
+          new JsonRpcProtocolError('WebSocket JSON-RPC message must be text'),
+        );
+        return;
+      }
+      try {
+        const message = JSON.parse(event.data) as Record<string, unknown>;
+        if (message.jsonrpc !== '2.0') {
+          const mappedEventName = this.mapLegacyTypeToEventName(message.type);
+          if (mappedEventName !== null) {
+            this.dispatchEvent(mappedEventName, message, message.type);
+            return;
+          }
+        }
+      } catch {
+        // The shared peer owns parse and strict-envelope failure semantics.
+      }
+      generation.transport.receive(event.data);
     };
+  }
+
+  private createRpcGeneration(socket: WebSocket): WebSocketRpcGeneration {
+    const transport = new WebSocketMessageTransport(socket, {
+      maxBufferedBytes: WEB_SOCKET_SEND_BUFFER_BYTES,
+      drainTimeoutMs: WEB_SOCKET_DRAIN_TIMEOUT_MS,
+    });
+    const generation = {
+      socket,
+      transport,
+      allowReconnect: true,
+    } as WebSocketRpcGeneration;
+    const peer = new JsonRpcPeer(transport, {
+      createRequestId: () => `msg_${Date.now()}_${++this.messageIdCounter}`,
+      requestTimeoutMs: 30_000,
+      limits: WEB_JSON_RPC_LIMITS,
+      onNotificationError: (error, notification) => {
+        log.error('Error in WebSocket notification consumer', {
+          method: notification.method,
+          error,
+        });
+      },
+    });
+    generation.peer = peer;
+    peer.onNotification((notification) => {
+      this.dispatchNotification(notification);
+    });
+    peer.onFailure((error) => {
+      if (error instanceof JsonRpcProtocolError) {
+        generation.allowReconnect = false;
+      }
+      log.error('WebSocket JSON-RPC peer stopped', error);
+    });
+    return generation;
+  }
+
+  private dispatchNotification(notification: JsonRpcNotification): void {
+    const decoded = decodeWsNotification({
+      jsonrpc: '2.0',
+      method: notification.method,
+      params: notification.params,
+    });
+    if (decoded !== null) {
+      this.dispatchEvent(decoded.event, decoded.payload);
+    }
+  }
+
+  private dispatchEvent(event: string, payload: unknown, rawType?: unknown): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners === undefined || listeners.size === 0) {
+      return;
+    }
+    listeners.forEach(callback => {
+      try {
+        callback(payload);
+      } catch (error) {
+        log.error('Error in WebSocket event listener', {
+          event,
+          rawType,
+          error,
+        });
+      }
+    });
   }
 
   private mapLegacyTypeToEventName(type: unknown): string | null {
@@ -588,7 +647,6 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
       await this.ensureConnected();
     }
 
-    const messageId = `msg_${Date.now()}_${++this.messageIdCounter}`;
     // Translate the frontend snake_case command to the app-server JSON-RPC
     // method so agent-kernel requests reach the app-server surface in web mode.
     const method = resolveWsMethod(action);
@@ -605,31 +663,30 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
     // desktop host does in Rust (`agentic_api.rs`).
     const body = encodeRequestBody(action, envelope);
 
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingRequests.delete(messageId);
-        reject(new Error(`Request timeout: ${action}`));
-      }, 30000);
-
-      this.pendingRequests.set(messageId, {
-        resolve: (value: any) => resolve(decodeResponseBody(action, value)),
-        reject,
-        timeout,
-      });
-
-      try {
-        this.ws!.send(JSON.stringify({
-          jsonrpc: '2.0',
-          id: messageId,
-          method,
-          params: body,
-        }));
-      } catch (error) {
-        clearTimeout(timeout);
-        this.pendingRequests.delete(messageId);
-        reject(error);
+    try {
+      const generation = this.rpcGeneration;
+      if (generation === null) {
+        throw new JsonRpcTransportError('WebSocket JSON-RPC peer is unavailable');
       }
-    });
+      const result = await generation.peer.request(method, body);
+      return decodeResponseBody(action, result) as T;
+    } catch (error) {
+      if (error instanceof JsonRpcRemoteError) {
+        throw webSocketResponseError({
+          code: error.code,
+          message: error.message,
+          data: error.data,
+        });
+      }
+      if (error instanceof JsonRpcTimeoutError) {
+        const timeout = new Error(`Request timeout: ${action}`) as Error & {
+          cause?: unknown;
+        };
+        timeout.cause = error;
+        throw timeout;
+      }
+      throw error;
+    }
   }
   
    
@@ -660,20 +717,19 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
     // and reopen the socket we are about to close.
     this.clearReconnectTimer();
 
-    this.pendingRequests.forEach((pending) => {
-      clearTimeout(pending.timeout);
-      pending.reject(new Error('WebSocket manually disconnected'));
-    });
-    this.pendingRequests.clear();
-    
-    
     this.eventListeners.clear();
-    
-    
+
+    const generation = this.rpcGeneration;
+    this.rpcGeneration = null;
     if (this.ws) {
       this.ws.onclose = null;
-      this.ws.close();
+      await generation?.peer.close();
+      if (this.ws.readyState < WebSocket.CLOSING) {
+        this.ws.close();
+      }
       this.ws = null;
+    } else {
+      await generation?.peer.close();
     }
     
     

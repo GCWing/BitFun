@@ -3,7 +3,11 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use bitfun_agent_runtime::sdk::SessionEventJournal;
 use bitfun_core::service::filesystem::FileSystemServiceFactory;
+use bitfun_core::service::session_projection_store::{
+    runtime_event_log_dir, FileSessionProjectionStore,
+};
 use bitfun_core::service::workspace::{self, WorkspaceService};
 
 use crate::runtime::CliRuntimeContext;
@@ -30,14 +34,33 @@ pub(crate) async fn ensure_peer_host_ready(runtime: &CliRuntimeContext) -> Resul
     };
 
     let filesystem_service = Arc::new(FileSystemServiceFactory::create_default());
-    let agent_events = runtime
+    // Same log the Desktop Host uses: either can own this Session at different
+    // times, and a Turn left running by one must be replayable by the other.
+    let session_event_journal = Arc::new(
+        match bitfun_core::infrastructure::try_get_path_manager_arc() {
+            Ok(path_manager) => SessionEventJournal::new().with_store(Arc::new(
+                FileSessionProjectionStore::new(runtime_event_log_dir(&path_manager)),
+            )),
+            Err(error) => {
+                tracing::warn!(
+                    "Runtime event log disabled: application paths unavailable: {error}"
+                );
+                SessionEventJournal::new()
+            }
+        },
+    );
+    let agent_runtime = runtime
         .agent_runtime()
+        .clone()
+        .with_session_event_journal(session_event_journal.clone());
+    let agent_events = agent_runtime
         .subscribe_events()
         .map_err(|error| anyhow::anyhow!(error.into_message()))
         .context("Peer Host agent event stream is unavailable")?;
 
     let state = PeerHostState {
-        agent_runtime: runtime.agent_runtime().clone(),
+        agent_runtime,
+        session_event_journal,
         local_workspace_snapshot: runtime.local_workspace_snapshot().clone(),
         compatibility: runtime.compatibility().clone(),
         account_runtime: runtime.account_runtime().clone(),

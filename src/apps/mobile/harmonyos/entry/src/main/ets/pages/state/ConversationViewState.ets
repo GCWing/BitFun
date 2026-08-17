@@ -6,9 +6,10 @@ import { RemoteUiState } from '../../services/RemoteUiState';
 import {
   ChatComposerCapabilities,
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
-  REMOTE_CHAT_COMPOSER_CAPABILITIES
-} from '../components/ChatComposerCapabilities';
-import { ChatSurface } from '../components/ChatSurface';
+  REMOTE_CHAT_COMPOSER_CAPABILITIES,
+  REMOTE_CREATE_COMPOSER_CAPABILITIES
+} from './ChatComposerCapabilities';
+import { ChatSurface } from './ChatSurface';
 import {
   ConversationUiModelCatalog,
   ConversationUiSelectedImage,
@@ -16,10 +17,11 @@ import {
   toConversationUiModelCatalog,
   toConversationUiSelectedImage,
   toConversationUiSession
-} from '../components/ConversationUiModels';
+} from './ConversationUiModels';
 import { AppRoute } from '../navigation/AppRouteContract';
 import { ConversationCoreState } from './ConversationCoreState';
 import { GeneralChatPageState } from './GeneralChatPageState';
+import { RemoteCreateSessionState } from './RemoteCreateSessionState';
 import { RemotePageState } from './RemotePageState';
 
 /** Immutable presentation state consumed by ConversationView. */
@@ -38,10 +40,7 @@ export class ConversationViewState {
   hasMoreMessages: boolean = false;
   timelineItems: ChatTimelineItem[] = [];
   timelineRevision: number = 0;
-  showSuggestionsWhenEmpty: boolean = true;
-  supportsSearch: boolean = false;
-  supportsImages: boolean = false;
-  supportsFiles: boolean = false;
+  showSuggestionsWhenEmpty: boolean = false;
   modelCatalog: ConversationUiModelCatalog = toConversationUiModelCatalog(RemoteUiState.emptyModelCatalog());
   selectedModelId: string = '';
   isSessionPinned: boolean = false;
@@ -56,12 +55,32 @@ export class ConversationViewState {
     route: AppRoute,
     remote: RemotePageState,
     general: GeneralChatPageState,
-    generalInlineStatus: string
+    generalInlineStatus: string,
+    create: RemoteCreateSessionState = new RemoteCreateSessionState()
   ): ConversationViewState {
+    if (route === AppRoute.RemoteCreate) {
+      return ConversationViewState.create(remote, create);
+    }
     if (route === AppRoute.RemoteChat) {
       return ConversationViewState.remote(remote);
     }
     return ConversationViewState.general(general, generalInlineStatus);
+  }
+
+  private static create(remote: RemotePageState, create: RemoteCreateSessionState): ConversationViewState {
+    const state = new ConversationViewState();
+    state.surface = ChatSurface.Create;
+    state.desktopName = remote.desktopName;
+    state.workspaceBranch = remote.workspaceBranch;
+    state.connectionState = 'connected';
+    state.composerCapabilities = REMOTE_CREATE_COMPOSER_CAPABILITIES;
+    state.chatInput = create.draft;
+    state.isBusy = create.isSubmitting;
+    state.inlineStatusText = create.errorText;
+    state.isVoiceListening = create.isVoiceListening;
+    state.selectedModelId = create.selectedModelId;
+    state.modelCatalog = toConversationUiModelCatalog(remote.conversation.modelCatalog);
+    return state;
   }
 
   private static remote(remote: RemotePageState): ConversationViewState {

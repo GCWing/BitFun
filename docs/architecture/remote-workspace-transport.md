@@ -138,6 +138,26 @@ omit an entry or follow a link outside the selected tree.
 Host bind mounts are not path-translated. A host path is visible only at the
 path mounted inside the container.
 
+Workspace-facing file requests are scoped by the remote connection id together
+with the POSIX workspace path whenever that id is known. A path alone is only a
+legacy compatibility fallback: the same path may exist on multiple SSH hosts,
+so new browse and search callers must carry the session or workspace connection
+id through the platform adapter. One product surface must use the same scope for
+directory browsing and filename search instead of consulting mutable global
+workspace state between requests.
+An explicit connection id is exact target identity, not a best-effort hint. If
+that connection is unavailable or does not own the requested path, the request
+fails without reading the controller filesystem or another registered host.
+
+Recursive remote filename searches publish cancellable progress as matches are
+discovered. Product surfaces render those partial results before traversal
+completes and preserve a distinct error state; a transport or routing failure
+must not be presented as an empty search result.
+The transport adapter advertises whether command-scoped search events reach the
+current surface. Peer Device controllers without a negotiated search-event
+contract use the response-based command on the peer host; they never fall back
+to searching the controller filesystem.
+
 ## Authentication and secrets
 
 Supported target methods are password, private key, private key plus OpenSSH

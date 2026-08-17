@@ -1,0 +1,95 @@
+# The `code` agent preset: the standard coding agent, presented as Code Mode.
+#
+# Adapted from deepseek-harness/apps/cli/config/agent-presets/code (MIT,
+# Copyright (c) DeepSeek — see ../../NOTICE.md).
+#
+# Everything in `standard` is here unchanged. What is added is the
+# `tool-presentation` row: instead of one tool call per action, the model writes
+# a TypeScript program against a generated SDK and `run_code` executes it, so a
+# sequence that would be five round trips becomes one.
+#
+# The tool registry itself stays on the host plane — the agent loop's scheduler
+# is its consumer — so what this preset owns is the PRESENTATION of that
+# registry for agents joined to it. A `standard` session runs beside a `code`
+# one in the same process, each seeing its own catalog.
+#
+# Note for IDE clients: in this mode the client sees `run_code` calls rather
+# than one card per file read or shell command. That is the trade this preset
+# makes, and it is why it is not the default.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: |-
+      You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}. Your bash tool runs under a file sandbox — a `[sandbox: file access denied …]` result is policy, not a command bug.
+
+      Verify your work by running the code or tests. Keep answers brief and factual.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── shell ───────────────────────────────────────────────────────────────────
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+
+# ── filesystem ──────────────────────────────────────────────────────────────
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: true
+
+# ── background jobs ─────────────────────────────────────────────────────────
+
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills and goals ────────────────────────────────────────────────────────
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+
+# ── delegation ──────────────────────────────────────────────────────────────
+
+- id: tool-subagent-control
+  name: '@deepseek-ai/dsh-tool-subagent-control'
+
+- id: tool-subagent-list-agents
+  name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+- id: tool-subagent
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent
+    backgroundMode: continuable
+    maxDepth: 1
+
+# ── planning ────────────────────────────────────────────────────────────────
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# ── presentation ────────────────────────────────────────────────────────────
+
+# Code Mode for agents on this preset. The row waits for the host's
+# `codeRuntime` rather than assuming it: a deployment that composes no
+# TypeScript runtime fails this preset at mount, naming this id, instead of at
+# the first request.
+- id: tool-presentation
+  name: '@deepseek-ai/dsh-agent-tool-presentation'
+  config:
+    mode: code

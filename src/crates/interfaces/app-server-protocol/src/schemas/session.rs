@@ -4,15 +4,16 @@ use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use bitfun_core_types::SessionUsageReport;
 use bitfun_product_domains::tool_permissions::PermissionRequest;
 use bitfun_runtime_ports::{
-    AgentContextReloadRequest, AgentSessionCompactionRequest, AgentSessionCompactionResult,
-    AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
-    AgentSessionHarnessProfileUpdateRequest, AgentSessionLineageCancellationRequest,
-    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
-    AgentSessionLineageTranscriptRequest, AgentSessionModeUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsageRequest,
-    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentTurnCancellationResult,
-    AgentTurnSettlementRequest, SessionTranscript, SessionTranscriptRequest,
+    AgentContextReloadRequest, AgentSessionArchiveStateRequest, AgentSessionCompactionRequest,
+    AgentSessionCompactionResult, AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionHarnessProfileUpdateRequest,
+    AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
+    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
+    AgentSessionUsageRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentTurnCancellationResult, AgentTurnSettlementRequest, SessionTranscript,
+    SessionTranscriptRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -49,6 +50,7 @@ pub struct SyncSessionResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
@@ -67,6 +69,7 @@ pub enum SessionRuntimeState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub enum SessionProcessingPhase {
     Starting,
@@ -75,6 +78,30 @@ pub enum SessionProcessingPhase {
     Streaming,
     ToolCalling,
     ToolConfirming,
+}
+
+/// Compatibility request for `session/restore`.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[request(method = "session/restore", response = RestoreSessionResponse)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreSessionMessage {
+    pub workspace_path: String,
+    pub session_id: String,
+    #[serde(default)]
+    pub include_internal: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreSessionResponse {
+    pub session: AgentSessionSummary,
+    pub state: SessionRuntimeState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
@@ -164,6 +191,7 @@ pub struct ForkSessionRequest(pub AgentSessionForkRequest);
 pub struct ForkSessionBeforeTurnRequest(pub AgentSessionForkBeforeTurnRequest);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcResponse)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct ForkSessionResponse(pub AgentSessionForkResult);
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
@@ -186,3 +214,22 @@ unit_response!(UpdateSessionModeResponse);
 pub struct UpdateSessionHarnessProfileRequest(pub AgentSessionHarnessProfileUpdateRequest);
 
 unit_response!(UpdateSessionHarnessProfileResponse);
+
+pub use ForkSessionBeforeTurnRequest as ForkSessionBeforeTurnMessage;
+pub use ForkSessionRequest as ForkSessionMessage;
+pub use RenameSessionRequest as RenameSessionMessage;
+pub use UpdateSessionHarnessProfileRequest as UpdateSessionHarnessProfileMessage;
+pub use UpdateSessionModeRequest as UpdateSessionModeMessage;
+pub use UpdateSessionModelRequest as UpdateSessionModelMessage;
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[request(method = "session/setArchived", response = SetSessionArchivedResponse)]
+pub struct SetSessionArchivedMessage(pub AgentSessionArchiveStateRequest);
+
+unit_response!(SetSessionArchivedResponse);
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[request(method = "session/forkAtTurn", response = ForkSessionResponse)]
+pub struct ForkSessionAtTurnMessage(pub AgentSessionForkAtTurnRequest);

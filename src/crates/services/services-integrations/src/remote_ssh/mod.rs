@@ -3,6 +3,7 @@
 //! `bitfun-core::service::remote_ssh` remains as the compatibility facade for
 //! the legacy public path.
 
+mod file_name_search;
 pub mod paths;
 pub mod remote_git;
 mod shell;
@@ -35,6 +36,7 @@ pub mod remote_fs;
 #[cfg(feature = "remote-ssh-concrete")]
 pub mod remote_terminal;
 
+pub use file_name_search::{search_remote_file_names, RemoteFileNameSearch};
 pub use paths::*;
 pub use remote_git::{build_remote_git_command, shell_quote_posix};
 #[cfg(feature = "remote-ssh-concrete")]

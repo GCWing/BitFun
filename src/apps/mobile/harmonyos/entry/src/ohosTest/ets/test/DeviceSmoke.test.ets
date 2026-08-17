@@ -21,7 +21,7 @@ export default function deviceSmokeTest() {
 
       await driver.click(130, 180);
       await driver.delayMs(300);
-      const remoteEntry = await driver.findComponent(ON.text('Remote'));
+      const remoteEntry = await driver.findComponent(ON.id('conversation-source-remote'));
       expect(remoteEntry !== undefined).assertTrue();
       await remoteEntry.click();
       await driver.delayMs(900);

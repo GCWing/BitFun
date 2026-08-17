@@ -765,6 +765,18 @@
     "peerRemoteLabel": "{{name}}",
     "peerRemoteBadgeTitle": "Remote device: {{name}}",
     "disconnectPeer": "Disconnect",
+    "deviceSwitcher": {
+      "title": "Devices",
+      "open": "Switch device",
+      "running": "$t(shared:statuses.running)",
+      "noDevices": "No other devices signed in to this account.",
+      "hint": "Switching only changes what this window shows. Every device keeps running its own tasks.",
+      "othersRunning": "Other devices are still working ({{count}})",
+      "switched": "Now showing {{name}}",
+      "switchedLocal": "Now showing this device",
+      "disconnected": "Disconnected from {{name}}",
+      "disconnectHint": "Stop controlling this device and cancel work it is running for you"
+    },
     "peerAutoExitOffline": "Remote device \"{{name}}\" went offline — disconnected",
     "peerAutoExitRpc": "Lost connection to remote device \"{{name}}\" — disconnected",
     "syncInProgressHint": "Cloud sync is still running. Please wait before opening a remote device.",

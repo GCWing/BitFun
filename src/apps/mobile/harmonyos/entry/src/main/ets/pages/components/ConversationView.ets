@@ -3,8 +3,8 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
 import { ConnectionStatusPresenter } from '../../services/ConnectionStatusPresenter';
 import { RemoteLogger } from '../../services/RemoteLogger';
-import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from './ChatComposerCapabilities';
-import { ChatSurface } from './ChatSurface';
+import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from '../state/ChatComposerCapabilities';
+import { ChatSurface } from '../state/ChatSurface';
 import { ChatStatusBar } from './ChatStatusBar';
 import { ChatTimeline } from './ChatTimeline';
 import { ConversationLoadingState } from './ConversationLoadingState';
@@ -14,11 +14,11 @@ import {
   ConversationUiQuestionAnswer,
   ConversationUiSelectedImage,
   ConversationUiSession
-} from './ConversationUiModels';
+} from '../state/ConversationUiModels';
 import { ComposerBar, ComposerPresentation } from './ComposerBar';
-import { GeneralChatHeader } from './GeneralChatHeader';
-import { RemoteChatHeader } from './RemoteChatHeader';
-import { CARD, FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
+import { ConversationHeader } from './ConversationHeader';
+import { ConversationHeaderPolicy, ConversationHeaderPresentation } from '../policy/ConversationHeaderPolicy';
+import { FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
 
 @ComponentV2
 export struct ConversationView {
@@ -41,10 +41,6 @@ export struct ConversationView {
   @Param hasMoreMessages: boolean = false;
   @Param timelineItems: ChatTimelineItem[] = [];
   @Param timelineRevision: number = 0;
-  @Param showSuggestionsWhenEmpty: boolean = false;
-  @Param supportsSearch: boolean = false;
-  @Param supportsImages: boolean = false;
-  @Param supportsFiles: boolean = false;
   @Param modelCatalog: ConversationUiModelCatalog = {
     version: 0,
     models: [],
@@ -63,7 +59,10 @@ export struct ConversationView {
   @Param showBackButton: boolean = true;
   @Param showSidebarRestoreButton: boolean = false;
   @Param composerPresentation: ComposerPresentation = ComposerPresentation.Compact;
+  @Param composerInputId: string = 'conversation-composer-input';
   @Param contentHorizontalOffset: number = 0;
+  @Param hoverOperateMode: boolean = false;
+  @BuilderParam aboveComposer: () => void = this.EmptyBuilder;
   @Event onOpenSidebar: () => void = () => {};
   @Event onRestoreSidebar: () => void = () => {};
   @Event onBack: () => void = () => {};
@@ -91,6 +90,7 @@ export struct ConversationView {
   @Event onSend: () => void = () => {};
   @Event onVoiceInput: () => void = () => {};
   @Event onChatInputChange: (value: string) => void = (_value: string) => {};
+  @Event onBackgroundTap: () => void = () => {};
   @Local showHeaderActions: boolean = false;
   private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET;
 
@@ -109,36 +109,11 @@ export struct ConversationView {
     Stack() {
       Column() {
         this.Header()
-        Column() {
-          if (this.shouldShowStatusBar()) {
-            this.ExecutionStatusBar()
-          }
-          if (this.isLoadingConversation) {
-            ConversationLoadingState({
-              maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 800 : 0
-            })
-              .layoutWeight(1)
-          } else if (this.shouldShowSuggestions()) {
-            Blank().layoutWeight(1)
-            if (!this.isVoiceListening) {
-              this.PromptArea()
-            }
-          } else if (this.shouldCenterInlineStatus()) {
-            this.CenteredInlineStatus()
-          } else {
-            this.MessageList()
-          }
-          if (this.inlineStatusText.length > 0 && !this.shouldCenterInlineStatus()) {
-            Text(this.inlineStatusText)
-              .fontSize(12).lineHeight(18).fontColor(MUTED).width('100%')
-              .padding({ left: 20, right: 20, bottom: 8 })
-          }
-          this.Composer()
+        if (this.hoverOperateMode) {
+          this.HoverBody()
+        } else {
+          this.StandardBody()
         }
-        .layoutWeight(1)
-        .width('100%')
-        .translate({ x: this.contentHorizontalOffset, y: 0 })
-        .animation({ duration: 220, curve: Curve.EaseInOut })
       }
       .width('100%').height('100%').backgroundColor(PAGE_BG)
     }
@@ -148,66 +123,101 @@ export struct ConversationView {
   }
 
   @Builder
-  Header() {
-    if (this.surface === ChatSurface.General) {
-      GeneralChatHeader({
-        title: this.activeSession.title,
-        showActions: ConversationViewContract.hasRealTimelineItem(this.timelineItems),
-        showSidebarButton: this.showSidebarButton,
-        showBackButton: this.showBackButton,
-        showSidebarRestoreButton: this.showSidebarRestoreButton,
-        showActionsMenu: this.showHeaderActions,
-        actionsMenu: () => {
-          this.HeaderActionsPopover();
-        },
-        onOpenSidebar: () => {
-          this.onOpenSidebar();
-        },
-        onRestoreSidebar: () => {
-          this.onRestoreSidebar();
-        },
-        onBack: () => {
-          this.onBack();
-        },
-        onOpenActions: () => {
-          this.showHeaderActions = !this.showHeaderActions;
-        },
-        onActionsMenuStateChange: (visible: boolean) => {
-          this.showHeaderActions = visible;
-        }
-      })
-    } else {
-      RemoteChatHeader({
-        activeSession: this.activeSession,
-        workspaceBranch: this.workspaceBranch,
-        desktopName: this.desktopName,
-        showBackButton: this.showBackButton,
-        showSidebarButton: this.showSidebarButton,
-        showSidebarRestoreButton: this.showSidebarRestoreButton,
-        showActionsMenu: this.showHeaderActions,
-        actionsMenu: () => {
-          this.HeaderActionsPopover();
-        },
-        onBack: () => {
-          this.onBack();
-        },
-        onOpenSidebar: () => {
-          this.onOpenSidebar();
-        },
-        onRestoreSidebar: () => {
-          this.onRestoreSidebar();
-        },
-        onOpenActions: () => {
-          this.showHeaderActions = !this.showHeaderActions;
-        },
-        onActionsMenuStateChange: (visible: boolean) => {
-          this.showHeaderActions = visible;
-        },
-        onRenameSession: (title: string) => {
-          this.onRenameSession(title);
-        }
-      })
+  private StandardBody() {
+    Column() {
+      this.ConversationBody()
+      this.Composer()
     }
+    .layoutWeight(1)
+    .width('100%')
+    .translate({ x: this.contentHorizontalOffset, y: 0 })
+    .animation({ duration: 220, curve: Curve.EaseInOut })
+  }
+
+  @Builder
+  private HoverBody() {
+    FolderStack() {
+      Column() {
+        this.ConversationBody()
+      }
+      .width('100%')
+      .height('100%')
+      .padding({ bottom: 12 })
+      Column() {
+        this.Composer()
+      }
+      .width('100%')
+    }
+    .alignContent(Alignment.Bottom)
+    .layoutWeight(1)
+    .width('100%')
+    .enableAnimation(true)
+    .autoHalfFold(true)
+  }
+
+  @Builder
+  private ConversationBody() {
+    if (this.shouldShowStatusBar()) {
+      this.ExecutionStatusBar()
+    }
+    if (this.isLoadingConversation) {
+      ConversationLoadingState({
+        maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 800 : 0
+      })
+        .layoutWeight(1)
+    } else if (this.surface === ChatSurface.Create) {
+      Blank()
+        .layoutWeight(1)
+        .width('100%')
+        .onClick(() => {
+          this.onBackgroundTap();
+        })
+    } else if (this.shouldCenterInlineStatus()) {
+      this.CenteredInlineStatus()
+    } else {
+      this.MessageList()
+    }
+    if (this.inlineStatusText.length > 0 && !this.shouldCenterInlineStatus()) {
+      Text(this.inlineStatusText)
+        .fontSize(12).lineHeight(18).fontColor(MUTED).width('100%')
+        .padding({ left: 20, right: 20, bottom: 8 })
+    }
+  }
+
+  @Builder
+  Header() {
+    ConversationHeader({
+      title: this.headerTitle(),
+      subtitle: this.headerSubtitle(),
+      titleFallback: this.headerFallback(),
+      allowRename: this.headerAllowRename(),
+      showActions: this.headerShowActions(),
+      showSidebarButton: this.showSidebarButton,
+      showBackButton: this.showBackButton,
+      showSidebarRestoreButton: this.showSidebarRestoreButton,
+      showActionsMenu: this.showHeaderActions,
+      actionsMenu: () => {
+        this.HeaderActionsPopover();
+      },
+      onOpenSidebar: () => {
+        this.onOpenSidebar();
+      },
+      onRestoreSidebar: () => {
+        this.onRestoreSidebar();
+      },
+      onBack: () => {
+        this.onBack();
+      },
+      onOpenActions: () => {
+        this.showHeaderActions = !this.showHeaderActions;
+      },
+      onActionsMenuStateChange: (visible: boolean) => {
+        this.showHeaderActions = visible;
+      },
+      onRenameSession: (title: string) => {
+        this.onRenameSession(title);
+      }
+    })
   }
 
   @Builder
@@ -286,44 +296,13 @@ export struct ConversationView {
   }
 
   @Builder
-  PromptArea() {
-    Column({ space: 15 }) {
-      if (this.supportsSearch) {
-        this.SuggestionRow('globe', RemoteI18n.t('chatHome.research'), RemoteI18n.t('chatHome.researchPrompt'))
-      }
-      if (this.supportsImages) {
-        this.SuggestionRow('image', RemoteI18n.t('chatHome.image'), RemoteI18n.t('chatHome.imagePrompt'))
-      }
-      if (this.supportsFiles) {
-        this.SuggestionRow('file', RemoteI18n.t('chatHome.file'), RemoteI18n.t('chatHome.filePrompt'))
-      }
-    }
-    .width('100%')
-    .padding({ left: 24, right: 36, bottom: 18 })
-  }
-
-  @Builder
-  SuggestionRow(icon: string, label: string, prompt: string) {
-    Row({ space: 14 }) {
-      this.SuggestionIcon(icon)
-      Text(label)
-        .fontSize(17)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(MUTED)
-        .layoutWeight(1)
-    }
-    .width('100%')
-    .height(38)
-    .onClick(() => {
-      this.onChatInputChange(prompt);
-    })
-  }
-
-  @Builder
   Composer() {
-    ComposerBar({
+    Column() {
+      this.aboveComposer()
+      ComposerBar({
       presentation: this.composerPresentation,
       capabilities: this.composerCapabilities,
+      inputId: this.composerInputId,
       chatInput: this.chatInput,
       selectedImages: this.selectedImages,
       isBusy: this.isBusy,
@@ -353,7 +332,13 @@ export struct ConversationView {
       onChatInputChange: (value: string) => {
         this.onChatInputChange(value);
       }
-    })
+      })
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private EmptyBuilder() {
   }
 
   @Builder
@@ -374,18 +359,22 @@ export struct ConversationView {
 
   @Builder
   HeaderActionsContent() {
-    Text('会话')
+    Text(RemoteI18n.t('chat.sessionSection'))
       .fontSize(13).fontWeight(FontWeight.Medium).fontColor(MUTED)
       .width('100%').height(28).padding({ left: 8 })
     if (this.surface === ChatSurface.General) {
       this.RemoteStyleMenuItem('remote_actions_check',
-        this.isSessionPinned ? '取消置顶' : '置顶', () => this.onTogglePinSession(), this.isSessionPinned)
+        this.isSessionPinned ? RemoteI18n.t('chat.unpin') : RemoteI18n.t('chat.pin'),
+        () => this.onTogglePinSession(), this.isSessionPinned)
     }
-    this.RemoteStyleMenuItem('remote_actions_cloud', '已上传的文件', () => this.onShowUploadedFiles())
+    this.RemoteStyleMenuItem('remote_actions_cloud', RemoteI18n.t('chat.uploadedFiles'),
+      () => this.onShowUploadedFiles())
     if (this.surface === ChatSurface.General) {
       Divider().strokeWidth(1).color(LINE).margin({ top: 8, bottom: 8 })
-      this.RemoteStyleMenuItem('remote_actions_folder', '归档', () => this.onArchiveSession())
-      this.RemoteStyleMenuItem('remote_actions_settings', '删除', () => this.onDeleteSession())
+      this.RemoteStyleMenuItem('remote_actions_folder', RemoteI18n.t('sidebar.archive'),
+        () => this.onArchiveSession())
+      this.RemoteStyleMenuItem('remote_actions_settings', RemoteI18n.t('common.delete'),
+        () => this.onDeleteSession())
     } else if (this.canStop) {
       Divider().strokeWidth(1).color(LINE).margin({ top: 8, bottom: 8 })
       this.RemoteStyleMenuItem('remote_actions_settings', RemoteI18n.t('chat.stop'), () => this.onStop())
@@ -425,70 +414,9 @@ export struct ConversationView {
     }
   }
 
-  @Builder
-  SuggestionIcon(kind: string) {
-    Stack({ alignContent: Alignment.Center }) {
-      if (kind === 'write') {
-        Text('Aa')
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(MUTED)
-      } else if (kind === 'organize') {
-        Text('=')
-          .fontSize(23)
-          .fontColor(MUTED)
-      } else if (kind === 'plan') {
-        Text('✓')
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(MUTED)
-      } else if (kind === 'globe') {
-        SymbolGlyph($r('sys.symbol.website'))
-          .fontSize(21)
-          .fontColor([MUTED])
-      } else if (kind === 'image') {
-        SymbolGlyph($r('sys.symbol.picture'))
-          .fontSize(21)
-          .fontColor([MUTED])
-      } else {
-        this.FileGlyph()
-      }
-    }
-    .width(26)
-    .height(26)
-  }
-
-  @Builder
-  FileGlyph() {
-    Stack() {
-      Text('')
-        .width(19)
-        .height(23)
-        .borderRadius(3)
-        .border({ width: 1.5, color: MUTED })
-        .position({ x: 3, y: 2 })
-      Text('')
-        .width(7)
-        .height(7)
-        .border({ width: { right: 1.5, bottom: 1.5 }, color: MUTED })
-        .position({ x: 15, y: 3 })
-    }
-    .width(26)
-    .height(26)
-  }
-
-  private shouldShowSuggestions(): boolean {
-    return ConversationViewContract.shouldShowSuggestions(
-      this.showSuggestionsWhenEmpty,
-      this.isBusy,
-      this.timelineItems
-    ) && (this.supportsSearch || this.supportsImages || this.supportsFiles);
-  }
-
   private shouldCenterInlineStatus(): boolean {
     return this.inlineStatusText.length > 0 &&
       !this.isBusy &&
-      !this.shouldShowSuggestions() &&
       !ConversationViewContract.hasRealTimelineItem(this.timelineItems);
   }
 
@@ -529,7 +457,39 @@ export struct ConversationView {
   }
 
   private shouldShowStatusBar(): boolean {
-    return !this.isLoadingConversation && this.surface === ChatSurface.Remote && this.connectionState !== 'connected';
+    return this.surface === ChatSurface.Remote &&
+      !this.isLoadingConversation &&
+      this.connectionState !== 'connected';
+  }
+
+  private headerTitle(): string {
+    return this.headerPresentation().title;
+  }
+
+  private headerSubtitle(): string {
+    return this.headerPresentation().subtitle;
+  }
+
+  private headerFallback(): string {
+    return RemoteI18n.t(this.headerPresentation().fallbackKey);
+  }
+
+  private headerAllowRename(): boolean {
+    return this.headerPresentation().allowRename;
+  }
+
+  private headerShowActions(): boolean {
+    return this.headerPresentation().showActions;
+  }
+
+  private headerPresentation(): ConversationHeaderPresentation {
+    return ConversationHeaderPolicy.present(
+      this.surface,
+      this.activeSession.title,
+      this.desktopName,
+      this.workspaceBranch,
+      ConversationViewContract.hasRealTimelineItem(this.timelineItems)
+    );
   }
 
   private connectionColor(): ResourceColor {

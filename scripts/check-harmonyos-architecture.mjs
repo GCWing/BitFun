@@ -44,6 +44,7 @@ const allPages = filesUnder(pagesRoot);
 const services = filesUnder(path.join(etsRoot, 'services'));
 const components = allPages.filter((file) => file.includes(`${path.sep}pages${path.sep}components${path.sep}`));
 const viewmodels = allPages.filter((file) => file.includes(`${path.sep}pages${path.sep}viewmodel${path.sep}`));
+const stateFiles = allPages.filter((file) => file.includes(`${path.sep}pages${path.sep}state${path.sep}`));
 
 const serviceToPages = services
   .filter((file) => imports(file).some((spec) => spec === 'pages' || spec.startsWith('pages/')))
@@ -52,6 +53,9 @@ const componentToViewmodel = components
   .filter((file) => imports(file).some((spec) => spec === 'pages/viewmodel' || spec.startsWith('pages/viewmodel/')))
   .map(relative);
 const viewmodelToComponents = viewmodels
+  .filter((file) => imports(file).some((spec) => spec === 'pages/components' || spec.startsWith('pages/components/')))
+  .map(relative);
+const stateToComponents = stateFiles
   .filter((file) => imports(file).some((spec) => spec === 'pages/components' || spec.startsWith('pages/components/')))
   .map(relative);
 const v1Components = allPages
@@ -98,10 +102,16 @@ const requiredPresentationFiles = [
   'components/AppRootOverlaySurfaces.ets',
   'components/ChatMessageChrome.ets',
   'components/ConnectManualPairingOverlay.ets',
+  'components/ConversationHeader.ets',
   'components/ConversationRouteSurface.ets',
   'components/ToolInteractionPanels.ets',
   'components/WideConversationHost.ets',
-  'components/remote/RemoteSurfaceHost.ets'
+  'components/remote/RemoteSurfaceHost.ets',
+  'policy/ConversationHeaderPolicy.ets',
+  'viewmodel/ConversationRuntime.ets',
+  'viewmodel/RemoteTranscriptController.ets',
+  'viewmodel/RemoteCreateFlowController.ets',
+  'viewmodel/VisibleConversationController.ets'
 ];
 const missingPresentationFiles = requiredPresentationFiles
   .filter((file) => !fs.existsSync(path.join(pagesRoot, file)));
@@ -268,6 +278,7 @@ const expected = {
   serviceToPages: [],
   componentToViewmodel: [],
   viewmodelToComponents: [],
+  stateToComponents: [],
   v1Components: [],
   positionalActionConstructors: [],
   duplicatedConversationTraceFields: [],
@@ -292,6 +303,7 @@ const actual = {
   serviceToPages,
   componentToViewmodel,
   viewmodelToComponents,
+  stateToComponents,
   v1Components,
   positionalActionConstructors,
   duplicatedConversationTraceFields,
@@ -323,6 +335,12 @@ if (appRootRuntimeLines > 500) {
 if (appRootPresentationLines > 500) {
   failed = true;
   console.error(`AppRootPresentation line budget exceeded: expected <=500, actual=${appRootPresentationLines}`);
+}
+const conversationControllerFile = path.join(pagesRoot, 'viewmodel/ConversationController.ets');
+const conversationControllerLines = fs.readFileSync(conversationControllerFile, 'utf8').split(/\r?\n/).length - 1;
+if (conversationControllerLines > 400) {
+  failed = true;
+  console.error(`ConversationController line budget exceeded: expected <=400, actual=${conversationControllerLines}`);
 }
 for (const [file, budget] of componentLineBudgets) {
   const source = fs.readFileSync(path.join(pagesRoot, file), 'utf8');

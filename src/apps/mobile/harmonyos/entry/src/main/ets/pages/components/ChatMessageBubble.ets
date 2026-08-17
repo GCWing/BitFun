@@ -1,7 +1,12 @@
-import { ConversationUiImage, ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiToolStatus } from './ConversationUiModels';
-import { INK, LINE, MUTED, SOFT } from './Theme';
+import { ConversationUiImage, ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
+import { ActivityGroupPolicy } from '../policy/ActivityGroupPolicy';
+import { AssistantProcessLayoutPolicy } from '../policy/AssistantProcessLayoutPolicy';
+import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
+import { ThinkingPresentationPolicy } from '../policy/ThinkingPresentationPolicy';
+import { LINE } from './Theme';
 import { MessageFileCards, MessageImageGallery, MessageMarkdown } from './ChatMessageContent';
 import { ChatMessageRetryAction, ChatTypingDots, ChatUserMessageBubble } from './ChatMessageChrome';
+import { SubagentTaskCard } from './SubagentTaskCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolStatusList } from './ToolStatusList';
 import { MessageFileReference, MessageFileReferenceProjectionCache } from '../../services/MessageFileReferenceProjector';
@@ -105,23 +110,31 @@ export struct ChatMessageBubble {
 
   @Builder
   ProcessContent(item: ConversationUiMessage) {
+    if (this.leadingThinkingText(item).length > 0) {
+      this.Thinking(
+        this.leadingThinkingText(item),
+        this.leadingThinkingStatus(item),
+        `${item.id}-thinking`,
+        ThinkingPresentationPolicy.isRunning(this.leadingThinkingStatus(item))
+      )
+    }
     if (this.shouldRenderStructuredItems(item)) {
       this.StructuredItems(item.items || [], this.shouldOmitStructuredThinking(item))
       if (this.uncoveredTools(item).length > 0) {
         this.Tools(this.uncoveredTools(item))
       }
     } else {
+      if (item.tools && item.tools.length > 0) {
+        this.Tools(item.tools)
+      }
+      if (this.shouldShowTypingDots(item)) {
+        ChatTypingDots()
+      }
       if (item.role !== 'user' && this.visibleMessageText(item).length > 0 && this.visibleMessageText(item) !== item.thinking) {
         this.MessageText(this.visibleMessageText(item), this.isStreamingAssistant(), `${item.id}-body`)
         if (this.fileReferences(this.visibleMessageText(item)).length > 0) {
           this.FileCards(this.visibleMessageText(item))
         }
-      }
-      if (this.shouldShowTypingDots(item)) {
-        ChatTypingDots()
-      }
-      if (item.tools && item.tools.length > 0) {
-        this.Tools(item.tools)
       }
     }
     if (this.pinnedThinkingText(item).length > 0) {
@@ -179,22 +192,19 @@ export struct ChatMessageBubble {
   @Builder
   ActivityGroup(group: StructuredRenderGroup, omitActiveThinking: boolean = false) {
     Column({ space: 6 }) {
+      if (!omitActiveThinking &&
+        ActivityGroupPolicy.thinkingHeaderCount(this.activityThinkingCount(group)) > 0 &&
+        (this.activityThinkingText(group).length > 0 || this.activityThinkingStreaming(group))) {
+        this.Thinking(
+          this.activityThinkingText(group),
+          this.activityThinkingStatus(group),
+          `${this.item.id}-${group.path}-activity-thinking`,
+          this.activityThinkingStreaming(group)
+        )
+      }
       if (this.activityGroupTools(group).length > 0) {
         this.Tools(this.activityGroupTools(group))
       }
-      ForEach(group.items, (entry: ConversationUiMessageItem, index: number) => {
-        if (!omitActiveThinking &&
-          this.isRenderableActivityThinking(entry, group.itemStatuses[index] || '', group.itemStreaming[index] || false)) {
-          this.Thinking(
-            entry.content || '',
-            group.itemStatuses[index] || this.item.status,
-            `${this.item.id}-${group.path}-activity-${index}-thinking`,
-            group.itemStreaming[index] || false
-          )
-        }
-      }, (entry: ConversationUiMessageItem, index: number) => {
-        return this.structuredItemKey(entry, `${group.path}-activity-thinking-${index}`);
-      })
     }
     .width('100%')
   }
@@ -233,37 +243,17 @@ export struct ChatMessageBubble {
 
   @Builder
   SubagentGroup(entry: ConversationUiMessageItem, path: string, activeScope: boolean = false) {
-    Column({ space: 8 }) {
-      Row({ space: 8 }) {
-        Text('↳')
-          .width(18)
-          .fontSize(13)
-          .fontColor(MUTED)
-          .textAlign(TextAlign.Center)
-        Text(this.subagentTitle(entry))
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
-          .layoutWeight(1)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+    SubagentTaskCard({
+      title: this.subagentTitle(entry),
+      running: !!(entry.tool && this.isRunningTool(entry.tool)),
+      content: this.subagentBody(entry),
+      hasChildren: !!(entry.subItems && entry.subItems.length > 0),
+      childItems: () => {
+        if (entry.subItems && entry.subItems.length > 0) {
+          this.ChildItems(entry.subItems, path, activeScope)
+        }
       }
-      .width('100%')
-      if (entry.tool && this.isRunningTool(entry.tool)) {
-        ChatTypingDots()
-      }
-      if (entry.content && entry.content.trim().length > 0 && !this.isTextEntry(entry) && !this.isThinkingEntry(entry)) {
-        this.MessageText(entry.content, activeScope && (!entry.subItems || entry.subItems.length === 0), `${this.item.id}-${path}-subagent`)
-      }
-      if (entry.subItems && entry.subItems.length > 0) {
-        this.ChildItems(entry.subItems, path, activeScope)
-      }
-    }
-    .width('100%')
-    .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-    .backgroundColor(SOFT)
-    .borderRadius(12)
-    .border({ width: 1, color: LINE })
+    })
   }
 
   @Builder
@@ -285,10 +275,7 @@ export struct ChatMessageBubble {
       status,
       keepExpandedWhenDone: false,
       streaming,
-      streamKey,
-      onCopyText: (body: string) => {
-        this.onCopyMessage(body);
-      }
+      streamKey
     })
   }
 
@@ -350,11 +337,7 @@ export struct ChatMessageBubble {
   }
 
   private visibleMessageText(item: ConversationUiMessage): string {
-    const text = item.text.trim();
-    if (text === '(空消息)' || text === '(empty message)') {
-      return '';
-    }
-    return text;
+    return ConversationMessageRenderPolicy.visibleText(item.text);
   }
 
   private shouldShowTypingDots(item: ConversationUiMessage): boolean {
@@ -384,7 +367,8 @@ export struct ChatMessageBubble {
   }
 
   private shouldPinThinkingToBottom(item: ConversationUiMessage): boolean {
-    return this.isStreamingAssistant() &&
+    return AssistantProcessLayoutPolicy.pinsThinkingAfterTools() &&
+      this.isStreamingAssistant() &&
       this.currentThinkingText(item).length > 0;
   }
 
@@ -395,17 +379,52 @@ export struct ChatMessageBubble {
     return this.currentThinkingText(item);
   }
 
-  private shouldOmitStructuredThinking(item: ConversationUiMessage): boolean {
-    return this.shouldPinThinkingToBottom(item) ||
-      (this.isStreamingAssistant() && this.hasVisibleAssistantOutput(item));
+  private leadingThinkingText(item: ConversationUiMessage): string {
+    if (this.shouldPinThinkingToBottom(item)) {
+      return '';
+    }
+    if (this.lastThinkingText(item.items || []).length > 0) {
+      return '';
+    }
+    return (item.thinking || '').trim();
   }
 
-  private hasVisibleAssistantOutput(item: ConversationUiMessage): boolean {
-    if (this.lastTopLevelText(item.items || []).length > 0) {
+  private leadingThinkingStatus(item: ConversationUiMessage): string {
+    return ThinkingPresentationPolicy.liveThinkingStatus(
+      item.status,
+      this.hasLaterProcessOutput(item)
+    );
+  }
+
+  private hasLaterProcessOutput(item: ConversationUiMessage): boolean {
+    if (item.tools && item.tools.length > 0) {
       return true;
     }
     const visible = this.visibleMessageText(item);
-    return visible.length > 0 && visible !== (item.thinking || '').trim();
+    if (visible.length > 0 && visible !== (item.thinking || '').trim()) {
+      return true;
+    }
+    return this.hasToolOrTextItems(item.items || []);
+  }
+
+  private hasToolOrTextItems(items: ConversationUiMessageItem[]): boolean {
+    return items.some((entry: ConversationUiMessageItem) => {
+      if (entry.tool || this.isTextEntry(entry)) {
+        return true;
+      }
+      return !!entry.subItems && this.hasToolOrTextItems(entry.subItems);
+    });
+  }
+
+  private subagentBody(entry: ConversationUiMessageItem): string {
+    if (!entry.content || this.isTextEntry(entry) || this.isThinkingEntry(entry)) {
+      return '';
+    }
+    return entry.content;
+  }
+
+  private shouldOmitStructuredThinking(_item: ConversationUiMessage): boolean {
+    return AssistantProcessLayoutPolicy.omitsInFlowThinkingWhileStreaming();
   }
 
   private currentThinkingText(item: ConversationUiMessage): string {
@@ -655,54 +674,11 @@ export struct ChatMessageBubble {
   }
 
   private shouldFoldIntoActivityGroup(entry: ConversationUiMessageItem): boolean {
-    if (this.isThinkingEntry(entry)) {
-      return true;
-    }
-    if (!entry.tool) {
-      return false;
-    }
-    return this.shouldFoldToolWithThinking(entry.tool);
-  }
-
-  private shouldFoldToolWithThinking(tool: ConversationUiToolStatus): boolean {
-    if (!this.isCollapsibleActivityTool(tool)) {
-      return false;
-    }
-    if (this.hasToolError(tool) || this.isPendingTool(tool) || this.isRunningTool(tool) || this.isQuestionTool(tool)) {
-      return false;
-    }
-    return this.isCompletedTool(tool) || this.isCancelledTool(tool);
-  }
-
-  private isCollapsibleActivityTool(tool: ConversationUiToolStatus): boolean {
-    const kind = this.activityToolKind(tool);
-    return kind === 'read' || kind === 'search';
-  }
-
-  private activityToolKind(tool: ConversationUiToolStatus): string {
-    const raw = tool.name || '';
-    const normalized = this.normalizedToolName(tool);
-    if (raw === 'Read' || raw === 'LS' ||
-      normalized === 'read' ||
-      normalized === 'read_file' ||
-      normalized === 'ls' ||
-      normalized === 'list_directory') {
-      return 'read';
-    }
-    if (raw === 'Grep' ||
-      raw === 'Glob' ||
-      raw === 'WebSearch' ||
-      raw === 'SemanticSearch' ||
-      normalized === 'grep' ||
-      normalized === 'glob' ||
-      normalized === 'websearch' ||
-      normalized === 'web_search' ||
-      normalized === 'semanticsearch' ||
-      normalized === 'semantic_search' ||
-      normalized.indexOf('search') >= 0) {
-      return 'search';
-    }
-    return '';
+    return ActivityGroupPolicy.shouldFoldEntry(
+      this.isThinkingEntry(entry),
+      this.isSubagentEntry(entry),
+      entry.tool
+    );
   }
 
   private activityGroupTools(group: StructuredRenderGroup): ConversationUiToolStatus[] {
@@ -715,19 +691,46 @@ export struct ChatMessageBubble {
     return tools;
   }
 
-  private isRenderableActivityThinking(
-    entry: ConversationUiMessageItem,
-    status: string,
-    streaming: boolean
-  ): boolean {
-    if (!this.isThinkingEntry(entry)) {
-      return false;
-    }
-    if (this.hasVisibleAssistantOutput(this.item)) {
-      return false;
-    }
-    const normalized = (status || '').toLowerCase();
-    return streaming || normalized === 'active' || normalized === 'running';
+  private activityThinkingCount(group: StructuredRenderGroup): number {
+    let count = 0;
+    group.items.forEach((entry: ConversationUiMessageItem) => {
+      if (this.isThinkingEntry(entry)) {
+        count += 1;
+      }
+    });
+    return count;
+  }
+
+  private activityThinkingText(group: StructuredRenderGroup): string {
+    const parts: string[] = [];
+    group.items.forEach((entry: ConversationUiMessageItem) => {
+      if (this.isThinkingEntry(entry)) {
+        parts.push(entry.content || '');
+      }
+    });
+    return ThinkingPresentationPolicy.mergedText(parts);
+  }
+
+  private activityThinkingStatus(group: StructuredRenderGroup): string {
+    const statuses: string[] = [];
+    const streamings: boolean[] = [];
+    group.items.forEach((entry: ConversationUiMessageItem, index: number) => {
+      if (this.isThinkingEntry(entry)) {
+        statuses.push(group.itemStatuses[index] || '');
+        streamings.push(group.itemStreaming[index] || false);
+      }
+    });
+    return ThinkingPresentationPolicy.mergedStatusValue(statuses, streamings);
+  }
+
+  private activityThinkingStreaming(group: StructuredRenderGroup): boolean {
+    const streamings: boolean[] = [];
+    group.items.forEach((entry: ConversationUiMessageItem, index: number) => {
+      if (this.isThinkingEntry(entry)) {
+        streamings.push(group.itemStreaming[index] || false);
+      }
+    });
+    return ThinkingPresentationPolicy.mergedStreaming(streamings);
   }
 
   private stableToolHash(tools: ConversationUiToolStatus[]): string {
@@ -901,6 +904,9 @@ export struct ChatMessageBubble {
   }
 
   private structuredItemKey(entry: ConversationUiMessageItem, path: string): string {
+    if (this.isThinkingEntry(entry)) {
+      return `${path}-thinking`;
+    }
     if (entry.tool && entry.tool.id) {
       return `${path}-tool-${entry.tool.id}`;
     }
@@ -920,12 +926,12 @@ export struct ChatMessageBubble {
   private activityGroupKey(items: ConversationUiMessageItem[], path: string): string {
     const parts: string[] = [];
     items.forEach((entry: ConversationUiMessageItem, index: number) => {
-      const content = entry.content || '';
       const tool = entry.tool;
+      const thinking = this.isThinkingEntry(entry);
       parts.push([
         `${index}`,
         entry.type || '',
-        `${content.length}:${this.stableTextHash(content)}`,
+        thinking ? 'thinking' : `${(entry.content || '').length}:${this.stableTextHash(entry.content || '')}`,
         tool ? `${tool.id || ''}:${tool.name || ''}:${tool.status || ''}` : ''
       ].join(':'));
     });
@@ -934,16 +940,6 @@ export struct ChatMessageBubble {
 
   private normalizedToolName(tool: ConversationUiToolStatus): string {
     return (tool.name || 'Tool').replace(/[\s-]/g, '_').toLowerCase();
-  }
-
-  private isCompletedTool(tool: ConversationUiToolStatus): boolean {
-    const normalized = (tool.status || '').toLowerCase();
-    return normalized === 'completed' || normalized === 'done' || normalized === 'success';
-  }
-
-  private isCancelledTool(tool: ConversationUiToolStatus): boolean {
-    const normalized = (tool.status || '').toLowerCase();
-    return normalized === 'cancelled' || normalized === 'canceled';
   }
 
   private isRunningTool(tool: ConversationUiToolStatus): boolean {

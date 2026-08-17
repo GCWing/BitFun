@@ -4,6 +4,7 @@ import { WorkspaceInfo, WorkspaceKind } from '../../shared/types';
 import { createLogger } from '@/shared/utils/logger';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
+import { isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
 import {
   WorkspaceContext,
   type WorkspaceContextValue,
@@ -208,6 +209,13 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
           hasActiveWorkspace: activeWorkspace !== null,
         });
       } catch (error) {
+        // A newer device surface superseded this initialization. The surface
+        // that replaced it runs its own, and its events drive this state, so
+        // rendering an error here would report a failure the user never had.
+        if (isSurfaceChangedError(error)) {
+          isInitializedRef.current = false;
+          return;
+        }
         startupTrace.markPhase('workspace_provider_initialize_failed', {
           durationMs: elapsedMs(providerStartedAt),
         });

@@ -342,7 +342,7 @@ impl SnapshotService {
         Ok(restored_files)
     }
 
-    pub async fn rollback_to_turn(
+    pub async fn rollback_workspace_files_to_boundary(
         &self,
         session_id: &str,
         turn_index: usize,
@@ -354,7 +354,9 @@ impl SnapshotService {
         );
 
         let mut snapshot_core = self.snapshot_core.write().await;
-        snapshot_core.rollback_to_turn(session_id, turn_index).await
+        snapshot_core
+            .rollback_workspace_files_to_boundary(session_id, turn_index)
+            .await
     }
 
     pub(crate) async fn prepare_workspace_revert(

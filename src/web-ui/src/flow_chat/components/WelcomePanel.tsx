@@ -8,7 +8,6 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, FolderPlus, ChevronDown, Check, GitBranch } from 'lucide-react';
 import { gitAPI } from '../../infrastructure/api';
-import type { GitWorkState } from '../../infrastructure/api/service-api/StartchatAgentAPI';
 import { useApp } from '../../app/hooks/useApp';
 import { createLogger } from '@/shared/utils/logger';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -20,6 +19,13 @@ import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPos
 import './WelcomePanel.css';
 
 const log = createLogger('WelcomePanel');
+
+interface GitWorkState {
+  currentBranch: string;
+  unstagedFiles: number;
+  stagedFiles: number;
+  unpushedCommits: number;
+}
 
 interface WelcomePanelProps {
   onQuickAction?: (command: string) => void;
@@ -141,8 +147,6 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
         unstagedFiles: s.unstaged.length + s.untracked.length,
         stagedFiles: s.staged.length,
         unpushedCommits: s.ahead,
-        aheadBehind: { ahead: s.ahead, behind: s.behind },
-        modifiedFiles: [],
       });
     } catch (err) {
       log.warn('Failed to load git state', err);

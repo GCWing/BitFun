@@ -1,4 +1,4 @@
-use bitfun_app_server_protocol::model::{ModelEditProjection, ModelMutation, SecretUpdate};
+use bitfun_core_types::model::{ModelEditProjection, ModelMutation, SecretUpdate};
 /// Model configuration form dialog
 ///
 /// A multi-field input form for adding a new AI model configuration.

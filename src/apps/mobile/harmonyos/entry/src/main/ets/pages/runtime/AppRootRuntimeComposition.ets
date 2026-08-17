@@ -41,6 +41,7 @@ import { ConversationController } from '../viewmodel/ConversationController';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteModelController } from '../../services/RemoteModelController';
 import { RemotePairingPolicy } from '../../services/RemotePairingPolicy';
+import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { RemoteSessionController } from '../../services/RemoteSessionController';
 import { RemoteSessionListCache } from '../../services/RemoteSessionListCache';
 import { RemoteSessionListRdbStore } from '../../services/RemoteSessionListRdbStore';
@@ -63,7 +64,11 @@ import {
   AppRouteContract,
   ConversationSource
 } from '../navigation/AppRouteContract';
-import { AppShellState } from '../state/AppShellState';
+import { AppShellState, CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../state/AppShellState';
+import {
+  RemoteConnectEntryKind,
+  RemoteSurfaceEntryPolicy
+} from '../policy/RemoteSurfaceEntryPolicy';
 import { AppShellViewModel } from '../viewmodel/AppShellViewModel';
 import { RemoteActivityViewModel } from '../viewmodel/RemoteActivityViewModel';
 import {
@@ -112,7 +117,6 @@ export abstract class AppRootRuntimeComposition {
   abstract connect(autoReconnect?: boolean, accountPassword?: string): Promise<void>;
   abstract currentActiveTurnId(): string;
   abstract disconnect(clearPairing: boolean): Promise<void>;
-  abstract enterCodeEntry(): void;
   abstract enterCompactLayout(): void;
   abstract exitActiveChat(): void;
   abstract failRemoteConnection(err: Object): void;
@@ -655,8 +659,8 @@ export abstract class AppRootRuntimeComposition {
       },
       this.clearCachedRemoteData,
       (route: AppRoute): void => this.appShellViewModel.replaceRouteWithoutAnimation(route),
-      (): void => this.appShellState.setConnectSheetVisible(false),
-      (): void => this.appShellState.setConnectSheetVisible(true)
+      (): void => this.dismissConnectSheetAfterSuccess(),
+      (): void => this.openConnectSheet()
     );
   readonly settingsController: SettingsController =
     new SettingsController(
@@ -685,7 +689,7 @@ export abstract class AppRootRuntimeComposition {
           resetKnownRemoteState: (): void => this.conversationController.resetKnownRemoteState(),
           clearCachedRemoteData: this.clearCachedRemoteData,
           closeSettings: (): void => this.appShellState.setSettingsVisible(false),
-          closeConnectSheet: (): void => this.appShellState.setConnectSheetVisible(false),
+          closeConnectSheet: (): void => this.dismissConnectSheetAfterSuccess(),
           navigateRemoteHome: (): void => this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome),
           loadRecentWorkspaces: async (): Promise<void> => {
             await this.remoteWorkspaceViewModel.loadRecentWorkspacesInBackground();
@@ -793,8 +797,8 @@ export abstract class AppRootRuntimeComposition {
     onLayoutModeChanged: (wideLayout: boolean): void => this.appShellState.setWideLayout(wideLayout),
     onRemoteHome: {
       openSidebar: (): void => this.openAppSidebar(),
-      connectWorkspace: (): void => this.enterCodeEntry(),
-      addConnection: (): void => this.appShellState.setConnectSheetVisible(true),
+      connectWorkspace: (): void => this.openConnectSheet(),
+      addConnection: (): void => this.openConnectSheet(),
       openSettings: (): void => this.openRemoteControlSettings(),
       refresh: (): void => { this.remoteSessionViewModel.refreshSessions(); },
       showWorkspaces: (): void => { this.remoteWorkspaceViewModel.toggleRecentWorkspaces(); },
@@ -866,6 +870,8 @@ export abstract class AppRootRuntimeComposition {
         this.settingsController.loginCloudAccount(relayUrl, username, password),
       cloudLogout: (): Promise<void> => this.settingsController.logoutCloudAccount(),
       cloudListDevices: (): Promise<CloudAccountDevice[]> => this.settingsController.listCloudAccountDevices(),
+      cloudSelectDevice: (device: CloudAccountDevice): Promise<void> =>
+        this.settingsController.selectCloudAccountDevice(device),
       getPermissionMode: (): Promise<RemotePermissionMode> => this.settingsController.getRemotePermissionMode(),
       setPermissionMode: (mode: RemotePermissionMode): Promise<RemotePermissionMode> =>
         this.settingsController.setRemotePermissionMode(mode),
@@ -877,18 +883,15 @@ export abstract class AppRootRuntimeComposition {
     onConnect: {
       back: (): void => this.appShellState.setConnectSheetVisible(false),
       connect: (password?: string): void => {
-        // Keep connection progress on the same RemoteHome surface as the connected state.
-        this.appShellState.setConnectSheetVisible(false);
-        this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
         this.connect(false, password || '');
       },
       clearPairing: (): void => { this.appShellState.setConnectSheetVisible(false); this.disconnect(true); },
       urlChanged: (url: string): void => { this.remotePageState.setRemoteUrl(url); this.remoteConnectionController.projectRemoteUrl(url); },
       userChanged: (user: string): void => this.remotePageState.setUserId(user),
-      detected: (url: string): boolean => this.remoteConnectionController.handleDetectedUrl(url),
+      detected: (url: string): string => this.handleDetectedRemoteUrl(url),
       inputVisible: (visible: boolean): void => this.remotePageState.setRemoteUrlInputVisible(visible),
       paste: (): void => { this.remoteConnectionController.paste(); },
-      scan: (): void => { this.remoteConnectionController.scan(this.host.context()); },
+      scan: (): void => { void this.scanRemotePairCode(); },
       cloudListDevices: (): Promise<CloudAccountDevice[]> => this.settingsController.listCloudAccountDevices(),
       cloudSelectDevice: (device: CloudAccountDevice): Promise<void> =>
         this.settingsController.selectCloudAccountDevice(device)
@@ -903,5 +906,66 @@ export abstract class AppRootRuntimeComposition {
   };
   readonly navigationStack: NavPathStack = this.appShellViewModel.navigationStack;
 
+  enterCodeEntry(): void {
+    this.enterRemoteSurface();
+  }
 
+  enterRemoteSurface(): void {
+    this.appShellState.setConnectSheetVisible(false);
+    if (this.appShellState.wideLayout) {
+      void this.switchWideConversationSource(ConversationSource.Remote);
+      return;
+    }
+    void this.switchCompactConversationSource(ConversationSource.Remote);
+  }
+
+  openConnectSheet(intent: string = CONNECT_INTENT_AUTO): void {
+    const kind = intent === CONNECT_INTENT_SCAN ?
+      RemoteConnectEntryKind.OpenScan : RemoteConnectEntryKind.OpenConnect;
+    if (!RemoteSurfaceEntryPolicy.shouldOpenConnectSheet(kind)) {
+      this.enterRemoteSurface();
+      return;
+    }
+    this.appShellState.setConnectSheetVisible(true, intent);
+  }
+
+  /**
+   * Close the sheet only after a connect that the user is watching on it.
+   * Heartbeat reconnects and background restores must not steal the current
+   * route just because they also go through the same success path.
+   */
+  dismissConnectSheetAfterSuccess(): void {
+    const opened = this.appShellState.showConnectSheet;
+    this.appShellState.setConnectSheetVisible(false);
+    if (opened) {
+      this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
+    }
+  }
+
+  handleDetectedRemoteUrl(url: string): string {
+    const result = this.remoteConnectionController.handleDetectedUrl(
+      url,
+      this.settingsController.hasCloudAccountSession(),
+      this.remotePageState.accountUsername
+    );
+    if (result.action === DetectedUrlAction.USE_CLOUD_DEVICE) {
+      void this.settingsController.restoreCloudTarget(
+        result.cloudDeviceId,
+        this.remotePageState.desktopName,
+        true
+      );
+    }
+    return result.action;
+  }
+
+  async scanRemotePairCode(): Promise<void> {
+    const text = await this.remoteConnectionController.scan(this.host.context());
+    if (text.length === 0) {
+      return;
+    }
+    const action = this.handleDetectedRemoteUrl(text);
+    if (action === DetectedUrlAction.PAIR_NOW) {
+      void this.connect(false, '');
+    }
+  }
 }

@@ -14,6 +14,16 @@ import { createLogger } from '@/shared/utils/logger';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { listen } from '@tauri-apps/api/event';
+import {
+  LOCAL_SURFACE_ID,
+  SurfaceChangedError,
+  getActiveSurfaceId,
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+  onSurfaceActivated,
+  type DeviceSurfaceId,
+  type SurfaceScope,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('WorkspaceManager');
 
@@ -71,22 +81,35 @@ export interface WorkspaceState {
 export type WorkspaceSection = 'all' | 'assistants' | 'projects';
 export type WorkspaceReorderPosition = 'before' | 'after';
 
-class WorkspaceManager {
-  private static instance: WorkspaceManager | null = null;
-  private state: WorkspaceState;
-  private listeners: Set<WorkspaceEventListener> = new Set();
-  private isInitialized = false;
-  private isInitializing = false;
-  private identityEventListening = false;
-  private identityListenerReady = false;
-  private identityListenerRegistrationPromise: Promise<void> | null = null;
-  private identityListenerReadyResyncPending = false;
-  private startupLegacyRemoteWorkspaceSnapshotAvailable = false;
-  private startupLegacyRemoteWorkspaceSnapshotConsumed = false;
-  private startupLegacyRemoteWorkspace: RemoteWorkspaceSnapshot | null = null;
+/**
+ * An operation pinned to the device surface it started under.
+ *
+ * Two things invalidate it, and both are needed: `activateSurface` moves the
+ * epoch when the rendered device changes, while `clearForPeerModeSwitch()`
+ * bumps the switch generation even when the same device is re-rendered.
+ */
+interface SurfaceCapture {
+  readonly scope: SurfaceScope;
+  readonly generation: number;
+}
 
-  private constructor() {
-    this.state = {
+/** The single initialization allowed to write state for one surface capture. */
+interface WorkspaceInitializationRun {
+  readonly surface: SurfaceCapture;
+  readonly promise: Promise<void>;
+}
+
+interface WorkspaceSurfaceContainer {
+  state: WorkspaceState;
+  isInitialized: boolean;
+  startupLegacyRemoteWorkspaceSnapshotAvailable: boolean;
+  startupLegacyRemoteWorkspaceSnapshotConsumed: boolean;
+  startupLegacyRemoteWorkspace: RemoteWorkspaceSnapshot | null;
+}
+
+function createWorkspaceSurfaceContainer(): WorkspaceSurfaceContainer {
+  return {
+    state: {
       currentWorkspace: null,
       openedWorkspaces: new Map(),
       activeWorkspaceId: null,
@@ -95,7 +118,97 @@ class WorkspaceManager {
       primaryAssistantWorkspaceId: null,
       loading: true,
       error: null,
-    };
+    },
+    isInitialized: false,
+    startupLegacyRemoteWorkspaceSnapshotAvailable: false,
+    startupLegacyRemoteWorkspaceSnapshotConsumed: false,
+    startupLegacyRemoteWorkspace: null,
+  };
+}
+
+class WorkspaceManager {
+  private static instance: WorkspaceManager | null = null;
+  private readonly surfaceContainers = new Map<DeviceSurfaceId, WorkspaceSurfaceContainer>();
+  private listeners: Set<WorkspaceEventListener> = new Set();
+  private switchGeneration = 0;
+  private activeInitialization: WorkspaceInitializationRun | null = null;
+  private identityEventListening = false;
+  private identityListenerReady = false;
+  private identityListenerRegistrationPromise: Promise<void> | null = null;
+  /** The identity watcher is local-Tauri-only, so its missed-event resync is too. */
+  private localIdentityListenerReadyResyncPending = false;
+
+  private constructor() {
+    // The activation commit swaps transport before listeners run, so consumers
+    // can safely render this surface's cached workspace snapshot immediately.
+    onSurfaceActivated(scope => {
+      this.emit({
+        type: 'workspace:active-changed',
+        workspace: this.state.currentWorkspace,
+      });
+      if (
+        scope.surfaceId === LOCAL_SURFACE_ID
+        && this.localIdentityListenerReadyResyncPending
+        && this.identityListenerReady
+        && this.isInitialized
+      ) {
+        void this.syncWorkspaceStateAfterIdentityListenerReady();
+      }
+    });
+  }
+
+  private surfaceContainer(surfaceId: DeviceSurfaceId): WorkspaceSurfaceContainer {
+    const existing = this.surfaceContainers.get(surfaceId);
+    if (existing) {
+      return existing;
+    }
+    const created = createWorkspaceSurfaceContainer();
+    this.surfaceContainers.set(surfaceId, created);
+    return created;
+  }
+
+  private get activeSurface(): WorkspaceSurfaceContainer {
+    return this.surfaceContainer(getActiveSurfaceId());
+  }
+
+  private get state(): WorkspaceState {
+    return this.activeSurface.state;
+  }
+
+  private set state(state: WorkspaceState) {
+    this.activeSurface.state = state;
+  }
+
+  private get isInitialized(): boolean {
+    return this.activeSurface.isInitialized;
+  }
+
+  private set isInitialized(value: boolean) {
+    this.activeSurface.isInitialized = value;
+  }
+
+  private get startupLegacyRemoteWorkspaceSnapshotAvailable(): boolean {
+    return this.activeSurface.startupLegacyRemoteWorkspaceSnapshotAvailable;
+  }
+
+  private set startupLegacyRemoteWorkspaceSnapshotAvailable(value: boolean) {
+    this.activeSurface.startupLegacyRemoteWorkspaceSnapshotAvailable = value;
+  }
+
+  private get startupLegacyRemoteWorkspaceSnapshotConsumed(): boolean {
+    return this.activeSurface.startupLegacyRemoteWorkspaceSnapshotConsumed;
+  }
+
+  private set startupLegacyRemoteWorkspaceSnapshotConsumed(value: boolean) {
+    this.activeSurface.startupLegacyRemoteWorkspaceSnapshotConsumed = value;
+  }
+
+  private get startupLegacyRemoteWorkspace(): RemoteWorkspaceSnapshot | null {
+    return this.activeSurface.startupLegacyRemoteWorkspace;
+  }
+
+  private set startupLegacyRemoteWorkspace(value: RemoteWorkspaceSnapshot | null) {
+    this.activeSurface.startupLegacyRemoteWorkspace = value;
   }
 
   public static getInstance(): WorkspaceManager {
@@ -359,7 +472,7 @@ class WorkspaceManager {
     const handleRegistrationFailure = (error: unknown): void => {
       this.identityEventListening = false;
       this.identityListenerReady = false;
-      this.identityListenerReadyResyncPending = false;
+      this.localIdentityListenerReadyResyncPending = false;
       startupTrace.markPhase('workspace_identity_listener_failed', {
         durationMs: elapsedMs(registrationStartedAt),
       });
@@ -370,7 +483,10 @@ class WorkspaceManager {
       this.identityListenerRegistrationPromise = listen<WorkspaceIdentityChangedEvent>(
         'workspace-identity-changed',
         event => {
-          this.applyIdentityUpdate(event.payload);
+          // This listener is registered directly with the controller's Tauri
+          // runtime and is not a peer-fanned event. Always update the local
+          // container, even while the window renders a peer with equal ids.
+          this.applyLocalIdentityUpdate(event.payload);
         }
       )
         .then(() => {
@@ -378,7 +494,11 @@ class WorkspaceManager {
           startupTrace.markPhase('workspace_identity_listener_ready', {
             durationMs: elapsedMs(registrationStartedAt),
           });
-          if (this.identityListenerReadyResyncPending && this.isInitialized) {
+          if (
+            this.localIdentityListenerReadyResyncPending
+            && getActiveSurfaceId() === LOCAL_SURFACE_ID
+            && this.isInitialized
+          ) {
             void this.syncWorkspaceStateAfterIdentityListenerReady();
           }
         })
@@ -396,11 +516,17 @@ class WorkspaceManager {
   }
 
   private async syncWorkspaceStateAfterIdentityListenerReady(): Promise<void> {
-    if (!this.identityListenerReadyResyncPending || !this.isInitialized || !this.identityListenerReady) {
+    if (
+      getActiveSurfaceId() !== LOCAL_SURFACE_ID
+      || !this.localIdentityListenerReadyResyncPending
+      || !this.isInitialized
+      || !this.identityListenerReady
+    ) {
       return;
     }
-    this.identityListenerReadyResyncPending = false;
+    this.localIdentityListenerReadyResyncPending = false;
 
+    const surface = this.captureSurface();
     const syncStartedAt = nowMs();
     try {
       const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
@@ -408,6 +534,9 @@ class WorkspaceManager {
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
       ]);
+      if (!this.isSurfaceUnchanged(surface)) {
+        return;
+      }
       this.updateWorkspaceState(
         currentWorkspace,
         recentWorkspaces,
@@ -422,6 +551,10 @@ class WorkspaceManager {
         durationMs: elapsedMs(syncStartedAt),
       });
     } catch (error) {
+      if (isSurfaceChangedError(error) || !this.isSurfaceUnchanged(surface)) {
+        log.debug('Abandoned local identity resync after a device surface switch');
+        return;
+      }
       startupTrace.markPhase('workspace_identity_listener_post_ready_sync_failed', {
         durationMs: elapsedMs(syncStartedAt),
       });
@@ -429,7 +562,9 @@ class WorkspaceManager {
     }
   }
 
-  private applyIdentityUpdate(update: WorkspaceIdentityChangedEvent): void {
+  private applyLocalIdentityUpdate(update: WorkspaceIdentityChangedEvent): void {
+    const container = this.surfaceContainer(LOCAL_SURFACE_ID);
+    const state = container.state;
     const updateWorkspace = (workspace: WorkspaceInfo | null): WorkspaceInfo | null => {
       if (!workspace) {
         return null;
@@ -450,14 +585,14 @@ class WorkspaceManager {
       };
     };
 
-    const currentWorkspace = updateWorkspace(this.state.currentWorkspace);
+    const currentWorkspace = updateWorkspace(state.currentWorkspace);
     const openedWorkspaces = new Map(
-      Array.from(this.state.openedWorkspaces.entries()).map(([id, workspace]) => [
+      Array.from(state.openedWorkspaces.entries()).map(([id, workspace]) => [
         id,
         updateWorkspace(workspace) ?? workspace,
       ])
     );
-    const recentWorkspaces = this.state.recentWorkspaces.map(
+    const recentWorkspaces = state.recentWorkspaces.map(
       workspace => updateWorkspace(workspace) ?? workspace
     );
 
@@ -469,32 +604,80 @@ class WorkspaceManager {
           null;
 
     if (!updatedWorkspace) {
-      if (!this.isInitialized) {
-        this.identityListenerReadyResyncPending = true;
+      if (!container.isInitialized) {
+        this.localIdentityListenerReadyResyncPending = true;
       }
       return;
     }
 
-    this.updateState(
-      {
-        currentWorkspace,
-        openedWorkspaces,
-        recentWorkspaces,
-      },
-      { type: 'workspace:updated', workspace: updatedWorkspace }
-    );
+    container.state = {
+      ...state,
+      currentWorkspace,
+      openedWorkspaces,
+      recentWorkspaces,
+    };
+    if (getActiveSurfaceId() === LOCAL_SURFACE_ID) {
+      this.emit({ type: 'workspace:updated', workspace: updatedWorkspace });
+    }
   }
 
+  private captureSurface(): SurfaceCapture {
+    return { scope: getActiveSurfaceScope(), generation: this.switchGeneration };
+  }
+
+  private isSurfaceUnchanged(surface: SurfaceCapture): boolean {
+    return surface.generation === this.switchGeneration && surface.scope.isCurrent();
+  }
+
+  /**
+   * Guard every state write that follows an await. A switch inside that window
+   * means the result describes a device this window no longer renders, so it
+   * must be abandoned rather than written over the surface that replaced it.
+   */
+  private assertSurfaceUnchanged(surface: SurfaceCapture, action: string): void {
+    if (!this.isSurfaceUnchanged(surface)) {
+      throw new SurfaceChangedError(surface.scope.surfaceId, surface.scope.epoch, action);
+    }
+  }
+
+  /**
+   * Load workspace state for the surface this window renders.
+   *
+   * Callers that arrive while a load for the same surface is in flight join it,
+   * so one surface never has two initializations writing the same state. A load
+   * whose surface was superseded rejects with `SurfaceChangedError`.
+   */
   public async initialize(): Promise<void> {
-    if (this.isInitialized || this.isInitializing) {
+    if (this.isInitialized) {
       return;
     }
 
+    const inFlight = this.activeInitialization;
+    if (inFlight && this.isSurfaceUnchanged(inFlight.surface)) {
+      return inFlight.promise;
+    }
+
+    const surface = this.captureSurface();
+    const run: WorkspaceInitializationRun = {
+      surface,
+      promise: this.runInitialization(surface),
+    };
+    this.activeInitialization = run;
+
+    try {
+      await run.promise;
+    } finally {
+      if (this.activeInitialization === run) {
+        this.activeInitialization = null;
+      }
+    }
+  }
+
+  private async runInitialization(surface: SurfaceCapture): Promise<void> {
     const initializeStartedAt = nowMs();
     startupTrace.markPhase('workspace_initialize_start');
 
     try {
-      this.isInitializing = true;
       log.info('Initializing workspace state');
 
       const identityListenerStartedAt = markWorkspaceStartupStepStart('ensure_identity_listener');
@@ -512,8 +695,9 @@ class WorkspaceManager {
         primaryAssistantWorkspaceId,
         legacyRemoteWorkspace,
       } = await globalStateAPI.initializeWorkspaceStartupState();
-      if (!this.identityListenerReady) {
-        this.identityListenerReadyResyncPending = true;
+      this.assertSurfaceUnchanged(surface, 'initialize workspace state');
+      if (surface.scope.surfaceId === LOCAL_SURFACE_ID && !this.identityListenerReady) {
+        this.localIdentityListenerReadyResyncPending = true;
       }
       this.startupLegacyRemoteWorkspace = legacyRemoteWorkspace;
       this.startupLegacyRemoteWorkspaceSnapshotAvailable = true;
@@ -555,7 +739,10 @@ class WorkspaceManager {
 
       this.emit({ type: 'workspace:loading', loading: false });
       this.isInitialized = true;
-      if (this.identityListenerReadyResyncPending) {
+      if (
+        surface.scope.surfaceId === LOCAL_SURFACE_ID
+        && this.localIdentityListenerReadyResyncPending
+      ) {
         void this.syncWorkspaceStateAfterIdentityListenerReady();
       }
       startupTrace.markPhase('workspace_initialize_end', {
@@ -569,40 +756,70 @@ class WorkspaceManager {
         openedWorkspaceCount: openedWorkspaces.length,
       });
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        // Reporting this failure would blank the surface that superseded it,
+        // and the load it failed at belongs to a device nobody renders now.
+        log.debug('Abandoned workspace initialization for a superseded surface', {
+          surfaceId: surface.scope.surfaceId,
+          epoch: surface.scope.epoch,
+        });
+        throw isSurfaceChangedError(error)
+          ? error
+          : new SurfaceChangedError(
+              surface.scope.surfaceId,
+              surface.scope.epoch,
+              'initialize workspace state',
+            );
+      }
       startupTrace.markPhase('workspace_initialize_failed', {
         durationMs: elapsedMs(initializeStartedAt),
       });
       log.error('Failed to initialize workspace state', { error });
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.updateWorkspaceState(null, [], [], false, errorMessage);
-      this.updateState({ primaryAssistantWorkspaceId: null });
+      // Keep this surface's last known workspace projection. A weak-link
+      // refresh failure is visible through `error`, but it must not turn a
+      // usable cached device into an empty workspace list.
+      this.updateState({ loading: false, error: errorMessage });
       this.emit({ type: 'workspace:error', error: errorMessage });
-    } finally {
-      this.isInitializing = false;
     }
   }
 
   /**
-   * Drop controller-local workspace pointers before peer transport is live so
-   * create_session / SessionModule cannot prefer a stale controller path while
-   * rebootstrap is still in flight.
+   * Announce that the rendered surface is about to change.
+   *
+   * Frontend-only, and must stay that way: it runs before the transport swap,
+   * so any backend call here would land on the device being left. Bumping the
+   * switch generation is what supersedes an initialization still in flight —
+   * that load abandons at its next checkpoint instead of racing this one. The
+   * current container is deliberately preserved; atomic activation selects the
+   * target container before the peer-mode event can trigger session creation.
    */
   public clearForPeerModeSwitch(): void {
-    this.isInitialized = false;
-    this.isInitializing = false;
-    this.updateWorkspaceState(null, [], [], false, null);
-    this.updateState({ primaryAssistantWorkspaceId: null });
+    this.switchGeneration += 1;
+    this.activeInitialization = null;
   }
 
   /**
    * Tear down local workspace product state and reload opened/recent
    * workspaces from the current transport target (local or peer).
+   *
+   * Rejects with `SurfaceChangedError` when a later switch supersedes this one:
+   * the caller must abandon quietly rather than report a product error or roll
+   * the surface back, because what is on screen now belongs to that later
+   * switch.
    */
   public async reinitializeForPeerModeSwitch(): Promise<void> {
     log.info('Reinitializing workspace state for peer mode switch');
-    this.clearForPeerModeSwitch();
+    // Reconcile the selected surface even when it has a cached snapshot. A
+    // second call on the same surface also supersedes the first one.
+    this.switchGeneration += 1;
+    this.activeInitialization = null;
+    this.isInitialized = false;
+    const surface = this.captureSurface();
+    this.updateState({ loading: true, error: null });
     this.emit({ type: 'workspace:loading', loading: true });
     await this.initialize();
+    this.assertSurfaceUnchanged(surface, 'reinitialize workspace for surface switch');
     if (!this.isInitialized) {
       throw new Error(
         this.state.error || 'Workspace state could not be loaded from the Peer host',
@@ -610,7 +827,13 @@ class WorkspaceManager {
     }
   }
 
+  /** Permanently release one detached peer's cached workspace projection. */
+  public discardDeviceSurface(surfaceId: DeviceSurfaceId): void {
+    this.surfaceContainers.delete(surfaceId);
+  }
+
   public async openWorkspace(path: string): Promise<WorkspaceInfo> {
+    const surface = this.captureSurface();
     try {
       this.setLoading(true);
       this.setError(null);
@@ -622,6 +845,7 @@ class WorkspaceManager {
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
       ]);
+      this.assertSurfaceUnchanged(surface, 'open workspace');
 
       this.updateWorkspaceState(
         workspace,
@@ -634,6 +858,9 @@ class WorkspaceManager {
 
       return workspace;
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to open workspace', { path, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -647,6 +874,7 @@ class WorkspaceManager {
     remotePath: string;
     sshHost?: string;
   }): Promise<WorkspaceInfo> {
+    const surface = this.captureSurface();
     try {
       this.setLoading(true);
       this.setError(null);
@@ -666,6 +894,7 @@ class WorkspaceManager {
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
       ]);
+      this.assertSurfaceUnchanged(surface, 'open remote workspace');
 
       this.updateWorkspaceState(
         workspace,
@@ -678,6 +907,9 @@ class WorkspaceManager {
 
       return workspace;
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to open remote workspace', { remoteWorkspace, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -686,6 +918,7 @@ class WorkspaceManager {
   }
 
   public async removeRemoteWorkspace(connectionId: string, remotePath?: string): Promise<void> {
+    const surface = this.captureSurface();
     try {
       const workspace = this.findRemoteWorkspace(connectionId, remotePath);
       if (!workspace) {
@@ -695,6 +928,9 @@ class WorkspaceManager {
       await this.cancelRunningSessionsForWorkspace(workspace);
       await globalStateAPI.closeWorkspace(workspace.id);
       await globalStateAPI.removeWorkspaceFromRecent(workspace.id).catch(error => {
+        if (isSurfaceChangedError(error)) {
+          throw error;
+        }
         log.warn('Failed to remove remote workspace from recent list', {
           workspaceId: workspace.id,
           error,
@@ -706,6 +942,7 @@ class WorkspaceManager {
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
       ]);
+      this.assertSurfaceUnchanged(surface, 'remove remote workspace');
 
       this.updateWorkspaceState(
         currentWorkspace,
@@ -718,6 +955,9 @@ class WorkspaceManager {
 
       this.emit({ type: 'workspace:active-changed', workspace: currentWorkspace });
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to remove remote workspace', { connectionId, remotePath, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -743,11 +983,13 @@ class WorkspaceManager {
   }
 
   public async createAssistantWorkspace(): Promise<WorkspaceInfo> {
+    const surface = this.captureSurface();
     try {
       this.setLoading(true);
       this.setError(null);
 
       const workspace = await globalStateAPI.createAssistantWorkspace();
+      this.assertSurfaceUnchanged(surface, 'create assistant workspace');
       if (!this.state.primaryAssistantWorkspaceId) {
         this.updateState({ primaryAssistantWorkspaceId: workspace.id });
       }
@@ -756,6 +998,7 @@ class WorkspaceManager {
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
       ]);
+      this.assertSurfaceUnchanged(surface, 'create assistant workspace');
 
       this.updateWorkspaceState(
         currentWorkspace,
@@ -768,6 +1011,9 @@ class WorkspaceManager {
 
       return workspace;
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to create assistant workspace', { error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -784,6 +1030,7 @@ class WorkspaceManager {
   }
 
   public async closeWorkspaceById(workspaceId: string): Promise<void> {
+    const surface = this.captureSurface();
     try {
       this.setLoading(true);
       this.setError(null);
@@ -802,6 +1049,7 @@ class WorkspaceManager {
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
       ]);
+      this.assertSurfaceUnchanged(surface, 'close workspace');
 
       this.updateWorkspaceState(
         currentWorkspace,
@@ -814,6 +1062,9 @@ class WorkspaceManager {
 
       this.emit({ type: 'workspace:active-changed', workspace: currentWorkspace });
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to close workspace', { workspaceId, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -840,6 +1091,7 @@ class WorkspaceManager {
   }
 
   public async deleteAssistantWorkspace(workspaceId: string): Promise<void> {
+    const surface = this.captureSurface();
     try {
       this.setLoading(true);
       this.setError(null);
@@ -859,6 +1111,7 @@ class WorkspaceManager {
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
       ]);
+      this.assertSurfaceUnchanged(surface, 'delete assistant workspace');
 
       this.updateWorkspaceState(
         currentWorkspace,
@@ -871,6 +1124,9 @@ class WorkspaceManager {
 
       this.emit({ type: 'workspace:active-changed', workspace: currentWorkspace });
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to delete assistant workspace', { workspaceId, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -879,12 +1135,14 @@ class WorkspaceManager {
   }
 
   public async setPrimaryAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
+    const surface = this.captureSurface();
     try {
       this.setLoading(true);
       this.setError(null);
 
       log.info('Setting primary assistant workspace', { workspaceId });
       const workspace = await globalStateAPI.setPrimaryAssistantWorkspace(workspaceId);
+      this.assertSurfaceUnchanged(surface, 'set primary assistant workspace');
       this.updateState(
         {
           primaryAssistantWorkspaceId: workspace.id,
@@ -895,6 +1153,9 @@ class WorkspaceManager {
       );
       return workspace;
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to set primary assistant workspace', { workspaceId, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState(
@@ -906,6 +1167,7 @@ class WorkspaceManager {
   }
 
   public async resetAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
+    const surface = this.captureSurface();
     try {
       this.setLoading(true);
       this.setError(null);
@@ -919,6 +1181,7 @@ class WorkspaceManager {
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
       ]);
+      this.assertSurfaceUnchanged(surface, 'reset assistant workspace');
 
       this.updateWorkspaceState(
         currentWorkspace,
@@ -932,6 +1195,9 @@ class WorkspaceManager {
       this.emit({ type: 'workspace:active-changed', workspace: currentWorkspace });
       return workspace;
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to reset assistant workspace', { workspaceId, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -940,6 +1206,7 @@ class WorkspaceManager {
   }
 
   public async setActiveWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
+    const surface = this.captureSurface();
     try {
       if (this.state.activeWorkspaceId === workspaceId) {
         const currentWorkspace = this.state.currentWorkspace;
@@ -957,6 +1224,7 @@ class WorkspaceManager {
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
       ]);
+      this.assertSurfaceUnchanged(surface, 'set active workspace');
       const orderedOpenedWorkspaces = this.preserveOpenedWorkspaceOrder(openedWorkspaces);
 
       this.updateWorkspaceState(
@@ -971,6 +1239,9 @@ class WorkspaceManager {
       this.emit({ type: 'workspace:active-changed', workspace });
       return workspace;
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to set active workspace', { workspaceId, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -984,6 +1255,7 @@ class WorkspaceManager {
     targetWorkspaceId: string,
     position: WorkspaceReorderPosition
   ): Promise<void> {
+    const surface = this.captureSurface();
     const previousCurrentWorkspace = this.state.currentWorkspace;
     const previousRecentWorkspaces = this.state.recentWorkspaces;
     const previousOpenedWorkspaces = this.getOpenedWorkspacesList();
@@ -1032,6 +1304,9 @@ class WorkspaceManager {
     try {
       await globalStateAPI.reorderOpenedWorkspaces(reorderedOpenedWorkspaceIds);
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       const rollbackEventWorkspace = previousCurrentWorkspace
         ?? workspaceMap.get(sourceWorkspaceId)
@@ -1077,6 +1352,7 @@ class WorkspaceManager {
   }
 
   public async scanWorkspaceInfo(): Promise<WorkspaceInfo | null> {
+    const surface = this.captureSurface();
     try {
       if (!this.state.currentWorkspace?.rootPath) {
         throw new Error('No current workspace available for scanning');
@@ -1086,6 +1362,7 @@ class WorkspaceManager {
       this.setError(null);
 
       const updatedWorkspace = await globalStateAPI.scanWorkspaceInfo(this.state.currentWorkspace.rootPath);
+      this.assertSurfaceUnchanged(surface, 'scan workspace info');
 
       if (updatedWorkspace) {
         const openedWorkspaces = new Map(this.state.openedWorkspaces);
@@ -1112,6 +1389,9 @@ class WorkspaceManager {
 
       return updatedWorkspace;
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to scan workspace info', { error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.setError(errorMessage);
@@ -1121,8 +1401,12 @@ class WorkspaceManager {
   }
 
   public async refreshRecentWorkspaces(): Promise<void> {
+    const surface = this.captureSurface();
     try {
       const recentWorkspaces = await globalStateAPI.getRecentWorkspaces();
+      if (!this.isSurfaceUnchanged(surface)) {
+        return;
+      }
       this.updateState({ recentWorkspaces }, { type: 'workspace:recent-updated' });
       log.debug('Recent workspaces refreshed', { count: recentWorkspaces.length });
     } catch (error) {
@@ -1139,16 +1423,21 @@ class WorkspaceManager {
     workspaceId: string,
     relatedPaths: WorkspaceInfo['relatedPaths']
   ): Promise<WorkspaceInfo> {
+    const surface = this.captureSurface();
     try {
       this.setError(null);
 
       const updatedWorkspace = await globalStateAPI.updateWorkspaceInfo(workspaceId, {
         relatedPaths,
       });
+      this.assertSurfaceUnchanged(surface, 'update workspace related paths');
 
       this.applyWorkspaceRecordUpdate(updatedWorkspace);
       return updatedWorkspace;
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to update workspace related paths', { workspaceId, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -1157,16 +1446,21 @@ class WorkspaceManager {
   }
 
   public async renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceInfo> {
+    const surface = this.captureSurface();
     try {
       this.setError(null);
 
       const updatedWorkspace = await globalStateAPI.updateWorkspaceInfo(workspaceId, {
         name: name.trim(),
       });
+      this.assertSurfaceUnchanged(surface, 'rename workspace');
 
       this.applyWorkspaceRecordUpdate(updatedWorkspace);
       return updatedWorkspace;
     } catch (error) {
+      if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
       log.error('Failed to rename workspace', { workspaceId, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ error: errorMessage }, { type: 'workspace:error', error: errorMessage });
@@ -1175,6 +1469,7 @@ class WorkspaceManager {
   }
 
   public async cleanupInvalidWorkspaces(): Promise<number> {
+    const surface = this.captureSurface();
     try {
       const removedCount = await globalStateAPI.cleanupInvalidWorkspaces();
 
@@ -1188,6 +1483,7 @@ class WorkspaceManager {
         globalStateAPI.getOpenedWorkspaces(),
         globalStateAPI.getPrimaryAssistantWorkspace(),
       ]);
+      this.assertSurfaceUnchanged(surface, 'cleanup invalid workspaces');
 
       this.updateState({ primaryAssistantWorkspaceId: primaryAssistantWorkspace?.id ?? null });
       this.updateWorkspaceState(
@@ -1202,7 +1498,9 @@ class WorkspaceManager {
       log.info('Invalid workspaces cleaned up', { removedCount });
       return removedCount;
     } catch (error) {
-      log.error('Failed to cleanup invalid workspaces', { error });
+      if (this.isSurfaceUnchanged(surface)) {
+        log.error('Failed to cleanup invalid workspaces', { error });
+      }
       throw error;
     }
   }

@@ -9,6 +9,9 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use bitfun_product_domains::account::{
+    AccountDevice, AccountInfo, AccountSnapshotProjection, SettingsSyncProgress, SettingsSyncStatus,
+};
 use tokio::sync::RwLock;
 
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
@@ -37,6 +40,117 @@ pub(crate) fn build_account_runtime(
 
 pub(crate) fn build_management_account_runtime() -> Arc<AccountRuntime> {
     build_account_runtime_with_backup(Arc::new(UnavailableSessionBackup)).runtime
+}
+
+pub(crate) fn account_snapshot_projection(
+    snapshot: bitfun_core::service::remote_connect::account_runtime::AccountSnapshot,
+) -> AccountSnapshotProjection {
+    AccountSnapshotProjection {
+        logged_in: snapshot.logged_in,
+        pending_sync_choice: snapshot.pending_sync_choice,
+        info: snapshot.info.map(|info| AccountInfo {
+            user_id: info.user_id,
+            relay_url: info.relay_url,
+            device_id: info.device_id,
+            device_name: info.device_name,
+        }),
+        devices: snapshot
+            .devices
+            .into_iter()
+            .map(|device| AccountDevice {
+                device_id: device.device_id,
+                device_name: device.device_name,
+                online: device.online,
+            })
+            .collect(),
+        sync: settings_sync_progress(snapshot.sync),
+    }
+}
+
+pub(crate) fn settings_sync_progress(
+    progress: bitfun_core::service::remote_connect::account_runtime::AccountSyncProgress,
+) -> SettingsSyncProgress {
+    settings_sync_progress_from_core(progress)
+}
+
+fn settings_sync_progress_from_core(
+    progress: bitfun_core::service::remote_connect::account_runtime::AccountSyncProgress,
+) -> SettingsSyncProgress {
+    SettingsSyncProgress {
+        operation_id: progress.operation_id,
+        status: match progress.status {
+            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Idle => {
+                SettingsSyncStatus::Idle
+            }
+            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Syncing => {
+                SettingsSyncStatus::Syncing
+            }
+            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Done => {
+                SettingsSyncStatus::Done
+            }
+            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Failed => {
+                SettingsSyncStatus::Failed
+            }
+            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Cancelled => {
+                SettingsSyncStatus::Cancelled
+            }
+        },
+        phase: progress.phase,
+        percent: progress.percent,
+        current: progress.current,
+        total: progress.total,
+        detail: progress.detail,
+        error: progress.error,
+        settings_synced: progress.settings_synced,
+        sessions_exported: progress.sessions_exported,
+    }
+}
+
+pub(crate) fn account_login_status_message(
+    result: &bitfun_core::service::remote_connect::account_runtime::AccountLoginResult,
+) -> String {
+    if result.has_cloud_settings {
+        return format!(
+            "Authenticated as user {} on {}. Choose cloud or local settings to finish login.",
+            result.user_id, result.relay_url
+        );
+    }
+    if result.routing_connected {
+        format!(
+            "Logged in as user {} on {}. Device routing connected.",
+            result.user_id, result.relay_url
+        )
+    } else if let Some(error) = &result.routing_error {
+        format!(
+            "Logged in as user {} on {}. Device routing failed: {}",
+            result.user_id,
+            result.relay_url,
+            bounded_account_error(error)
+        )
+    } else {
+        format!(
+            "Logged in as user {} on {}.",
+            result.user_id, result.relay_url
+        )
+    }
+}
+
+pub(crate) fn redact_login_error(error: anyhow::Error, secrets: [&str; 3]) -> anyhow::Error {
+    let mut message = error.to_string();
+    for secret in secrets {
+        if !secret.is_empty() {
+            message = message.replace(secret, "<redacted>");
+        }
+    }
+    anyhow!(bounded_account_error(&message))
+}
+
+fn bounded_account_error(message: &str) -> String {
+    message
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(500)
+        .collect()
 }
 
 fn build_account_runtime_with_backup(

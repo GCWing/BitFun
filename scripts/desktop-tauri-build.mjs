@@ -229,6 +229,11 @@ export function prepareTauriConfig(
     config.identifier = resolution.assembly.bundleId;
   }
   injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary);
+  // The DeepSeek bridge is not a compile-time resource: cargo check and
+  // desktop:dev must not require packages/dsh-acp/dist-profile. Official
+  // packaging injects it here; frontend:build-all (beforeBuildCommand)
+  // compiles the profile before Tauri copies resources.
+  injectDshProfileResource(config);
 
   const release = releaseChannel
     ?? resolveReleaseChannel(process.env.BITFUN_RELEASE_CHANNEL);
@@ -287,6 +292,18 @@ export function prepareTauriConfig(
   );
   writeFileSync(generatedConfig, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   return generatedConfig;
+}
+
+const DSH_PROFILE_RESOURCE_SOURCE = '../../../packages/dsh-acp/dist-profile';
+const DSH_PROFILE_RESOURCE_TARGET = 'resources/dsh-profile';
+
+function injectDshProfileResource(config) {
+  const resources = { ...(config.bundle?.resources || {}) };
+  resources[DSH_PROFILE_RESOURCE_SOURCE] = DSH_PROFILE_RESOURCE_TARGET;
+  config.bundle = {
+    ...(config.bundle || {}),
+    resources,
+  };
 }
 
 function injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary) {

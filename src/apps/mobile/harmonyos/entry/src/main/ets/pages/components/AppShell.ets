@@ -1,4 +1,5 @@
 import { AppShellState } from '../state/AppShellState';
+import { ConversationLayoutPolicy } from '../policy/ConversationLayoutPolicy';
 import { PAGE_BG } from './Theme';
 
 const WIDE_SETTINGS_SHEET_MAX_WIDTH: number = 680;
@@ -133,7 +134,7 @@ export struct AppShell {
     if (this.shellWidth <= 0) {
       return 280;
     }
-    if (this.shellWidth < 720) {
+    if (this.shellWidth < ConversationLayoutPolicy.MD_MIN_WIDTH) {
       return Math.min(280, Math.max(220, Math.round(this.shellWidth * 0.68)));
     }
     return Math.min(420, Math.max(280, Math.round(this.shellWidth * 0.35)));

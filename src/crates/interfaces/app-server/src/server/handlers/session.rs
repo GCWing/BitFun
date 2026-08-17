@@ -1,21 +1,21 @@
 use std::sync::Arc;
 
 use agent_client_protocol::{Builder, Error, HandleDispatchFrom};
-use bitfun_agent_runtime::sdk::{AgentSessionRestoreRequest, ProcessingPhase, SessionState};
+use bitfun_agent_runtime::sdk::AgentSessionRestoreRequest;
 use bitfun_app_server_protocol::session::{
     CancelLineageRequest, CancelLineageResponse, CompactSessionRequest, CompactSessionResponse,
     InspectLineageRequest, InspectLineageResponse, ReadTranscriptRequest, ReadTranscriptResponse,
     RedoSessionRequest, ReloadContextRequest, ReloadContextResponse, ResolveWorkspaceRequest,
     ResolveWorkspaceResponse, RevertSessionResponse, SessionLineageRequest, SessionLineageResponse,
-    SessionProcessingPhase, SessionRuntimeState, SessionUsageRequest, SessionUsageResponse,
-    SyncSessionRequest, SyncSessionResponse, UndoSessionRequest, WaitForSettlementRequest,
-    WaitForSettlementResponse,
+    SessionUsageRequest, SessionUsageResponse, SyncSessionRequest, SyncSessionResponse,
+    UndoSessionRequest, WaitForSettlementRequest, WaitForSettlementResponse,
 };
 use bitfun_runtime_ports::{AgentSessionWorkspaceBinding, SessionExecutionTarget};
 
 use crate::agent::{runtime_call, BitfunAppRuntime};
 use crate::role::{AppClient, AppServer};
 use crate::schema::*;
+use crate::server::wire;
 
 pub(in crate::server) fn builder(
     runtime: Arc<BitfunAppRuntime>,
@@ -171,9 +171,9 @@ pub(in crate::server) fn builder(
                     responder.respond_with_result(
                         runtime
                             .runtime()
-                            .restore_session(request.into())
+                            .restore_session(wire::restore_session_request(request))
                             .await
-                            .map(RestoreSessionResponse::from)
+                            .map(wire::restore_session_response)
                             .map_err(|error| {
                                 BitfunAppRuntime::session_runtime_error(&session_id, error)
                             }),
@@ -233,7 +233,7 @@ pub(in crate::server) fn builder(
 
                     responder.respond(SyncSessionResponse {
                         session: restored.session,
-                        state: session_state(restored.state),
+                        state: wire::session_state(restored.state),
                         transcript,
                         workspace_binding,
                         pending_permissions,
@@ -434,32 +434,5 @@ fn fallback_workspace_binding(workspace_path: String) -> AgentSessionWorkspaceBi
         execution_target: Some(SessionExecutionTarget::local(workspace_path)),
         remote_connection_id: None,
         remote_ssh_host: None,
-    }
-}
-
-fn session_state(state: SessionState) -> SessionRuntimeState {
-    match state {
-        SessionState::Idle => SessionRuntimeState::Idle,
-        SessionState::Processing {
-            current_turn_id,
-            phase,
-        } => SessionRuntimeState::Processing {
-            current_turn_id,
-            phase: processing_phase(phase),
-        },
-        SessionState::Error { error, recoverable } => {
-            SessionRuntimeState::Error { error, recoverable }
-        }
-    }
-}
-
-fn processing_phase(phase: ProcessingPhase) -> SessionProcessingPhase {
-    match phase {
-        ProcessingPhase::Starting => SessionProcessingPhase::Starting,
-        ProcessingPhase::Compacting => SessionProcessingPhase::Compacting,
-        ProcessingPhase::Thinking => SessionProcessingPhase::Thinking,
-        ProcessingPhase::Streaming => SessionProcessingPhase::Streaming,
-        ProcessingPhase::ToolCalling => SessionProcessingPhase::ToolCalling,
-        ProcessingPhase::ToolConfirming => SessionProcessingPhase::ToolConfirming,
     }
 }

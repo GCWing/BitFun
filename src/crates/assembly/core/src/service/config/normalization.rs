@@ -161,7 +161,7 @@ pub async fn isolate_invalid_ai_models(
 pub struct ModelReferenceReconcileResult {
     pub invalidated_model_ids: Vec<String>,
     pub default_models_changed: bool,
-    pub func_agent_models_changed: bool,
+    pub task_models_changed: bool,
     pub agent_model_defaults_changed: bool,
     pub diagnostics: Vec<ConfigDiagnostic>,
 }
@@ -169,7 +169,7 @@ pub struct ModelReferenceReconcileResult {
 impl ModelReferenceReconcileResult {
     pub fn is_noop(&self) -> bool {
         !self.default_models_changed
-            && !self.func_agent_models_changed
+            && !self.task_models_changed
             && !self.agent_model_defaults_changed
     }
 }
@@ -226,20 +226,43 @@ pub fn reconcile_model_references(config: &mut GlobalConfig) -> ModelReferenceRe
             || enabled_model_with_capability(&snapshot, reference, ModelCapability::TextChat)
     };
 
-    config.ai.func_agent_models.retain(|agent, model_ref| {
-        let valid = direct_text_reference_is_valid(model_ref);
-        if !valid {
-            invalidated.insert(model_ref.clone());
-            result.func_agent_models_changed = true;
-            diagnose_reference_repair(
-                &mut result.diagnostics,
-                &format!("ai.func_agent_models.{agent}"),
-                Some(model_ref),
-                None,
-            );
-        }
-        valid
-    });
+    let mut reconcile_task_model =
+        |selection: &mut crate::service::config::types::TaskModelSelection,
+         path: &str,
+         allow_inherit: bool| {
+            let previous = selection.fixed_model_id().map(str::to_string);
+            let valid = match selection {
+                crate::service::config::types::TaskModelSelection::Inherit => allow_inherit,
+                crate::service::config::types::TaskModelSelection::Fixed { model_id } => {
+                    model_id != "auto" && direct_text_reference_is_valid(model_id)
+                }
+            };
+            if !valid {
+                if let Some(model_id) = previous.as_ref() {
+                    invalidated.insert(model_id.clone());
+                }
+                *selection = crate::service::config::types::TaskModelSelection::Fixed {
+                    model_id: "fast".to_string(),
+                };
+                result.task_models_changed = true;
+                diagnose_reference_repair(
+                    &mut result.diagnostics,
+                    path,
+                    previous.as_deref().or(Some("inherit")),
+                    Some("fast"),
+                );
+            }
+        };
+    reconcile_task_model(
+        &mut config.ai.task_models.session_title,
+        "ai.task_models.session_title",
+        true,
+    );
+    reconcile_task_model(
+        &mut config.ai.task_models.git_commit,
+        "ai.task_models.git_commit",
+        false,
+    );
 
     if !direct_text_reference_is_valid(&config.ai.agent_model_defaults.mode) {
         invalidated.insert(config.ai.agent_model_defaults.mode.clone());
@@ -486,6 +509,32 @@ mod tests {
             Some("speech")
         );
         assert!(result.default_models_changed);
+    }
+
+    #[test]
+    fn task_models_reconcile_invalid_fixed_and_git_inherit_to_fast() {
+        let mut config = GlobalConfig::default();
+        config.ai.task_models.session_title =
+            crate::service::config::types::TaskModelSelection::Fixed {
+                model_id: "missing".to_string(),
+            };
+        config.ai.task_models.git_commit =
+            crate::service::config::types::TaskModelSelection::Inherit;
+
+        let result = reconcile_model_references(&mut config);
+
+        assert!(result.task_models_changed);
+        assert_eq!(
+            config.ai.task_models.session_title.fixed_model_id(),
+            Some("fast")
+        );
+        assert_eq!(
+            config.ai.task_models.git_commit.fixed_model_id(),
+            Some("fast")
+        );
+        assert!(result
+            .invalidated_model_ids
+            .contains(&"missing".to_string()));
     }
 
     #[tokio::test]

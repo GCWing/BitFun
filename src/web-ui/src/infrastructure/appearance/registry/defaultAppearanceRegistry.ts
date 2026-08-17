@@ -248,6 +248,7 @@ import { acpPermissionActionsAppearanceDescriptor } from '@/flow_chat/tool-cards
 import { contextCompressionDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/ContextCompressionDisplay.appearance';
 import { getToolSpecCardAppearanceDescriptor } from '@/flow_chat/tool-cards/GetToolSpecCard.appearance';
 import { viewImageToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ViewImageToolCard.appearance';
+import { runCodeToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/RunCodeToolCard.appearance';
 import { acpPlanPanelAppearanceDescriptor } from '@/flow_chat/components/AcpPlanPanel.appearance';
 import { backgroundCommandInputDialogAppearanceDescriptor } from '@/flow_chat/components/background-command/BackgroundCommandInputDialog.appearance';
 import { chatEmptyStateAppearanceDescriptor } from '@/flow_chat/components/ChatEmptyState.appearance';
@@ -261,7 +262,6 @@ import { scrollToLatestBarAppearanceDescriptor } from '@/flow_chat/components/Sc
 import { scrollToTurnHeaderButtonAppearanceDescriptor } from '@/flow_chat/components/ScrollToTurnHeaderButton.appearance';
 import { tokenUsageIndicatorAppearanceDescriptor } from '@/flow_chat/components/TokenUsageIndicator.appearance';
 import { toolApprovalBarAppearanceDescriptor } from '@/flow_chat/components/ToolApprovalBar.appearance';
-import { snapshotRollbackButtonAppearanceDescriptor } from '@/flow_chat/components/SnapshotRollbackButton.appearance';
 import { smartRecommendationsAppearanceDescriptor } from '@/flow_chat/components/smart-recommendations/SmartRecommendations.appearance';
 import { sessionRuntimeStatusEntryAppearanceDescriptor } from '@/flow_chat/components/usage/SessionRuntimeStatusEntry.appearance';
 import { runtimeStatusSlotAppearanceDescriptor } from '@/flow_chat/components/modern/RuntimeStatusSlot.appearance';
@@ -508,6 +508,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(contextCompressionDisplayAppearanceDescriptor)
     .registerComponent(getToolSpecCardAppearanceDescriptor)
     .registerComponent(viewImageToolCardAppearanceDescriptor)
+    .registerComponent(runCodeToolCardAppearanceDescriptor)
     .registerComponent(acpPlanPanelAppearanceDescriptor)
     .registerComponent(backgroundCommandInputDialogAppearanceDescriptor)
     .registerComponent(chatEmptyStateAppearanceDescriptor)
@@ -521,7 +522,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(scrollToTurnHeaderButtonAppearanceDescriptor)
     .registerComponent(tokenUsageIndicatorAppearanceDescriptor)
     .registerComponent(toolApprovalBarAppearanceDescriptor)
-    .registerComponent(snapshotRollbackButtonAppearanceDescriptor)
     .registerComponent(smartRecommendationsAppearanceDescriptor)
     .registerComponent(sessionRuntimeStatusEntryAppearanceDescriptor)
     .registerComponent(runtimeStatusSlotAppearanceDescriptor)

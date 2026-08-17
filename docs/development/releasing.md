@@ -57,3 +57,7 @@ BITFUN_RELEASE_CHANNEL=beta scripts/openbitfun-release-sync.sh
 
 The beta invocation writes below `/release/beta` and intentionally skips the
 stable-only CLI and Relay floating manifests.
+
+Production cron must run this in-repo script from the BitFun checkout. Do not
+create a detached copy. Host paths, Nginx, and the rest of the origin restore
+steps live in [`deploy/openbitfun-host/README.md`](../../deploy/openbitfun-host/README.md).

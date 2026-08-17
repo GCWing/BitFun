@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
+bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
 bitfun-core = { path = "../../crates/assembly/core", features = [
     "agent-runtime",
     "document-read",
@@ -32,6 +32,10 @@ bitfun-core = { path = "../../crates/assembly/core", features = [
     "tools-agent-control",
 ] }
 bitfun-sdk-host = { path = "../../crates/interfaces/sdk-host" }
+bitfun-services-core = { path = "../../crates/services/services-core", features = [
+    "process-runtime",
+] }
+bitfun-transport = { path = "../../crates/adapters/transport" }
 futures-util = { workspace = true }
 rustls = { workspace = true }
 serde_json = { workspace = true }

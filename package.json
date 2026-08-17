@@ -1,7 +1,7 @@
 {
   "name": "BitFun",
   "private": true,
-  "version": "0.2.17",
+  "version": "0.2.18",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -73,6 +73,7 @@
     "type-check:skin-market": "pnpm --dir src/skin-market-web type-check",
     "test:skin-market": "pnpm --dir src/skin-market-web test",
     "prepare:mobile-web": "node scripts/mobile-web-build.cjs",
+    "prepare:dsh-profile": "node scripts/prepare-dsh-profile.mjs",
     "frontend:build-all": "node scripts/frontend-build-all.mjs",
     "preview": "pnpm --dir src/web-ui preview",
     "desktop:dev": "node scripts/dev.cjs desktop",

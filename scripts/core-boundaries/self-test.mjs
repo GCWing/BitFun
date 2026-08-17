@@ -61,10 +61,13 @@ export function runManifestParserSelfTest({
   const explicitTestManifest = [
     '[package]',
     'autotests = false',
-    ...agentRuntimeIntegrationTestTargets.flatMap(({ name, path }) => [
+    ...agentRuntimeIntegrationTestTargets.flatMap(({ name, path, requiredFeatures }) => [
       '[[test]]',
       `name = "${name}"`,
       `path = "${path}"`,
+      ...(requiredFeatures === undefined
+        ? []
+        : [`required-features = [${requiredFeatures.map((feature) => `"${feature}"`).join(', ')}]`]),
     ]),
     '[lints]',
   ].join('\n');
@@ -158,7 +161,6 @@ export function runManifestParserSelfTest({
       ? {
           ...target,
           leaves: ['tests/agent_definition_contracts/prompt_contracts.rs'],
-          forbidRequiredFeatures: true,
         }
       : target
   ));
@@ -179,8 +181,8 @@ export function runManifestParserSelfTest({
       ...explicitTestFixture,
       expectedTargets: reviewedLeafTargets,
       manifestText: explicitTestManifest.replace(
-        'path = "tests/agent_definition_contracts.rs"',
-        `path = "tests/agent_definition_contracts.rs"\n${requiredFeaturesDeclaration}`,
+        'required-features = ["agent-runtime"]',
+        requiredFeaturesDeclaration,
       ),
     });
     if (!unexpectedRequiredFeaturesErrors.some((error) => error.includes('required-features'))) {
@@ -189,10 +191,14 @@ export function runManifestParserSelfTest({
   }
   const independentRequiredFeaturesErrors = validateExplicitIntegrationTestTopology({
     ...explicitTestFixture,
-    expectedTargets: reviewedLeafTargets,
+    expectedTargets: reviewedLeafTargets.map((target) => (
+      target.path === 'tests/native_hook_execution_contracts.rs'
+        ? { ...target, requiredFeatures: ['native-hooks'] }
+        : target
+    )),
     manifestText: explicitTestManifest.replace(
-      'path = "tests/native_hook_execution_contracts.rs"',
-      'path = "tests/native_hook_execution_contracts.rs"\nrequired-features = ["native-hooks"]',
+      'required-features = ["native-hook-runtime"]',
+      'required-features = ["native-hooks"]',
     ),
   });
   if (independentRequiredFeaturesErrors.length > 0) {
@@ -604,6 +610,12 @@ export function runManifestParserSelfTest({
         'bitfun-agent-tools/acp-bridge',
         'dep:futures',
         'dep:serde',
+        // The bundled DeepSeek Harness profile the ACP client materializes:
+        // $DSH_HOME lookup, a minimum-version comparison, and packing the
+        // profile for a remote host.
+        'dep:dirs',
+        'dep:semver',
+        'dep:tar',
         'dep:bitfun-core',
         'bitfun-core/agent-runtime',
         'bitfun-core/ssh-remote',
@@ -614,6 +626,7 @@ export function runManifestParserSelfTest({
       [
         'dep:bitfun-agent-tools',
         'dep:bitfun-agent-runtime',
+        'bitfun-agent-runtime/agent-runtime',
         'dep:bitfun-core-types',
         'dep:bitfun-core',
         'dep:sha2',
@@ -1433,6 +1446,9 @@ export function runManifestParserSelfTest({
   const pluginPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/plugin.rs',
   );
+  const agentRuntimePublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/execution/agent-runtime/src/lib.rs',
+  );
   const pluginRootReexportRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/lib.rs',
   );
@@ -1527,6 +1543,20 @@ export function runManifestParserSelfTest({
     'TopLevelEnum,PluginDispatchEnvelope,HiddenType,PublicName,MultiLineType,PublicMultiLine,host,CONTRACT_VERSION'
   ) {
     throw new Error('public API parser must collect top-level items and re-exports without impl methods');
+  }
+  const parsedAgentRuntimeModules = collectTopLevelRustPublicSymbols(`
+    #[cfg(feature = "agent-runtime")]
+    pub mod agents;
+    pub mod accidental_feature_free_api;
+  `);
+  if (!agentRuntimePublicApiRule?.allowedSymbols?.includes('agents')) {
+    throw new Error('Agent Runtime public API allowlist must include reviewed owner modules');
+  }
+  if (
+    !parsedAgentRuntimeModules.includes('accidental_feature_free_api') ||
+    agentRuntimePublicApiRule.allowedSymbols.includes('accidental_feature_free_api')
+  ) {
+    throw new Error('Agent Runtime public API allowlist must reject an unreviewed feature-free module');
   }
   const parsedExternalSubagentIds = collectTopLevelRustPublicSymbols(`
     external_subagent_id!(ExternalSubagentLocalId, "local");
@@ -4238,25 +4268,11 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/interfaces/app-server/src/management/service.rs',
+      path: 'src/apps/cli/src/modes/chat/worktree.rs',
       contracts: [
-        'pub struct AppManagementService',
-        'impl AppManagementService',
-        'AppManagementCapabilities::available\\(\\)',
-      ],
-    },
-    {
-      path: 'src/apps/cli/src/shared_tui_backend.rs',
-      contracts: [
-        'management: Arc<AppManagementService>',
-        'fn management_service',
-        'fn set_management_scope_from_binding',
-        '\\.list_models\\(ListModelsRequest \\{\\}\\)',
-        '\\.list_skills\\(request\\)',
-        '\\.list_subagents\\(request\\)',
-        '\\.list_mcp_servers\\(request\\)',
-        'shared_management_capabilities_follow_the_local_management_service',
-        'remote_workspace_cannot_use_the_local_management_service',
+        'WorktreeService::bind_session',
+        'is_remote_workspace',
+        'does not fall back to controller-local services',
       ],
     },
     {
@@ -4264,9 +4280,9 @@ export function runManifestParserSelfTest({
       contracts: [
         'show_available_subagent_list',
         'show_subagent_config_selector',
-        'agent.list_subagents',
+        'get_subagents_for_query',
         'SubagentSummary',
-        'agent\\s*\\.set_subagent_enabled',
+        'update_subagent_override',
       ],
     },
     {
@@ -4352,7 +4368,7 @@ export function runManifestParserSelfTest({
       contracts: ['renumber_research_report', 'ResearchCitationRenumberOutput', 'ResearchCitationDisplayMapEntry', 'rejected_index_rows_dropped', 'should_post_process_research_report'],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/agent_long_horizon_contracts/deep_research_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
       contracts: ['deep_research_citation_renumber_owner_preserves_report_and_display_map_contracts', 'deep_research_citation_renumber_owner_is_idempotent_without_citations'],
     },
     {
@@ -4988,14 +5004,11 @@ export function runManifestParserSelfTest({
       contracts: [
         'prepare_commit_ai_prompt',
         'parse_commit_ai_response',
-        'build_work_state_analysis_prompt',
-        'parse_work_state_analysis_response',
         'send_message',
         'AgentError::internal_error',
         'CoreCommitAiAnalysisService',
-        'CoreWorkStateAiAnalysisService',
+        'CoreCommitAiAnalysisService::new_with_task_config',
         'parse_commit_response_preserves_product_domain_response_policy',
-        'parse_complete_analysis_preserves_product_domain_response_policy',
       ],
     },
     {
@@ -5003,20 +5016,12 @@ export function runManifestParserSelfTest({
       contracts: [
         'FunctionAgentGitService',
         'git_commit_snapshot',
-        'startchat_git_snapshot',
-        'startchat_time_snapshot',
-        'process_manager::create_command("git")',
-        'git_unpushed_commits',
-        'git_ahead_behind',
-        'git_last_commit_timestamp',
       ],
     },
     {
       path: 'src/crates/services/services-integrations/tests/function_agent_contracts.rs',
       contracts: [
         'git_service_builds_commit_snapshot_from_staged_diff_without_unstaged_content',
-        'git_service_startchat_snapshot_preserves_no_head_and_non_git_fallback',
-        'git_service_time_snapshot_uses_last_commit_timestamp',
       ],
     },
     {
@@ -5024,42 +5029,19 @@ export function runManifestParserSelfTest({
       contracts: ['CoreCommitAiAnalysisService as AIAnalysisService'],
     },
     {
-      path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/ai_service.rs',
-      contracts: ['CoreWorkStateAiAnalysisService as AIWorkStateService'],
-    },
-    {
       path: 'src/crates/assembly/core/src/function_agents/git-func-agent/commit_generator.rs',
       contracts: ['CoreProductDomainRuntime', 'generate_function_agent_commit_message'],
-    },
-    {
-      path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
-      contracts: ['CoreProductDomainRuntime', 'analyze_function_agent_work_state'],
     },
     {
       path: 'src/crates/contracts/product-domains/src/function_agents/ports.rs',
       contracts: [
         'FunctionAgentRuntimeFacade',
         'generate_commit_message',
-        'analyze_work_state',
-        'git_work_state_from_snapshot',
-        'StartchatTimeSnapshot',
-        'startchat_time_snapshot',
       ],
     },
     {
       path: 'src/crates/contracts/product-domains/src/function_agents/common.rs',
       contracts: ['extract_json_from_ai_response', 'try_repair_json'],
-    },
-    {
-      path: 'src/crates/contracts/product-domains/src/function_agents/startchat_func_agent/utils.rs',
-      contracts: [
-        'WORK_STATE_ANALYSIS_PROMPT',
-        'build_work_state_analysis_prompt',
-        'ParsedCompleteAnalysis',
-        'parse_complete_analysis_value',
-        'parse_complete_analysis_json',
-        'parse_work_state_analysis_response',
-      ],
     },
     {
       path: 'src/crates/contracts/product-domains/src/function_agents/git_func_agent/utils.rs',
@@ -5564,7 +5546,6 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
     'bitfun-sdk-host',
     'bitfun-services-core',
     'bitfun-services-integrations',
-    'bitfun-transport',
     'terminal-core',
     'tool-runtime',
     'tauri',
@@ -5576,13 +5557,14 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
       throw new Error(`agent-runtime-ipc lightweight boundary must forbid ${dependency}`);
     }
   }
-  for (const sharedContract of [
+  for (const allowedDependency of [
     'bitfun-events',
     'bitfun-product-domains',
     'bitfun-runtime-ports',
+    'bitfun-transport',
   ]) {
-    if (runtimeIpcBoundary?.forbiddenDeps.includes(sharedContract)) {
-      throw new Error(`agent-runtime-ipc must be allowed to reuse ${sharedContract}`);
+    if (runtimeIpcBoundary?.forbiddenDeps.includes(allowedDependency)) {
+      throw new Error(`agent-runtime-ipc must be allowed to reuse ${allowedDependency}`);
     }
   }
   const runtimeIpcProfile = dependencyProfileRules.find(
@@ -5596,6 +5578,20 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
   const runtimeIpcOperationRule = forbiddenContentRules.find(
     (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/src/operation.rs',
   );
+  const cliManifestRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/apps/cli/Cargo.toml',
+  );
+  const cliManifestPattern = cliManifestRule?.patterns[0]?.regex;
+  if (
+    !cliManifestPattern ||
+    !cliManifestPattern.test('bitfun-app-server = { path = "..." }') ||
+    !cliManifestPattern.test('bitfun-app-server-client = { path = "..." }') ||
+    !cliManifestPattern.test('bitfun-tui-management = { path = "..." }') ||
+    !cliManifestPattern.test('bitfun-app-server-protocol = { path = "..." }') ||
+    cliManifestPattern.test('bitfun-agent-runtime-ipc = { path = "..." }')
+  ) {
+    throw new Error('CLI manifest guard must forbid App Server, wire DTOs, and shared TUI management implementations while allowing contracts and Runtime IPC');
+  }
   const runtimeIpcOperationPattern = runtimeIpcOperationRule?.patterns[0]?.regex;
   if (
     !runtimeIpcOperationPattern ||
@@ -5666,6 +5662,54 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
   ) {
     throw new Error(
       'agent-runtime-ipc local-only guard must cover network transports in new private modules',
+    );
+  }
+  const runtimeIpcSharedTransportPattern = runtimeIpcTransportRule?.patterns.find(
+    (pattern) => pattern.message.includes('bounded JSON API'),
+  )?.regex;
+  if (
+    !runtimeIpcSharedTransportPattern ||
+    !runtimeIpcSharedTransportPattern.test('use bitfun_transport::TransportAdapter;') ||
+    !runtimeIpcSharedTransportPattern.test('use bitfun_transport as transport;') ||
+    runtimeIpcSharedTransportPattern.test('use bitfun_transport::encode_json_with_limit;') ||
+    runtimeIpcSharedTransportPattern.test('use bitfun_transport::JsonCodecError;')
+  ) {
+    throw new Error(
+      'agent-runtime-ipc may consume only the reviewed bitfun-transport bounded JSON API',
+    );
+  }
+  const runtimeIpcTransportFeatureRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/Cargo.toml' &&
+      rule.reason.includes('bitfun-transport features'),
+  );
+  const runtimeIpcTransportFeaturePattern =
+    runtimeIpcTransportFeatureRule?.patterns[0]?.regex;
+  if (
+    !runtimeIpcTransportFeaturePattern?.test(
+      'bitfun-transport = { path = "../transport", features = ["tauri-adapter"] }',
+    ) ||
+    runtimeIpcTransportFeaturePattern.test(
+      'bitfun-transport = { path = "../transport" }',
+    )
+  ) {
+    throw new Error('agent-runtime-ipc must not enable bitfun-transport features');
+  }
+  const runtimeIpcTransportDependencyRule = requiredContentRules.find(
+    (rule) => rule.path === 'src/crates/adapters/agent-runtime-ipc/Cargo.toml' &&
+      rule.reason.includes('exact feature-free bitfun-transport dependency'),
+  );
+  const runtimeIpcTransportDependencyPattern =
+    runtimeIpcTransportDependencyRule?.patterns[0]?.regex;
+  if (
+    !runtimeIpcTransportDependencyPattern?.test(
+      'bitfun-transport = { path = "../transport" }',
+    ) ||
+    runtimeIpcTransportDependencyPattern.test(
+      'bitfun-transport = {\n  path = "../transport",\n  features = ["tauri-adapter"]\n}',
+    )
+  ) {
+    throw new Error(
+      'agent-runtime-ipc must keep the exact feature-free bitfun-transport dependency',
     );
   }
 }

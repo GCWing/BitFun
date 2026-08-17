@@ -10,6 +10,7 @@ const agentRuntimeIpcForbiddenDeps = [
   'bitfun-codex-adapter',
   'bitfun-core',
   'bitfun-core-types',
+  'bitfun-dsh-adapter',
   'bitfun-external-sources',
   'bitfun-harness',
   'bitfun-opencode-adapter',
@@ -24,7 +25,6 @@ const agentRuntimeIpcForbiddenDeps = [
   'bitfun-static-hook-support',
   'bitfun-tool-call-jsonrepair',
   'bitfun-tool-packs',
-  'bitfun-transport',
   'bitfun-webdriver',
   'terminal-core',
   'tool-runtime',
@@ -62,6 +62,7 @@ export const noCoreDependencyCrates = [
   'product-domains',
   'claude-code-adapter',
   'codex-adapter',
+  'dsh-adapter',
   'opencode-adapter',
   'static-hook-support',
   'external-sources',
@@ -116,6 +117,19 @@ export const forbiddenManifestDependencyRules = [
       'OpenCode adapter production dependencies are limited to the reviewed product composition root',
     message:
       'only bitfun-core product-full assembly may register bitfun-opencode-adapter through reviewed capability composition roots',
+  },
+  {
+    dependencyNames: ['bitfun-dsh-adapter'],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    workspaceManifestPath: 'Cargo.toml',
+    allowManifestPaths: [
+      'src/crates/adapters/dsh-adapter/Cargo.toml',
+      'src/crates/assembly/core/Cargo.toml',
+    ],
+    reason:
+      'DeepSeek Harness adapter production dependencies are limited to the reviewed product composition root',
+    message:
+      'only bitfun-core product-full assembly may register bitfun-dsh-adapter through reviewed capability composition roots',
   },
   ...[
     ['bitfun-claude-code-adapter', 'claude-code-adapter'],
@@ -462,7 +476,7 @@ export const dependencyProfileRules = [
     crateName: 'agent-runtime-ipc',
     profileName: 'private Shared TUI local IPC profile',
     reason:
-      'agent-runtime-ipc may share stable event and Runtime DTO contracts but must not acquire Runtime owners, SDK Host, services, remote transports, or product implementations',
+      'agent-runtime-ipc may share stable DTO contracts and protocol-neutral bitfun-transport mechanics but must not acquire Runtime owners, SDK Host, services, remote transports, or product implementations',
     forbiddenNonOptionalDeps: agentRuntimeIpcForbiddenDeps,
   },
   {

@@ -69,8 +69,10 @@ import {
   type HistoryBoundaryProximity,
 } from './flowChatHistoryBoundary';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
+import { useFlowChatVolatileContext } from './FlowChatContext';
 import {
-  estimateVirtualMessageItemHeight,
+  estimateVirtualMessageItemHeightWithContext,
+  type VirtualItemHeightEstimateContext,
 } from './virtualMessageListLayout';
 import { resolveVisibleFlowChatTurnIds } from './flowChatVisibleTurns';
 import { warnHistoryPagingRefusedWithPendingTurns } from '../../services/historySessionDiagnostics';
@@ -89,14 +91,6 @@ const SEARCH_NAVIGATION_MAX_ATTEMPTS = 24;
 const OPEN_REVEAL_QUIET_FRAMES = 2;
 /** Hard cap so the transcript is always revealed, settled or not. */
 const OPEN_REVEAL_MAX_FRAMES = 40;
-/**
- * Quiet period after the last scroll event that stands in for `scrollend`.
- *
- * Only used where the event is missing. It has to outlast the gap between
- * frames of a momentum scroll without making the snap back feel detached from
- * the gesture that caused it.
- */
-const SCROLL_SETTLE_FALLBACK_MS = 140;
 /**
  * Resize callbacks over which a viewport resting at the end is re-aligned after
  * the scroller's own box changes.
@@ -371,6 +365,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   });
   const canonicalVirtualItems = useVirtualItems();
   const virtualItems = items ?? canonicalVirtualItems;
+  const { exploreGroupStates } = useFlowChatVolatileContext();
   const activeSession = useActiveSession();
   const activeSessionState = useActiveSessionState();
   const activeSessionId = activeSession?.sessionId ?? null;
@@ -414,6 +409,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const headerElementRef = useRef<HTMLDivElement | null>(null);
   const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
   const [viewportHeightPx, setViewportHeightPx] = useState(0);
+  const [viewportWidthPx, setViewportWidthPx] = useState(0);
   /** Last scroller box the resize observer saw, to tell it apart from a content change. */
   const observedViewportBoxRef = useRef({ width: 0, height: 0 });
   /** Remaining resize callbacks over which to keep a resting viewport at the end. */
@@ -485,9 +481,23 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollerRef: scrollerElementRef,
     headerRef: headerElementRef,
     getItemKey: getVirtualItemStableKey,
-    estimateItemHeightPx: estimateVirtualMessageItemHeight,
+    estimateItemHeightPx: estimateVirtualMessageItemHeightWithContext,
+    estimateContext: {
+      availableWidthPx: viewportWidthPx > 0 ? viewportWidthPx : scrollerElement?.clientWidth,
+      isHistorical: activeSession?.isHistorical === true,
+      exploreGroupStates,
+    } satisfies VirtualItemHeightEstimateContext,
+    estimateContextRevision: [
+      viewportWidthPx,
+      activeSession?.isHistorical === true ? 'historical' : 'live',
+      [...(exploreGroupStates?.entries() ?? [])]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([groupId, expanded]) => `${groupId}:${expanded ? 1 : 0}`)
+        .join(','),
+    ].join('|'),
     scrollPaddingStartPx: FLOWCHAT_TURN_TOP_GAP_PX,
     writeViewport: viewportOwner.write,
+    shiftViewport: viewportOwner.shift,
   });
 
   const userMessageItems = useMemo(() => virtualItems
@@ -624,7 +634,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     handleUserScrollIntent,
     handleTurnsRolledBack,
     handleScroll,
-    handleScrollSettled,
     handleViewportResize,
     getFollowTargetScrollTop,
   } = useFlowChatFollowOutput({
@@ -797,9 +806,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      *   transcript, so needing more than this is proof the amount is wrong.
      *
      * Overshooting is the expensive direction: it puts the reader below the
-     * content end, where the snap back correctly reads them as parked in the
-     * blank and returns them to the tail — which, since paging happens only
-     * while scrolling up, it then did on every attempt. Undershooting leaves
+     * content end, inside the reserved blank. Undershooting leaves
      * them looking at slightly earlier content, which the anchor removes.
      */
     const contentEndPx = readContentEndScrollTop(scroller);
@@ -824,8 +831,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * Follow-output is the only holder that can be asleep. Its ownership
      * deliberately outlives its frame loop, so that streaming can resume
      * without re-entering, and the loop stops on its own once the transcript
-     * settles; a navigation's aim and a snap back's animation are both still
-     * running by construction. So a page landing after the settle budget ran
+     * settles; a navigation's aim is still running by construction. So a page
+     * landing after the settle budget ran
      * out is refused by a writer that will never act, and the reader is left
      * holding an offset that now means something else.
      *
@@ -932,9 +939,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * Measured on a tail window of three Turns that fitted inside the viewport,
      * so the whole scroll range was reserved blank: twenty gestures over seven
      * seconds produced twenty `user-gesture` claims, no scroll events, and not
-     * one boundary evaluation. The only evaluations in that session landed in
-     * the three milliseconds after each snap back handed the viewport to
-     * follow-output, and were refused for that reason. Nothing could ever page.
+     * one boundary evaluation. Nothing could ever page.
      *
      * After `handleUserScrollIntent`, which clears follow-output's ownership
      * synchronously — so this asks as the reader rather than as our placement.
@@ -1139,49 +1144,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   /*
    * The band's lower edge is whatever the follow rule owns, so it moves when
    * ownership changes — and that can happen with the viewport perfectly still.
-   * A snap back completes at rest by construction, and a jump to latest that
-   * lands on a pin the viewport is already on writes nothing. Neither produces
-   * a scroll event, so without this the affordance stays as the last scroll
+   * A jump to latest that lands on a pin the viewport is already on writes
+   * nothing. That produces no scroll event, so without this the affordance
+   * stays as the last scroll
    * left it: visible, over a viewport that is already at the tail, and inert
    * because clicking it has nothing left to do.
    */
   useEffect(() => {
     updateIsAtBottom();
   }, [isFollowingOutput, updateIsAtBottom]);
-
-  /*
-   * Snap out of the reserved blank once a gesture is over.
-   *
-   * `scrollend` is the accurate signal — it knows when momentum has actually
-   * died, which a quiet timer can only approximate — but it is recent enough
-   * that the WebKit-backed builds may not have it. Where it is missing, a quiet
-   * period after the last scroll event stands in.
-   */
-  useEffect(() => {
-    if (!scrollerElement) return;
-
-    if ('onscrollend' in window) {
-      const handleScrollEnd = () => {
-        handleScrollSettled();
-      };
-      scrollerElement.addEventListener('scrollend', handleScrollEnd, { passive: true });
-      return () => scrollerElement.removeEventListener('scrollend', handleScrollEnd);
-    }
-
-    let settleTimer: number | null = null;
-    const handleScrollTick = () => {
-      if (settleTimer !== null) window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(() => {
-        settleTimer = null;
-        handleScrollSettled();
-      }, SCROLL_SETTLE_FALLBACK_MS);
-    };
-    scrollerElement.addEventListener('scroll', handleScrollTick, { passive: true });
-    return () => {
-      if (settleTimer !== null) window.clearTimeout(settleTimer);
-      scrollerElement.removeEventListener('scroll', handleScrollTick);
-    };
-  }, [handleScrollSettled, scrollerElement]);
 
   /*
    * A rollback removed Turns from the session, so the transcript ends somewhere
@@ -1210,9 +1181,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
        * event does carry intent — the press is what qualifies it. Left
        * unqualified, a drag never released the viewport: follow-output kept
        * writing its target every frame against the thumb (measured: a 100px
-       * oscillation, every frame, for as long as the drag lasted), and a drag
-       * that came to rest in the reserved blank was skipped by the snap back
-       * because follow still nominally owned it.
+       * oscillation, every frame, for as long as the drag lasted). Recognising
+       * the drag transfers ownership to the reader and preserves where it ends.
        */
       if (isScrollbarPressRef.current) notifyUserScrollIntent();
       updateIsAtBottom();
@@ -1297,6 +1267,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         tailRealignCallbacksRef.current = TAIL_REALIGN_RESIZE_CALLBACKS;
       }
       setViewportHeightPx(nextViewportBox.height);
+      setViewportWidthPx(nextViewportBox.width);
 
       /*
        * Before paint, and ahead of everything below: this observer is the one

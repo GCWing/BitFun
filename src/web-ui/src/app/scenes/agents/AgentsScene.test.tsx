@@ -27,12 +27,20 @@ vi.mock('./components/CreateAgentPage', () => ({
 vi.mock('./components/AgentCard', () => ({
   default: ({
     agent,
+    toolCount,
     onOpenDetails,
   }: {
     agent: { name: string };
+    toolCount?: number;
     onOpenDetails: (agent: unknown) => void;
   }) => (
-    <button type="button" onClick={() => onOpenDetails(agent)}>{agent.name}</button>
+    <button
+      type="button"
+      data-tool-count={toolCount}
+      onClick={() => onOpenDetails(agent)}
+    >
+      {agent.name}
+    </button>
   ),
 }));
 
@@ -59,6 +67,19 @@ vi.mock('./components/useUserSkillGroups', () => ({
 vi.mock('./components/SkillGroupPicker', () => ({
   SkillGroupPicker: () => <div data-testid="agent-detail-skill-groups">skill picker</div>,
   SkillGroupSummary: () => <div data-testid="agent-detail-skill-summary">skill summary</div>,
+}));
+
+vi.mock('./components/ToolGroupPicker', () => ({
+  ToolGroupPicker: ({ tools }: { tools: Array<{ name: string }> }) => (
+    <div data-testid="agent-detail-tool-groups">
+      {tools.map((tool) => tool.name).join(',')}
+    </div>
+  ),
+  ToolGroupSummary: ({ tools }: { tools: Array<{ name: string }> }) => (
+    <div data-testid="agent-detail-tool-summary">
+      {tools.map((tool) => tool.name).join(',')}
+    </div>
+  ),
 }));
 
 vi.mock('@/component-library', () => ({
@@ -335,5 +356,57 @@ describeWithJsdom('AgentsScene', () => {
       manageButton?.click();
     });
     expect(container.querySelector('[data-testid="agent-detail-skill-groups"]')).toBeTruthy();
+  });
+
+  it('keeps MCP tools out of mode cards and tool details', async () => {
+    const mode = {
+      key: 'mode::custom-mode',
+      id: 'custom-mode',
+      name: 'Custom mode',
+      description: 'General coding mode.',
+      isReadonly: false,
+      isReview: false,
+      toolCount: 2,
+      defaultTools: ['Read'],
+      defaultEnabled: true,
+      effectiveEnabled: true,
+      source: 'user',
+      agentKind: 'mode' as const,
+      capabilities: [],
+    };
+    mockAgentsList({
+      allAgents: [mode],
+      filteredAgents: [mode],
+      availableTools: [
+        { name: 'Read', description: 'Read files.', is_readonly: true },
+        {
+          name: 'mcp__github__list_issues',
+          description: 'List issues.',
+          is_readonly: true,
+        },
+      ],
+      getModeConfig: () => ({
+        profile_id: 'coding_shared',
+        enabled_tools: ['Read', 'mcp__github__list_issues'],
+        default_tools: ['Read'],
+      }),
+    });
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+
+    const card = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === mode.name);
+    expect(card?.dataset.toolCount).toBe('1');
+
+    await act(async () => {
+      card?.click();
+    });
+
+    const summary = container.querySelector('[data-testid="agent-detail-tool-summary"]');
+    expect(summary?.textContent).toBe('Read');
+    expect(summary?.textContent).not.toContain('mcp__github__list_issues');
   });
 });

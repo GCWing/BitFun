@@ -118,6 +118,7 @@ bitfun-runtime-services = { path = "../../execution/runtime-services", optional 
 
 # Reviewed product-full plugin composition root.
 bitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional = true }
+bitfun-dsh-adapter = { path = "../../adapters/dsh-adapter", optional = true }
 bitfun-claude-code-adapter = { path = "../../adapters/claude-code-adapter", optional = true }
 bitfun-codex-adapter = { path = "../../adapters/codex-adapter", optional = true }
 bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client", optional = true }
@@ -196,6 +197,7 @@ product-full = [
 agent-runtime = [
     "ai-adapter-runtime",
     "dep:bitfun-agent-runtime",
+    "bitfun-agent-runtime/agent-runtime",
     "dep:bitfun-agent-content",
     "dep:bitfun-agent-stream",
     "dep:bitfun-agent-tools",
@@ -260,6 +262,7 @@ external-sources = [
     "mcp-runtime",
     "script-tool-runtime",
     "dep:bitfun-opencode-adapter",
+    "dep:bitfun-dsh-adapter",
     "dep:bitfun-claude-code-adapter",
     "dep:bitfun-codex-adapter",
     "dep:bitfun-external-sources",
@@ -305,7 +308,10 @@ web-tools = [
     "bitfun-services-integrations/web-tools",
     "tool-runtime/web-readable",
 ]
-deep-research = ["bitfun-services-integrations/deep-research"]
+deep-research = [
+    "bitfun-agent-runtime?/deep-research",
+    "bitfun-services-integrations/deep-research",
+]
 script-tool-runtime = [
     "bitfun-runtime-ports/script-tool-runtime",
     "bitfun-services-integrations/script-tool-runtime",

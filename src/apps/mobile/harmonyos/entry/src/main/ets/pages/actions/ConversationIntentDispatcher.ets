@@ -1,7 +1,7 @@
 import { RemoteQuestionAnswerPayload, RemoteSession } from '../../model/RemoteModels';
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
 import { ConversationIntent, ConversationIntentType } from './ConversationIntent';
-import { toRemoteQuestionAnswer } from '../components/ConversationUiModels';
+import { toRemoteQuestionAnswer } from '../state/ConversationUiModels';
 import { FilePreviewRequest } from '../../model/FilePreviewTarget';
 
 export interface ConversationIntentDispatcherHooks {

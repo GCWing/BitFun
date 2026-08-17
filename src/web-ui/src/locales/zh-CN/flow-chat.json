@@ -456,6 +456,8 @@
     "restoreMain": "恢复主窗口",
     "inUseTitle": "会话已在其他实例中打开",
     "inUseMessage": "该会话已在另一个 BitFun 实例中打开。请先在那里关闭，然后重试。",
+    "surfaceSwitchDroppedTitle": "消息未发送",
+    "surfaceSwitchDropped": "消息尚未发出时设备已切换，且该会话的队列已满。请重新发送。",
     "retry": "重试"
   },
   "scroll": {
@@ -482,6 +484,7 @@
     "clickToCollapse": "点击收起",
     "fillToInput": "填充到输入框",
     "cannotRollback": "无法回滚",
+    "rollbackDisabledBusy": "请等待会话空闲后再回滚。",
     "rollbackDisabledRemote": "远程工作区未记录文件快照，暂不支持文件与消息一致回滚；不会更改任何文件或消息。",
     "rollbackTo": "回滚到第 {{index}} 轮之前（删除该轮及之后）",
     "rollbackDialogTitle": "确定回滚到第 {{index}} 轮之前？",
@@ -494,6 +497,7 @@
     "cancelEdit": "取消",
     "editPlaceholder": "编辑你的消息...",
     "cannotEdit": "无法编辑该消息",
+    "editDisabledBusy": "请等待会话空闲后再编辑并重跑。",
     "editDisabledImages": "暂不支持编辑图片消息",
     "editDisabledRemote": "编辑并重跑需要完整回滚；远程工作区未记录文件快照，因此暂不支持。",
     "editDisabledLocalCommand": "无法编辑本地命令消息",
@@ -532,6 +536,8 @@
     "sendShortcut": "发送 (⏎)",
     "stop": "停止",
     "stopGeneration": "停止生成 (Esc)",
+    "continueInterrupted": "继续上次中断的工作",
+    "continueInterruptedFailed": "无法继续上次中断的工作，请重试。",
     "processingCapsule": "正在处理",
     "cancelShortcut": "取消",
     "clear": "清空",
@@ -761,9 +767,14 @@
       "noSession": "请先打开或新建会话，再修改其权限模式。",
       "turnScope": "仅下一条消息",
       "currentTurnOverride": "权限：{{mode}}（仅下一条消息）",
+      "activeTurnScope": "当前轮",
+      "currentActiveTurnOverride": "权限：{{mode}}（仅当前轮）",
       "nextTurnOnly": "仅下一条消息使用「{{mode}}」",
       "nextTurnOnlyShort": "仅一次",
+      "activeTurnOnly": "当前轮后续使用「{{mode}}」",
+      "activeTurnOnlyShort": "当前轮",
       "fullAccessWarningMessageNextTurn": "完全访问会默认放行工具调用，不再逐次确认。该设置仅作用于下一条消息，项目规则与强制规则仍然生效。",
+      "fullAccessWarningMessageActiveTurn": "完全访问会默认放行工具调用，不再逐次确认。该设置从当前轮的后续模型轮次生效，项目规则与强制规则仍然生效。",
       "openDefaultSettings": "打开权限设置"
     },
     "addModeTooltip": "附加 Plan 或 Debug",
@@ -921,6 +932,8 @@
   "fileMention": {
     "searchResults": "搜索结果",
     "loading": "加载中...",
+    "browseUnavailable": "无法加载工作区文件，请检查连接后重试。",
+    "searchUnavailable": "无法搜索工作区，请检查连接后重试。",
     "noMatchingFiles": "没有找到匹配的文件",
     "emptyDirectory": "空目录",
     "rootDirectory": "根目录",
@@ -1681,6 +1694,20 @@
       "commandInterrupted": "命令已被中断",
       "executionFailed": "命令执行失败"
     },
+    "runCode": {
+      "title": "运行代码",
+      "programLabel": "程序",
+      "outputLabel": "输出",
+      "writing": "正在编写程序…",
+      "running": "正在运行程序…",
+      "completed": "程序已结束",
+      "failed": "程序执行失败",
+      "cancelled": "程序已取消",
+      "rejected": "程序已拒绝",
+      "copyCode": "复制代码",
+      "codeCopied": "代码已复制",
+      "copyCodeFailed": "复制代码失败"
+    },
     "approval": {
       "waiting": "等待确认",
       "confirm": "允许",
@@ -2424,6 +2451,9 @@
     "fastModel": "Fast 模型",
     "fastMode": "Fast 模式",
     "fastModeDescription": "1.5 倍速度，消耗更多额度",
+    "acpMode": "模式",
+    "acpModeLocked": "会话已经开始，模式不能再改。",
+    "acpModeFailed": "切换模式失败",
     "switchFailed": "切换模型失败",
     "modelNotConfigured": "未配置",
     "contextUsage": {

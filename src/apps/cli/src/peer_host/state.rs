@@ -3,8 +3,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_agent_runtime::sdk::PermissionRequest;
+use bitfun_agent_runtime::sdk::{AgentRuntime, SessionEventJournal};
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::filesystem::FileSystemService;
 use bitfun_core::service::workspace::WorkspaceService;
@@ -449,18 +449,6 @@ impl PeerTurnTracker {
             .unwrap_or_default()
     }
 
-    pub(crate) fn session_turns_for_cancellation(&self, session_id: &str) -> PeerTurnDrain {
-        self.inner
-            .lock()
-            .map(|inner| {
-                let keys = session_tree_keys(&inner, session_id);
-                let mut drain = peer_turn_drain_for_keys(&inner, &keys);
-                merge_completed_background_subagents(&inner, &mut drain, Some(session_id));
-                drain
-            })
-            .unwrap_or_default()
-    }
-
     pub(crate) fn interrupt_event_stream(&self, closed: bool) -> PeerTurnDrain {
         let Ok(mut inner) = self.inner.lock() else {
             return PeerTurnDrain::default();
@@ -899,6 +887,7 @@ fn prune_idle_tree(inner: &mut PeerTurnTrackerInner, key: &PeerTurnKey) {
 #[derive(Clone)]
 pub(crate) struct PeerHostState {
     pub(crate) agent_runtime: AgentRuntime,
+    pub(crate) session_event_journal: Arc<SessionEventJournal>,
     pub(crate) local_workspace_snapshot: Arc<dyn bitfun_runtime_ports::LocalWorkspaceSnapshotPort>,
     pub(crate) compatibility: CoreAgentRuntimeCompatibility,
     pub(crate) account_runtime:

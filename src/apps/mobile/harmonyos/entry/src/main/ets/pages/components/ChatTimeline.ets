@@ -1,7 +1,8 @@
-import { ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, toConversationUiMessage } from './ConversationUiModels';
+import { ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, toConversationUiMessage } from '../state/ConversationUiModels';
+import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ChatTimelineItem, ChatTimelineRevisionTracker } from '../../services/ChatTimelineProjector';
-import { ChatSurface } from './ChatSurface';
+import { ChatSurface } from '../state/ChatSurface';
 import { CARD, INK, LINE, MUTED, RED } from './Theme';
 import { ChatMessageBubble } from './ChatMessageBubble';
 import { RemoteLogger } from '../../services/RemoteLogger';
@@ -44,6 +45,7 @@ export struct ChatTimeline {
   // difference between the two readings.
   aboutToAppear(): void {
     RemoteLogger.info(`chat timeline mounted surface=${this.surface} items=${this.timelineItems.length}`);
+    this.logTimelineProjection('mount');
   }
 
   aboutToDisappear(): void {
@@ -54,6 +56,7 @@ export struct ChatTimeline {
   // new bubble arriving is a layout change the list does not chase on its own.
   @Monitor('timelineRevision')
   onTimelineChanged(): void {
+    this.logTimelineProjection('revision');
     if (!this.stickToBottom) {
       return;
     }
@@ -163,7 +166,7 @@ export struct ChatTimeline {
       .onAppear(() => {
         this.logRenderedItem(item);
       })
-    } else if (item.message && this.shouldRenderMessage(toConversationUiMessage(item.message))) {
+    } else if (item.message && this.shouldRenderTimelineMessage(item)) {
       ListItem() {
         this.MessageBubble(item)
       }
@@ -175,7 +178,37 @@ export struct ChatTimeline {
 
   private logRenderedItem(item: ChatTimelineItem): void {
     const message = item.message;
-    RemoteLogger.info(`chat timeline item appear revision=${this.timelineRevision} type=${item.type} id=${item.id} status=${message ? message.status : ''} textLength=${message ? message.text.length : 0}`);
+    const uiMessage = message ? toConversationUiMessage(message) : undefined;
+    const thinkingLength = uiMessage && uiMessage.thinking ? uiMessage.thinking.length : 0;
+    const toolCount = uiMessage && uiMessage.tools ? uiMessage.tools.length : 0;
+    const itemCount = uiMessage && uiMessage.items ? uiMessage.items.length : 0;
+    RemoteLogger.info(
+      `chat timeline item appear revision=${this.timelineRevision} type=${item.type} id=${item.id} ` +
+      `status=${uiMessage ? uiMessage.status : ''} textLength=${uiMessage ? uiMessage.text.length : 0} ` +
+      `thinkingLength=${thinkingLength} toolCount=${toolCount} itemCount=${itemCount} ` +
+      `itemTypes=${this.itemTypeSummary(uiMessage && uiMessage.items ? uiMessage.items : [])}`
+    );
+  }
+
+  private itemTypeSummary(items: ConversationUiMessageItem[]): string {
+    if (items.length === 0) {
+      return '';
+    }
+    const parts: string[] = [];
+    items.forEach((entry: ConversationUiMessageItem) => {
+      if (entry.tool && entry.tool.name) {
+        parts.push(entry.tool.name);
+      } else if ((entry.type || '').length > 0) {
+        parts.push(entry.type || '');
+      } else {
+        parts.push('item');
+      }
+    });
+    const summary = parts.join(',');
+    if (summary.length > 80) {
+      return summary.substring(0, 80);
+    }
+    return summary;
   }
 
   @Builder
@@ -218,32 +251,44 @@ export struct ChatTimeline {
     })
   }
 
-  private shouldRenderMessage(item: ConversationUiMessage): boolean {
-    return item.role === 'user' ||
-      this.visibleMessageText(item).length > 0 ||
-      (item.thinking || '').trim().length > 0 ||
-      (item.tools && item.tools.length > 0) ||
-      this.hasRenderableItems(item.items || []) ||
-      (item.images && item.images.length > 0) ||
-      (item.status || '').toLowerCase() === 'active' ||
-      item.status === 'failed';
-  }
-
-  private hasRenderableItems(items: ConversationUiMessageItem[]): boolean {
-    return items.some((entry: ConversationUiMessageItem) => {
-      if ((entry.content || '').trim().length > 0 || !!entry.tool) {
-        return true;
-      }
-      return !!entry.subItems && this.hasRenderableItems(entry.subItems);
-    });
-  }
-
-  private visibleMessageText(item: ConversationUiMessage): string {
-    const text = item.text.trim();
-    if (text === '(空消息)' || text === '(empty message)') {
-      return '';
+  private shouldRenderTimelineMessage(item: ChatTimelineItem): boolean {
+    if (!item.message) {
+      return false;
     }
-    return text;
+    try {
+      const uiMessage = toConversationUiMessage(item.message);
+      const render = ConversationMessageRenderPolicy.shouldRender(uiMessage);
+      RemoteLogger.info(
+        `chat timeline decide type=${item.type} id=${item.id} role=${uiMessage.role} ` +
+        `render=${render ? 1 : 0} text=${uiMessage.text ? uiMessage.text.length : -1} ` +
+        `thinking=${uiMessage.thinking ? uiMessage.thinking.length : 0} ` +
+        `tools=${uiMessage.tools ? uiMessage.tools.length : 0} ` +
+        `items=${uiMessage.items ? uiMessage.items.length : 0}`
+      );
+      return render;
+    } catch (err) {
+      RemoteLogger.error(`chat timeline decide failed type=${item.type} id=${item.id} err=${err}`);
+      return false;
+    }
+  }
+
+  private logTimelineProjection(reason: string): void {
+    const parts: string[] = [];
+    this.timelineItems.forEach((item: ChatTimelineItem) => {
+      const message = item.message;
+      parts.push(
+        `${item.type}:${item.id}:role=${message ? message.role : 'none'}:` +
+        `text=${message && message.text ? message.text.length : -1}:` +
+        `thinking=${message && message.thinking ? message.thinking.length : 0}:` +
+        `tools=${message && message.tools ? message.tools.length : 0}:` +
+        `items=${message && message.items ? message.items.length : 0}`
+      );
+    });
+    const summary = parts.join(' | ');
+    RemoteLogger.info(
+      `chat timeline project reason=${reason} revision=${this.timelineRevision} ` +
+      `count=${this.timelineItems.length} ${summary.length > 600 ? summary.substring(0, 600) : summary}`
+    );
   }
 
   private emptyChatIcon(): string {

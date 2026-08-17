@@ -18,7 +18,7 @@ each missing what the other had.
 |---|---|
 | `flowChatTailFollow.test.ts` | the follow target, `pin-turn-top`, `hold-tail` |
 | `flowChatCollapseMotion.test.ts` | collapse does not move earlier content |
-| `useFlowChatFollowOutput.test.tsx` | the frame loop, snap back, resize realign |
+| `useFlowChatFollowOutput.test.tsx` | the frame loop, user-controlled blank, resize realign |
 | `../../tool-cards/useToolCardHeightContract.test.tsx` | tool cards reflow rather than compensate |
 | `flowChatHistoryBoundary.test.ts` | the screenful lead, and the latch's own predicate |
 | `flowChatLiveTailWindow.test.ts` | "does the transcript still reach the newest Turn" |
@@ -110,21 +110,38 @@ group does not renumber the others.
 2. Expand and collapse a tall tool card near the top of the viewport, and one
    below it, and confirm earlier content stays put in both cases.
 
-### The reserved blank and the snap back
+### The user-controlled reserved blank
 
-1. Scrolling down into the reserved blank and letting go returns to the end of
-   real content, and streaming resumes following from there.
-2. Pressing End scrolls to the bottom of the scroll range and then comes back —
-   that key is the cheapest way to land deep in the spacer.
+1. Scrolling down into the reserved blank and letting go leaves the viewport at
+   the user's chosen offset; it must not return automatically.
+2. Pressing End scrolls to the bottom of the scroll range and stays there until
+   an explicit follow action occurs.
 3. Scroll to the very bottom and confirm the transcript ends where content
    ends, with the reserved blank below it reachable but not where the session
    opens.
-4. Wheel down into the reserved blank and stop. The transcript must return to
-   the content end in one smooth movement, not shudder in place.
-5. With a short Turn pinned, scroll up, jump to latest, then scroll down into
-   the blank and let go. After the snap back the jump-to-latest affordance must
-   be gone — this is the one path where the viewport arrives at the tail
-   without a scroll event to notice it.
+4. Wheel down into the reserved blank and stop. The transcript must remain
+   still and the jump-to-latest affordance must stay available.
+5. With a short Turn pinned, scroll up and jump to latest. The explicit jump
+   must still return to the pin rather than the physical bottom of the spacer.
+
+### Output catching up with a reader in the blank
+
+1. Send a message so a short Turn pins with blank below it, then wheel up a
+   little — far enough to leave the tail, not far enough to push the blank off
+   screen — and take your hand off. As the answer grows past the bottom edge the
+   transcript must resume following, easing rather than snapping, and the
+   jump-to-latest affordance must disappear with it.
+2. The same scroll, but keep wheeling. The transcript must not take the viewport
+   back mid-gesture, and once you are above the end of content it must leave you
+   there however much more arrives — until you go back down yourself.
+3. Scroll up past the end of content, stop, and let output arrive. Nothing may
+   move. This is the case the rule must never claim.
+4. From there — above the end of content, follow long gone — scroll back *down*
+   until the blank shows again and stop. Follow must resume as output reaches
+   the bottom edge. Repeat it a third time. Nothing about this is once-only.
+5. With no blank on screen at all — a transcript that fills the viewport, mid
+   answer — scroll up a little. Follow must not resume until you bring the blank
+   back on screen; nothing was crossed.
 
 ### The scrollbar
 
@@ -133,7 +150,7 @@ group does not renumber the others.
    reservation. Repeat with the composer expanded, which is where the reserve
    falls back to the hold-gap floor.
 2. Drag the scrollbar, without touching the wheel first, down into the reserved
-   blank and let go: it must snap back. Then drag it while output streams: the
+   blank and let go: it must stay there. Then drag it while output streams: the
    transcript must follow the thumb without the frame loop fighting it. A press
    on the thumb that moves nothing must leave the viewport alone.
 
@@ -176,7 +193,7 @@ group does not renumber the others.
    history must load. This is the case where the reader is at the top, so the
    wheel emits no scroll event and the gesture is the only thing to go on.
 6. In an `isPartial` session that paged on open and is now streaming, scroll
-   down into the reserved blank and let the snap back return you. No history
+   down into the reserved blank and use jump-to-latest to return. No history
    status may appear at either end of the transcript — the transcript already
    reaches the newest Turn, so there is nothing past its bottom to load. This
    is the case that showed "preparing the conversation history" under a

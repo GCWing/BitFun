@@ -9,8 +9,8 @@ export struct ConversationSourceSwitcher {
 
   build() {
     Row({ space: 2 }) {
-      this.SourceOption(ConversationSource.General, RemoteI18n.t('sidebar.local'))
-      this.SourceOption(ConversationSource.Remote, RemoteI18n.t('sidebar.code'))
+      this.SourceOption(ConversationSource.General, RemoteI18n.t('sidebar.local'), 'conversation-source-local')
+      this.SourceOption(ConversationSource.Remote, RemoteI18n.t('sidebar.code'), 'conversation-source-remote')
     }
     .width('100%')
     .height(40)
@@ -21,8 +21,9 @@ export struct ConversationSourceSwitcher {
   }
 
   @Builder
-  private SourceOption(source: ConversationSource, label: string) {
+  private SourceOption(source: ConversationSource, label: string, optionId: string) {
     Text(label)
+      .id(optionId)
       .layoutWeight(1)
       .height(32)
       .fontSize(13)
@@ -31,6 +32,7 @@ export struct ConversationSourceSwitcher {
       .textAlign(TextAlign.Center)
       .backgroundColor(this.activeSource === source ? CARD : '#00000000')
       .borderRadius(6)
+      .accessibilityText(label)
       .onClick(() => {
         if (this.activeSource !== source) {
           this.onSelectSource(source);

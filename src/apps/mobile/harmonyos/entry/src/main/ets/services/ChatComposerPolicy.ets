@@ -82,4 +82,24 @@ export class ChatComposerPolicy {
   ): boolean {
     return inputFocused || modelSelectorOpen || text.indexOf('\n') >= 0;
   }
+
+  static shouldShowAddButton(showAddButton: boolean, supportsAttachments: boolean): boolean {
+    return showAddButton && supportsAttachments;
+  }
+
+  static primaryActionAccessibilityKey(
+    action: ComposerPrimaryAction,
+    isVoiceListening: boolean
+  ): string {
+    if (action === ComposerPrimaryAction.Stop) {
+      return isVoiceListening ? 'chat.stopListening' : 'chat.stop';
+    }
+    if (action === ComposerPrimaryAction.Voice || action === ComposerPrimaryAction.VoiceBlocked) {
+      return 'chat.voiceInput';
+    }
+    if (action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.SendBlocked) {
+      return 'chat.send';
+    }
+    return '';
+  }
 }

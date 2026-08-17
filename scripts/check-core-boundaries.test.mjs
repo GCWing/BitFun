@@ -35,8 +35,15 @@ import {
   capabilityContractDependencyRules,
   coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
+  guardedEmptyInternalDefaultManifestPaths,
   optionalDependencyFeatureOwnerRules,
 } from './core-boundaries/rules/feature-rules.mjs';
+import {
+  agentRuntimeRootPublicModules,
+  forbiddenContentRules,
+  publicApiAllowlistRules,
+  requiredContentRules,
+} from './core-boundaries/rules/source-rules.mjs';
 
 const ENTRYPOINT = new URL('./check-core-boundaries.mjs', import.meta.url);
 const MODULES = [
@@ -56,6 +63,82 @@ const MODULES = [
 ];
 
 const TEST_ROOT = join('C:', 'repo');
+
+test('App Server TypeScript capability is owned by the protocol crate', () => {
+  const appServerTs = coreClosedFeatureProfileRules.find(
+    (rule) => rule.manifestPath === 'src/crates/interfaces/app-server/Cargo.toml'
+      && rule.featureName === 'ts',
+  );
+  assert.deepEqual(appServerTs?.requiredFeatureRefs, [
+    'bitfun-app-server-protocol/ts',
+  ]);
+  assert.equal(appServerTs?.exact, true);
+
+  const protocolTs = coreClosedFeatureProfileRules.find(
+    (rule) => rule.manifestPath === 'src/crates/interfaces/app-server-protocol/Cargo.toml'
+      && rule.featureName === 'ts',
+  );
+  assert.deepEqual(protocolTs?.requiredFeatureRefs, [
+    'bitfun-core-types/ts',
+    'bitfun-product-domains/ts',
+    'bitfun-runtime-ports/ts',
+    'dep:ts-rs',
+  ]);
+  assert.equal(protocolTs?.exact, true);
+});
+
+test('Agent Runtime leaf capabilities have one managed feature and source contract', async () => {
+  const rule = capabilityContractDependencyRules.find(
+    (candidate) => candidate.packageName === 'bitfun-agent-runtime',
+  );
+  assert.ok(rule, 'bitfun-agent-runtime must be a managed capability target');
+  assert.deepEqual(Object.keys(rule.featureProfiles).sort(), [
+    'agent-runtime',
+    'deep-research',
+    'default',
+    'native-hook-runtime',
+    'native-hook-settings',
+  ]);
+  assert.equal(rule.consumers.size, 10);
+  assert.ok(
+    guardedEmptyInternalDefaultManifestPaths.includes(
+      'src/crates/execution/agent-runtime/Cargo.toml',
+    ),
+  );
+  assert.ok(requiredContentRules.some(
+    (sourceRule) => sourceRule.path === 'src/crates/execution/agent-runtime/src/lib.rs'
+      && sourceRule.reason.includes('leaf capability modules'),
+  ));
+  const publicApiRule = publicApiAllowlistRules.find(
+    (sourceRule) => sourceRule.path === 'src/crates/execution/agent-runtime/src/lib.rs',
+  );
+  assert.ok(publicApiRule, 'bitfun-agent-runtime root must have a closed public module allowlist');
+  assert.deepEqual(
+    new Set(publicApiRule.allowedSymbols),
+    new Set(agentRuntimeRootPublicModules),
+  );
+  const flatRootRule = forbiddenContentRules.find(
+    (sourceRule) => sourceRule.path === 'src/crates/execution/agent-runtime/src/lib.rs'
+      && sourceRule.reason.includes('flat feature-owned module wrapper'),
+  );
+  assert.ok(flatRootRule, 'bitfun-agent-runtime root must reject non-wrapper source lines');
+  const rootSource = await readFile(
+    new URL('../src/crates/execution/agent-runtime/src/lib.rs', import.meta.url),
+    'utf8',
+  );
+  assert.equal(flatRootRule.patterns[0].regex.test(rootSource), false);
+  for (const mutation of [
+    '#[doc(hidden)] pub mod accidental_feature_free_api;',
+    'pub union AccidentalFeatureFreeApi { value: u64 }',
+    'const DOC: &str = "{";\npub mod accidental_feature_free_api;',
+  ]) {
+    assert.equal(
+      flatRootRule.patterns[0].regex.test(`${rootSource}\n${mutation}`),
+      true,
+      `Agent Runtime root must reject mutation: ${mutation}`,
+    );
+  }
+});
 
 test('Core and ACP defaults preserve their explicit assembly contracts', async () => {
   const [coreManifest, acpManifest] = await Promise.all([
@@ -3593,11 +3676,11 @@ test('unreviewed consumers cannot add capability contract dependency edges', asy
     ],
   );
 
-  const messages = findTestCapabilityViolations(findCapabilityContractConsumerViolations, [
-    runtimePorts,
-    agentTools,
-    unreviewed,
-  ]).map(
+  const messages = findTestCapabilityViolations(
+    findCapabilityContractConsumerViolations,
+    [runtimePorts, agentTools, unreviewed],
+    capabilityContractDependencyRules.slice(0, 2),
+  ).map(
     (violation) => violation.message,
   );
   assert.equal(messages.length, 1, messages.join('\n'));

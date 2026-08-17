@@ -278,6 +278,61 @@ jobs:
       - name: Run search tool tests
         run: "cargo test --locked -p tool-runtime --lib search::"
 
+  # ── DeepSeek Harness bridge: profile packaging on Windows ──────────
+  # `prepare:dsh-profile` runs from `frontend:build-all` / official desktop
+  # packaging, not from desktop:dev or cargo check. Until this job existed,
+  # its first Windows execution ever was a release build, and it failed there
+  # (`spawnSync npm ENOENT`: npm is a `.cmd` shim Node will not spawn without
+  # a shell). This job is the cheapest thing that exercises the whole
+  # packaging path — npm install, tsc, `npm pack`, tar, tree copy — on the
+  # platform whose path and process rules differ.
+  dsh-profile-windows:
+    name: DSH Profile Packaging (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Build the bridge profile
+        run: node scripts/prepare-dsh-profile.mjs
+
+      - name: Verify the profile is complete and stamped
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=packages/dsh-acp/dist-profile
+          for path in \
+            "$root/.bitfun-bridge.json" \
+            "$root/cordis.patch.yml" \
+            "$root/package.json" \
+            "$root/lib/app.js" \
+            "$root/node_modules/@agentclientprotocol/sdk/package.json" \
+            "$root/node_modules/@deepseek-ai/dsh-agent-spine-demo/package.json"
+          do
+            [ -f "$path" ] || { echo "::error::missing $path"; exit 1; }
+          done
+          # A vendored tree copied with a broken separator filter drags
+          # node_modules along; the profile resolves those from the user's own
+          # dsh installation and must ship none of its own beyond the two above.
+          nested=$(find "$root/lib" "$root/presets" -name node_modules -o -name '*.map' || true)
+          if [ -n "$nested" ]; then
+            echo "::error::profile carries files it must not ship:"
+            echo "$nested"
+            exit 1
+          fi
+          node -e '
+            const stamp = require("./packages/dsh-acp/dist-profile/.bitfun-bridge.json");
+            if (stamp.profile !== "bitfun-acp") throw new Error("wrong profile name: " + stamp.profile);
+            if (!/^[0-9a-f]{64}$/.test(stamp.content)) throw new Error("no content digest");
+            process.stdout.write(`profile ${stamp.profile} @ ${stamp.bridge}, min dsh ${stamp.minDshVersion}\n`);
+          '
+
   # ── Frontend: build ────────────────────────────────────────────────
   frontend-build:
     name: Frontend Build

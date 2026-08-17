@@ -522,11 +522,10 @@ impl RemoteConnectService {
             + Sync
             + 'static,
     {
-        *self.peer_device_provision_fn.write().await = Some(Arc::new(
-            move |device_id, device_name, request_id| {
+        *self.peer_device_provision_fn.write().await =
+            Some(Arc::new(move |device_id, device_name, request_id| {
                 Box::pin(f(device_id, device_name, request_id))
-            },
-        ));
+            }));
     }
 
     /// Enable account-password pairing in the QR.

@@ -9,6 +9,7 @@ import { RemoteI18n } from '../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from './ConnectionErrorPolicy';
 import { RemoteChatCache } from './RemoteChatCache';
 import { RemoteLogger } from './RemoteLogger';
+import { TranscriptIntegrityPolicy } from './TranscriptIntegrityPolicy';
 
 export interface RemoteChatCommandClient {
   getSessionMessages(sessionId: string): Promise<SessionMessagesResult>;
@@ -70,10 +71,15 @@ export class RemoteChatCommandController {
   /**
    * Puts a session's transcript on screen, from disk when there is one.
    *
-   * A cache hit sends nothing at all: the poller that starts right after this
-   * asks for `known_msg_count` messages onwards, so whatever arrived while the
-   * session was closed comes back as an ordinary tail rather than as another
-   * copy of the whole transcript.
+   * A cache hit with complete rows sends nothing: the poller that starts right
+   * after this asks for `known_msg_count` messages onwards, so whatever arrived
+   * while the session was closed comes back as an ordinary tail rather than as
+   * another copy of the whole transcript.
+   *
+   * Hollow assistants are a miss. The poller will not refill them — it skips
+   * the rows the phone already counted — so the only way back to a body is a
+   * full `get_session_messages`. The hollow rows still go on screen first so
+   * the user messages do not wait on that fetch.
    */
   async loadMessages(
     sessionId: string,
@@ -89,6 +95,15 @@ export class RemoteChatCommandController {
       }
       RemoteLogger.info(`messages from cache session=${RemoteChatCommandController.shortId(sessionId)} count=${cached.length}`);
       this.applyMessages(cached);
+      if (TranscriptIntegrityPolicy.hasHollowAssistants(cached)) {
+        RemoteLogger.info(
+          `hollow assistants in cache session=${RemoteChatCommandController.shortId(sessionId)} ` +
+            `${TranscriptIntegrityPolicy.describeMessages(cached)}`
+        );
+        await this.cache.forget(sessionId);
+        await this.reloadMessages(sessionId, canApply);
+        return;
+      }
       this.callbacks.onStatusText(RemoteI18n.t('status.messagesRestored'));
       return;
     }
@@ -118,6 +133,10 @@ export class RemoteChatCommandController {
         this.callbacks.onStatusText(RemoteI18n.t('status.loadMessages'));
       }
       const result = await this.client.getSessionMessages(sessionId);
+      RemoteLogger.info(
+        `get_session_messages mapped session=${RemoteChatCommandController.shortId(sessionId)} ` +
+          `${TranscriptIntegrityPolicy.describeMessages(result.messages)}`
+      );
       if (canApply(sessionId)) {
         this.applyMessages(result.messages);
         this.callbacks.onStatusText(RemoteI18n.t('status.messagesSynced'));
@@ -166,7 +185,9 @@ export class RemoteChatCommandController {
     this.callbacks.onTimelineReady();
     // The last thing that happens before ArkUI owns the delay: everything after
     // this line is build, measure and paint.
-    RemoteLogger.info(`messages applied to state count=${messages.length}`);
+    RemoteLogger.info(
+      `messages applied to state ${TranscriptIntegrityPolicy.describeMessages(messages)}`
+    );
   }
 
   /** Drops a session's cached transcript once it no longer exists upstream. */

@@ -8,14 +8,14 @@ use bitfun_ai_adapters::models_dev::{
     project_reasoning_catalog_with_limit_and_auto_binding, ModelsDevCatalog,
 };
 #[cfg(feature = "model-catalog")]
+use bitfun_core_types::ReasoningCatalogProjectionRequest;
+#[cfg(feature = "model-catalog")]
 use bitfun_core_types::{
     ModelsDevCatalogSource, ModelsDevCatalogStatus, ModelsDevRefreshResult, ModelsDevRefreshStatus,
 };
 use bitfun_core_types::{
     ReasoningCatalogBinding, ReasoningCatalogProjection, ReasoningPresetDescriptor,
 };
-#[cfg(feature = "model-catalog")]
-use bitfun_core_types::ReasoningCatalogProjectionRequest;
 #[cfg(feature = "model-catalog")]
 use bitfun_events::{AIModelCatalogUpdatedEvent, AI_MODEL_CATALOG_UPDATED_EVENT};
 #[cfg(feature = "model-catalog")]
@@ -24,6 +24,7 @@ use bitfun_services_integrations::models_dev::{
 };
 #[cfg(feature = "model-catalog")]
 use log::debug;
+use sha2::{Digest, Sha256};
 
 use crate::infrastructure::ai::provider_catalog::trusted_models_dev_binding;
 use crate::infrastructure::ai::AIClient;
@@ -349,6 +350,22 @@ pub(crate) fn resolve_reasoning_preset<'a>(
         .find(|preset| preset.id == preset_id)
 }
 
+pub(crate) fn reasoning_preset_runtime_fingerprint(
+    preset: Option<&ReasoningPresetDescriptor>,
+) -> String {
+    let value = preset.map_or(serde_json::Value::Null, |preset| {
+        serde_json::json!({
+            "id": preset.id,
+            "actions": preset.actions,
+            "source": preset.source,
+            "execution_provider": preset.execution_provider,
+            "execution_model": preset.execution_model,
+        })
+    });
+    let encoded = serde_json::to_vec(&value).unwrap_or_default();
+    format!("{:x}", Sha256::digest(encoded))
+}
+
 /// Normalizes a session-scoped reasoning preset against one concrete model.
 ///
 /// `None` is the canonical Auto state. A configured preset can always be
@@ -428,17 +445,44 @@ pub(crate) fn apply_selected_reasoning_preset(
 mod tests {
     use bitfun_core_types::{
         ReasoningCatalogBinding, ReasoningCatalogProjectionRequest, ReasoningConfig,
-        ReasoningPreset, ReasoningPresetAction, ReasoningPresetSource,
+        ReasoningPreset, ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
     };
 
     use super::{
         apply_default_reasoning_preset, apply_selected_reasoning_preset,
         normalize_reasoning_preset_for_model, project_model_reasoning_catalog,
-        resolve_default_reasoning_preset, resolve_reasoning_preset, ModelsDevCatalog,
+        reasoning_preset_runtime_fingerprint, resolve_default_reasoning_preset,
+        resolve_reasoning_preset, ModelsDevCatalog,
     };
     use crate::infrastructure::ai::AIClient;
     use crate::service::config::types::AIModelConfig;
     use crate::util::types::AIConfig;
+
+    #[test]
+    fn runtime_fingerprint_detects_same_id_action_drift() {
+        let preset = ReasoningPresetDescriptor {
+            id: "high".to_string(),
+            label: "High".to_string(),
+            order: 1,
+            actions: vec![ReasoningPresetAction::Effort {
+                value: "high".to_string(),
+            }],
+            source: ReasoningPresetSource::ModelsDev,
+            execution_provider: Some("openai".to_string()),
+            execution_model: Some("model-v1".to_string()),
+        };
+        let mut changed = preset.clone();
+        changed.actions = vec![ReasoningPresetAction::BudgetTokens { value: 32_000 }];
+
+        assert_ne!(
+            reasoning_preset_runtime_fingerprint(Some(&preset)),
+            reasoning_preset_runtime_fingerprint(Some(&changed)),
+        );
+        assert_ne!(
+            reasoning_preset_runtime_fingerprint(None),
+            reasoning_preset_runtime_fingerprint(Some(&preset)),
+        );
+    }
 
     fn catalog() -> ModelsDevCatalog {
         ModelsDevCatalog::parse_str(

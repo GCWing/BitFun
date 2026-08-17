@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use bitfun_agent_runtime::user_questions::{
     ask_user_question_available_in_context, build_answered_user_question_result,
     build_cancelled_user_question_result, validate_ask_user_question_input, AskUserQuestionInput,
-    USER_INPUT_AVAILABLE_CONTEXT_KEY,
+    PendingUserQuestion, USER_INPUT_AVAILABLE_CONTEXT_KEY, USER_INPUT_MODEL_ROUND_CONTEXT_KEY,
 };
 use log::{debug, warn};
 use serde_json::{json, Value};
@@ -206,25 +206,43 @@ Usage notes:
         // 3. Generate tool ID
         let tool_id = Self::generate_tool_id(context);
 
-        // 4. Create oneshot channel
-        let (tx, rx) = tokio::sync::oneshot::channel();
-
-        // 5. Register to global manager
-        let manager = get_user_input_manager();
-        manager.register_channel(tool_id.clone(), tx);
-
-        // 6. Send backend event to notify frontend to display question card
-        let event_system = get_global_event_system();
         let session_id = context
             .session_id
             .clone()
             .unwrap_or_else(|| "unknown".to_string());
+        let model_round_id = context
+            .custom_data
+            .get(USER_INPUT_MODEL_ROUND_CONTEXT_KEY)
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let questions = serde_json::to_value(&tool_input).unwrap_or_else(|_| json!({}));
+
+        // 4. Create oneshot channel
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        // 5. Register the channel together with the replayable request before
+        // emitting. The guard removes it if cancellation drops this Tool
+        // future, so later Surface snapshots cannot revive stale questions.
+        let manager = get_user_input_manager();
+        let _registration = manager.register_question(
+            PendingUserQuestion::new(
+                tool_id.clone(),
+                session_id.clone(),
+                context.dialog_turn_id.clone(),
+                model_round_id,
+                questions.clone(),
+            ),
+            tx,
+        );
+
+        // 6. Send backend event to notify frontend to display question card
+        let event_system = get_global_event_system();
 
         // Send complete questions array to frontend
         let event = BackendEvent::ToolAwaitingUserInput {
             tool_id: tool_id.clone(),
             session_id,
-            questions: serde_json::to_value(&tool_input).unwrap_or_else(|_| json!({})),
+            questions,
         };
 
         let _ = event_system.emit(event).await;
@@ -265,6 +283,8 @@ Usage notes:
 mod tests {
     use super::AskUserQuestionTool;
     use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use crate::agentic::tools::user_input_manager::get_user_input_manager;
+    use bitfun_agent_runtime::user_questions::USER_INPUT_MODEL_ROUND_CONTEXT_KEY;
     use std::collections::HashMap;
 
     fn context_with_custom_data(custom_data: HashMap<String, serde_json::Value>) -> ToolUseContext {
@@ -358,5 +378,83 @@ mod tests {
             .expect("required array")
             .iter()
             .any(|value| value == "multiSelect"));
+    }
+
+    #[tokio::test]
+    async fn pending_question_remains_replayable_until_the_tool_receives_an_answer() {
+        let tool = AskUserQuestionTool::new();
+        let unique = uuid::Uuid::new_v4().to_string();
+        let session_id = format!("session-{unique}");
+        let turn_id = format!("turn-{unique}");
+        let round_id = format!("round-{unique}");
+        let tool_id = format!("tool-{unique}");
+        let mut context = context_with_custom_data(HashMap::from([(
+            USER_INPUT_MODEL_ROUND_CONTEXT_KEY.to_string(),
+            serde_json::json!(round_id),
+        )]));
+        context.session_id = Some(session_id.clone());
+        context.dialog_turn_id = Some(turn_id.clone());
+        context.tool_call_id = Some(tool_id.clone());
+        let input = serde_json::json!({
+            "questions": [{
+                "question": "Continue?",
+                "header": "Continue",
+                "options": [
+                    { "label": "Yes", "description": "Continue" },
+                    { "label": "No", "description": "Stop" }
+                ]
+            }]
+        });
+
+        let call = tool.call(&input, &context);
+        tokio::pin!(call);
+        let mailbox_registration = async {
+            loop {
+                let snapshot = get_user_input_manager().pending_question_snapshot(&session_id);
+                if let Some(question) = snapshot.questions.first() {
+                    assert_eq!(question.tool_id, tool_id);
+                    assert_eq!(question.dialog_turn_id.as_deref(), Some(turn_id.as_str()));
+                    assert_eq!(question.model_round_id.as_deref(), Some(round_id.as_str()));
+                    assert_eq!(
+                        question.questions,
+                        serde_json::json!({
+                            "questions": [{
+                                "question": "Continue?",
+                                "header": "Continue",
+                                "options": [
+                                    { "label": "Yes", "description": "Continue" },
+                                    { "label": "No", "description": "Stop" }
+                                ],
+                                "multiSelect": false
+                            }]
+                        })
+                    );
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::pin!(mailbox_registration);
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            tokio::select! {
+                _ = &mut call => panic!("question Tool completed before receiving an answer"),
+                _ = &mut mailbox_registration => {}
+            }
+        })
+        .await
+        .expect("question should enter the Runtime mailbox");
+
+        get_user_input_manager()
+            .send_answer(&tool_id, serde_json::json!({ "0": "Yes" }))
+            .expect("answer should reach the waiting Tool");
+        tokio::time::timeout(std::time::Duration::from_secs(1), &mut call)
+            .await
+            .expect("answered Tool should resume")
+            .expect("answered Tool should succeed");
+
+        assert!(get_user_input_manager()
+            .pending_question_snapshot(&session_id)
+            .questions
+            .is_empty());
     }
 }

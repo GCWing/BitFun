@@ -11,8 +11,12 @@
 
 本文只记录长期产品心智、架构边界和发布门槛。当前代码中的
 `agent-runtime::sdk` 是供 BitFun 内部入口和受控 Rust 嵌入使用的低层 Rust Runtime SDK；
-`interfaces/sdk-host` 与 `apps/sdk-host` 是本地协议和独立 Host 进程的实现候选。它们都不是已经发布的
-Python/TypeScript BitFun Agent SDK，也不能据此宣称公开 SDK 已交付。
+`interfaces/sdk-host` 与 `apps/sdk-host` 是本地协议和独立 Host 进程的实现候选；`sdk/typescript` 是仓库内私有的
+TypeScript 垂直切片，用于验证 managed Host、Query、显式 Session、取消、终态和错误语义。其 internal wire 类型与
+runtime validator 均由 Rust Host 协议生成，不构成公开 API。该切片对 Query 事件、终态聚合、JSON-RPC pending request
+和载体写队列分别设置条目与字节预算；Windows Host 通过 `services-core` 的 kill-on-close Job Object owner 持有后代进程，
+Unix managed client 通过独立进程组回收 Host 树。Python binding、平台原生 Host 包、安装与签名链路尚未交付，握手仍返回
+`not_delivered`，因此不能据此宣称公开或 Preview SDK 已交付。
 
 ## 1. 最终决策
 
@@ -246,6 +250,18 @@ flowchart LR
 | SDK Host adapter | 协议、能力协商、连接/Query 资源清理责任和 DTO 转换 | stdin/stdout 入口、Agent 业务状态、Tool/MCP 注册表 |
 | Python/TypeScript SDK | 管理或连接匹配 Host，提供一致公开 API | 要求用户安装 `bitfun` CLI；暴露内部 wire DTO |
 | `CoreRuntimeOwnership` | 第一方 Rust 入口选择 Embedded/Shared，并把本机 workspace lease 注入 Coordinator | 进入公开 SDK/wire；成为 Session 单写或 Server 路由 owner |
+
+通讯能力按“协议机械层、载体、产品协议”三层拆分：
+
+| 层次 | 共享 owner | 保留在使用方的职责 |
+|---|---|---|
+| 协议无关机械层 | `adapters/transport` 的 Rust 有界 JSON，以及同目录 TypeScript `MessageTransport`、有界 `WebSocketMessageTransport`、JSON-RPC request correlation | 不拥有业务 method、DTO、认证、Session/Query 生命周期或恢复策略；单一消费者的 length-prefix framing 留在 private IPC owner |
+| 载体 | stdio、Named Pipe/UDS、WebSocket adapter 实现统一的消息收发与背压边界 | 各 Host 继续拥有 endpoint、具体 framing、Origin/认证、重连和方向性限额策略 |
+| 产品协议 | SDK Host、private Runtime IPC 和 App Server 分别拥有自己的 wire 与行为合同 | 不因复用 JSON-RPC/消息机械能力而合并业务协议、controller/lease 或 Runtime owner |
+
+因此“复用通讯层”不等于建立万能 wire：stdio、IPC 和 WebSocket 共享有界编解码、消息收发、request correlation
+等机械能力，但 SDK Host、Shared TUI IPC 与 Web App Server 仍是同级 adapter。任何载体超限、背压失败或无法确认的
+请求结果都由对应产品 adapter 投影成自己的错误与清理语义；通用通讯层不能替它们决定自动重试或生命周期。
 
 ### 5.2 一次 Query 的运行时序
 

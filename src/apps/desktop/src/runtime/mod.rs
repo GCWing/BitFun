@@ -1,13 +1,12 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use bitfun_agent_runtime::sdk::SessionEventJournal;
 use bitfun_agent_runtime::sdk::{AgentRuntime, PermissionRequestEvent};
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
-use bitfun_core::product_runtime::CoreLocalWorkspaceSnapshot;
 use bitfun_core::service::remote_ssh::SSHConnectionManager;
 use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
-use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
 use tokio::sync::RwLock;
 
 mod session_application;
@@ -28,7 +27,6 @@ pub(crate) use session_application::{
 /// Desktop delivery profile or its product services have been assembled.
 pub struct DesktopRuntimeContext {
     session_application: DesktopSessionApplication,
-    local_workspace_snapshot: Arc<dyn LocalWorkspaceSnapshotPort>,
     permission_events_started: AtomicBool,
 }
 
@@ -40,6 +38,7 @@ impl DesktopRuntimeContext {
         workspace_service: Arc<WorkspaceService>,
         ssh_manager: Arc<RwLock<Option<SSHConnectionManager>>>,
         acp_client_service: Option<Arc<bitfun_acp::AcpClientService>>,
+        session_event_journal: Arc<SessionEventJournal>,
     ) -> Result<Self, String> {
         let host_effects = Arc::new(ProductionDesktopSessionHostEffects::new(acp_client_service));
         let session_application = DesktopSessionApplication::build(
@@ -49,12 +48,10 @@ impl DesktopRuntimeContext {
             workspace_service,
             ssh_manager,
             host_effects,
+            session_event_journal,
         )?;
-        let local_workspace_snapshot = CoreLocalWorkspaceSnapshot::build();
-
         Ok(Self {
             session_application,
-            local_workspace_snapshot,
             permission_events_started: AtomicBool::new(false),
         })
     }
@@ -65,10 +62,6 @@ impl DesktopRuntimeContext {
 
     pub(crate) fn session_application(&self) -> &DesktopSessionApplication {
         &self.session_application
-    }
-
-    pub(crate) fn local_workspace_snapshot(&self) -> &dyn LocalWorkspaceSnapshotPort {
-        self.local_workspace_snapshot.as_ref()
     }
 
     pub(crate) fn start_permission_event_forwarding(
@@ -161,8 +154,6 @@ mod tests {
         assert!(app_source.contains(".manage(desktop_runtime)"));
 
         assert!(runtime_source.contains("DesktopSessionApplication::build("));
-        assert!(runtime_source.contains("CoreLocalWorkspaceSnapshot::build()"));
-
         let session_commands = include_str!("../api/session_api.rs");
         assert_eq!(
             session_commands.matches("PersistenceManager::new").count(),
@@ -174,47 +165,20 @@ mod tests {
         assert!(session_application.contains("export_persisted_session_transcript"));
 
         let snapshot_commands = include_str!("../api/snapshot_service.rs");
-        assert_eq!(
-            snapshot_commands
-                .matches(".local_workspace_snapshot()")
-                .count(),
-            1,
-            "only workspace rollback uses the mutation port; reads use Core's bounded snapshot view"
-        );
         assert!(snapshot_commands.contains("begin_snapshot_history_read"));
         assert!(snapshot_commands.contains("open_snapshot_manager_for_view"));
         assert!(snapshot_commands.contains("ensure_local_snapshot_mutation_path"));
 
         let rollback_source = &snapshot_commands[snapshot_commands
-            .find("pub async fn rollback_to_turn")
+            .find("pub async fn rollback_session_to_turn")
             .expect("rollback command must exist")..];
         let remote_guard = rollback_source
             .find("ensure_complete_rollback_supported")
             .expect("remote rollback guard must remain host-owned");
-        let maintenance = rollback_source
-            .find("begin_snapshot_history_mutation")
-            .expect("scheduler maintenance must precede rollback");
-        let file_rollback = rollback_source
-            .find("rollback_local_workspace_files(")
-            .expect("workspace files must be restored through the port adapter");
-        let history_cleanup = file_rollback
-            + rollback_source[file_rollback..]
-                .find("if request.delete_turns")
-                .expect("history cleanup must remain host-owned");
-        let history_event = rollback_source
-            .find("conversation_turns_deleted")
-            .expect("history event must remain host-projected");
-        let rollback_event = rollback_source
-            .find("turn_rolled_back")
-            .expect("rollback event must remain host-projected");
-        assert!(
-            remote_guard < maintenance
-                && maintenance < file_rollback
-                && file_rollback < history_cleanup
-                && history_cleanup < history_event
-                && history_event < rollback_event,
-            "Desktop rollback must preserve remote, maintenance, files, history, and event order"
-        );
+        let runtime_revert = rollback_source
+            .find(".rollback_session_to_turn(request)")
+            .expect("rollback must delegate to the Agent Session transaction");
+        assert!(remote_guard < runtime_revert);
 
         let sdk_source = include_str!("../../../../crates/execution/agent-runtime/src/sdk.rs");
         assert!(!sdk_source.contains("LocalWorkspaceSnapshot"));
@@ -347,7 +311,7 @@ mod tests {
             "pub async fn initialize_snapshot",
             "pub async fn record_file_change",
             "pub async fn rollback_session",
-            "pub async fn rollback_to_turn",
+            "pub async fn rollback_session_to_turn",
             "pub async fn accept_session",
             "pub async fn accept_file",
             "pub async fn reject_file",

@@ -35,17 +35,27 @@ runtime owner moved.
 Normal interactive submissions follow:
 
 ```text
-ChatView -> TuiAgentClient -> TuiBackend -> App Server client
-         -> App Server handler -> Agent Runtime owner -> ToolPipeline
+ChatView / StartupPage
+  -> CliAgentRuntimeClient
+     -> Embedded AgentRuntime typed API
+     -> Shared private Runtime IPC v17
+  -> existing owner/service APIs
+     -> ConfigService / registries / MCPService / AccountRuntime / WorktreeService
+     -> External Source and Hook domain APIs
 ```
 
-Embedded TUI uses an in-memory App Server connection. During the migration,
-Shared TUI uses a CLI Host compatibility adapter that implements `TuiBackend`
-over the private versioned Runtime IPC; the TUI client and controllers must not
-reference that IPC. Replacing the physical Shared transport with App Server
-Pipe/UDS framing belongs to Phase 5. Side-effecting operations need stable
-identities, controller/idle rules, bounded frames, and outcome-unknown handling
-before a connection can retry.
+Embedded and Shared TUI construct the same `CliAgentRuntimeClient`; only its
+deployment backend differs. Controllers depend on that client for Runtime
+behavior and call the existing owner/service APIs directly for the non-Runtime
+operations they use. There is no catch-all TUI client, unified TUI management
+module, domain service interface layer, or owner adapter. Controllers must not
+reference Runtime IPC or Runtime implementation types, and they must not import
+`bitfun-app-server-protocol` wire DTOs. Non-Runtime projections come from the
+stable contracts layer (`bitfun-core-types` / `bitfun-product-domains`) or the
+existing owner API. Controller-local calls reject Remote workspace scope before
+touching local state. App Server wiring is independent and does not constrain
+the TUI path. Side-effecting operations need stable identities, controller/idle
+rules, bounded frames, and outcome-unknown handling before a connection can retry.
 
 Explicit Shell input follows:
 

@@ -355,6 +355,7 @@ describe('WebSocketTransportAdapter reconnect lifecycle', () => {
     const sockets: MockWebSocket[] = [];
     class MockWebSocket {
       static readonly OPEN = 1;
+      static readonly CLOSING = 2;
 
       readyState = 0;
       onopen: ((event: Event) => void) | null = null;
@@ -400,3 +401,218 @@ describe('WebSocketTransportAdapter reconnect lifecycle', () => {
     expect(sockets).toHaveLength(1);
   });
 });
+
+describe('WebSocketTransportAdapter JSON-RPC lifecycle', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('fails the connection closed for an ambiguous response envelope', async () => {
+    vi.useFakeTimers();
+    const sockets: RpcMockWebSocket[] = [];
+    RpcMockWebSocket.instances = sockets;
+    vi.stubGlobal('WebSocket', RpcMockWebSocket);
+    const adapter = new WebSocketTransportAdapter('ws://example.test/ws');
+    const connected = adapter.connect();
+    sockets[0].open();
+    await connected;
+
+    const response = adapter.request('ping', {});
+    const request = JSON.parse(sockets[0].sent[0]) as { id: string };
+    sockets[0].receive({
+      jsonrpc: '2.0',
+      id: request.id,
+      result: { ok: true },
+      error: { code: -32000, message: 'ambiguous' },
+    });
+
+    await expect(response).rejects.toThrow(/exactly one result or error/);
+    expect(sockets[0].closeCalls).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps a healthy WebSocket reusable after one request deadline', async () => {
+    vi.useFakeTimers();
+    const sockets: RpcMockWebSocket[] = [];
+    RpcMockWebSocket.instances = sockets;
+    vi.stubGlobal('WebSocket', RpcMockWebSocket);
+    const adapter = new WebSocketTransportAdapter('ws://example.test/ws');
+    const connected = adapter.connect();
+    sockets[0].open();
+    await connected;
+
+    const expired = adapter.request('ping', {});
+    const expiredAssertion = expect(expired).rejects.toThrow('Request timeout: ping');
+    await vi.advanceTimersByTimeAsync(30_000);
+    await expiredAssertion;
+    expect(sockets[0].closeCalls).toBe(0);
+
+    const next = adapter.request<{ ok: boolean }>('ping', {});
+    await vi.advanceTimersByTimeAsync(0);
+    const request = JSON.parse(sockets[0].sent[1]) as { id: string };
+    sockets[0].receive({
+      jsonrpc: '2.0',
+      id: request.id,
+      result: { ok: true },
+    });
+    await expect(next).resolves.toEqual({ ok: true });
+    await adapter.disconnect();
+  });
+
+  it('fails closed before the browser WebSocket send buffer grows past its cap', async () => {
+    const sockets: RpcMockWebSocket[] = [];
+    RpcMockWebSocket.instances = sockets;
+    vi.stubGlobal('WebSocket', RpcMockWebSocket);
+    const adapter = new WebSocketTransportAdapter('ws://example.test/ws');
+    const connected = adapter.connect();
+    sockets[0].open();
+    await connected;
+    sockets[0].bufferedAmount = 2 * 1024 * 1024;
+
+    const response = adapter.request('ping', {});
+    const bounded = Promise.race([
+      response,
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(() => reject(new Error('WebSocket send buffer was not bounded')), 50);
+      }),
+    ]);
+    try {
+      const error = await bounded.then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+      const cause = (error as { cause?: unknown } | undefined)?.cause;
+      expect(cause).toBeInstanceOf(Error);
+      expect((cause as Error).message).toMatch(/send buffer capacity/);
+      expect(sockets[0].closeCalls).toBe(1);
+    } finally {
+      await adapter.disconnect();
+    }
+  });
+
+  it('closes a connection whose browser send buffer never drains', async () => {
+    vi.useFakeTimers();
+    const sockets: RpcMockWebSocket[] = [];
+    RpcMockWebSocket.instances = sockets;
+    vi.stubGlobal('WebSocket', RpcMockWebSocket);
+    const adapter = new WebSocketTransportAdapter('ws://example.test/ws');
+    const connected = adapter.connect();
+    sockets[0].open();
+    await connected;
+    sockets[0].bufferedAmount = 1;
+    let settled = false;
+    const response = adapter.request('ping', {});
+    void response.catch(() => {
+      settled = true;
+    });
+
+    try {
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(settled).toBe(true);
+      expect(sockets[0].closeCalls).toBe(1);
+    } finally {
+      await adapter.disconnect();
+    }
+  });
+
+  it('an old socket generation cannot close or settle requests on its replacement', async () => {
+    vi.useFakeTimers();
+    const sockets: RpcMockWebSocket[] = [];
+    RpcMockWebSocket.instances = sockets;
+    vi.stubGlobal('WebSocket', RpcMockWebSocket);
+    const adapter = new WebSocketTransportAdapter('ws://example.test/ws');
+    const connected = adapter.connect();
+    sockets[0].open();
+    await connected;
+    sockets[0].bufferedAmount = 1;
+    let oldSettled = false;
+    const oldRequest = adapter.request('ping', {});
+    void oldRequest.catch(() => {
+      oldSettled = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    sockets[0].closeFromServer();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(oldSettled).toBe(true);
+    expect(sockets).toHaveLength(2);
+
+    sockets[1].open();
+    const current = adapter.request<{ ok: boolean }>('ping', {});
+    await vi.advanceTimersByTimeAsync(0);
+    const request = JSON.parse(sockets[1].sent[0]) as { id: string };
+    sockets[1].receive({ jsonrpc: '2.0', id: request.id, result: { ok: true } });
+    await expect(current).resolves.toEqual({ ok: true });
+    expect(sockets[1].closeCalls).toBe(0);
+    await adapter.disconnect();
+  });
+
+  it('a request during reconnect joins the one in-flight replacement socket', async () => {
+    vi.useFakeTimers();
+    const sockets: RpcMockWebSocket[] = [];
+    RpcMockWebSocket.instances = sockets;
+    vi.stubGlobal('WebSocket', RpcMockWebSocket);
+    const adapter = new WebSocketTransportAdapter('ws://example.test/ws');
+    const connected = adapter.connect();
+    sockets[0].open();
+    await connected;
+    sockets[0].closeFromServer();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets).toHaveLength(2);
+
+    const response = adapter.request<{ ok: boolean }>('ping', {});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sockets).toHaveLength(2);
+    sockets[1].open();
+    await vi.advanceTimersByTimeAsync(0);
+    const request = JSON.parse(sockets[1].sent[0]) as { id: string };
+    sockets[1].receive({ jsonrpc: '2.0', id: request.id, result: { ok: true } });
+
+    await expect(response).resolves.toEqual({ ok: true });
+    await adapter.disconnect();
+  });
+});
+
+class RpcMockWebSocket {
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static instances: RpcMockWebSocket[] = [];
+
+  readyState = 0;
+  readonly sent: string[] = [];
+  bufferedAmount = 0;
+  closeCalls = 0;
+  onopen: ((event: Event) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+
+  constructor(readonly url: string) {
+    RpcMockWebSocket.instances.push(this);
+  }
+
+  open(): void {
+    this.readyState = RpcMockWebSocket.OPEN;
+    this.onopen?.({} as Event);
+  }
+
+  send(message: string): void {
+    this.sent.push(message);
+  }
+
+  receive(value: unknown): void {
+    this.onmessage?.({ data: JSON.stringify(value) } as MessageEvent);
+  }
+
+  closeFromServer(): void {
+    this.readyState = 3;
+    this.onclose?.({} as CloseEvent);
+  }
+
+  close(): void {
+    this.closeCalls += 1;
+    this.readyState = 3;
+    this.onclose?.({} as CloseEvent);
+  }
+}

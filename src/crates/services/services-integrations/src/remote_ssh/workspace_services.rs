@@ -82,8 +82,26 @@ impl RemoteWorkspaceFs {
     }
 }
 
+fn join_posix_path(root: &str, components: &[&str]) -> String {
+    let mut path = root.trim_end_matches('/').to_string();
+    if path.is_empty() && root.starts_with('/') {
+        path.push('/');
+    }
+    for component in components {
+        if !path.is_empty() && !path.ends_with('/') {
+            path.push('/');
+        }
+        path.push_str(component.trim_matches('/'));
+    }
+    path
+}
+
 #[async_trait]
 impl WorkspaceFileSystem for RemoteWorkspaceFs {
+    fn join_path(&self, root: &str, components: &[&str]) -> String {
+        join_posix_path(root, components)
+    }
+
     async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
         self.file_service.read_file(&self.connection_id, path).await
     }
@@ -223,6 +241,19 @@ mod bounded_read_tests {
             size,
             modified: None,
             permissions: None,
+        }
+    }
+
+    #[test]
+    fn remote_workspace_paths_keep_posix_syntax_for_absolute_home_and_relative_roots() {
+        for (root, expected) in [
+            ("/", "/.bitfun/report.md"),
+            ("~", "~/.bitfun/report.md"),
+            ("~/repo", "~/repo/.bitfun/report.md"),
+            ("repo", "repo/.bitfun/report.md"),
+            (".", "./.bitfun/report.md"),
+        ] {
+            assert_eq!(join_posix_path(root, &[".bitfun", "report.md"]), expected);
         }
     }
 

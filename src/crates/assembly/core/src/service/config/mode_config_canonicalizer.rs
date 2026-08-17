@@ -19,6 +19,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 
+const DYNAMIC_MCP_TOOL_PREFIX: &str = "mcp__";
+
 /// Agent-profile config canonicalization report.
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct AgentProfileConfigCanonicalizationReport {
@@ -57,6 +59,16 @@ fn normalize_tools(tools: Vec<String>, valid_tools: &HashSet<String>) -> Vec<Str
     dedupe_preserving_order(tools)
         .into_iter()
         .filter(|tool| valid_tools.contains(tool))
+        .collect()
+}
+
+fn normalize_added_tool_overrides(
+    tools: Vec<String>,
+    valid_tools: &HashSet<String>,
+) -> Vec<String> {
+    dedupe_preserving_order(tools)
+        .into_iter()
+        .filter(|tool| valid_tools.contains(tool) || tool.starts_with(DYNAMIC_MCP_TOOL_PREFIX))
         .collect()
 }
 
@@ -198,7 +210,10 @@ fn stored_agent_profile_from_overrides(
     } = overrides;
     let profile_id = resolve_profile_id(agent_id);
     let default_set: HashSet<String> = default_tools.iter().cloned().collect();
-    let mut added_tools = normalize_tools(added_tools, valid_tools);
+    // MCP tools are registered only after deferred server initialization. Keep
+    // their stored overrides during startup canonicalization even when the
+    // current registry snapshot cannot validate them yet.
+    let mut added_tools = normalize_added_tool_overrides(added_tools, valid_tools);
     let mut removed_tools = normalize_tools(removed_tools, valid_tools);
     let (disabled_user_skills, enabled_user_skills) =
         normalize_skill_override_lists(disabled_user_skills, enabled_user_skills);
@@ -811,6 +826,27 @@ mod tests {
                 .expect("null mode config should be ignored");
 
         assert!(canonical.is_none());
+    }
+
+    #[test]
+    fn canonicalize_agent_profile_preserves_mcp_override_before_registration() {
+        let raw = serde_json::json!({
+            "profile_id": "coding_shared",
+            "added_tools": ["mcp__github__list_issues", "missing_static_tool"]
+        });
+        let canonical = canonicalize_agent_profile(
+            "coding_shared",
+            Some(&raw),
+            &["Read".to_string()],
+            &HashSet::from(["Read".to_string()]),
+        )
+        .expect("profile should canonicalize")
+        .expect("the MCP override should keep the profile");
+
+        assert_eq!(
+            canonical.added_tools,
+            vec!["mcp__github__list_issues".to_string()]
+        );
     }
 
     #[test]

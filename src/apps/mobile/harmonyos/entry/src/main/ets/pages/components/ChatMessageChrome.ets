@@ -1,5 +1,5 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ConversationUiMessage } from './ConversationUiModels';
+import { ConversationUiMessage } from '../state/ConversationUiModels';
 import { MessageImageGallery } from './ChatMessageContent';
 import { ACCENT, INK, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 

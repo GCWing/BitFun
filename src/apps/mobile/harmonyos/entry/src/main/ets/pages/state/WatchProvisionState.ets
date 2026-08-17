@@ -1,4 +1,5 @@
 import { WatchProvisionProtocol } from '../../services/WatchProvisionProtocol';
+import { WatchProvisionDisplay } from '../../services/WatchProvisionDisplay';
 
 export enum WatchProvisionPhase {
   /** No watch is waiting; the card is not on screen. */
@@ -12,7 +13,7 @@ export enum WatchProvisionPhase {
 }
 
 @ObservedV2
-export class WatchProvisionState {
+export class WatchProvisionState implements WatchProvisionDisplay {
   @Trace phase: WatchProvisionPhase = WatchProvisionPhase.Hidden;
   @Trace deviceName: string = '';
   @Trace deviceIdLabel: string = '';

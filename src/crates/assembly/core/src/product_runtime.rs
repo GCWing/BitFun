@@ -21,6 +21,7 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionUsagePort, AgentSessionUsageRequest, AgentTurnCancellationResult,
     AgentTurnSettlementPort, AgentTurnSettlementRequest, SessionTranscript,
 };
+use bitfun_core_types::{SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
 use bitfun_harness::HarnessRegistry;
 #[cfg(feature = "product-search")]
 use bitfun_product_domains::product_search::{
@@ -59,11 +60,19 @@ use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
 use crate::agentic::session::transcript_render::{
     transcript_display_assistant_content, transcript_display_user_content,
 };
-use crate::agentic::session::{CoreSessionStorePort, PromptCacheScope};
+use crate::agentic::session::{
+    CoreSessionStorePort, PromptCacheScope,
+    INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY,
+    INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY,
+    INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY,
+    INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY,
+};
 use crate::agentic::tools::implementations::skills::SkillRegistry;
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
-    SessionTurnCatalog, SessionTurnWindowResponse,
+    SessionTurnCatalog, SessionTurnWindowResponse, TurnStatus,
 };
 #[cfg(feature = "product-search")]
 use crate::service::session::{DialogTurnKind, SessionStatus};
@@ -80,6 +89,60 @@ use crate::util::errors::{BitFunError, BitFunResult};
 
 pub use bitfun_product_capabilities::ProductRuntimeAssembly as CoreProductRuntimeAssembly;
 pub use runtime_services::{build_local_runtime_services, CoreRuntimeServicesProvider};
+
+fn projected_turn_save_would_overwrite_runtime_state(
+    persisted: &DialogTurnData,
+    projected: &DialogTurnData,
+) -> bool {
+    persisted.recovery.is_some()
+        || persisted.recovery_epoch.is_some()
+        || projected.recovery.is_some()
+        || projected.recovery_epoch.is_some()
+        || (matches!(
+            persisted.status,
+            TurnStatus::Completed | TurnStatus::Cancelled | TurnStatus::Error
+        ) && projected.status == TurnStatus::InProgress)
+}
+
+fn merge_runtime_owned_turn_facts(
+    persisted: &DialogTurnData,
+    projected: &DialogTurnData,
+) -> DialogTurnData {
+    let mut merged = projected.clone();
+    merged.agent_type = persisted.agent_type.clone();
+
+    let Some(persisted_metadata) = persisted
+        .user_message
+        .metadata
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+    else {
+        return merged;
+    };
+    let projected_metadata = merged
+        .user_message
+        .metadata
+        .get_or_insert_with(|| serde_json::json!({}));
+    if !projected_metadata.is_object() {
+        *projected_metadata = serde_json::json!({});
+    }
+    let target = projected_metadata
+        .as_object_mut()
+        .expect("projected metadata was normalized to an object");
+    for key in [
+        INTERRUPTED_TURN_PERMISSION_MODE_METADATA_KEY,
+        INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY,
+        INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY,
+        INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY,
+        INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY,
+        INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY,
+    ] {
+        if let Some(value) = persisted_metadata.get(key) {
+            target.insert(key.to_string(), value.clone());
+        }
+    }
+    merged
+}
 
 struct ProductEventQueueDrain {
     task: tokio::task::JoinHandle<()>,
@@ -505,7 +568,7 @@ impl LocalWorkspaceSnapshotPort for CoreLocalWorkspaceSnapshot {
         validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
         ensure_local_snapshot_manager(&request.workspace_path)
             .await?
-            .rollback_to_turn(&request.session_id, request.turn_index)
+            .rollback_workspace_files_to_boundary(&request.session_id, request.turn_index)
             .await
             .map_err(snapshot_port_error)
     }
@@ -539,6 +602,18 @@ impl CoreProductAgentRuntime {
             session_operations.clone(),
             session_operations,
         )
+    }
+
+    /// Build the Desktop/Rich-client Session facade with the Runtime-owned
+    /// materialized event projection used for client reattachment.
+    pub fn build_session_surface_with_event_journal(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+        token_usage_service: Arc<TokenUsageService>,
+        event_journal: Arc<bitfun_agent_runtime::sdk::SessionEventJournal>,
+    ) -> Result<AgentRuntime, String> {
+        Self::build_session_surface(coordinator, scheduler, token_usage_service)
+            .map(|runtime| runtime.with_session_event_journal(event_journal))
     }
 
     #[deprecated(note = "use build_with_event_source for first-party product runtimes")]
@@ -1035,6 +1110,28 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
+    /// True when an external agent (ACP), not this Runtime, drives the Session.
+    ///
+    /// The Runtime never starts or completes those Turns, so it holds no
+    /// history branch for them and loading them into the Session manager only
+    /// rewrites their mode to a local fallback. Their history is projected by
+    /// the frontend, which is its only writer.
+    pub async fn is_externally_projected_session(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<bool> {
+        let metadata = self
+            .load_persisted_session_metadata(workspace_path, session_id)
+            .await?;
+        Ok(metadata
+            .as_ref()
+            .and_then(|metadata| metadata.custom_metadata.as_ref())
+            .and_then(|custom| custom.get(SESSION_PROVIDER_METADATA_KEY))
+            .and_then(serde_json::Value::as_str)
+            == Some(SESSION_PROVIDER_ACP))
+    }
+
     pub async fn update_persisted_session_metadata(
         &self,
         workspace_path: &Path,
@@ -1356,6 +1453,17 @@ impl CoreAgentRuntimeCompatibility {
                 turn.session_id, permit.session_id
             )));
         }
+        if self
+            .is_externally_projected_session(&permit.storage_path, &permit.session_id)
+            .await?
+        {
+            // No Runtime history branch exists to validate against: the external
+            // agent owns the conversation and the projection is the only writer.
+            return self
+                .persistence
+                .save_dialog_turn(&permit.storage_path, turn)
+                .await;
+        }
         let session = self
             .coordinator
             .get_session_manager()
@@ -1373,8 +1481,26 @@ impl CoreAgentRuntimeCompatibility {
                 permit.session_id, turn.turn_index, turn.turn_id
             )));
         }
+        let mut projected = turn.clone();
+        if let Some(persisted) = self
+            .persistence
+            .load_dialog_turn(&permit.storage_path, &permit.session_id, turn.turn_index)
+            .await?
+        {
+            if projected_turn_save_would_overwrite_runtime_state(&persisted, turn) {
+                log::debug!(
+                    "Ignoring stale projected Turn save owned by the runtime: session_id={}, turn_id={}, persisted_status={:?}, projected_status={:?}",
+                    permit.session_id,
+                    turn.turn_id,
+                    persisted.status,
+                    turn.status
+                );
+                return Ok(());
+            }
+            projected = merge_runtime_owned_turn_facts(&persisted, turn);
+        }
         self.persistence
-            .save_dialog_turn(&permit.storage_path, turn)
+            .save_dialog_turn(&permit.storage_path, &projected)
             .await
     }
 
@@ -2095,10 +2221,12 @@ mod tests {
     use super::CoreProductAgentEventSource;
     use super::{
         build_session_lineage_snapshot, generate_core_session_usage_report,
-        get_snapshot_manager_for_workspace, latest_persisted_turn_id, runtime_lineage_snapshot,
-        runtime_port_error, validate_latest_turn_fork_scope, validate_persisted_session_id,
-        CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
-        CoreProductEventQueueOwner, CoreSessionOperationsPort,
+        get_snapshot_manager_for_workspace, latest_persisted_turn_id,
+        merge_runtime_owned_turn_facts, projected_turn_save_would_overwrite_runtime_state,
+        runtime_lineage_snapshot, runtime_port_error, validate_latest_turn_fork_scope,
+        validate_persisted_session_id, CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot,
+        CoreProductAgentRuntime, CoreProductEventQueueOwner, CoreSessionOperationsPort,
+        SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY,
     };
     #[cfg(feature = "product-search")]
     use super::{session_search_index_error, validated_session_content_search_query};
@@ -2116,7 +2244,10 @@ mod tests {
     use crate::agentic::tools::registry::ToolRegistry;
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::infrastructure::PathManager;
-    use crate::service::session::{DialogTurnData, SessionMetadata, UserMessageData};
+    use crate::service::session::{
+        DialogTurnData, DialogTurnRecoveryData, DialogTurnRecoveryStatus, SessionMetadata,
+        TurnStatus, UserMessageData,
+    };
     use crate::service::session_usage::UsageTokenSource;
     use crate::service::snapshot::manager::clear_snapshot_manager_for_test;
     use crate::service::token_usage::TokenUsageService;
@@ -2193,6 +2324,103 @@ mod tests {
             clear_snapshot_manager_for_test(&self.path);
             let _ = std::fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn stale_projected_turn_saves_cannot_overwrite_runtime_recovery_state() {
+        let mut persisted = DialogTurnData::new(
+            "turn-1".to_string(),
+            0,
+            "session-1".to_string(),
+            UserMessageData {
+                id: "user-1".to_string(),
+                content: "continue".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        let projected = persisted.clone();
+        persisted.status = TurnStatus::Cancelled;
+        persisted.recovery = Some(DialogTurnRecoveryData {
+            status: DialogTurnRecoveryStatus::Interrupted,
+            execution_generation: 0,
+            resume_count: 0,
+            interrupted_at: Some(2),
+            model_id: Some("model-a".to_string()),
+        });
+        persisted.recovery_epoch = Some(0);
+        assert!(projected_turn_save_would_overwrite_runtime_state(
+            &persisted, &projected
+        ));
+
+        let mut completed = persisted.clone();
+        completed.status = TurnStatus::Completed;
+        completed.recovery = None;
+        assert!(projected_turn_save_would_overwrite_runtime_state(
+            &completed, &projected
+        ));
+
+        let mut projected_with_recovery = projected.clone();
+        projected_with_recovery.recovery = persisted.recovery.clone();
+        assert!(projected_turn_save_would_overwrite_runtime_state(
+            &projected,
+            &projected_with_recovery
+        ));
+        assert!(!projected_turn_save_would_overwrite_runtime_state(
+            &projected, &projected
+        ));
+    }
+
+    #[test]
+    fn projected_turn_saves_preserve_runtime_execution_contract() {
+        let mut persisted = DialogTurnData::new(
+            "turn-1".to_string(),
+            0,
+            "session-1".to_string(),
+            UserMessageData {
+                id: "user-1".to_string(),
+                content: "continue".to_string(),
+                timestamp: 1,
+                metadata: Some(serde_json::json!({
+                    "runtime_resolved_model_id": "model-a",
+                    "runtime_model_binding_fingerprint": "binding-a",
+                    "runtime_reasoning_preset": "high",
+                    "runtime_reasoning_selection": "high",
+                    "runtime_reasoning_fingerprint": "reasoning-a",
+                    "resolved_permission_mode": "ask",
+                })),
+            },
+        );
+        persisted.agent_type = Some("runtime-agent".to_string());
+        let mut projected = persisted.clone();
+        projected.agent_type = Some("stale-agent".to_string());
+        projected.user_message.metadata = Some(serde_json::json!({
+            "canvas_context": { "node": "selected" }
+        }));
+
+        let merged = merge_runtime_owned_turn_facts(&persisted, &projected);
+        let metadata = merged
+            .user_message
+            .metadata
+            .and_then(|value| value.as_object().cloned())
+            .expect("merged metadata");
+        assert_eq!(merged.agent_type.as_deref(), Some("runtime-agent"));
+        assert_eq!(
+            metadata.get("runtime_resolved_model_id"),
+            Some(&serde_json::json!("model-a"))
+        );
+        assert_eq!(
+            metadata.get("runtime_reasoning_fingerprint"),
+            Some(&serde_json::json!("reasoning-a"))
+        );
+        assert_eq!(
+            metadata.get("resolved_permission_mode"),
+            Some(&serde_json::json!("ask"))
+        );
+        assert_eq!(
+            metadata.get("canvas_context"),
+            Some(&serde_json::json!({ "node": "selected" }))
+        );
     }
 
     #[tokio::test]
@@ -3325,5 +3553,139 @@ mod tests {
         assert_eq!(report.tokens.input_tokens, Some(10));
         assert_eq!(report.tokens.output_tokens, Some(5));
         assert_eq!(report.tokens.total_tokens, Some(15));
+    }
+
+    #[tokio::test]
+    async fn externally_projected_turns_persist_without_a_runtime_history_branch() {
+        let workspace = TestWorkspace::new();
+        let storage_path = workspace.path().join("sessions");
+        std::fs::create_dir_all(&storage_path).expect("session storage");
+        let persistence = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence.clone(),
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let tool_pipeline = Arc::new(ToolPipeline::new(
+            Arc::new(TokioRwLock::new(ToolRegistry::new())),
+            Arc::new(ToolStateManager::new(event_queue.clone())),
+            None,
+        ));
+        let execution_engine = Arc::new(ExecutionEngine::new(
+            Arc::new(RoundExecutor::new(
+                Arc::new(StreamProcessor::new(event_queue.clone())),
+                event_queue.clone(),
+                tool_pipeline.clone(),
+            )),
+            event_queue.clone(),
+            session_manager.clone(),
+            Arc::new(ContextCompressor::new(CompressionConfig::default())),
+            ExecutionEngineConfig::default(),
+        ));
+        let coordinator = Arc::new(ConversationCoordinator::new(
+            session_manager.clone(),
+            execution_engine,
+            tool_pipeline,
+            event_queue,
+            Arc::new(EventRouter::new()),
+            Arc::new(
+                crate::runtime_ownership::CoreRuntimeOwnership::embedded_with_facts(
+                    std::env::temp_dir().join(format!(
+                        "bitfun-product-runtime-ownership-test-{}",
+                        uuid::Uuid::new_v4()
+                    )),
+                    "bitfun".to_string(),
+                    "test",
+                ),
+            ),
+        ));
+        let scheduler = DialogScheduler::new(coordinator.clone(), session_manager.clone());
+        let compatibility = CoreAgentRuntimeCompatibility::build(coordinator, scheduler);
+
+        let save_first_turn = |session_id: &'static str| {
+            let compatibility = compatibility.clone();
+            let storage_path = storage_path.clone();
+            async move {
+                let turn = DialogTurnData::new(
+                    format!("{session_id}-turn-0"),
+                    0,
+                    session_id.to_string(),
+                    UserMessageData {
+                        id: format!("{session_id}-user-0"),
+                        content: "hello".to_string(),
+                        timestamp: 1,
+                        metadata: None,
+                    },
+                );
+                let permit = compatibility
+                    .begin_persisted_session_mutation(&storage_path, session_id)
+                    .await
+                    .expect("mutation permit");
+                compatibility
+                    .save_persisted_dialog_turn(&permit, &turn)
+                    .await
+            }
+        };
+
+        let acp_session_id = "acp_dsh_projected";
+        let mut acp_metadata = SessionMetadata::new(
+            acp_session_id.to_string(),
+            "Projected".to_string(),
+            "acp:dsh".to_string(),
+            "deepseek".to_string(),
+        );
+        let mut custom_metadata = serde_json::Map::new();
+        custom_metadata.insert(
+            SESSION_PROVIDER_METADATA_KEY.to_string(),
+            serde_json::Value::String(SESSION_PROVIDER_ACP.to_string()),
+        );
+        acp_metadata.custom_metadata = Some(serde_json::Value::Object(custom_metadata));
+        persistence
+            .save_session_metadata(&storage_path, &acp_metadata)
+            .await
+            .expect("acp metadata");
+
+        save_first_turn(acp_session_id)
+            .await
+            .expect("a projected first turn has no branch to validate against");
+        assert_eq!(
+            persistence
+                .load_session_turns(&storage_path, acp_session_id)
+                .await
+                .expect("projected turns")
+                .len(),
+            1
+        );
+
+        let runtime_session_id = "runtime-owned";
+        persistence
+            .save_session_metadata(
+                &storage_path,
+                &SessionMetadata::new(
+                    runtime_session_id.to_string(),
+                    "Runtime owned".to_string(),
+                    "agentic".to_string(),
+                    "model-a".to_string(),
+                ),
+            )
+            .await
+            .expect("runtime metadata");
+
+        let error = save_first_turn(runtime_session_id)
+            .await
+            .expect_err("a Runtime-owned Session still needs its history branch");
+        assert!(
+            matches!(error, BitFunError::OutcomeUnknown(_)),
+            "unexpected error: {error}"
+        );
     }
 }

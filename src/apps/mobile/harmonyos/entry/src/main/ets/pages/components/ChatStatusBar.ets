@@ -39,6 +39,7 @@ export struct ChatStatusBar {
           .textAlign(TextAlign.Center)
           .backgroundColor(SOFT)
           .borderRadius(17)
+          .accessibilityText(RemoteI18n.t('chat.stop'))
           .onClick(() => {
             this.onStop();
           })

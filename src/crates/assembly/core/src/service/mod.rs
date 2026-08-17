@@ -42,6 +42,8 @@ pub mod search; // Workspace search via managed flashgrep daemon
 #[cfg(feature = "local-storage")]
 pub mod session; // Session persistence
 #[cfg(feature = "agent-runtime")]
+pub mod session_projection_store; // Durable append-only log of the executing Turn
+#[cfg(feature = "agent-runtime")]
 pub mod session_usage; // Session runtime usage reports
 #[cfg(feature = "agent-runtime")]
 pub mod snapshot; // Snapshot-based change tracking

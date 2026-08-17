@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ContextItem } from '@/shared/types/context';
 import { sessionComposerStore } from './sessionComposerStore';
+import {
+  LOCAL_SURFACE_ID,
+  activateSurface,
+} from '@/infrastructure/peer-device/deviceSurface';
 
 function context(id: string): ContextItem {
   return {
@@ -14,6 +18,7 @@ function context(id: string): ContextItem {
 
 describe('sessionComposerStore', () => {
   beforeEach(() => {
+    activateSurface(LOCAL_SURFACE_ID);
     sessionComposerStore.setState({ drafts: {} });
   });
 
@@ -79,7 +84,33 @@ describe('sessionComposerStore', () => {
 
     store.removeDrafts(['session-a']);
 
-    expect(sessionComposerStore.getState().drafts['session-a']).toBeUndefined();
+    expect(sessionComposerStore.getState().getDraft('session-a').value).toBe('');
     expect(sessionComposerStore.getState().getDraft('session-b').value).toBe('draft b');
+  });
+
+  it('keeps equal session ids isolated across device surfaces', () => {
+    sessionComposerStore.getState().setValue('same-session', 'local draft');
+
+    activateSurface('peer-b');
+    expect(sessionComposerStore.getState().getDraft('same-session').value).toBe('');
+    sessionComposerStore.getState().setValue('same-session', 'peer draft');
+
+    activateSurface(LOCAL_SURFACE_ID);
+    expect(sessionComposerStore.getState().getDraft('same-session').value).toBe('local draft');
+    activateSurface('peer-b');
+    expect(sessionComposerStore.getState().getDraft('same-session').value).toBe('peer draft');
+  });
+
+  it('does not save the previous surface contexts into the new surface', () => {
+    activateSurface('peer-b');
+
+    sessionComposerStore.getState().activateDraft(
+      'local-session',
+      'peer-session',
+      [context('local-context')],
+      false,
+    );
+
+    expect(sessionComposerStore.getState().getDraft('local-session').contexts).toEqual([]);
   });
 });

@@ -92,7 +92,6 @@ pub(crate) async fn start_dialog_turn(
     if !state
         .turns
         .is_event_stream_generation_current(stream_generation)
-        || !is_controller_lease_current(controller_lease)
     {
         let cancellation = state
             .agent_runtime
@@ -101,7 +100,7 @@ pub(crate) async fn start_dialog_turn(
                 turn_id: Some(turn_id.clone()),
                 source: Some(AgentSubmissionSource::Cli),
                 requester_session_id: None,
-                reason: Some("Peer controller or event stream lost continuity".to_string()),
+                reason: Some("Peer event stream lost continuity".to_string()),
                 wait_timeout_ms: Some(1_500),
                 cancel_descendants: true,
             })
@@ -112,10 +111,7 @@ pub(crate) async fn start_dialog_turn(
                 "Peer continuity was lost after dialog submission and cancellation could not be confirmed: session_id={session_id}, turn_id={turn_id}, error={error}"
             ));
         }
-        return Err(
-            "Peer controller or event stream lost continuity while starting the dialog turn"
-                .to_string(),
-        );
+        return Err("Peer event stream lost continuity while starting the dialog turn".to_string());
     }
 
     Ok(json!({ "success": true, "message": "Dialog turn started" }))

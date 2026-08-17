@@ -67,6 +67,7 @@ pub type PluginRuntimeAvailability = ExtensionCapabilityAvailability;
 pub enum PluginSourceKind {
     LocalPath,
     OpenCodeCompatible,
+    DeepSeekHarnessCompatible,
     RemoteRegistry,
     BitFunNative,
 }

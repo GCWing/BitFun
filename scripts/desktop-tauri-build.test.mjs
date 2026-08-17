@@ -27,9 +27,9 @@ test('Desktop DMG uses the branded installer layout', () => {
   );
   assert.deepEqual(config.bundle.macOS.dmg, {
     background: 'dmg/background.png',
-    windowSize: { width: 800, height: 563 },
-    appPosition: { x: 235, y: 240 },
-    applicationFolderPosition: { x: 565, y: 240 },
+    windowSize: { width: 660, height: 400 },
+    appPosition: { x: 180, y: 170 },
+    applicationFolderPosition: { x: 480, y: 170 },
   });
 });
 
@@ -310,6 +310,45 @@ test('beta Desktop artifacts compile and bundle only beta updater endpoints', ()
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
+    rmSync(fixture, { force: true, recursive: true });
+  }
+});
+
+test('static desktop Tauri configs do not require the DeepSeek profile at compile time', () => {
+  for (const name of ['tauri.conf.json', 'tauri.dev.conf.json']) {
+    const config = JSON.parse(
+      readFileSync(join(ROOT, 'src', 'apps', 'desktop', name), 'utf8')
+    );
+    assert.equal(
+      config.bundle.resources['../../../packages/dsh-acp/dist-profile'],
+      undefined,
+      `${name} must not list dist-profile as a compile-time resource`,
+    );
+  }
+});
+
+test('official packaging injects the DeepSeek profile resource', () => {
+  const fixture = join(tmpdir(), `bitfun-tauri-dsh-${process.pid}-${Date.now()}`);
+  mkdirSync(fixture, { recursive: true });
+  const baseConfig = join(fixture, 'tauri.conf.json');
+  writeFileSync(baseConfig, JSON.stringify({
+    bundle: { resources: { 'resources/worker_host.js': 'resources/worker_host.js' } },
+  }));
+  try {
+    const generated = prepareTauriConfig(baseConfig, {
+      desktopDir: fixture,
+      flashgrepBinary: join(fixture, 'flashgrep'),
+    });
+    const config = JSON.parse(readFileSync(generated, 'utf8'));
+    assert.equal(
+      config.bundle.resources['../../../packages/dsh-acp/dist-profile'],
+      'resources/dsh-profile',
+    );
+    assert.equal(
+      config.bundle.resources['resources/worker_host.js'],
+      'resources/worker_host.js',
+    );
+  } finally {
     rmSync(fixture, { force: true, recursive: true });
   }
 });

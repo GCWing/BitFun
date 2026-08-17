@@ -1,5 +1,12 @@
 import { ITransportAdapter, type TransportRequestTiming } from './base';
 import { TauriTransportAdapter } from './tauri-adapter';
+import {
+  SurfaceChangedError,
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+  surfaceIdForDevice,
+  type DeviceSurfaceId,
+} from '@/infrastructure/peer-device/deviceSurface';
 import { createLogger } from '@/shared/utils/logger';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 
@@ -158,6 +165,7 @@ const HIGH_PRIORITY_COMMANDS = new Set([
   'get_agent_profile_config',
   'start_dialog_turn',
   'cancel_dialog_turn',
+  'rollback_session_to_turn',
   'list_pending_permission_requests',
   'subscribe_permission_requests',
   'respond_permission',
@@ -339,6 +347,8 @@ export interface PeerDeviceTransportHooks {
    * advertises matching execution-side deduplication.
    */
   supportsIdempotentDialogSubmit?: boolean;
+  /** Enables targeted rollback only when the target host owns the transaction. */
+  supportsTargetedSessionRollback?: boolean;
 }
 
 interface HostInvokeResultEnvelope {
@@ -371,10 +381,32 @@ class PeerRpcTimeoutError extends Error {
   }
 }
 
+/**
+ * Raised when a request is abandoned because its adapter was torn down.
+ *
+ * It extends `SurfaceChangedError` so the one boundary that already unwinds
+ * stale-surface work handles disposal too, rather than every call site growing
+ * a second guard. What matters most is that it settles the promise at all:
+ * queued entries used to be dropped without settling, so every caller awaiting
+ * one (session list, session history) hung on a spinner forever.
+ */
+export class PeerTransportClosedError extends SurfaceChangedError {
+  constructor(deviceId: string, epoch: number, action?: string) {
+    super(surfaceIdForDevice(deviceId), epoch, action);
+    this.name = 'PeerTransportClosedError';
+    this.message = action
+      ? `Peer transport for '${deviceId}' closed while '${action}' was pending`
+      : `Peer transport for '${deviceId}' closed`;
+  }
+}
+
 interface QueuedPeerRequest {
   priority: PeerInvokePriority;
+  action: string;
   enqueuedAt: number;
   run: () => Promise<void>;
+  /** Settle the caller without running (or awaiting) the request. */
+  cancel: (error: Error) => void;
 }
 
 /**
@@ -387,8 +419,20 @@ interface QueuedPeerRequest {
  * session hydrate is not starved by background git/SSH/editor RPCs.
  */
 export class PeerDeviceTransportAdapter implements ITransportAdapter {
+  /** Which device surface this adapter's product traffic belongs to. */
+  readonly surfaceId: DeviceSurfaceId;
+
   private readonly local = new TauriTransportAdapter();
   private connected = false;
+  private disposed = false;
+  /**
+   * Whether this adapter is the transport the window currently renders.
+   * Permissive until the registry says otherwise: the guard exists to catch
+   * work outliving a switch *away*, not to gate an adapter nobody rendered yet.
+   */
+  private renderedTransport = true;
+  /** Bumped on every bind/unbind, so a request can detect it outlived one. */
+  private surfaceBindingEpoch = 0;
   private activeCount = 0;
   private readonly activeByPriority: Record<PeerInvokePriority, number> = {
     high: 0,
@@ -400,35 +444,118 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     normal: [],
     low: [],
   };
+  /** Every request whose caller promise has not settled — queued or in flight. */
+  private readonly pending = new Set<QueuedPeerRequest>();
 
   constructor(
     private readonly targetDeviceId: string,
     private readonly deviceRpc: DeviceRpcFn,
-    private readonly hooks: PeerDeviceTransportHooks = {},
+    private hooks: PeerDeviceTransportHooks = {},
     private readonly maxConcurrent: number = PEER_HOST_INVOKE_MAX_CONCURRENT,
-  ) {}
+  ) {
+    this.surfaceId = surfaceIdForDevice(targetDeviceId);
+  }
+
+  /**
+   * Search progress is not part of the negotiated Peer DeviceEvent contract.
+   * Use the response-based search command so older peers remain compatible and
+   * results never fall back to the controller's filesystem.
+   */
+  supportsSearchStreamEvents(): boolean {
+    return false;
+  }
 
   getTargetDeviceId(): string {
     return this.targetDeviceId;
   }
 
+  /**
+   * Adopt the capabilities of the host that answered the latest handshake.
+   * They belong to that host, not to the device id: a peer that restarted on
+   * an older build during a reconnect must not keep the previous contract.
+   */
+  setHostCapabilities(
+    capabilities: Pick<
+      PeerDeviceTransportHooks,
+      'supportsIdempotentDialogSubmit' | 'supportsTargetedSessionRollback'
+    >,
+  ): void {
+    this.hooks = { ...this.hooks, ...capabilities };
+  }
+
+  /**
+   * Registry hook: this adapter has started or stopped being the transport the
+   * window renders. A request issued under an earlier binding fails as a
+   * surface change when it lands, so slow work — a session-list read still
+   * working through its retry budget, say — cannot resolve into the surface
+   * that replaced it.
+   */
+  markRenderedTransport(rendered: boolean, forceNewBinding = false): void {
+    if (rendered === this.renderedTransport && !forceNewBinding) {
+      return;
+    }
+    this.renderedTransport = rendered;
+    this.surfaceBindingEpoch += 1;
+    const error = new SurfaceChangedError(
+      this.surfaceId,
+      getActiveSurfaceScope().epoch,
+      'change peer transport binding',
+    );
+    // Settle callers immediately at the activation boundary. Work already on
+    // the wire may finish on its owning host, but nobody should wait through a
+    // timeout/retry budget before learning that its rendered surface is gone.
+    for (const entry of Array.from(this.pending)) {
+      entry.cancel(error);
+    }
+    for (const priority of ['high', 'normal', 'low'] as const) {
+      for (const entry of this.queues[priority]) {
+        this.pending.delete(entry);
+      }
+      this.queues[priority].length = 0;
+    }
+  }
+
+  isDisposed(): boolean {
+    return this.disposed;
+  }
+
   async connect(): Promise<void> {
+    this.assertUsable('connect');
     await this.local.connect();
     this.connected = true;
   }
 
   async request<T>(action: string, params?: any, timing?: TransportRequestTiming): Promise<T> {
     const transportStartedAt = nowMs();
+    this.assertUsable(action);
     if (!this.connected) {
       await this.connect();
     }
 
     if (isPeerLocalOnlyCommand(action)) {
+      // Local-only commands run on this machine by definition, so they are not
+      // bound to the rendered surface and stay valid on a retired adapter.
       return this.local.request<T>(action, params, timing);
     }
 
+    this.assertRenderedTransport(action);
+
+    if (
+      action === 'rollback_session_to_turn' &&
+      this.hooks.supportsTargetedSessionRollback !== true
+    ) {
+      throw new PeerProductCommandError(
+        'The connected Peer host does not support targeted Session rollback',
+      );
+    }
+
+    const issuedBindingEpoch = this.surfaceBindingEpoch;
     const priority = peerInvokePriorityFor(action);
-    return this.enqueue(priority, () => this.invokeOnPeer<T>(action, params, timing, transportStartedAt));
+    return this.enqueue(
+      priority,
+      action,
+      () => this.invokeOnPeer<T>(action, params, timing, transportStartedAt, issuedBindingEpoch),
+    );
   }
 
   /**
@@ -440,10 +567,18 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     command: Record<string, unknown>,
     priority: PeerInvokePriority = 'normal',
   ): Promise<T> {
+    const action = typeof command.cmd === 'string' ? command.cmd : 'unknown';
+    this.assertUsable(action);
     if (!this.connected) {
       await this.connect();
     }
-    return this.enqueue(priority, () => this.invokePeerCommand<T>(command, priority));
+    this.assertRenderedTransport(action);
+    const issuedBindingEpoch = this.surfaceBindingEpoch;
+    return this.enqueue(
+      priority,
+      action,
+      () => this.invokePeerCommand<T>(command, priority, issuedBindingEpoch),
+    );
   }
 
   listen<T>(event: string, callback: (data: T) => void): () => void {
@@ -454,14 +589,30 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     await this.local.waitForListenerRegistrations?.();
   }
 
+  /**
+   * Dispose this adapter. Terminal on purpose: an adapter dies with its peer
+   * link, and a late request must not silently re-open a data plane to a device
+   * we have detached from.
+   *
+   * Every unsettled caller is rejected. Queued entries used to be discarded
+   * with `queue.length = 0`, which never settled their promises — that is what
+   * left session-list and history loads spinning forever after a teardown.
+   */
   async disconnect(): Promise<void> {
-    await this.local.disconnect();
+    this.disposed = true;
     this.connected = false;
     for (const priority of ['high', 'normal', 'low'] as const) {
       this.queues[priority].length = 0;
-      this.activeByPriority[priority] = 0;
     }
-    this.activeCount = 0;
+    for (const entry of Array.from(this.pending)) {
+      entry.cancel(this.closedError(entry.action));
+    }
+    this.pending.clear();
+    // Concurrency counters are deliberately left alone: requests already handed
+    // to the transport still settle and decrement themselves. Zeroing them here
+    // made each late settle decrement a freshly reset count, so the limiter
+    // afterwards believed it had free slots it did not have.
+    await this.local.disconnect();
   }
 
   isConnected(): boolean {
@@ -477,24 +628,78 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     };
   }
 
-  private enqueue<T>(priority: PeerInvokePriority, task: () => Promise<T>): Promise<T> {
+  /** Test helper: requests currently occupying a concurrency slot. */
+  getActiveCountsForTest(): Record<PeerInvokePriority | 'total', number> {
+    return {
+      total: this.activeCount,
+      high: this.activeByPriority.high,
+      normal: this.activeByPriority.normal,
+      low: this.activeByPriority.low,
+    };
+  }
+
+  private closedError(action?: string): PeerTransportClosedError {
+    return new PeerTransportClosedError(
+      this.targetDeviceId,
+      getActiveSurfaceScope().epoch,
+      action,
+    );
+  }
+
+  private assertUsable(action: string): void {
+    if (this.disposed) {
+      throw this.closedError(action);
+    }
+  }
+
+  private assertRenderedTransport(action: string): void {
+    if (!this.renderedTransport) {
+      throw new SurfaceChangedError(
+        this.surfaceId,
+        getActiveSurfaceScope().epoch,
+        action,
+      );
+    }
+  }
+
+  private enqueue<T>(
+    priority: PeerInvokePriority,
+    action: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      this.queues[priority].push({
+      let settled = false;
+      const settle = (outcome: () => void): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        outcome();
+      };
+      const entry: QueuedPeerRequest = {
         priority,
+        action,
         enqueuedAt: nowMs(),
         run: async () => {
           try {
-            resolve(await task());
+            const value = await task();
+            settle(() => resolve(value));
           } catch (error) {
-            reject(error);
+            settle(() => reject(error));
           }
         },
-      });
+        cancel: (error: Error) => settle(() => reject(error)),
+      };
+      this.pending.add(entry);
+      this.queues[priority].push(entry);
       this.pump();
     });
   }
 
   private pump(): void {
+    if (this.disposed) {
+      return;
+    }
     while (this.activeCount < this.maxConcurrent) {
       const next = this.dequeueNext();
       if (!next) {
@@ -503,6 +708,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       this.activeCount += 1;
       this.activeByPriority[next.priority] += 1;
       void next.run().finally(() => {
+        this.pending.delete(next);
         this.activeCount = Math.max(0, this.activeCount - 1);
         this.activeByPriority[next.priority] = Math.max(
           0,
@@ -543,6 +749,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
   private async invokePeerCommand<T extends PeerDeviceCommandResponse>(
     command: Record<string, unknown>,
     priority: PeerInvokePriority,
+    issuedBindingEpoch: number,
   ): Promise<T> {
     const action = typeof command.cmd === 'string' ? command.cmd : 'unknown';
     try {
@@ -556,7 +763,9 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
         action,
         JSON.stringify(command),
         retryable ? READ_RPC_POLICY : MUTATION_RPC_POLICY,
+        issuedBindingEpoch,
       );
+      this.assertBindingUnchanged(issuedBindingEpoch, action);
       const envelope = JSON.parse(raw) as T;
       if (envelope.resp === 'error') {
         throw new PeerProductCommandError(
@@ -573,9 +782,29 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
         log.warn('Peer product command failed', { action, error });
         throw error;
       }
+      if (isSurfaceChangedError(error)) {
+        throw error;
+      }
       log.error('Peer direct command transport failed', { action, error });
       this.hooks.onHostInvokeTransportFailure?.(error, { action, priority });
       throw error;
+    }
+  }
+
+  /**
+   * A request that outlived its surface binding must not resolve: its answer
+   * describes a device this window has stopped rendering, and feeding it to the
+   * current surface is how a peer's session list ended up drawn over the local
+   * one. The peer-side effect of a mutation still stands — the caller's own
+   * generation guard decides what to do about that.
+   */
+  private assertBindingUnchanged(issuedBindingEpoch: number, action: string): void {
+    if (issuedBindingEpoch !== this.surfaceBindingEpoch) {
+      throw new SurfaceChangedError(
+        this.surfaceId,
+        getActiveSurfaceScope().epoch,
+        action,
+      );
     }
   }
 
@@ -584,6 +813,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     params: unknown,
     timing: TransportRequestTiming | undefined,
     transportStartedAt: number,
+    issuedBindingEpoch: number,
   ): Promise<T> {
     const invokeStartedAt = nowMs();
     const priority = peerInvokePriorityFor(action);
@@ -604,7 +834,9 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
         action,
         commandJson,
         rpcPolicy,
+        issuedBindingEpoch,
       );
+      this.assertBindingUnchanged(issuedBindingEpoch, action);
       const envelope = JSON.parse(raw) as HostInvokeResultEnvelope;
       if (timing) {
         timing.invokeDurationMs = elapsedMs(invokeStartedAt);
@@ -632,6 +864,11 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
         log.warn('Peer product command failed', { action, error });
         throw error;
       }
+      // A surface change is control flow, not a weak link: reporting it as a
+      // transport failure would mark a healthy peer degraded on every switch.
+      if (isSurfaceChangedError(error)) {
+        throw error;
+      }
       log.error('Peer HostInvoke transport failed', { action, error });
       this.hooks.onHostInvokeTransportFailure?.(error, { action, priority });
       throw error;
@@ -642,15 +879,25 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     action: string,
     commandJson: string,
     policy: PeerRpcPolicy,
+    issuedBindingEpoch: number,
   ): Promise<string> {
     for (let attempt = 0; ; attempt += 1) {
+      this.assertBindingUnchanged(issuedBindingEpoch, action);
       try {
-        return await this.withTimeout(
+        const result = await this.withTimeout(
           this.deviceRpc(this.targetDeviceId, commandJson, policy.timeoutMs),
           action,
           policy.timeoutMs,
         );
+        this.assertBindingUnchanged(issuedBindingEpoch, action);
+        return result;
       } catch (error) {
+        if (isSurfaceChangedError(error)) {
+          throw error;
+        }
+        // A retired binding is cancellation, not a weak relay. In particular,
+        // do not keep replaying a read after another device is rendered.
+        this.assertBindingUnchanged(issuedBindingEpoch, action);
         if (attempt >= policy.maxRetries) {
           throw error;
         }
@@ -664,6 +911,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
           error,
         });
         await new Promise(resolve => setTimeout(resolve, delayMs));
+        this.assertBindingUnchanged(issuedBindingEpoch, action);
       }
     }
   }

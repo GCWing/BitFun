@@ -545,21 +545,24 @@ describe('useFlowChatViewportAnchor', () => {
     expect(frames).toHaveLength(0);
   });
 
-  it('keeps a frame in flight for as long as an anchor stands', () => {
+  it('winds the settle window down when the anchor stays in place', () => {
     /*
-     * A frame that answered refreshes the window, and a frame that found the
-     * anchor already in place counts as answered — so an open transcript that
-     * nobody else is writing to holds the loop open indefinitely. That is the
-     * shipped behaviour, and its cost is one `querySelectorAll` and two rect
-     * reads per frame for as long as a session is open.
+     * An in-place frame means the relationship is already stable. It spends
+     * the remaining settle budget instead of refreshing it, so an open
+     * transcript that nobody else is writing to does not keep a RAF loop alive.
      */
     layoutTurns({ 'turn-3': 100 });
     api.captureAnchor();
     api.openSettleWindow();
 
-    for (let index = 0; index < 60; index += 1) runFrame();
+    let ranFrames = 0;
+    while (frames.length > 0 && ranFrames < 60) {
+      runFrame();
+      ranFrames += 1;
+    }
 
-    expect(frames).toHaveLength(1);
+    expect(ranFrames).toBe(ANCHOR_SETTLE_FRAMES);
+    expect(frames).toHaveLength(0);
     expect(scroller.scrollTop).toBe(0);
   });
 

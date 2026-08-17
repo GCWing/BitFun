@@ -1,0 +1,21 @@
+// Emit configuration for `lib/`. The base config type-checks src, tests, and
+// scripts with `noEmit`; this one compiles src alone, because tests and build
+// scripts are not part of what ships.
+//
+// `rewriteRelativeImportExtensions` (inherited) is what makes the `./bridge.ts`
+// import style in src/ legal here: TypeScript rewrites those specifiers to
+// `./bridge.js` on the way out, so the emitted tree is plain Node ESM with no
+// loader hook.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "lib",
+    "declaration": true,
+    "declarationDir": "lib/types",
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src"]
+}

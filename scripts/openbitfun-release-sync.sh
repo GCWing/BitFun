@@ -20,9 +20,11 @@
 # latest.json's manual_installers entry while the updater keeps the versioned
 # Tauri setup.exe URL.
 #
-# Cron (every 10 minutes):
-#   */10 * * * * /root/repos/BitFun-AutoUpdate/openbitfun-release-sync.sh \
-#       >> /root/repos/BitFun-AutoUpdate/sync.log 2>&1
+# Cron (every 10 minutes). Run the in-repo script from the BitFun checkout so a
+# new host only needs this repository, not a detached AutoUpdate copy:
+#   */10 * * * * /root/repos/BitFun/scripts/openbitfun-release-sync.sh \
+#       >> /var/log/bitfun-release-sync.log 2>&1
+# Host restore: deploy/openbitfun-host/README.md
 #
 # Optional immediate trigger. The release workflow POSTs to
 # ${OPENBITFUN_SYNC_WEBHOOK_URL} once assets are published (see the "Request
@@ -33,9 +35,12 @@
 #   while true; do
 #     nc -l -p 8787 -q 1 >/dev/null \
 #       && BITFUN_RELEASE_CHANNEL=stable \
-#            /root/repos/BitFun-AutoUpdate/openbitfun-release-sync.sh \
-#            >> /root/repos/BitFun-AutoUpdate/sync.log 2>&1
+#            /root/repos/BitFun/scripts/openbitfun-release-sync.sh \
+#            >> /var/log/bitfun-release-sync.log 2>&1
 #   done
+#
+# The current production origin is cron-only. Do not invent a detached webhook
+# listener unless OPENBITFUN_SYNC_WEBHOOK_URL is actually configured.
 #
 # Cron stays the source of truth: this script is idempotent and holds a flock,
 # so a webhook run and a cron run cannot collide and a missed webhook only costs
@@ -70,7 +75,9 @@ OPENBITFUN_BASE_URL="https://openbitfun.com/release${CHANNEL_PATH}"
 # serves this directory through a `location ^~ /release/` alias instead.
 WEBSITE_RELEASE_ROOT="${WEBSITE_RELEASE_DIR:-/srv/bitfun-release}"
 WEBSITE_RELEASE_DIR="${WEBSITE_RELEASE_ROOT}${CHANNEL_PATH}"
-LOCK_FILE="/root/repos/BitFun-AutoUpdate/sync.lock"
+# Keep the lock off the Nginx /release/ alias. Override with
+# BITFUN_RELEASE_SYNC_LOCK if a host must share a lock across checkouts.
+LOCK_FILE="${BITFUN_RELEASE_SYNC_LOCK:-/var/lock/bitfun-release-sync.lock}"
 LEGACY_WINDOWS_INSTALLER_FILENAME="bitfun-installer.exe"
 WINDOWS_INSTALLER_FILENAME="$LEGACY_WINDOWS_INSTALLER_FILENAME"
 WINDOWS_INSTALLER_URL=""

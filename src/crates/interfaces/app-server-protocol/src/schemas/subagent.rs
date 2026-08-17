@@ -3,6 +3,8 @@
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
+pub use bitfun_product_domains::agent_catalog::SubagentSummary;
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]
 #[request(method = "subagent/list", response = ListSubagentsResponse)]
 #[serde(rename_all = "camelCase")]
@@ -18,22 +20,6 @@ pub struct ListSubagentsResponse {
     pub subagents: Vec<SubagentSummary>,
     #[serde(default)]
     pub has_external: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubagentSummary {
-    pub key: String,
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub source: String,
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default)]
-    pub is_external: bool,
-    #[serde(default)]
-    pub supports_follow_up: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonRpcRequest)]

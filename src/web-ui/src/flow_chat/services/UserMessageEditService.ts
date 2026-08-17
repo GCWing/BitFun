@@ -1,10 +1,11 @@
-import { snapshotAPI } from '@/infrastructure/api';
-import { globalEventBus } from '@/infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatStore } from '../store/FlowChatStore';
-import { pendingQueueManager } from './flow-chat-manager/PendingQueueModule';
-import { stateMachineManager } from '../state-machine';
-import { SessionExecutionEvent, SessionExecutionState } from '../state-machine/types';
+import {
+  endSessionMutation,
+  tryBeginSessionMutation,
+} from '../store/sessionMutationStore';
+import { resolveMaterializedSessionTurnIdentity } from '../utils/flowChatTurnIdentity';
+import { rollbackSessionToTurn } from './SessionRollbackService';
 
 const log = createLogger('UserMessageEditService');
 
@@ -18,19 +19,15 @@ export interface UserMessageEditImpact {
 export interface EditAndRerunUserMessageRequest {
   sessionId: string;
   turnId: string;
-  turnIndex: number;
   originalContent: string;
   editedContent: string;
   agentType?: string;
-  rerun: (content: string, agentType?: string) => Promise<void>;
+  rerun: (content: string, agentType: string | undefined, leaseId: string) => Promise<void>;
 }
 
-export function describeUserMessageEditImpact(sessionId: string): UserMessageEditImpact {
-  const currentState = stateMachineManager.getCurrentState(sessionId);
+export function describeUserMessageEditImpact(_sessionId: string): UserMessageEditImpact {
   return {
-    willStopRunningTask:
-      currentState === SessionExecutionState.PROCESSING ||
-      currentState === SessionExecutionState.FINISHING,
+    willStopRunningTask: false,
     willRestoreFiles: true,
     willDeleteTurns: true,
     willRerun: true,
@@ -74,8 +71,12 @@ export async function editAndRerunUserMessage(
     throw new Error(`Session does not exist: ${request.sessionId}`);
   }
 
-  const targetTurn = session.dialogTurns[request.turnIndex];
-  if (!targetTurn || targetTurn.id !== request.turnId) {
+  const targetTurn = resolveMaterializedSessionTurnIdentity(
+    session,
+    flowChatStore.getSessionHistoryViewState(request.sessionId),
+    request.turnId,
+  )?.turn;
+  if (!targetTurn) {
     throw new Error('Message edit target is no longer available');
   }
 
@@ -84,31 +85,25 @@ export async function editAndRerunUserMessage(
     throw new Error('Only messages sent from the desktop chat input can be edited');
   }
 
-  if (pendingQueueManager.list(request.sessionId).length > 0) {
-    throw new Error('Edit the message after clearing the pending queue');
-  }
-
-  const currentState = stateMachineManager.getCurrentState(request.sessionId);
-  if (currentState === SessionExecutionState.PROCESSING || currentState === SessionExecutionState.FINISHING) {
-    await stateMachineManager.transition(request.sessionId, SessionExecutionEvent.USER_CANCEL);
-  } else if (currentState === SessionExecutionState.ERROR) {
-    await stateMachineManager.transition(request.sessionId, SessionExecutionEvent.RESET);
-  }
-
   log.info('Editing user message and rerunning from turn', {
     sessionId: request.sessionId,
-    turnIndex: request.turnIndex,
     turnId: request.turnId,
   });
 
-  const restoredFiles = await snapshotAPI.rollbackToTurn(request.sessionId, request.turnIndex, true);
+  const lease = tryBeginSessionMutation(request.sessionId, 'edit-rerun', request.turnId);
+  if (!lease) {
+    throw new Error('Another Session history mutation is already in progress');
+  }
+  try {
+    await rollbackSessionToTurn({
+      sessionId: request.sessionId,
+      targetTurnId: request.turnId,
+      kind: 'edit-rerun',
+      lease,
+    });
 
-  flowChatStore.truncateDialogTurnsFrom(request.sessionId, request.turnIndex);
-
-  globalEventBus.emit('file-tree:refresh');
-  restoredFiles.forEach(filePath => {
-    globalEventBus.emit('editor:file-changed', { filePath });
-  });
-
-  await request.rerun(trimmedEditedContent, request.agentType);
+    await request.rerun(trimmedEditedContent, request.agentType, lease.leaseId);
+  } finally {
+    endSessionMutation(lease);
+  }
 }

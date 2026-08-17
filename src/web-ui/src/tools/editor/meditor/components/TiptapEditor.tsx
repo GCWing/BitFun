@@ -37,7 +37,7 @@ import {
   InlineAiPreviewExtension,
 } from '../extensions/InlineAiPreviewExtension';
 import { inlineAiPreviewPluginKey } from '../extensions/InlineAiPreviewPluginKey';
-import { RawHtmlBlock, RawHtmlInline, RenderOnlyBlock } from '../extensions/RawHtmlExtensions';
+import { Frontmatter, RawHtmlBlock, RawHtmlInline, RenderOnlyBlock } from '../extensions/RawHtmlExtensions';
 import { getBlockIndexForLine } from '../utils/markdownBlocks';
 import {
   buildInlineContinuePrompt,
@@ -601,6 +601,9 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       }),
       DetailsSummary,
       DetailsContent,
+      Frontmatter.configure({
+        label: t('editor.meditor.frontmatter.label'),
+      }),
       // Keep raw/render-only fallbacks for HTML we still can't round-trip safely.
       RenderOnlyBlock.configure({
         basePath,

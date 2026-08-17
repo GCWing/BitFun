@@ -20,7 +20,12 @@ ts-rs = { workspace = true, optional = true }
 
 [features]
 default = []
-ts = ["dep:ts-rs", "bitfun-product-domains/ts"]
+ts = [
+    "dep:ts-rs",
+    "bitfun-core-types/ts",
+    "bitfun-product-domains/ts",
+    "bitfun-runtime-ports/ts",
+]
 
 [lints]
 workspace = true

@@ -17,7 +17,7 @@ vi.mock('@/shared/utils/logger', () => ({
   }),
 }))
 
-import { MEditorErrorBoundary } from './MEditor'
+import { MEditor, MEditorErrorBoundary } from './MEditor'
 
 function UnsupportedMarkdownRenderer(): never {
   throw new SyntaxError('Invalid regular expression: invalid group specifier name')
@@ -67,4 +67,31 @@ describe('MEditorErrorBoundary', () => {
       })
     )
   })
+
+  it('shows the compatibility warning only when IR mode requests a fallback', () => {
+    act(() => {
+      root.render(
+        <MEditor value={'Mix <span data-x="1">inline</span> HTML.'} mode="preview" />
+      )
+    })
+    expect(container.textContent).not.toContain('IR fallback warning')
+
+    act(() => {
+      root.render(
+        <MEditor value={'Mix <span data-x="1">inline</span> HTML.'} mode="ir" />
+      )
+    })
+    expect(container.textContent).toContain('IR fallback warning')
+  })
 })
+
+vi.mock('@/infrastructure/i18n', () => ({
+  i18nService: {
+    t: (key: string) => key,
+  },
+  useI18n: () => ({
+    t: (key: string) => key === 'editor.markdownEditor.notice.sourcePreviewFallback'
+      ? 'IR fallback warning'
+      : key,
+  }),
+}))

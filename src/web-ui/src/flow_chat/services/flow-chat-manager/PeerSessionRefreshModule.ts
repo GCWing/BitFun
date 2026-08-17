@@ -1,14 +1,25 @@
 /**
- * Peer Device active-session snapshot reconciliation.
+ * Active-session snapshot reconciliation for the rendered device surface.
  *
  * DeviceEvent fan-out is the real-time path, but the relay protocol has no
  * ACK/replay recovery. A controller that attaches mid-turn can therefore miss
- * lifecycle events required by the local FlowChat state machine. This module
- * periodically reconciles a small host snapshot and also supports immediate
- * refresh requests when an event gap is detected.
+ * lifecycle events required by the local FlowChat state machine. The same gap
+ * exists on the **local** surface: a turn that keeps running on this machine
+ * while the UI renders another device produces events that surface routing
+ * drops, so returning to it needs the same repair. This module periodically
+ * reconciles a small host snapshot and also supports immediate refresh
+ * requests when an event gap is detected.
  */
 
-import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import {
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+} from '@/infrastructure/peer-device/deviceSurface';
+import { isSurfaceReconcileEnabled } from '@/infrastructure/peer-device/deviceSurfaceReconcile';
+import {
+  beginRuntimeSessionAttachment,
+  subscribeRuntimeSessionEventGaps,
+} from '@/infrastructure/peer-device/runtimeSessionEventGate';
 import { createLogger } from '@/shared/utils/logger';
 import {
   isBackendSessionActivelyProcessing,
@@ -18,7 +29,10 @@ import {
   SessionExecutionEvent,
   SessionExecutionState,
 } from '../../state-machine/types';
-import type { AnyFlowItem, DialogTurn } from '../../types/flow-chat';
+import type { AnyFlowItem, DialogTurn, Session } from '../../types/flow-chat';
+import { installLiveSessionInteractionMailbox } from '../liveSessionInteractionStore';
+import { agenticEventListener } from '../AgenticEventListener';
+import { pendingQueueManager } from './PendingQueueModule';
 import type { FlowChatContext } from './types';
 
 const log = createLogger('PeerSessionRefresh');
@@ -26,11 +40,44 @@ const log = createLogger('PeerSessionRefresh');
 export const PEER_SESSION_REFRESH_INTERVAL_MS = 3000;
 export const PEER_SESSION_STREAM_STALE_MS = 6000;
 
+/**
+ * A session can attach to the host Runtime projection once it has a usable
+ * live shell on this surface.
+ *
+ * `historyState === 'ready'` is the hydrated-from-disk path. Locally created
+ * sessions stay at `'new'` for their whole window — they never pass through
+ * disk hydrate — and after a surface switch they are exactly the sessions
+ * that missed DialogTurnStarted. Treating `'new'` as unready permanently
+ * disables the only repair path: later chunks arrive against an idle machine
+ * and are dropped, and the composer queues follow-up messages behind a turn
+ * that the UI can no longer update.
+ */
+type AttachableSession = Pick<
+  Session,
+  'workspacePath' | 'isTransient' | 'isHistorical' | 'historyState'
+> & { workspacePath: string };
+
+export function isSessionProjectionAttachable(
+  session: Pick<
+    Session,
+    'workspacePath' | 'isTransient' | 'isHistorical' | 'historyState'
+  > | null | undefined,
+): session is AttachableSession {
+  const workspacePath = session?.workspacePath?.trim();
+  return Boolean(
+    session &&
+    workspacePath &&
+    !session.isTransient &&
+    !session.isHistorical &&
+    (session.historyState === 'ready' || session.historyState === 'new'),
+  );
+}
+
 type RefreshRequester = (sessionId?: string) => void;
 let installedRefreshRequester: RefreshRequester | null = null;
 
 export function requestPeerSessionRefresh(sessionId?: string): void {
-  if (!isPeerDeviceModeActive()) {
+  if (!isSurfaceReconcileEnabled()) {
     return;
   }
   installedRefreshRequester?.(sessionId);
@@ -116,38 +163,68 @@ async function alignStateMachineWithSnapshot(
 }
 
 export function installPeerSessionRefresh(context: FlowChatContext): () => void {
+  // Blocking interactions are Runtime mailboxes, so their event projection
+  // must exist for the whole FlowChat lifetime rather than only while a card
+  // component is mounted.
+  installLiveSessionInteractionMailbox();
   let disposed = false;
   let inFlight = false;
-  let queued = false;
+  const queuedSessionIds = new Set<string | undefined>();
   let immediateTimer: ReturnType<typeof setTimeout> | null = null;
 
-  async function runRefresh(requestedSessionId?: string): Promise<void> {
-    if (disposed || inFlight || !isPeerDeviceModeActive()) {
+  function enqueueFollowUpRefresh(sessionId?: string): void {
+    queuedSessionIds.add(sessionId);
+  }
+
+  function drainFollowUpRefresh(): void {
+    if (disposed || queuedSessionIds.size === 0) {
+      return;
+    }
+    const next = queuedSessionIds.values().next().value;
+    queuedSessionIds.delete(next);
+    scheduleRefresh(next);
+  }
+
+  async function runRefresh(
+    requestedSessionId?: string,
+    staleOnly = false,
+  ): Promise<void> {
+    if (disposed || inFlight || !isSurfaceReconcileEnabled()) {
       if (inFlight) {
-        queued = true;
+        enqueueFollowUpRefresh(requestedSessionId);
       }
       return;
     }
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
       return;
     }
+    // A dead subscription is the strongest reason to reconcile, not a reason to
+    // skip: bailing here meant a switch that tore the listener down disabled
+    // the only path that could repair it, and the chat froze for good. Re-arm
+    // and continue — the runtime cursor fence already covers the snapshot/live
+    // race while the subscription is coming back up.
+    if (!agenticEventListener.getIsListening()) {
+      void context.ensureLiveSubscription?.();
+    }
 
     const state = context.flowChatStore.getState();
     const sessionId = requestedSessionId || state.activeSessionId;
-    if (!sessionId || state.activeSessionId !== sessionId) {
+    // Attach is per (surface, session), not per the tab currently focused.
+    // After a switch, every live session on this surface may have missed
+    // DialogTurnStarted; dropped-event refresh requests name those sessions
+    // explicitly even when they are not active.
+    if (!sessionId) {
       return;
     }
     const session = state.sessions.get(sessionId);
-    const workspacePath = session?.workspacePath?.trim();
-    if (
-      !session ||
-      !workspacePath ||
-      session.isTransient ||
-      session.isHistorical ||
-      session.historyState !== 'ready'
-    ) {
+    if (!isSessionProjectionAttachable(session)) {
       return;
     }
+    const workspacePath = session.workspacePath.trim();
+    pendingQueueManager.reconcileAgainstLiveTurns(
+      sessionId,
+      state.sessions.get(sessionId)?.dialogTurns ?? [],
+    );
 
     const machine = stateMachineManager.get(sessionId);
     const machineState = machine?.getCurrentState() ?? SessionExecutionState.IDLE;
@@ -155,12 +232,20 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
       return;
     }
     const lastUpdateTime = machine?.getContext().lastUpdateTime ?? 0;
-    const replaceRunningSnapshot =
+    const forceRuntimeReplay =
       machineState === SessionExecutionState.IDLE ||
-      machineState === SessionExecutionState.ERROR ||
-      Date.now() - lastUpdateTime >= PEER_SESSION_STREAM_STALE_MS;
+      machineState === SessionExecutionState.ERROR;
+    const streamIsStale = Date.now() - lastUpdateTime >= PEER_SESSION_STREAM_STALE_MS;
+    if (staleOnly && !forceRuntimeReplay && !streamIsStale) {
+      return;
+    }
+    const replaceRunningSnapshot =
+      forceRuntimeReplay || streamIsStale;
     context.eventBatcher.flushNow();
     const machineVersion = machine?.getContext().version ?? 0;
+    const surfaceScope = getActiveSurfaceScope();
+    const attachment = beginRuntimeSessionAttachment(surfaceScope.surfaceId, sessionId);
+    let attachmentFinished = false;
 
     inFlight = true;
     try {
@@ -169,17 +254,121 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         workspacePath,
         {
           replaceRunningSnapshot,
-          requireActiveSession: true,
+          // A background session on this surface still owns its projection.
+          // Requiring the focused tab aborted the dropped-event repair for
+          // every non-active running chat after a multi-session switch.
+          requireActiveSession: false,
           shouldApply: () => {
-            if (!isPeerDeviceModeActive()) {
+            if (!isSurfaceReconcileEnabled()) {
               return false;
             }
             const currentMachine = stateMachineManager.get(sessionId);
             return (currentMachine?.getContext().version ?? 0) === machineVersion;
           },
+          shouldReplayRuntimeSnapshot: snapshot =>
+            forceRuntimeReplay || attachment.requiresReplay(snapshot),
         },
       );
+      surfaceScope.assertCurrent('attachRuntimeSession');
+      const restoredSession = context.flowChatStore.getState().sessions.get(sessionId);
+      if (restoredSession) {
+        pendingQueueManager.reconcileAgainstLiveTurns(
+          sessionId,
+          restoredSession.dialogTurns,
+        );
+      }
+
+      if (result.runtimeEventSnapshot) {
+        if (result.runtimeEventReplayRequired === false) {
+          // The rendered projection already includes this exact Runtime
+          // cursor. Advance the in-flight fence without resetting a healthy
+          // state machine every time the liveness timer runs.
+          attachment.finish({
+            streamId: result.runtimeEventSnapshot.streamId,
+            cursor: result.runtimeEventSnapshot.cursor,
+          });
+          attachmentFinished = true;
+          log.debug('Runtime session projection already current', {
+            sessionId,
+            cursor: result.runtimeEventSnapshot.cursor,
+          });
+          return;
+        }
+
+        // Establish an empty current-Turn base before replay. The journal is
+        // authoritative for everything after DialogTurnStarted, so no
+        // UI-written partial checkpoint is allowed to overlap it.
+        context.eventBatcher.clear();
+        context.contentBuffers.delete(sessionId);
+        context.activeTextItems.delete(sessionId);
+        stateMachineManager.reset(sessionId);
+        await alignStateMachineWithSnapshot(
+          context,
+          sessionId,
+          result.backendState,
+          result.runtimeEventSnapshot.activeTurnId ?? result.latestTurnId,
+        );
+
+        for (const event of result.runtimeEventSnapshot.events) {
+          surfaceScope.assertCurrent('replayRuntimeSessionProjection');
+          if (!agenticEventListener.dispatchExternal(event.eventName, event.payload)) {
+            throw new Error('Agentic event listener is unavailable during Runtime replay');
+          }
+        }
+        context.eventBatcher.flushNow();
+        context.flowChatStore.reconcilePendingUserQuestions(
+          sessionId,
+          result.pendingUserQuestions,
+        );
+        await alignStateMachineWithSnapshot(
+          context,
+          sessionId,
+          result.backendState,
+          result.runtimeEventSnapshot.activeTurnId ?? result.latestTurnId,
+        );
+        surfaceScope.assertCurrent('finishRuntimeSessionAttachment');
+        attachment.finish({
+          streamId: result.runtimeEventSnapshot.streamId,
+          cursor: result.runtimeEventSnapshot.cursor,
+        });
+        attachmentFinished = true;
+        log.debug('Runtime session projection attached', {
+          sessionId,
+          backendState: result.backendState,
+          cursor: result.runtimeEventSnapshot.cursor,
+          eventCount: result.runtimeEventSnapshot.events.length,
+        });
+        return;
+      }
+
+      // Older hosts have no cursor contract. Release their queued live events
+      // and retain the existing persisted-snapshot reconciliation fallback.
+      attachment.abort();
+      attachmentFinished = true;
       if (!result.applied) {
+        // A snapshot that changed nothing — or that was refused because it
+        // would have dropped projected content — still reports whether the
+        // host is executing. After a device-surface switch the rebuilt
+        // projection has no state machine, so an executing turn would render
+        // as static history and later chunks would be dropped. Re-attach on
+        // that narrow case only: while a turn really is streaming the machine
+        // is already processing, so this cannot churn it every tick.
+        const machine = stateMachineManager.get(sessionId);
+        const machineIsIdle =
+          (machine?.getCurrentState() ?? SessionExecutionState.IDLE)
+            === SessionExecutionState.IDLE;
+        if (machineIsIdle && isBackendSessionActivelyProcessing(result.backendState)) {
+          await alignStateMachineWithSnapshot(
+            context,
+            sessionId,
+            result.backendState,
+            result.latestTurnId,
+          );
+          log.debug('Re-attached an executing session after a surface switch', {
+            sessionId,
+            backendState: result.backendState,
+          });
+        }
         return;
       }
       await alignStateMachineWithSnapshot(
@@ -194,16 +383,27 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         latestTurnId: result.latestTurnId,
       });
     } catch (error) {
+      if (!attachmentFinished) {
+        attachment.abort({ discard: !surfaceScope.isCurrent() });
+        attachmentFinished = true;
+      }
+      if (isSurfaceChangedError(error)) {
+        // The snapshot belongs to a device this window stopped rendering. Its
+        // own container keeps the projection; the surface now on screen
+        // reconciles itself on the next tick.
+        log.debug('Discarded a snapshot for a device surface we left', { sessionId });
+        return;
+      }
       // Realtime DeviceEvents remain usable when a background refresh fails.
       // The next interval or gap-triggered request retries without forcing an
       // auto-exit from Peer Mode.
       log.warn('Peer session snapshot refresh failed', { sessionId, error });
     } finally {
-      inFlight = false;
-      if (queued && !disposed) {
-        queued = false;
-        scheduleRefresh();
+      if (!attachmentFinished) {
+        attachment.abort({ discard: !surfaceScope.isCurrent() });
       }
+      inFlight = false;
+      drainFollowUpRefresh();
     }
   }
 
@@ -211,8 +411,11 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
     if (disposed) {
       return;
     }
-    if (immediateTimer !== null) {
-      clearTimeout(immediateTimer);
+    // Do not replace a pending attach with a later request: two sessions
+    // that drop events in the same tick must both be repaired.
+    if (inFlight || immediateTimer !== null) {
+      enqueueFollowUpRefresh(sessionId);
+      return;
     }
     immediateTimer = setTimeout(() => {
       immediateTimer = null;
@@ -223,12 +426,29 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
   installedRefreshRequester = scheduleRefresh;
 
   const unsubscribeActiveSession = context.flowChatStore.subscribeSelector(
-    state => state.activeSessionId,
-    sessionId => scheduleRefresh(sessionId ?? undefined),
+    state => {
+      const sessionId = state.activeSessionId;
+      const session = sessionId ? state.sessions.get(sessionId) : undefined;
+      return JSON.stringify([
+        sessionId ?? '',
+        session?.historyState ?? '',
+        session?.workspacePath ?? '',
+        session?.isTransient === true,
+        session?.isHistorical === true,
+      ]);
+    },
+    () => scheduleRefresh(),
   );
   const interval = setInterval(() => {
-    void runRefresh();
+    void runRefresh(undefined, true);
   }, PEER_SESSION_REFRESH_INTERVAL_MS);
+  const unsubscribeRuntimeGaps = subscribeRuntimeSessionEventGaps(
+    (surfaceId, sessionId) => {
+      if (getActiveSurfaceScope().surfaceId === surfaceId) {
+        scheduleRefresh(sessionId);
+      }
+    },
+  );
 
   const handlePeerModeChanged = (): void => scheduleRefresh();
   const handleVisibilityChanged = (): void => {
@@ -255,6 +475,7 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
     }
     clearInterval(interval);
     unsubscribeActiveSession();
+    unsubscribeRuntimeGaps();
     if (typeof window !== 'undefined') {
       window.removeEventListener('peer-mode:changed', handlePeerModeChanged);
     }

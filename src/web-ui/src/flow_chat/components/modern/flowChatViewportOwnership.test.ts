@@ -36,7 +36,6 @@ describe('the order of viewport owners', () => {
     expect(FLOWCHAT_VIEWPORT_OWNERS).toEqual([
       'user-gesture',
       'one-shot-navigation',
-      'snap-back',
       'follow-output',
       'layout-correction',
     ]);
@@ -70,18 +69,6 @@ describe('claimViewport', () => {
     });
     expect(outcome.granted).toBe(true);
     expect(outcome.claim?.owner).toBe('user-gesture');
-  });
-
-  it('refuses a correction while a snap back is animating', () => {
-    // The failure this register exists for: the anchor read the snap's own
-    // travel as a displacement, and the write cancelled the animation. It is
-    // `canShiftViewport` that refuses the anchor now, on the same grounds.
-    const outcome = claimViewport(heldBy('snap-back', { holdForMs: 1_200 }), {
-      owner: 'layout-correction',
-      nowMs: NOW,
-    });
-    expect(outcome.granted).toBe(false);
-    expect(outcome.claim?.owner).toBe('snap-back');
   });
 
   it('leaves the register untouched when it refuses', () => {
@@ -147,11 +134,11 @@ describe('claimViewport', () => {
   it('still resolves a correction against whoever holds the viewport', () => {
     // A zero-length hold is not the absence of a claim: the question it answers
     // is whether the write happens at all.
-    const outcome = claimViewport(heldBy('snap-back', { holdForMs: 1_200 }), {
+    const outcome = claimViewport(null, {
       owner: 'layout-correction',
       nowMs: NOW + 16,
     });
-    expect(outcome.granted).toBe(false);
+    expect(outcome.granted).toBe(true);
   });
 });
 
@@ -166,12 +153,13 @@ describe('canShiftViewport', () => {
     expect(canShiftViewport(heldBy('user-gesture', { holdForMs: 200 }), NOW)).toBe(true);
   });
 
-  it('leaves the displacement to anyone holding a target', () => {
-    // All three re-assert a position of their own, so a shift underneath is
-    // either redundant or a fight.
+  it('leaves the displacement to navigation and follow targets', () => {
+    // Those writers re-assert a position of their own. Snap-back is different:
+    // a late history measurement invalidates its target coordinate, so the
+    // displacement must cancel the stale animation and be reconsidered.
     expect(canShiftViewport(heldBy('follow-output'), NOW)).toBe(false);
     expect(canShiftViewport(heldBy('one-shot-navigation', { holdForMs: 600 }), NOW)).toBe(false);
-    expect(canShiftViewport(heldBy('snap-back', { holdForMs: 1_200 }), NOW)).toBe(false);
+    expect(canShiftViewport(null, NOW)).toBe(true);
   });
 
   it('shifts an unheld viewport, and one held only by a correction', () => {
@@ -193,7 +181,7 @@ describe('activeViewportClaim', () => {
 
   it('reports nothing once the hold has elapsed', () => {
     // A missed release costs a bounded wait, never a viewport nobody may write.
-    expect(activeViewportClaim(heldBy('snap-back', { holdForMs: 200 }), NOW + 200)).toBeNull();
+    expect(activeViewportClaim(heldBy('user-gesture', { holdForMs: 200 }), NOW + 200)).toBeNull();
   });
 });
 

@@ -3,13 +3,19 @@ use std::sync::Arc;
 
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::infrastructure::PathManager;
-use bitfun_core::service::session::SessionMetadata;
+use bitfun_core::service::session::{
+    SessionMetadata, SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY,
+};
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-pub(super) const CUSTOM_METADATA_PROVIDER_KEY: &str = "provider";
-pub(super) const CUSTOM_METADATA_PROVIDER_VALUE: &str = "acp";
+// Persistence reads these back to tell an externally projected Session from a
+// Runtime-owned one, so both sides share one definition. It reaches this crate
+// through the Session module it already reads metadata types from, because the
+// ACP client owns no direct dependency on the core contracts.
+pub(super) const CUSTOM_METADATA_PROVIDER_KEY: &str = SESSION_PROVIDER_METADATA_KEY;
+pub(super) const CUSTOM_METADATA_PROVIDER_VALUE: &str = SESSION_PROVIDER_ACP;
 pub(super) const CUSTOM_METADATA_CLIENT_ID_KEY: &str = "acpClientId";
 pub(super) const CUSTOM_METADATA_REMOTE_SESSION_ID_KEY: &str = "acpRemoteSessionId";
 pub(super) const CUSTOM_METADATA_RESUME_STRATEGY_KEY: &str = "acpResumeStrategy";

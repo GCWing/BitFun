@@ -650,6 +650,11 @@ fn revert_result(session_id: String, text: &str) -> ports::AgentSessionRevertRes
         retired_turn_ids: vec!["turn-active".to_string()],
         changed: true,
         hidden_turn_count: 1,
+        boundary_storage_turn_index: None,
+        target_turn_id: None,
+        restored_files: Vec::new(),
+        reload_required: false,
+        reload_reason: None,
     }
 }
 
@@ -1643,8 +1648,8 @@ struct UnknownAgentResponse;
 
 #[allow(dead_code)]
 fn _document_run_response_shape_in_tests(_r: RunResponse) {}
-
-/// The Server Host drives the app-server through the real `client::connect`
+/// The Server Host drives the app-server through the real
+/// `bitfun_app_server_client::connect`
 /// handle (not an inline `AppClient::builder().connect_with` main_fn like the
 /// round-trip tests above). `connect` parks its main loop on a shutdown
 /// receiver and returns an `AppServerClient` the host holds for the process
@@ -1666,7 +1671,7 @@ async fn client_connect_keeps_connection_alive_after_return() {
             let runtime = build_app_runtime();
             spawn_server(runtime, server_transport);
 
-            let client = bitfun_app_server::connect(client_transport)
+            let client = bitfun_app_server_client::connect(client_transport)
                 .await
                 .expect("app-server client should connect");
 
@@ -1674,7 +1679,7 @@ async fn client_connect_keeps_connection_alive_after_return() {
             // here -- otherwise the connection's background actors are gone and
             // this RPC surfaces `send failed because receiver is gone`.
             let response = client
-                .create_session(AgentSessionCreateRequest {
+                .create_session(CreateSessionMessage(AgentSessionCreateRequest {
                     session_name: "post-connect session".to_string(),
                     agent_type: "agentic".to_string(),
                     execution_profile: None,
@@ -1686,11 +1691,11 @@ async fn client_connect_keeps_connection_alive_after_return() {
                     remote_ssh_host: None,
                     model_id: None,
                     metadata: Default::default(),
-                })
+                }))
                 .await
                 .expect("RPC after connect() must succeed -- connection should still be alive");
-            assert_eq!(response.session_id, "example-session");
-            assert_eq!(response.agent_type, "agentic");
+            assert_eq!(response.0.session_id, "example-session");
+            assert_eq!(response.0.agent_type, "agentic");
 
             client.shutdown().await;
         })

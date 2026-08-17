@@ -48,7 +48,7 @@ import { AGENT_ICON_MAP } from './agentsIcons';
 import { CAPABILITY_ACCENT, CORE_AGENT_ACCENTS, DEFAULT_CORE_AGENT_ACCENT } from './agentAppearance';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
-import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
+import { isAgentProfileConfigurableToolName } from './agentToolVisibility';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
 import './AgentsView.scss';
 import './AgentsScene.scss';
@@ -341,11 +341,11 @@ const AgentsHomeView: React.FC = () => {
       : (selectedAgent?.defaultTools ?? [])
   ), [selectedAgent, selectedAgentModeConfig]);
   const selectedAgentTools = useMemo(
-    () => selectedAgentConfiguredTools.filter(isUserSelectableToolName),
+    () => selectedAgentConfiguredTools.filter(isAgentProfileConfigurableToolName),
     [selectedAgentConfiguredTools],
   );
-  const userSelectableAvailableTools = useMemo(
-    () => availableTools.filter((tool) => isUserSelectableToolName(tool.name)),
+  const agentProfileAvailableTools = useMemo(
+    () => availableTools.filter((tool) => isAgentProfileConfigurableToolName(tool.name)),
     [availableTools],
   );
   const selectedAgentHasSkillTool = hasSkillTool(selectedAgentConfiguredTools);
@@ -403,7 +403,7 @@ const AgentsHomeView: React.FC = () => {
       ? (getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools)
       : agent.defaultTools;
     if (configuredTools) {
-      return configuredTools.filter(isUserSelectableToolName).length;
+      return configuredTools.filter(isAgentProfileConfigurableToolName).length;
     }
     return agent.toolCount ?? 0;
   }, [getModeConfig]);
@@ -470,11 +470,11 @@ const AgentsHomeView: React.FC = () => {
     if (selectedAgentTools.length > 0) {
       const currentToolCount = selectedAgent?.agentKind === 'mode'
         ? (toolsEditing
-          ? (pendingTools ?? selectedAgentConfiguredTools).filter(isUserSelectableToolName).length
+          ? (pendingTools ?? selectedAgentTools).length
           : selectedAgentTools.length)
         : selectedAgentTools.length;
       const totalToolCount = selectedAgent?.agentKind === 'mode'
-        ? userSelectableAvailableTools.length
+        ? agentProfileAvailableTools.length
         : selectedAgentTools.length;
 
       tabs.push({
@@ -515,13 +515,12 @@ const AgentsHomeView: React.FC = () => {
 
     return tabs;
   }, [
-    userSelectableAvailableTools.length,
+    agentProfileAvailableTools.length,
     pendingSkills,
     pendingSubagentIds,
     pendingTools,
     selectedAgent,
     selectedAgentIsExternal,
-    selectedAgentConfiguredTools,
     selectedAgentEnabledSubagentIds,
     selectedAgentHasSkillTool,
     selectedAgentHasTaskTool,
@@ -1166,7 +1165,7 @@ const AgentsHomeView: React.FC = () => {
                           size="small"
                           onClick={() => {
                             if (currentCapabilityTab === 'tools') {
-                              setPendingTools([...selectedAgentConfiguredTools]);
+                              setPendingTools([...selectedAgentTools]);
                               setToolsEditing(true);
                               return;
                             }
@@ -1208,8 +1207,8 @@ const AgentsHomeView: React.FC = () => {
                 {currentCapabilityTab === 'tools' ? (
                   selectedAgent.agentKind === 'mode' && toolsEditing ? (
                     <ToolGroupPicker
-                      tools={userSelectableAvailableTools}
-                      selectedToolNames={pendingTools ?? selectedAgentConfiguredTools}
+                      tools={agentProfileAvailableTools}
+                      selectedToolNames={pendingTools ?? selectedAgentTools}
                       userGroups={userToolGroups}
                       onSelectionChange={setPendingTools}
                       onSaveUserGroups={saveUserToolGroups}
@@ -1218,7 +1217,7 @@ const AgentsHomeView: React.FC = () => {
                     />
                   ) : (
                     <ToolGroupSummary
-                      tools={userSelectableAvailableTools}
+                      tools={agentProfileAvailableTools}
                       selectedToolNames={selectedAgentTools}
                       userGroups={userToolGroups}
                     />

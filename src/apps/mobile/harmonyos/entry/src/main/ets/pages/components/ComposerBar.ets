@@ -1,12 +1,11 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ChatComposerPolicy, ComposerPrimaryAction } from '../../services/ChatComposerPolicy';
-import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from './ChatComposerCapabilities';
-import { ChatSurface } from './ChatSurface';
+import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from '../state/ChatComposerCapabilities';
 import {
   ConversationUiModel,
   ConversationUiModelCatalog,
   ConversationUiSelectedImage
-} from './ConversationUiModels';
+} from '../state/ConversationUiModels';
 import { ConversationModelPresentationPolicy } from '../policy/ConversationModelPresentationPolicy';
 import { CARD, FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, RED, SOFT } from './Theme';
 
@@ -302,6 +301,7 @@ export struct ComposerBar {
     }
     .width(COMPOSER_ACTION_SIZE)
     .height(COMPOSER_ACTION_SIZE)
+    .accessibilityText(RemoteI18n.t('chat.addImage'))
     .onClick(() => {
       if (this.isVoiceListening) {
         return;
@@ -390,6 +390,8 @@ export struct ComposerBar {
     .type(ButtonType.Circle)
     .backgroundColor(this.actionBackgroundColor())
     .borderRadius(20)
+    .accessibilityText(RemoteI18n.t(ChatComposerPolicy.primaryActionAccessibilityKey(
+      this.primaryAction(), this.isVoiceListening)))
     // Driven off the same decision that drew the glyph, so the button can never
     // do something other than what it is showing.
     .onClick(() => {
@@ -487,14 +489,15 @@ export struct ComposerBar {
         .objectFit(ImageFit.Cover)
         .borderRadius(14)
       Text('×')
-        .width(22)
-        .height(22)
-        .fontSize(14)
+        .width(32)
+        .height(32)
+        .fontSize(16)
         .fontColor(CARD)
         .textAlign(TextAlign.Center)
         .backgroundColor('#AA222222')
-        .borderRadius(11)
-        .margin({ top: 4, right: 4 })
+        .borderRadius(16)
+        .margin({ top: 0, right: 0 })
+        .accessibilityText(RemoteI18n.t('chat.removeImage'))
         .onClick(() => {
           this.onRemoveImage(image.id);
         })
@@ -525,8 +528,10 @@ export struct ComposerBar {
   }
 
   private shouldShowAddButton(): boolean {
-    return this.capabilities.showAddButton &&
-      (this.capabilities.supportsAttachments || this.capabilities.surface === ChatSurface.General);
+    return ChatComposerPolicy.shouldShowAddButton(
+      this.capabilities.showAddButton,
+      this.capabilities.supportsAttachments
+    );
   }
 
   // Attachments live inside the card, so the card has to grow to hold them.
@@ -556,8 +561,7 @@ export struct ComposerBar {
   }
 
   private shouldShowModelControl(): boolean {
-    return (this.capabilities.surface === ChatSurface.Remote || this.capabilities.surface === ChatSurface.General) &&
-      this.enabledModels().length > 0;
+    return this.enabledModels().length > 0;
   }
 
   private enabledModels(): ConversationUiModel[] {

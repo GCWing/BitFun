@@ -295,6 +295,47 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
+  it('labels one-off choices as current-turn updates while a turn is active', async () => {
+    const onChangeForNextTurn = vi.fn();
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath=""
+          workspaceLabel=""
+          permissionControl={{
+            mode: 'ask',
+            activeTurn: true,
+            nextTurnMode: null,
+            scopeLabel: 'chatInput.permissionMode.activeTurnScope',
+            onChange: vi.fn(),
+            onChangeForNextTurn,
+          }}
+        />
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-permission-trigger"]',
+    );
+    expect(trigger?.dataset.permissionActiveTurn).toBe('true');
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const oneOff = document.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-permission-next-turn-auto"]',
+    );
+    expect(oneOff?.textContent).toBe('chatInput.permissionMode.activeTurnOnlyShort');
+    expect(oneOff?.getAttribute('aria-label')).toBe(
+      'chatInput.permissionMode.activeTurnOnly',
+    );
+
+    await act(async () => {
+      oneOff?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onChangeForNextTurn).toHaveBeenCalledWith('auto');
+  });
+
   it('keeps the mode descriptions out of the row and in the accessible name', async () => {
     await act(async () => {
       root.render(

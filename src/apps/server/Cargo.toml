@@ -16,7 +16,7 @@ bitfun-core = { path = "../../crates/assembly/core", features = ["product-full"]
 # in-memory channel transport. The websocket handler routes agent kernel RPCs
 # through this client so agent interfaces uniformly go through app-server.
 bitfun-app-server = { path = "../../crates/interfaces/app-server" }
-bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
+bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
 bitfun-events = { path = "../../crates/contracts/events" }
 
 agent-client-protocol = { workspace = true }

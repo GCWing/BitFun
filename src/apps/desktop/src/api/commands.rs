@@ -16,20 +16,19 @@ use crate::api::search_api::{
 use crate::api::workspace_activation::spawn_workspace_background_warmup;
 use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::infrastructure::{
-    BatchedFileSearchProgressSink, FileSearchOutcome, FileSearchProgressSink, FileSearchResult,
-    FileSearchResultGroup, FileTreeNode, SearchMatchType,
+    BatchedFileSearchProgressSink, FileSearchResult, FileSearchResultGroup, FileTreeNode,
+    SearchMatchType,
 };
 use bitfun_core::service::file_watch;
 use bitfun_core::service::remote_ssh::get_remote_workspace_manager;
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::{
-    shell_quote_posix, RemoteDirEntry, RemoteFileService, RemoteWorkspaceEntry,
+    search_remote_file_names, shell_quote_posix, RemoteFileNameSearch,
 };
 use bitfun_core::service::workspace::{
     ScanOptions, WorkspaceInfo, WorkspaceKind, WorkspaceOpenOptions,
 };
 use log::{debug, error, info, warn};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -582,6 +581,8 @@ pub struct SearchFilenamesRequest {
     pub root_path: String,
     pub pattern: String,
     #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
     pub search_id: Option<String>,
     #[serde(default)]
     pub case_sensitive: bool,
@@ -593,6 +594,38 @@ pub struct SearchFilenamesRequest {
     pub max_results: Option<usize>,
     #[serde(default = "default_include_directories")]
     pub include_directories: bool,
+}
+
+#[cfg(test)]
+mod search_filenames_request_tests {
+    use super::SearchFilenamesRequest;
+
+    #[test]
+    fn legacy_payload_without_remote_scope_remains_readable() {
+        let request: SearchFilenamesRequest = serde_json::from_value(serde_json::json!({
+            "rootPath": "/workspace",
+            "pattern": "src"
+        }))
+        .expect("deserialize legacy filename search request");
+
+        assert_eq!(request.remote_connection_id, None);
+        assert!(request.include_directories);
+    }
+
+    #[test]
+    fn remote_scope_is_deserialized_when_supplied() {
+        let request: SearchFilenamesRequest = serde_json::from_value(serde_json::json!({
+            "rootPath": "/workspace",
+            "pattern": "src",
+            "remoteConnectionId": "remote-connection-1"
+        }))
+        .expect("deserialize scoped filename search request");
+
+        assert_eq!(
+            request.remote_connection_id.as_deref(),
+            Some("remote-connection-1")
+        );
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -630,208 +663,6 @@ fn resolve_search_limit(requested: Option<usize>, fallback: usize) -> usize {
     requested
         .unwrap_or(fallback)
         .clamp(1, HARD_MAX_SEARCH_RESULTS)
-}
-
-fn compile_filename_search_regex(
-    pattern: &str,
-    case_sensitive: bool,
-    use_regex: bool,
-    whole_word: bool,
-) -> Result<Regex, String> {
-    let mut pattern = if use_regex {
-        pattern.to_string()
-    } else {
-        regex::escape(pattern)
-    };
-
-    if whole_word {
-        pattern = format!(r"\b(?:{})\b", pattern);
-    }
-
-    if !case_sensitive {
-        pattern = format!("(?i){}", pattern);
-    }
-
-    Regex::new(&pattern).map_err(|error| format!("Invalid search pattern: {}", error))
-}
-
-fn should_skip_remote_search_directory(name: &str) -> bool {
-    matches!(
-        name,
-        ".git"
-            | ".svn"
-            | ".hg"
-            | "node_modules"
-            | "target"
-            | "dist"
-            | "build"
-            | ".next"
-            | ".nuxt"
-            | ".cache"
-            | ".turbo"
-    )
-}
-
-fn should_skip_remote_search_file(name: &str) -> bool {
-    let lower = name.to_ascii_lowercase();
-    matches!(
-        lower.rsplit_once('.').map(|(_, ext)| ext),
-        Some(
-            "png"
-                | "jpg"
-                | "jpeg"
-                | "gif"
-                | "webp"
-                | "ico"
-                | "pdf"
-                | "zip"
-                | "tar"
-                | "gz"
-                | "rar"
-                | "7z"
-                | "exe"
-                | "dll"
-                | "so"
-                | "dylib"
-        )
-    )
-}
-
-fn remote_filename_search_result(entry: &RemoteDirEntry) -> FileSearchResult {
-    FileSearchResult {
-        path: entry.path.clone(),
-        name: entry.name.clone(),
-        is_directory: entry.is_dir,
-        match_type: SearchMatchType::FileName,
-        line_number: None,
-        matched_content: None,
-        preview_before: None,
-        preview_inside: None,
-        preview_after: None,
-    }
-}
-
-struct RemoteFilenameSearch {
-    remote_fs: RemoteFileService,
-    entry: RemoteWorkspaceEntry,
-    root_path: String,
-    pattern: String,
-    case_sensitive: bool,
-    use_regex: bool,
-    whole_word: bool,
-    include_directories: bool,
-    limit: usize,
-    cancel_flag: Option<Arc<AtomicBool>>,
-    progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
-}
-
-async fn search_remote_file_names_with_progress(
-    search: RemoteFilenameSearch,
-) -> Result<FileSearchOutcome, String> {
-    let RemoteFilenameSearch {
-        remote_fs,
-        entry,
-        root_path,
-        pattern,
-        case_sensitive,
-        use_regex,
-        whole_word,
-        include_directories,
-        limit,
-        cancel_flag,
-        progress_sink,
-    } = search;
-    let matcher = compile_filename_search_regex(&pattern, case_sensitive, use_regex, whole_word)?;
-    let mut stack = vec![root_path];
-    let mut results = Vec::new();
-    let mut truncated = false;
-
-    while let Some(directory) = stack.pop() {
-        if cancel_flag
-            .as_ref()
-            .is_some_and(|flag| flag.load(Ordering::Relaxed))
-        {
-            break;
-        }
-
-        let mut entries = remote_fs
-            .read_dir(&entry.connection_id, &directory)
-            .await
-            .map_err(|error| format!("Failed to read remote directory: {}", error))?;
-        entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.cmp(&b.name),
-        });
-
-        for child in entries {
-            if cancel_flag
-                .as_ref()
-                .is_some_and(|flag| flag.load(Ordering::Relaxed))
-            {
-                break;
-            }
-
-            if child.is_dir {
-                if should_skip_remote_search_directory(&child.name) {
-                    continue;
-                }
-
-                if include_directories && matcher.is_match(&child.name) {
-                    let result = remote_filename_search_result(&child);
-                    if let Some(sink) = progress_sink.as_ref() {
-                        sink.report(FileSearchResultGroup {
-                            path: result.path.clone(),
-                            name: result.name.clone(),
-                            is_directory: result.is_directory,
-                            file_name_match: Some(result.clone()),
-                            content_matches: Vec::new(),
-                        });
-                    }
-                    results.push(result);
-                    if results.len() >= limit {
-                        truncated = true;
-                        break;
-                    }
-                }
-
-                stack.push(child.path);
-                continue;
-            }
-
-            if !child.is_file || should_skip_remote_search_file(&child.name) {
-                continue;
-            }
-
-            if matcher.is_match(&child.name) {
-                let result = remote_filename_search_result(&child);
-                if let Some(sink) = progress_sink.as_ref() {
-                    sink.report(FileSearchResultGroup {
-                        path: result.path.clone(),
-                        name: result.name.clone(),
-                        is_directory: result.is_directory,
-                        file_name_match: Some(result.clone()),
-                        content_matches: Vec::new(),
-                    });
-                }
-                results.push(result);
-                if results.len() >= limit {
-                    truncated = true;
-                    break;
-                }
-            }
-        }
-
-        if truncated {
-            break;
-        }
-    }
-
-    if let Some(sink) = progress_sink.as_ref() {
-        sink.flush();
-    }
-
-    Ok(FileSearchOutcome { results, truncated })
 }
 
 #[derive(Debug, Deserialize)]
@@ -4679,14 +4510,20 @@ pub async fn search_filenames(
         include_directories: request.include_directories,
     };
 
-    let result = match resolve_desktop_path_target(&state, &request.root_path, None).await {
+    let result = match resolve_desktop_path_target(
+        &state,
+        &request.root_path,
+        request.remote_connection_id.as_deref(),
+    )
+    .await
+    {
         Ok(DesktopPathTarget::Remote {
             requested_path,
             entry,
         }) => match state.get_remote_file_service_async().await {
-            Ok(remote_fs) => search_remote_file_names_with_progress(RemoteFilenameSearch {
+            Ok(remote_fs) => search_remote_file_names(RemoteFileNameSearch {
                 remote_fs,
-                entry,
+                workspace: entry,
                 root_path: requested_path,
                 pattern: request.pattern.clone(),
                 case_sensitive: request.case_sensitive,
@@ -4824,27 +4661,32 @@ pub async fn start_search_filenames_stream(
         include_directories: request.include_directories,
     };
 
-    let remote_search_target =
-        match resolve_desktop_path_target(&state, &request.root_path, None).await {
-            Ok(DesktopPathTarget::Remote {
-                requested_path,
-                entry,
-            }) => {
-                let remote_fs = match state.get_remote_file_service_async().await {
-                    Ok(remote_fs) => remote_fs,
-                    Err(error) => {
-                        unregister_search(&state, Some(&search_id));
-                        return Err(format!("Remote file service not available: {}", error));
-                    }
-                };
-                Some((remote_fs, entry, requested_path))
-            }
-            Ok(DesktopPathTarget::Local { .. }) => None,
-            Err(error) => {
-                unregister_search(&state, Some(&search_id));
-                return Err(error);
-            }
-        };
+    let remote_search_target = match resolve_desktop_path_target(
+        &state,
+        &request.root_path,
+        request.remote_connection_id.as_deref(),
+    )
+    .await
+    {
+        Ok(DesktopPathTarget::Remote {
+            requested_path,
+            entry,
+        }) => {
+            let remote_fs = match state.get_remote_file_service_async().await {
+                Ok(remote_fs) => remote_fs,
+                Err(error) => {
+                    unregister_search(&state, Some(&search_id));
+                    return Err(format!("Remote file service not available: {}", error));
+                }
+            };
+            Some((remote_fs, entry, requested_path))
+        }
+        Ok(DesktopPathTarget::Local { .. }) => None,
+        Err(error) => {
+            unregister_search(&state, Some(&search_id));
+            return Err(error);
+        }
+    };
 
     let filesystem_service = state.filesystem_service.clone();
     let active_searches = state.active_searches.clone();
@@ -4872,9 +4714,9 @@ pub async fn start_search_filenames_stream(
 
     tokio::spawn(async move {
         let result = if let Some((remote_fs, entry, requested_path)) = remote_search_target {
-            search_remote_file_names_with_progress(RemoteFilenameSearch {
+            search_remote_file_names(RemoteFileNameSearch {
                 remote_fs,
-                entry,
+                workspace: entry,
                 root_path: requested_path,
                 pattern: pattern.clone(),
                 case_sensitive,

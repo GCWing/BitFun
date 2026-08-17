@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Runs the two independent frontend build pipelines in parallel:
- *   - build:web          (type-check + vite build + monaco asset verify)
- *   - prepare:mobile-web (mobile-web install/build with mtime short-circuit)
+ * Runs the independent pre-bundle build pipelines in parallel:
+ *   - build:web            (type-check + vite build + monaco asset verify)
+ *   - prepare:mobile-web   (mobile-web install/build with mtime short-circuit)
+ *   - prepare:dsh-profile  (the DeepSeek Harness bridge official desktop:build ships)
  *
- * Used as the Tauri beforeBuildCommand so the frontend stage costs
- * max(build:web, mobile-web) instead of their sum. Either failure fails the
- * whole script with a non-zero exit code.
+ * Used as the Tauri beforeBuildCommand so the stage costs max(…) instead of
+ * their sum. Any failure fails the whole script with a non-zero exit code.
  */
 
 import { spawn } from 'node:child_process';
@@ -58,6 +58,10 @@ function runPrefixed(prefix, command, args) {
 const codes = await Promise.all([
   runPrefixed('web', 'pnpm', ['run', 'build:web']),
   runPrefixed('mobile-web', 'pnpm', ['run', 'prepare:mobile-web']),
+  // The DeepSeek Harness bridge Tauri ships as a resource. On a cold tree this
+  // installs its own pinned toolchain (~30s), which still fits inside the two
+  // above; it is independent of them, and of BitFun's pnpm store.
+  runPrefixed('dsh-profile', 'pnpm', ['run', 'prepare:dsh-profile']),
 ]);
 
 const failed = codes.some((code) => code !== 0);

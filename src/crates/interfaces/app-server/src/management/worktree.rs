@@ -1,3 +1,5 @@
+//! App Server Worktree management operations.
+
 use bitfun_app_server_protocol::worktree::*;
 use bitfun_core::service::git::GitService;
 use bitfun_core::service::worktree::{WorktreeService, WorktreeSessionBindingRequest};

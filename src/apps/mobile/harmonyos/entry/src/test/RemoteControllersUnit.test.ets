@@ -115,7 +115,8 @@ import {
 } from '../main/ets/pages/policy/FilePreviewPlacementPolicy';
 import {
   ConversationLayoutCrease,
-  ConversationLayoutPolicy
+  ConversationLayoutPolicy,
+  ConversationLayoutRect
 } from '../main/ets/pages/policy/ConversationLayoutPolicy';
 import { SessionActionPolicy, SessionActionScope } from '../main/ets/pages/policy/SessionActionPolicy';
 import { ConversationSessionFilterPolicy } from '../main/ets/pages/policy/ConversationSessionFilterPolicy';
@@ -128,13 +129,13 @@ import { ConversationModelPresentationPolicy } from '../main/ets/pages/policy/Co
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
   REMOTE_CHAT_COMPOSER_CAPABILITIES
-} from '../main/ets/pages/components/ChatComposerCapabilities';
-import { ChatSurface } from '../main/ets/pages/components/ChatSurface';
+} from '../main/ets/pages/state/ChatComposerCapabilities';
+import { ChatSurface } from '../main/ets/pages/state/ChatSurface';
 import { ConversationViewContract } from '../main/ets/pages/components/ConversationViewContract';
 import {
   ConversationUiModel,
   ConversationUiModelCatalog
-} from '../main/ets/pages/components/ConversationUiModels';
+} from '../main/ets/pages/state/ConversationUiModels';
 import {
   AppNavigationBackAction,
   AppNavigationPathSpec,
@@ -776,6 +777,46 @@ export default function remoteControllersUnitTest() {
       expect(threshold.placement).assertEqual(FilePreviewPlacement.WideFocusSplit);
       expect(threshold.conversationPaneWidth).assertEqual(360);
       expect(threshold.previewPaneWidth).assertEqual(360);
+    });
+
+    it('aligns dual-fold preview focus to the single vertical crease', 0, () => {
+      const layout = FilePreviewPlacementPolicy.resolveLayout(true, true, 2210, [
+        new ConversationLayoutCrease(1100, 16)
+      ]);
+      expect(layout.placement).assertEqual(FilePreviewPlacement.WideFocusSplit);
+      expect(layout.masterPaneWidth).assertEqual(0);
+      expect(layout.conversationPaneWidth).assertEqual(1100);
+      expect(layout.conversationPreviewGap).assertEqual(16);
+      expect(layout.previewPaneWidth).assertEqual(1094);
+    });
+
+    it('keeps tri-fold preview on a crease instead of splitting the full window in half', 0, () => {
+      const single = FilePreviewPlacementPolicy.resolveLayout(true, true, 1107, [
+        new ConversationLayoutCrease(351, 44)
+      ]);
+      expect(single.placement).assertEqual(FilePreviewPlacement.WideFocusSplit);
+      expect(single.conversationPaneWidth).assertEqual(351);
+      expect(single.conversationPreviewGap).assertEqual(44);
+      expect(single.previewPaneWidth).assertEqual(712);
+
+      const dual = FilePreviewPlacementPolicy.resolveLayout(true, true, 1107, [
+        new ConversationLayoutCrease(351, 44),
+        new ConversationLayoutCrease(773, 44)
+      ]);
+      expect(dual.placement).assertEqual(FilePreviewPlacement.WideFocusSplit);
+      expect(dual.conversationPaneWidth).assertEqual(773);
+      expect(dual.conversationPreviewGap).assertEqual(44);
+      expect(dual.previewPaneWidth).assertEqual(290);
+    });
+
+    it('falls back from crease-aligned focus when one side is too narrow', 0, () => {
+      const layout = FilePreviewPlacementPolicy.resolveLayout(true, true, 900, [
+        new ConversationLayoutCrease(200, 8)
+      ]);
+      expect(layout.placement).assertEqual(FilePreviewPlacement.WideFocusSplit);
+      expect(layout.conversationPaneWidth).assertEqual(449);
+      expect(layout.conversationPreviewGap).assertEqual(1);
+      expect(layout.previewPaneWidth).assertEqual(450);
     });
   });
 
@@ -1523,6 +1564,61 @@ export default function remoteControllersUnitTest() {
       expect(statuses[statuses.length - 1]).assertEqual(RemoteI18n.t('status.messagesRestored'));
     });
 
+    it('refetches when a cached assistant has no body', 0, async () => {
+      const client = new FakeRemoteChatCommandClient();
+      const store = new FakeRemoteChatCacheStore();
+      const projection = new RemoteChatMessagesProjectionRecord();
+      const cache = await readyRemoteChatCache(store);
+      const hollow = chatMessage('message-2', 'assistant', '');
+      hollow.thinking = '';
+      hollow.tools = [];
+      hollow.items = [];
+      await cache.sync('session-1', [
+        chatMessage('message-1', 'user', 'Hello'),
+        hollow
+      ]);
+      client.messageResults = [{
+        messages: [
+          chatMessage('message-1', 'user', 'Hello'),
+          chatMessage('message-2', 'assistant', 'Recovered reply')
+        ],
+        hasMore: false
+      }];
+      const controller = new RemoteChatCommandController(client, {
+        onMessagesLoaded: (messages: ChatMessage[], hasMoreMessages: boolean) => {
+          projection.messages = messages;
+          projection.hasMoreMessages = hasMoreMessages;
+        },
+        onMessageCountKnown: (pollVersion: number, knownMessageCount: number) => {
+          projection.pollVersion = pollVersion;
+          projection.knownMessageCount = knownMessageCount;
+        },
+        onTimelineReady: () => {},
+        onSendSucceeded: (_turnId: string, _pendingActiveId: string) => {},
+        onSendFailed: (
+          _rawText: string,
+          _images: SelectedImageAttachment[],
+          _localMessageId: string,
+          _pendingActiveId: string
+        ) => {},
+        onActiveSession: (_session: SessionSummary) => {},
+        onSessionTitleChanged: (_sessionId: string, _title: string) => {},
+        onStatusText: (_statusText: string) => {},
+        onToast: (_message: string) => {},
+        onBusy: (_isBusy: boolean) => {},
+        onPollRequested: () => {}
+      }, cache);
+
+      await controller.loadMessages('session-1', (_sessionId: string) => true);
+
+      expect(client.messageRequests.length).assertEqual(1);
+      expect(projection.messages.length).assertEqual(2);
+      expect(projection.messages[1].text).assertEqual('Recovered reply');
+
+      await controller.loadMessages('session-1', (_sessionId: string) => true);
+      expect(client.messageRequests.length).assertEqual(1);
+    });
+
     it('caches a transcript the user switched away from before it arrived', 0, async () => {
       const client = new FakeRemoteChatCommandClient();
       const store = new FakeRemoteChatCacheStore();
@@ -1989,7 +2085,7 @@ export default function remoteControllersUnitTest() {
 
     it('keeps general chat independent from remote-only composer requirements', 0, () => {
       expect(GENERAL_CHAT_COMPOSER_CAPABILITIES.surface).assertEqual(ChatSurface.General);
-      expect(GENERAL_CHAT_COMPOSER_CAPABILITIES.supportsAttachments).assertFalse();
+      expect(GENERAL_CHAT_COMPOSER_CAPABILITIES.supportsAttachments).assertTrue();
       expect(GENERAL_CHAT_COMPOSER_CAPABILITIES.requiresRemoteConnection).assertFalse();
       // Nothing queues a message on this surface, so a draft written mid-reply
       // has nowhere to go until the reply finishes.
@@ -2401,86 +2497,173 @@ export default function remoteControllersUnitTest() {
   });
 
   describe('ConversationLayoutPolicy', () => {
-    it('keeps folded and narrow surfaces compact', 0, () => {
-      expect(ConversationLayoutPolicy.useMasterDetail(480, false, false, 'tablet', [])).assertFalse();
-      expect(ConversationLayoutPolicy.useMasterDetail(900, true, true, 'tablet', [])).assertFalse();
-      expect(ConversationLayoutPolicy.useMasterDetail(900, false, true, 'phone', [
+    it('treats only tent statuses as hover candidates', 0, () => {
+      expect(ConversationLayoutPolicy.isHoverStatus(
+        ConversationLayoutPolicy.FOLD_STATUS_HALF_FOLDED
+      )).assertTrue();
+      expect(ConversationLayoutPolicy.isHoverStatus(
+        ConversationLayoutPolicy.FOLD_STATUS_HALF_FOLDED_WITH_SECOND_HALF_FOLDED
+      )).assertTrue();
+      expect(ConversationLayoutPolicy.isHoverStatus(
+        ConversationLayoutPolicy.FOLD_STATUS_HALF_FOLDED_WITH_SECOND_EXPANDED
+      )).assertFalse();
+      expect(ConversationLayoutPolicy.isHoverStatus(
+        ConversationLayoutPolicy.FOLD_STATUS_EXPANDED_WITH_SECOND_HALF_FOLDED
+      )).assertFalse();
+      expect(ConversationLayoutPolicy.isHoverStatus(
+        ConversationLayoutPolicy.FOLD_STATUS_EXPANDED_WITH_SECOND_EXPANDED
+      )).assertFalse();
+    });
+
+    it('keeps one-axis half-fold landscape windows on master-detail', 0, () => {
+      expect(ConversationLayoutPolicy.useHoverOperate(
+        ConversationLayoutPolicy.FOLD_STATUS_EXPANDED_WITH_SECOND_HALF_FOLDED,
+        1107,
+        776
+      )).assertFalse();
+      expect(ConversationLayoutPolicy.useHoverOperate(
+        ConversationLayoutPolicy.FOLD_STATUS_HALF_FOLDED_WITH_SECOND_EXPANDED,
+        1107,
+        776
+      )).assertFalse();
+      expect(ConversationLayoutPolicy.useMasterDetail(
+        1107,
+        true,
+        false,
+        [new ConversationLayoutCrease(351, 44)],
+        true,
+        ConversationLayoutPolicy.useHoverOperate(
+          ConversationLayoutPolicy.FOLD_STATUS_EXPANDED_WITH_SECOND_HALF_FOLDED,
+          1107,
+          776
+        )
+      )).assertTrue();
+    });
+
+    it('uses FolderStack only for tent hover that is not still landscape-wide', 0, () => {
+      expect(ConversationLayoutPolicy.useHoverOperate(
+        ConversationLayoutPolicy.FOLD_STATUS_HALF_FOLDED,
+        480,
+        800
+      )).assertTrue();
+      expect(ConversationLayoutPolicy.useHoverOperate(
+        ConversationLayoutPolicy.FOLD_STATUS_HALF_FOLDED,
+        1107,
+        776
+      )).assertFalse();
+    });
+
+    it('keeps folded, hover and narrow surfaces compact', 0, () => {
+      expect(ConversationLayoutPolicy.useMasterDetail(480, false, false, [])).assertFalse();
+      expect(ConversationLayoutPolicy.useMasterDetail(900, true, true, [])).assertFalse();
+      expect(ConversationLayoutPolicy.useMasterDetail(900, false, true, [
         new ConversationLayoutCrease(300, 8),
         new ConversationLayoutCrease(600, 8)
       ])).assertFalse();
+      expect(ConversationLayoutPolicy.useMasterDetail(
+        2210,
+        true,
+        false,
+        [new ConversationLayoutCrease(1100, 16)],
+        true,
+        true
+      )).assertFalse();
     });
 
-    it('uses master-detail for width-qualified tablets', 0, () => {
+    it('uses official md width rather than device type for master-detail', 0, () => {
       expect(ConversationLayoutPolicy.useMasterDetail(
-        ConversationLayoutPolicy.WIDE_LAYOUT_MIN_WIDTH,
+        ConversationLayoutPolicy.MD_MIN_WIDTH +
+          ConversationLayoutPolicy.MIN_DETAIL_PANE_WIDTH,
         false,
         false,
-        'tablet',
         []
       )).assertTrue();
+      expect(ConversationLayoutPolicy.useMasterDetail(480, true, false, [])).assertFalse();
       expect(ConversationLayoutPolicy.useMasterDetail(
-        480,
+        ConversationLayoutPolicy.LG_MIN_WIDTH,
         true,
         false,
-        'tablet',
         []
       )).assertTrue();
     });
 
-    it('keeps phone, single-fold, and dual-screen foldables compact', 0, () => {
+    it('uses master-detail for unfolded dual-fold surfaces', 0, () => {
       expect(ConversationLayoutPolicy.useMasterDetail(
-        ConversationLayoutPolicy.EXTRA_WIDE_MIN_WIDTH,
+        ConversationLayoutPolicy.LG_MIN_WIDTH,
         true,
         false,
-        'phone',
-        []
-      )).assertFalse();
-      expect(ConversationLayoutPolicy.useMasterDetail(
-        ConversationLayoutPolicy.EXTRA_WIDE_MIN_WIDTH,
-        true,
-        false,
-        'phone',
         [new ConversationLayoutCrease(520, 8)]
-      )).assertFalse();
+      )).assertTrue();
       expect(ConversationLayoutPolicy.useMasterDetail(
-        ConversationLayoutPolicy.EXTRA_WIDE_MIN_WIDTH,
+        2210,
+        false,
+        false,
+        [new ConversationLayoutCrease(1100, 16)]
+      )).assertTrue();
+      expect(ConversationLayoutPolicy.useMasterDetail(
+        2210,
+        false,
+        false,
+        [],
+        true
+      )).assertTrue();
+    });
+
+    it('keeps an unfolded crease compact when master-detail cannot fit', 0, () => {
+      expect(ConversationLayoutPolicy.useMasterDetail(
+        500,
         true,
         false,
-        'tablet',
-        [new ConversationLayoutCrease(520, 8)]
+        [new ConversationLayoutCrease(200, 8)]
       )).assertFalse();
     });
 
     it('uses master-detail for unfolded tri-fold surfaces', 0, () => {
       expect(ConversationLayoutPolicy.useMasterDetail(
-        ConversationLayoutPolicy.EXTRA_WIDE_MIN_WIDTH,
+        ConversationLayoutPolicy.LG_MIN_WIDTH,
         false,
         false,
-        'phone',
         [new ConversationLayoutCrease(352, 8), new ConversationLayoutCrease(712, 8)]
       )).assertTrue();
       expect(ConversationLayoutPolicy.useMasterDetail(
-        ConversationLayoutPolicy.WIDE_LAYOUT_MIN_WIDTH,
+        720,
         false,
         false,
-        'phone',
         [new ConversationLayoutCrease(230, 8), new ConversationLayoutCrease(480, 8)]
       )).assertTrue();
     });
 
+    it('synthesizes a centered hinge when expanded foldables omit crease data', 0, () => {
+      const synthetic = ConversationLayoutPolicy.syntheticCenterCrease(2210);
+      expect(synthetic !== undefined).assertTrue();
+      expect(synthetic ? synthetic.left : 0).assertEqual(1097);
+      expect(synthetic ? synthetic.width : 0).assertEqual(ConversationLayoutPolicy.SYNTHETIC_HINGE_WIDTH);
+      expect(ConversationLayoutPolicy.syntheticCenterCrease(500) === undefined).assertTrue();
+      expect(ConversationLayoutPolicy.effectiveVerticalCreases(500, [], true).length).assertEqual(0);
+      const creases = ConversationLayoutPolicy.effectiveVerticalCreases(2210, [], true);
+      expect(creases.length).assertEqual(1);
+      expect(creases[0].left).assertEqual(1097);
+      const realCrease = ConversationLayoutPolicy.effectiveVerticalCreases(
+        2210,
+        [new ConversationLayoutCrease(1100, 16)],
+        true
+      );
+      expect(realCrease[0].left).assertEqual(1100);
+    });
+
     it('keeps the existing master width when no usable crease is available', 0, () => {
-      const geometry = ConversationLayoutPolicy.resolveWideGeometry(860, []);
+      const geometry = ConversationLayoutPolicy.resolveWideGeometry(820, []);
       const invalidCrease = ConversationLayoutPolicy.resolveWideGeometry(
-        860,
+        820,
         [new ConversationLayoutCrease(120, 10)]
       );
       expect(geometry.masterPaneWidth).assertEqual(ConversationLayoutPolicy.FALLBACK_MASTER_PANE_WIDTH);
       expect(geometry.masterDetailGap).assertEqual(0);
       expect(geometry.isExtraWide).assertFalse();
       expect(geometry.detailContentOffset).assertEqual(0);
-      expect(geometry.detailContentWidth).assertEqual(516);
+      expect(geometry.detailContentWidth).assertEqual(476);
       expect(geometry.collapsedDetailContentOffset).assertEqual(0);
-      expect(geometry.collapsedDetailContentWidth).assertEqual(860);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(820);
       expect(invalidCrease.masterPaneWidth).assertEqual(ConversationLayoutPolicy.FALLBACK_MASTER_PANE_WIDTH);
     });
 
@@ -2491,6 +2674,9 @@ export default function remoteControllersUnitTest() {
       expect(geometry.detailContentWidth).assertEqual(0);
       expect(geometry.collapsedDetailContentOffset).assertEqual(0);
       expect(geometry.collapsedDetailContentWidth).assertEqual(300);
+      const emptyViewport = ConversationLayoutPolicy.resolveWideGeometry(0, []);
+      expect(emptyViewport.detailContentWidth).assertEqual(0);
+      expect(emptyViewport.collapsedDetailContentWidth).assertEqual(0);
     });
 
     it('aligns the master boundary with the first usable fold crease', 0, () => {
@@ -2503,6 +2689,61 @@ export default function remoteControllersUnitTest() {
       expect(geometry.isExtraWide).assertFalse();
       expect(geometry.detailContentOffset).assertEqual(0);
       expect(geometry.detailContentWidth).assertEqual(430);
+      expect(geometry.collapsedDetailContentOffset).assertEqual(0);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(820);
+    });
+
+    it('keeps collapsed dual-fold content full-width so restore stays at the window origin', 0, () => {
+      const geometry = ConversationLayoutPolicy.resolveWideGeometry(
+        2210,
+        [new ConversationLayoutCrease(1097, 16)]
+      );
+      expect(geometry.collapsedDetailContentOffset).assertEqual(0);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(2210);
+    });
+
+    it('keeps collapsed tri-fold content on the dominant hinge-free band', 0, () => {
+      const geometry = ConversationLayoutPolicy.resolveWideGeometry(
+        1107,
+        [new ConversationLayoutCrease(351, 44)]
+      );
+      expect(geometry.collapsedDetailContentOffset).assertEqual(395);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(712);
+    });
+
+    it('treats dual-axis expanded fold status as an unfolded foldable', 0, () => {
+      expect(ConversationLayoutPolicy.isFoldedStatus(
+        ConversationLayoutPolicy.FOLD_STATUS_FOLDED
+      )).assertTrue();
+      expect(ConversationLayoutPolicy.isFoldedStatus(
+        ConversationLayoutPolicy.FOLD_STATUS_EXPANDED_WITH_SECOND_EXPANDED
+      )).assertFalse();
+      expect(ConversationLayoutPolicy.isExpandedFoldableStatus(
+        ConversationLayoutPolicy.FOLD_STATUS_EXPANDED_WITH_SECOND_EXPANDED
+      )).assertTrue();
+      expect(ConversationLayoutPolicy.isExpandedFoldableStatus(
+        ConversationLayoutPolicy.FOLD_STATUS_FOLDED
+      )).assertFalse();
+    });
+
+    it('uses the landscape display width when area reports the short side', 0, () => {
+      expect(ConversationLayoutPolicy.resolveLayoutViewportWidth(776, 1107, 1107, 776))
+        .assertEqual(1107);
+      expect(ConversationLayoutPolicy.resolveLayoutViewportWidth(776, 1107, 776, 1107, 270))
+        .assertEqual(1107);
+      expect(ConversationLayoutPolicy.resolveLayoutViewportWidth(360, 780, 360, 780, 0))
+        .assertEqual(360);
+    });
+
+    it('rotates a physical horizontal crease into a vertical layout crease', 0, () => {
+      const creases = ConversationLayoutPolicy.verticalCreasesFromRects(
+        1107,
+        776,
+        [new ConversationLayoutRect(0, 351, 776, 44)]
+      );
+      expect(creases.length).assertEqual(1);
+      expect(creases[0].left).assertEqual(351);
+      expect(creases[0].width).assertEqual(44);
     });
 
     it('accepts a zero-width crease without creating an empty detail segment', 0, () => {
@@ -2516,7 +2757,7 @@ export default function remoteControllersUnitTest() {
       expect(geometry.detailContentWidth).assertEqual(548);
     });
 
-    it('treats two creases as an extra-wide master-detail surface', 0, () => {
+    it('keeps tri-fold detail across both remaining screens instead of one hinge-free band', 0, () => {
       const geometry = ConversationLayoutPolicy.resolveWideGeometry(
         1080,
         [new ConversationLayoutCrease(352, 8), new ConversationLayoutCrease(712, 8)]
@@ -2524,31 +2765,44 @@ export default function remoteControllersUnitTest() {
       expect(geometry.masterPaneWidth).assertEqual(352);
       expect(geometry.masterDetailGap).assertEqual(8);
       expect(geometry.isExtraWide).assertTrue();
-      expect(geometry.detailContentOffset).assertEqual(360);
-      expect(geometry.detailContentWidth).assertEqual(360);
-      expect(geometry.collapsedDetailContentOffset).assertEqual(720);
-      expect(geometry.collapsedDetailContentWidth).assertEqual(360);
+      expect(geometry.detailContentOffset).assertEqual(0);
+      expect(geometry.detailContentWidth).assertEqual(720);
+      expect(geometry.collapsedDetailContentOffset).assertEqual(360);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(720);
     });
 
-    it('selects the widest hinge-free detail band on asymmetric three-screen geometry', 0, () => {
+    it('keeps asymmetric tri-fold detail on the full remaining span after the first crease', 0, () => {
       const geometry = ConversationLayoutPolicy.resolveWideGeometry(
         1080,
         [new ConversationLayoutCrease(352, 8), new ConversationLayoutCrease(800, 8)]
       );
       expect(geometry.detailContentOffset).assertEqual(0);
-      expect(geometry.detailContentWidth).assertEqual(440);
+      expect(geometry.detailContentWidth).assertEqual(720);
       expect(geometry.collapsedDetailContentOffset).assertEqual(360);
-      expect(geometry.collapsedDetailContentWidth).assertEqual(440);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(720);
+    });
+
+    it('spans remaining screens when a second crease sits inside the detail pane', 0, () => {
+      const geometry = ConversationLayoutPolicy.resolveWideGeometry(
+        1107,
+        [new ConversationLayoutCrease(351, 44), new ConversationLayoutCrease(773, 44)]
+      );
+      expect(geometry.masterPaneWidth).assertEqual(351);
+      expect(geometry.masterDetailGap).assertEqual(44);
+      expect(geometry.detailContentOffset).assertEqual(0);
+      expect(geometry.detailContentWidth).assertEqual(712);
+      expect(geometry.collapsedDetailContentOffset).assertEqual(395);
+      expect(geometry.collapsedDetailContentWidth).assertEqual(712);
     });
 
     it('uses width as the extra-wide fallback when crease data is missing', 0, () => {
       const geometry = ConversationLayoutPolicy.resolveWideGeometry(
-        ConversationLayoutPolicy.EXTRA_WIDE_MIN_WIDTH,
+        ConversationLayoutPolicy.LG_MIN_WIDTH,
         []
       );
       expect(geometry.isExtraWide).assertTrue();
       expect(geometry.detailContentOffset).assertEqual(0);
-      expect(geometry.detailContentWidth).assertEqual(736);
+      expect(geometry.detailContentWidth).assertEqual(496);
     });
 
     it('ignores crease regions outside the application viewport', 0, () => {
@@ -2571,8 +2825,8 @@ export default function remoteControllersUnitTest() {
         [new ConversationLayoutCrease(600, 8)]
       );
       expect(geometry.masterPaneWidth).assertEqual(ConversationLayoutPolicy.FALLBACK_MASTER_PANE_WIDTH);
-      expect(geometry.detailContentOffset).assertEqual(264);
-      expect(geometry.detailContentWidth).assertEqual(292);
+      expect(geometry.detailContentOffset).assertEqual(0);
+      expect(geometry.detailContentWidth).assertEqual(556);
     });
   });
 

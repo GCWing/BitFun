@@ -548,6 +548,88 @@ describe('AcpAgentsConfig', () => {
     expect(notifySuccessMock).toHaveBeenCalledWith('notifications.configAddedManualCliRequired');
   });
 
+  it('offers the one-click installer for DeepSeek Harness and launches the bundled profile', async () => {
+    probeClientRequirementsMock.mockResolvedValue([
+      {
+        id: 'dsh',
+        tool: { name: 'dsh', installed: false },
+        runnable: false,
+        notes: ['dsh is not available on PATH'],
+      },
+    ]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('DeepSeek Harness');
+    // Unlike omp, the harness is a plain npm global, so BitFun installs it.
+    // The bridge is not a separate adapter — it ships inside BitFun.
+    expect(container.textContent).not.toContain('registry.adapterMissing');
+
+    const installButtons = Array.from(container.querySelectorAll('button'))
+      .filter(button => button.textContent?.includes('actions.installCli'));
+    expect(installButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      installButtons[0].click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(installClientCliMock).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'dsh' }),
+    );
+  });
+
+  it('adds DeepSeek Harness as a launch of the profile BitFun materializes', async () => {
+    probeClientRequirementsMock.mockResolvedValue([
+      {
+        id: 'dsh',
+        tool: { name: 'dsh', installed: true, version: '0.1.0-rc.6' },
+        runnable: true,
+        notes: [],
+      },
+    ]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Address the harness row by name: row order is whatever the saved config
+    // and the preset list happen to produce, so "the last add button" belongs
+    // to some other agent as often as not.
+    const harnessRow = Array.from(
+      container.querySelectorAll('.bitfun-acp-agents__registry-row'),
+    ).find(row => row.querySelector('.bitfun-acp-agents__registry-name')
+      ?.textContent === 'DeepSeek Harness');
+    expect(harnessRow).toBeTruthy();
+
+    const addButton = Array.from(harnessRow!.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('actions.add'));
+    expect(addButton).toBeTruthy();
+
+    await act(async () => {
+      addButton!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The command has to name the profile BitFun materializes; a bare `dsh`
+    // would drop the user into the harness's own default composition, which
+    // does not speak ACP at all.
+    expect(saveJsonConfigMock).toHaveBeenCalledWith(expect.stringContaining('bitfun-acp'));
+  });
+
   it('does not downgrade enabled agents on transient probe timeouts during refresh', async () => {
     probeClientRequirementsMock
       .mockResolvedValueOnce([

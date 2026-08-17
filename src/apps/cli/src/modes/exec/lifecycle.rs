@@ -19,7 +19,7 @@ use bitfun_agent_tools::effective_tool_invocation;
 use bitfun_events::{AgenticEvent, ToolEventIdentity};
 use tokio::time::Instant;
 
-use crate::agent::runtime_client::ExecAgentRuntimeClient;
+use crate::agent::runtime_client::CliAgentRuntimeClient;
 use crate::config::CliConfig;
 use crate::diagnostics::{
     cli_error_code, emit_exit_diagnostic, user_facing_error_message, ExitContext, ExitKind,
@@ -472,7 +472,7 @@ pub(crate) struct ExecMode {
     config: CliConfig,
     message: String,
     agent_type: String,
-    agent: Arc<ExecAgentRuntimeClient>,
+    agent: Arc<CliAgentRuntimeClient>,
     runtime: Arc<CliRuntimeContext>,
     pub(super) workspace_path: Option<PathBuf>,
     /// Explicit CLI override. Omitted means preserve the resumed Session profile.
@@ -512,7 +512,7 @@ impl ExecMode {
             | crate::runtime::approval::CliApprovalPolicy::DisableAuto
             | crate::runtime::approval::CliApprovalPolicy::Reject => ExecApprovalMode::Reject,
         };
-        let agent = Arc::new(ExecAgentRuntimeClient::new(
+        let agent = Arc::new(CliAgentRuntimeClient::new(
             runtime.as_ref(),
             workspace_path.clone(),
         ));

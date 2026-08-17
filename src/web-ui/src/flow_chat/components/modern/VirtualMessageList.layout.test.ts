@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   estimateTextHeightFromLength,
+  estimateVirtualMessageItemHeightWithContext,
   estimateVirtualMessageItemHeight,
   getVirtualMessageDefaultItemHeight,
   selectInitialHistoryRenderWindow,
 } from './virtualMessageListLayout';
+import { estimateToolHeight } from './virtualItemHeightEstimators';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
+import type { FlowToolItem } from '../../types/flow-chat';
 
 describe('getVirtualMessageDefaultItemHeight', () => {
   it('keeps compact historical projections on the small row estimate', () => {
@@ -71,6 +74,35 @@ describe('estimateVirtualMessageItemHeight', () => {
     expect(estimateVirtualMessageItemHeight(item)).toBeGreaterThan(1000);
   });
 
+  it('uses the shared collapsed hint for completed thinking rounds', () => {
+    const item = {
+      type: 'model-round',
+      turnId: 'turn-1',
+      isLastRound: false,
+      isTurnComplete: true,
+      layoutHints: { expandedThinkingItemIds: [] },
+      data: {
+        id: 'round-thinking',
+        status: 'completed',
+        isStreaming: false,
+        items: [{
+          id: 'thinking-1',
+          type: 'thinking',
+          content: 'x'.repeat(13_016),
+          status: 'completed',
+          timestamp: 1,
+        }],
+      },
+    } as VirtualItem;
+
+    expect(estimateVirtualMessageItemHeight(item)).toBe(200);
+
+    expect(estimateVirtualMessageItemHeight({
+      ...item,
+      layoutHints: { expandedThinkingItemIds: ['thinking-1'] },
+    })).toBeGreaterThan(1000);
+  });
+
   it('keeps compact user-only rows small enough for partial history tails', () => {
     const item = {
       type: 'user-message',
@@ -83,6 +115,80 @@ describe('estimateVirtualMessageItemHeight', () => {
     } as VirtualItem;
 
     expect(estimateVirtualMessageItemHeight(item)).toBeLessThanOrEqual(160);
+  });
+
+  it('uses tool-owned data to distinguish compact and expanded Write estimates', () => {
+    const tool = {
+      id: 'write-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      timestamp: 1,
+      toolCall: {
+        id: 'call-1',
+        input: { content: 'x'.repeat(600) },
+      },
+    } as FlowToolItem;
+
+    const completed = estimateToolHeight(tool);
+    const running = estimateToolHeight({
+      ...tool,
+      status: 'running',
+    } as FlowToolItem);
+
+    expect(completed.heightPx).toBeLessThan(running.heightPx);
+    expect(running.kind).toBe('tool-write');
+  });
+
+  it('uses layout width and explicit Explore state for unmeasured rows', () => {
+    const textItem = {
+      type: 'model-round',
+      turnId: 'turn-1',
+      isLastRound: true,
+      isTurnComplete: true,
+      data: {
+        id: 'round-width',
+        status: 'completed',
+        isStreaming: false,
+        items: [{
+          id: 'text-width',
+          type: 'text',
+          content: 'x'.repeat(600),
+          status: 'completed',
+          timestamp: 1,
+        }],
+      },
+    } as VirtualItem;
+    expect(estimateVirtualMessageItemHeightWithContext(textItem, { availableWidthPx: 360 }))
+      .toBeGreaterThan(estimateVirtualMessageItemHeightWithContext(textItem, { availableWidthPx: 1200 }));
+
+    const exploreItem = {
+      type: 'explore-group',
+      turnId: 'turn-1',
+      data: {
+        groupId: 'group-1',
+        allItems: [{
+          id: 'tool-1',
+          type: 'tool',
+          toolName: 'Write',
+          status: 'running',
+          timestamp: 1,
+          toolCall: { id: 'call-1', input: { content: 'x'.repeat(300) } },
+        }],
+        stats: { readCount: 0, searchCount: 0, commandCount: 0 },
+        rounds: [],
+        isGroupStreaming: false,
+        isLastGroupInTurn: true,
+        wasCutByCritical: true,
+      },
+    } as VirtualItem;
+    const collapsed = estimateVirtualMessageItemHeightWithContext(exploreItem, {
+      exploreGroupStates: new Map([['group-1', false]]),
+    });
+    const expanded = estimateVirtualMessageItemHeightWithContext(exploreItem, {
+      exploreGroupStates: new Map([['group-1', true]]),
+    });
+    expect(expanded).toBeGreaterThan(collapsed);
   });
 });
 

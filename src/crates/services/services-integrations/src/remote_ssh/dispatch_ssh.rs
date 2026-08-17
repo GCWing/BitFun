@@ -1181,12 +1181,7 @@ async fn account_daemon_cli_path(
 /// Keys of the `ai` config section that make up "model configuration": the
 /// model catalog (credentials included) plus every default-selection table the
 /// target consults when resolving a ready model.
-const MODEL_CONFIG_KEYS: [&str; 4] = [
-    "models",
-    "default_models",
-    "agent_model_defaults",
-    "func_agent_models",
-];
+const MODEL_CONFIG_KEYS: [&str; 3] = ["models", "default_models", "agent_model_defaults"];
 
 /// Write the controller's model configuration into the target's global config
 /// so `bitfun dispatch probe` can report a ready model.
@@ -4156,6 +4151,11 @@ mod tests {
         assert!(validate_model_config_payload(&serde_json::json!({
             "models": [{"id": "m1"}],
             "tool_permissions": {}
+        }))
+        .is_err());
+        assert!(validate_model_config_payload(&serde_json::json!({
+            "models": [{"id": "m1"}],
+            "task_models": {"session_title": {"kind": "inherit"}}
         }))
         .is_err());
         assert!(validate_model_config_payload(&serde_json::json!({ "models": [] })).is_err());

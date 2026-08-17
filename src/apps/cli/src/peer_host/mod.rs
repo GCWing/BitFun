@@ -31,17 +31,5 @@ pub(crate) fn notify_controllers_settings_changed() {
 }
 
 pub(crate) async fn update_controller_presence(online_device_ids: Vec<String>) {
-    let lost_last_controller =
-        control::retain_online_controllers(online_device_ids.iter().map(String::as_str)).await;
-    if !lost_last_controller {
-        return;
-    }
-    if let Some(state) = state::try_peer_host_state() {
-        if let Err(error) = state
-            .cancel_and_drain_peer_turns("last Peer controller went offline")
-            .await
-        {
-            tracing::warn!("Peer work was not fully cancelled after controller loss: {error}");
-        }
-    }
+    control::retain_online_controllers(online_device_ids.iter().map(String::as_str)).await;
 }

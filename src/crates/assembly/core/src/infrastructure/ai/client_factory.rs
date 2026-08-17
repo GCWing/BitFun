@@ -73,17 +73,6 @@ fn subscription_credential_stale(auth: &AuthConfig, _cached: &CachedAIClient) ->
     matches!(auth, AuthConfig::Subscription { .. })
 }
 
-fn functional_agent_model_selector<'a>(
-    ai_config: &'a crate::service::config::types::AIConfig,
-    func_agent_name: &str,
-) -> &'a str {
-    ai_config
-        .func_agent_models
-        .get(func_agent_name)
-        .map(String::as_str)
-        .unwrap_or("fast")
-}
-
 impl AIClientFactory {
     fn new(config_service: Arc<ConfigService>) -> Self {
         Self {
@@ -92,18 +81,21 @@ impl AIClientFactory {
         }
     }
 
-    /// Get a functional agent's AI client using its dedicated mapping or fast.
-    pub async fn get_client_by_func_agent(&self, func_agent_name: &str) -> Result<Arc<AIClient>> {
-        let global_config: crate::service::config::GlobalConfig =
-            self.config_service.get_config(None).await?;
-
-        let model_id = functional_agent_model_selector(&global_config.ai, func_agent_name);
-
-        self.get_client_resolved(model_id).await
-    }
-
     pub async fn get_client_by_id(&self, model_id: &str) -> Result<Arc<AIClient>> {
         self.get_or_create_client(model_id, None).await
+    }
+
+    /// Resolve the fixed model configured for Git commit-message generation.
+    pub async fn get_git_commit_task_client(&self) -> Result<Arc<AIClient>> {
+        let global_config: crate::service::config::GlobalConfig =
+            self.config_service.get_config(None).await?;
+        let model_id = global_config
+            .ai
+            .task_models
+            .git_commit
+            .fixed_model_id()
+            .ok_or_else(|| anyhow!("Git commit task model cannot inherit a session model"))?;
+        self.get_client_resolved(model_id).await
     }
 
     /// Resolves an immutable concrete model id only when its current runtime

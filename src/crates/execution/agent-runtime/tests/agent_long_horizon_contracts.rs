@@ -1,7 +1,6 @@
-//! DeepResearch, DeepReview, and long-running thread-goal contracts.
+//! DeepReview and long-running thread-goal contracts.
+#![cfg(feature = "agent-runtime")]
 
-#[path = "agent_long_horizon_contracts/deep_research_contracts.rs"]
-mod deep_research_contracts;
 #[path = "agent_long_horizon_contracts/deep_review_policy_contracts.rs"]
 mod deep_review_policy_contracts;
 #[path = "agent_long_horizon_contracts/thread_goal_contracts.rs"]

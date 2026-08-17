@@ -4,9 +4,14 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ConnectAccountDevicePage } from './ConnectAccountDevicePage';
 import { ConnectManualPairingOverlay } from './ConnectManualPairingOverlay';
-import { CONNECT_INTENT_AUTO } from '../state/AppShellState';
-import { ConnectOpenIntentPolicy } from '../policy/ConnectOpenIntentPolicy';
-import { ACCENT, CARD, CONNECT_HERO_ACCENT, CONNECT_HERO_BG, CONNECT_HERO_SECONDARY,
+import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../state/AppShellState';
+import {
+  ConnectSheetLandingPolicy,
+  ConnectSheetStatusPolicy,
+  ConnectSheetStep
+} from '../policy/ConnectSheetLandingPolicy';
+import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
+import { CARD, CONNECT_HERO_ACCENT, CONNECT_HERO_BG, CONNECT_HERO_SECONDARY,
   CONNECT_HERO_SURFACE, CONNECT_SCAN_ACCENT, GREEN, INK, LINE, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT,
   SUBTLE } from './Theme';
 const CAMERA_PERMISSION: Permissions = 'ohos.permission.CAMERA';
@@ -35,7 +40,7 @@ export struct ConnectView {
   @Event onConnect: (password?: string) => void = (_password?: string) => {};
   @Event onRemoteUrlChange: (value: string) => void = (_value: string) => {};
   @Event onUserIdChange: (value: string) => void = (_value: string) => {};
-  @Event onRemoteUrlDetected: (value: string) => boolean = (_value: string) => false;
+  @Event onRemoteUrlDetected: (value: string) => string = (_value: string) => DetectedUrlAction.INVALID;
   @Event onRemoteUrlInputVisibleChange: (visible: boolean) => void = (_visible: boolean) => {};
   @Event cloudListDevices: () => Promise<CloudAccountDevice[]> = async (): Promise<CloudAccountDevice[]> => [];
   @Event cloudSelectDevice: (device: CloudAccountDevice) => Promise<void> =
@@ -47,12 +52,15 @@ export struct ConnectView {
   @Local cameraPermissionReady: boolean = false;
   @Local requestingCameraPermission: boolean = false;
 
+  /**
+   * SCAN intent always opens the camera. Every other automatic open lands on
+   * the account device list when signed in, and on the pair-code explainer
+   * when not — never on the camera by default.
+   */
   aboutToAppear(): void {
-    this.pairingStep = ConnectOpenIntentPolicy.initialStep(
+    this.pairingStep = ConnectSheetLandingPolicy.initialStep(
       this.openIntent,
-      this.isAccountAuthenticated(),
-      this.remoteUrl,
-      this.pairingStep
+      this.isAccountAuthenticated()
     );
   }
 
@@ -264,10 +272,10 @@ export struct ConnectView {
       .borderRadius(24)
       .position({ x: 28, y: 18 })
       .onClick(() => {
-        if (ConnectOpenIntentPolicy.backStaysInSheet(
-          this.openIntent, this.currentStep(), this.remoteUrl, this.showManualPairing)) {
+        if (this.openIntent !== CONNECT_INTENT_SCAN &&
+          this.currentStep() === ConnectSheetStep.Scan && this.remoteUrl.trim().length === 0 && !this.showManualPairing) {
           this.stopInlineScan();
-          this.pairingStep = this.isAccountAuthenticated() ? 'account' : 'intro';
+          this.pairingStep = this.isAccountAuthenticated() ? ConnectSheetStep.Account : ConnectSheetStep.Intro;
           return;
         }
         this.stopInlineScan();
@@ -468,6 +476,10 @@ export struct ConnectView {
     }
     if (this.remoteUrl.trim().length > 0) {
       if (this.requiresAccountAuth && this.accountPassword.length === 0) {
+        if (this.isAccountAuthenticated()) {
+          this.pairingStep = ConnectSheetStep.Account;
+          return;
+        }
         this.showManualPairing = true;
         this.onRemoteUrlInputVisibleChange(true);
         return;
@@ -479,7 +491,7 @@ export struct ConnectView {
     this.onRemoteUrlInputVisibleChange(true);
     this.stopInlineScan();
     this.showManualPairing = true;
-    this.pairingStep = 'scan';
+    this.pairingStep = ConnectSheetStep.Scan;
   }
 
   private canConnect(): boolean {
@@ -499,19 +511,7 @@ export struct ConnectView {
   }
 
   private currentStep(): string {
-    if (this.pairingStep === 'account' && this.isAccountAuthenticated()) {
-      return 'account';
-    }
-    if (this.pairingStep === 'scan' ||
-      this.remoteUrl.trim().length > 0 ||
-      this.isBusy ||
-      this.isConnected ||
-      this.connectionState === 'parsing' ||
-      this.connectionState === 'pairing' ||
-      this.connectionState === 'reconnecting') {
-      return 'scan';
-    }
-    return 'intro';
+    return ConnectSheetLandingPolicy.visibleStep(this.pairingStep, this.isAccountAuthenticated());
   }
 
   private isAccountAuthenticated(): boolean {
@@ -543,7 +543,7 @@ export struct ConnectView {
   private async startInlineScan(): Promise<void> {
     if (this.scannerStarted ||
       this.scanCompleted ||
-      this.currentStep() !== 'scan' ||
+      this.currentStep() !== ConnectSheetStep.Scan ||
       this.showManualPairing) {
       return;
     }
@@ -593,15 +593,26 @@ export struct ConnectView {
         }
         this.scanCompleted = true;
         this.stopInlineScan();
-        const shouldPrompt = this.onRemoteUrlDetected(text);
-        if (shouldPrompt) {
+        const action = this.onRemoteUrlDetected(text);
+        if (action === DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD) {
           this.showManualPairing = true;
           this.onRemoteUrlInputVisibleChange(true);
-          this.pairingStep = 'scan';
+          this.pairingStep = ConnectSheetStep.Scan;
           return;
         }
-        this.ensureUserId();
-        this.onConnect();
+        if (action === DetectedUrlAction.SHOW_CLOUD_DEVICES ||
+          action === DetectedUrlAction.USE_CLOUD_DEVICE) {
+          this.pairingStep = ConnectSheetStep.Account;
+          return;
+        }
+        if (action === DetectedUrlAction.PAIR_NOW) {
+          this.ensureUserId();
+          this.onConnect();
+          return;
+        }
+        this.inlineScanError = this.statusText || RemoteI18n.t('connect.hintInvalidLink');
+        this.scanCompleted = false;
+        this.resumeInlineScan();
       });
     } catch (_err) {
       this.scannerStarted = false;
@@ -621,7 +632,7 @@ export struct ConnectView {
   }
 
   private resumeInlineScan(): void {
-    if (this.remoteUrl.trim().length > 0 || this.pairingStep !== 'scan') {
+    if (this.remoteUrl.trim().length > 0 || this.pairingStep !== ConnectSheetStep.Scan) {
       return;
     }
     this.scanCompleted = false;
@@ -660,39 +671,23 @@ export struct ConnectView {
     this.scanStartRetryCount = 0;
     this.inlineScanError = '';
     this.cameraPermissionReady = false;
-    this.pairingStep = 'scan';
+    this.pairingStep = ConnectSheetStep.Scan;
   }
 
   private isConnectError(): boolean {
-    if (this.connectionState === 'failed') {
-      return true;
-    }
-    if (this.isBusy || this.isConnected) {
-      return false;
-    }
-    const text = this.statusText.toLowerCase();
-    return text.indexOf('http') >= 0 ||
-      text.indexOf('error') >= 0 ||
-      text.indexOf('failed') >= 0 ||
-      text.indexOf(RemoteI18n.t('common.failed')) >= 0 ||
-      this.statusText === RemoteI18n.t('errors.remoteUrlMissingParams') ||
-      this.statusText === RemoteI18n.t('errors.remoteUrlRequired') ||
-      text.indexOf('rejected') >= 0;
+    return ConnectSheetStatusPolicy.isConnectError(
+      this.connectionState,
+      this.isBusy,
+      this.isConnected,
+      this.statusText,
+      RemoteI18n.t('common.failed'),
+      RemoteI18n.t('errors.remoteUrlMissingParams'),
+      RemoteI18n.t('errors.remoteUrlRequired')
+    );
   }
 
   private failureHint(): string {
-    if (this.connectionFailureKind === 'expired_room') {
-      return RemoteI18n.t('connect.hintExpiredRoom');
-    }
-    if (this.connectionFailureKind === 'network') {
-      return RemoteI18n.t('connect.hintNetwork');
-    }
-    if (this.connectionFailureKind === 'protected_user') {
-      return RemoteI18n.t('connect.hintProtectedUser');
-    }
-    if (this.connectionFailureKind === 'invalid_link') {
-      return RemoteI18n.t('connect.hintInvalidLink');
-    }
-    return '';
+    const key = ConnectSheetStatusPolicy.failureHintKey(this.connectionFailureKind);
+    return key.length > 0 ? RemoteI18n.t(key) : '';
   }
 }

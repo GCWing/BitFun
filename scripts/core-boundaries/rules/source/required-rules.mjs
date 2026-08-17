@@ -1,6 +1,20 @@
 // Boundary rules for source ownership, facades, and required owner content.
 
+import { agentRuntimeRootPublicModules } from './public-api-rules.mjs';
+
 export const requiredContentRules = [
+  {
+    path: 'src/crates/adapters/agent-runtime-ipc/Cargo.toml',
+    reason:
+      'agent-runtime-ipc must keep the exact feature-free bitfun-transport dependency',
+    patterns: [
+      {
+        regex: /^bitfun-transport = \{ path = "\.\.\/transport" \}$/m,
+        message:
+          'bitfun-transport must stay feature-free and use the reviewed sibling path',
+      },
+    ],
+  },
   ...[
     'src/apps/cli/Cargo.toml',
     'src/apps/desktop/Cargo.toml',
@@ -873,6 +887,10 @@ export const requiredContentRules = [
       {
         regex: /default = \[\]/,
         message: 'agent-runtime default feature set must stay empty',
+      },
+      {
+        regex: /\[\[example\]\]\r?\nname = "sdk_minimal"\r?\npath = "examples\/sdk_minimal\.rs"\r?\nrequired-features = \["agent-runtime"\]/,
+        message: 'sdk_minimal example must declare the versioned agent-runtime owner feature',
       },
     ],
   },
@@ -2773,7 +2791,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/tests/agent_long_horizon_contracts/deep_research_contracts.rs',
+    path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
     reason:
       'agent-runtime must keep behavior-equivalence contracts for DeepResearch citation renumbering',
     patterns: [
@@ -5126,6 +5144,16 @@ export const requiredContentRules = [
       },
       {
         path: 'src/crates/contracts/runtime-ports/src/workspace_ports.rs',
+        regex: /\bfn join_path\(&self, root: &str, components: &\[&str\]\) -> String\b/,
+        message: 'workspace filesystem providers must own their path joining syntax',
+      },
+      {
+        path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_services.rs',
+        regex: /fn join_path\(&self, root: &str, components: &\[&str\]\) -> String \{\r?\n\s*join_posix_path\(root, components\)/,
+        message: 'remote workspace filesystem must keep POSIX path joining independent of the host',
+      },
+      {
+        path: 'src/crates/contracts/runtime-ports/src/workspace_ports.rs',
         regex: /\bpub trait WorkspaceShell\b/,
         message: 'missing workspace shell port contract',
       },
@@ -5402,6 +5430,42 @@ export const requiredContentRules = [
         regex: /\bsubagent_context_mode_preserves_fork_wire_value\b/,
         message: 'missing subagent context mode contract regression',
       },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/lib.rs',
+    reason: 'Agent Runtime leaf capability modules must stay behind their exact owner features',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "deep-research"\)\]\r?\npub mod deep_research;/,
+        message: 'deep-research must gate its pure report capability',
+      },
+      {
+        regex: /#\[cfg\(feature = "native-hook-settings"\)\]\r?\npub mod native_hooks;/,
+        message: 'native-hook-settings must gate the portable hook facade',
+      },
+      ...agentRuntimeRootPublicModules
+        .filter((moduleName) => !['deep_research', 'native_hooks'].includes(moduleName))
+        .map((moduleName) => ({
+          regex: new RegExp(`#\\[cfg\\(feature = "agent-runtime"\\)\\]\\r?\\npub mod ${moduleName};`),
+          message: `${moduleName} must stay behind the full agent-runtime owner`,
+        })),
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/native_hooks/mod.rs',
+    reason: 'native hook execution modules must stay behind native-hook-runtime',
+    patterns: [
+      ...['engine', 'output', 'payload'].flatMap((moduleName) => [
+        {
+          regex: new RegExp(`#\\[cfg\\(feature = "native-hook-runtime"\\)\\]\\r?\\nmod ${moduleName};`),
+          message: `${moduleName} must stay behind native-hook-runtime`,
+        },
+        {
+          regex: new RegExp(`#\\[cfg\\(feature = "native-hook-runtime"\\)\\]\\r?\\npub use ${moduleName}(?:::|\\{)`),
+          message: `${moduleName} exports must stay behind native-hook-runtime`,
+        },
+      ]),
     ],
   },
   {
@@ -8169,71 +8233,28 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/interfaces/app-server/src/management/service.rs',
+    path: 'src/apps/cli/src/modes/chat/worktree.rs',
     reason:
-      'App Server owns the concrete management adapter while Hosts retain explicit service injection and capability scope',
+      'CLI worktree presentation must delegate session binding to the worktree owner and refuse remote-workspace local fallback',
     patterns: [
       {
-        regex: /\bpub struct AppManagementService\b/,
-        message: 'missing concrete App Server management service',
+        regex: /\bWorktreeService::bind_session\b/,
+        message: 'missing worktree session binding delegation',
       },
       {
-        regex: /\bimpl AppManagementService\b/,
-        message: 'missing concrete App Server management implementation',
+        regex: /\bis_remote_workspace\b/,
+        message: 'missing remote workspace guard',
       },
       {
-        regex: /\bAppManagementCapabilities::available\(\)/,
-        message: 'missing App Server management capability projection',
-      },
-    ],
-  },
-  {
-    path: 'src/apps/cli/src/shared_tui_backend.rs',
-    reason:
-      'Shared TUI must retain local Model, Skill, Subagent, and MCP compatibility management without expanding Runtime IPC or leaking owners into controllers',
-    patterns: [
-      {
-        regex: /management: Arc<AppManagementService>/,
-        message: 'missing injected Shared TUI App Server management service',
-      },
-      {
-        regex: /\bfn management_service\b/,
-        message: 'missing Shared TUI management capability gate',
-      },
-      {
-        regex: /\bfn set_management_scope_from_binding\b/,
-        message: 'missing Shared TUI Remote workspace compatibility guard',
-      },
-      {
-        regex: /\.list_models\(ListModelsRequest \{\}\)/,
-        message: 'missing Shared TUI model compatibility delegation',
-      },
-      {
-        regex: /\.list_skills\(request\)/,
-        message: 'missing Shared TUI skill compatibility delegation',
-      },
-      {
-        regex: /\.list_subagents\(request\)/,
-        message: 'missing Shared TUI subagent compatibility delegation',
-      },
-      {
-        regex: /\.list_mcp_servers\(request\)/,
-        message: 'missing Shared TUI MCP compatibility delegation',
-      },
-      {
-        regex: /\bshared_management_capabilities_follow_the_local_management_service\b/,
-        message: 'missing Shared TUI management capability regression',
-      },
-      {
-        regex: /\bremote_workspace_cannot_use_the_local_management_service\b/,
-        message: 'missing Shared TUI Remote management scope regression',
+        regex: /does not fall back to controller-local services/,
+        message: 'missing remote workspace local-fallback guard',
       },
     ],
   },
   {
     path: 'src/apps/cli/src/ui/startup.rs',
     reason:
-      'CLI subagent presentation remains app-local while mode-aware reads and mutations cross the typed TUI backend boundary',
+      'CLI subagent presentation remains app-local while mode-aware reads and mutations call the agent registry owner directly',
     patterns: [
       {
         regex: /\bfn show_available_subagent_list\b/,
@@ -8244,16 +8265,16 @@ export const requiredContentRules = [
         message: 'missing CLI subagent config surface',
       },
       {
-        regex: /\bagent\.list_subagents\b/,
-        message: 'missing typed CLI mode-scoped subagent query',
+        regex: /\bget_subagents_for_query\b/,
+        message: 'missing CLI agent-registry mode-scoped subagent query',
       },
       {
         regex: /\bSubagentSummary\b/,
         message: 'missing secret-safe CLI subagent read projection',
       },
       {
-        regex: /\bagent\s*\.set_subagent_enabled\b/,
-        message: 'missing typed CLI subagent availability update path',
+        regex: /\bupdate_subagent_override\b/,
+        message: 'missing CLI agent-registry subagent availability update path',
       },
     ],
   },
@@ -9691,7 +9712,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/function_agents/port_adapters.rs',
     reason:
-      'core function-agent port adapters must continue owning AI concrete calls while product-domains owns prompt, parser, and facade policy',
+      'core function-agent port adapters must continue owning AI concrete calls while product-domains owns Git prompt, parser, and facade policy',
     patterns: [
       {
         regex: /\bprepare_commit_ai_prompt\b/,
@@ -9700,14 +9721,6 @@ export const requiredContentRules = [
       {
         regex: /\bparse_commit_ai_response\b/,
         message: 'missing product-domain Git function-agent response policy use',
-      },
-      {
-        regex: /\bbuild_work_state_analysis_prompt\b/,
-        message: 'missing product-domain Startchat prompt policy use',
-      },
-      {
-        regex: /\bparse_work_state_analysis_response\b/,
-        message: 'missing product-domain Startchat response policy use',
       },
       {
         regex: /\bai_client\s*\.\s*send_message\b/,
@@ -9722,16 +9735,8 @@ export const requiredContentRules = [
         message: 'missing core-owned commit AI concrete service',
       },
       {
-        regex: /\bCoreWorkStateAiAnalysisService\b/,
-        message: 'missing core-owned Startchat AI concrete service',
-      },
-      {
         regex: /\bparse_commit_response_preserves_product_domain_response_policy\b/,
         message: 'missing Git function-agent AI response boundary regression test',
-      },
-      {
-        regex: /\bparse_complete_analysis_preserves_product_domain_response_policy\b/,
-        message: 'missing Startchat AI response boundary regression test',
       },
     ],
   },
@@ -9749,14 +9754,6 @@ export const requiredContentRules = [
         message: 'missing commit snapshot service method',
       },
       {
-        regex: /\bstartchat_git_snapshot\b/,
-        message: 'missing Startchat Git snapshot service method',
-      },
-      {
-        regex: /\bstartchat_time_snapshot\b/,
-        message: 'missing Startchat time snapshot service method',
-      },
-      {
         regex: /\bGitService::get_status\b/,
         message: 'missing shared GitService status lookup',
       },
@@ -9768,40 +9765,16 @@ export const requiredContentRules = [
         regex: /\bContextAnalyzer::analyze_project_context\b/,
         message: 'missing product-domain project context analysis',
       },
-      {
-        regex: /\bprocess_manager::create_command\("git"\)/,
-        message: 'missing process-manager backed lenient Git command fallback',
-      },
-      {
-        regex: /\bgit_unpushed_commits\b/,
-        message: 'missing unpushed-commit fallback helper',
-      },
-      {
-        regex: /\bgit_ahead_behind\b/,
-        message: 'missing ahead/behind fallback helper',
-      },
-      {
-        regex: /\bgit_last_commit_timestamp\b/,
-        message: 'missing last-commit timestamp helper',
-      },
     ],
   },
   {
     path: 'src/crates/services/services-integrations/tests/function_agent_contracts.rs',
     reason:
-      'services-integrations function-agent Git service must preserve legacy Git snapshot behavior',
+      'services-integrations function-agent Git service must preserve commit snapshot behavior',
     patterns: [
       {
         regex: /\bgit_service_builds_commit_snapshot_from_staged_diff_without_unstaged_content\b/,
         message: 'missing staged/unstaged boundary regression test',
-      },
-      {
-        regex: /\bgit_service_startchat_snapshot_preserves_no_head_and_non_git_fallback\b/,
-        message: 'missing Startchat no-HEAD and non-Git fallback regression test',
-      },
-      {
-        regex: /\bgit_service_time_snapshot_uses_last_commit_timestamp\b/,
-        message: 'missing time snapshot regression test',
       },
     ],
   },
@@ -9813,17 +9786,6 @@ export const requiredContentRules = [
       {
         regex: /\bCoreCommitAiAnalysisService as AIAnalysisService\b/,
         message: 'missing Git function-agent AI service compatibility re-export',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/ai_service.rs',
-    reason:
-      'legacy Startchat AI service path must remain a compatibility re-export only',
-    patterns: [
-      {
-        regex: /\bCoreWorkStateAiAnalysisService as AIWorkStateService\b/,
-        message: 'missing Startchat AI service compatibility re-export',
       },
     ],
   },
@@ -9938,21 +9900,6 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
-    reason:
-      'legacy Startchat work-state analyzer must delegate to the core product-domain runtime owner',
-    patterns: [
-      {
-        regex: /\bCoreProductDomainRuntime\b/,
-        message: 'missing core product-domain runtime owner routing',
-      },
-      {
-        regex: /\banalyze_function_agent_work_state\b/,
-        message: 'missing Startchat work-state owner method delegation',
-      },
-    ],
-  },
-  {
     path: 'src/crates/contracts/product-domains/src/function_agents/ports.rs',
     reason:
       'product-domains owns port-backed function-agent facade orchestration while providers/core keep concrete Git/AI runtime calls',
@@ -9964,22 +9911,6 @@ export const requiredContentRules = [
       {
         regex: /\bgenerate_commit_message\b/,
         message: 'missing function-agent commit facade orchestration',
-      },
-      {
-        regex: /\banalyze_work_state\b/,
-        message: 'missing function-agent work-state facade orchestration',
-      },
-      {
-        regex: /\bgit_work_state_from_snapshot\b/,
-        message: 'missing Startchat Git snapshot projection helper',
-      },
-      {
-        regex: /\bStartchatTimeSnapshot\b/,
-        message: 'missing Startchat time snapshot contract',
-      },
-      {
-        regex: /\bstartchat_time_snapshot\b/,
-        message: 'missing Startchat time snapshot port',
       },
     ],
   },
@@ -9995,41 +9926,6 @@ export const requiredContentRules = [
       {
         regex: /\bfn try_repair_json\b/,
         message: 'missing function-agent AI response JSON repair helper',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/contracts/product-domains/src/function_agents/startchat_func_agent/utils.rs',
-    reason:
-      'product-domains owns Startchat function-agent prompt and response policy while core keeps AI calls',
-    patterns: [
-      {
-        regex: /\bpub const WORK_STATE_ANALYSIS_PROMPT\b/,
-        message: 'missing product-domain Startchat prompt template',
-      },
-      {
-        regex: /\bpub fn build_work_state_analysis_prompt\b/,
-        message: 'missing product-domain Startchat prompt builder',
-      },
-      {
-        regex: /\bpub struct ParsedCompleteAnalysis\b/,
-        message: 'missing Startchat complete-analysis parse result contract',
-      },
-      {
-        regex: /\bpub fn parse_complete_analysis_value\b/,
-        message: 'missing Startchat complete-analysis value parser',
-      },
-      {
-        regex: /\bpub fn parse_complete_analysis_json\b/,
-        message: 'missing Startchat complete-analysis JSON parser',
-      },
-      {
-        regex: /\bpub fn parse_work_state_analysis_response\b/,
-        message: 'missing Startchat AI response policy',
-      },
-      {
-        regex: /\bwork_state_ai_response_policy_extracts_json_and_maps_domain_errors\b/,
-        message: 'missing Startchat AI response policy regression test',
       },
     ],
   },
@@ -10217,20 +10113,12 @@ export const requiredContentRules = [
         message: 'missing Git adapter delegation to integration runtime service',
       },
       {
-        regex: /\bCoreCommitAiAnalysisService::new_with_agent_config\b/,
+        regex: /\bCoreCommitAiAnalysisService::new_with_task_config\b/,
         message: 'missing commit AI adapter delegation to concrete runtime service',
-      },
-      {
-        regex: /\bCoreWorkStateAiAnalysisService::new_with_agent_config\b/,
-        message: 'missing Startchat AI adapter delegation to concrete runtime service',
       },
       {
         regex: /\bgit_adapter_commit_snapshot_keeps_staged_diff_and_unstaged_count_separate\b/,
         message: 'missing function-agent Git snapshot boundary regression test',
-      },
-      {
-        regex: /\bgit_adapter_startchat_snapshot_preserves_git_state_when_diff_has_no_head\b/,
-        message: 'missing Startchat Git diff fallback regression test',
       },
     ],
   },
@@ -10262,10 +10150,6 @@ export const requiredContentRules = [
       {
         regex: /\bfn generate_function_agent_commit_message\b/,
         message: 'missing Git function-agent concrete runtime owner entrypoint',
-      },
-      {
-        regex: /\bfn analyze_function_agent_work_state\b/,
-        message: 'missing Startchat concrete runtime owner entrypoint',
       },
       {
         regex: /\bCoreFunctionAgentGitAdapter\b/,

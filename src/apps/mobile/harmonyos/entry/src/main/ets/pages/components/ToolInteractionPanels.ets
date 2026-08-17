@@ -1,5 +1,5 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ConversationUiQuestionAnswer } from './ConversationUiModels';
+import { ConversationUiQuestionAnswer } from '../state/ConversationUiModels';
 import { ACCENT, CARD, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 
 interface QuestionOption {

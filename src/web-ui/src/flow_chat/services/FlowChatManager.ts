@@ -15,6 +15,13 @@ import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { stateMachineManager } from '../state-machine';
 import { EventBatcher } from './EventBatcher';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  getActiveSurfaceId,
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+  onSurfaceActivated,
+  type DeviceSurfaceId,
+} from '@/infrastructure/peer-device/deviceSurface';
 import type { WorkspaceInfo } from '@/shared/types';
 import type { Session } from '../types/flow-chat';
 import {
@@ -48,6 +55,8 @@ import {
   cancelSessionTask as cancelSessionTaskModule,
   installPendingQueueDrainListener,
   drainPendingQueue,
+  waitForInFlightSubmissions,
+  pendingQueueManager,
   initializeEventListeners,
   processBatchedEvents,
   addDialogTurn as addDialogTurnModule,
@@ -64,6 +73,9 @@ import { registerDriverSessionLookup } from '../session-drivers/resolve';
 
 const log = createLogger('FlowChatManager');
 
+/** Backstop cadence for re-establishing a subscription that failed to start. */
+const EVENT_LISTENER_RETRY_MS = 2000;
+
 export class FlowChatManager {
   private static instance: FlowChatManager | null = null;
   private context: FlowChatContext;
@@ -75,6 +87,8 @@ export class FlowChatManager {
   private latestInitializationRequestKey: string | null = null;
   private peerSessionRefreshCleanup: (() => void) | null = null;
   private dispatchJobObserverCleanup: (() => void) | null = null;
+  private surfaceActivationCleanup: (() => void) | null = null;
+  private eventListenerRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
   private constructor() {
@@ -99,7 +113,8 @@ export class FlowChatManager {
       runtimeStatusTimers: new Map(),
       userCancelledSessionIds: new Set(),
       handledTerminalTurnEvents: new Set(),
-      currentWorkspacePath: null
+      currentWorkspacePath: null,
+      ensureLiveSubscription: () => this.ensureEventListeners(),
     };
     
     this.agentService = AgentService.getInstance();
@@ -109,11 +124,20 @@ export class FlowChatManager {
     installPendingQueueDrainListener(this.context);
     this.peerSessionRefreshCleanup = installPeerSessionRefresh(this.context);
     this.dispatchJobObserverCleanup = installDispatchJobObserver(this.context);
+    // The agentic subscription is this window's only live view of a running
+    // Turn, so its lifetime must not depend on a workspace bootstrap that a
+    // rapid switch is allowed to abandon. Re-arm on every activation instead.
+    this.surfaceActivationCleanup = onSurfaceActivated(() => {
+      void this.ensureEventListeners();
+    });
   }
 
   /** Public hook used by the queue panel "send now" fallback to drain head item. */
-  async drainPendingQueueForSession(sessionId: string): Promise<void> {
-    return drainPendingQueue(this.context, sessionId);
+  async drainPendingQueueForSession(
+    sessionId: string,
+    options?: { allowInterruptedRecoveryAbandon?: boolean },
+  ): Promise<void> {
+    return drainPendingQueue(this.context, sessionId, options);
   }
 
   public static getInstance(): FlowChatManager {
@@ -166,6 +190,11 @@ export class FlowChatManager {
     return request;
   }
 
+  /**
+   * The same repository is routinely open at the same path on two devices, so
+   * without the surface a bootstrap for one device is handed the in-flight
+   * initialization of another — and reads back the wrong device's session list.
+   */
   private static createInitializationRequestKey(
     workspacePath: string,
     preferredMode?: string,
@@ -173,6 +202,7 @@ export class FlowChatManager {
     remoteSshHost?: string
   ): string {
     return JSON.stringify([
+      getActiveSurfaceId(),
       workspacePath,
       preferredMode ?? '',
       remoteConnectionId ?? '',
@@ -187,6 +217,7 @@ export class FlowChatManager {
     remoteConnectionId?: string,
     remoteSshHost?: string
   ): Promise<boolean> {
+    const scope = getActiveSurfaceScope();
     try {
       await this.initializeEventListeners();
       if (this.disposed) {
@@ -202,8 +233,7 @@ export class FlowChatManager {
         }
       );
 
-      const surfaceGenerationBeforeLoad = this.context.flowChatStore.getSurfaceGeneration();
-      let initialMetadataPage = await this.context.flowChatStore.loadSessionMetadataPage(
+      const initialMetadataPage = await this.context.flowChatStore.loadSessionMetadataPage(
         workspacePath,
         5,
         undefined,
@@ -215,33 +245,11 @@ export class FlowChatManager {
         return false;
       }
 
-      // A Peer Device surface switch during the load bumps the store surface
-      // generation, and the metadata processor then drops the page instead of
-      // applying it to a surface that no longer exists. The page still reports
-      // its sessions, so the caller would see "history exists" over an empty
-      // store, select nothing, and skip session creation as well — a chat that
-      // stays blank until the user clicks a session by hand. Reload once
-      // against the settled generation.
-      if (
-        this.context.flowChatStore.getSurfaceGeneration() !== surfaceGenerationBeforeLoad &&
-        initialMetadataPage.sessions.length > 0
-      ) {
-        log.info('Reloading session metadata after a peer surface switch discarded the page', {
-          workspacePath,
-          discardedSessionCount: initialMetadataPage.sessions.length,
-        });
-        initialMetadataPage = await this.context.flowChatStore.loadSessionMetadataPage(
-          workspacePath,
-          5,
-          undefined,
-          remoteConnectionId,
-          remoteSshHost,
-          'flow_chat_manager_surface_switch_reload'
-        );
-        if (this.disposed) {
-          return false;
-        }
-      }
+      // This page belongs to the device it was read from and has already landed
+      // in that surface's own container. Selecting a session out of it now would
+      // apply one device's history to another; the surface this window moved to
+      // runs its own bootstrap.
+      scope.assertCurrent('initializeWorkspace');
 
       const sessionMatchesWorkspace = (session: {
         workspacePath?: string;
@@ -291,6 +299,7 @@ export class FlowChatManager {
           if (this.disposed) {
             return false;
           }
+          scope.assertCurrent('initializeWorkspace');
           state = this.context.flowChatStore.getState();
           workspaceSessions = Array
             .from(state.sessions.values())
@@ -335,6 +344,7 @@ export class FlowChatManager {
         if (this.disposed) {
           return false;
         }
+        scope.assertCurrent('initializeWorkspace');
       }
 
       if (hasHistoricalSessions && !activeSessionBelongsToWorkspace) {
@@ -371,6 +381,7 @@ export class FlowChatManager {
           if (this.disposed) {
             return false;
           }
+          scope.assertCurrent('initializeWorkspace');
         }
 
         if (!isCurrentInitializationRequest()) {
@@ -403,12 +414,59 @@ export class FlowChatManager {
 
       return hasHistoricalSessions;
     } catch (error) {
-      log.error('Initialization failed', error);
       // Must not return false: callers treat false as "no history → create
       // session", which in Peer Device Mode can create on the peer with a
-      // stale controller workspace path.
+      // stale controller workspace path. A surface change is not a failure
+      // either — this bootstrap simply no longer owns the rendered device —
+      // but it must still not report "no history" to the caller.
+      if (isSurfaceChangedError(error)) {
+        log.debug('Abandoned workspace initialization after a device surface switch', {
+          workspacePath,
+        });
+        throw error;
+      }
+      log.error('Initialization failed', error);
       throw error;
     }
+  }
+
+  /**
+   * Guarantee this window has a live agentic subscription.
+   *
+   * Idempotent and safe to call from anywhere. It exists because the
+   * subscription used to be re-established only as a side effect of a
+   * successful workspace bootstrap: a switch tore it down, and a bootstrap that
+   * a newer switch legitimately superseded left the window with no live Turn
+   * events and nothing to retry — a permanently frozen chat.
+   */
+  public async ensureEventListeners(): Promise<void> {
+    try {
+      await this.initializeEventListeners();
+    } catch (error) {
+      if (isSurfaceChangedError(error)) {
+        return;
+      }
+      log.warn('Failed to establish the agentic subscription; retrying', { error });
+      this.scheduleEventListenerRetry();
+    }
+  }
+
+  /**
+   * A failed subscription cannot repair itself from the event path, so recovery
+   * is time-based. The reconcile loop also calls `ensureEventListeners` when it
+   * observes a dead subscription, so this is the backstop, not the only path.
+   */
+  private scheduleEventListenerRetry(): void {
+    if (this.disposed || this.eventListenerRetryTimer !== null) {
+      return;
+    }
+    this.eventListenerRetryTimer = setTimeout(() => {
+      this.eventListenerRetryTimer = null;
+      if (this.disposed || this.eventListenerInitialized) {
+        return;
+      }
+      void this.ensureEventListeners();
+    }, EVENT_LISTENER_RETRY_MS);
   }
 
   private async initializeEventListeners(): Promise<void> {
@@ -461,8 +519,31 @@ export class FlowChatManager {
   }
 
   /**
-   * Clear all session UI state when entering/exiting Peer Device Mode so the
-   * next workspace bootstrap loads the target device's session list only.
+   * Let submissions that already created a projection turn hand it to their
+   * host before the rendered transport changes.
+   *
+   * Without this, a switch during the async window in `startTurn` (state
+   * transition, worktree binding, model sync) resumes against a store that no
+   * longer holds the session, and the turn is lost before `start_dialog_turn`
+   * ever runs. A timeout is safe: `sendMessage` detects the surface change and
+   * re-queues the message.
+   */
+  public async waitForInFlightSubmissions(timeoutMs: number): Promise<boolean> {
+    return waitForInFlightSubmissions(timeoutMs);
+  }
+
+  /**
+   * Detach this window from the device it is rendering, before the transport
+   * swaps to another one.
+   *
+   * The store keeps that device's sessions in its own container, so nothing is
+   * deleted here: state machines and processing status stay alive for work the
+   * device may still be running, and returning to it renders immediately.
+   *
+   * Debounced disk writes are the exception. They are addressed by session id
+   * only, so a checkpoint that fires after the transport swap would persist one
+   * device's turn onto another's disk. Drop them; the host keeps its own copy
+   * and reconciliation re-reads it.
    */
   public resetForPeerModeSwitch(): string[] {
     this.cleanupEventListeners();
@@ -471,19 +552,30 @@ export class FlowChatManager {
     // Drop controller-local path so createChatSession cannot reuse a stale
     // Windows/Mac path against the peer host after the surface switch.
     this.context.currentWorkspacePath = null;
-    const removedSessionIds = this.context.flowChatStore.clearAllSessionsForPeerSwitch();
-    removedSessionIds.forEach(sessionId => {
-      stateMachineManager.delete(sessionId);
-      this.context.processingManager.clearSessionStatus(sessionId);
+    const detachedSessionIds = Array.from(
+      this.context.flowChatStore.getState().sessions.keys(),
+    );
+    detachedSessionIds.forEach(sessionId => {
       cleanupSaveState(this.context, sessionId);
       cleanupSessionBuffers(this.context, sessionId);
     });
+    this.context.flowChatStore.prepareForSurfaceSwitch();
     try {
       useModernFlowChatStore.getState().clear();
     } catch (error) {
       log.warn('Failed to clear modern FlowChat store during peer switch', error);
     }
-    return removedSessionIds;
+    // No session ids: a switch removes nothing, and callers must not tear down
+    // runtime state for sessions that still exist on their own device.
+    return [];
+  }
+
+  /** Permanently forget a peer that was explicitly detached or became lost. */
+  public discardDeviceSurface(surfaceId: DeviceSurfaceId): void {
+    this.context.flowChatStore.discardSurfaceState(surfaceId);
+    stateMachineManager.clearSurface(surfaceId);
+    this.context.processingManager.clearSurface(surfaceId);
+    pendingQueueManager.clearSurface(surfaceId);
   }
 
   public destroy(): void {
@@ -496,6 +588,12 @@ export class FlowChatManager {
     this.initializationRequests.clear();
     this.latestInitializationRequestKey = null;
     this.cleanupEventListeners();
+    if (this.eventListenerRetryTimer !== null) {
+      clearTimeout(this.eventListenerRetryTimer);
+      this.eventListenerRetryTimer = null;
+    }
+    this.surfaceActivationCleanup?.();
+    this.surfaceActivationCleanup = null;
     this.peerSessionRefreshCleanup?.();
     this.peerSessionRefreshCleanup = null;
     this.dispatchJobObserverCleanup?.();
@@ -734,6 +832,7 @@ export class FlowChatManager {
       preserveTurnOnStartError?: boolean;
       onSessionConflictRetryStart?: () => void;
       onSessionConflictRetrySuccess?: () => void;
+      sessionMutationLeaseId?: string;
     }
   ): Promise<void> {
     const targetSessionId = sessionId || this.context.flowChatStore.getState().activeSessionId;

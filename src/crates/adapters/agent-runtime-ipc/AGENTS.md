@@ -34,7 +34,9 @@ session controller leases, event delivery, connection bounds, and cleanup. It is
   Disconnect cleanup is internal lifecycle, not a detach operation.
   Model catalogs, defaults, and full Agent/Subagent management remain product configuration outside this wire. The main-Agent summary is only the minimal host-owned selector projection: startup reads the Runtime-bound workspace without a Session lease, while a Session-scoped query requires that Session's current controller and lets the Runtime owner resolve its execution workspace. Its external-source classification is ecosystem-neutral, and it carries no installation, mutation, activation, or runtime lifecycle API. Do not add archive, replay, observer,
   general controller transfer, Tool/MCP/Hook management, or other product configuration incidentally.
-- Stable Event, Product Domain, and Runtime Port DTOs may be reused. Do not
+- Stable Event, Product Domain, and Runtime Port DTOs may be reused. Only the
+  protocol-neutral bounded JSON encoder from `bitfun-transport` is reused; the
+  single-consumer length-prefix framing remains private to this wire. Do not
   depend on `bitfun-core`, Agent Runtime implementations, SDK Host, services,
   Tauri, terminal, tool runtime, or remote transports.
 - Use only Windows Named Pipes or Unix Domain Sockets. Do not add TCP, HTTP,

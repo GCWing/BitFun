@@ -30,8 +30,14 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   roundViewportPx,
   traceViewport,
+  traceViewportRepeating,
+  isViewportDiagnosticsEnabled,
 } from '@/infrastructure/diagnostics/flowChatViewportDiagnostics';
 import type { FlowChatViewportOwner } from './flowChatViewportOwnership';
+import {
+  describeVirtualItemEstimate,
+  type VirtualItemHeightEstimateContext,
+} from './virtualMessageListLayout';
 
 /** Item-count overscan. Roughly two Turns either side of the viewport. */
 const FLOW_CHAT_OVERSCAN_ITEMS = 6;
@@ -47,7 +53,7 @@ const FLOW_CHAT_OVERSCAN_ITEMS = 6;
 const VIRTUALIZER_REAIM_WINDOW_MS = 5_000;
 
 /**
- * The virtualizer does not compensate for its own late measurements.
+ * TanStack's default late-measurement adjustment is not safe for this list.
  *
  * Its rule is the right shape — adjust by *this item's* delta, and only for an
  * item above the viewport — but it applies that delta to `scrollOffset`, which
@@ -59,11 +65,10 @@ const VIRTUALIZER_REAIM_WINDOW_MS = 5_000;
  * two frames walked the viewport from 7440 back to 3556 before the follow loop
  * wrote 7440 again.
  *
- * The viewport anchor is the compensator instead. It restores a relationship
- * rather than replaying a delta, so it has no base to go stale.
+ * For a row wholly above the reader, the real viewport owner applies the
+ * measured delta before TanStack updates its cache. Rows intersecting the
+ * viewport are left alone: their content is what the reader is looking at.
  */
-const neverAdjustScrollPositionOnItemResize = () => false;
-
 export interface FlowChatVirtualRow {
   index: number;
   key: string;
@@ -74,6 +79,19 @@ export interface FlowChatVirtualRow {
 export interface FlowChatItemBounds {
   startPx: number;
   endPx: number;
+}
+
+/** A resize can shift the reader only when the whole row is above it. */
+export function isItemFullyAboveViewport(itemEndPx: number, scrollTopPx: number): boolean {
+  return itemEndPx <= scrollTopPx;
+}
+
+function resizeDeltaBand(deltaPx: number): string {
+  const magnitudePx = Math.abs(deltaPx);
+  if (magnitudePx < 1) return 'subpixel';
+  if (magnitudePx < 16) return 'small';
+  if (magnitudePx < 128) return 'medium';
+  return 'large';
 }
 
 /**
@@ -103,7 +121,11 @@ export interface UseFlowChatVirtualizerOptions<T> {
    */
   headerRef: RefObject<HTMLElement | null>;
   getItemKey: (item: T) => string;
-  estimateItemHeightPx: (item: T) => number;
+  estimateItemHeightPx: (item: T, context?: VirtualItemHeightEstimateContext) => number;
+  /** Data-driven inputs used by estimates before an item is mounted. */
+  estimateContext?: VirtualItemHeightEstimateContext;
+  /** Stable identity for data that changes an unmeasured row's estimate. */
+  estimateContextRevision?: string | number;
   /**
    * Gap kept above a Turn that has been scrolled to the top of the viewport.
    * Applied by the virtualizer itself so that its re-aim, which runs while
@@ -125,6 +147,8 @@ export interface UseFlowChatVirtualizerOptions<T> {
     behavior?: ScrollBehavior;
     holdForMs?: number;
   }) => boolean;
+  /** Shift the viewport before a measurement changes row heights. */
+  shiftViewport?: (byPx: number) => boolean;
 }
 
 export interface FlowChatVirtualizer {
@@ -262,8 +286,11 @@ export function useFlowChatVirtualizer<T>({
   headerRef,
   getItemKey,
   estimateItemHeightPx,
+  estimateContext,
+  estimateContextRevision,
   scrollPaddingStartPx,
   writeViewport,
+  shiftViewport = () => false,
 }: UseFlowChatVirtualizerOptions<T>): FlowChatVirtualizer {
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -301,6 +328,8 @@ export function useFlowChatVirtualizer<T>({
   getItemKeyRef.current = getItemKey;
   const estimateItemHeightRef = useRef(estimateItemHeightPx);
   estimateItemHeightRef.current = estimateItemHeightPx;
+  const estimateContextRef = useRef(estimateContext);
+  estimateContextRef.current = estimateContext;
 
   const [contentStartPx, setContentStartPx] = useState(0);
   useEffect(() => {
@@ -323,13 +352,17 @@ export function useFlowChatVirtualizer<T>({
    */
   const estimateSize = useCallback((index: number) => {
     const item = itemsRef.current[index];
-    return item === undefined ? 0 : estimateItemHeightRef.current(item);
+    return item === undefined ? 0 : estimateItemHeightRef.current(item, estimateContextRef.current);
   }, []);
 
   const resolveItemKey = useCallback((index: number) => {
+    // Recreate the callback when estimate inputs change. TanStack uses the
+    // callback identity to invalidate its derived measurement positions while
+    // retaining DOM-measured sizes in its key cache.
+    void estimateContextRevision;
     const item = itemsRef.current[index];
     return item === undefined ? index : getItemKeyRef.current(item);
-  }, []);
+  }, [estimateContextRevision]);
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -358,7 +391,68 @@ export function useFlowChatVirtualizer<T>({
   });
   // An instance field rather than an option, so it is assigned here — before
   // any measurement callback can reach `resizeItem`.
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = neverAdjustScrollPositionOnItemResize;
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return false;
+    const beforeScrollTopPx = scroller.scrollTop;
+    const beforeScrollHeightPx = scroller.scrollHeight;
+    // A row that merely starts above the viewport may still be visible. Its
+    // resize changes content inside the reader rather than moving content that
+    // is wholly above it, so compensating its full delta would pull the reader
+    // by the size of a row they are looking at (history model rounds can be
+    // several thousand pixels). Only a row whose end is above the viewport can
+    // move the reader's existing content and needs a viewport shift.
+    const fullyAboveViewport = isItemFullyAboveViewport(item.end, beforeScrollTopPx);
+    const applied = fullyAboveViewport ? shiftViewport(delta) : false;
+    const virtualItem = itemsRef.current[item.index];
+    if (isViewportDiagnosticsEnabled()) {
+      const diagnosticItem = virtualItem as {
+        type?: unknown;
+        turnId?: unknown;
+      } | undefined;
+      const itemKey = virtualItem === undefined ? null : getItemKeyRef.current(virtualItem);
+      traceViewportRepeating(
+        `itemResize|${itemKey ?? 'unknown'}|${fullyAboveViewport}|${applied}|${resizeDeltaBand(delta)}`,
+        {
+          location: 'virtualizer.itemResize',
+          message: 'an item changed size during virtualizer measurement',
+          travelPx: delta,
+          data: () => ({
+            index: item.index,
+            itemKey,
+            itemType: typeof diagnosticItem?.type === 'string' ? diagnosticItem.type : null,
+            turnId: typeof diagnosticItem?.turnId === 'string' ? diagnosticItem.turnId : null,
+            estimatedSizePx: virtualItem === undefined
+              ? null
+              : roundViewportPx(estimateItemHeightRef.current(virtualItem)),
+            previousItemSizePx: roundViewportPx(item.size),
+            nextItemSizePx: roundViewportPx(item.size + delta),
+            itemStartPx: roundViewportPx(item.start),
+            itemEndPx: roundViewportPx(item.end),
+            deltaPx: roundViewportPx(delta),
+            fullyAboveViewport,
+            beforeScrollTopPx: roundViewportPx(beforeScrollTopPx),
+            beforeScrollHeightPx: roundViewportPx(beforeScrollHeightPx),
+            applied,
+            afterScrollTopPx: roundViewportPx(scroller.scrollTop),
+            afterScrollHeightPx: roundViewportPx(scroller.scrollHeight),
+            estimateBreakdown: virtualItem && typeof virtualItem === 'object' && 'type' in virtualItem
+              ? describeVirtualItemEstimate(virtualItem as unknown as Parameters<typeof describeVirtualItemEstimate>[0])
+              : null,
+          }),
+        },
+      );
+    }
+    /*
+     * TanStack's default adjustment is based on its cached scroll offset. This
+     * list writes the real scroller through the viewport register, so that copy
+     * can be one frame stale. Move the real viewport before the new size enters
+     * the cache; otherwise a shrinking range can make the browser clamp
+     * scrollTop to the physical tail before the reader's anchor gets a chance
+     * to restore it.
+     */
+    return false;
+  };
 
   const virtualRows = virtualizer.getVirtualItems();
   const totalSizePx = virtualizer.getTotalSize();

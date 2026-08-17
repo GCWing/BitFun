@@ -10,6 +10,7 @@ import { RemoteFileDownloadClient } from './RemoteFileDownloadController';
 import { RemoteLogger } from './RemoteLogger';
 import { RemoteModelClient } from './RemoteModelController';
 import { RemoteResponseMapper } from './RemoteResponseMapper';
+import { TranscriptIntegrityPolicy } from './TranscriptIntegrityPolicy';
 import { RemoteSessionClient } from './RemoteSessionController';
 import { RemoteToolActionClient } from './RemoteToolActionController';
 
@@ -261,9 +262,15 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
   }
 
   async getSessionMessages(sessionId: string): Promise<SessionMessagesResult> {
+    const startedAt = Date.now();
     const response = await this.send<SessionMessagesResponse>(RemoteCommandFactory.getSessionMessages(sessionId));
     const rawMessages = response.messages || [];
     const messages = rawMessages.map((item: ChatMessageResponse) => RemoteResponseMapper.chatMessage(item));
+    RemoteLogger.info(
+      `get_session_messages done session=${RemoteSessionManager.shortId(sessionId)} ` +
+        `raw=${rawMessages.length} ${TranscriptIntegrityPolicy.describeMessages(messages)} ` +
+        `ms=${Date.now() - startedAt}`
+    );
     const result: SessionMessagesResult = {
       messages,
       hasMore: false
@@ -310,7 +317,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       modelCatalog: response.model_catalog
     };
     const rawActive = response.active_turn;
-    RemoteLogger.info(`poll_session done session=${RemoteSessionManager.shortId(sessionId)} changed=${result.changed ? '1' : '0'} state=${result.sessionState} active=${rawActive ? rawActive.turn_id : ''} activeStatus=${rawActive ? rawActive.status : ''} rawText=${rawActive && rawActive.text ? rawActive.text.length : 0} rawThinking=${rawActive && rawActive.thinking ? rawActive.thinking.length : 0} rawItems=${rawActive && rawActive.items ? rawActive.items.length : 0} rawItemText=${RemoteSessionManager.itemsContentLength(rawActive ? rawActive.items : undefined)} projectedText=${result.activeTurn ? result.activeTurn.text.length : 0} new=${newMessages.length} ms=${Date.now() - startedAt}`);
+    RemoteLogger.info(`poll_session done session=${RemoteSessionManager.shortId(sessionId)} changed=${result.changed ? '1' : '0'} state=${result.sessionState} active=${rawActive ? rawActive.turn_id : ''} activeStatus=${rawActive ? rawActive.status : ''} rawText=${rawActive && rawActive.text ? rawActive.text.length : 0} rawThinking=${rawActive && rawActive.thinking ? rawActive.thinking.length : 0} rawItems=${rawActive && rawActive.items ? rawActive.items.length : 0} rawItemText=${RemoteSessionManager.itemsContentLength(rawActive ? rawActive.items : undefined)} projectedText=${result.activeTurn ? result.activeTurn.text.length : 0} new=${newMessages.length} ${newMessages.length > 0 ? TranscriptIntegrityPolicy.describeMessages(newMessages) + ' ' : ''}ms=${Date.now() - startedAt}`);
     return result;
   }
 

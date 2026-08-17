@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
 use bitfun_agent_runtime::sdk::{
@@ -23,13 +23,14 @@ use tokio_util::sync::CancellationToken;
 
 use crate::protocol::{
     ErrorCode, ErrorData, ErrorStage, InitializeParams, InitializeResult, JsonRpcErrorResponse,
-    JsonRpcNotification, JsonRpcRequest, JsonRpcSuccessResponse, QueryCancelParams,
-    QueryCancelResult, QueryEvent, QueryEventParams, QueryResultError, QueryResultParams,
-    QueryStartParams, QueryStartResult, QueryTerminalStatus, RecoveryAction, RequestId,
-    SessionCloseParams, SessionCloseResult, SessionCreateParams, SessionCreateResult,
-    SessionLifetime, ShutdownParams, ShutdownResult, JSON_RPC_VERSION, METHOD_INITIALIZE,
-    METHOD_QUERY_CANCEL, METHOD_QUERY_START, METHOD_SESSION_CLOSE, METHOD_SESSION_CREATE,
-    METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT, NOTIFICATION_QUERY_RESULT, PROTOCOL_VERSION,
+    JsonRpcNotification, JsonRpcRequest, JsonRpcSuccessResponse, OutcomeCertainty,
+    QueryCancelParams, QueryCancelResult, QueryEvent, QueryEventParams, QueryOutput,
+    QueryResultError, QueryResultParams, QueryStartParams, QueryStartResult, QueryTerminalStatus,
+    RecoveryAction, RequestId, SessionCloseParams, SessionCloseResult, SessionCreateParams,
+    SessionCreateResult, SessionLifetime, ShutdownParams, ShutdownResult, JSON_RPC_VERSION,
+    METHOD_INITIALIZE, METHOD_QUERY_CANCEL, METHOD_QUERY_START, METHOD_SESSION_CLOSE,
+    METHOD_SESSION_CREATE, METHOD_SHUTDOWN, NOTIFICATION_QUERY_EVENT, NOTIFICATION_QUERY_RESULT,
+    PROTOCOL_VERSION,
 };
 
 const DEFAULT_SESSION_NAME: &str = "BitFun SDK query";
@@ -37,6 +38,14 @@ const DEFAULT_AGENT: &str = "agentic";
 const DEFAULT_TURN_SETTLEMENT_TIMEOUT_MS: u64 = 5_000;
 const PERMISSION_REJECTION_TIMEOUT_MS: u64 = 2_000;
 const MAX_SESSION_CLOSE_TIMEOUT_MS: u64 = 30_000;
+const MAX_QUERY_OUTPUT_WIRE_BYTES: usize = 768 * 1024;
+
+fn json_string_content_bytes(value: &str) -> usize {
+    serde_json::to_vec(value)
+        .expect("serializing a Rust string as JSON cannot fail")
+        .len()
+        .saturating_sub(2)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionControl {
@@ -93,6 +102,7 @@ struct ConnectionInner {
     query_budget: Arc<Semaphore>,
     session_budget: Arc<Semaphore>,
     shutdown_started: CancellationToken,
+    connection_failed: CancellationToken,
 }
 
 #[derive(Default)]
@@ -140,10 +150,18 @@ struct QueryLease {
     query_id: String,
     session_id: String,
     turn_id: String,
+    operation_id: String,
+    output: StdMutex<QueryOutputBuffer>,
     terminal: AtomicBool,
     stop_forwarding: CancellationToken,
     emit_output: bool,
     _budget: OwnedSemaphorePermit,
+}
+
+#[derive(Default)]
+struct QueryOutputBuffer {
+    text: String,
+    wire_bytes: usize,
 }
 
 impl QueryLease {
@@ -187,8 +205,13 @@ impl SdkHostConnection {
                 query_budget: Arc::new(Semaphore::new(config.max_active_queries.max(1))),
                 session_budget: Arc::new(Semaphore::new(config.max_leased_sessions.max(1))),
                 shutdown_started: CancellationToken::new(),
+                connection_failed: CancellationToken::new(),
             }),
         }
+    }
+
+    pub fn connection_failed_token(&self) -> CancellationToken {
+        self.inner.connection_failed.clone()
     }
 
     pub async fn handle_request(&self, request: JsonRpcRequest) -> ConnectionControl {
@@ -200,6 +223,8 @@ impl SdkHostConnection {
                 ErrorCode::InvalidRequest,
                 ErrorStage::Protocol,
                 false,
+                None,
+                OutcomeCertainty::NotStarted,
                 None,
                 "jsonrpc must be 2.0",
             )
@@ -323,6 +348,8 @@ impl SdkHostConnection {
                     ErrorCode::CapabilityUnavailable,
                     ErrorStage::Protocol,
                     false,
+                    None,
+                    OutcomeCertainty::NotStarted,
                     None,
                     "method is not supported by this SDK Host",
                 )
@@ -1024,10 +1051,13 @@ impl SdkHostConnection {
             } => (session_id, turn_id),
         };
         let query_id = format!("query_{}", uuid::Uuid::new_v4());
+        let operation_id = format!("operation_{}", uuid::Uuid::new_v4());
         let lease = Arc::new(QueryLease {
             query_id: query_id.clone(),
             session_id: submitted_session_id.clone(),
             turn_id: turn_id.clone(),
+            operation_id: operation_id.clone(),
+            output: StdMutex::new(QueryOutputBuffer::default()),
             terminal: AtomicBool::new(false),
             stop_forwarding: CancellationToken::new(),
             emit_output,
@@ -1047,6 +1077,7 @@ impl SdkHostConnection {
                     query_id: query_id.clone(),
                     session_id: submitted_session_id.clone(),
                     turn_id: turn_id.clone(),
+                    operation_id,
                     accepted: true,
                     created_session,
                     session_lifetime,
@@ -1178,6 +1209,39 @@ impl SdkHostConnection {
                 let terminal = terminal_fact(&envelope.event, &lease.turn_id, &lease.query_id);
                 if lease.emit_output {
                     if let Some(projected) = project_query_event(&envelope.event) {
+                        let QueryEvent::AssistantTextDelta { text } = &projected;
+                        let output_exceeded = {
+                            let encoded_bytes = json_string_content_bytes(text);
+                            let mut output = lease
+                                .output
+                                .lock()
+                                .expect("SDK Host Query output lock poisoned");
+                            if encoded_bytes
+                                > MAX_QUERY_OUTPUT_WIRE_BYTES.saturating_sub(output.wire_bytes)
+                            {
+                                true
+                            } else {
+                                output.text.push_str(text);
+                                output.wire_bytes += encoded_bytes;
+                                false
+                            }
+                        };
+                        if output_exceeded {
+                            connection
+                                .cancel_and_finish(
+                                    &lease,
+                                    QueryResultError::new(
+                                        ErrorCode::Overloaded,
+                                        false,
+                                        None,
+                                        &lease.query_id,
+                                        "SDK Host Query output exceeded the protocol size limit",
+                                    ),
+                                    true,
+                                )
+                                .await;
+                            return;
+                        }
                         sequence += 1;
                         if !connection
                             .send_notification(
@@ -1186,6 +1250,7 @@ impl SdkHostConnection {
                                     query_id: lease.query_id.clone(),
                                     session_id: lease.session_id.clone(),
                                     turn_id: lease.turn_id.clone(),
+                                    operation_id: lease.operation_id.clone(),
                                     sequence,
                                     event: projected,
                                 },
@@ -1233,17 +1298,31 @@ impl SdkHostConnection {
             .get(&params.query_id)
             .cloned();
         let Some(lease) = lease else {
-            self.send_error(
+            self.send_success(
                 request.id.clone(),
-                ErrorCode::NotFound,
-                ErrorStage::Query,
-                false,
-                None,
-                "Query was not found",
+                QueryCancelResult {
+                    query_id: params.query_id,
+                    session_id: params.session_id,
+                    turn_id: params.turn_id,
+                    operation_id: params.operation_id,
+                    requested: false,
+                },
             )
             .await;
             return;
         };
+        if lease.session_id != params.session_id
+            || lease.turn_id != params.turn_id
+            || lease.operation_id != params.operation_id
+        {
+            self.send_invalid_params(
+                request.id.clone(),
+                ErrorStage::Query,
+                "Query cancellation identity does not match the accepted Query",
+            )
+            .await;
+            return;
+        }
         match timeout(
             Duration::from_millis(2_500),
             self.inner
@@ -1267,21 +1346,28 @@ impl SdkHostConnection {
                         query_id: lease.query_id.clone(),
                         session_id: lease.session_id.clone(),
                         turn_id: lease.turn_id.clone(),
+                        operation_id: lease.operation_id.clone(),
                         requested: result.requested,
                     },
                 )
                 .await;
             }
             Ok(Err(error)) => {
-                self.send_runtime_error(request.id.clone(), ErrorStage::Query, error)
-                    .await
+                self.send_runtime_uncertain_error(
+                    request.id.clone(),
+                    ErrorStage::Query,
+                    Some(lease.operation_id.clone()),
+                    error,
+                )
+                .await
             }
             Err(_) => {
-                self.send_error(
+                self.send_uncertain_error(
                     request.id.clone(),
                     ErrorCode::Timeout,
                     ErrorStage::Query,
                     true,
+                    Some(lease.operation_id.clone()),
                     Some(RecoveryAction::Retry),
                     "SDK Host Query cancellation timed out",
                 )
@@ -1410,11 +1496,12 @@ impl SdkHostConnection {
                     "SDK Host Session close ended with uncertain cleanup"
                 );
                 self.mark_session_cleanup_failed(&params.session_id).await;
-                self.send_error(
+                self.send_uncertain_error(
                     request.id.clone(),
                     ErrorCode::CleanupRequired,
                     ErrorStage::Session,
                     false,
+                    None,
                     Some(RecoveryAction::RestartHost),
                     "SDK Host Session cleanup is incomplete; restart the Host before retrying",
                 )
@@ -1426,11 +1513,12 @@ impl SdkHostConnection {
                     "SDK Host Session close timed out with uncertain cleanup"
                 );
                 self.mark_session_cleanup_failed(&params.session_id).await;
-                self.send_error(
+                self.send_uncertain_error(
                     request.id.clone(),
                     ErrorCode::CleanupRequired,
                     ErrorStage::Session,
                     false,
+                    None,
                     Some(RecoveryAction::RestartHost),
                     "SDK Host Session cleanup timed out; restart the Host before retrying",
                 )
@@ -1719,8 +1807,8 @@ impl SdkHostConnection {
     async fn finish_query(
         &self,
         lease: &Arc<QueryLease>,
-        mut status: QueryTerminalStatus,
-        mut error: Option<QueryResultError>,
+        status: QueryTerminalStatus,
+        error: Option<QueryResultError>,
         emit_result: bool,
     ) {
         if !lease.finish_once() {
@@ -1737,40 +1825,22 @@ impl SdkHostConnection {
                 }),
         )
         .await;
-        let mut poison_session = false;
-        match settlement {
-            Ok(Ok(())) => {}
-            Ok(Err(_settlement_error)) => {
-                poison_session = true;
-                status = QueryTerminalStatus::Failed;
-                error = Some(QueryResultError::new(
-                    ErrorCode::CleanupRequired,
-                    false,
-                    Some(RecoveryAction::RestartHost),
-                    &lease.query_id,
-                    "SDK Host could not confirm Turn settlement; restart the Host before retrying",
-                ));
-            }
-            Err(_) => {
-                poison_session = true;
-                status = QueryTerminalStatus::Failed;
-                error = Some(QueryResultError::new(
-                    ErrorCode::CleanupRequired,
-                    false,
-                    Some(RecoveryAction::RestartHost),
-                    &lease.query_id,
-                    "SDK Host Turn settlement timed out; restart the Host before retrying",
-                ));
-            }
-        }
+        let settlement_confirmed = matches!(settlement, Ok(Ok(())));
         {
             let mut state = self.inner.state.lock().await;
             state.queries.remove(&lease.query_id);
             state.starting_query_sessions.remove(&lease.session_id);
             state.active_query_sessions.remove(&lease.session_id);
-            if poison_session {
+            if !settlement_confirmed {
                 state.poisoned_sessions.insert(lease.session_id.clone());
+                state.cleanup_failed = true;
+                state.shutting_down = true;
             }
+        }
+        if !settlement_confirmed {
+            lease.stop_forwarding.cancel();
+            self.inner.connection_failed.cancel();
+            return;
         }
         if emit_result {
             self.send_query_result(lease, status, error).await;
@@ -1781,18 +1851,29 @@ impl SdkHostConnection {
         &self,
         lease: &QueryLease,
         status: QueryTerminalStatus,
-        error: Option<QueryResultError>,
+        mut error: Option<QueryResultError>,
     ) -> bool {
         if !lease.emit_output {
             return true;
         }
+        if let Some(error) = error.as_mut() {
+            error.data.operation_id = Some(lease.operation_id.clone());
+        }
+        let output_text = lease
+            .output
+            .lock()
+            .expect("SDK Host Query output lock poisoned")
+            .text
+            .clone();
         self.send_notification(
             NOTIFICATION_QUERY_RESULT,
             QueryResultParams {
                 query_id: lease.query_id.clone(),
                 session_id: lease.session_id.clone(),
                 turn_id: lease.turn_id.clone(),
+                operation_id: lease.operation_id.clone(),
                 status,
+                output: QueryOutput { text: output_text },
                 error,
             },
         )
@@ -1935,6 +2016,8 @@ impl SdkHostConnection {
             stage,
             false,
             None,
+            OutcomeCertainty::NotStarted,
+            None,
             message,
         )
         .await;
@@ -1951,6 +2034,28 @@ impl SdkHostConnection {
             .await;
     }
 
+    async fn send_runtime_uncertain_error(
+        &self,
+        id: Option<RequestId>,
+        stage: ErrorStage,
+        operation_id: Option<String>,
+        error: RuntimeError,
+    ) {
+        let (code, retryable, recovery) = runtime_error_facts(&error);
+        self.send_rpc_error(
+            id,
+            -32000,
+            code,
+            stage,
+            retryable,
+            operation_id,
+            OutcomeCertainty::Unknown,
+            recovery,
+            &error.into_message(),
+        )
+        .await;
+    }
+
     async fn send_error(
         &self,
         id: Option<RequestId>,
@@ -1960,8 +2065,42 @@ impl SdkHostConnection {
         recovery: Option<RecoveryAction>,
         message: &str,
     ) {
-        self.send_rpc_error(id, -32000, code, stage, retryable, recovery, message)
-            .await;
+        self.send_rpc_error(
+            id,
+            -32000,
+            code,
+            stage,
+            retryable,
+            None,
+            OutcomeCertainty::NotStarted,
+            recovery,
+            message,
+        )
+        .await;
+    }
+
+    async fn send_uncertain_error(
+        &self,
+        id: Option<RequestId>,
+        code: ErrorCode,
+        stage: ErrorStage,
+        retryable: bool,
+        operation_id: Option<String>,
+        recovery: Option<RecoveryAction>,
+        message: &str,
+    ) {
+        self.send_rpc_error(
+            id,
+            -32000,
+            code,
+            stage,
+            retryable,
+            operation_id,
+            OutcomeCertainty::Unknown,
+            recovery,
+            message,
+        )
+        .await;
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1972,6 +2111,8 @@ impl SdkHostConnection {
         code: ErrorCode,
         stage: ErrorStage,
         retryable: bool,
+        operation_id: Option<String>,
+        outcome_certainty: OutcomeCertainty,
         recovery: Option<RecoveryAction>,
         message: &str,
     ) {
@@ -1988,6 +2129,9 @@ impl SdkHostConnection {
                 stage,
                 retryable,
                 correlation_id,
+                operation_id,
+                causation_id: None,
+                outcome_certainty,
                 recovery,
             },
         ))
@@ -2264,5 +2408,19 @@ mod runtime_error_tests {
             (ErrorCode::CapabilityUnavailable, false, None)
         );
         assert_eq!(runtime_error_kind(&error), "capability_unavailable");
+    }
+
+    #[test]
+    fn missing_mode_catalog_port_uses_not_available_contract() {
+        let error = RuntimeError::Port(PortError::new(
+            PortErrorKind::NotAvailable,
+            "agent mode catalog port is not registered",
+        ));
+
+        assert_eq!(
+            runtime_error_facts(&error),
+            (ErrorCode::CapabilityUnavailable, false, None)
+        );
+        assert_eq!(runtime_error_kind(&error), "not_available");
     }
 }

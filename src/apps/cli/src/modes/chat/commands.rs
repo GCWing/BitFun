@@ -428,9 +428,11 @@ impl ChatMode {
         let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
         let mut external = self.external_command_projection(command_name);
         let authoritative_preferences = tokio::task::block_in_place(|| {
-            rt_handle
-                .block_on(self.agent.external_source_snapshot(false))
-                .map(|response| response.preferences.into())
+            rt_handle.block_on(async {
+                bitfun_core::external_sources::external_source_conflict_choices()
+                    .await
+                    .map(ExternalSourceConflictPreferences::from)
+            })
         });
         if let Ok(authoritative_preferences) = authoritative_preferences {
             if authoritative_preferences != self.external_conflict_preferences() {
@@ -706,17 +708,33 @@ impl ChatMode {
             .map(|snapshot| snapshot.preference_revision)
             .unwrap_or(0);
         let persisted = tokio::task::block_in_place(|| {
-            rt_handle.block_on(self.agent.set_native_command_choice(
-                native_commands,
-                candidate_id.to_string(),
-                expected_preference_revision,
-            ))
+            rt_handle.block_on(async {
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                let conflicts =
+                    bitfun_core::external_sources::set_native_prompt_command_conflict_choice(
+                        Some(&workspace),
+                        native_commands,
+                        candidate_id,
+                        expected_preference_revision,
+                    )
+                    .await
+                    .map_err(
+                        bitfun_core::external_sources::sanitize_external_source_operation_error,
+                    )?;
+                let preferences = bitfun_core::external_sources::external_source_conflict_choices()
+                    .await
+                    .map(ExternalSourceConflictPreferences::from)
+                    .map_err(
+                        bitfun_core::external_sources::sanitize_external_source_operation_error,
+                    )?;
+                Ok::<_, ExternalSourceOperationError>((conflicts, preferences))
+            })
         });
         match persisted {
-            Ok(response) => {
-                self.replace_external_conflict_preferences(response.preferences.into());
+            Ok((conflicts, preferences)) => {
+                self.replace_external_conflict_preferences(preferences);
                 if let Some(snapshot) = &mut self.external_source_snapshot {
-                    snapshot.preference_revision = response.conflicts.preference_revision;
+                    snapshot.preference_revision = conflicts.preference_revision;
                 }
             }
             Err(error) => {
@@ -757,19 +775,23 @@ impl ChatMode {
                 .map(|snapshot| snapshot.preference_revision)
                 .unwrap_or(0);
             let snapshot = tokio::task::block_in_place(|| {
-                rt_handle.block_on(self.agent.external_source_review(
-                    ExternalSourceReviewAction::SetPromptCommandConflictChoice {
-                        conflict_key: provider_conflict_key.clone(),
-                        candidate_id: projection.candidate_id.clone(),
+                rt_handle.block_on(async {
+                    let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                    bitfun_core::external_sources::set_external_prompt_command_conflict_choice(
+                        Some(&workspace),
+                        provider_conflict_key,
+                        &projection.candidate_id,
                         expected_preference_revision,
-                    },
-                ))
+                    )
+                    .await
+                    .map_err(
+                        bitfun_core::external_sources::sanitize_external_source_operation_error,
+                    )
+                    .map(ExternalSourceCatalogSnapshot::from)
+                })
             });
             let snapshot = match snapshot {
-                Ok(response) => {
-                    self.replace_external_conflict_preferences(response.preferences.into());
-                    response.snapshot
-                }
+                Ok(snapshot) => snapshot,
                 Err(error) => {
                     chat_state.add_system_message(format!(
                         "Could not select {}: {error}",
@@ -874,24 +896,28 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
         let expanded = tokio::task::block_in_place(|| {
-            rt_handle.block_on(self.agent.expand_external_command(
-                invocation.command_name.clone(),
-                invocation.arguments.clone(),
-                invocation.native_commands.clone(),
-                invocation.candidate_id.clone(),
-                invocation.content_version.clone(),
-                invocation.native_conflict_key.clone(),
-                invocation.expected_preference_revision,
-                shell_review_decision,
-            ))
+            rt_handle.block_on(async {
+                let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
+                bitfun_core::external_sources::expand_external_prompt_command(
+                    Some(&workspace),
+                    &invocation.command_name,
+                    &invocation.arguments,
+                    invocation.native_commands.clone(),
+                    invocation.candidate_id.as_deref(),
+                    invocation.content_version.as_deref(),
+                    invocation.native_conflict_key.as_deref(),
+                    invocation.expected_preference_revision,
+                    shell_review_decision.as_ref(),
+                )
+                .await
+                .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+            })
         });
         match expanded {
-            Ok(bitfun_app_server_protocol::external_source::ExpandExternalCommandResponse(
-                PromptCommandInvocationOutcome::Ready {
-                    content,
-                    execution_target,
-                },
-            )) => {
+            Ok(PromptCommandInvocationOutcome::Ready {
+                content,
+                execution_target,
+            }) => {
                 match execution_target {
                     PromptCommandExecutionTarget::Inline => {
                         self.send_message_to_agent(content, chat_view, chat_state, rt_handle);
@@ -918,9 +944,7 @@ impl ChatMode {
                 }
                 Ok(None)
             }
-            Ok(bitfun_app_server_protocol::external_source::ExpandExternalCommandResponse(
-                PromptCommandInvocationOutcome::ReviewRequired { review },
-            )) => {
+            Ok(PromptCommandInvocationOutcome::ReviewRequired { review }) => {
                 chat_view.show_prompt_command_shell_review(review.clone());
                 self.pending_prompt_command_shell_invocation =
                     Some(PendingPromptCommandShellInvocation { invocation, review });
@@ -1021,8 +1045,19 @@ impl ChatMode {
                 ));
             }
             ActionHandler::AddModel => {
-                let agent = self.agent.clone();
-                match tokio::task::block_in_place(|| rt_handle.block_on(agent.model_catalog())) {
+                match tokio::task::block_in_place(|| {
+                    rt_handle.block_on(async {
+                        if self.agent.is_remote_workspace() {
+                            anyhow::bail!("Model management is unavailable for a Remote workspace")
+                        }
+                        let catalog = bitfun_core::get_ai_model_catalog()
+                            .await
+                            .map_err(anyhow::Error::msg)?;
+                        Ok::<_, anyhow::Error>(crate::model_selection::model_catalog_projection(
+                            catalog,
+                        ))
+                    })
+                }) {
                     Ok(catalog) => chat_view.show_provider_selector(catalog.provider_catalog),
                     Err(error) => chat_view
                         .set_status(Some(format!("Failed to load model providers: {error}"))),

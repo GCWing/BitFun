@@ -842,7 +842,8 @@ jobs:
       # 10-minute cron tick. Until the mirror has these bytes, CN clients have
       # only the GitHub origin to fall back to. Best effort: the cron run is
       # still the source of truth, so a failed or unconfigured ping never fails
-      # the release. Receiver setup: scripts/openbitfun-release-sync.sh.
+      # the release. Receiver: scripts/openbitfun-release-sync.sh.
+      # Host restore: deploy/openbitfun-host/README.md.
       - name: Request openbitfun mirror sync
         if: github.repository == 'GCWing/BitFun'
         continue-on-error: true

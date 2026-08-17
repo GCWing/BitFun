@@ -1,16 +1,34 @@
 // Boundary rules for source ownership, facades, and required owner content.
 
+import { agentRuntimeRootPublicModules } from './public-api-rules.mjs';
+
+const agentRuntimeRootUnexpectedLine = new RegExp(
+  `^(?!(?:[ \\t]*|[ \\t]*\\/\\/!.*|[ \\t]*#\\[cfg\\(feature = "(?:agent-runtime|deep-research|native-hook-settings)"\\)\\][ \\t]*|[ \\t]*pub mod (?:${agentRuntimeRootPublicModules.join('|')});[ \\t]*)\\r?$).+$`,
+  'm',
+);
+
 export const forbiddenContentRules = [
   {
-    path: 'src/apps/cli/src/tui_backend.rs',
+    path: 'src/crates/execution/agent-runtime/src/lib.rs',
     reason:
-      'The CLI-local TUI backend may consume App Server client and wire contracts but must not depend on backend implementations, Runtime, services, or private IPC',
+      'Agent Runtime root is a flat feature-owned module wrapper, not a feature-free implementation surface',
+    patterns: [
+      {
+        regex: agentRuntimeRootUnexpectedLine,
+        message: 'unexpected Agent Runtime root content outside the reviewed cfg/module pairs',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/cli/Cargo.toml',
+    reason:
+      'CLI/TUI consumes stable contracts and must not depend on App Server implementation, client transport, wire DTOs, or a shared TUI management crate',
     patterns: [
       {
         regex:
-          /\b(?:bitfun_core|bitfun_agent_runtime|bitfun_agent_runtime_ipc|bitfun_services_core|bitfun_services_integrations|bitfun_runtime_services|bitfun_product_capabilities|bitfun_external_sources|bitfun_app_server)::/,
+          /^\s*bitfun-(?:app-server|app-server-client|app-server-protocol|tui-management)\s*=/m,
         message:
-          'CLI-local TuiBackend must stay on the App Server client/protocol boundary',
+          'bitfun-cli must not depend on App Server implementation, client transport, wire DTOs, or a shared TUI management crate',
       },
     ],
   },
@@ -32,6 +50,19 @@ export const forbiddenContentRules = [
         regex: /^\s+(?!(?:Health|ListAgentModes|ListSessions|CreateSession|RestoreSession|DeleteSession|ForkSession|RenameSession|UpdateSessionMode|UpdateSessionModel|ReloadSessionContext|CompactSession|UndoSession|RedoSession|SessionUsage|WaitForSettlement|RecordLocalCommandTurn|SearchWorkspaceReferences|WorkspaceReferencesForMessage|GetSessionLineage|InspectLineageSession|CancelLineageSession|WorkspaceDiff|SubmitTurn|SteerTurn|RunUserShellCommand|CancelTurn|PendingPermissions|RespondPermission|SubmitUserAnswers|Unit|AgentModes|Sessions|SessionCreated|SessionRestored|SessionForked|SessionReverted|SessionLineage|LineageSessionInspection|WorkspaceReferenceSearch|WorkspaceReferences|TurnAccepted|TurnSteered|TurnCancelled|LocalCommandTurnRecorded|Idle|Processing|Error|Starting|Compacting|Thinking|Streaming|ToolCalling|ToolConfirming|None|CurrentController|AttachExisting|UncontrolledTarget|Self|RuntimeIpcSessionRequirement|RuntimeIpcOperationRules|RuntimeSessionForkRequest|RuntimeSessionState|RuntimeSessionProcessingPhase|AgentContextReloadRequest|AgentDialogSteerRequest|AgentDialogTurnRequest|AgentLocalCommandTurnRecordRequest|AgentLocalCommandTurnRecordResult|AgentMessageWorkspaceReferencesRequest|AgentSessionCompactionRequest|AgentSessionCreateRequest|AgentSessionCreateResult|AgentSessionLineageCancellationRequest|AgentSessionLineageInspection|AgentSessionLineageRequest|AgentSessionLineageSnapshot|AgentSessionLineageTranscriptRequest|AgentSessionListRequest|AgentSessionModeUpdateRequest|AgentSessionModelUpdateRequest|AgentSessionRevertRequest|AgentSessionRevertResult|AgentSessionSummary|AgentSessionUsageRequest|AgentTurnCancellationRequest|AgentTurnCancellationResult|AgentTurnSettlementRequest|AgentUserShellCommandRequest|AgentWorkspaceReference|AgentWorkspaceReferenceSearchRequest|AgentWorkspaceReferenceSearchResult|SessionTranscript|SessionUsageReport|WorkspaceDiffSnapshot)\b)[A-Z][A-Za-z0-9_]*\b/,
         message:
           'agent-runtime-ipc may not add archive, replay, observer, general controller-transfer, or other operations beyond the reviewed Shared TUI slice',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/agent-runtime-ipc/Cargo.toml',
+    reason:
+      'agent-runtime-ipc may reuse bounded JSON encoding without enabling bitfun-transport features',
+    patterns: [
+      {
+        regex:
+          /bitfun-transport\s*=\s*\{[^}\r\n]*(?:features|default-features)\s*=/,
+        message:
+          'agent-runtime-ipc must not enable event-host or Tauri transport features',
       },
     ],
   },
@@ -3260,7 +3291,7 @@ export const forbiddenContentRules = [
           'Git function-agent commit generator must use CoreProductDomainRuntime for Git adapter wiring',
       },
       {
-        regex: /\bAIAnalysisService::new_with_agent_config\b/,
+        regex: /\bAIAnalysisService::new_with_task_config\b/,
         message:
           'Git function-agent commit generator must use CoreProductDomainRuntime for AI adapter wiring',
       },
@@ -3268,21 +3299,6 @@ export const forbiddenContentRules = [
         regex: /\bto_string_lossy\b/,
         message:
           'Git function-agent commit generator must preserve PathBuf paths when routing through the facade',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
-    patterns: [
-      {
-        regex: /\bAIWorkStateService::new_with_agent_config\b/,
-        message:
-          'Startchat work-state analyzer must use CoreProductDomainRuntime for AI adapter wiring',
-      },
-      {
-        regex: /\bcreate_command\("git"\)/,
-        message:
-          'Startchat work-state analyzer must use CoreProductDomainRuntime for Git adapter wiring',
       },
     ],
   },
@@ -4057,6 +4073,12 @@ export const forbiddenContentUnderRules = [
         regex:
           /\b(?:(?:Tcp|Udp)[A-Za-z0-9_]*|tokio_tungstenite|reqwest|hyper|WebSocket)\b/,
         message: 'agent-runtime-ipc must not add network or remote transports',
+      },
+      {
+        regex:
+          /\bbitfun_transport\b(?!::(?:encode_json_with_limit|JsonCodecError)\b)/,
+        message:
+          'agent-runtime-ipc may consume only the reviewed bounded JSON API from bitfun-transport',
       },
     ],
   },

@@ -53,7 +53,7 @@ import { ModelProviderSseParser } from '../main/ets/services/general-chat/ModelP
 import { MockGeneralChatAdapter } from '../main/ets/services/general-chat/MockGeneralChatAdapter';
 import { MarkdownParser } from '../main/ets/services/MarkdownParser';
 import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory';
-import { toRemoteQuestionAnswer } from '../main/ets/pages/components/ConversationUiModels';
+import { toRemoteQuestionAnswer } from '../main/ets/pages/state/ConversationUiModels';
 import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
 import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
 import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
@@ -92,8 +92,8 @@ import { ConversationViewState } from '../main/ets/pages/state/ConversationViewS
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
   REMOTE_CHAT_COMPOSER_CAPABILITIES
-} from '../main/ets/pages/components/ChatComposerCapabilities';
-import { ChatSurface } from '../main/ets/pages/components/ChatSurface';
+} from '../main/ets/pages/state/ChatComposerCapabilities';
+import { ChatSurface } from '../main/ets/pages/state/ChatSurface';
 import { ConversationViewContract } from '../main/ets/pages/components/ConversationViewContract';
 import {
   AppNavigationBackAction,
@@ -266,6 +266,10 @@ class InMemorySettingsConfigStore extends GeneralChatConfigStore {
   async activeSnapshot(): Promise<GeneralChatConfigSnapshot> {
     return this.snapshotResult;
   }
+
+  async activeAccessToken(): Promise<string> {
+    return this.accessTokenResult;
+  }
 }
 
 export default function transportAndGeneralChatUnitTest() {
@@ -356,6 +360,17 @@ export default function transportAndGeneralChatUnitTest() {
         userId: 'harmony-device',
         requiresAccountAuth: false
       })).assertTrue();
+    });
+
+    it('does not prompt for an account password when this phone already has that cloud session', 0, () => {
+      const policy = new RemotePairingPolicy();
+      const descriptor = RemoteDescriptorParser.parse(
+        'https://relay.example.com/#/pair?room=room-a&pk=key-a&auth=account&user=alice'
+      );
+
+      expect(policy.shouldPromptForAccount(descriptor)).assertTrue();
+      expect(policy.shouldPromptForAccount(descriptor, true, 'alice')).assertFalse();
+      expect(policy.shouldPromptForAccount(descriptor, true, 'bob')).assertTrue();
     });
   });
 
@@ -1048,6 +1063,93 @@ export default function transportAndGeneralChatUnitTest() {
       expect(anthropicBody.indexOf('"system"')).assertLarger(-1);
       expect(openAiBody.indexOf('"role":"system"')).assertLarger(-1);
       expect(openAiBody.indexOf('blockchain')).assertLarger(-1);
+    });
+
+    it('sends attached images on the Anthropic-compatible local chat path', 0, async () => {
+      const config = new InMemorySettingsConfigStore();
+      config.snapshotResult = {
+        apiUrl: 'https://api.openbitfun.com',
+        modelName: 'vision-model',
+        hasApiKey: true
+      };
+      config.accessTokenResult = 'sk-test-token';
+      const transport = new FakeModelProviderHttpTransport();
+      transport.responses.push(modelProviderRecordedResponse(
+        200,
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"图里是一只猫"}}\n\n'
+      ));
+      const adapter = new ModelProviderGeneralChatAdapter(config, transport);
+      const image = imageAttachment('cat.png', 'data:image/png;base64,aGVsbG8=');
+
+      const result = await adapter.sendMessage('chat-1', '这是什么', [image]);
+
+      expect(transport.requests.length).assertEqual(1);
+      expect(transport.requests[0].body.indexOf('"type":"image"')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('"media_type":"image/png"')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('"data":"aGVsbG8="')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('data:image/png;base64,aGVsbG8=')).assertEqual(-1);
+      expect(transport.requests[0].body.indexOf('这是什么')).assertLarger(-1);
+      expect((result.userMessage.images || []).length).assertEqual(1);
+      expect(result.assistantMessage.text).assertEqual('图里是一只猫');
+    });
+
+    it('sends attached images on the OpenAI-compatible local chat path', 0, async () => {
+      const config = new InMemorySettingsConfigStore();
+      config.snapshotResult = {
+        apiUrl: 'https://llm.example.com/v1',
+        modelName: 'gpt-vision',
+        hasApiKey: true
+      };
+      config.accessTokenResult = 'sk-openai';
+      const transport = new FakeModelProviderHttpTransport();
+      transport.responses.push(modelProviderRecordedResponse(
+        200,
+        'data: {"id":"cmpl-1","choices":[{"delta":{"content":"A screenshot"}}]}\n\n'
+      ));
+      const adapter = new ModelProviderGeneralChatAdapter(config, transport);
+
+      await adapter.sendMessage(
+        'chat-1',
+        'describe this',
+        [imageAttachment('ui.jpg', 'data:image/jpeg;base64,dGVzdA==')]
+      );
+
+      expect(transport.requests[0].protocol).assertEqual(ModelProviderProtocol.OpenAi);
+      expect(transport.requests[0].body.indexOf('"type":"image_url"')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('data:image/jpeg;base64,dGVzdA==')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('describe this')).assertLarger(-1);
+    });
+
+    it('replays prior local-chat images when continuing a conversation', 0, async () => {
+      const config = new InMemorySettingsConfigStore();
+      config.snapshotResult = {
+        apiUrl: 'https://api.openbitfun.com',
+        modelName: 'vision-model',
+        hasApiKey: true
+      };
+      config.accessTokenResult = 'sk-test-token';
+      const transport = new FakeModelProviderHttpTransport();
+      transport.responses.push(modelProviderRecordedResponse(
+        200,
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"还是同一只猫"}}\n\n'
+      ));
+      const adapter = new ModelProviderGeneralChatAdapter(config, transport);
+      const history: ChatMessage[] = [
+        chatMessageWithImage(
+          'user-1',
+          'user',
+          '这是什么',
+          'cat.png',
+          'data:image/png;base64,aGVsbG8='
+        ),
+        chatMessage('assistant-1', 'assistant', '图里是一只猫', 'completed')
+      ];
+
+      await adapter.sendMessage('chat-1', '再看一眼颜色', [], history);
+
+      expect(transport.requests[0].body.indexOf('"data":"aGVsbG8="')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('再看一眼颜色')).assertLarger(-1);
+      expect(transport.requests[0].body.indexOf('图里是一只猫')).assertLarger(-1);
     });
   });
 

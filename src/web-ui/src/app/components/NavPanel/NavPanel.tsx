@@ -31,7 +31,7 @@ import { ViewTransitionBoundary } from '@/component-library';
 import type { InteractionMotion } from '@/shared/utils/motionPreference';
 import MainNav from './MainNav';
 import PersistentFooterActions from './components/PersistentFooterActions';
-import { PeerRemoteBadge } from '@/infrastructure/peer-device/PeerRemoteBadge';
+import { DeviceSurfaceSwitcher } from '@/infrastructure/peer-device/DeviceSurfaceSwitcher';
 import './NavPanel.scss';
 
 /** Scenes that use the split-open accordion transition. */
@@ -152,7 +152,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
         )}
 
       </div>
-      <PeerRemoteBadge />
+      <DeviceSurfaceSwitcher />
       <PersistentFooterActions />
     </nav>
   );

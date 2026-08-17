@@ -81,19 +81,43 @@ export struct WideConversationHost {
         this.MasterPane(ConversationSource.Remote, false)
         this.MasterDetailGap()
       }
-      Column() {
-        RemoteSurfaceHost({
-          mode: RemoteSurfaceMode.Placeholder,
-          remotePageState: this.remotePageState,
-          presentationState: this.remoteSurfaceState,
-          actions: this.actions,
-          wideMasterPaneCollapsed: this.wideMasterPaneCollapsed,
-          onRestoreSidebar: this.onRestoreMasterPane
-        })
-      }
-      .layoutWeight(1).height('100%').backgroundColor(PAGE_BG)
+      this.RemoteHomeDetail()
     }
     .width('100%').height('100%').backgroundColor(PAGE_BG)
+  }
+
+  @Builder
+  private RemoteHomeDetail() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Row() {
+        if (this.currentDetailOffset() > 0) {
+          Row() {}.width(this.currentDetailOffset()).height('100%')
+        }
+        Column() {
+          RemoteSurfaceHost({
+            mode: RemoteSurfaceMode.Placeholder,
+            remotePageState: this.remotePageState,
+            presentationState: this.remoteSurfaceState,
+            actions: this.actions,
+            wideMasterPaneCollapsed: false,
+            onRestoreSidebar: this.onRestoreMasterPane
+          })
+        }
+        .width(this.currentDetailWidth() > 0 ? this.currentDetailWidth() : '100%')
+        .height('100%').backgroundColor(PAGE_BG)
+        if (this.currentDetailOffset() > 0) {
+          Row() {}.layoutWeight(1).height('100%')
+        }
+      }
+      .width('100%').height('100%').justifyContent(FlexAlign.Start).backgroundColor(PAGE_BG)
+
+      if (this.wideMasterPaneCollapsed) {
+        SidebarToggleButton({ restore: true, controlSize: 44, onToggle: this.onRestoreMasterPane })
+          .position({ x: 12, y: 12 }).zIndex(2)
+          .hitTestBehavior(HitTestMode.Default)
+      }
+    }
+    .layoutWeight(1).height('100%').backgroundColor(PAGE_BG)
   }
 
   @Builder
@@ -232,7 +256,9 @@ export struct WideConversationHost {
     } else {
       Stack({ alignContent: Alignment.TopStart }) {
         Row() {
-          if (this.currentDetailOffset() > 0) Blank().width(this.currentDetailOffset())
+          if (this.currentDetailOffset() > 0) {
+            Row() {}.width(this.currentDetailOffset()).height('100%')
+          }
           Row() {
             Column() { this.RouteSurface(showBackButton) }
               .width('100%').height('100%').constraintSize({ maxWidth: WIDE_DETAIL_CONTENT_MAX_WIDTH })
@@ -240,13 +266,16 @@ export struct WideConversationHost {
           }
           .width(this.currentDetailWidth() > 0 ? this.currentDetailWidth() : '100%')
           .height('100%').justifyContent(FlexAlign.Center)
-          if (this.currentDetailOffset() > 0) Blank().layoutWeight(1)
+          if (this.currentDetailOffset() > 0) {
+            Row() {}.layoutWeight(1).height('100%')
+          }
         }
-        .width('100%').height('100%').justifyContent(FlexAlign.Center).backgroundColor(PAGE_BG)
+        .width('100%').height('100%').justifyContent(FlexAlign.Start).backgroundColor(PAGE_BG)
 
         if (this.wideMasterPaneCollapsed) {
           SidebarToggleButton({ restore: true, controlSize: 44, onToggle: this.onRestoreMasterPane })
-            .position({ x: this.currentDetailOffset() + 12, y: 12 }).zIndex(2)
+            .position({ x: 12, y: 12 }).zIndex(2)
+            .hitTestBehavior(HitTestMode.Default)
             .transition(TransitionEffect.scale({ x: 0.9, y: 0.9 }).combine(TransitionEffect.opacity(0))
               .animation({ duration: 180, curve: Curve.EaseOut }))
         }

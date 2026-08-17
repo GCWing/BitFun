@@ -21,7 +21,15 @@ pass: `size = measured ?? estimateSize(i)`. A per-item estimate for everything
 unmeasured. react-virtuoso reserves a single scalar (`lastSize`) for all of
 them, and this transcript alternates 38px user messages with model rounds up to
 5012px, so the scroll range was wrong by an order of magnitude until an item was
-actually measured. `estimateVirtualMessageItemHeight` now feeds it directly.
+actually measured. `estimateVirtualMessageItemHeightWithContext` now feeds it
+directly. The estimate is owned by the data shape in
+`virtualItemHeightEstimators.ts`: text, thinking, user messages, model rounds,
+Explore groups, and tool families each derive a bounded height from their
+content, status, width, and expansion state. This code is pure and runs before
+a row has a DOM node. Once mounted, DOM measurement remains authoritative and
+replaces the estimate. Width and volatile Explore expansion changes invalidate
+only the derived position pass; TanStack's key-based measured-size cache is
+retained.
 
 **Items stay in normal flow inside a padded window**, not absolutely positioned.
 Everything outside the window stands in as `padding-top` and `padding-bottom`
@@ -30,18 +38,23 @@ inside the window changes height, the browser reflows the ones below it in the
 same layout pass, so there is no frame where the scroll has been corrected but
 the items have not moved yet.
 
-**The virtualizer does not compensate for its own late measurements.**
-`shouldAdjustScrollPositionOnItemSizeChange` is set to refuse, always. Its rule
-is the right shape — this item's delta, only for an item above the viewport —
-but it applies that delta to `scrollOffset`, the library's own copy of the
-scroll position, refreshed only from scroll events. Every continuous writer here
-assigns `scrollTop` directly and the matching scroll event lands a frame later,
-so a measurement arriving in between is compensated from a position the viewport
-has already left. Measured on session open: **nine corrections across two frames
-walked the viewport from 7440 back to 3556**, and the follow loop wrote 7440
-again on the next frame. The interception this replaces was written for
-react-virtuoso and removed on the assumption that TanStack asked the right
-question. It does — from a stale base.
+**The virtualizer does not use TanStack's own late-measurement adjustment.**
+`shouldAdjustScrollPositionOnItemSizeChange` reads the real scroller position
+and asks the viewport owner to apply the delta only when the whole item is above
+the viewport. A partly visible row is left alone because its changed content is
+inside what the reader is looking at. TanStack's adjustment is always refused:
+it applies its delta to `scrollOffset`, the library's copy refreshed only from
+scroll events. Every continuous writer here assigns `scrollTop` directly and
+the matching scroll event lands a frame later, so that base can be stale. The
+owner's displacement is applied before the new size enters the cache, while
+the anchor remains responsible for restoring relationships across larger layout
+transactions.
+
+The measurement decision is recorded as the switch-gated, coalesced
+`virtualizer.itemResize` probe: item identity, estimated and measured sizes,
+the above-viewport decision, and the real scroll geometry before and after the
+owner's displacement. It deliberately omits flow-item contents, which made the
+temporary investigation probe too large for a lasting diagnostic trail.
 
 **Measurement is forced before any position is read in the commit that changed
 the items.** The library skips its inline resize while the reader is scrolling,

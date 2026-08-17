@@ -26,18 +26,28 @@ impl ChatMode {
             chat_state.set_git_repository_status(false, None);
             return;
         };
+        if self.agent.is_remote_workspace() {
+            chat_state.set_worktree_control_available(false);
+            chat_state.set_git_repository_status(false, None);
+            tracing::debug!("Worktree management is unavailable for a Remote workspace");
+            return;
+        }
 
         let repository = tokio::task::block_in_place(|| {
-            rt_handle.block_on(
-                self.agent
-                    .worktree_repository_status(workspace_path.clone()),
-            )
+            rt_handle.block_on(async {
+                let repository =
+                    bitfun_core::service::git::GitService::resolve_worktree_repository(
+                        &workspace_path,
+                    )
+                    .await?;
+                bitfun_core::service::git::GitService::get_repository_basic(repository.query_path)
+                    .await
+            })
         });
         match repository {
             Ok(repository) => {
-                chat_state.set_worktree_control_available(repository.is_repository);
-                chat_state
-                    .set_git_repository_status(repository.is_repository, repository.current_branch);
+                chat_state.set_worktree_control_available(true);
+                chat_state.set_git_repository_status(true, Some(repository.current_branch));
             }
             Err(error) => {
                 chat_state.set_worktree_control_available(false);
@@ -83,22 +93,46 @@ impl ChatMode {
             "Releasing worktree after prompt submission...".to_string()
         }));
         let project_workspace_path = chat_state.project_workspace_path().map(str::to_string);
+        if self.agent.is_remote_workspace() {
+            return Err(
+                "Worktree management is unavailable for a Remote workspace; the TUI does not fall back to controller-local services"
+                    .to_string(),
+            );
+        }
         let result = tokio::task::block_in_place(|| {
-            if enabled {
-                rt_handle.block_on(self.agent.worktree_bind_session(
-                    chat_state.core_session_id.clone(),
-                    project_workspace_path,
-                ))
-            } else {
-                rt_handle.block_on(self.agent.worktree_release_session(
-                    chat_state.core_session_id.clone(),
-                    project_workspace_path,
-                ))
-            }
+            rt_handle.block_on(
+                bitfun_core::service::worktree::WorktreeService::bind_session(
+                    bitfun_core::service::worktree::WorktreeSessionBindingRequest {
+                        request_id: format!("tui-worktree-{}", uuid::Uuid::new_v4()),
+                        session_id: chat_state.core_session_id.clone(),
+                        project_workspace_path,
+                        enabled,
+                    },
+                ),
+            )
         })
-        .map_err(|error| format!("Worktree isolation could not be prepared: {error}"))?;
+        .map_err(|error| {
+            format!(
+                "Worktree isolation could not be prepared: {}: {}",
+                match error.code {
+                    bitfun_runtime_ports::WorktreeErrorCode::RemoteUnsupported => {
+                        "remote_unsupported"
+                    }
+                    _ => error.code.as_str(),
+                },
+                error.message
+            )
+        })?;
 
-        let binding = result.workspace_binding;
+        let execution_target = result.execution_target.clone();
+        let binding = bitfun_runtime_ports::AgentSessionWorkspaceBinding {
+            workspace_id: result.workspace_id,
+            workspace_path: result.workspace_path,
+            project_workspace_path: Some(result.project_workspace_path),
+            execution_target: Some(execution_target),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
         self.agent.set_workspace_binding(&binding);
         chat_state.apply_workspace_binding(binding);
         chat_state.set_worktree_isolation_requested(None);

@@ -8,6 +8,7 @@ use crate::schema::{
     GitGetStatusResponse, GitIsRepositoryMessage, GitIsRepositoryResponse,
     GitRepositoryPathRequest,
 };
+use crate::server::wire;
 
 pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
@@ -31,7 +32,7 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
                 responder.respond_with_result(
                     GitService::get_status(&repository_path)
                         .await
-                        .map(GitGetStatusResponse)
+                        .map(|status| GitGetStatusResponse(wire::git_status(status)))
                         .map_err(git_service_error),
                 )
             },
@@ -46,7 +47,9 @@ pub(in crate::server) fn builder() -> Builder<AppServer, impl HandleDispatchFrom
                 let result =
                     GitService::get_branches(&repository_path, include_remote.unwrap_or(false))
                         .await
-                        .map(|branches| GitGetBranchesResponse { branches })
+                        .map(|branches| GitGetBranchesResponse {
+                            branches: branches.into_iter().map(wire::git_branch).collect(),
+                        })
                         .map_err(git_service_error);
                 responder.respond_with_result(result)
             },

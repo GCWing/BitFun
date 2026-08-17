@@ -297,6 +297,11 @@ impl RuntimeIpcRequestHandler for FakeHandler {
                         retired_turn_ids: Vec::new(),
                         changed: true,
                         hidden_turn_count: 1,
+                        boundary_storage_turn_index: None,
+                        target_turn_id: None,
+                        restored_files: Vec::new(),
+                        reload_required: false,
+                        reload_reason: None,
                     },
                 })
             }

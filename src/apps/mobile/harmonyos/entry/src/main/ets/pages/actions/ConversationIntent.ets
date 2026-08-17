@@ -1,4 +1,4 @@
-import { ConversationUiQuestionAnswer } from '../components/ConversationUiModels';
+import { ConversationUiQuestionAnswer } from '../state/ConversationUiModels';
 import { FilePreviewRequest } from '../../model/FilePreviewTarget';
 
 export enum ConversationIntentType {

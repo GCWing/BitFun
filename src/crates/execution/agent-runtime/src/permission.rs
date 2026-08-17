@@ -11,7 +11,7 @@ use bitfun_runtime_ports::{
 use dashmap::DashMap;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::{broadcast, oneshot, Mutex};
 
 const PERMISSION_EVENT_CAPACITY: usize = 128;
@@ -173,6 +173,16 @@ pub struct PendingPermissionReceiver {
     receiver: oneshot::Receiver<PermissionWaitOutcome>,
 }
 
+/// Monotonic snapshot used by reconnecting product surfaces to reconcile
+/// permission requests even when the low-latency event stream had a gap.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionRequestSnapshot {
+    pub revision: u64,
+    #[serde(default)]
+    pub requests: Vec<PermissionRequest>,
+}
+
 impl PendingPermissionReceiver {
     pub fn request_id(&self) -> &str {
         &self.request_id
@@ -222,6 +232,8 @@ struct PendingPermission {
 pub struct PermissionRequestManager {
     pending: Arc<DashMap<String, PendingPermission>>,
     next_registration_sequence: Arc<AtomicU64>,
+    snapshot_revision: Arc<AtomicU64>,
+    snapshot_barrier: Arc<StdRwLock<()>>,
     operations: Arc<Mutex<()>>,
     audit_store: Arc<dyn PermissionAuditStorePort>,
     reply_store: Arc<dyn PermissionReplyStorePort>,
@@ -248,6 +260,8 @@ impl PermissionRequestManager {
         Self {
             pending: Arc::new(DashMap::new()),
             next_registration_sequence: Arc::new(AtomicU64::new(0)),
+            snapshot_revision: Arc::new(AtomicU64::new(0)),
+            snapshot_barrier: Arc::new(StdRwLock::new(())),
             operations: Arc::new(Mutex::new(())),
             audit_store,
             reply_store,
@@ -402,25 +416,32 @@ impl PermissionRequestManager {
 
         let timestamp_ms = self.clock.now_unix_millis();
         let mut receivers = Vec::with_capacity(requests.len());
-        for request in &requests {
-            let (sender, receiver) = oneshot::channel();
-            let registration_sequence = self
-                .next_registration_sequence
-                .fetch_add(1, Ordering::Relaxed);
-            self.pending.insert(
-                request.request_id.clone(),
-                PendingPermission {
-                    request: request.clone(),
-                    dialog_turn_id: dialog_turn_id.clone(),
-                    sender,
-                    interactive,
-                    registration_sequence,
-                },
-            );
-            receivers.push(PendingPermissionReceiver {
-                request_id: request.request_id.clone(),
-                receiver,
-            });
+        {
+            let _snapshot_write = self
+                .snapshot_barrier
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            for request in &requests {
+                let (sender, receiver) = oneshot::channel();
+                let registration_sequence = self
+                    .next_registration_sequence
+                    .fetch_add(1, Ordering::Relaxed);
+                self.pending.insert(
+                    request.request_id.clone(),
+                    PendingPermission {
+                        request: request.clone(),
+                        dialog_turn_id: dialog_turn_id.clone(),
+                        sender,
+                        interactive,
+                        registration_sequence,
+                    },
+                );
+                receivers.push(PendingPermissionReceiver {
+                    request_id: request.request_id.clone(),
+                    receiver,
+                });
+            }
+            self.snapshot_revision.fetch_add(1, Ordering::Release);
         }
 
         for request in &requests {
@@ -434,8 +455,16 @@ impl PermissionRequestManager {
                 })
                 .await
             {
+                let _snapshot_write = self
+                    .snapshot_barrier
+                    .write()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let mut removed = false;
                 for request in &requests {
-                    self.pending.remove(&request.request_id);
+                    removed |= self.pending.remove(&request.request_id).is_some();
+                }
+                if removed {
+                    self.snapshot_revision.fetch_add(1, Ordering::Release);
                 }
                 return Err(PermissionRequestManagerError::AuditStore(error));
             }
@@ -456,6 +485,17 @@ impl PermissionRequestManager {
 
     pub fn interactive_pending_requests(&self) -> Vec<PermissionRequest> {
         self.ordered_pending_requests(|pending| pending.interactive)
+    }
+
+    pub fn interactive_pending_snapshot(&self) -> PermissionRequestSnapshot {
+        let _snapshot_read = self
+            .snapshot_barrier
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        PermissionRequestSnapshot {
+            revision: self.snapshot_revision.load(Ordering::Acquire),
+            requests: self.ordered_pending_requests(|pending| pending.interactive),
+        }
     }
 
     /// Returns the process-local owning Dialog Turn for exact event routing.
@@ -576,18 +616,29 @@ impl PermissionRequestManager {
             .iter()
             .map(|(pending_request, _)| pending_request.request_id.clone())
             .collect::<Vec<_>>();
-        for (pending_request, pending_reply) in resolutions {
-            if let Some((_, pending)) = self.pending.remove(&pending_request.request_id) {
-                let _ = pending
-                    .sender
-                    .send(PermissionWaitOutcome::Replied(pending_reply.clone()));
-                if pending.interactive {
-                    let _ = self.events.send(PermissionRequestEvent::Replied {
-                        request_id: pending_request.request_id,
-                        reply: pending_reply,
-                        source,
-                    });
+        {
+            let _snapshot_write = self
+                .snapshot_barrier
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut removed = false;
+            for (pending_request, pending_reply) in resolutions {
+                if let Some((_, pending)) = self.pending.remove(&pending_request.request_id) {
+                    removed = true;
+                    let _ = pending
+                        .sender
+                        .send(PermissionWaitOutcome::Replied(pending_reply.clone()));
+                    if pending.interactive {
+                        let _ = self.events.send(PermissionRequestEvent::Replied {
+                            request_id: pending_request.request_id,
+                            reply: pending_reply,
+                            source,
+                        });
+                    }
                 }
+            }
+            if removed {
+                self.snapshot_revision.fetch_add(1, Ordering::Release);
             }
         }
 
@@ -652,17 +703,28 @@ impl PermissionRequestManager {
                 .map_err(PermissionRequestManagerError::AuditStore)?;
         }
 
-        for request in requests {
-            if let Some((_, pending)) = self.pending.remove(&request.request_id) {
-                let _ = pending.sender.send(PermissionWaitOutcome::Cancelled {
-                    reason: reason.clone(),
-                });
-                if pending.interactive {
-                    let _ = self.events.send(PermissionRequestEvent::Cancelled {
-                        request_id: request.request_id,
+        {
+            let _snapshot_write = self
+                .snapshot_barrier
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut removed = false;
+            for request in requests {
+                if let Some((_, pending)) = self.pending.remove(&request.request_id) {
+                    removed = true;
+                    let _ = pending.sender.send(PermissionWaitOutcome::Cancelled {
                         reason: reason.clone(),
                     });
+                    if pending.interactive {
+                        let _ = self.events.send(PermissionRequestEvent::Cancelled {
+                            request_id: request.request_id,
+                            reason: reason.clone(),
+                        });
+                    }
                 }
+            }
+            if removed {
+                self.snapshot_revision.fetch_add(1, Ordering::Release);
             }
         }
         Ok(())
@@ -800,6 +862,9 @@ mod tests {
             PermissionRequestEvent::Asked { request: request() }
         );
         assert_eq!(manager.pending_requests(), vec![request()]);
+        let asked_snapshot = manager.interactive_pending_snapshot();
+        assert_eq!(asked_snapshot.requests, vec![request()]);
+        assert!(asked_snapshot.revision > 0);
 
         manager
             .reply(
@@ -822,6 +887,9 @@ mod tests {
             PermissionWaitOutcome::Replied(PermissionReply::Once)
         );
         assert!(manager.pending_requests().is_empty());
+        let replied_snapshot = manager.interactive_pending_snapshot();
+        assert!(replied_snapshot.requests.is_empty());
+        assert!(replied_snapshot.revision > asked_snapshot.revision);
 
         let cancelled = manager
             .register(PermissionRequest {

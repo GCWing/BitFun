@@ -13,13 +13,15 @@ export interface ContextDropZoneProps {
   children?: React.ReactNode;
   className?: string;
   onContextAdded?: (context: ContextItem) => void;
+  disabled?: boolean;
 }
 
 export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
   acceptedTypes,
   children,
   className = '',
-  onContextAdded
+  onContextAdded,
+  disabled = false,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [canAccept, setCanAccept] = useState(false);
@@ -40,10 +42,11 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     acceptedTypes: acceptedTypesArray,
     
     canAccept: (payload: DragPayload<ContextItem>) => {
-      return acceptedTypesArray.includes(payload.dataType);
+      return !disabled && acceptedTypesArray.includes(payload.dataType);
     },
     
     onDrop: async (payload: DragPayload<ContextItem>) => {
+      if (disabled) return;
       const context = payload.data;
       
       
@@ -75,7 +78,7 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     onDragOver: () => {
       
     }
-  }), [acceptedTypesArray, addContext, updateValidation, onContextAdded]);
+  }), [acceptedTypesArray, addContext, disabled, updateValidation, onContextAdded]);
   
   
   const dropTargetRef = useRef(dropTarget);

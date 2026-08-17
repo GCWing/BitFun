@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isItemFullyAboveViewport,
   virtualWindowPaddingPx,
   visibleRowRange,
   type FlowChatVirtualRow,
 } from './useFlowChatVirtualizer';
+
+describe('isItemFullyAboveViewport', () => {
+  it('does not compensate a row that is partly visible', () => {
+    expect(isItemFullyAboveViewport(8280, 5450)).toBe(false);
+  });
+
+  it('compensates only a row whose end is above the viewport', () => {
+    expect(isItemFullyAboveViewport(4722, 5450)).toBe(true);
+  });
+});
 
 /** Header above the items, which every offset below is measured past. */
 const CONTENT_START = 24;

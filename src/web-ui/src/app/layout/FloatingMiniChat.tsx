@@ -211,6 +211,9 @@ export const FloatingMiniChat: React.FC = () => {
       // Registration presence makes this an isolated workspace even when the
       // hidden session has no path, so the normal project never leaks in.
       workspacePath: displayedSession?.workspacePath || '',
+      remoteConnectionId:
+        displayedSession?.remoteConnectionId
+        || displayedSession?.config?.remoteConnectionId,
       draft: composerPrefill
         ? { id: composerPrefill.id, text: composerPrefill.text }
         : undefined,
@@ -222,6 +225,8 @@ export const FloatingMiniChat: React.FC = () => {
     activeMiniAppName,
     bubbleCustomization?.composer?.placeholder,
     composerPrefill,
+    displayedSession?.config?.remoteConnectionId,
+    displayedSession?.remoteConnectionId,
     displayedSession?.workspacePath,
     handleMiniAppDraftConsumed,
     handleMiniAppSubmit,

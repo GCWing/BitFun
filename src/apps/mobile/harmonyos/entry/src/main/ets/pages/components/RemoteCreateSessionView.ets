@@ -1,20 +1,20 @@
-import { KeyboardAvoidMode } from '@kit.ArkUI';
 import { RecentWorkspaceEntry } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
-import { ACCENT, CARD, INK, LINE, MUTED, PAGE_BG, RED, SOFT, SUBTLE } from './Theme';
-import { ComposerBar, ComposerPresentation } from './ComposerBar';
-import { ConversationUiModelCatalog } from './ConversationUiModels';
-import { REMOTE_CREATE_COMPOSER_CAPABILITIES } from './ChatComposerCapabilities';
-import { SidebarToggleButton } from './SidebarToggleButton';
-import { TemplateIcon } from './TemplateIcon';
+import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
+import { ComposerPresentation } from './ComposerBar';
+import { ConversationView } from './ConversationView';
+import { ConversationUiModelCatalog } from '../state/ConversationUiModels';
+import { REMOTE_CREATE_COMPOSER_CAPABILITIES } from '../state/ChatComposerCapabilities';
+import { ChatSurface } from '../state/ChatSurface';
 
 @ComponentV2
 export struct RemoteCreateSessionView {
   @Param state: RemoteCreateSessionState = new RemoteCreateSessionState();
   @Param presentation: ComposerPresentation = ComposerPresentation.Create;
   @Param showSidebarRestoreButton: boolean = false;
+  @Param hoverOperateMode: boolean = false;
   @Param isVoiceListening: boolean = false;
   @Param modelCatalog: ConversationUiModelCatalog = {
     version: 0,
@@ -33,138 +33,49 @@ export struct RemoteCreateSessionView {
   @Event onVoiceInput: () => void = () => {};
   @Event onSelectModel: (modelId: string) => void = (_modelId: string) => {};
   @Local showSelectorSheet: boolean = false;
-  private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET;
 
   aboutToAppear(): void {
-    this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode();
-    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     setTimeout(() => this.keepComposerFocused(), 180);
-  }
-
-  aboutToDisappear(): void {
-    this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode);
   }
 
   build() {
     Column() {
-      if (this.presentation === ComposerPresentation.Floating) {
-        this.Header()
-        Blank()
-          .layoutWeight(1)
-          .onClick(() => {
-            this.state.closeMenu();
-            this.keepComposerFocused();
-          })
-      } else {
-        this.CompactNavigationSpace()
-        this.ContextControls()
-        this.CompactComposerBar()
-      }
-      if (this.presentation === ComposerPresentation.Floating) {
-        this.TaskComposer()
-      }
+      ConversationView({
+        surface: ChatSurface.Create,
+        composerCapabilities: REMOTE_CREATE_COMPOSER_CAPABILITIES,
+        composerPresentation: this.presentation === ComposerPresentation.Floating ?
+          ComposerPresentation.Floating : ComposerPresentation.Create,
+        composerInputId: 'remote-create-composer',
+        chatInput: this.state.draft,
+        isBusy: this.state.isSubmitting,
+        inlineStatusText: this.state.errorText,
+        connectionState: 'connected',
+        isVoiceListening: this.isVoiceListening,
+        modelCatalog: this.modelCatalog,
+        selectedModelId: this.selectedModelId,
+        showBackButton: true,
+        showSidebarButton: false,
+        showSidebarRestoreButton: this.showSidebarRestoreButton,
+        hoverOperateMode: this.hoverOperateMode,
+        aboveComposer: () => {
+          this.ContextControls();
+        },
+        onBack: () => this.onBack(),
+        onRestoreSidebar: () => this.onRestoreSidebar(),
+        onSend: () => this.onSend(),
+        onChatInputChange: (value: string) => this.onDraftChange(value),
+        onVoiceInput: () => this.onVoiceInput(),
+        onSelectModel: (modelId: string) => this.onSelectModel(modelId),
+        onBackgroundTap: () => {
+          this.state.closeMenu();
+          this.keepComposerFocused();
+        }
+      })
     }
     .width('100%')
     .height('100%')
     .backgroundColor(PAGE_BG)
     .bindSheet($$this.showSelectorSheet, this.SelectorSheet(), this.selectorSheetOptions())
-  }
-
-  @Builder
-  CompactComposerBar() {
-    ComposerBar({
-      presentation: ComposerPresentation.Create,
-      capabilities: REMOTE_CREATE_COMPOSER_CAPABILITIES,
-      inputId: 'remote-create-composer',
-      chatInput: this.state.draft,
-      isBusy: this.state.isSubmitting,
-      connectionState: 'connected',
-      isVoiceListening: this.isVoiceListening,
-      modelCatalog: this.modelCatalog,
-      selectedModelId: this.selectedModelId,
-      onSend: () => this.onSend(),
-      onChatInputChange: (value: string) => this.onDraftChange(value),
-      onVoiceInput: () => this.onVoiceInput(),
-      onSelectModel: (modelId: string) => this.onSelectModel(modelId)
-    })
-  }
-
-  @Builder
-  CompactNavigationSpace() {
-    Column() {
-      Row() {
-        Button() {
-          TemplateIcon({
-            src: $r('app.media.remote_ref_back'),
-            iconWidth: 15,
-            iconHeight: 23
-          })
-        }
-        .width(44)
-        .height(44)
-        .padding(0)
-        .type(ButtonType.Circle)
-        .backgroundColor(CARD)
-        .border({ width: 1, color: LINE })
-        .borderRadius(22)
-        .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
-        .accessibilityText(RemoteI18n.t('common.back'))
-        .onClick(() => this.onBack())
-      }
-      .width('100%')
-      .height(78)
-      .padding({ left: 18, top: 14 })
-      .alignItems(VerticalAlign.Top)
-      Column()
-        .width('100%')
-        .layoutWeight(1)
-        .onClick(() => {
-          this.state.closeMenu();
-          this.keepComposerFocused();
-        })
-    }
-    .width('100%')
-    .layoutWeight(1)
-  }
-
-  @Builder
-  Header() {
-    Row({ space: 8 }) {
-      if (this.showSidebarRestoreButton) {
-        SidebarToggleButton({
-          restore: true,
-          controlSize: 48,
-          onToggle: this.onRestoreSidebar
-        })
-      } else if (this.presentation !== ComposerPresentation.Floating) {
-        Button() {
-          SymbolGlyph($r('sys.symbol.chevron_left'))
-            .fontSize(22)
-            .fontColor([INK])
-        }
-        .width(48)
-        .height(48)
-        .padding(0)
-        .type(ButtonType.Circle)
-        .backgroundColor(CARD)
-        .border({ width: 1, color: LINE })
-        .borderRadius(24)
-        .accessibilityText(RemoteI18n.t('common.back'))
-        .onClick(() => this.onBack())
-      } else {
-        Blank().width(48).height(48)
-      }
-      Text(RemoteI18n.t('remote.create.title'))
-        .layoutWeight(1)
-        .fontSize(17)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(INK)
-        .textAlign(TextAlign.Center)
-      Blank().width(48).height(48)
-    }
-    .width('100%')
-    .height(64)
-    .padding({ left: 16, right: 16, top: 8, bottom: 8 })
   }
 
   @Builder
@@ -443,102 +354,6 @@ export struct RemoteCreateSessionView {
     .padding({ left: 12, right: 12, bottom: 16 })
     .backgroundColor(CARD)
     .borderRadius(16)
-  }
-
-  @Builder
-  TaskComposer() {
-    Column({ space: 6 }) {
-      if (this.presentation === ComposerPresentation.Floating) {
-        this.ContextControls()
-        Divider()
-          .color(LINE)
-          .margin({ left: 18, right: 18 })
-      }
-      if (this.state.errorText.length > 0) {
-        Text(this.state.errorText)
-          .width('100%')
-          .padding({ left: 12, right: 12 })
-          .fontSize(12)
-          .fontColor(RED)
-          .maxLines(2)
-      }
-      Row({ space: 8 }) {
-        TextArea({ placeholder: RemoteI18n.t('remote.create.placeholder'), text: this.state.draft })
-          .id('remote-create-composer')
-          .layoutWeight(1)
-          .height(56)
-          .fontSize(16)
-          .fontColor(INK)
-          .placeholderColor(SUBTLE)
-          .backgroundColor('#00000000')
-          .padding({ left: 6, right: 4, top: 8, bottom: 8 })
-          .defaultFocus(true)
-          .maxLines(3)
-          .onChange((value: string, previewText?: PreviewText) => {
-            if (previewText && previewText.value.length > 0) {
-              return;
-            }
-            this.onDraftChange(value);
-          })
-        Button() {
-          SymbolGlyph($r('sys.symbol.arrow_up'))
-            .fontSize(23)
-            .fontColor([INK])
-            .opacity(this.canSend() ? 1 : 0.36)
-        }
-        .width(42)
-        .height(42)
-        .padding(0)
-        .type(ButtonType.Circle)
-        .backgroundColor('#00000000')
-        .enabled(this.canSend())
-        .onClick(() => this.onSend())
-      }
-      .width('100%')
-      .height(this.presentation === ComposerPresentation.Floating ? 72 : 66)
-      .padding({ left: 12, right: 7, top: 5, bottom: 5 })
-      .backgroundColor(this.presentation === ComposerPresentation.Floating ? '#00000000' : CARD)
-      .borderRadius(this.presentation === ComposerPresentation.Floating ? 0 : 25)
-      .border({
-        width: this.presentation === ComposerPresentation.Floating ? 0 : 1,
-        color: this.presentation === ComposerPresentation.Floating ? '#00000000' : SOFT
-      })
-      .shadow({
-        radius: this.presentation === ComposerPresentation.Floating ? 0 : 22,
-        color: this.presentation === ComposerPresentation.Floating ? '#00000000' : '#18000000',
-        offsetY: this.presentation === ComposerPresentation.Floating ? 0 : 7
-      })
-    }
-    .width('100%')
-    .constraintSize({ maxWidth: this.presentation === ComposerPresentation.Floating ? 760 : 10000 })
-    .alignSelf(ItemAlign.Center)
-    .padding({
-      left: this.presentation === ComposerPresentation.Floating ? 0 : 16,
-      right: this.presentation === ComposerPresentation.Floating ? 0 : 16,
-      top: this.presentation === ComposerPresentation.Floating ? 4 : 0,
-      bottom: this.presentation === ComposerPresentation.Floating ? 4 : 14
-    })
-    .backgroundColor(this.presentation === ComposerPresentation.Floating ? CARD : '#00000000')
-    .borderRadius(this.presentation === ComposerPresentation.Floating ? 18 : 0)
-    .border({
-      width: this.presentation === ComposerPresentation.Floating ? 1 : 0,
-      color: this.presentation === ComposerPresentation.Floating ? SOFT : '#00000000'
-    })
-    .shadow({
-      radius: this.presentation === ComposerPresentation.Floating ? 20 : 0,
-      color: this.presentation === ComposerPresentation.Floating ? '#18000000' : '#00000000',
-      offsetY: this.presentation === ComposerPresentation.Floating ? 6 : 0
-    })
-    .margin({
-      left: this.presentation === ComposerPresentation.Floating ? 24 : 0,
-      right: this.presentation === ComposerPresentation.Floating ? 24 : 0,
-      bottom: this.presentation === ComposerPresentation.Floating ? 24 : 0
-    })
-  }
-
-  private canSend(): boolean {
-    return this.state.draft.trim().length > 0 && this.state.selectedDeviceId.length > 0 &&
-      !this.state.isSubmitting;
   }
 
   private keepComposerFocused(): void {

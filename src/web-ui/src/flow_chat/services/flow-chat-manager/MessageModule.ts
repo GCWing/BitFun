@@ -10,14 +10,24 @@ import { notificationService } from '../../../shared/notification-system';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  getActiveSurfaceId,
+  getActiveSurfaceScope,
+  isSurfaceChangedError,
+  type DeviceSurfaceId,
+} from '@/infrastructure/peer-device/deviceSurface';
 import type { FlowChatContext } from './types';
 import { isProjectedSessionEmpty } from '../../utils/flowChatTurnIdentity';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import { pendingQueueManager } from './PendingQueueModule';
+import { isRuntimeSessionAttachmentInFlight } from '@/infrastructure/peer-device/runtimeSessionEventGate';
 import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { i18nService } from '@/infrastructure/i18n';
 import { driverForSession } from '../../session-drivers/registry';
 import type { SendMessageOptions, SubmissionDraft, TurnTracker } from '../../session-drivers/types';
+import { assertSessionSubmissionAllowed } from '../../store/sessionMutationStore';
+import { hasInterruptedTurnHoldingQueue } from '../../utils/interruptedTurnRecovery';
+import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
 
 export { syncSessionModelSelection } from '../../utils/modelSync';
 export { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
@@ -33,30 +43,154 @@ interface SessionConflictRetry {
 const sessionConflictRetries = new Map<string, SessionConflictRetry>();
 const latestSendBySession = new Map<string, symbol>();
 
-function clearSessionConflictRetry(sessionId: string): void {
-  const current = sessionConflictRetries.get(sessionId);
+function clearSessionConflictRetry(sendKey: string): void {
+  const current = sessionConflictRetries.get(sendKey);
   if (!current) return;
   current.active = false;
-  sessionConflictRetries.delete(sessionId);
+  sessionConflictRetries.delete(sendKey);
   notificationService.dismiss(current.notificationId);
 }
 
-function beginSessionSend(sessionId: string): symbol {
+function beginSessionSend(sendKey: string, sessionId: string): symbol {
   const attempt = Symbol(sessionId);
-  latestSendBySession.set(sessionId, attempt);
-  clearSessionConflictRetry(sessionId);
+  latestSendBySession.set(sendKey, attempt);
+  clearSessionConflictRetry(sendKey);
   return attempt;
 }
 
 function completeSessionSend(
-  sessionId: string,
+  sendKey: string,
   attempt: symbol,
   retrySuccess?: () => void,
 ): void {
-  if (latestSendBySession.get(sessionId) !== attempt) return;
-  latestSendBySession.delete(sessionId);
-  clearSessionConflictRetry(sessionId);
+  if (latestSendBySession.get(sendKey) !== attempt) return;
+  latestSendBySession.delete(sendKey);
+  clearSessionConflictRetry(sendKey);
   retrySuccess?.();
+}
+
+/**
+ * Submissions that have created a projection turn but have not yet handed the
+ * turn to a host.
+ *
+ * Switching the rendered device surface selects another projection. A
+ * submission caught mid-flight must not resume through that new projection —
+ * and because the throw may land before `start_dialog_turn`, the surface switch
+ * waits for submissions to drain first.
+ */
+let inFlightSubmissions = 0;
+const inFlightSubmissionWaiters = new Set<() => void>();
+
+function beginSubmission(): void {
+  inFlightSubmissions += 1;
+}
+
+function endSubmission(): void {
+  inFlightSubmissions = Math.max(0, inFlightSubmissions - 1);
+  if (inFlightSubmissions === 0 && inFlightSubmissionWaiters.size > 0) {
+    for (const notify of Array.from(inFlightSubmissionWaiters)) {
+      notify();
+    }
+    inFlightSubmissionWaiters.clear();
+  }
+}
+
+export function inFlightSubmissionCount(): number {
+  return inFlightSubmissions;
+}
+
+/**
+ * Salvage a submission that lost the race against a device-surface switch.
+ *
+ * When the host never accepted the turn the message exists nowhere, so it goes
+ * back onto the session's pending queue — queues are keyed by surface and
+ * session id, so returning to that device drains it. When the
+ * host did accept it, the turn is already running there and nothing is owed.
+ */
+function recoverSubmissionAfterSurfaceSwitch(
+  context: FlowChatContext,
+  surfaceId: DeviceSurfaceId,
+  sessionId: string,
+  turnTracker: TurnTracker,
+  draft: {
+    message: string;
+    displayMessage?: string;
+    agentType?: string;
+    options?: SendMessageOptions;
+  },
+): void {
+  const hostHasTurn =
+    turnTracker.hostAcceptedTurn || turnTracker.hostSubmitStarted === true;
+  if (hostHasTurn) {
+    log.info('Device surface switched after the host accepted the turn; it keeps running there', {
+      sessionId,
+    });
+    return;
+  }
+  if (turnTracker.createdLocalTurnId) {
+    context.flowChatStore.abandonOptimisticDialogTurn(
+      surfaceId,
+      sessionId,
+      turnTracker.createdLocalTurnId,
+    );
+    stateMachineManager.resetForSurface(surfaceId, sessionId);
+    context.processingManager.clearSessionStatusForSurface(surfaceId, sessionId);
+  }
+  try {
+    pendingQueueManager.enqueueForSurface(surfaceId, {
+      sessionId,
+      content: draft.message,
+      displayMessage: draft.displayMessage,
+      agentType: draft.agentType,
+      imageContexts: draft.options?.imageContexts,
+      imageDisplayData: draft.options?.imageDisplayData,
+      userMessageMetadata: draft.options?.userMessageMetadata,
+    });
+    log.info('Device surface switched before submit reached the host; message re-queued', {
+      sessionId,
+    });
+  } catch (error) {
+    // A full queue is the only expected failure, and dropping the message
+    // silently would be worse than the original error toast.
+    log.error('Failed to re-queue a message after a device surface switch', {
+      sessionId,
+      error,
+    });
+    notificationService.error(
+      i18nService.t('flow-chat:session.surfaceSwitchDropped'),
+      { title: i18nService.t('flow-chat:session.surfaceSwitchDroppedTitle'), duration: 6000 },
+    );
+  }
+}
+
+/**
+ * Wait until no submission is mid-flight, or until `timeoutMs` elapses.
+ *
+ * Returns whether the wait drained. A timeout is not fatal: `sendMessage`
+ * detects the surface change and recovers the message onto the pending queue.
+ */
+export function waitForInFlightSubmissions(timeoutMs: number): Promise<boolean> {
+  if (inFlightSubmissions === 0) {
+    return Promise.resolve(true);
+  }
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    // `endSubmission` clears the waiter set before notifying, so the drained
+    // path does not have to unregister itself; only a timeout leaves a stale
+    // waiter behind.
+    const notify = (): void => {
+      if (settled) return;
+      settled = true;
+      resolve(true);
+    };
+    inFlightSubmissionWaiters.add(notify);
+    setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      inFlightSubmissionWaiters.delete(notify);
+      resolve(false);
+    }, timeoutMs);
+  });
 }
 
 function acpClientIdFromMode(mode: string | undefined): string | null {
@@ -87,7 +221,17 @@ export async function sendMessage(
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
   }
-  const sendAttempt = beginSessionSend(sessionId);
+  const surfaceScopeAtSend = getActiveSurfaceScope();
+  const sendCoordinationKey = surfaceScopeAtSend.key(
+    'session-send',
+    surfaceScopeAtSend.epoch,
+    sessionId,
+  );
+  if (interruptedTurnRecoveryGate.isSessionInFlight(sessionId)) {
+    throw new Error('Interrupted turn recovery is in flight');
+  }
+  assertSessionSubmissionAllowed(sessionId, options?.sessionMutationLeaseId);
+  const sendAttempt = beginSessionSend(sendCoordinationKey, sessionId);
   const draft: SubmissionDraft = {
     message,
     displayMessage,
@@ -98,7 +242,8 @@ export async function sendMessage(
     const machineState = stateMachineManager.getCurrentState(sessionId);
     const sessionBusy =
       machineState === SessionExecutionState.PROCESSING ||
-      machineState === SessionExecutionState.FINISHING;
+      machineState === SessionExecutionState.FINISHING ||
+      context.userCancelledSessionIds?.has(sessionId) === true;
     const hasPendingQueue = pendingQueueManager.list(sessionId).length > 0;
 
     if (sessionBusy || hasPendingQueue) {
@@ -143,7 +288,7 @@ export async function sendMessage(
         throw error;
       }
       completeSessionSend(
-        sessionId,
+        sendCoordinationKey,
         sendAttempt,
         options?.fromSessionConflictRetry
           ? options.onSessionConflictRetrySuccess
@@ -161,7 +306,12 @@ export async function sendMessage(
     }));
   }
 
-  const turnTracker: TurnTracker = { createdLocalTurnId: null };
+  const turnTracker: TurnTracker = { createdLocalTurnId: null, hostAcceptedTurn: false };
+  // A device-surface switch swaps the projection this submission reads through.
+  // Anything read back after an await belongs to the surface captured here.
+  const surfaceGenerationAtSend = context.flowChatStore.getSurfaceGeneration();
+  const surfaceIdAtSend = surfaceScopeAtSend.surfaceId;
+  beginSubmission();
 
   try {
     const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
@@ -183,7 +333,11 @@ export async function sendMessage(
       context.flowChatStore.updateSessionMode(sessionId, currentAgentType);
     }
 
-    if (context.pendingHistoryLoads.has(sessionId)) {
+    if (
+      context.pendingHistoryLoads.has(
+        surfaceScopeAtSend.key('history-load', surfaceScopeAtSend.epoch, sessionId),
+      )
+    ) {
       throw new Error('Session history is still restoring, please retry once loading finishes');
     }
 
@@ -194,6 +348,7 @@ export async function sendMessage(
       const readiness = driver.ensureReady(context, sessionId);
       if (readiness) {
         await readiness;
+        surfaceScopeAtSend.assertCurrent('prepare session submission');
       }
     }
 
@@ -208,6 +363,7 @@ export async function sendMessage(
     const outcome = await driver.startTurn(
       context,
       {
+        surfaceScope: surfaceScopeAtSend,
         sessionId,
         message,
         displayMessage,
@@ -226,7 +382,7 @@ export async function sendMessage(
     }
 
     completeSessionSend(
-      sessionId,
+      sendCoordinationKey,
       sendAttempt,
       options?.fromSessionConflictRetry
         ? options.onSessionConflictRetrySuccess
@@ -234,6 +390,26 @@ export async function sendMessage(
     );
 
   } catch (error) {
+    // The window moved to another device mid-submission. That is not a turn
+    // failure: the session still exists on its own device, and the state
+    // machine and turn we would "clean up" no longer belong to the rendered
+    // surface. Recover the message instead of reporting an error.
+    if (
+      isSurfaceChangedError(error)
+      || context.flowChatStore.getSurfaceGeneration() !== surfaceGenerationAtSend
+    ) {
+      recoverSubmissionAfterSurfaceSwitch(context, surfaceIdAtSend, sessionId, turnTracker, {
+        message,
+        displayMessage,
+        agentType,
+        options,
+      });
+      if (latestSendBySession.get(sendCoordinationKey) === sendAttempt) {
+        latestSendBySession.delete(sendCoordinationKey);
+      }
+      return;
+    }
+
     log.error('Failed to send message', { sessionId: sessionId, error });
 
     const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
@@ -260,10 +436,10 @@ export async function sendMessage(
 
     if (!options?.preserveTurnOnStartError) {
       if (isSessionInUseError(error)) {
-        if (latestSendBySession.get(sessionId) !== sendAttempt) {
+        if (latestSendBySession.get(sendCoordinationKey) !== sendAttempt) {
           throw error;
         }
-        clearSessionConflictRetry(sessionId);
+        clearSessionConflictRetry(sendCoordinationKey);
         const retry: SessionConflictRetry = {
           notificationId: '',
           active: true,
@@ -280,7 +456,8 @@ export async function sendMessage(
               if (
                 !retry.active ||
                 retry.inFlight ||
-                sessionConflictRetries.get(sessionId) !== retry
+                !surfaceScopeAtSend.isCurrent() ||
+                sessionConflictRetries.get(sendCoordinationKey) !== retry
               ) {
                 return;
               }
@@ -299,21 +476,23 @@ export async function sendMessage(
             },
           }],
         });
-        sessionConflictRetries.set(sessionId, retry);
+        sessionConflictRetries.set(sendCoordinationKey, retry);
       } else {
-        if (latestSendBySession.get(sessionId) === sendAttempt) {
-          latestSendBySession.delete(sessionId);
+        if (latestSendBySession.get(sendCoordinationKey) === sendAttempt) {
+          latestSendBySession.delete(sendCoordinationKey);
           notificationService.error(errorMessage, {
             title: 'Thinking process error',
             duration: 5000
           });
         }
       }
-    } else if (latestSendBySession.get(sessionId) === sendAttempt) {
-      latestSendBySession.delete(sessionId);
+    } else if (latestSendBySession.get(sendCoordinationKey) === sendAttempt) {
+      latestSendBySession.delete(sendCoordinationKey);
     }
 
     throw error;
+  } finally {
+    endSubmission();
   }
 }
 
@@ -346,9 +525,31 @@ export async function cancelCurrentTask(context: FlowChatContext): Promise<boole
 export async function drainPendingQueue(
   context: FlowChatContext,
   sessionId: string,
+  options?: { allowInterruptedRecoveryAbandon?: boolean },
 ): Promise<void> {
+  if (isRuntimeSessionAttachmentInFlight(getActiveSurfaceId(), sessionId)) {
+    return;
+  }
   const machineState = stateMachineManager.getCurrentState(sessionId);
   if (machineState !== SessionExecutionState.IDLE) {
+    return;
+  }
+  if (interruptedTurnRecoveryGate.isSessionInFlight(sessionId)) {
+    log.debug('Pending queue held while interrupted recovery admission is in flight', {
+      sessionId,
+    });
+    return;
+  }
+  if (context.userCancelledSessionIds.has(sessionId)) {
+    log.debug('Pending queue held until cancellation outcome is authoritative', { sessionId });
+    return;
+  }
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (
+    hasInterruptedTurnHoldingQueue(session)
+    && !options?.allowInterruptedRecoveryAbandon
+  ) {
+    log.debug('Pending queue held for interrupted turn recovery decision', { sessionId });
     return;
   }
   // Find the head item *that is still eligible for auto-drain*. Items with

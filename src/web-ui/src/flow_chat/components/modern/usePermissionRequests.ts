@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import {
   type PermissionReplyKind,
   type PermissionRequest,
@@ -7,13 +7,16 @@ import {
   selectActivePermissionBatch,
   selectPermissionRequestsForSession,
 } from './permissionRequestRouting';
-import {
-  getLivePermissionRequests,
-  markLivePermissionRequestsResolved,
-  subscribeLivePermissionRequests,
-} from './permissionRequestLiveStore';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { driverForSession } from '../../session-drivers/registry';
+import {
+  ensureActivePermissionMailbox,
+  liveSessionInteractionStore,
+} from '../../services/liveSessionInteractionStore';
+
+const EMPTY_EXTERNAL_REQUESTS: PermissionRequest[] = [];
+const noopSubscribe = () => () => {};
+const emptyExternalSnapshot = () => EMPTY_EXTERNAL_REQUESTS;
 
 export function usePermissionRequests(sessionId?: string) {
   // Driver resolution is per-render: the caller re-renders on any session
@@ -28,19 +31,29 @@ export function usePermissionRequests(sessionId?: string) {
   );
   const isLiveSource = source === 'live';
 
-  const effectiveRequests = useSyncExternalStore(
-    isLiveSource ? subscribeLivePermissionRequests : source.subscribe,
-    isLiveSource ? getLivePermissionRequests : source.getSnapshot,
+  const externalRequests = useSyncExternalStore(
+    isLiveSource ? noopSubscribe : source.subscribe,
+    isLiveSource ? emptyExternalSnapshot : source.getSnapshot,
   ) as unknown as PermissionRequest[];
+
+  const liveMailbox = useSyncExternalStore(
+    liveSessionInteractionStore.subscribe,
+    liveSessionInteractionStore.getActiveSnapshot,
+    liveSessionInteractionStore.getActiveSnapshot,
+  );
+
+  useEffect(() => {
+    if (isLiveSource) void ensureActivePermissionMailbox();
+  }, [isLiveSource, liveMailbox.surfaceId]);
 
   const respond = useCallback(
     async (requestId: string, reply: PermissionReplyKind, feedback?: string) => {
       await driver.respondPermission(sessionId ?? '', requestId, reply, feedback);
       if (isLiveSource) {
-        markLivePermissionRequestsResolved([requestId]);
+        liveSessionInteractionStore.markPermissionResolved(liveMailbox.surfaceId, requestId);
       }
     },
-    [driver, sessionId, isLiveSource],
+    [driver, sessionId, isLiveSource, liveMailbox.surfaceId],
   );
 
   const respondBatch = useCallback(
@@ -52,12 +65,18 @@ export function usePermissionRequests(sessionId?: string) {
         feedback,
       );
       if (isLiveSource) {
-        markLivePermissionRequestsResolved(resolvedRequestIds);
+        resolvedRequestIds.forEach((requestId) => {
+          liveSessionInteractionStore.markPermissionResolved(
+            liveMailbox.surfaceId,
+            requestId,
+          );
+        });
       }
     },
-    [driver, sessionId, isLiveSource],
+    [driver, sessionId, isLiveSource, liveMailbox.surfaceId],
   );
 
+  const effectiveRequests = isLiveSource ? liveMailbox.requests : externalRequests;
   const sessionRequests = useMemo(
     () => selectPermissionRequestsForSession(effectiveRequests, sessionId),
     [effectiveRequests, sessionId],

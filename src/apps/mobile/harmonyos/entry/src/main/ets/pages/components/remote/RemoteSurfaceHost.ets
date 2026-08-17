@@ -8,7 +8,8 @@ import {
   emptyAppRootPresentationActions
 } from '../../actions/AppRootPresentationActions';
 import { ConversationViewSettings } from '../ConversationViewSettings';
-import { GeneralChatHeader } from '../GeneralChatHeader';
+import { ConversationHeader } from '../ConversationHeader';
+import { RemoteCompactHomePolicy } from '../../policy/RemoteCompactHomePolicy';
 import { RemoteSessionList } from '../RemoteSessionList';
 import { RemoteSessionLoadingView } from '../RemoteSessionLoadingView';
 import { SidebarToggleButton } from '../SidebarToggleButton';
@@ -60,7 +61,9 @@ export struct RemoteSurfaceHost {
   // down for a change that is only page state — the sidebar rebuild this used
   // to pay for. See AppShellViewModel.replaceRouteWithoutAnimation.
   aboutToAppear(): void {
-    RemoteLogger.info(`remote surface mounted mode=${this.mode}`);
+    RemoteLogger.info(
+      `remote surface mounted mode=${this.mode} connection=${this.remotePageState.connectionState} sessions=${this.remotePageState.visibleSessions().length}`
+    );
   }
 
   build() {
@@ -143,7 +146,7 @@ export struct RemoteSurfaceHost {
           .padding({ left: 12, right: 12 })
           .backgroundColor(PRIMARY_ACTION)
           .borderRadius(14)
-          .onClick(() => this.actions.onRemoteHome.connectWorkspace())
+          .onClick(() => this.actions.onRemoteHome.reconnect())
       }
     }
     .width('100%')
@@ -196,16 +199,17 @@ export struct RemoteSurfaceHost {
   @Builder
   private CompactHomeContent() {
     Column() {
-      GeneralChatHeader({
+      ConversationHeader({
         title: RemoteI18n.t('remote.title'),
         subtitle: this.compactHeaderContext(),
+        titleFallback: RemoteI18n.t('remote.title'),
         showSidebarButton: true,
         onOpenSidebar: this.onOpenSidebar
       })
-      if (this.canShowSessionList()) {
-        this.CompactEmptyState()
-      } else {
+      if (RemoteCompactHomePolicy.shouldShowConnectHome(this.remotePageState.connectionState)) {
         this.DisconnectedState()
+      } else {
+        this.CompactEmptyState()
       }
     }
     .width('100%')
@@ -233,7 +237,7 @@ export struct RemoteSurfaceHost {
           .width(148).height(46).fontSize(15).fontWeight(FontWeight.Medium)
           .fontColor(PRIMARY_ACTION_TEXT).backgroundColor(PRIMARY_ACTION)
           .textAlign(TextAlign.Center).borderRadius(23).margin({ top: 12 })
-          .onClick(() => this.actions.onRemoteHome.connectWorkspace())
+          .onClick(() => this.actions.onRemoteHome.reconnect())
       } else {
         Text(RemoteI18n.t('remote.startSession'))
           .width(148).height(46).fontSize(15).fontWeight(FontWeight.Medium)
@@ -404,7 +408,10 @@ export struct RemoteSurfaceHost {
    * the connect state does not advertise a stale desktop.
    */
   private compactHeaderContext(): string {
-    return this.canShowSessionList() ? this.remotePageState.desktopName : '';
+    return RemoteCompactHomePolicy.headerSubtitle(
+      this.remotePageState.connectionState,
+      this.remotePageState.desktopName
+    );
   }
 
   private desktopName(): string {

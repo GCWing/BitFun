@@ -456,6 +456,8 @@
     "restoreMain": "恢復主視窗",
     "inUseTitle": "會話已在其他執行個體中開啟",
     "inUseMessage": "此會話已在另一個 BitFun 執行個體中開啟。請先在該處關閉，然後重試。",
+    "surfaceSwitchDroppedTitle": "訊息未送出",
+    "surfaceSwitchDropped": "訊息尚未送出時裝置已切換，且該會話的佇列已滿。請重新傳送。",
     "retry": "重試"
   },
   "scroll": {
@@ -482,6 +484,7 @@
     "clickToCollapse": "點擊收起",
     "fillToInput": "填充到輸入框",
     "cannotRollback": "無法回滾",
+    "rollbackDisabledBusy": "請等待會話閒置後再回滾。",
     "rollbackDisabledRemote": "遠端工作區未記錄檔案快照，暫不支援檔案與訊息一致回滾；不會變更任何檔案或訊息。",
     "rollbackTo": "回滾到第 {{index}} 輪之前（刪除該輪及之後）",
     "rollbackDialogTitle": "確定回滾到第 {{index}} 輪之前？",
@@ -494,6 +497,7 @@
     "cancelEdit": "取消",
     "editPlaceholder": "編輯你的消息...",
     "cannotEdit": "無法編輯該消息",
+    "editDisabledBusy": "請等待會話閒置後再編輯並重跑。",
     "editDisabledImages": "暫不支援編輯圖片消息",
     "editDisabledRemote": "編輯並重新執行需要完整回滾；遠端工作區未記錄檔案快照，因此暫不支援。",
     "editDisabledLocalCommand": "無法編輯本機命令消息",
@@ -532,6 +536,8 @@
     "sendShortcut": "發送 (⏎)",
     "stop": "停止",
     "stopGeneration": "停止生成 (Esc)",
+    "continueInterrupted": "繼續上次中斷的工作",
+    "continueInterruptedFailed": "無法繼續上次中斷的工作，請重試。",
     "processingCapsule": "正在處理",
     "cancelShortcut": "取消",
     "clear": "清空",
@@ -761,9 +767,14 @@
       "noSession": "請先開啟或新建工作階段，再變更其權限模式。",
       "turnScope": "僅下一則訊息",
       "currentTurnOverride": "權限：{{mode}}（僅下一則訊息）",
+      "activeTurnScope": "目前輪次",
+      "currentActiveTurnOverride": "權限：{{mode}}（僅目前輪次）",
       "nextTurnOnly": "僅下一則訊息使用「{{mode}}」",
       "nextTurnOnlyShort": "僅一次",
+      "activeTurnOnly": "目前輪次後續使用「{{mode}}」",
+      "activeTurnOnlyShort": "目前輪次",
       "fullAccessWarningMessageNextTurn": "完全存取會預設放行工具呼叫，不再逐次確認。此設定僅作用於下一則訊息，專案規則與強制規則仍然生效。",
+      "fullAccessWarningMessageActiveTurn": "完全存取會預設放行工具呼叫，不再逐次確認。此設定從目前輪次的後續模型輪次生效，專案規則與強制規則仍然生效。",
       "openDefaultSettings": "開啟權限設定"
     },
     "addModeTooltip": "附加 Plan 或 Debug",
@@ -921,6 +932,8 @@
   "fileMention": {
     "searchResults": "搜尋結果",
     "loading": "載入中...",
+    "browseUnavailable": "無法載入工作區檔案，請檢查連線後重試。",
+    "searchUnavailable": "無法搜尋工作區，請檢查連線後重試。",
     "noMatchingFiles": "沒有找到匹配的檔案",
     "emptyDirectory": "空目錄",
     "rootDirectory": "根目錄",
@@ -1681,6 +1694,20 @@
       "commandInterrupted": "命令已被中斷",
       "executionFailed": "命令執行失敗"
     },
+    "runCode": {
+      "title": "執行程式碼",
+      "programLabel": "程式",
+      "outputLabel": "輸出",
+      "writing": "正在撰寫程式…",
+      "running": "正在執行程式…",
+      "completed": "程式已結束",
+      "failed": "程式執行失敗",
+      "cancelled": "程式已取消",
+      "rejected": "程式已拒絕",
+      "copyCode": "複製程式碼",
+      "codeCopied": "程式碼已複製",
+      "copyCodeFailed": "複製程式碼失敗"
+    },
     "approval": {
       "waiting": "等待確認",
       "confirm": "允許",
@@ -2424,6 +2451,9 @@
     "fastModel": "Fast 模型",
     "fastMode": "Fast 模式",
     "fastModeDescription": "1.5 倍速度，消耗更多額度",
+    "acpMode": "模式",
+    "acpModeLocked": "對話已經開始，模式不能再改。",
+    "acpModeFailed": "切換模式失敗",
     "switchFailed": "切換模型失敗",
     "modelNotConfigured": "未設定",
     "contextUsage": {

@@ -11,41 +11,55 @@ use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnPort,
-    AgentDialogTurnRequest, AgentInputAttachment, AgentInteractionResponsePort,
-    AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
+    AgentDialogTurnRecoveryOutcome, AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest,
+    AgentInputAttachment, AgentInteractionResponsePort, AgentLifecycleDeliveryPort,
+    AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
     AgentLocalCommandTurnRecordResult, AgentMessageWorkspaceReferencesRequest,
-    AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
-    AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
-    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
+    AgentModeCatalogEntry, AgentModeCatalogPort, AgentModeCatalogQuery, AgentSessionArchiveRequest,
+    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
+    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
+    AgentSessionForkResult, AgentSessionHarnessProfilePort,
+    AgentSessionHarnessProfileUpdateRequest, AgentSessionLineageCancellationRequest,
     AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
     AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
-    AgentSessionHarnessProfilePort, AgentSessionHarnessProfileUpdateRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest,
     AgentSessionRenameRequest, AgentSessionRevertPort, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
+    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
     AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
-    AgentUserAnswersRequest, AgentUserShellCommandPort, AgentUserShellCommandRequest,
-    AgentUserShellCommandResult, AgentWorkspaceReference, AgentWorkspaceReferencePort,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DialogSteerOutcome,
-    DialogSubmitOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
-    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
-    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
-    WorkspaceDiffSnapshot,
+    AgentTurnCancellationResult, AgentTurnInterruptionRequest, AgentTurnInterruptionResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserAnswersRequest,
+    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
+    AgentWorkspaceReference, AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, DialogSubmitOutcome,
+    PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError,
+    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
+    SessionTranscriptRequest, ThreadGoal, WorkspaceDiffSnapshot,
 };
 use bitfun_runtime_services::RuntimeServices;
 
 use crate::event_source::{AgentEventReceiver, AgentEventSource, AgentSessionEventReceiver};
-use crate::permission::{PermissionRequestEventReceiver, PermissionRequestManager};
+use crate::permission::{
+    PermissionRequestEventReceiver, PermissionRequestManager, PermissionRequestSnapshot,
+};
 use crate::post_call_hooks::RuntimeHookRegistry;
+use crate::user_questions::{get_user_input_manager, PendingUserQuestionSnapshot};
 use bitfun_runtime_ports::{PermissionReply, PermissionReplySource, PermissionRequest};
+
+#[path = "session_event_journal.rs"]
+mod session_event_journal;
+pub use session_event_journal::{
+    attach_session_event_cursor, SessionEventCursor, SessionEventJournal,
+    SessionEventProjectionSnapshot, SessionEventProjectionStore, StoredSessionEvents,
+    RUNTIME_EVENT_CURSOR_KEY, RUNTIME_EVENT_STREAM_ID_KEY,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RuntimeBuildError {
@@ -121,6 +135,18 @@ pub struct AgentSessionRestoreRequest {
 pub struct AgentSessionRestoreResult {
     pub session: AgentSessionSummary,
     pub state: crate::session_state::SessionState,
+}
+
+/// Authoritative live interactions required to re-attach a product Surface to
+/// a running Session after missing push events.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionInteractionSnapshot {
+    pub session_id: String,
+    #[serde(default)]
+    pub user_questions: PendingUserQuestionSnapshot,
+    #[serde(default)]
+    pub permissions: PermissionRequestSnapshot,
 }
 
 #[async_trait::async_trait]
@@ -207,10 +233,12 @@ pub struct AgentRuntime {
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
     event_source: Option<AgentEventSource>,
+    session_event_journal: Option<Arc<SessionEventJournal>>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
+    mode_catalog: Option<Arc<dyn AgentModeCatalogPort>>,
     plugin_runtime: PluginRuntimeBinding,
 }
 
@@ -371,6 +399,13 @@ impl std::fmt::Debug for AgentRuntime {
                 &self.event_source.as_ref().map(|_| "<AgentEventSource>"),
             )
             .field(
+                "session_event_journal",
+                &self
+                    .session_event_journal
+                    .as_ref()
+                    .map(|_| "<SessionEventJournal>"),
+            )
+            .field(
                 "tool_registry",
                 &self.tool_registry.as_ref().map(|_| "<RuntimeToolRegistry>"),
             )
@@ -432,10 +467,12 @@ pub struct AgentRuntimeBuilder {
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
     event_source: Option<AgentEventSource>,
+    session_event_journal: Option<Arc<SessionEventJournal>>,
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
+    mode_catalog: Option<Arc<dyn AgentModeCatalogPort>>,
     plugin_runtime: PluginRuntimeBinding,
 }
 
@@ -607,6 +644,11 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_session_event_journal(mut self, journal: Arc<SessionEventJournal>) -> Self {
+        self.session_event_journal = Some(journal);
+        self
+    }
+
     pub fn with_tool_registry(mut self, registry: Arc<dyn RuntimeToolRegistry>) -> Self {
         self.tool_registry = Some(registry);
         self
@@ -624,6 +666,11 @@ impl AgentRuntimeBuilder {
 
     pub fn with_agent_registry(mut self, registry: Arc<dyn RuntimeAgentRegistry>) -> Self {
         self.agent_registry = Some(registry);
+        self
+    }
+
+    pub fn with_mode_catalog(mut self, port: Arc<dyn AgentModeCatalogPort>) -> Self {
+        self.mode_catalog = Some(port);
         self
     }
 
@@ -660,10 +707,12 @@ impl AgentRuntimeBuilder {
             services,
             event_stream,
             event_source,
+            session_event_journal,
             tool_registry,
             harness_registry,
             hook_registry,
             agent_registry,
+            mode_catalog,
             plugin_runtime,
         } = self;
 
@@ -698,10 +747,12 @@ impl AgentRuntimeBuilder {
             services,
             event_stream,
             event_source,
+            session_event_journal,
             tool_registry,
             harness_registry,
             hook_registry,
             agent_registry,
+            mode_catalog,
             plugin_runtime,
         })
     }
@@ -804,6 +855,13 @@ pub struct AgentRunHandle {
 }
 
 impl AgentRuntime {
+    /// Attach the host-owned Session event projection after a narrow Runtime
+    /// facade has been assembled from existing product ports.
+    pub fn with_session_event_journal(mut self, journal: Arc<SessionEventJournal>) -> Self {
+        self.session_event_journal = Some(journal);
+        self
+    }
+
     pub fn subscribe_events(&self) -> Result<AgentEventReceiver, RuntimeError> {
         self.event_source
             .as_ref()
@@ -826,6 +884,45 @@ impl AgentRuntime {
             .as_ref()
             .map(|manager| manager.interactive_pending_requests())
             .ok_or(RuntimeError::MissingPermissionRequestManager)
+    }
+
+    /// Capture every blocking interaction needed to resume rendering one
+    /// Session. Push events remain the low-latency path; this snapshot is the
+    /// gap-recovery contract for reconnecting or device-switching surfaces.
+    pub fn session_interaction_snapshot(&self, session_id: &str) -> SessionInteractionSnapshot {
+        let user_questions = get_user_input_manager().pending_question_snapshot(session_id);
+        let permissions =
+            self.permission_requests
+                .as_ref()
+                .map(|manager| {
+                    let mut snapshot = manager.interactive_pending_snapshot();
+                    snapshot.requests.retain(|request| {
+                        request.session_id == session_id
+                            || request.delegation.as_ref().is_some_and(|delegation| {
+                                delegation.parent_session_id == session_id
+                            })
+                    });
+                    snapshot
+                })
+                .unwrap_or_default();
+        SessionInteractionSnapshot {
+            session_id: session_id.to_string(),
+            user_questions,
+            permissions,
+        }
+    }
+
+    /// Materialized current-Turn projection owned by the Runtime Host.
+    ///
+    /// Unlike a live receiver, this remains available while no client is
+    /// subscribed and is therefore safe for GUI/TUI/Peer reattachment.
+    pub fn session_event_projection_snapshot(
+        &self,
+        session_id: &str,
+    ) -> Option<SessionEventProjectionSnapshot> {
+        self.session_event_journal
+            .as_ref()
+            .map(|journal| journal.snapshot(session_id))
     }
 
     pub fn permission_request_dialog_turn_id(
@@ -984,6 +1081,23 @@ impl AgentRuntime {
             .as_ref()
             .map(|registry| registry.agent_ids(query))
             .unwrap_or_default()
+    }
+
+    pub async fn list_agent_modes(
+        &self,
+        query: AgentModeCatalogQuery,
+    ) -> Result<Vec<AgentModeCatalogEntry>, RuntimeError> {
+        self.mode_catalog
+            .as_ref()
+            .ok_or_else(|| {
+                RuntimeError::Port(PortError::new(
+                    PortErrorKind::NotAvailable,
+                    "agent mode catalog port is not registered",
+                ))
+            })?
+            .list_modes(query)
+            .await
+            .map_err(RuntimeError::from)
     }
 
     pub async fn create_session(
@@ -1275,6 +1389,21 @@ impl AgentRuntime {
         port.redo_session(request).await.map_err(RuntimeError::from)
     }
 
+    pub async fn rollback_session_to_turn(
+        &self,
+        request: AgentSessionRollbackToTurnRequest,
+    ) -> Result<AgentSessionRollbackToTurnOutcome, RuntimeError> {
+        let port = self.session_revert.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session revert port is not registered",
+            ))
+        })?;
+        port.rollback_session_to_turn(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
     pub async fn fork_session(
         &self,
         request: AgentSessionForkRequest,
@@ -1514,6 +1643,33 @@ impl AgentRuntime {
         Ok(outcome)
     }
 
+    pub async fn recover_interrupted_turn(
+        &self,
+        request: AgentDialogTurnRecoveryRequest,
+    ) -> Result<AgentDialogTurnRecoveryOutcome, RuntimeError> {
+        let requested_session_id = request.session_id.clone();
+        let requested_turn_id = request.turn_id.clone();
+        let dialog_turn = self
+            .dialog_turn
+            .as_ref()
+            .ok_or(RuntimeError::MissingDialogTurnPort)?;
+        let outcome = dialog_turn
+            .recover_interrupted_turn(request)
+            .await
+            .map_err(RuntimeError::from)?;
+        if outcome.session_id != requested_session_id || outcome.turn_id != requested_turn_id {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                format!(
+                    "agent dialog recovery provider returned session_id '{}' and turn_id '{}' for requested session_id '{}' and turn_id '{}'",
+                    outcome.session_id, outcome.turn_id, requested_session_id, requested_turn_id
+                ),
+            )
+            .into());
+        }
+        Ok(outcome)
+    }
+
     pub async fn deliver_background_result(
         &self,
         request: AgentBackgroundResultRequest,
@@ -1604,6 +1760,20 @@ impl AgentRuntime {
             .ok_or(RuntimeError::MissingCancellationPort)?;
         cancellation
             .cancel_turn(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn interrupt_turn(
+        &self,
+        request: AgentTurnInterruptionRequest,
+    ) -> Result<AgentTurnInterruptionResult, RuntimeError> {
+        let cancellation = self
+            .cancellation
+            .as_ref()
+            .ok_or(RuntimeError::MissingCancellationPort)?;
+        cancellation
+            .interrupt_turn(request)
             .await
             .map_err(RuntimeError::from)
     }
@@ -1715,11 +1885,81 @@ mod tests {
         ClockPort, DialogQueuePriority, DialogSubmissionPolicy, DialogSubmitOutcome,
         FileSystemPort, PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
         PluginRuntimeClient, PluginRuntimeUnavailableReason, PortErrorKind, PortResult,
-        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort,
-        SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
-        ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
+        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort,
+        SessionStorageKind, SessionStoragePathRequest, SessionStoragePathResolution,
+        SessionStorePort, SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest,
+        ThreadGoal, ThreadGoalStatus, TranscriptContent, TranscriptMessage, WorkspacePort,
     };
-    use bitfun_runtime_services::{test_support::FakeRuntimePort, RuntimeServicesBuilder};
+    use bitfun_runtime_services::RuntimeServicesBuilder;
+
+    #[test]
+    fn session_interaction_snapshot_wire_is_additive_and_camel_case() {
+        let legacy: SessionInteractionSnapshot = serde_json::from_value(serde_json::json!({
+            "sessionId": "session-1"
+        }))
+        .expect("older payloads may omit additive mailbox fields");
+        assert!(legacy.user_questions.questions.is_empty());
+        assert!(legacy.permissions.requests.is_empty());
+
+        let encoded = serde_json::to_value(SessionInteractionSnapshot {
+            session_id: "session-1".to_string(),
+            user_questions: PendingUserQuestionSnapshot {
+                revision: 4,
+                questions: Vec::new(),
+            },
+            permissions: PermissionRequestSnapshot {
+                revision: 7,
+                requests: Vec::new(),
+            },
+        })
+        .expect("interaction snapshot should serialize");
+        assert_eq!(encoded["sessionId"], "session-1");
+        assert_eq!(encoded["userQuestions"]["revision"], 4);
+        assert_eq!(encoded["permissions"]["revision"], 7);
+        assert!(encoded.get("user_questions").is_none());
+    }
+
+    #[derive(Debug)]
+    struct TestRuntimePort {
+        capability: RuntimeServiceCapability,
+    }
+
+    impl TestRuntimePort {
+        fn new(capability: RuntimeServiceCapability) -> Self {
+            Self { capability }
+        }
+    }
+
+    impl RuntimeServicePort for TestRuntimePort {
+        fn capability(&self) -> RuntimeServiceCapability {
+            self.capability
+        }
+    }
+
+    impl FileSystemPort for TestRuntimePort {}
+    impl WorkspacePort for TestRuntimePort {}
+
+    #[async_trait::async_trait]
+    impl SessionStorePort for TestRuntimePort {
+        async fn resolve_session_storage_path(
+            &self,
+            request: SessionStoragePathRequest,
+        ) -> PortResult<SessionStoragePathResolution> {
+            Ok(SessionStoragePathResolution::new(
+                request.workspace_path.clone(),
+                request.workspace_path,
+                SessionStorageKind::Local,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ))
+        }
+    }
+
+    impl ClockPort for TestRuntimePort {
+        fn now_unix_millis(&self) -> i64 {
+            0
+        }
+    }
 
     #[derive(Debug, Default)]
     struct FakeAgentRuntimePorts {
@@ -1727,6 +1967,7 @@ mod tests {
         exact_session_result_id: Mutex<Option<String>>,
         submitted_messages: Mutex<Vec<AgentSubmissionRequest>>,
         cancelled_turns: Mutex<Vec<AgentTurnCancellationRequest>>,
+        interrupted_turns: Mutex<Vec<AgentTurnInterruptionRequest>>,
         compaction_requests: Mutex<Vec<AgentSessionCompactionRequest>>,
         before_turn_fork_requests: Mutex<Vec<AgentSessionForkBeforeTurnRequest>>,
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
@@ -1948,6 +2189,11 @@ mod tests {
                 retired_turn_ids: Vec::new(),
                 changed: true,
                 hidden_turn_count: 1,
+                boundary_storage_turn_index: None,
+                target_turn_id: None,
+                restored_files: Vec::new(),
+                reload_required: false,
+                reload_reason: None,
             })
         }
 
@@ -2250,6 +2496,18 @@ mod tests {
                 requested: true,
             })
         }
+
+        async fn interrupt_turn(
+            &self,
+            request: AgentTurnInterruptionRequest,
+        ) -> PortResult<AgentTurnInterruptionResult> {
+            self.interrupted_turns.lock().unwrap().push(request.clone());
+            Ok(AgentTurnInterruptionResult {
+                session_id: request.session_id,
+                turn_id: request.turn_id,
+                requested: true,
+            })
+        }
     }
 
     #[derive(Debug, Default)]
@@ -2273,13 +2531,13 @@ mod tests {
 
     fn runtime_services_with_events(events: Arc<dyn RuntimeEventSink>) -> RuntimeServices {
         let filesystem: Arc<dyn FileSystemPort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::FileSystem));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::FileSystem));
         let workspace: Arc<dyn WorkspacePort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Workspace));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::Workspace));
         let session_store: Arc<dyn SessionStorePort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::SessionStore));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::SessionStore));
         let clock: Arc<dyn ClockPort> =
-            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Clock));
+            Arc::new(TestRuntimePort::new(RuntimeServiceCapability::Clock));
 
         RuntimeServicesBuilder::new()
             .with_filesystem(filesystem)
@@ -2665,6 +2923,30 @@ mod tests {
                 .as_deref(),
             Some("requester_session")
         );
+    }
+
+    #[tokio::test]
+    async fn interrupt_turn_delegates_to_cancellation_owner() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_cancellation_port(ports.clone())
+            .build()
+            .expect("runtime");
+
+        let result = runtime
+            .interrupt_turn(AgentTurnInterruptionRequest {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                source: Some(AgentSubmissionSource::DesktopUi),
+                wait_timeout_ms: Some(30_000),
+            })
+            .await
+            .expect("interrupt");
+
+        assert!(result.requested);
+        assert_eq!(result.turn_id, "turn_1");
+        assert_eq!(ports.interrupted_turns.lock().unwrap().len(), 1);
     }
 
     #[tokio::test]
@@ -3348,6 +3630,54 @@ mod tests {
             dialog_turns.requests.lock().unwrap()[0].attachments[0].kind,
             "remote_image"
         );
+    }
+
+    #[tokio::test]
+    async fn recover_interrupted_turn_delegates_and_validates_identity() {
+        #[derive(Debug)]
+        struct RecoveryPort;
+
+        #[async_trait::async_trait]
+        impl bitfun_runtime_ports::AgentDialogTurnPort for RecoveryPort {
+            async fn submit_dialog_turn(
+                &self,
+                _request: AgentDialogTurnRequest,
+            ) -> PortResult<DialogSubmitOutcome> {
+                unreachable!("recovery must not submit a new turn")
+            }
+
+            async fn recover_interrupted_turn(
+                &self,
+                request: AgentDialogTurnRecoveryRequest,
+            ) -> PortResult<AgentDialogTurnRecoveryOutcome> {
+                Ok(AgentDialogTurnRecoveryOutcome {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id,
+                    execution_generation: request.execution_generation + 1,
+                })
+            }
+        }
+
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(FakeAgentRuntimePorts::default()))
+            .with_dialog_turn_port(Arc::new(RecoveryPort))
+            .build()
+            .expect("runtime");
+        let result = runtime
+            .recover_interrupted_turn(AgentDialogTurnRecoveryRequest {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                execution_generation: 0,
+                workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("recover");
+
+        assert_eq!(result.session_id, "session_1");
+        assert_eq!(result.turn_id, "turn_1");
+        assert_eq!(result.execution_generation, 1);
     }
 
     #[tokio::test]

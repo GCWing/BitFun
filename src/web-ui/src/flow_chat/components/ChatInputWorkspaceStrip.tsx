@@ -76,14 +76,14 @@ export interface ChatInputWorkspaceStripProps {
     /** Opens the settings page that owns the default this row follows. */
     onOpenDefaultSettings?: () => void;
     /**
-     * Mode armed for the next submission only, or `null` when none is.
-     * Scope is chosen per click rather than by a separate toggle, so a mode
-     * can never be written to the session by one click and then be "corrected"
-     * to one-off by a later one.
+     * Temporary one-off mode. While idle it is armed for the next submission;
+     * while a turn is active it is that turn's mutable override.
      */
     nextTurnMode?: ChatInputPermissionMode | null;
+    /** Whether `nextTurnMode` currently belongs to the active turn. */
+    activeTurn?: boolean;
     onChange?: (mode: Exclude<ChatInputPermissionMode, 'acp'>) => void | Promise<void>;
-    /** Arms the mode for the next submission; re-picking the armed one disarms it. */
+    /** Updates the one-off mode; re-picking the selected one clears it. */
     onChangeForNextTurn?: (
       mode: Exclude<ChatInputPermissionMode, 'acp'>,
     ) => void | Promise<void>;
@@ -321,14 +321,20 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     ? null
     : permissionControl?.nextTurnMode ?? null;
   const permissionNextTurnArmed = permissionNextTurnMode !== null;
-  // The trigger reports what the next submission will actually run with, so an
-  // armed one-off outranks the session mode there.
+  const permissionActiveTurn = permissionMode !== 'acp' && !!permissionControl?.activeTurn;
+  // The trigger reports what the active turn (or the next submission while
+  // idle) runs with, so a one-off outranks the session mode there.
   const permissionDisplayMode = permissionNextTurnMode ?? permissionMode;
   const permissionModeLabel = permissionCopy[permissionDisplayMode].label;
   const permissionTooltip = permissionMode === 'acp'
     ? t('chatInput.permissionMode.acp.tooltip')
     : permissionNextTurnArmed
-      ? t('chatInput.permissionMode.currentTurnOverride', { mode: permissionModeLabel })
+      ? t(
+          permissionActiveTurn
+            ? 'chatInput.permissionMode.currentActiveTurnOverride'
+            : 'chatInput.permissionMode.currentTurnOverride',
+          { mode: permissionModeLabel },
+        )
       : permissionOverridden
         ? t('chatInput.permissionMode.currentSessionOverride', { mode: permissionModeLabel })
       : t('chatInput.permissionMode.current', { mode: permissionModeLabel });
@@ -497,6 +503,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                 data-permission-mode={permissionDisplayMode}
                 data-permission-overridden={permissionOverridden ? 'true' : undefined}
                 data-permission-next-turn={permissionNextTurnArmed ? 'true' : undefined}
+                data-permission-active-turn={permissionActiveTurn ? 'true' : undefined}
                 onClick={event => {
                   event.stopPropagation();
                   if (!permissionDisabled) {
@@ -620,7 +627,9 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                           ) : null}
                           {permissionControl.onChangeForNextTurn ? (
                             <Tooltip
-                              content={t('chatInput.permissionMode.nextTurnOnly', {
+                              content={t(permissionActiveTurn
+                                ? 'chatInput.permissionMode.activeTurnOnly'
+                                : 'chatInput.permissionMode.nextTurnOnly', {
                                 mode: copy.label,
                               })}
                               placement="top"
@@ -629,7 +638,9 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                                 type="button"
                                 role="menuitemcheckbox"
                                 aria-checked={armed}
-                                aria-label={t('chatInput.permissionMode.nextTurnOnly', {
+                                aria-label={t(permissionActiveTurn
+                                  ? 'chatInput.permissionMode.activeTurnOnly'
+                                  : 'chatInput.permissionMode.nextTurnOnly', {
                                   mode: copy.label,
                                 })}
                                 data-bf-component="chat-input-workspace-strip"
@@ -649,7 +660,9 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                                   void permissionControl.onChangeForNextTurn?.(mode);
                                 }}
                               >
-                                {t('chatInput.permissionMode.nextTurnOnlyShort')}
+                                {t(permissionActiveTurn
+                                  ? 'chatInput.permissionMode.activeTurnOnlyShort'
+                                  : 'chatInput.permissionMode.nextTurnOnlyShort')}
                               </button>
                             </Tooltip>
                           ) : null}

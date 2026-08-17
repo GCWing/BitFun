@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitfun_agent_runtime::sdk::AgentRuntime;
+use bitfun_transport::encode_json_with_limit;
 use futures_util::StreamExt;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
@@ -21,6 +22,7 @@ use bitfun_sdk_host::protocol::{
 #[derive(Debug, Clone)]
 pub struct SdkHostTransportConfig {
     pub max_line_bytes: usize,
+    pub max_output_line_bytes: usize,
     pub write_timeout_ms: u64,
     pub shutdown_total_timeout_ms: u64,
     pub host: SdkHostConfig,
@@ -30,6 +32,7 @@ impl Default for SdkHostTransportConfig {
     fn default() -> Self {
         Self {
             max_line_bytes: 1024 * 1024,
+            max_output_line_bytes: 1024 * 1024,
             write_timeout_ms: 5_000,
             shutdown_total_timeout_ms: 10_000,
             host: SdkHostConfig::default(),
@@ -41,14 +44,16 @@ struct JsonLineOutput<Writer> {
     writer: Mutex<Writer>,
     failed: CancellationToken,
     write_timeout: Duration,
+    max_line_bytes: usize,
 }
 
 impl<Writer> JsonLineOutput<Writer> {
-    fn new(writer: Writer, write_timeout_ms: u64) -> Self {
+    fn new(writer: Writer, write_timeout_ms: u64, max_line_bytes: usize) -> Self {
         Self {
             writer: Mutex::new(writer),
             failed: CancellationToken::new(),
             write_timeout: Duration::from_millis(write_timeout_ms.max(1)),
+            max_line_bytes: max_line_bytes.max(1),
         }
     }
 
@@ -63,7 +68,9 @@ where
     Writer: AsyncWrite + Unpin + Send,
 {
     async fn send(&self, value: serde_json::Value) -> Result<(), ()> {
-        let mut line = serde_json::to_vec(&value).map_err(|_| ())?;
+        let mut line = encode_json_with_limit(&value, self.max_line_bytes).map_err(|_| {
+            self.failed.cancel();
+        })?;
         line.push(b'\n');
         let result = timeout(self.write_timeout, async {
             let mut writer = self.writer.lock().await;
@@ -95,10 +102,15 @@ where
     let max_in_flight_requests = config.host.max_in_flight_requests.max(1);
     let max_in_flight_control_requests = config.host.max_in_flight_control_requests.max(1);
     let shutdown_total_timeout = Duration::from_millis(config.shutdown_total_timeout_ms.max(1));
-    let output = Arc::new(JsonLineOutput::new(writer, config.write_timeout_ms));
+    let output = Arc::new(JsonLineOutput::new(
+        writer,
+        config.write_timeout_ms,
+        config.max_output_line_bytes,
+    ));
     let output_failed = output.failure_token();
     let connection =
         SdkHostConnection::with_output(runtime, default_cwd, output.clone(), config.host);
+    let connection_failed = connection.connection_failed_token();
     let mut lines = FramedRead::new(
         reader,
         LinesCodec::new_with_max_length(config.max_line_bytes),
@@ -116,6 +128,14 @@ where
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::BrokenPipe,
                     "SDK Host output is unavailable",
+                ));
+            }
+            _ = connection_failed.cancelled() => {
+                data_requests.abort_all();
+                control_requests.abort_all();
+                graceful_shutdown(&connection, shutdown_total_timeout).await;
+                return Err(std::io::Error::other(
+                    "SDK Host connection cleanup became uncertain",
                 ));
             }
             completed = data_requests.join_next(), if !data_requests.is_empty() => {
@@ -361,4 +381,21 @@ pub async fn serve_stdio(
         SdkHostTransportConfig::default(),
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HostOutput, JsonLineOutput};
+
+    #[tokio::test]
+    async fn outbound_json_lines_fail_before_exceeding_the_transport_budget() {
+        let output = JsonLineOutput::new(tokio::io::sink(), 100, 32);
+        let failure = output.failure_token();
+
+        assert!(output
+            .send(serde_json::json!({ "text": "x".repeat(64) }))
+            .await
+            .is_err());
+        assert!(failure.is_cancelled());
+    }
 }

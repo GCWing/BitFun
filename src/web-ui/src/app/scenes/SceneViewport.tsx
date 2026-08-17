@@ -45,7 +45,7 @@ const WelcomeScene    = lazy(() => import('./welcome/WelcomeScene'));
 const MiniAppScene    = lazy(() => import('./miniapps/MiniAppScene'));
 const PanelViewScene  = lazy(() => import('./panel-view/PanelViewScene'));
 
-const SCENE_TRANSITION_RETENTION_MS = 200;
+const SCENE_ENTRY_DURATION_MS = 480;
 const EMPTY_SCENE_ID = '__empty-scene__' as const;
 type RenderedSceneId = SceneTabId | typeof EMPTY_SCENE_ID;
 
@@ -106,15 +106,21 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
     setReadyVersion(version => version + 1);
   }, []);
 
-  // Derive the outgoing id during render as well as from state. This keeps a
-  // just-closed active tab (notably the welcome tab) in the keyed React tree
-  // for its exit frame instead of unmounting and remounting it after layout.
+  // Derive the outgoing id during render as well as from state. Pointer
+  // navigation keeps that scene as the only visible surface until the target
+  // has resolved through Suspense, then swaps atomically to the incoming scene.
   const activeSceneChanged = previousActiveTabIdRef.current !== activeRenderedSceneId;
-  const outgoingTabId = activeSceneChanged
-    ? navigationMotion === 'pointer'
-      ? previousActiveTabIdRef.current
-      : null
-    : transition?.outgoingTabId ?? null;
+  const pendingTransition: SceneTransition | null = activeSceneChanged
+    && navigationMotion === 'pointer'
+    ? {
+        outgoingTabId: previousActiveTabIdRef.current,
+        incomingTabId: activeRenderedSceneId,
+        phase: 'holding',
+      }
+    : activeSceneChanged
+      ? null
+      : transition;
+  const outgoingTabId = pendingTransition?.outgoingTabId ?? null;
   const renderedTabIds: RenderedSceneId[] = openTabs.length === 0
     ? [EMPTY_SCENE_ID]
     : openTabs.map(tab => tab.id);
@@ -184,13 +190,13 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
     if (transition?.phase !== 'running') return;
 
     const completedTransition = transition;
-    const exitTimer = window.setTimeout(() => {
+    const entryTimer = window.setTimeout(() => {
       setTransition(current => (
         current === completedTransition ? null : current
       ));
-    }, SCENE_TRANSITION_RETENTION_MS);
+    }, SCENE_ENTRY_DURATION_MS);
 
-    return () => window.clearTimeout(exitTimer);
+    return () => window.clearTimeout(entryTimer);
   }, [transition]);
 
   return (
@@ -204,7 +210,7 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
       <div
         className="bitfun-scene-viewport__clip"
         data-testid="scene-viewport-clip"
-        data-scene-motion-phase={transition?.phase}
+        data-scene-motion-phase={pendingTransition?.phase}
         data-bf-scene="workbench"
         data-bf-part="viewportClip"
       >
@@ -212,7 +218,10 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
           const isEmpty = tabId === EMPTY_SCENE_ID;
           const isActive = tabId === activeRenderedSceneId;
           const isOutgoing = !isActive && tabId === outgoingTabId;
-          const isIncoming = isActive && transition?.incomingTabId === tabId;
+          const isIncoming = isActive && pendingTransition?.incomingTabId === tabId;
+          const isVisible = pendingTransition?.phase === 'holding'
+            ? isOutgoing
+            : isActive;
           return (
             <div
               key={tabId}
@@ -220,9 +229,11 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
                 'bitfun-scene-viewport__scene',
                 isEmpty && 'bitfun-scene-viewport__scene--empty',
                 isActive && 'bitfun-scene-viewport__scene--active',
+                isVisible && 'bitfun-scene-viewport__scene--visible',
                 isIncoming && 'bitfun-scene-viewport__scene--incoming',
                 isOutgoing && 'bitfun-scene-viewport__scene--outgoing',
               ].filter(Boolean).join(' ')}
+              hidden={!isVisible}
               aria-hidden={!isActive}
               {...(!isActive ? { inert: '' } : {})}
               data-testid="scene-viewport-scene"

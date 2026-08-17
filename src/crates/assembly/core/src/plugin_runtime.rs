@@ -1,14 +1,15 @@
 //! Managed plugin composition.
 //!
-//! This is the only plugin-runtime root that selects the OpenCode-compatible
-//! adapter and PluginRuntimeClient. Workspace identity here scopes source,
+//! This is the only plugin-runtime root that selects managed-package ecosystem
+//! adapters and PluginRuntimeClient. Workspace identity here scopes source,
 //! approval, and logical client state; it is not a process ownership boundary.
 //! This module projects candidates for product surfaces; it does not register
 //! tools or execute plugin code.
 
 use async_trait::async_trait;
+use bitfun_dsh_adapter::load_dsh_package_adapter;
 use bitfun_opencode_adapter::load_opencode_package_adapter;
-use bitfun_plugin_runtime_client::DefaultPluginRuntimeClient;
+use bitfun_plugin_runtime_client::{DefaultPluginRuntimeClient, PluginRuntimeAdapter};
 use bitfun_product_domains::plugin_source::{
     PluginActivationAuthority, PluginPackageInput, PluginPackageSourceIdentity,
 };
@@ -16,8 +17,8 @@ use bitfun_runtime_ports::{
     PluginCapabilityRef, PluginDispatchEnvelope, PluginEffectCandidatePayload,
     PluginPermissionGate, PluginResponseEnvelope, PluginRiskLevel, PluginRuntimeAvailability,
     PluginRuntimeBinding, PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest,
-    PluginRuntimeReadResponse, PluginSourceRef, PluginTargetRef, PortError, PortErrorKind,
-    PortResult,
+    PluginRuntimeReadResponse, PluginSourceRef, PluginStatusKind, PluginTargetRef, PortError,
+    PortErrorKind, PortResult,
 };
 use bitfun_services_integrations::plugin_source::{
     ManagedPluginSourceError, ManagedPluginSourceIssue, ManagedPluginSourceService,
@@ -28,12 +29,37 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const PREVIEW_PROJECT_ID: &str = "managed-plugin-preview";
 const PREVIEW_WORKSPACE_ID: &str = "managed-plugin-preview";
+const DSH_MANIFEST_ADAPTER_ID: &str = "dsh_compatible";
+const OPENCODE_MANIFEST_ADAPTER_ID: &str = "opencode_compatible";
 type PluginDispatchTarget = (
     PluginSourceRef,
     String,
     PluginCapabilityRef,
     Vec<(PluginTargetRef, PluginRiskLevel)>,
 );
+
+fn load_package_adapter(
+    input: PluginPackageInput,
+    activation: Option<PluginActivationAuthority>,
+    observed_at_ms: u64,
+) -> Result<(Arc<dyn PluginRuntimeAdapter>, Vec<PluginDispatchTarget>), ManagedPluginSourceError> {
+    let (adapter, package_id) = {
+        let (manifest, source, _files) = input.clone().into_parts();
+        (manifest.adapter, source.package_id)
+    };
+    match adapter.as_str() {
+        OPENCODE_MANIFEST_ADAPTER_ID => {
+            load_opencode_package_adapter(input, activation, observed_at_ms)
+                .map_err(|error| invalid_package(&package_id, error.to_string()))
+        }
+        DSH_MANIFEST_ADAPTER_ID => load_dsh_package_adapter(input, activation, observed_at_ms)
+            .map_err(|error| invalid_package(&package_id, error.to_string())),
+        other => Err(invalid_package(
+            &package_id,
+            format!("unsupported managed package adapter: {other}"),
+        )),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ManagedPluginCandidateView {
@@ -55,6 +81,11 @@ pub struct ManagedPluginActivationView {
     pub permission_required: bool,
     pub candidates: Vec<ManagedPluginCandidateView>,
     pub diagnostics: Vec<String>,
+}
+
+struct ManagedPluginPreview {
+    view: ManagedPluginActivationView,
+    activation_config_valid: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,25 +142,41 @@ async fn preview_with_service(
     workspace: &Path,
     package_id: &str,
 ) -> Result<ManagedPluginActivationView, ManagedPluginSourceError> {
+    Ok(project_preview_with_service(service, workspace, package_id)
+        .await?
+        .view)
+}
+
+async fn project_preview_with_service(
+    service: Arc<ManagedPluginSourceService>,
+    workspace: &Path,
+    package_id: &str,
+) -> Result<ManagedPluginPreview, ManagedPluginSourceError> {
     let input = service.load_package(workspace, package_id).await?;
     let source = input.clone().into_parts().1;
-    let (adapter, dispatch_targets) = load_opencode_package_adapter(input, None, current_time_ms())
-        .map_err(|error| invalid_package(package_id, error.to_string()))?;
+    let (adapter, dispatch_targets) = load_package_adapter(input, None, current_time_ms())?;
     let binding = PluginRuntimeBinding::client(Arc::new(DefaultPluginRuntimeClient::new(adapter)));
     let response = binding
         .as_client()
         .read_plugins(read_request(PREVIEW_PROJECT_ID, PREVIEW_WORKSPACE_ID, 1))
         .await
         .map_err(|error| unavailable(package_id, error.to_string()))?;
+    let activation_config_valid = response
+        .plugin_statuses
+        .iter()
+        .all(|status| status.status != PluginStatusKind::InvalidConfig);
     let candidates = preview_candidates(&dispatch_targets);
-    Ok(project_view(
-        source,
-        false,
-        None,
-        !dispatch_targets.is_empty(),
-        response,
-        candidates,
-    ))
+    Ok(ManagedPluginPreview {
+        view: project_view(
+            source,
+            false,
+            None,
+            !dispatch_targets.is_empty(),
+            response,
+            candidates,
+        ),
+        activation_config_valid,
+    })
 }
 
 async fn activate_with_service(
@@ -144,14 +191,23 @@ async fn activate_with_service(
             "activation requires the exact content hash from the preview".to_string(),
         )
     })?;
-    let preview = preview_with_service(Arc::clone(&service), workspace, package_id).await?;
+    let ManagedPluginPreview {
+        view: preview,
+        activation_config_valid,
+    } = project_preview_with_service(Arc::clone(&service), workspace, package_id).await?;
     if preview.content_hash != expected_content_hash {
         return Err(invalid_package(
             package_id,
             "activation confirmation does not match the current package content".to_string(),
         ));
     }
-    if !preview.provider_candidates_supported {
+    if preview.adapter == DSH_MANIFEST_ADAPTER_ID && !activation_config_valid {
+        return Err(invalid_package(
+            package_id,
+            "the package projection contains invalid configuration".to_string(),
+        ));
+    }
+    if preview.adapter == OPENCODE_MANIFEST_ADAPTER_ID && !preview.provider_candidates_supported {
         return Err(invalid_package(
             package_id,
             "the package contains no supported OpenCode custom tool declaration".to_string(),
@@ -252,6 +308,7 @@ async fn project_activated(
         authority.clone().into_parts();
     let (binding, dispatch_targets) =
         activated_binding(service, workspace, package_id, input, authority)?;
+    let provider_candidates_supported = !dispatch_targets.is_empty();
     let client = binding.as_client();
     let read = client
         .read_plugins(read_request(
@@ -293,10 +350,15 @@ async fn project_activated(
     }
     diagnostics.sort();
     diagnostics.dedup();
-    Ok(
-        project_view(source, true, Some(activation_epoch), true, read, candidates)
-            .with_diagnostics(diagnostics),
+    Ok(project_view(
+        source,
+        true,
+        Some(activation_epoch),
+        provider_candidates_supported,
+        read,
+        candidates,
     )
+    .with_diagnostics(diagnostics))
 }
 
 fn preview_candidates(
@@ -324,8 +386,7 @@ fn activated_binding(
     authority: PluginActivationAuthority,
 ) -> Result<(PluginRuntimeBinding, Vec<PluginDispatchTarget>), ManagedPluginSourceError> {
     let (adapter, dispatch_targets) =
-        load_opencode_package_adapter(input, Some(authority.clone()), current_time_ms())
-            .map_err(|error| invalid_package(package_id, error.to_string()))?;
+        load_package_adapter(input, Some(authority.clone()), current_time_ms())?;
     let client: Arc<dyn PluginRuntimeClient> = Arc::new(DefaultPluginRuntimeClient::new(adapter));
     Ok((
         PluginRuntimeBinding::client(Arc::new(ActivationGatedPluginRuntimeClient {
@@ -542,6 +603,7 @@ impl PluginRuntimeClient for ActivationGatedPluginRuntimeClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitfun_product_domains::plugin_source::{PluginPackageFile, PluginPackageManifest};
     use bitfun_services_integrations::plugin_source::ManagedPluginTrustDecision;
     use sha2::{Digest, Sha256};
     use std::fs;
@@ -602,30 +664,41 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         }
 
         async fn with_source(plugin_source: &str) -> Self {
+            Self::with_managed_package(
+                "opencode_compatible",
+                &[(".opencode/plugins/workspace-tools.ts", plugin_source)],
+            )
+            .await
+        }
+
+        async fn with_managed_package(adapter: &str, files: &[(&str, &str)]) -> Self {
             let temp = tempfile::tempdir().expect("tempdir");
             let workspace = temp.path().join("workspace");
             let user = temp.path().join("user");
             let package = workspace.join(".bitfun/plugins/acme.demo");
-            let source_path = package.join(".opencode/plugins/workspace-tools.ts");
-            fs::create_dir_all(source_path.parent().expect("source parent"))
-                .expect("create package");
+            let source_path = package.join(files[0].0);
             fs::create_dir_all(user.join("plugins")).expect("create user plugins");
-            fs::write(&source_path, plugin_source).expect("write plugin source");
-            let file_hash = format!(
-                "sha256:{}",
-                hex::encode(Sha256::digest(plugin_source.as_bytes()))
-            );
+            let mut manifest_files = Vec::new();
+            for (relative_path, contents) in files {
+                let path = package.join(relative_path);
+                fs::create_dir_all(path.parent().expect("source parent")).expect("create package");
+                fs::write(&path, contents).expect("write plugin source");
+                manifest_files.push(serde_json::json!({
+                    "path": relative_path,
+                    "sha256": format!(
+                        "sha256:{}",
+                        hex::encode(Sha256::digest(contents.as_bytes()))
+                    )
+                }));
+            }
             fs::write(
                 package.join("bitfun.plugin.json"),
                 serde_json::to_vec_pretty(&serde_json::json!({
                     "schemaVersion": 1,
                     "id": "acme.demo",
                     "version": "1.0.0",
-                    "adapter": "opencode_compatible",
-                    "files": [{
-                        "path": ".opencode/plugins/workspace-tools.ts",
-                        "sha256": file_hash
-                    }]
+                    "adapter": adapter,
+                    "files": manifest_files
                 }))
                 .expect("serialize manifest"),
             )
@@ -977,5 +1050,141 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
             .expect("dispatch task")
             .expect_err("revoked dispatch result must be discarded");
         assert_eq!(error.kind, PortErrorKind::NotAvailable);
+    }
+
+    #[tokio::test]
+    async fn dsh_packages_route_to_the_dsh_adapter() {
+        let manifest = PluginPackageManifest {
+            schema_version: 1,
+            id: "acme.dsh".to_string(),
+            version: "1.0.0".to_string(),
+            adapter: "dsh_compatible".to_string(),
+            files: vec![PluginPackageFile {
+                path: "package.json".to_string(),
+                sha256: format!(
+                    "sha256:{}",
+                    hex::encode(Sha256::digest(
+                        br#"{ "dsh": { "profile": { "bundles": ["@acme/dsh-base"] } } }"#
+                    ))
+                ),
+            }],
+        };
+        let source = PluginPackageSourceIdentity {
+            package_id: "acme.dsh".to_string(),
+            version: "1.0.0".to_string(),
+            adapter: "dsh_compatible".to_string(),
+            source_path: "/managed/acme.dsh".to_string(),
+            content_hash: manifest.content_hash().expect("content hash"),
+        };
+        let files = std::collections::BTreeMap::from([(
+            "package.json".to_string(),
+            br#"{ "dsh": { "profile": { "bundles": ["@acme/dsh-base"] } } }"#.to_vec(),
+        )]);
+        let input = PluginPackageInput::new(manifest, source, files).expect("dsh input");
+
+        let (adapter, dispatch_targets) =
+            load_package_adapter(input, None, current_time_ms()).expect("route dsh adapter");
+        assert_eq!(adapter.adapter_id(), "dsh-compatible");
+        assert!(dispatch_targets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn valid_dsh_projection_can_activate_without_tool_candidates() {
+        let fixture = Fixture::with_managed_package(
+            "dsh_compatible",
+            &[(
+                "package.json",
+                r#"{ "dsh": { "profile": { "bundles": ["@acme/dsh-base"] } } }"#,
+            )],
+        )
+        .await;
+        let preview = preview_with_service(
+            Arc::clone(&fixture.service),
+            &fixture.workspace,
+            "acme.demo",
+        )
+        .await
+        .expect("preview dsh package");
+        assert!(!preview.provider_candidates_supported);
+        assert!(!preview.entry_ids.is_empty());
+
+        let activated = activate_with_service(
+            Arc::clone(&fixture.service),
+            &fixture.workspace,
+            "acme.demo",
+            Some(&preview.content_hash),
+        )
+        .await
+        .expect("activate valid dsh projection");
+        assert!(activated.activated);
+        assert!(!activated.provider_candidates_supported);
+        assert!(!activated.permission_required);
+    }
+
+    #[tokio::test]
+    async fn invalid_dsh_projection_does_not_persist_activation() {
+        let fixture = Fixture::with_managed_package(
+            "dsh_compatible",
+            &[("package.json", r#"{ "name": "plain-package" }"#)],
+        )
+        .await;
+        let preview = preview_with_service(
+            Arc::clone(&fixture.service),
+            &fixture.workspace,
+            "acme.demo",
+        )
+        .await
+        .expect("preview invalid dsh package");
+        let activation_epoch_before = fixture
+            .service
+            .refresh(&fixture.workspace)
+            .await
+            .activation_epoch;
+
+        let error = activate_with_service(
+            Arc::clone(&fixture.service),
+            &fixture.workspace,
+            "acme.demo",
+            Some(&preview.content_hash),
+        )
+        .await
+        .expect_err("invalid dsh package must not remain active");
+        assert!(matches!(
+            error,
+            ManagedPluginSourceError::PackageInvalid { .. }
+        ));
+        let snapshot = fixture.service.refresh(&fixture.workspace).await;
+        assert!(!snapshot.packages[0].activated);
+        assert_eq!(snapshot.activation_epoch, activation_epoch_before);
+    }
+
+    #[tokio::test]
+    async fn unsupported_managed_package_adapter_is_rejected() {
+        let manifest = PluginPackageManifest {
+            schema_version: 1,
+            id: "acme.unknown".to_string(),
+            version: "1.0.0".to_string(),
+            adapter: "unknown_compatible".to_string(),
+            files: vec![PluginPackageFile {
+                path: "package.json".to_string(),
+                sha256: format!("sha256:{}", hex::encode(Sha256::digest(b"{}"))),
+            }],
+        };
+        let source = PluginPackageSourceIdentity {
+            package_id: "acme.unknown".to_string(),
+            version: "1.0.0".to_string(),
+            adapter: "unknown_compatible".to_string(),
+            source_path: "/managed/acme.unknown".to_string(),
+            content_hash: manifest.content_hash().expect("content hash"),
+        };
+        let files =
+            std::collections::BTreeMap::from([("package.json".to_string(), b"{}".to_vec())]);
+        let input = PluginPackageInput::new(manifest, source, files).expect("unknown input");
+        let error = load_package_adapter(input, None, current_time_ms())
+            .err()
+            .expect("unsupported adapter must fail");
+        assert!(error
+            .to_string()
+            .contains("unsupported managed package adapter"));
     }
 }

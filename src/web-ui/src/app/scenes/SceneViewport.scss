@@ -105,8 +105,7 @@
     display: none;
     overflow: hidden;
 
-    &--active,
-    &--outgoing {
+    &--visible {
       display: flex;
       flex-direction: row;
       min-width: 0;
@@ -130,39 +129,21 @@
       justify-content: center;
     }
 
-    &--incoming,
-    &--outgoing {
-      opacity: 1;
-      transform: translate3d(0, 0, 0) scale(1);
-    }
-
     &--incoming {
-      transition:
-        opacity 180ms cubic-bezier(0.23, 1, 0.32, 1),
-        transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+      opacity: 1;
+      transition: opacity 480ms cubic-bezier(0.23, 1, 0.32, 1);
     }
 
     &--outgoing {
       z-index: 2;
       pointer-events: none;
-      transition:
-        opacity 140ms cubic-bezier(0.23, 1, 0.32, 1),
-        transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
     }
   }
 
   &__clip[data-scene-motion-phase='preparing'] {
     .bitfun-scene-viewport__scene--incoming {
-      opacity: 0.72;
-      transform: translate3d(0, 6px, 0) scale(0.995);
+      opacity: 0.5;
       transition: none;
-    }
-  }
-
-  &__clip[data-scene-motion-phase='running'] {
-    .bitfun-scene-viewport__scene--outgoing {
-      opacity: 0;
-      transform: translate3d(0, -4px, 0) scale(0.997);
     }
   }
 }
@@ -172,22 +153,13 @@
     transition: none;
   }
 
-  .bitfun-scene-viewport__scene--incoming,
-  .bitfun-scene-viewport__scene--outgoing {
-    transform: none;
-    transition: opacity 100ms cubic-bezier(0.23, 1, 0.32, 1);
+  .bitfun-scene-viewport__scene--incoming {
+    transition: none;
   }
 
   .bitfun-scene-viewport__clip[data-scene-motion-phase='preparing'] {
     .bitfun-scene-viewport__scene--incoming {
-      opacity: 0.82;
-      transform: none;
-    }
-  }
-
-  .bitfun-scene-viewport__clip[data-scene-motion-phase='running'] {
-    .bitfun-scene-viewport__scene--outgoing {
-      transform: none;
+      opacity: 1;
     }
   }
 }

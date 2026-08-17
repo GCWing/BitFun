@@ -6,6 +6,7 @@ import {
   RemoteSession
 } from '../model/RemoteModels';
 import { RemoteI18n } from '../i18n/RemoteI18n';
+import { TranscriptIntegrityPolicy } from './TranscriptIntegrityPolicy';
 
 export class RemoteUiState {
   static canUseRemote(connectionState: string): boolean {
@@ -216,6 +217,10 @@ export class RemoteUiState {
 
   private static mergeMessageSnapshot(previous: ChatMessage, incoming: ChatMessage): ChatMessage {
     const hasIncomingText = (incoming.text || '').trim().length > 0;
+    const incomingThinking = (incoming.thinking || '').trim();
+    const incomingTools = incoming.tools && incoming.tools.length > 0 ? incoming.tools : undefined;
+    const incomingItems = TranscriptIntegrityPolicy.hasRenderableItems(incoming.items) ? incoming.items : undefined;
+    const incomingImages = incoming.images && incoming.images.length > 0 ? incoming.images : undefined;
     return {
       id: incoming.id,
       turnId: incoming.turnId || previous.turnId,
@@ -224,10 +229,14 @@ export class RemoteUiState {
       status: incoming.status || previous.status,
       detail: incoming.detail || previous.detail,
       timestamp: incoming.timestamp || previous.timestamp,
-      thinking: incoming.thinking !== undefined ? incoming.thinking : (hasIncomingText ? undefined : previous.thinking),
-      tools: incoming.tools !== undefined ? incoming.tools : previous.tools,
-      items: incoming.items !== undefined ? incoming.items : previous.items,
-      images: incoming.images !== undefined ? incoming.images : previous.images,
+      // Final text without a thinking field still clears streamed thinking.
+      // An empty stub must not wipe a body the previous snapshot already had.
+      thinking: incomingThinking.length > 0
+        ? incoming.thinking
+        : (hasIncomingText ? incoming.thinking : previous.thinking),
+      tools: incomingTools !== undefined ? incomingTools : previous.tools,
+      items: incomingItems !== undefined ? incomingItems : previous.items,
+      images: incomingImages !== undefined ? incomingImages : previous.images,
       renderVersion: incoming.renderVersion !== undefined ? incoming.renderVersion : previous.renderVersion
     };
   }

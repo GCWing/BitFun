@@ -31,6 +31,7 @@ import {
   resolveReasoningPresetForSessionCreation,
 } from '../../utils/modelResolution';
 import { syncSessionModelSelection } from '../../utils/modelSync';
+import { nextStorageTurnIndex } from '../../utils/flowChatTurnIdentity';
 import { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
 import {
   requireSessionProjectWorkspacePath,
@@ -48,6 +49,7 @@ export const localSessionDriver: SessionDriver = {
 
   async createSession(context: FlowChatContext, seed: SessionCreationSeed): Promise<string> {
     const {
+      surfaceScope,
       config,
       agentType,
       sessionName,
@@ -58,12 +60,14 @@ export const localSessionDriver: SessionDriver = {
       remoteConnectionId,
       remoteSshHost,
     } = seed;
+    surfaceScope.assertCurrent('start local session creation');
 
     const explicitModelName = config.modelName?.trim() || undefined;
     const reasoningPreset = config.reasoningPreset
       ?? (explicitModelName
         ? await resolveReasoningPresetForSessionCreation(explicitModelName)
         : undefined);
+    surfaceScope.assertCurrent('resolve session creation reasoning preset');
 
     const response = await agentAPI.createSession({
       sessionName,
@@ -87,9 +91,11 @@ export const localSessionDriver: SessionDriver = {
         remoteSshHost,
       }
     });
+    surfaceScope.assertCurrent('create local backend session');
 
     const sessionModelName = response.modelId ?? explicitModelName;
     const maxContextTokens = await getModelMaxTokens(sessionModelName, agentType);
+    surfaceScope.assertCurrent('resolve created session model');
     const mergedConfig: SessionConfig = {
       ...config,
       executionProfile: response.executionProfile,
@@ -207,17 +213,28 @@ export const localSessionDriver: SessionDriver = {
 
   async cancel(context: FlowChatContext, sessionId: string): Promise<boolean> {
     const currentState = stateMachineManager.getCurrentState(sessionId);
-    const success = currentState === SessionExecutionState.PROCESSING
-      ? await stateMachineManager.transition(sessionId, SessionExecutionEvent.USER_CANCEL)
-      : false;
+    if (currentState !== SessionExecutionState.PROCESSING) {
+      return false;
+    }
+    // Gate pending-queue auto-drain before the asynchronous interrupt RPC can
+    // race an Idle/terminal event back to the UI.
+    context.userCancelledSessionIds.add(sessionId);
+    const success = await stateMachineManager.transition(
+      sessionId,
+      SessionExecutionEvent.USER_CANCEL,
+    );
+    const settledInFinishing = success
+      && stateMachineManager.getCurrentState(sessionId) === SessionExecutionState.FINISHING;
+    if (!settledInFinishing) {
+      context.userCancelledSessionIds.delete(sessionId);
+    }
 
-    if (success) {
-      context.userCancelledSessionIds.add(sessionId);
+    if (settledInFinishing) {
       markCurrentTurnItemsAsCancelled(context, sessionId);
       cleanupSessionBuffers(context, sessionId);
     }
 
-    return success;
+    return settledInFinishing;
   },
 
   planSubmission(): SubmissionPlan {
@@ -285,6 +302,7 @@ export const localSessionDriver: SessionDriver = {
     tracker: TurnTracker,
   ): Promise<StartTurnResult> {
     const {
+      surfaceScope,
       sessionId,
       message,
       displayMessage,
@@ -298,6 +316,20 @@ export const localSessionDriver: SessionDriver = {
     const dialogTurnId = options?.turnId?.trim() ||
       `dialog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const hasImages = (options?.imageContexts?.length ?? 0) > 0;
+
+    // An ACP agent runs outside the local runtime, so no backend
+    // DialogTurnStarted arrives with a storage slot for this Turn. Without one
+    // every save of the Turn is deferred and the Session never reaches disk, so
+    // the projection — the only writer of these Turns — allocates it here.
+    const acpStorageTurnIndex = acpClientId
+      ? nextStorageTurnIndex(readySession)
+      : undefined;
+    if (acpClientId && acpStorageTurnIndex === undefined) {
+      log.warn('ACP turn starts without a storage slot; its saves stay deferred', {
+        sessionId,
+        dialogTurnId,
+      });
+    }
 
     const dialogTurn: DialogTurn = {
       id: dialogTurnId,
@@ -315,13 +347,17 @@ export const localSessionDriver: SessionDriver = {
       // Images are attached for multimodal primary models or reduced to text placeholders for text-only models.
       // We don't run a separate frontend "image pre-analysis" phase here.
       status: 'pending',
-      startTime: Date.now()
+      startTime: Date.now(),
+      storageTurnIndex: acpStorageTurnIndex,
     };
 
     context.flowChatStore.addDialogTurn(sessionId, dialogTurn);
     tracker.createdLocalTurnId = dialogTurnId;
     const isRestoringHistoricalSession =
-      readySession.isHistorical || context.pendingHistoryLoads.has(sessionId);
+      readySession.isHistorical
+      || context.pendingHistoryLoads.has(
+        surfaceScope.key('history-load', surfaceScope.epoch, sessionId),
+      );
     if (isRestoringHistoricalSession) {
       context.processingManager.clearSessionStatus(sessionId);
       context.flowChatStore.deleteDialogTurn(sessionId, dialogTurnId);
@@ -332,6 +368,7 @@ export const localSessionDriver: SessionDriver = {
       taskId: sessionId,
       dialogTurnId,
     });
+    surfaceScope.assertCurrent('start session state machine');
     if (!startOk) {
       const currentState = stateMachineManager.getCurrentState(sessionId);
       throw new Error(`Session is still busy finishing the previous turn (current state: ${currentState})`);
@@ -358,6 +395,7 @@ export const localSessionDriver: SessionDriver = {
           globalThis.crypto?.randomUUID?.() ?? `worktree-first-turn-${Date.now()}`,
           materialization.projectWorkspacePath,
         );
+        surfaceScope.assertCurrent('bind session worktree');
         context.flowChatStore.updateSessionExecutionTarget(sessionId, {
           workspacePath: result.workspacePath,
           projectWorkspacePath: result.projectWorkspacePath,
@@ -379,7 +417,7 @@ export const localSessionDriver: SessionDriver = {
     }
 
     if (!acpClientId) {
-      await syncSessionModelSelection(context, sessionId, currentAgentType);
+      await syncSessionModelSelection(context, sessionId, currentAgentType, surfaceScope);
     }
 
     const updatedSession = context.flowChatStore.getState().sessions.get(sessionId);
@@ -394,6 +432,7 @@ export const localSessionDriver: SessionDriver = {
     const projectWorkspacePath = sessionProjectWorkspacePath(updatedSession);
 
     if (acpClientId) {
+      tracker.hostSubmitStarted = true;
       await ACPClientAPI.startDialogTurn({
         sessionId,
         clientId: acpClientId,
@@ -406,9 +445,12 @@ export const localSessionDriver: SessionDriver = {
         remoteConnectionId: updatedSession.remoteConnectionId,
         remoteSshHost: updatedSession.remoteSshHost,
       });
+      tracker.hostAcceptedTurn = true;
+      surfaceScope.assertCurrent('start ACP dialog turn');
       context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
     } else {
       try {
+        tracker.hostSubmitStarted = true;
         await agentAPI.startDialogTurn({
           sessionId: sessionId,
           userInput: message,
@@ -423,6 +465,8 @@ export const localSessionDriver: SessionDriver = {
           userMessageMetadata: options?.userMessageMetadata,
           execution: options?.execution,
         });
+        tracker.hostAcceptedTurn = true;
+        surfaceScope.assertCurrent('start dialog turn');
         context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
       } catch (error: any) {
         if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
@@ -430,13 +474,17 @@ export const localSessionDriver: SessionDriver = {
             sessionId: sessionId,
             dialogTurnsCount: updatedSession.dialogTurns.length
           });
+          tracker.hostSubmitStarted = false;
 
           // Lazy import: SessionModule routes lifecycle calls through the
           // driver registry, so a static import would create a module cycle.
           const { retryCreateBackendSession } =
             await import('../../services/flow-chat-manager/SessionModule');
+          surfaceScope.assertCurrent('load backend session retry');
           await retryCreateBackendSession(context, sessionId);
+          surfaceScope.assertCurrent('retry backend session creation');
 
+          tracker.hostSubmitStarted = true;
           await agentAPI.startDialogTurn({
             sessionId: sessionId,
             userInput: message,
@@ -451,6 +499,8 @@ export const localSessionDriver: SessionDriver = {
             userMessageMetadata: options?.userMessageMetadata,
             execution: options?.execution,
           });
+          tracker.hostAcceptedTurn = true;
+          surfaceScope.assertCurrent('retry dialog turn submission');
           context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
         } else {
           throw error;

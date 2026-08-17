@@ -133,7 +133,7 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
   ['browser-control', ['time']],
   ['canvas-runtime', ['fs']],
   ['debug-log', ['rt']],
-  ['deep-research', ['fs']],
+  ['deep-research', []],
   ['git', ['fs', 'io-util', 'macros', 'rt', 'time']],
   ['file-watch', ['rt', 'sync']],
   ['function-agents', ['fs', 'io-util', 'macros', 'rt', 'time']],
@@ -182,6 +182,10 @@ const CORE_TOKIO_AGGREGATES = new Set([
   'remote-connect',
   'tools-browser-web',
   'tools-mcp',
+]);
+const AGENT_RUNTIME_TOKIO_FEATURES = new Map([
+  ['native-hook-runtime', ['io-util', 'macros', 'process', 'rt', 'time']],
+  ['agent-runtime', ['io-util', 'macros', 'process', 'rt', 'sync', 'time']],
 ]);
 
 const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set();
@@ -722,10 +726,14 @@ export function findTokioDependencyFeatureViolations(packages) {
       const featureOwnedCoreRuntime =
         pkg.name === 'bitfun-core'
         && (dependency.kind ?? null) === null;
+      const featureOwnedAgentRuntime =
+        pkg.name === 'bitfun-agent-runtime'
+        && (dependency.kind ?? null) === null;
       if (
         featureOwnedIntegrationRuntime
         || featureOwnedServicesCoreRuntime
         || featureOwnedCoreRuntime
+        || featureOwnedAgentRuntime
       ) {
         const actual = [...features].sort();
         const expected = [...(featureOwnedCoreRuntime
@@ -767,6 +775,12 @@ export function findTokioDependencyFeatureViolations(packages) {
         pkg,
         CORE_TOKIO_FEATURES,
         CORE_TOKIO_AGGREGATES,
+      ));
+    }
+    if (pkg.name === 'bitfun-agent-runtime') {
+      violations.push(...findOwnedTokioFeatureViolations(
+        pkg,
+        AGENT_RUNTIME_TOKIO_FEATURES,
       ));
     }
   }
