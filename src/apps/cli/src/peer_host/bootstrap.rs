@@ -68,6 +68,7 @@ pub(crate) async fn ensure_peer_host_ready(runtime: &CliRuntimeContext) -> Resul
         turns: PeerTurnTracker::new(),
         workspace_service,
         filesystem_service,
+        token_usage_service: runtime.token_usage_service().clone(),
     };
 
     if set_peer_host_state(state.clone()).is_err() {

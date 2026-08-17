@@ -42,6 +42,7 @@ export type PeerConnectionLostReason = 'keepalive' | 'presence';
 export interface PeerHostCapabilities {
   readonly idempotentDialogSubmit: boolean;
   readonly targetedSessionRollback: boolean;
+  readonly tokenUsageStatistics: boolean;
 }
 
 /** Immutable view of one connection; safe to hold in component state. */
@@ -102,12 +103,14 @@ interface PeerModePingResult {
   capabilities?: {
     idempotent_dialog_submit?: boolean;
     targeted_session_rollback?: boolean;
+    token_usage_statistics?: boolean;
   };
 }
 
 const NO_CAPABILITIES: PeerHostCapabilities = {
   idempotentDialogSubmit: false,
   targetedSessionRollback: false,
+  tokenUsageStatistics: false,
 };
 
 interface ConnectionEntry {
@@ -341,6 +344,7 @@ export class PeerConnectionManager {
     adapter.setHostCapabilities({
       supportsIdempotentDialogSubmit: entry.capabilities.idempotentDialogSubmit,
       supportsTargetedSessionRollback: entry.capabilities.targetedSessionRollback,
+      supportsTokenUsageStatistics: entry.capabilities.tokenUsageStatistics,
     });
     entry.health = 'ready';
     this.scheduleKeepalive(entry);
@@ -354,6 +358,7 @@ export class PeerConnectionManager {
     return {
       idempotentDialogSubmit: result?.capabilities?.idempotent_dialog_submit === true,
       targetedSessionRollback: result?.capabilities?.targeted_session_rollback === true,
+      tokenUsageStatistics: result?.capabilities?.token_usage_statistics === true,
     };
   }
 
@@ -410,6 +415,7 @@ export class PeerConnectionManager {
       entry.adapter.setHostCapabilities({
         supportsIdempotentDialogSubmit: capabilities.idempotentDialogSubmit,
         supportsTargetedSessionRollback: capabilities.targetedSessionRollback,
+        supportsTokenUsageStatistics: capabilities.tokenUsageStatistics,
       });
       entry.consecutiveFailures = 0;
       const recovered = entry.health !== 'ready';

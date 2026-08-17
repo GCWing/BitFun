@@ -9,6 +9,7 @@ import {
   Select,
 } from '@/component-library';
 import {
+  TokenUsageStatisticsUnavailableError,
   tokenUsageStatisticsApi,
   type UsageGranularity,
   type UsageStatistics,
@@ -632,7 +633,10 @@ const UsageStatisticsConfig: React.FC = () => {
   const [stats, setStats] = useState<UsageStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [message, setMessage] = useState<{ type: 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: 'error' | 'info';
+    text: string;
+  } | null>(null);
   const requestIdRef = useRef(0);
   const hasLoadedRef = useRef(false);
 
@@ -668,9 +672,11 @@ const UsageStatisticsConfig: React.FC = () => {
       if (requestId !== requestIdRef.current) return;
       setStats(result);
       hasLoadedRef.current = true;
-    } catch {
+    } catch (error) {
       if (requestId !== requestIdRef.current) return;
-      setMessage({ type: 'error', text: t('loadFailed') });
+      setMessage(error instanceof TokenUsageStatisticsUnavailableError
+        ? { type: 'info', text: t('unsupported') }
+        : { type: 'error', text: t('loadFailed') });
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading(false);
