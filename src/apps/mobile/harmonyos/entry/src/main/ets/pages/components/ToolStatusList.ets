@@ -427,16 +427,16 @@ export struct ToolStatusList {
   private collapsedSummaryDetail(entry: ToolRenderEntry): string {
     const parts: string[] = [];
     if (entry.readCount > 0) {
-      parts.push(`读取 ${entry.readCount}`);
+      parts.push(RemoteI18n.f('chat.toolsReadCount', `${entry.readCount}`));
     }
     if (entry.searchCount > 0) {
-      parts.push(`搜索 ${entry.searchCount}`);
+      parts.push(RemoteI18n.f('chat.toolsSearchCount', `${entry.searchCount}`));
     }
     if (entry.commandCount > 0) {
-      parts.push(`命令 ${entry.commandCount}`);
+      parts.push(RemoteI18n.f('chat.toolsCommandCount', `${entry.commandCount}`));
     }
     if (entry.otherCount > 0) {
-      parts.push(`其他 ${entry.otherCount}`);
+      parts.push(RemoteI18n.f('chat.toolsOtherCount', `${entry.otherCount}`));
     }
     return parts.join(' · ');
   }
@@ -622,41 +622,41 @@ export struct ToolStatusList {
     const raw = tool.name || 'Tool';
     const normalized = this.normalizedToolName(tool);
     if (raw === 'TodoWrite' || normalized === 'todo_write' || normalized === 'todowrite') {
-      return '更新任务列表';
+      return RemoteI18n.t('chat.toolOpTodoWrite');
     }
     if (raw === 'Task' || normalized === 'task') {
-      return '发起任务';
+      return RemoteI18n.t('chat.toolOpTask');
     }
     if (this.isFileReadTool(tool)) {
-      return '读取文件';
+      return RemoteI18n.t('chat.toolOpRead');
     }
     if (raw === 'Write' || raw === 'Create' || normalized === 'write' || normalized === 'write_file' ||
       normalized === 'create_file') {
-      return '写入文件';
+      return RemoteI18n.t('chat.toolOpWrite');
     }
     if (raw === 'Delete' || normalized === 'delete' || normalized === 'delete_file') {
-      return '删除文件';
+      return RemoteI18n.t('chat.toolOpDelete');
     }
     if (raw === 'GetFileDiff' || normalized === 'get_file_diff' || normalized === 'getfilediff') {
-      return '查看变更';
+      return RemoteI18n.t('chat.toolOpDiff');
     }
     if (this.isFileMutationTool(tool)) {
-      return '修改文件';
+      return RemoteI18n.t('chat.toolOpEdit');
     }
     if (this.isCommandTool(tool)) {
-      return '运行命令';
+      return RemoteI18n.t('chat.toolOpCommand');
     }
     if (raw === 'WebSearch' || normalized === 'websearch' || normalized === 'web_search') {
-      return '网页搜索';
+      return RemoteI18n.t('chat.toolOpWebSearch');
     }
     if (this.isWebTool(tool)) {
-      return '访问网页';
+      return RemoteI18n.t('chat.toolOpWebFetch');
     }
     if (this.isSearchTool(tool)) {
-      return '搜索代码';
+      return RemoteI18n.t('chat.toolOpSearch');
     }
     if (raw === 'AskUserQuestion') {
-      return '请求确认';
+      return RemoteI18n.t('chat.toolOpAskUser');
     }
     return raw;
   }
@@ -696,11 +696,12 @@ export struct ToolStatusList {
     const name = tool.name || '';
     if ((name === 'TodoWrite' || this.normalizedToolName(tool) === 'todowrite') &&
       payload.todos && payload.todos.length > 0) {
-      return payload.todos[0].content || '任务列表';
+      return payload.todos[0].content || RemoteI18n.t('chat.toolTodoFallback');
     }
 
     if (name === 'Task') {
-      return payload.description || payload.task || payload.prompt || payload.content || '子任务';
+      return payload.description || payload.task || payload.prompt || payload.content ||
+        RemoteI18n.t('chat.toolTaskFallback');
     }
 
     const path = payload.file_path || payload.filePath || payload.path || '';
@@ -748,7 +749,8 @@ export struct ToolStatusList {
       return `${RemoteI18n.t('chat.toolRunning')} “${this.compactText(this.operationTarget(tool), 24)}”`;
     }
     if (this.hasToolError(tool)) {
-      return `${this.operationLabel(tool)}失败 · ${this.compactText(this.operationTarget(tool), 24)}`;
+      return `${RemoteI18n.f('chat.toolFailed', this.operationLabel(tool))} · ` +
+        `${this.compactText(this.operationTarget(tool), 24)}`;
     }
     if (this.isPendingConfirmation(tool) || this.isQuestionTool(tool)) {
       return `${this.displayStatus(tool.status || 'pending')} · ${this.operationLabel(tool)}`;
