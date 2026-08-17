@@ -126,9 +126,12 @@ describe('UsageStatisticsConfig', () => {
     expect(container.querySelector('[data-bf-part="model"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="group"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="endpoint"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="modelHitRate"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="trendPanel"]')).not.toBeNull();
     expect(container.querySelectorAll('[data-bf-part="donut"]').length).toBe(3);
     expect(container.querySelectorAll('[data-bf-part="trend"] svg').length).toBe(1);
+    // Hit rate is truncated to two decimals, never rounded up.
+    expect(container.textContent).toContain('95.00%');
   });
 
   it('shows the empty state when there are no records', async () => {

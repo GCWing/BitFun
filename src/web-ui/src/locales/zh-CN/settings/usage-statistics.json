@@ -32,6 +32,9 @@
     "byGroup": "分组使用分布",
     "byEndpoint": "端点分布"
   },
+  "cacheHitRate": {
+    "title": "模型缓存命中率"
+  },
   "trend": {
     "title": "Token 使用趋势",
     "legend": {
@@ -47,7 +50,6 @@
     "group": "分组",
     "endpoint": "端点",
     "requests": "请求",
-    "tokens": "Token",
-    "cacheHitRate": "缓存命中率"
+    "tokens": "Token"
   }
 }
