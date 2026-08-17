@@ -23,11 +23,11 @@
     {
       "root": "src/web-ui/src",
       "domain": "themePreset",
-      "key": "#f0f4f8 <-> #f3f3f5",
+      "key": "#fafafa <-> #ffffff",
       "decision": "keep",
       "owner": "src/web-ui/src/infrastructure/appearance/builtins",
-      "reason": "The pair crosses light primary background and Monaco lineHighlight / button state values. Editor line highlight must remain visibly distinct from base surface roles.",
-      "reevaluateWhen": "Only after Monaco-focused light-theme screenshots confirm the line highlight remains readable."
+      "reason": "The default Light primary background intentionally uses the requested off-white surface while secondary, elevated, and scene surfaces remain pure white. These adjacent roles need a restrained but visible hierarchy.",
+      "reevaluateWhen": "Only after a focused Light-theme surface review proves primary and elevated surfaces no longer need separate values."
     },
     {
       "root": "src/web-ui/src",
@@ -44,7 +44,7 @@
       "key": "#f3f3f5 <-> #faf8f0",
       "decision": "keep",
       "owner": "src/web-ui/src/infrastructure/appearance/builtins",
-      "reason": "China Style paper uses a warm first-paint surface while #f3f3f5 is a cool light neutral and button state stop. This is cross-theme identity, not a duplicate role.",
+      "reason": "China Style paper uses a warm first-paint surface while #f3f3f5 is the default Light editor line highlight and a button state stop. This is cross-theme and renderer identity, not a duplicate role.",
       "reevaluateWhen": "Only after China Style paper identity is intentionally neutralized."
     },
     {

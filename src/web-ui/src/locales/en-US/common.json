@@ -78,6 +78,7 @@
       "project": "Project",
       "persona": "Smart Members",
       "assistant": "AI Assistant",
+      "todos": "Task Board",
       "longTermTracking": "Long-term Tracking",
       "agents": "Agents",
       "skills": "Skills",
@@ -90,7 +91,7 @@
     },
     "tooltips": {
       "persona": "Smart Members — expand role- and memory-based member sessions",
-      "todos": "Todos — open all Todo items",
+      "todos": "Task Board — manage all tasks",
       "longTermTracking": "Long-term Tracking — ongoing tasks and conversations",
       "agents": "Which agents it can call",
       "skills": "What it knows — specialized knowledge files",
@@ -638,7 +639,13 @@
     },
     "moreOptions": "More options",
     "multimodalTools": "Multimodal Tools",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "settingsMenu": {
+      "floatingWindow": "Floating window",
+      "themeConfiguration": "Theme configuration",
+      "openSettings": "Open settings",
+      "about": "About"
+    }
   },
   "window": {
     "minimize": "Minimize",
@@ -1328,7 +1335,7 @@
     "browser": "Browser",
     "insights": "Insights",
     "assistant": "Assistant",
-    "todos": "Todos",
+    "todos": "Task Board",
     "shell": "Shell",
     "panelView": "Panel View"
   },

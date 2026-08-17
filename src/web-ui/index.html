@@ -9,8 +9,8 @@
     <script>
       (function () {
         var dark = '#121214';
-        /* Keep in sync with presets/light-theme.ts colors.background.primary */
-        var light = '#f3f3f5';
+        /* Keep in sync with infrastructure/appearance/builtins/light.ts colors.background.primary */
+        var light = '#fafafa';
         var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
         var root = document.documentElement;
         var fallbackMessages = {
@@ -85,7 +85,7 @@
       }
       @media (prefers-color-scheme: light) {
         html {
-          background-color: #f3f3f5;
+          background-color: #fafafa;
         }
       }
       

@@ -1920,10 +1920,10 @@ $_section-header-height: 24px;
 }
 
 // ──────────────────────────────────────────────
-// More-options popup menu
+// Settings popup menu
 // ──────────────────────────────────────────────
 
-.bitfun-nav-panel__footer-more-wrap {
+.bitfun-nav-panel__footer-menu-wrap {
   position: relative;
 }
 
@@ -2057,7 +2057,7 @@ $_section-header-height: 24px;
   color: var(--bf-appearance-token-color-text-primary);
   font-family: var(--bf-appearance-token-font-family-sans);
   font-size: var(--bf-appearance-token-font-size-sm);
-  transform-origin: bottom left;
+  transform-origin: bottom right;
   animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
 
   &.is-closing {

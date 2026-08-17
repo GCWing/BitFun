@@ -78,6 +78,7 @@
       "project": "項目",
       "persona": "智能成員",
       "assistant": "智能助理",
+      "todos": "任務看板",
       "longTermTracking": "長期跟蹤",
       "agents": "專業智能體",
       "skills": "技能",
@@ -90,7 +91,7 @@
     },
     "tooltips": {
       "persona": "智能成員 — 展開查看基於角色和記憶的成員會話",
-      "todos": "待辦 — 開啟全部待辦事項",
+      "todos": "任務看板 — 管理全部任務",
       "longTermTracking": "長期跟蹤 — 持續任務與長期對話",
       "agents": "它能調用哪些 Agent",
       "skills": "它懂什麼專項知識 — 技能知識檔案",
@@ -638,7 +639,13 @@
     },
     "moreOptions": "更多選項",
     "multimodalTools": "多模態工具",
-    "notifications": "通知"
+    "notifications": "通知",
+    "settingsMenu": {
+      "floatingWindow": "懸浮窗",
+      "themeConfiguration": "主題配置",
+      "openSettings": "開啟設定",
+      "about": "關於"
+    }
   },
   "window": {
     "minimize": "最小化",
@@ -1328,7 +1335,7 @@
     "browser": "瀏覽器",
     "insights": "洞察",
     "assistant": "助理",
-    "todos": "待辦事項",
+    "todos": "任務看板",
     "shell": "Shell",
     "panelView": "面板視圖"
   },

@@ -19,14 +19,34 @@ async function openAppearanceSettings(): Promise<void> {
   const settingsItem = await waitForDisplayed('[data-testid="nav-footer-settings-item"]');
   await settingsItem.click();
 
-  await waitForDisplayed('[data-testid="settings-scene"]');
-  const appearanceTab = await waitForDisplayed(
-    '[data-testid="settings-nav-tab"][data-settings-tab="appearance"]',
-  );
-  await appearanceTab.click();
+  const themeConfiguration = await waitForDisplayed('[data-testid="nav-settings-theme-item"]');
+  await themeConfiguration.click();
 
+  await waitForDisplayed('[data-testid="settings-scene"]');
   await waitForDisplayed('[data-testid="appearance-config"]');
   await waitForDisplayed('[data-testid="appearance-palette-select"]');
+}
+
+async function selectAppearance(appearanceId: string): Promise<void> {
+  await openAppearanceSettings();
+
+  const picker = await $('[data-testid="appearance-palette-select"]');
+  await picker.click();
+
+  const option = await waitForDisplayed(
+    `[data-testid="appearance-palette-option"][data-appearance-id="${appearanceId}"]`,
+  );
+  await option.click();
+
+  await browser.waitUntil(async () => {
+    return browser.execute((expectedId: string) => {
+      return document.documentElement.getAttribute('data-bf-appearance') === expectedId;
+    }, appearanceId);
+  }, {
+    timeout: 10000,
+    interval: 100,
+    timeoutMsg: `Appearance runtime did not apply ${appearanceId}`,
+  });
 }
 
 describe('L0 Appearance', () => {
@@ -87,6 +107,22 @@ describe('L0 Appearance', () => {
     expect(appearanceStyles.background).not.toBe('');
     expect(appearanceStyles.text).not.toBe('');
     expect(appearanceStyles.accent).not.toBe('');
+  });
+
+  it('should project the light primary background token onto the navigation', async () => {
+    await selectAppearance('bitfun-light');
+
+    const lightNavigation = await browser.execute(() => {
+      const styles = window.getComputedStyle(document.documentElement);
+      const navPanel = document.querySelector<HTMLElement>('[data-testid="nav-panel"]');
+      return {
+        token: styles.getPropertyValue('--bf-appearance-token-color-bg-primary').trim(),
+        navBackground: navPanel ? window.getComputedStyle(navPanel).backgroundColor : null,
+      };
+    });
+
+    expect(lightNavigation.token.toLowerCase()).toBe('#fafafa');
+    expect(lightNavigation.navBackground).toBe('rgb(250, 250, 250)');
   });
 
   it('should expose the Appearance selector in settings', async () => {

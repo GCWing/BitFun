@@ -7,9 +7,9 @@ import { browser, expect, $ } from '@wdio/globals';
 import { openWorkspace } from '../helpers/workspace-helper';
 
 async function openNotificationMenuItem() {
-  const moreButton = await $('[data-testid="nav-footer-more-btn"]');
-  await moreButton.waitForDisplayed({ timeout: 15000 });
-  await moreButton.click();
+  const settingsButton = await $('[data-testid="nav-footer-settings-item"]');
+  await settingsButton.waitForDisplayed({ timeout: 15000 });
+  await settingsButton.click();
 
   const notificationButton = await $('[data-testid="notification-button"]');
   await notificationButton.waitForDisplayed({ timeout: 10000 });
@@ -52,7 +52,7 @@ describe('L0 Notification', () => {
   });
 
   describe('Notification entry visibility', () => {
-    it('notification entry should be visible in More options', async function () {
+    it('notification entry should be visible in the settings list', async function () {
       expect(hasWorkspace).toBe(true);
 
       const notificationBtn = await openNotificationMenuItem();

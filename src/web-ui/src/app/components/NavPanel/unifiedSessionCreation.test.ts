@@ -34,10 +34,10 @@ describe('unified project session creation', () => {
 
     expect(mainNav).not.toContain('data-testid="nav-smart-members-btn"');
     expect(mainNav).not.toContain('data-testid="nav-long-term-tracking-btn"');
-    expect(mainNav).not.toContain('data-testid="nav-todos-btn"');
-    expect(footerActions).toContain('data-testid="nav-todos-btn"');
-    expect(footerActions).toContain('data-bf-part="todoEntry"');
-    expect(footerActions).toContain("activateProductAction('surface.todos.open')");
+    expect(mainNav).toContain('data-testid="nav-todos-btn"');
+    expect(footerActions).not.toContain('data-testid="nav-todos-btn"');
+    expect(mainNav).toContain('data-bf-part="todoEntry"');
+    expect(mainNav).toContain("activateProductAction('surface.todos.open')");
     expect(mainNav).toContain("new Set(['sessions'])");
     expect(mainNav).toContain('label={t(\'nav.items.sessions\')}');
     expect(mainNav).toContain('<WorkspaceListSection variant="all" />');
@@ -49,20 +49,43 @@ describe('unified project session creation', () => {
     expect(projection).toContain("WorkspaceBackedSessionGroupKind = 'assistant' | 'project'");
   });
 
-  it('places Mini Apps before capability management and keeps both above sessions', () => {
+  it('places Task Board below AI Assistant, before Mini Apps and capability management', () => {
     const mainNav = source('./MainNav.tsx');
+    const assistantIndex = mainNav.indexOf('data-testid="nav-assistant-manager"');
+    const taskBoardIndex = mainNav.indexOf('data-testid="nav-todos-btn"');
     const miniAppsIndex = mainNav.indexOf('className="bitfun-nav-panel__miniapp-navigation"');
     const extensionIndex = mainNav.indexOf('data-testid="agent-skill-entry"');
     const sessionsIndex = mainNav.indexOf('data-bf-section="sessions"');
 
-    expect(miniAppsIndex).toBeGreaterThan(-1);
+    expect(taskBoardIndex).toBeGreaterThan(assistantIndex);
+    expect(miniAppsIndex).toBeGreaterThan(taskBoardIndex);
     expect(extensionIndex).toBeGreaterThan(miniAppsIndex);
-    expect(extensionIndex).toBeGreaterThan(-1);
     expect(sessionsIndex).toBeGreaterThan(extensionIndex);
+    expect(mainNav).toContain("t('nav.items.todos')");
     expect(mainNav).not.toContain('data-testid="nav-bottom-bar"');
     expect(mainNav).toContain('className="bitfun-nav-panel__top-action-expand"');
     expect(mainNav).toContain('data-testid="ecosystem-compatibility-tab"');
     expect(mainNav).toContain("activateProductAction('settings.external-sources.open')");
+  });
+
+  it('opens the footer utility list from Settings without More or Insights', () => {
+    const footerActions = source('./components/PersistentFooterActions.tsx');
+    const floatingIndex = footerActions.indexOf('data-testid="nav-settings-floating-item"');
+    const notificationIndex = footerActions.indexOf('<NotificationButton menuItem');
+    const themeIndex = footerActions.indexOf('data-testid="nav-settings-theme-item"');
+    const openSettingsIndex = footerActions.indexOf('data-testid="nav-settings-open-item"');
+    const aboutIndex = footerActions.indexOf('data-testid="nav-settings-about-item"');
+
+    expect(footerActions).toContain('data-testid="nav-footer-settings-item"');
+    expect(footerActions).toContain('data-testid="nav-settings-menu"');
+    expect(floatingIndex).toBeGreaterThan(-1);
+    expect(notificationIndex).toBeGreaterThan(floatingIndex);
+    expect(themeIndex).toBeGreaterThan(notificationIndex);
+    expect(openSettingsIndex).toBeGreaterThan(themeIndex);
+    expect(aboutIndex).toBeGreaterThan(openSettingsIndex);
+    expect(footerActions).toContain("useSettingsStore.getState().openTab('appearance')");
+    expect(footerActions).not.toContain('data-testid="nav-footer-more-btn"');
+    expect(footerActions).not.toContain("activateProductAction('surface.insights.open')");
   });
 
   it('places one semantic all/grouped toggle beside the session filter and group add action', () => {

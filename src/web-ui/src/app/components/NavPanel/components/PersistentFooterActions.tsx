@@ -3,11 +3,9 @@ import { createPortal } from 'react-dom';
 import {
   Settings,
   Info,
-  MoreVertical,
   PictureInPicture2,
   Smartphone,
-  BarChart3,
-  CalendarClock,
+  Palette,
   ChevronUp,
 } from 'lucide-react';
 import { Tooltip, Modal, PresenceBoundary } from '@/component-library';
@@ -29,6 +27,7 @@ import {
 } from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
+import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 
 const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
 const AboutDialog = lazy(() =>
@@ -65,7 +64,7 @@ const PersistentFooterActions: React.FC = () => {
     anchorRef: menuTriggerRef,
     popoverRef: menuPopoverRef,
     preferredPlacement: 'top',
-    alignment: 'start',
+    alignment: 'end',
     gap: 6,
   });
   const [showAbout, setShowAbout] = useState(false);
@@ -105,18 +104,16 @@ const PersistentFooterActions: React.FC = () => {
     }
   };
 
-  const handleOpenSettings = () => {
-    void activateProductAction('settings.open');
-  };
-
-  const handleOpenInsights = useCallback(() => {
+  const handleOpenSettings = useCallback(() => {
     closeMenu();
-    void activateProductAction('surface.insights.open');
+    void activateProductAction('settings.open');
   }, [closeMenu]);
 
-  const handleOpenTodos = useCallback(() => {
-    void activateProductAction('surface.todos.open');
-  }, []);
+  const handleOpenThemeConfiguration = useCallback(() => {
+    closeMenu();
+    useSettingsStore.getState().openTab('appearance');
+    void activateProductAction('settings.open');
+  }, [closeMenu]);
 
   const handleShowAbout = () => {
     closeMenu();
@@ -147,7 +144,6 @@ const PersistentFooterActions: React.FC = () => {
     setShowRemoteConnect(true);
   }, []);
 
-  const isTodosActive = activeTabId === 'todos';
   const isSettingsActive = activeTabId === 'settings';
   const deviceStatusLabel = accountLoggedIn
     ? accountDeviceName || t('accountLogin.thisDevice')
@@ -160,111 +156,6 @@ const PersistentFooterActions: React.FC = () => {
     <>
       <div className="bitfun-nav-panel__footer" data-bf-component="nav-panel" data-bf-part="footer">
         <div className="bitfun-nav-panel__footer-left">
-          <div className="bitfun-nav-panel__footer-more-wrap">
-            <Tooltip content={t('nav.moreOptions')} placement="right" followCursor disabled={menuOpen}>
-              <button
-                ref={menuTriggerRef}
-                type="button"
-                className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${menuOpen ? ' is-active' : ''}`}
-                aria-label={t('nav.moreOptions')}
-                aria-expanded={menuOpen}
-                onClick={toggleMenu}
-                data-testid="nav-footer-more-btn"
-                data-bf-component="nav-panel"
-                data-bf-part="footerButton"
-                data-bf-state={menuOpen ? 'active' : undefined}
-              >
-                {menuOpen ? (
-                  <MoreVertical size={15} aria-hidden="true" />
-                ) : (
-                  <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-                    <MoreVertical size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-                    <ChevronUp size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
-                  </span>
-                )}
-              </button>
-            </Tooltip>
-
-            {menuOpen && createPortal(
-              <>
-                <div
-                  className="bitfun-nav-panel__footer-backdrop"
-                  onClick={closeMenu}
-                />
-                <div
-                  ref={menuPopoverRef}
-                  className={`bitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
-                  role="menu"
-                  data-testid="nav-footer-menu"
-                  data-bf-component="nav-panel"
-                  data-bf-part="footerMenu"
-                  data-bf-state={menuClosing ? 'closing' : 'open'}
-                  data-bf-placement={menuLayout?.placement ?? 'top'}
-                  style={{
-                    top: `${menuLayout?.top ?? 0}px`,
-                    left: `${menuLayout?.left ?? 0}px`,
-                    visibility: menuLayout ? 'visible' : 'hidden',
-                  }}
-                >
-                  <NotificationButton menuItem onActivate={closeMenu} />
-                  <div className="bitfun-nav-panel__footer-menu-divider" data-bf-component="nav-panel" data-bf-part="footerMenuDivider" />
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
-                    data-bf-component="nav-panel"
-                    data-bf-part="footerMenuItem"
-                    onClick={handleFloatingMode}
-                  >
-                    <PictureInPicture2 size={14} />
-                    <span>{t('header.switchToToolbar')}</span>
-                  </button>
-                  <div className="bitfun-nav-panel__footer-menu-divider" data-bf-component="nav-panel" data-bf-part="footerMenuDivider" />
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
-                    data-bf-component="nav-panel"
-                    data-bf-part="footerMenuItem"
-                    onClick={handleOpenInsights}
-                  >
-                    <BarChart3 size={14} />
-                    <span>{t('scenes.insights')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
-                    data-bf-component="nav-panel"
-                    data-bf-part="footerMenuItem"
-                    onClick={handleShowAbout}
-                  >
-                    <Info size={14} />
-                    <span>{t('header.about')}</span>
-                  </button>
-                </div>
-              </>,
-              getAppearanceOverlayHost(),
-            )}
-          </div>
-
-          <Tooltip content={t('nav.tooltips.todos')} placement="right" followCursor>
-            <button
-              type="button"
-              className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isTodosActive ? ' is-active' : ''}`}
-              aria-label={t('nav.tooltips.todos')}
-              aria-pressed={isTodosActive}
-              onClick={handleOpenTodos}
-              data-testid="nav-todos-btn"
-              data-bf-component="nav-panel"
-              data-bf-part="todoEntry"
-              data-bf-action="todos"
-              data-bf-state={isTodosActive ? 'active' : undefined}
-            >
-              <CalendarClock size={15} aria-hidden="true" />
-            </button>
-          </Tooltip>
-
           <Tooltip content={deviceStatusTooltip} placement="right" followCursor>
             <button
               type="button"
@@ -287,21 +178,119 @@ const PersistentFooterActions: React.FC = () => {
 
         <div className="bitfun-nav-panel__footer-right">
           <GithubStarButton />
-          <Tooltip content={t('shared:features.settings')} placement="right" followCursor>
-            <button
-              type="button"
-              className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${isSettingsActive ? ' is-active' : ''}`}
-              aria-label={t('shared:features.settings')}
-              aria-pressed={isSettingsActive}
-              onClick={handleOpenSettings}
-              data-testid="nav-footer-settings-item"
-              data-bf-component="nav-panel"
-              data-bf-part="settingsEntry"
-              data-bf-state={isSettingsActive ? 'active' : undefined}
+          <div className="bitfun-nav-panel__footer-menu-wrap">
+            <Tooltip
+              content={t('shared:features.settings')}
+              placement="right"
+              followCursor
+              disabled={menuOpen}
             >
-              <Settings size={15} aria-hidden="true" />
-            </button>
-          </Tooltip>
+              <button
+                ref={menuTriggerRef}
+                type="button"
+                className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${menuOpen || isSettingsActive ? ' is-active' : ''}`}
+                aria-label={t('shared:features.settings')}
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
+                aria-pressed={isSettingsActive}
+                onClick={toggleMenu}
+                data-testid="nav-footer-settings-item"
+                data-bf-component="nav-panel"
+                data-bf-part="settingsEntry"
+                data-bf-state={menuOpen ? 'open' : isSettingsActive ? 'active' : undefined}
+              >
+                {menuOpen ? (
+                  <Settings size={15} aria-hidden="true" />
+                ) : (
+                  <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
+                    <Settings size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
+                    <ChevronUp size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
+                  </span>
+                )}
+              </button>
+            </Tooltip>
+
+            {menuOpen && createPortal(
+              <>
+                <div
+                  className="bitfun-nav-panel__footer-backdrop"
+                  onClick={closeMenu}
+                />
+                <div
+                  ref={menuPopoverRef}
+                  className={`bitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
+                  role="menu"
+                  aria-label={t('shared:features.settings')}
+                  data-testid="nav-settings-menu"
+                  data-bf-component="nav-panel"
+                  data-bf-part="footerMenu"
+                  data-bf-state={menuClosing ? 'closing' : 'open'}
+                  data-bf-placement={menuLayout?.placement ?? 'top'}
+                  style={{
+                    top: `${menuLayout?.top ?? 0}px`,
+                    left: `${menuLayout?.left ?? 0}px`,
+                    visibility: menuLayout ? 'visible' : 'hidden',
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__footer-menu-item"
+                    role="menuitem"
+                    onClick={handleFloatingMode}
+                    data-testid="nav-settings-floating-item"
+                    data-bf-component="nav-panel"
+                    data-bf-part="footerMenuItem"
+                    data-bf-action="floating-window"
+                  >
+                    <PictureInPicture2 size={14} aria-hidden="true" />
+                    <span>{t('nav.settingsMenu.floatingWindow')}</span>
+                  </button>
+                  <NotificationButton menuItem onActivate={closeMenu} />
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__footer-menu-item"
+                    role="menuitem"
+                    onClick={handleOpenThemeConfiguration}
+                    data-testid="nav-settings-theme-item"
+                    data-bf-component="nav-panel"
+                    data-bf-part="footerMenuItem"
+                    data-bf-action="theme-configuration"
+                  >
+                    <Palette size={14} aria-hidden="true" />
+                    <span>{t('nav.settingsMenu.themeConfiguration')}</span>
+                  </button>
+                  <div className="bitfun-nav-panel__footer-menu-divider" data-bf-component="nav-panel" data-bf-part="footerMenuDivider" />
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__footer-menu-item"
+                    role="menuitem"
+                    onClick={handleOpenSettings}
+                    data-testid="nav-settings-open-item"
+                    data-bf-component="nav-panel"
+                    data-bf-part="footerMenuItem"
+                    data-bf-action="open-settings"
+                  >
+                    <Settings size={14} aria-hidden="true" />
+                    <span>{t('nav.settingsMenu.openSettings')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__footer-menu-item"
+                    role="menuitem"
+                    onClick={handleShowAbout}
+                    data-testid="nav-settings-about-item"
+                    data-bf-component="nav-panel"
+                    data-bf-part="footerMenuItem"
+                    data-bf-action="about"
+                  >
+                    <Info size={14} aria-hidden="true" />
+                    <span>{t('nav.settingsMenu.about')}</span>
+                  </button>
+                </div>
+              </>,
+              getAppearanceOverlayHost(),
+            )}
+          </div>
         </div>
       </div>
       <PresenceBoundary active={showAbout}>

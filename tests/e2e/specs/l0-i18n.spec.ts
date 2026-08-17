@@ -56,24 +56,12 @@ describe('L0 Internationalization', () => {
 
       await browser.pause(500);
 
-      // Open more options menu in footer
-      const moreBtn = await $('.bitfun-nav-panel__footer-btn--icon');
-      await moreBtn.click();
-      await browser.pause(500);
-
-      // Click settings menu item
-      const menuItems = await $$('.bitfun-nav-panel__footer-menu-item');
-      let settingsItem = null;
-      for (const item of menuItems) {
-        const html = await item.getHTML();
-        if (html.includes('Settings') || html.includes('settings')) {
-          settingsItem = item;
-          break;
-        }
-      }
-
-      expect(settingsItem).not.toBeNull();
-      await settingsItem!.click();
+      // Open the footer settings list, then enter Settings.
+      const settingsButton = await $('[data-testid="nav-footer-settings-item"]');
+      await settingsButton.click();
+      const settingsItem = await $('[data-testid="nav-settings-open-item"]');
+      await settingsItem.waitForDisplayed({ timeout: 10000 });
+      await settingsItem.click();
       await browser.pause(2000);
 
       // Navigate to Basics tab (language selector lives there)

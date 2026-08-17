@@ -26,6 +26,8 @@ const LIGHT_PURPLE_HOVER = '#655680';
 const LIGHT_SUCCESS = '#5b9a6f';
 const LIGHT_WARNING = '#c08c42';
 const LIGHT_ERROR = '#c26565';
+const LIGHT_BACKGROUND_PRIMARY = '#fafafa';
+const LIGHT_EDITOR_LINE_HIGHLIGHT = '#f3f3f5';
 
 const lightInk = (alpha: number | string) => rgbaFromHex(LIGHT_INK, alpha);
 const lightAccent = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT, alpha);
@@ -38,7 +40,7 @@ export const bitfunLightPalette: AppearancePalette = {
   type: 'light',
   description: 'Light appearance - Neutral gray surfaces, black primary actions',
   author: 'BitFun Team',
-  version: '2.3.0',
+  version: '2.3.1',
 
   layout: {
     sceneViewportBorder: false,
@@ -47,7 +49,7 @@ export const bitfunLightPalette: AppearancePalette = {
 
   colors: {
     background: {
-      primary: '#f3f3f5',
+      primary: LIGHT_BACKGROUND_PRIMARY,
       secondary: STATIC_WHITE,
       tertiary: '#e8e8e8',
       elevated: STATIC_WHITE,
@@ -234,9 +236,9 @@ export const bitfunLightPalette: AppearancePalette = {
       { token: 'attribute.value', foreground: '5b9a6f' },
     ],
     colors: {
-      background: '#f3f3f5',
+      background: LIGHT_BACKGROUND_PRIMARY,
       foreground: LIGHT_TEXT_PRIMARY,
-      lineHighlight: '#f0f4f8',
+      lineHighlight: LIGHT_EDITOR_LINE_HIGHLIGHT,
       selection: lightInk(0.14),
       cursor: LIGHT_TEXT_PRIMARY,
 

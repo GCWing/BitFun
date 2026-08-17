@@ -1048,7 +1048,8 @@
     }
 
     .bitfun-nav-panel__inline-list {
-      margin-left: 8px;
+      // Align the nested session title with the workspace label after its 26px icon slot.
+      margin-left: 22px;
       margin-right: 0;
       padding-top: 0;
       padding-left: 2px;
@@ -1393,7 +1394,8 @@
     }
 
     .bitfun-nav-panel__inline-list {
-      margin-left: 8px;
+      // Keep assistant-owned session rows on the same text rail as the assistant label.
+      margin-left: 22px;
       margin-right: 0;
       padding-top: 0;
       padding-left: 2px;

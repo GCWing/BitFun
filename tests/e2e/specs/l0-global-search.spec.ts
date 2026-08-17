@@ -59,6 +59,19 @@ describe('L0 Global Search', () => {
 
     const dialog = await $('[data-testid="global-search-dialog"]');
     await dialog.waitForDisplayed({ timeout: 10000 });
+    const overlayPresentation = await browser.execute(() => {
+      const overlay = document.querySelector<HTMLElement>('.modal-overlay.global-search-overlay');
+      if (!overlay) return null;
+
+      const style = window.getComputedStyle(overlay);
+      return {
+        backgroundColor: style.backgroundColor,
+        backdropFilter: style.backdropFilter,
+      };
+    });
+    expect(overlayPresentation).not.toBeNull();
+    expect(['rgba(0, 0, 0, 0)', 'transparent']).toContain(overlayPresentation?.backgroundColor);
+    expect(overlayPresentation?.backdropFilter).toBe('none');
     expect(await dialog.$('.global-search__prefix-hint').isExisting()).toBe(false);
     expect(await dialog.$('.global-search__footer-status').isExisting()).toBe(false);
 
