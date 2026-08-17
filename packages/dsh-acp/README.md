@@ -28,6 +28,11 @@ the harness's own `dsh-settings-file`, `dsh-credentials-local`, and
 `dsh-agent-default-model` services, so switching models in dsh switches them in
 BitFun too. BitFun writes no DeepSeek credentials of its own.
 
+A session also opens with a model picker of its own: the bridge publishes every
+model your dsh providers advertise as the `model` session config option,
+grouped by provider, starting on the default above. Picking one applies from
+the next message and lasts that session — it does not rewrite your dsh default.
+
 ## How BitFun launches it
 
 BitFun runs `dsh --profile bitfun-acp`. A dsh profile is just a directory under
@@ -71,8 +76,8 @@ reopened conversation loses its history, its context, and the mode it ran under
 
 `session/load` resumes the stored session out of the harness's own persistence
 (`$DSH_HOME/acp-sessions/<project>/<session-id>/`), replays its events to the
-client as `session/update` notifications, and answers with the session's mode.
-Three consequences worth knowing:
+client as `session/update` notifications, and answers with the session's mode
+and model. Four consequences worth knowing:
 
 - **The stored mode wins over the roster default.** Which preset a session ran
   under is read back from its own log, so a conversation started in `minimal`
@@ -80,6 +85,10 @@ Three consequences worth knowing:
 - **A conversation that has started comes back locked.** The mode picker shrinks
   to the one mode in force, because the composition is already baked into the
   transcript — the same rule a live session follows after its first turn.
+- **The model comes back off the log too, and stays switchable.** The picker
+  opens on the provider/model the session's own turns were logged under, not on
+  whatever the dsh default has become. Unlike the mode it is never locked:
+  swapping which model answers the next step leaves every logged turn valid.
 - **A session belongs to the directory it was created in.** Loading it against
   another `cwd` is refused rather than answered with a session whose sandbox
   boundary points somewhere else.

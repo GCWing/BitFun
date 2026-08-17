@@ -19,7 +19,9 @@
 # the harness the user already installed and configured: `$DSH_HOME/settings.yaml`
 # (what dsh's web Models page writes) and `$DSH_HOME/.credentials.yaml`, read
 # through the two provider rows below. Nothing about an account is stored in
-# this repository, and BitFun never asks for a key of its own.
+# this repository, and BitFun never asks for a key of its own. The bridge offers
+# those same routes to the client as the `model` session config option, so an
+# IDE picks per session out of the catalog dsh already holds.
 
 # User-settings document ($DSH_HOME/settings.yaml, hot-reloaded): its
 # `llm-deepseek:` / `llm-pi-ai:` sections override the adapter rows below
@@ -104,9 +106,12 @@
 # keeps its registries (tools, skills, goals, jobs, agents, loop) and hands the
 # model-facing plugins to ./presets. `persona` is likewise absent — each preset
 # carries its own through `@deepseek-ai/dsh-persona`.
-# `provider`/`model` are deliberately absent: each session starts on
+# `provider`/`model` are deliberately absent: each session STARTS on
 # `agent-default-model`'s live selection, so the model chosen in dsh is the
-# model an IDE session runs. Sessions live under the harness home rather than
+# model an IDE session opens on. From there the client picks per session
+# through the `model` config option, over the catalog the rows above register;
+# that pick lasts the session and is not written back as the dsh default.
+# Sessions live under the harness home rather than
 # beside whatever project happens to be open — an ACP client launches this
 # adapter with the USER's workspace as the working directory.
 - id: acp-agent

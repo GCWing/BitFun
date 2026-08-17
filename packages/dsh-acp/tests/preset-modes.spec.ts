@@ -11,7 +11,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { PROTOCOL_VERSION, type SessionConfigOption } from '@agentclientprotocol/sdk'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
-  makeBridgeHarness, textResponse, updatesOfKind, waitForUpdates, type BridgeHarness,
+  makeBridgeHarness, optionsOfCategory, selectOption, textResponse, updatesOfKind, waitForUpdates,
+  type BridgeHarness,
 } from './harness.ts'
 
 /** The tools a session's model can call, i.e. what its preset composed. */
@@ -30,14 +31,14 @@ function selections(harness: BridgeHarness, sessionId: string): unknown[] {
     .map(event => (event as { data: { agentPreset: string } }).data.agentPreset)
 }
 
-/** The one mode option, asserted to be a select so its values can be read. */
+/**
+ * The one mode option. A session publishes a model picker alongside it, so the
+ * mode is read by category rather than by being the only thing on the wire.
+ */
 function modeOption(configOptions: SessionConfigOption[] | null | undefined): Extract<
   SessionConfigOption, { type: 'select' }
 > {
-  const [option, ...rest] = configOptions ?? []
-  expect(rest).toEqual([])
-  if (option?.type !== 'select') throw new Error(`expected one select option, got ${JSON.stringify(configOptions)}`)
-  return option
+  return selectOption(configOptions, 'mode')
 }
 
 /** The values a client's picker would list, in roster order. */
@@ -154,12 +155,13 @@ describe('agent-preset modes', () => {
     expect(updatesOfKind(harness, 'config_option_update')).toHaveLength(1)
   })
 
-  it('offers nothing when the deployment has no roster', async () => {
+  it('offers no mode when the deployment has no roster', async () => {
     harness = await makeBridgeHarness({ script: [textResponse('ok')] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const session = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
-    expect(session.configOptions ?? []).toEqual([])
+    // The model picker is orthogonal and still published; only the mode is gone.
+    expect(optionsOfCategory(session.configOptions, 'mode')).toEqual([])
     await expect(harness.client.setSessionConfigOption({
       sessionId: session.sessionId, configId: 'agent-preset', value: 'beta',
     })).rejects.toThrow(/offers no modes/)
