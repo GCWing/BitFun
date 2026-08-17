@@ -495,7 +495,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("generate_insights", RemoteWorkspacePolicy::RemoteRouted),
     (
         "get_token_usage_statistics",
-        RemoteWorkspacePolicy::RemoteRouted,
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
         "generate_session_title",
@@ -2144,6 +2144,15 @@ mod tests {
         assert!(
             stale.is_empty(),
             "remote workspace policies declared for commands that are no longer registered: {stale:?}"
+        );
+    }
+
+    #[test]
+    fn token_usage_statistics_are_scoped_to_the_current_bitfun_host() {
+        assert_eq!(
+            remote_workspace_policy("get_token_usage_statistics"),
+            Some(RemoteWorkspacePolicy::WorkspaceAgnostic),
+            "token usage is recorded by the current BitFun runtime and does not follow the workspace filesystem to an SSH host"
         );
     }
 
