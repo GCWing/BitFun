@@ -32,6 +32,7 @@ mod prompts;
 mod root_handlers;
 mod runtime;
 mod self_update;
+mod server_host;
 mod shared_runtime;
 mod terminal_attention;
 mod ui;
@@ -371,6 +372,11 @@ enum Commands {
         #[command(subcommand)]
         action: DispatchAction,
     },
+
+    /// Start the BitFun app server over stdio
+    ///
+    /// stdout carries JSON-RPC traffic only; logs are written to stderr.
+    Server,
 
     /// Start or inspect the Agent Client Protocol (ACP) server
     Acp {
@@ -1494,6 +1500,10 @@ async fn run_cli() -> Result<()> {
             root_handlers::handle_dispatch_action(action).await?;
         }
 
+        Some(Commands::Server) => {
+            server_host::serve().await?;
+        }
+
         Some(Commands::Acp {
             action: None | Some(AcpAction::Serve),
         }) => {
@@ -1671,6 +1681,18 @@ fn main() {
             eprintln!("Error: bitfun worker thread panicked");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod server_command_tests {
+    use super::{Cli, Commands};
+    use clap::Parser;
+
+    #[test]
+    fn server_command_parses_as_stdio_host() {
+        let parsed = Cli::try_parse_from(["bitfun", "server"]).expect("parse server command");
+        assert!(matches!(parsed.command, Some(Commands::Server)));
     }
 }
 

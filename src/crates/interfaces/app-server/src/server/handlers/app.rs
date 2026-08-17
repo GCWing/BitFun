@@ -10,17 +10,21 @@ use bitfun_product_domains::product_search::PRODUCT_SEARCH_CAPABILITY_ID;
 
 use crate::management::EXTERNAL_SOURCES_CAPABILITY;
 use crate::role::{AppClient, AppServer};
-
-const MAX_FRAME_BYTES: u64 = 16 * 1024 * 1024;
-const EVENT_BUFFER_CAPACITY: u32 = 1024;
+use crate::server::host_policy::{AppServerHostLimits, AppServerHostPolicy};
 
 pub(in crate::server) fn builder(
     runtime: std::sync::Arc<crate::agent::BitfunAppRuntime>,
     event_state: std::sync::Arc<crate::server::ConnectionEventState>,
     management: Option<std::sync::Arc<crate::management::AppManagementService>>,
+    host_policy: Option<std::sync::Arc<AppServerHostPolicy>>,
+    limits: AppServerHostLimits,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
-    let capabilities =
-        registered_capabilities(runtime.product_search().is_some(), management.as_deref());
+    let capabilities = registered_capabilities(
+        runtime.product_search().is_some(),
+        management.as_deref(),
+        runtime.context_reload().is_some(),
+        host_policy.as_deref(),
+    );
     let external_source_snapshot_available = capabilities.iter().any(|capability| {
         capability.id == EXTERNAL_SOURCES_CAPABILITY
             && matches!(capability.availability, CapabilityAvailability::Available)
@@ -51,8 +55,8 @@ pub(in crate::server) fn builder(
                     },
                     capabilities.clone(),
                     TransportLimits {
-                        max_frame_bytes: MAX_FRAME_BYTES,
-                        event_buffer_capacity: EVENT_BUFFER_CAPACITY,
+                        max_frame_bytes: limits.max_frame_bytes,
+                        event_buffer_capacity: limits.event_buffer_capacity,
                     },
                 )))
             },
@@ -92,8 +96,11 @@ pub(in crate::server) fn builder(
 fn registered_capabilities(
     product_search_available: bool,
     management: Option<&crate::management::AppManagementService>,
+    context_reload_available: bool,
+    host_policy: Option<&AppServerHostPolicy>,
 ) -> Vec<CapabilityDescriptor> {
-    let mut capabilities = [
+    let mut capabilities = Vec::new();
+    for (id, methods) in [
         (
             "agent",
             vec![
@@ -194,45 +201,67 @@ fn registered_capabilities(
             ],
         ),
         ("eventSync", vec!["app/syncEvents", "app/eventStreamState"]),
-    ]
-    .into_iter()
-    .map(|(id, methods)| CapabilityDescriptor {
-        id: id.to_string(),
-        availability: CapabilityAvailability::Available,
-        methods: methods.into_iter().map(str::to_string).collect(),
-    })
-    .collect::<Vec<_>>();
-    capabilities.push(CapabilityDescriptor {
-        id: PRODUCT_SEARCH_CAPABILITY_ID.to_string(),
-        availability: if product_search_available {
-            CapabilityAvailability::Available
-        } else {
-            CapabilityAvailability::Unavailable {
-                reason: "The Host did not provide product search".to_string(),
-            }
-        },
-        methods: vec!["search/sessionContent".to_string()],
-    });
-    capabilities.extend(
-        management
-            .map(|service| service.capabilities())
-            .unwrap_or_else(|| {
-                crate::management::AppManagementCapabilities::unavailable(
-                    "The Host did not provide management owners",
-                )
-            })
-            .descriptors(),
-    );
+    ] {
+        let mut methods = methods;
+        if !context_reload_available {
+            methods.retain(|method| *method != "session/reloadContext");
+        }
+        if let Some(host_policy) = host_policy {
+            methods.retain(|method| host_policy.allows(method));
+        }
+        if methods.is_empty() {
+            continue;
+        }
+        capabilities.push(CapabilityDescriptor {
+            id: id.to_string(),
+            availability: CapabilityAvailability::Available,
+            methods: methods.into_iter().map(str::to_string).collect(),
+        });
+    }
+    const PRODUCT_SEARCH_METHOD: &str = "search/sessionContent";
+    if host_policy
+        .map(|policy| policy.allows(PRODUCT_SEARCH_METHOD))
+        .unwrap_or(true)
+    {
+        capabilities.push(CapabilityDescriptor {
+            id: PRODUCT_SEARCH_CAPABILITY_ID.to_string(),
+            availability: if product_search_available {
+                CapabilityAvailability::Available
+            } else {
+                CapabilityAvailability::Unavailable {
+                    reason: "The Host did not provide product search".to_string(),
+                }
+            },
+            methods: vec![PRODUCT_SEARCH_METHOD.to_string()],
+        });
+    }
+    let management_capabilities = management
+        .map(|service| service.capabilities())
+        .unwrap_or_else(|| {
+            crate::management::AppManagementCapabilities::unavailable(
+                "The Host did not provide management owners",
+            )
+        });
+    for mut descriptor in management_capabilities.descriptors() {
+        if let Some(host_policy) = host_policy {
+            descriptor
+                .methods
+                .retain(|method| host_policy.allows(method));
+        }
+        if descriptor.methods.is_empty() {
+            continue;
+        }
+        capabilities.push(descriptor);
+    }
     capabilities
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn missing_host_management_service_declares_capabilities_unavailable() {
-        let capabilities = registered_capabilities(false, None);
+        let capabilities = registered_capabilities(false, None, true, None);
         for id in [
             "tui.modes",
             "tui.models",
@@ -258,7 +287,7 @@ mod tests {
     #[test]
     fn product_search_capability_reflects_the_injected_port() {
         for (available, expected_available) in [(false, false), (true, true)] {
-            let capabilities = registered_capabilities(available, None);
+            let capabilities = registered_capabilities(available, None, true, None);
             let search = capabilities
                 .iter()
                 .find(|capability| capability.id == PRODUCT_SEARCH_CAPABILITY_ID)
@@ -269,5 +298,20 @@ mod tests {
             );
             assert_eq!(search.methods, vec!["search/sessionContent"]);
         }
+    }
+
+    #[test]
+    fn host_policy_hides_product_search_when_method_is_not_allowed() {
+        let policy = AppServerHostPolicy::new(
+            "test-host",
+            std::env::temp_dir(),
+            ["app/initialize"],
+        )
+        .expect("build host policy");
+        let capabilities = registered_capabilities(true, None, true, Some(&policy));
+
+        assert!(capabilities
+            .iter()
+            .all(|capability| capability.id != PRODUCT_SEARCH_CAPABILITY_ID));
     }
 }

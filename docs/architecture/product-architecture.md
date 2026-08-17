@@ -507,7 +507,7 @@ adapter 映射到稳定 owner 接口，不因该目标复用 App Server wire。�
 | 能力归属模块 / Agent Runtime API | 字段明确的请求和响应、状态事实、权限/取消规则、与框架无关的用例方法 | `tauri::State`、`AppHandle`、窗口/菜单对象、command 宏、HTTP/WebSocket/ACP/SDK Host 消息结构 |
 | Desktop Tauri / product Host adapter | 当前组装 Tauri adapter；目标按部署组装 direct Runtime adapter 或 App Server transport、注入真实 capability 与平台 provider、管理窗口和桌面生命周期、投递 typed Runtime/App Server notification 或桌面专属事件 | 复制业务校验、持有第二份权威状态、在目标迁移完成后为同一能力保留第二条 Runtime 旁路、把 Tauri 类型传入下层 |
 | Server / Remote adapter | 路由鉴权、协议消息、连接生命周期、流量控制与取消转换 | 为同一能力另建业务含义不同的 DTO 或 handler |
-| GUI / Web / TUI frontend | 当前依赖各自 infrastructure；Embedded/Shared TUI controller 直接组合 `CliAgentRuntimeClient` 与所需的 owner/service API，Web 或其他确需连接边界的 surface 才组合 App Server client；各自保留渲染状态 | 在 UI component/view 中直接依赖 Runtime 实现或私有 Shared IPC、公开 Python/TypeScript SDK、Tauri 业务 command；创建 catch-all TUI client、surface service、owner adapter、统一 TUI management 模块，或让 CLI 依赖 App Server implementation/client |
+| GUI / Web / TUI frontend | 当前依赖各自 infrastructure；Embedded/Shared TUI controller 直接组合 `CliAgentRuntimeClient` 与所需的 owner/service API，Web 或其他确需连接边界的 surface 才组合 App Server client；各自保留渲染状态 | 在 UI component/view 中直接依赖 Runtime 实现或私有 Shared IPC、公开 Python/TypeScript SDK、Tauri 业务 command；创建 catch-all TUI client、surface service、owner adapter、统一 TUI management 模块，或让 CLI 在 `bitfun server` 之外依赖 App Server implementation/client（唯一经评审的例外是 `src/apps/cli/src/server_host.rs` 中的独立 stdio Server Host 装配点：它选择 `DeliveryProfile::Cli` 复用已评审的 CLI Agent 内核装配，再以 Host 注入的 allowlist/scope 收敛能力；TUI/controller/Headless CLI 仍禁止依赖 App Server） |
 
 本文其他章节和历史设计中出现的“Runtime SDK”，如果指 `agent-runtime::sdk`，统一称为
 **Rust Runtime SDK（当前 preview）**；它是共享 **Agent Runtime API** 的当前 Rust 入口。只有

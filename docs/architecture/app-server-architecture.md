@@ -68,6 +68,7 @@ Embedded 已选择 B/C 的受限组合，A 不再是 Embedded 默认方案。Sha
 | Shared TUI | 仍通过私有 Runtime IPC v17 连接独立 Runtime Host | 保留 v17；是否迁入 Shared App Server 由可靠性、安全、性能和回滚证据决定 |
 | Desktop GUI | 主要仍使用 Tauri command 和桌面事件投影 | Embedded 时使用 direct Runtime adapter；需要连接边界时使用 App Server，Tauri 保留平台能力 |
 | Web Host | 当前 Server 已组装 Embedded Runtime，WebSocket 直接承载 `BitfunAppServer`；仅适用于 loopback 单用户模式 | 补齐连接身份、作用域绑定和 Host allowlist 后才能扩展部署范围 |
+| CLI stdio Server Host | `bitfun server` 命令在 `src/apps/cli/src/server_host.rs` 独立装配 stdio `BitfunAppServer`；该装配点是 CLI 唯一允许依赖 App Server implementation 的位置。Host 注入 canonical cwd workspace scope、显式 method allowlist、transport limits 与 stdin EOF disconnect 信号 | 保持独立 Host 表面：stdout 只承载 JSON-RPC line 流量，frame 超限 fail closed，断连后取消在途 Turn 并确定性退出；TUI/controller/Headless CLI 不依赖 App Server |
 | App Server protocol/client | 已拆为 behavior-light crate，已有版本、能力、限制、错误和部分事件恢复类型 | 补齐 Host 注入能力、可靠性语义及跨 transport 合同测试 |
 | App Server server | 已注册 app、agent、session、permission、TUI/workspace、git、config 和 i18n handler | 按真实 owner 和 Host 装配收窄能力，不以已存在 DTO 代替可用性证据 |
 
@@ -284,7 +285,9 @@ Tauri 继续拥有窗口、菜单、系统托盘、文件选择器、剪贴板�
 - Desktop Host 可在 direct Embedded 与 Shared/App Server 之间切换，但 UI 不包含部署分支；
   route 选择留在 Host/infrastructure。
 
-## 9. Web 与远程 Host
+## 9. Web、stdio 与远程 Host
+
+CLI 的 `bitfun server` 是同一 App Server 合同的独立 stdio Server Host：stdout 只承载 JSON-RPC line 流量；canonical cwd 是唯一 workspace scope；Host 注入显式 method allowlist；`app/initialize` 返回该 Host 的实际能力与 transport limits；stdin 读取端按 advertised frame limit fail closed；stdin EOF 触发断连生命周期（取消在途 Turn 并确定性退出）。该 Host 是独立 Host surface，不是 TUI/Headless CLI 的默认路径。
 
 WebSocket 是 App Server 的一种 transport，不是另一套业务 API。Web Host 必须使用同一 method、DTO、错误和事件合同，同时根据部署场景构造显式 capability allowlist。
 
