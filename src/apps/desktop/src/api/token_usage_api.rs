@@ -21,6 +21,9 @@ pub struct TokenUsageStatisticsRequest {
     pub start: Option<DateTime<Utc>>,
     #[serde(default)]
     pub end: Option<DateTime<Utc>>,
+    /// IANA time zone used for local-calendar ranges and trend buckets.
+    #[serde(default)]
+    pub time_zone: Option<String>,
     #[serde(default)]
     pub include_subagent: bool,
 }
@@ -66,6 +69,7 @@ pub async fn get_token_usage_statistics(
         model_id: None,
         session_id: None,
         time_range,
+        time_zone: request.time_zone,
         limit: None,
         offset: None,
         include_subagent: request.include_subagent,

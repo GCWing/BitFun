@@ -29,6 +29,7 @@ fn token_usage_query_preserves_include_subagent_default() {
         model_id: None,
         session_id: None,
         time_range: TimeRange::All,
+        time_zone: None,
         limit: None,
         offset: None,
         include_subagent: false,
@@ -39,6 +40,7 @@ fn token_usage_query_preserves_include_subagent_default() {
             .expect("query should deserialize");
 
     assert!(!restored.include_subagent);
+    assert!(restored.time_zone.is_none());
 }
 
 #[test]
