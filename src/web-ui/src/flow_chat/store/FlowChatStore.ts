@@ -702,10 +702,14 @@ function snapshotDropsProjectedTurnContent(
  *
  * Contract 2 of docs/architecture/session-projection.md: the runtime stream
  * owns an executing Turn, so its persisted copy — deliberately stored idle so a
- * restart never revives work, and therefore truncated, token-less, and shaped
- * like a finished Turn — must not be painted over it. Doing so showed a
- * completed Turn on a controller while the Host was still streaming
- * (regression: 2026-08-17).
+ * restart never revives work, and therefore lagging and shaped like a finished
+ * Turn — must not be painted over it. Doing so left a controller showing less
+ * of a Turn than the Host, and showing it as finished while the Host was still
+ * streaming (regression: 2026-08-17).
+ *
+ * Those two symptoms together are the signature. Missing token usage is not
+ * part of it: a provider that returns no usage stats produces the same empty
+ * field on a perfectly healthy Turn.
  *
  * Two cases keep a content comparison, and both are places the contract does
  * not yet reach:
