@@ -10395,6 +10395,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         child_session_id: &str,
         child_session_name: Option<&str>,
         question: &str,
+        submission_policy: DialogSubmissionPolicy,
         model_id: Option<&str>,
         image_contexts: Option<Vec<ImageContextData>>,
         parent_dialog_turn_id: Option<&str>,
@@ -10480,7 +10481,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             child_session.config.workspace_path.clone(),
             child_session.config.remote_connection_id.clone(),
             child_session.config.remote_ssh_host.clone(),
-            DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi),
+            submission_policy,
             Some(user_message_metadata),
             prepended_messages,
             true,
@@ -18498,6 +18499,7 @@ mod tests {
                     project_workspace_path: Some(project_workspace_path.clone()),
                     execution_target: Some(execution_target.clone()),
                     workspace_id: Some("workspace-1".to_string()),
+                    prompt_cache_lineage_id: Some("parent-lineage".to_string()),
                     ..Default::default()
                 },
             )
@@ -18545,6 +18547,7 @@ mod tests {
             resolved.session_config.workspace_id.as_deref(),
             Some("workspace-1")
         );
+        assert!(resolved.session_config.prompt_cache_lineage_id.is_none());
     }
 
     #[tokio::test]
@@ -19169,6 +19172,10 @@ mod tests {
         assert_eq!(
             child_session.config.remote_ssh_host.as_deref(),
             Some("example.test")
+        );
+        assert_eq!(
+            child_session.config.prompt_cache_lineage_id.as_deref(),
+            Some(parent_session.session_id.as_str())
         );
         assert_eq!(
             session_manager

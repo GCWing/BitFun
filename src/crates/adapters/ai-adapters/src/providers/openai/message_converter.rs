@@ -1,8 +1,11 @@
 //! OpenAI message format converter
 
+use crate::stream::types::responses::OPENAI_RESPONSES_REPLAY_PROTOCOL;
 use crate::types::{Message, ToolDefinition};
+use bitfun_core_types::ModelResponseReplayItem;
 use log::{error, warn};
 use serde_json::{json, Value};
+use std::collections::{HashMap, HashSet};
 
 pub struct OpenAIMessageConverter;
 
@@ -27,6 +30,11 @@ impl OpenAIMessageConverter {
                     }
                 }
                 "assistant" => {
+                    if let Some(replay_items) = Self::convert_assistant_replay_items(&msg) {
+                        input.extend(replay_items);
+                        continue;
+                    }
+
                     if let Some(content_items) = Self::convert_message_content_to_responses_items(
                         &msg.role,
                         msg.content.as_deref(),
@@ -72,6 +80,98 @@ impl OpenAIMessageConverter {
         };
 
         (instructions, input)
+    }
+
+    fn convert_assistant_replay_items(msg: &Message) -> Option<Vec<Value>> {
+        let replay = msg.model_response_replay.as_ref()?;
+        if replay.protocol != OPENAI_RESPONSES_REPLAY_PROTOCOL || replay.items.is_empty() {
+            return None;
+        }
+
+        let assistant_message =
+            Self::convert_message_content_to_responses_items("assistant", msg.content.as_deref())
+                .map(|content| {
+                    json!({
+                        "type": "message",
+                        "role": "assistant",
+                        "content": content,
+                    })
+                });
+
+        let tool_calls = msg.tool_calls.as_deref().unwrap_or_default();
+        let mut tool_calls_by_id = HashMap::with_capacity(tool_calls.len());
+        for tool_call in tool_calls {
+            if tool_call.id.is_empty()
+                || tool_calls_by_id
+                    .insert(tool_call.id.as_str(), tool_call)
+                    .is_some()
+            {
+                return None;
+            }
+        }
+
+        let mut output = Vec::with_capacity(replay.items.len());
+        let mut assistant_message_used = false;
+        let mut used_tool_calls = HashSet::with_capacity(tool_calls.len());
+        let mut saw_opaque_reasoning = false;
+
+        for replay_item in &replay.items {
+            match replay_item {
+                ModelResponseReplayItem::OpaqueReasoning {
+                    item_id,
+                    summary,
+                    opaque_state,
+                } => {
+                    if opaque_state.is_empty() {
+                        return None;
+                    }
+                    saw_opaque_reasoning = true;
+                    let mut item = json!({
+                        "type": "reasoning",
+                        "summary": summary
+                            .iter()
+                            .map(|part| json!({
+                                "type": "summary_text",
+                                "text": part.text,
+                            }))
+                            .collect::<Vec<_>>(),
+                        "encrypted_content": opaque_state,
+                    });
+                    if let Some(item_id) = item_id.as_ref().filter(|value| !value.is_empty()) {
+                        item["id"] = Value::String(item_id.clone());
+                    }
+                    output.push(item);
+                }
+                ModelResponseReplayItem::AssistantMessage => {
+                    if assistant_message_used {
+                        return None;
+                    }
+                    output.push(assistant_message.clone()?);
+                    assistant_message_used = true;
+                }
+                ModelResponseReplayItem::FunctionCall { call_id } => {
+                    if !used_tool_calls.insert(call_id.as_str()) {
+                        return None;
+                    }
+                    let tool_call = tool_calls_by_id.get(call_id.as_str())?;
+                    output.push(json!({
+                        "type": "function_call",
+                        "call_id": tool_call.id,
+                        "name": tool_call.name,
+                        "arguments": tool_call.serialized_arguments(),
+                    }));
+                }
+            }
+        }
+
+        if !saw_opaque_reasoning
+            || assistant_message_used != assistant_message.is_some()
+            || used_tool_calls.len() != tool_calls.len()
+        {
+            return None;
+        }
+
+        Some(output)
     }
 
     pub fn convert_messages(messages: Vec<Message>) -> Vec<Value> {
@@ -429,7 +529,142 @@ impl OpenAIMessageConverter {
 mod tests {
     use super::OpenAIMessageConverter;
     use crate::types::{Message, ToolCall, ToolImageAttachment};
+    use bitfun_core_types::{
+        ModelReasoningSummaryPart, ModelResponseReplay, ModelResponseReplayItem,
+    };
     use serde_json::json;
+
+    fn assistant_with_replay(
+        content: Option<&str>,
+        tool_calls: Vec<ToolCall>,
+        items: Vec<ModelResponseReplayItem>,
+    ) -> Message {
+        Message {
+            role: "assistant".to_string(),
+            content: content.map(ToString::to_string),
+            reasoning_content: Some("readable summary".to_string()),
+            thinking_signature: None,
+            tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
+            tool_call_id: None,
+            name: None,
+            is_error: None,
+            tool_image_attachments: None,
+            model_response_replay: Some(ModelResponseReplay {
+                protocol: "openai_responses".to_string(),
+                items,
+            }),
+        }
+    }
+
+    fn opaque_reasoning(id: &str, state: &str) -> ModelResponseReplayItem {
+        ModelResponseReplayItem::OpaqueReasoning {
+            item_id: Some(id.to_string()),
+            summary: vec![ModelReasoningSummaryPart {
+                text: format!("summary {id}"),
+            }],
+            opaque_state: state.to_string(),
+        }
+    }
+
+    #[test]
+    fn replays_reasoning_before_final_assistant_message() {
+        let message = assistant_with_replay(
+            Some("done"),
+            vec![],
+            vec![
+                opaque_reasoning("rs_1", "opaque_1"),
+                ModelResponseReplayItem::AssistantMessage,
+            ],
+        );
+
+        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(vec![message]);
+
+        assert_eq!(input.len(), 2);
+        assert_eq!(input[0]["type"], json!("reasoning"));
+        assert_eq!(input[0]["id"], json!("rs_1"));
+        assert_eq!(input[0]["encrypted_content"], json!("opaque_1"));
+        assert_eq!(input[1]["type"], json!("message"));
+        assert_eq!(input[1]["content"][0]["text"], json!("done"));
+    }
+
+    #[test]
+    fn replays_multiple_reasoning_and_function_calls_in_original_order() {
+        let message = assistant_with_replay(
+            None,
+            vec![
+                ToolCall {
+                    id: "call_1".to_string(),
+                    name: "one".to_string(),
+                    arguments: json!({"value": 1}),
+                    raw_arguments: None,
+                },
+                ToolCall {
+                    id: "call_2".to_string(),
+                    name: "two".to_string(),
+                    arguments: json!({"value": 2}),
+                    raw_arguments: Some("{\"value\":2}".to_string()),
+                },
+            ],
+            vec![
+                opaque_reasoning("rs_1", "opaque_1"),
+                ModelResponseReplayItem::FunctionCall {
+                    call_id: "call_2".to_string(),
+                },
+                opaque_reasoning("rs_2", "opaque_2"),
+                ModelResponseReplayItem::FunctionCall {
+                    call_id: "call_1".to_string(),
+                },
+            ],
+        );
+
+        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(vec![message]);
+
+        assert_eq!(
+            input
+                .iter()
+                .map(|item| item["type"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["reasoning", "function_call", "reasoning", "function_call"]
+        );
+        assert_eq!(input[1]["call_id"], json!("call_2"));
+        assert_eq!(input[1]["arguments"], json!("{\"value\":2}"));
+        assert_eq!(input[3]["call_id"], json!("call_1"));
+    }
+
+    #[test]
+    fn invalid_replay_layout_falls_back_atomically() {
+        let message = assistant_with_replay(
+            None,
+            vec![
+                ToolCall {
+                    id: "call_1".to_string(),
+                    name: "one".to_string(),
+                    arguments: json!({"value": 1}),
+                    raw_arguments: None,
+                },
+                ToolCall {
+                    id: "call_2".to_string(),
+                    name: "two".to_string(),
+                    arguments: json!({"value": 2}),
+                    raw_arguments: None,
+                },
+            ],
+            vec![
+                opaque_reasoning("rs_1", "opaque_1"),
+                ModelResponseReplayItem::FunctionCall {
+                    call_id: "call_1".to_string(),
+                },
+            ],
+        );
+
+        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(vec![message]);
+
+        assert_eq!(input.len(), 2);
+        assert!(input.iter().all(|item| item["type"] == "function_call"));
+        assert!(input
+            .iter()
+            .all(|item| item.get("encrypted_content").is_none()));
+    }
 
     #[test]
     fn converts_messages_to_responses_input() {
@@ -452,6 +687,7 @@ mod tests {
                 name: Some("get_weather".to_string()),
                 is_error: None,
                 tool_image_attachments: None,
+                model_response_replay: None,
             },
         ];
 
@@ -528,6 +764,7 @@ mod tests {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }];
 
         let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(messages);
@@ -552,6 +789,7 @@ mod tests {
                 mime_type: "image/jpeg".to_string(),
                 data_base64: "AAA".to_string(),
             }]),
+            model_response_replay: None,
         }];
 
         let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(messages);
@@ -583,6 +821,7 @@ mod tests {
                 mime_type: "image/jpeg".to_string(),
                 data_base64: "YmFi".to_string(),
             }]),
+            model_response_replay: None,
         };
 
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
@@ -613,6 +852,7 @@ mod tests {
             name: Some("WebFetch".to_string()),
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         };
 
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
@@ -641,6 +881,7 @@ mod tests {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         };
 
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
@@ -672,6 +913,7 @@ mod tests {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         };
 
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
@@ -700,6 +942,7 @@ mod tests {
                 name: None,
                 is_error: None,
                 tool_image_attachments: None,
+                model_response_replay: None,
             }]);
 
         assert_eq!(input[0]["content"][0]["type"], json!("input_text"));
@@ -731,6 +974,7 @@ mod tests {
                 name: None,
                 is_error: None,
                 tool_image_attachments: None,
+                model_response_replay: None,
             }]);
 
         assert_eq!(input[0]["content"][0]["type"], json!("input_text"));
@@ -749,6 +993,7 @@ mod tests {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         };
 
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
@@ -773,6 +1018,7 @@ mod tests {
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         };
 
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);

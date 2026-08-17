@@ -304,6 +304,7 @@ pub fn build_multimodal_message(
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }
     } else if provider_lower.contains("gemini") || provider_lower.contains("google") {
         Message {
@@ -326,6 +327,7 @@ pub fn build_multimodal_message(
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }
     } else {
         // Default to OpenAI-compatible payload shape for OpenAI and most OpenAI-compatible providers.
@@ -350,6 +352,7 @@ pub fn build_multimodal_message(
             name: None,
             is_error: None,
             tool_image_attachments: None,
+            model_response_replay: None,
         }
     };
 
@@ -467,6 +470,7 @@ pub fn build_multimodal_message_with_images(
         name: None,
         is_error: None,
         tool_image_attachments: None,
+        model_response_replay: None,
     }])
 }
 

@@ -219,6 +219,7 @@ pub(crate) async fn test_image_input_connection(
         name: None,
         is_error: None,
         tool_image_attachments: None,
+        model_response_replay: None,
     }];
 
     match client

@@ -2,6 +2,7 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::util::types::{Message as AIMessage, ToolCall as AIToolCall, ToolImageAttachment};
 use crate::util::TokenCounter;
 use bitfun_agent_runtime::prompt_markup::is_system_reminder_only;
+use bitfun_core_types::ModelResponseReplay;
 pub use bitfun_runtime_ports::{CompressionContract, CompressionContractItem};
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -74,6 +75,8 @@ pub struct MessageMetadata {
     /// reminders so activation can be reconstructed from persisted history.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub activated_instruction_sources: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_response_replay: Option<ModelResponseReplay>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -259,6 +262,7 @@ impl From<Message> for AIMessage {
             MessageRole::System => "system",
         };
         let thinking_signature = msg.metadata.thinking_signature.clone();
+        let model_response_replay = msg.metadata.model_response_replay.clone();
 
         match msg.content {
             MessageContent::Text(text) => {
@@ -287,6 +291,7 @@ impl From<Message> for AIMessage {
                     name: None,
                     is_error: None,
                     tool_image_attachments: None,
+                    model_response_replay: model_response_replay.clone(),
                 }
             }
             MessageContent::Multimodal { text, images } => {
@@ -321,6 +326,7 @@ impl From<Message> for AIMessage {
                     name: None,
                     is_error: None,
                     tool_image_attachments: None,
+                    model_response_replay: model_response_replay.clone(),
                 }
             }
             MessageContent::Mixed {
@@ -363,6 +369,7 @@ impl From<Message> for AIMessage {
                     name: None,
                     is_error: None,
                     tool_image_attachments: None,
+                    model_response_replay: model_response_replay.clone(),
                 }
             }
             MessageContent::ToolResult {
@@ -401,6 +408,7 @@ impl From<Message> for AIMessage {
                     name: Some(tool_name),
                     is_error: Some(is_error),
                     tool_image_attachments: image_attachments.clone(),
+                    model_response_replay: model_response_replay.clone(),
                 }
             }
         }
@@ -605,6 +613,14 @@ impl Message {
         self
     }
 
+    pub fn with_model_response_replay(
+        mut self,
+        model_response_replay: Option<ModelResponseReplay>,
+    ) -> Self {
+        self.metadata.model_response_replay = model_response_replay;
+        self
+    }
+
     /// Get message's token count
     pub fn get_tokens(&mut self) -> usize {
         if let Some(tokens) = self.metadata.tokens {
@@ -758,6 +774,7 @@ mod tests {
     use super::{Message, ToolCall};
     use crate::util::types::Message as AIMessage;
     use bitfun_agent_stream::ToolArgumentRepairKind;
+    use bitfun_core_types::{ModelResponseReplay, ModelResponseReplayItem};
     use serde_json::json;
 
     #[test]
@@ -769,6 +786,60 @@ mod tests {
 
         assert_eq!(ai_msg.reasoning_content.as_deref(), Some(""));
         assert_eq!(ai_msg.thinking_signature.as_deref(), Some("sig_1"));
+    }
+
+    #[test]
+    fn persists_and_restores_model_response_replay() {
+        let message = Message::assistant("done".to_string()).with_model_response_replay(Some(
+            ModelResponseReplay {
+                protocol: "openai_responses".to_string(),
+                items: vec![ModelResponseReplayItem::OpaqueReasoning {
+                    item_id: Some("rs_1".to_string()),
+                    summary: vec![],
+                    opaque_state: "opaque".to_string(),
+                }],
+            },
+        ));
+
+        let encoded = serde_json::to_string(&message).expect("serialize message");
+        let restored: Message = serde_json::from_str(&encoded).expect("deserialize message");
+        let replay = restored
+            .metadata
+            .model_response_replay
+            .expect("restored replay");
+
+        assert_eq!(replay.protocol, "openai_responses");
+        assert!(matches!(
+            &replay.items[0],
+            ModelResponseReplayItem::OpaqueReasoning { opaque_state, .. }
+                if opaque_state == "opaque"
+        ));
+    }
+
+    #[test]
+    fn legacy_message_without_model_response_replay_still_deserializes() {
+        let message = Message::assistant("done".to_string());
+        let mut encoded = serde_json::to_value(message).expect("serialize message");
+        encoded["metadata"]
+            .as_object_mut()
+            .expect("metadata object")
+            .remove("model_response_replay");
+
+        let restored: Message = serde_json::from_value(encoded).expect("legacy message");
+        assert!(restored.metadata.model_response_replay.is_none());
+    }
+
+    #[test]
+    fn carries_model_response_replay_into_adapter_message() {
+        let message = Message::assistant("done".to_string()).with_model_response_replay(Some(
+            ModelResponseReplay {
+                protocol: "openai_responses".to_string(),
+                items: vec![ModelResponseReplayItem::AssistantMessage],
+            },
+        ));
+
+        let ai_message = AIMessage::from(message);
+        assert!(ai_message.model_response_replay.is_some());
     }
 
     #[test]

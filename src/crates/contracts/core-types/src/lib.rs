@@ -16,7 +16,8 @@ pub mod tool_image_attachment;
 pub mod worktree;
 
 pub use ai::{
-    AIConfig, ConnectionTestMessageCode, ConnectionTestResult, Message, ModelsDevCatalogSource,
+    AIConfig, ConnectionTestMessageCode, ConnectionTestResult, Message, ModelReasoningSummaryPart,
+    ModelRequestContext, ModelResponseReplay, ModelResponseReplayItem, ModelsDevCatalogSource,
     ModelsDevCatalogStatus, ModelsDevReasoningCatalog, ModelsDevReasoningModel,
     ModelsDevReasoningProvider, ModelsDevRefreshResult, ModelsDevRefreshStatus, ProviderCatalog,
     ProviderCatalogEndpoint, ProviderCatalogModel, ProviderCatalogModelCapabilities,

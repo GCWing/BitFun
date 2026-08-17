@@ -41,6 +41,7 @@ fn build_replay_assistant_message(result: &StreamResult) -> AIMessage {
         name: None,
         is_error: None,
         tool_image_attachments: None,
+        model_response_replay: None,
     }
 }
 

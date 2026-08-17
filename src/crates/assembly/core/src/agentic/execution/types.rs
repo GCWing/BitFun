@@ -8,7 +8,7 @@ use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 pub use bitfun_agent_runtime::events::FinishReason;
 use bitfun_agent_tools::LoadedDeferredToolSpec;
-use bitfun_core_types::SessionExecutionProfile;
+use bitfun_core_types::{ModelRequestContext, SessionExecutionProfile};
 use bitfun_runtime_ports::{
     DelegationPolicy, PermissionConstraintLayer, PermissionDelegationContext,
     PermissionRuntimeCeiling, RemoteExecPort, TerminalPort,
@@ -74,6 +74,8 @@ pub struct RoundContext {
     pub model_config_id: String,
     /// Provider model name sent in the request.
     pub effective_model_name: String,
+    /// Provider-neutral request-scoped facts resolved by the runtime owner.
+    pub model_request_context: ModelRequestContext,
     pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,
     /// Harness selection inherited from the owning turn snapshot.

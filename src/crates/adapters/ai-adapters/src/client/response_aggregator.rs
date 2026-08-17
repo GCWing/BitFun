@@ -33,6 +33,7 @@ pub(crate) async fn aggregate_stream_response(
                     tool_call_completion: _,
                     finish_reason: chunk_finish_reason,
                     provider_metadata: chunk_provider_metadata,
+                    model_response_replay: _,
                 } = chunk;
 
                 if let Some(text) = text {

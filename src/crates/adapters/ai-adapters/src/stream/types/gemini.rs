@@ -383,6 +383,7 @@ impl GeminiSSEData {
                         tool_call_completion: None,
                         finish_reason: None,
                         provider_metadata: None,
+                        model_response_replay: None,
                     });
                     continue;
                 }
@@ -398,6 +399,7 @@ impl GeminiSSEData {
                             tool_call_completion: None,
                             finish_reason: None,
                             provider_metadata: None,
+                            model_response_replay: None,
                         });
                         continue;
                     }
@@ -416,6 +418,7 @@ impl GeminiSSEData {
                             tool_call_completion: None,
                             finish_reason: None,
                             provider_metadata: None,
+                            model_response_replay: None,
                         });
                         continue;
                     }
@@ -431,6 +434,7 @@ impl GeminiSSEData {
                         tool_call_completion: None,
                         finish_reason: None,
                         provider_metadata: None,
+                        model_response_replay: None,
                     });
                     continue;
                 }
@@ -445,6 +449,7 @@ impl GeminiSSEData {
                         tool_call_completion: None,
                         finish_reason: None,
                         provider_metadata: None,
+                        model_response_replay: None,
                     });
                 }
             }
@@ -480,6 +485,7 @@ impl GeminiSSEData {
                 tool_call_completion: None,
                 finish_reason: None,
                 provider_metadata: Some(provider_metadata),
+                model_response_replay: None,
             });
         }
 
