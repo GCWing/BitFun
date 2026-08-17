@@ -451,11 +451,12 @@ export struct RemoteControlSettingsSheet {
       Column({ space: 0 }) {
         Row() {
           Button() {
+            // Unsized on purpose: a forced square box wider than the chevron's
+            // natural advance box leaves the glyph drawn against its left edge,
+            // which reads as an arrow slipped off the centre of a round button.
             SymbolGlyph($r('sys.symbol.chevron_left'))
               .fontSize(23)
               .fontColor([INK])
-              .width(26)
-              .height(26)
           }
             .width(44)
             .height(44)
