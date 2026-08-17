@@ -138,6 +138,10 @@ pub struct TokenUsageQuery {
     pub model_id: Option<String>,
     pub session_id: Option<String>,
     pub time_range: TimeRange,
+    /// IANA time zone used for local-calendar ranges and trend buckets.
+    /// Missing values preserve the legacy UTC behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<String>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
     /// Whether to include subagent token usage in results (default: false)

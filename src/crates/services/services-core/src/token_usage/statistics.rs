@@ -7,8 +7,10 @@
 //! (provider group, endpoint) so the module stays free of configuration and
 //! catalog dependencies.
 
+use super::time_zone::{local_date_start_utc, parse_time_zone};
 use super::types::TokenUsageRecord;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
+use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -64,8 +66,8 @@ impl UsageStatisticsEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageTrendPoint {
-    /// Bucket start (UTC). Hourly buckets are aligned to the hour, daily buckets
-    /// to midnight UTC.
+    /// Bucket start serialized as UTC. The instant is aligned to the requested
+    /// time zone's hour or local-calendar midnight.
     pub bucket: DateTime<Utc>,
     pub input_tokens: u64,
     pub output_tokens: u64,
@@ -117,6 +119,20 @@ pub fn aggregate_statistics<F>(
 where
     F: Fn(&TokenUsageRecord) -> UsageAttribution,
 {
+    aggregate_statistics_with_time_zone(records, granularity, None, attribute)
+}
+
+/// Aggregate records while aligning trend buckets to an IANA time zone.
+/// Invalid or missing zones preserve the legacy UTC behavior.
+pub fn aggregate_statistics_with_time_zone<F>(
+    records: &[TokenUsageRecord],
+    granularity: UsageGranularity,
+    time_zone: Option<&str>,
+    attribute: F,
+) -> UsageStatistics
+where
+    F: Fn(&TokenUsageRecord) -> UsageAttribution,
+{
     let mut total_requests = 0u32;
     let mut total_input = 0u64;
     let mut total_output = 0u64;
@@ -144,7 +160,8 @@ where
         accumulate_entry(&mut by_endpoint, attribution.endpoint, record);
     }
 
-    let (trend, effective_granularity) = build_trend(records, granularity);
+    let time_zone = parse_time_zone(time_zone).unwrap_or(chrono_tz::UTC);
+    let (trend, effective_granularity) = build_trend(records, granularity, time_zone);
 
     UsageStatistics {
         total_requests,
@@ -209,75 +226,52 @@ fn finalize_entries(map: HashMap<String, UsageStatisticsEntry>) -> Vec<UsageStat
 fn build_trend(
     records: &[TokenUsageRecord],
     granularity: UsageGranularity,
+    time_zone: Tz,
 ) -> (Vec<UsageTrendPoint>, UsageGranularity) {
     if records.is_empty() {
         return (Vec::new(), granularity);
     }
 
     let mut granularity = granularity;
-    let mut buckets = bucket_records(records, granularity);
+    let mut buckets = bucket_records(records, granularity, time_zone);
 
     let mut first = *buckets.keys().min().unwrap_or(&0);
     let mut last = *buckets.keys().max().unwrap_or(&0);
-    let mut step_seconds = step_seconds_for(granularity);
 
-    let mut bucket_count = (last - first) / step_seconds + 1;
-    if granularity == UsageGranularity::Hour && bucket_count > MAX_TREND_POINTS as i64 {
+    let hourly_bucket_count = (last - first) / 3600 + 1;
+    if granularity == UsageGranularity::Hour && hourly_bucket_count > MAX_TREND_POINTS as i64 {
         granularity = UsageGranularity::Day;
-        step_seconds = step_seconds_for(granularity);
-        // Re-key already collected buckets on the coarser grid.
-        let mut rebucketed: HashMap<i64, TrendBucket> = HashMap::new();
-        for (key, mut bucket) in buckets {
-            bucket.key = key - key.rem_euclid(step_seconds);
-            rebucketed
-                .entry(bucket.key)
-                .and_modify(|existing: &mut TrendBucket| existing.merge(&bucket))
-                .or_insert(bucket);
-        }
-        buckets = rebucketed;
+        buckets = bucket_records(records, granularity, time_zone);
         first = *buckets.keys().min().unwrap_or(&0);
         last = *buckets.keys().max().unwrap_or(&0);
-        bucket_count = (last - first) / step_seconds + 1;
     }
 
-    let start = if bucket_count > MAX_TREND_POINTS as i64 {
-        // Extremely long ranges keep only the most recent buckets.
-        last - (MAX_TREND_POINTS as i64 - 1) * step_seconds
-    } else {
-        first
-    };
+    let bucket_keys = bucket_keys_between(first, last, granularity, time_zone);
+    let retained_start = bucket_keys.len().saturating_sub(MAX_TREND_POINTS);
 
-    let mut trend = Vec::with_capacity((last - start) as usize / step_seconds as usize + 1);
-    let mut cursor = start;
-    while cursor <= last {
-        let bucket = buckets.remove(&cursor);
+    let mut trend = Vec::with_capacity(bucket_keys.len() - retained_start);
+    for key in bucket_keys.into_iter().skip(retained_start) {
+        let bucket = buckets.remove(&key);
         trend.push(
             TrendBucket {
-                key: cursor,
+                key,
                 ..bucket.unwrap_or_default()
             }
             .into_point(),
         );
-        cursor += step_seconds;
     }
 
     (trend, granularity)
 }
 
-fn step_seconds_for(granularity: UsageGranularity) -> i64 {
-    match granularity {
-        UsageGranularity::Hour => 3600,
-        UsageGranularity::Day => 86_400,
-    }
-}
-
 fn bucket_records(
     records: &[TokenUsageRecord],
     granularity: UsageGranularity,
+    time_zone: Tz,
 ) -> HashMap<i64, TrendBucket> {
     let mut buckets: HashMap<i64, TrendBucket> = HashMap::new();
     for record in records {
-        let key = bucket_key(record.timestamp, granularity);
+        let key = bucket_key(record.timestamp, granularity, time_zone);
         let bucket = buckets.entry(key).or_insert_with(|| TrendBucket {
             key,
             ..TrendBucket::default()
@@ -293,16 +287,52 @@ fn bucket_records(
     buckets
 }
 
-fn bucket_key(timestamp: DateTime<Utc>, granularity: UsageGranularity) -> i64 {
-    let seconds = timestamp.timestamp();
+fn bucket_key(timestamp: DateTime<Utc>, granularity: UsageGranularity, time_zone: Tz) -> i64 {
     match granularity {
-        UsageGranularity::Hour => seconds - seconds.rem_euclid(3600),
+        UsageGranularity::Hour => timestamp
+            .with_timezone(&time_zone)
+            .with_minute(0)
+            .and_then(|value| value.with_second(0))
+            .and_then(|value| value.with_nanosecond(0))
+            .map(|value| value.with_timezone(&Utc).timestamp())
+            .unwrap_or_else(|| timestamp.timestamp() - timestamp.timestamp().rem_euclid(3600)),
         UsageGranularity::Day => {
-            let date = timestamp.date_naive();
-            let midnight = date.and_hms_opt(0, 0, 0).expect("midnight is valid");
-            midnight.and_utc().timestamp()
+            let date = timestamp.with_timezone(&time_zone).date_naive();
+            local_date_start_utc(date, time_zone)
+                .map(|value| value.timestamp())
+                .unwrap_or_else(|_| {
+                    date.and_hms_opt(0, 0, 0)
+                        .expect("midnight is valid")
+                        .and_utc()
+                        .timestamp()
+                })
         }
     }
+}
+
+fn bucket_keys_between(
+    first: i64,
+    last: i64,
+    granularity: UsageGranularity,
+    time_zone: Tz,
+) -> Vec<i64> {
+    let mut keys = Vec::new();
+    let mut cursor = first;
+    while cursor <= last {
+        keys.push(cursor);
+        let next = match granularity {
+            UsageGranularity::Hour => cursor.checked_add(3600),
+            UsageGranularity::Day => DateTime::from_timestamp(cursor, 0)
+                .and_then(|value| value.with_timezone(&time_zone).date_naive().succ_opt())
+                .and_then(|date| local_date_start_utc(date, time_zone).ok())
+                .map(|value| value.timestamp()),
+        };
+        let Some(next) = next.filter(|next| *next > cursor) else {
+            break;
+        };
+        cursor = next;
+    }
+    keys
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -316,14 +346,6 @@ struct TrendBucket {
 }
 
 impl TrendBucket {
-    fn merge(&mut self, other: &TrendBucket) {
-        self.input_tokens += other.input_tokens;
-        self.output_tokens += other.output_tokens;
-        self.cached_tokens += other.cached_tokens;
-        self.cache_write_tokens += other.cache_write_tokens;
-        self.reported_input_tokens += other.reported_input_tokens;
-    }
-
     fn into_point(self) -> UsageTrendPoint {
         let cache_hit_rate = (self.reported_input_tokens > 0)
             .then(|| self.cached_tokens as f64 / self.reported_input_tokens as f64);
@@ -492,6 +514,89 @@ mod tests {
         let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         assert_eq!(stats.granularity, UsageGranularity::Day);
         assert_eq!(stats.trend.len(), 61);
+    }
+
+    #[test]
+    fn daily_trend_uses_the_requested_local_midnight() {
+        let records = vec![
+            record(
+                "model-a",
+                Utc.with_ymd_and_hms(2026, 8, 15, 16, 30, 0).unwrap(),
+                100,
+                0,
+                0,
+                0,
+                false,
+            ),
+            record(
+                "model-a",
+                Utc.with_ymd_and_hms(2026, 8, 16, 15, 30, 0).unwrap(),
+                200,
+                0,
+                0,
+                0,
+                false,
+            ),
+        ];
+
+        let stats = aggregate_statistics_with_time_zone(
+            &records,
+            UsageGranularity::Day,
+            Some("Asia/Shanghai"),
+            attribution(),
+        );
+
+        assert_eq!(stats.trend.len(), 1);
+        assert_eq!(stats.trend[0].input_tokens, 300);
+        assert_eq!(
+            stats.trend[0].bucket,
+            Utc.with_ymd_and_hms(2026, 8, 15, 16, 0, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn daily_trend_follows_dst_calendar_days() {
+        let records = vec![
+            record(
+                "model-a",
+                Utc.with_ymd_and_hms(2026, 3, 7, 13, 0, 0).unwrap(),
+                100,
+                0,
+                0,
+                0,
+                false,
+            ),
+            record(
+                "model-a",
+                Utc.with_ymd_and_hms(2026, 3, 9, 12, 0, 0).unwrap(),
+                200,
+                0,
+                0,
+                0,
+                false,
+            ),
+        ];
+
+        let stats = aggregate_statistics_with_time_zone(
+            &records,
+            UsageGranularity::Day,
+            Some("America/New_York"),
+            attribution(),
+        );
+
+        assert_eq!(stats.trend.len(), 3);
+        assert_eq!(
+            stats.trend[0].bucket,
+            Utc.with_ymd_and_hms(2026, 3, 7, 5, 0, 0).unwrap()
+        );
+        assert_eq!(
+            stats.trend[1].bucket,
+            Utc.with_ymd_and_hms(2026, 3, 8, 5, 0, 0).unwrap()
+        );
+        assert_eq!(
+            stats.trend[2].bucket,
+            Utc.with_ymd_and_hms(2026, 3, 9, 4, 0, 0).unwrap()
+        );
     }
 
     #[test]

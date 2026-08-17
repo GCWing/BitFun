@@ -1525,6 +1525,7 @@ dependencies = [
  "bitfun-events",
  "bitfun-runtime-ports",
  "chrono",
+ "chrono-tz",
  "dunce",
  "filetime",
  "fs2",

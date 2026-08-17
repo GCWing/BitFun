@@ -66,13 +66,22 @@ function formatHitRate(value: number | null): string {
   return `${truncated.toFixed(2)}%`;
 }
 
-function formatBucketLabel(bucket: string, granularity: UsageGranularity): string {
+function formatBucketLabel(
+  bucket: string,
+  granularity: UsageGranularity,
+  timeZone: string,
+  formatDate: (date: Date | number, options?: Intl.DateTimeFormatOptions) => string,
+): string {
   const date = new Date(bucket);
   if (Number.isNaN(date.getTime())) return bucket;
-  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(date.getUTCDate()).padStart(2, '0');
-  if (granularity === 'day') return `${mm}-${dd}`;
-  return `${mm}-${dd} ${String(date.getUTCHours()).padStart(2, '0')}:00`;
+  return formatDate(date, {
+    month: '2-digit',
+    day: '2-digit',
+    timeZone,
+    ...(granularity === 'hour'
+      ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' as const }
+      : {}),
+  });
 }
 
 function truncateName(name: string, max = 28): string {
@@ -264,6 +273,7 @@ const ModelCacheHitRatePanel: React.FC<{ entries: UsageStatisticsEntry[] }> = ({
 interface TrendChartProps {
   points: UsageStatistics['trend'];
   granularity: UsageGranularity;
+  timeZone: string;
 }
 
 const TREND_SERIES: {
@@ -292,8 +302,8 @@ function niceMax(value: number): number {
   return nice * magnitude;
 }
 
-const TrendChart: React.FC<TrendChartProps> = ({ points, granularity }) => {
-  const { t } = useI18n('settings/usage-statistics');
+const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }) => {
+  const { t, formatDate } = useI18n('settings/usage-statistics');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const plotWidth = CHART_WIDTH - PAD_LEFT - PAD_RIGHT;
@@ -372,7 +382,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity }) => {
             textAnchor="middle"
             className="bitfun-usage-stats__trend-axis"
           >
-            {formatBucketLabel(points[index].bucket, granularity)}
+            {formatBucketLabel(points[index].bucket, granularity, timeZone, formatDate)}
           </text>
         ))}
 
@@ -444,7 +454,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity }) => {
                 y={PAD_TOP + 16}
                 className="bitfun-usage-stats__trend-tooltip-title"
               >
-                {formatBucketLabel(hovered.bucket, granularity)}
+                {formatBucketLabel(hovered.bucket, granularity, timeZone, formatDate)}
               </text>
               {[
                 { label: t('trend.legend.input'), value: hovered.inputTokens, color: SERIES_COLORS.input },
@@ -525,6 +535,10 @@ const UsageStatisticsConfig: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<{ type: 'error'; text: string } | null>(null);
   const requestIdRef = useRef(0);
+  const timeZone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    [],
+  );
 
   const load = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
@@ -538,6 +552,7 @@ const UsageStatisticsConfig: React.FC = () => {
       const result = await tokenUsageStatisticsApi.getStatistics({
         timeRange,
         granularity,
+        timeZone,
       });
       if (requestId !== requestIdRef.current) return;
       setStats(result);
@@ -550,7 +565,7 @@ const UsageStatisticsConfig: React.FC = () => {
         setRefreshing(false);
       }
     }
-  }, [timeRange, granularity, t]);
+  }, [timeRange, granularity, timeZone, t]);
 
   useEffect(() => {
     void load();
@@ -674,7 +689,11 @@ const UsageStatisticsConfig: React.FC = () => {
                 data-bf-part="trendPanel"
               >
                 <div className="bitfun-usage-stats__panel-title">{t('trend.title')}</div>
-                <TrendChart points={stats.trend} granularity={stats.granularity} />
+                <TrendChart
+                  points={stats.trend}
+                  granularity={stats.granularity}
+                  timeZone={timeZone}
+                />
               </div>
             </div>
           </>
