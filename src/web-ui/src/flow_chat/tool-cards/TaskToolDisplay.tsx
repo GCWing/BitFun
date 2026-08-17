@@ -793,6 +793,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                   <>
                     <span
                       className="task-action__subagent-name"
+                      data-bf-component="task-tool-display"
                       data-bf-part="subagentName"
                     >
                       {subagentIdentityName}

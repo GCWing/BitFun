@@ -48,6 +48,7 @@ export const IconCatalogPreview: React.FC = () => (
         <article
           className="bitfun-icon-catalog-preview__item"
           key={name}
+          data-bf-component="icon-catalog"
           data-bf-part="item"
           data-bf-icon={name}
         >

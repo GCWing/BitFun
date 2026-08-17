@@ -18,7 +18,6 @@ export function createBitFunIconComponent(
       ref={ref}
       size={size}
       strokeWidth={strokeWidth}
-      data-bf-component="icon"
       data-bf-icon={id}
       aria-hidden={decorative ? 'true' : undefined}
       aria-label={decorative ? undefined : label}

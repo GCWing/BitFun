@@ -212,6 +212,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
             aria-label={t('deviceOverview.title')}
             data-testid="nav-device-status-popover"
             data-bf-component="device-overview"
+            data-bf-part="root"
             data-bf-state={overview.mode}
             data-bf-placement={popoverLayout?.placement ?? 'top'}
             style={{

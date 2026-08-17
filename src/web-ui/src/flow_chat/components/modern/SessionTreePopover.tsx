@@ -458,7 +458,8 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
             <span className="session-tree-popover__node-copy">
               <span
                 className="session-tree-popover__node-title"
-                data-bf-part={identityName ? 'subagentName' : 'sessionTreeNodeTitle'}
+                data-bf-component="flow-chat-header"
+                data-bf-part="sessionTreeNodeTitle"
               >
                 {primaryLabel}
               </span>
