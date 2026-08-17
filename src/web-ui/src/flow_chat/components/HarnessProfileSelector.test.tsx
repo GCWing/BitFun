@@ -127,7 +127,7 @@ describe('HarnessProfileSelector', () => {
     ).toBe(true);
   });
 
-  it('offers the three gears with ascending density and the promise each makes', async () => {
+  it('offers three density gears plus the Creative profile with its BitFun icon', async () => {
     await act(async () => {
       root.render(<HarnessProfileSelector selectedProfile="balanced" onSelectProfile={vi.fn()} />);
     });
@@ -143,16 +143,22 @@ describe('HarnessProfileSelector', () => {
       'minimal',
       'balanced',
       'ultimate',
+      'creative',
     ]);
-    expect(rows.map(row => density(row))).toEqual([1, 2, 3]);
-    for (const row of rows) {
+    expect(rows.map(row => density(row))).toEqual([1, 2, 3, 0]);
+    for (const row of rows.slice(0, 3)) {
       expect(row.querySelector('.bitfun-harness-selector__profile-promise')).not.toBeNull();
       expect(row.querySelector('.bitfun-harness-selector__density-core')).not.toBeNull();
     }
+    const creative = rows[3];
+    expect(creative?.querySelector('.bitfun-harness-selector__profile-promise')).not.toBeNull();
+    expect(creative?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();
+    expect(creative?.querySelector('[data-bf-icon="harness-creative"]')).not.toBeNull();
+    expect(creative?.dataset.bfState).toBe('coming-soon');
     expect(rows[1]?.dataset.bfState).toBe('current');
   });
 
-  it('activates minimal and balanced while reporting ultimate as unavailable', async () => {
+  it('activates minimal and balanced while reporting unfinished profiles as unavailable', async () => {
     const onSelectProfile = vi.fn();
     await act(async () => {
       root.render(<HarnessProfileSelector selectedProfile="balanced" onSelectProfile={onSelectProfile} />);
@@ -166,6 +172,17 @@ describe('HarnessProfileSelector', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(notify.info).toHaveBeenCalledTimes(1);
+    expect(onSelectProfile).not.toHaveBeenCalled();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-creative"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(notify.info).toHaveBeenCalledTimes(2);
     expect(onSelectProfile).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -222,23 +239,38 @@ describe('HarnessProfileSelector', () => {
       { duration: 3800 },
     );
     expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
-  });
 
-  it('does not present a persisted ultimate profile as active', async () => {
     await act(async () => {
-      root.render(<HarnessProfileSelector selectedProfile="ultimate" onSelectProfile={vi.fn()} />);
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-creative"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-
-    const ultimate = document.querySelector<HTMLButtonElement>(
-      '[data-testid="harness-profile-ultimate"]',
+    expect(notify.info).toHaveBeenLastCalledWith(
+      'chatInput.harness.comingSoonNotice',
+      { duration: 3200 },
     );
-    expect(ultimate?.dataset.bfState).toBe('coming-soon');
-    expect(ultimate?.getAttribute('aria-checked')).toBe('false');
   });
+
+  it.each(['ultimate', 'creative'] as const)(
+    'does not present a persisted %s profile as active',
+    async (profileId) => {
+      await act(async () => {
+        root.render(<HarnessProfileSelector selectedProfile={profileId} onSelectProfile={vi.fn()} />);
+      });
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      const profile = document.querySelector<HTMLButtonElement>(
+        `[data-testid="harness-profile-${profileId}"]`,
+      );
+      expect(profile?.dataset.bfState).toBe('coming-soon');
+      expect(profile?.getAttribute('aria-checked')).toBe('false');
+    },
+  );
 
   it('keeps a legacy session on its own mode and explains why instead of switching', async () => {
     const onSelectProfile = vi.fn();

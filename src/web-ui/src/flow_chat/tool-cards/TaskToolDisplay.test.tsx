@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskToolDisplay } from './TaskToolDisplay';
 import { taskCollapseStateManager } from '../store/TaskCollapseStateManager';
+import { useSubagentIdentityStore } from '../subagent-identity';
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
 const mocks = vi.hoisted(() => ({
@@ -155,6 +156,10 @@ vi.mock('../store/FlowChatStore', () => ({
         }],
         ['subagent-session-1', {
           sessionId: 'subagent-session-1',
+          sessionKind: 'subagent',
+          parentSessionId: 'parent-session',
+          createdAt: 1000,
+          status: 'completed',
           mode: 'Explore',
           config: { agentType: 'Explore', modelName: 'fast' },
           dialogTurns: [],
@@ -335,6 +340,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
     taskCollapseStateManager.clearAll();
+    useSubagentIdentityStore.getState().clear();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -353,6 +359,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     mocks.dynamicReviewTurn.startTime = 1000;
     mocks.dynamicReviewTurn.endTime = undefined;
     mocks.dynamicReviewTurn.error = undefined;
+    useSubagentIdentityStore.getState().clear();
     taskCollapseStateManager.clearAll();
   });
 
@@ -1007,6 +1014,11 @@ describeWithJsdom('TaskToolDisplay', () => {
       ...reviewTaskItem('completed', 'Explore', 'Investigate task card behavior'),
       subagentSessionId: 'subagent-session-1',
     };
+    useSubagentIdentityStore.getState().reconcileRoot('parent-session', [{
+      sessionId: 'subagent-session-1',
+      createdAt: 1000,
+      active: false,
+    }]);
 
     await act(async () => {
       root.render(
@@ -1020,6 +1032,10 @@ describeWithJsdom('TaskToolDisplay', () => {
 
     const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
     expect(openButton).toBeTruthy();
+    expect(container.querySelector('[data-bf-component="subagent-avatar"][data-bf-avatar-id]'))
+      .toBeTruthy();
+    expect(container.querySelector('[data-bf-part="subagentName"]')?.textContent)
+      .toMatch(/^subagentIdentity\.names\.name\d{2}$/);
 
     await act(async () => {
       openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));

@@ -40,6 +40,11 @@
         "name": "極致",
         "description": "有界分解、專業協作與獨立複核。",
         "behavior": "品質優先，預算明確"
+      },
+      "creative": {
+        "name": "創造",
+        "description": "為 BitFun 做個人化定製：開發 Mini App、調整產品能力，並修改 BitFun 自身。",
+        "behavior": "Mini App 開發、產品定製與自身改造"
       }
     }
   },

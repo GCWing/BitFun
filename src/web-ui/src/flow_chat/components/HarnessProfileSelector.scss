@@ -51,9 +51,9 @@
   text-overflow: ellipsis;
 }
 
-// The frame grows from focus corners to a 2 x 2 plan and finally a 3 x 3
-// coverage grid. The accent core stays fixed, so density is legible by shape
-// rather than by color alone.
+// The execution gears grow from focus corners to a 2 x 2 plan and finally a
+// 3 x 3 coverage grid. Creative uses the registered grid-and-brush mark and
+// intentionally omits the shared accent core.
 .bitfun-harness-selector__density-mark {
   position: relative;
   display: inline-grid;

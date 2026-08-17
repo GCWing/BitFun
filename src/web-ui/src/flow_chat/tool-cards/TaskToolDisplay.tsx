@@ -37,6 +37,12 @@ import { loadBtwSessionHistory, openBtwSessionInAuxPane } from '../services/btwS
 import { flowChatStore } from '../store/FlowChatStore';
 import { useSessionGoalModeActive } from '../hooks/useSessionGoalModeActive';
 import { deriveSubagentExecutionStatus } from '../utils/subagentProjection';
+import { sessionLineageLifecycleForSession } from '../utils/sessionLineage';
+import {
+  getSubagentNameDefinition,
+  SubagentAvatar,
+  useSubagentIdentity,
+} from '../subagent-identity';
 import { deriveReviewTaskOutcome } from '../utils/reviewTaskOutcome';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system/services/NotificationService';
@@ -391,6 +397,15 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const linkedSubagentSession = linkedSubagentSessionId
     ? flowChatStore.getState().sessions.get(linkedSubagentSessionId)
     : undefined;
+  const subagentIdentity = useSubagentIdentity(linkedSubagentSessionId);
+  const subagentIdentityName = useMemo(() => {
+    if (!subagentIdentity) return undefined;
+    const definition = getSubagentNameDefinition(subagentIdentity.nameId);
+    return t(definition.labelKey, { defaultValue: definition.fallback });
+  }, [subagentIdentity, t]);
+  const subagentAvatarStatus = linkedSubagentSession
+    ? sessionLineageLifecycleForSession(linkedSubagentSession)
+    : 'idle';
   const loadLinkedReviewHistory = useCallback(async () => {
     if (!linkedSubagentSessionId) {
       return;
@@ -748,7 +763,14 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   );
 
   const renderToolIcon = () => {
-    return <Split size={16} />;
+    return subagentIdentity ? (
+      <SubagentAvatar
+        identity={subagentIdentity}
+        name={subagentIdentityName}
+        size={22}
+        status={subagentAvatarStatus}
+      />
+    ) : <Split size={16} />;
   };
 
   const renderHeader = () => (
@@ -767,6 +789,17 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
           <div className="task-body-main" data-bf-component="task-tool-display" data-bf-part="main">
             <div className={`task-header-main ${isFailed ? 'task-header-main--failed' : ''}`}>
               <span className="task-action" data-bf-component="task-tool-display" data-bf-part="action">
+                {subagentIdentityName ? (
+                  <>
+                    <span
+                      className="task-action__subagent-name"
+                      data-bf-part="subagentName"
+                    >
+                      {subagentIdentityName}
+                    </span>
+                    <span className="task-action__identity-separator" aria-hidden="true"> · </span>
+                  </>
+                ) : null}
                 {showSubagentExecModel && resolvedSubagentModel ? (
                   <>
                     {t('toolCards.taskTool.headerLinePrefix', { agentType: taskAgentTypeLabel })}

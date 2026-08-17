@@ -40,6 +40,11 @@
         "name": "Ultimate",
         "description": "Bounded decomposition, specialist collaboration, and independent review.",
         "behavior": "Quality-first with explicit budgets"
+      },
+      "creative": {
+        "name": "Creative",
+        "description": "Personalizes BitFun by building Mini Apps, tailoring product capabilities, and modifying BitFun itself.",
+        "behavior": "Mini App development, product customization, self-modification"
       }
     }
   },

@@ -1024,10 +1024,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     // window may currently be rendering a peer.
     const isLocalDevice = Boolean(localDeviceId) && device.device_id === localDeviceId;
     if (!isLocalDevice) {
-      if (syncStatus === 'syncing') {
-        info(t('accountLogin.syncInProgressHint'));
-        return;
-      }
       if (syncStatus === 'failed') {
         warning(t('accountLogin.syncFailedPeerHint'));
       }
@@ -1056,7 +1052,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       setLoading(false);
     }
   }, [
-    info,
     localDeviceId,
     onCloseDialog,
     success,
@@ -1277,7 +1272,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 // so the dialog can bring the UI back without disconnecting.
                 const isSelectable = isLocal
                   ? peerMode.active
-                  : d.online && syncStatus !== 'syncing';
+                  : d.online;
                 const removeLabel = isLocal
                   ? t('accountLogin.removeCurrentDevice')
                   : t('accountLogin.removeDevice');
@@ -1287,9 +1282,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                   data-bf-state={[
                     !d.online && 'offline',
                     isLocal && 'current',
-                    syncStatus === 'syncing' && !isLocal && 'syncing',
                   ].filter(Boolean).join(' ') || undefined}
-                  className={`account-panel__device-card ${isSelectable ? 'selectable' : ''} ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''} ${syncStatus === 'syncing' && !isLocal ? 'syncing' : ''}`}>
+                  className={`account-panel__device-card ${isSelectable ? 'selectable' : ''} ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''}`}>
                   <button
                     type="button"
                     className="account-panel__device-select"
@@ -1322,13 +1316,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                       </span>
                     </span>
                     {isSelectable && <ChevronRight size={14} />}
-                    {!isLocal && d.online && syncStatus === 'syncing' && (
-                      <RefreshCw
-                        size={14}
-                        className="spinning"
-                        aria-label={t('accountLogin.syncing')}
-                      />
-                    )}
                   </button>
                   <button type="button" className="account-panel__device-remove"
                     onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, displayName); }}

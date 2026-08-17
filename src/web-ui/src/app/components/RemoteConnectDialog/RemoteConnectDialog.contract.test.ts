@@ -273,7 +273,7 @@ describe('Remote Connect safety contracts', () => {
       dialogSource.indexOf("activeGroup !== 'network'"),
     );
 
-    expect(applyStatus).toContain("nextStatus.pairing_state === 'connected'");
+    expect(applyStatus).toContain("remotePairingStateName(nextStatus.pairing_state) === 'connected'");
     expect(applyStatus).toContain('setNetworkTab(connectedTab)');
     expect(applyStatus).toContain('setBotTab(connectedBot)');
     expect(restoreFlow.indexOf('applyStatus(s)')).toBeLessThan(

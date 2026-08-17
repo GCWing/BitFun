@@ -4,6 +4,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionTreePopover } from './SessionTreePopover';
+import { useSubagentIdentityStore } from '../../subagent-identity';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -72,6 +73,7 @@ describe('SessionTreePopover', () => {
     mocks.sessions.clear();
     mocks.sessions.set('root', createSession('root', 'main'));
     mocks.sessions.set('child', createSession('child', 'subagent', 'root'));
+    useSubagentIdentityStore.getState().clear();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -113,10 +115,10 @@ describe('SessionTreePopover', () => {
     expect(actionButton).not.toBeNull();
     const childNode = Array.from(panel?.querySelectorAll('[role="treeitem"]') ?? [])
       .find(node => node.textContent?.includes('Running child'));
-    const status = childNode?.querySelector('.session-tree-popover__status');
+    const status = childNode?.querySelector('.subagent-avatar__status');
     expect(childNode).not.toBeUndefined();
     expect(status).not.toBeNull();
-    expect(Boolean(actionButton?.compareDocumentPosition(status!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(childNode?.contains(status!)).toBe(true);
 
     await act(async () => {
       actionButton?.click();
@@ -136,6 +138,33 @@ describe('SessionTreePopover', () => {
       sessionId: 'child',
       isRoot: false,
     }));
+  });
+
+  it('assigns distinct avatar and name identities to sibling subagents', async () => {
+    mocks.sessions.set('child-2', createSession('child-2', 'subagent', 'root'));
+    mocks.sessions.set('child-3', createSession('child-3', 'subagent', 'root'));
+    const t = (key: string) => key;
+
+    await act(async () => {
+      root.render(
+        <SessionTreePopover
+          sessionId="root"
+          fallbackWorkspacePath="/workspace"
+          t={t}
+        />,
+      );
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-session-tree"]')?.click();
+      await Promise.resolve();
+    });
+
+    const avatars = Array.from(document.querySelectorAll<HTMLElement>(
+      '.session-tree-popover__panel [data-bf-component="subagent-avatar"]',
+    ));
+    expect(avatars).toHaveLength(3);
+    expect(new Set(avatars.map(avatar => avatar.dataset.bfAvatarId)).size).toBe(3);
+    expect(new Set(avatars.map(avatar => avatar.dataset.bfNameId)).size).toBe(3);
   });
 
   it('closes a sibling action-menu portal and restores focus with the parent', async () => {

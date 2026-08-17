@@ -8,6 +8,7 @@ export const config = createEmbeddedConfig(
     '../specs/l0-open-settings.spec.ts',
     '../specs/l0-observe.spec.ts',
     '../specs/l0-navigation.spec.ts',
+    '../specs/l0-device-overview.spec.ts',
     '../specs/l0-tabs.spec.ts',
     '../specs/l0-appearance.spec.ts',
     '../specs/l0-i18n.spec.ts',

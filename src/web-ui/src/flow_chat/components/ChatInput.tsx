@@ -131,6 +131,10 @@ import {
   resolveSessionAssistantWorkspace,
   resolveSwitchableChatInputModes,
 } from '../utils/chatInputMode';
+import {
+  resolveChatInputHarnessProfilePolicy,
+  resolvePendingHarnessProfileForCreation,
+} from '../utils/chatInputHarnessPolicy';
 import { collectModifiedFilePathsFromTurns } from '../utils/modifiedFilePaths';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
@@ -1060,6 +1064,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [effectiveTargetSession]
   );
   const isAcpTargetSession = Boolean(acpTargetAgentType);
+  const harnessProfilePolicy = useMemo(
+    () => resolveChatInputHarnessProfilePolicy({
+      isAssistantWorkspace,
+      isAcpTargetSession,
+      isSubagentInputTarget,
+    }),
+    [isAcpTargetSession, isAssistantWorkspace, isSubagentInputTarget],
+  );
   const globalPermissionMode = permissionModeFromConfig(toolPermissionConfig);
   // Session selection wins over the user-level default, matching how the
   // backend resolves the mode for each submission.
@@ -1089,19 +1101,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isHarnessProfileChangePending, setHarnessProfileChangePending] = useState(false);
   const [pendingNewSessionHarnessProfile, setPendingNewSessionHarnessProfile] =
     useState<SelectableHarnessProfileId | null>(null);
+  const effectivePendingNewSessionHarnessProfile = resolvePendingHarnessProfileForCreation(
+    harnessProfilePolicy,
+    pendingNewSessionHarnessProfile,
+  );
   const selectedHarnessProfile: HarnessProfileId =
     effectiveTargetSession?.config.executionProfile?.harnessProfileId
-      ?? pendingNewSessionHarnessProfile
+      ?? effectivePendingNewSessionHarnessProfile
       ?? 'balanced';
   const pendingNewSessionExecutionProfile = useMemo<SessionExecutionProfile | undefined>(
-    () => pendingNewSessionHarnessProfile
+    () => effectivePendingNewSessionHarnessProfile
       ? {
-          harnessProfileId: pendingNewSessionHarnessProfile,
+          harnessProfileId: effectivePendingNewSessionHarnessProfile,
           schemaVersion: 1,
           selectedBy: 'user',
         }
       : undefined,
-    [pendingNewSessionHarnessProfile],
+    [effectivePendingNewSessionHarnessProfile],
   );
 
   useEffect(() => {
@@ -4305,6 +4321,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
 
   const requestHarnessProfileChange = useCallback(async (profileId: SelectableHarnessProfileId) => {
+    if (!harnessProfilePolicy.userConfigurable) return;
     if (isHarnessProfileChangePending) return;
     if (harnessProfileLocked) {
       notificationService.info(t('chatInput.harness.sessionStartedNotice'));
@@ -4344,7 +4361,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setHarnessProfileChangePending(false);
     }
-  }, [effectiveTargetSessionId, harnessProfileLocked, isHarnessProfileChangePending, sessionModeSelectionTarget, t]);
+  }, [effectiveTargetSessionId, harnessProfileLocked, harnessProfilePolicy.userConfigurable, isHarnessProfileChangePending, sessionModeSelectionTarget, t]);
   
   const interruptedTurnRecovery = useMemo(
     () => selectInterruptedTurnRecovery(effectiveTargetSession, {
@@ -6113,12 +6130,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             
             <div className="bitfun-chat-input__actions" data-bf-component="chat-input" data-bf-part="actions">
               <div className="bitfun-chat-input__actions-left" data-bf-component="chat-input" data-bf-part="actionsLeft">
-                <div className="bitfun-chat-input__agent-boost" data-bf-component="chat-input" data-bf-part="boost" ref={agentBoostRef}>
+                <div
+                  className="bitfun-chat-input__agent-boost"
+                  data-bf-component="chat-input"
+                  data-bf-part="boost"
+                  data-testid="chat-input-agent-boost"
+                  ref={agentBoostRef}
+                >
                   {!isAcpTargetSession && (
                     <span ref={boostTriggerRef} data-bf-component="chat-input" data-bf-part="boostTrigger" data-bf-state={modeState.dropdownOpen ? 'open' : undefined}>
                       <Tooltip content={t('chatInput.addBoostTooltip')}>
                         <IconButton
                           className="bitfun-chat-input__agent-boost-add"
+                          data-testid="chat-input-agent-boost-trigger"
                           variant="ghost"
                           size="xs"
                           aria-haspopup="menu"
@@ -6135,35 +6159,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         </IconButton>
                       </Tooltip>
                     </span>
-                  )}
-
-                  {(canSwitchModes || isAcpTargetSession) && modeState.current !== 'agentic' && (
-                    <div
-                      className={`bitfun-chat-input__agent-capsule bitfun-chat-input__agent-capsule--${modeState.current === 'debug' ? 'debug' : modeState.current}`}
-                      data-bf-component="chat-input"
-                      data-bf-part="modeChip"
-                    >
-                      <span className="bitfun-chat-input__agent-capsule-label" data-bf-component="chat-input" data-bf-part="modeChipLabel">
-                        {t(`chatInput.modeNames.${modeState.current}`, { defaultValue: '' }) ||
-                          modeState.available.find(m => m.id === modeState.current)?.name ||
-                          modeState.current}
-                      </span>
-                      {!isAcpTargetSession && (
-                        <button
-                          type="button"
-                          className="bitfun-chat-input__agent-capsule-close"
-                          data-bf-component="chat-input"
-                          data-bf-part="modeChipRemove"
-                          aria-label={t('chatInput.resetToAgentic')}
-                          onClick={e => {
-                            e.stopPropagation();
-                            requestModeChange('agentic');
-                          }}
-                        >
-                          <X size={12} strokeWidth={2.5} />
-                        </button>
-                      )}
-                    </div>
                   )}
 
                   {modeState.dropdownOpen && createPortal(
@@ -6204,6 +6199,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                       data-bf-component="chat-input"
                                       data-bf-part="boostItem"
                                       data-bf-boost-item-kind="mode"
+                                      data-bf-mode-id={modeOption.id}
+                                      data-testid={`chat-input-mode-option-${modeOption.id}`}
                                       data-bf-state={[
                                         modeState.current === modeOption.id && 'selected',
                                         modeDisabled && 'disabled',
@@ -6508,10 +6505,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     getAppearanceOverlayHost(),
                   )}
                 </div>
-                {/* The two ends of the capsule carry the two halves of the next
-                    turn's contract: how it runs on the left, what runs it on
-                    the right. */}
-                {!isAcpTargetSession && !isSubagentInputTarget && !isAssistantWorkspace ? (
+                {/* Keep the add entry first, then Session Harness, then the
+                    selected Agent/Mode. Semantic DOM and focus order match. */}
+                {harnessProfilePolicy.userConfigurable ? (
                   <HarnessProfileSelector
                     legacySession={!canSwitchModes}
                     sessionStarted={harnessProfileLocked}
@@ -6520,6 +6516,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     onSelectProfile={requestHarnessProfileChange}
                   />
                 ) : null}
+                {(canSwitchModes || isAcpTargetSession) && modeState.current !== 'agentic' && (
+                  <div
+                    className={`bitfun-chat-input__agent-capsule bitfun-chat-input__agent-capsule--${modeState.current === 'debug' ? 'debug' : modeState.current}`}
+                    data-bf-component="chat-input"
+                    data-bf-part="modeChip"
+                    data-testid="chat-input-agent-mode-chip"
+                  >
+                    <span className="bitfun-chat-input__agent-capsule-label" data-bf-component="chat-input" data-bf-part="modeChipLabel">
+                      {t(`chatInput.modeNames.${modeState.current}`, { defaultValue: '' }) ||
+                        modeState.available.find(m => m.id === modeState.current)?.name ||
+                        modeState.current}
+                    </span>
+                    {!isAcpTargetSession && (
+                      <button
+                        type="button"
+                        className="bitfun-chat-input__agent-capsule-close"
+                        data-bf-component="chat-input"
+                        data-bf-part="modeChipRemove"
+                        aria-label={t('chatInput.resetToAgentic')}
+                        onClick={e => {
+                          e.stopPropagation();
+                          requestSessionModeChange('agentic');
+                          dispatchMode({ type: 'CLOSE_DROPDOWN' });
+                        }}
+                      >
+                        <X size={12} strokeWidth={2.5} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="bitfun-chat-input__actions-right" data-bf-component="chat-input" data-bf-part="actionsRight">
                 {voiceInput.phase === 'idle' ? (

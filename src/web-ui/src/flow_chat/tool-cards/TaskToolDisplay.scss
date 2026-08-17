@@ -212,6 +212,16 @@
       color: var(--bf-appearance-token-color-text-secondary);
       vertical-align: baseline;
     }
+
+    &__subagent-name {
+      color: var(--bf-appearance-token-color-accent-500);
+      font-weight: 600;
+    }
+
+    &__identity-separator {
+      color: var(--bf-appearance-token-color-text-muted);
+      font-weight: 400;
+    }
   }
 
   .task-header-main--failed {

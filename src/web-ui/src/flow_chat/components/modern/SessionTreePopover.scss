@@ -121,6 +121,10 @@
       font-weight: 500;
     }
 
+    &--subagent {
+      min-height: 44px;
+    }
+
     &--cancelling {
       opacity: 0.72;
     }
@@ -165,6 +169,10 @@
     > svg {
       flex: 0 0 auto;
       color: var(--bf-appearance-token-color-text-secondary);
+    }
+
+    > .subagent-avatar {
+      margin-right: 1px;
     }
   }
 

@@ -12,7 +12,7 @@ export const harnessProfileSelectorAppearanceDescriptor: AppearanceSurfaceDescri
     {
       id: 'profile',
       attribute: 'data-bf-profile',
-      values: ['minimal', 'balanced', 'ultimate'],
+      values: ['minimal', 'balanced', 'ultimate', 'creative'],
     },
   ],
   states: [

@@ -1,0 +1,56 @@
+.subagent-avatar {
+  --subagent-avatar-size: 28px;
+
+  position: relative;
+  display: inline-grid;
+  width: var(--subagent-avatar-size);
+  height: var(--subagent-avatar-size);
+  flex: 0 0 var(--subagent-avatar-size);
+  place-items: center;
+  overflow: visible;
+
+  &__art {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    user-select: none;
+  }
+
+  &__status {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    z-index: 1;
+    width: max(6px, calc(var(--subagent-avatar-size) * 0.24));
+    height: max(6px, calc(var(--subagent-avatar-size) * 0.24));
+    border: 1.5px solid var(--bf-appearance-token-color-bg-elevated);
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-text-muted);
+  }
+
+  &--running &__status,
+  &--finishing &__status {
+    background: var(--bf-appearance-token-color-success);
+  }
+
+  &--waiting &__status {
+    background: var(--bf-appearance-token-color-warning);
+  }
+
+  &--error &__status,
+  &--cancelled &__status {
+    background: var(--bf-appearance-token-color-error);
+  }
+
+  &--completed &__status {
+    background: var(--bf-appearance-token-color-info);
+  }
+}
