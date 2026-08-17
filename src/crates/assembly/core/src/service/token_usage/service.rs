@@ -161,3 +161,22 @@ impl TokenUsageService {
             .map_err(anyhow::Error::msg)
     }
 }
+
+static GLOBAL_TOKEN_USAGE_SERVICE: std::sync::OnceLock<Arc<TokenUsageService>> =
+    std::sync::OnceLock::new();
+
+/// Install the process-wide token usage service. Called once by the desktop
+/// runtime after the service is constructed; tools that call the model outside
+/// the round executor (e.g. `analyze_image`) use it to persist usage that would
+/// otherwise never reach the token usage store.
+pub fn set_global_token_usage_service(service: Arc<TokenUsageService>) {
+    match GLOBAL_TOKEN_USAGE_SERVICE.set(service) {
+        Ok(_) => log::info!("Global token usage service set"),
+        Err(_) => log::info!("Global token usage service already exists, skipping set"),
+    }
+}
+
+/// Access the process-wide token usage service, if installed.
+pub fn get_global_token_usage_service() -> Option<Arc<TokenUsageService>> {
+    GLOBAL_TOKEN_USAGE_SERVICE.get().cloned()
+}
