@@ -18,6 +18,7 @@ bitfun-core = { path = "../../assembly/core", features = ["external-sources", "g
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
 bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "product-search"] }
+dunce = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

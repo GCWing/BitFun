@@ -179,6 +179,7 @@ bitfun plugins --help
 bitfun hooks --help
 bitfun config --help
 bitfun acp --help
+bitfun server --help
 ```
 
 `bitfun mcp import` is an explicit preview/apply snapshot. It does not copy
@@ -193,6 +194,25 @@ disconnects. Controllers should call `dispatch probe` and honor the returned
 protocol version before submitting or inspecting jobs. See the
 [detached task architecture](../../../docs/architecture/detached-task-dispatch.md)
 for the transport and workspace-snapshot contract.
+
+### App server
+
+`bitfun server` starts the BitFun App Server surface over stdio. stdout carries
+JSON-RPC traffic only, so an App Server client (for example an editor
+integration) can connect by spawning this command; logs go to stderr. The
+server scope is the current directory, matching the CLI's cwd-only session
+scope, and reuses the CLI product runtime. Host management capabilities
+(models, skills, subagents, hooks, and external sources) are served from the
+local configuration; account sync, MCP management, and local worktree
+management are reported as unavailable by this host.
+
+The server is a reviewed stdio Server Host with an explicit method allowlist
+(read-only session, agent, permission, workspace, git, config, and i18n
+methods plus management catalogs; state-changing config, model, MCP, account,
+worktree, and hook mutations are not served). Frames are limited to 16 MiB and
+the limit is enforced at the stdin reader. stdin EOF is a deterministic
+disconnect: the Host cancels in-flight turns and exits. `app/initialize`
+advertises only the methods this Host actually serves.
 
 ### Always-on account device host
 

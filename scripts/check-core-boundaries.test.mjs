@@ -671,11 +671,12 @@ test('runtime-services feature aliases cannot hide test support from default bui
   assert.match(messages, /bitfun-runtime-services:testing/);
 });
 
-test('CLI integration tests keep the reviewed three-target topology', () => {
+test('CLI integration tests keep the reviewed four-target topology', () => {
   const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 
   assert.deepEqual(cliIntegrationTestTargets, [
     { name: 'acp_stdio_cli', path: 'tests/acp_stdio_cli.rs' },
+    { name: 'app_server_stdio_cli', path: 'tests/app_server_stdio_cli.rs' },
     { name: 'cli_command_contracts', path: 'tests/cli_command_contracts.rs' },
     { name: 'terminal_process_contracts', path: 'tests/terminal_process_contracts.rs' },
   ]);
