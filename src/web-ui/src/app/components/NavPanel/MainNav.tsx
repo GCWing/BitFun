@@ -3,7 +3,7 @@
  *
  * Layout (top to bottom):
  *   1. Search and New Session
- *   2. AI Assistant, Mini Apps, then Extensions & Compatibility
+ *   2. AI Assistant, Task Board, Mini Apps, then Extensions & Compatibility
  *   3. Unified Sessions (all or grouped by project / assistant)
  *
  * When a scene-nav transition is active (`isDeparting=true`), items receive
@@ -13,7 +13,7 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, ChevronDown, Network, Search } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, ChevronDown, Network, Search, CalendarClock } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import {
   BITFUN_ICON_SIZE,
@@ -250,6 +250,10 @@ const MainNav: React.FC<MainNavProps> = ({
     void activateProductAction('surface.agents.open');
   }, []);
 
+  const handleOpenTodos = useCallback(() => {
+    void activateProductAction('surface.todos.open');
+  }, []);
+
   const handleOpenSkills = useCallback(() => {
     void activateProductAction('surface.skills.open');
   }, []);
@@ -376,8 +380,10 @@ const MainNav: React.FC<MainNavProps> = ({
   const skillsTooltip = t('nav.tooltips.skills');
   const ecosystemCompatibilityTooltip = t('nav.tooltips.ecosystemCompatibility');
   const assistantManagerLabel = t('nav.items.assistant');
+  const taskBoardLabel = t('nav.items.todos');
   const extensionsLabel = t('nav.sections.extensions');
   const isAssistantManagerActive = activeTabId === 'assistant' || activeTabId === 'profile';
+  const isTaskBoardActive = activeTabId === 'todos';
   const isEcosystemCompatibilityActive = activeTabId === 'settings' && activeSettingsTab === 'external-sources';
   return (
     <>
@@ -452,6 +458,29 @@ const MainNav: React.FC<MainNavProps> = ({
                 <User size={15} />
               </span>
               <span>{assistantManagerLabel}</span>
+            </button>
+          </Tooltip>
+
+          <Tooltip content={t('nav.tooltips.todos')} placement="right" followCursor>
+            <button
+              type="button"
+              className={[
+                'bitfun-nav-panel__top-action-btn',
+                isTaskBoardActive ? 'is-active' : '',
+              ].filter(Boolean).join(' ')}
+              data-bf-component="nav-panel"
+              data-bf-part="todoEntry"
+              data-bf-action="todos"
+              data-bf-state={isTaskBoardActive ? 'active' : ''}
+              onClick={handleOpenTodos}
+              aria-label={taskBoardLabel}
+              aria-pressed={isTaskBoardActive}
+              data-testid="nav-todos-btn"
+            >
+              <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                <CalendarClock size={15} />
+              </span>
+              <span>{taskBoardLabel}</span>
             </button>
           </Tooltip>
 

@@ -104,9 +104,18 @@ describe('WorkspaceListSection layout styles', () => {
     expect(assistantMenu).toContain('position: absolute;');
     expect(assistantMenu).toContain('right: 4px;');
     expect(assistantMenu).toContain('gap: 4px;');
-    expect(stylesheet).toContain('.bitfun-nav-panel__inline-list {\n      margin-left: 8px;');
     expect(stylesheet).toContain('padding-left: 2px;');
     expect(stylesheet).toContain('padding-right: 0;');
+  });
+
+  it('aligns nested session titles with workspace and assistant labels', () => {
+    const stylesheet = readWorkspaceListStylesheet();
+    const alignedSessionLists = stylesheet.match(
+      /\.bitfun-nav-panel__inline-list \{\n\s+\/\/[^\n]+\n\s+margin-left: 22px;/g,
+    );
+
+    expect(alignedSessionLists).toHaveLength(2);
+    expect(stylesheet).not.toContain('.bitfun-nav-panel__inline-list {\n      margin-left: 8px;');
   });
 
   it('keeps workspace and assistant menu triggers at the compact row size', () => {

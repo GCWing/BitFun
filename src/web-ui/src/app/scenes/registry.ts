@@ -145,7 +145,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
   },
   {
     id: 'todos' as SceneTabId,
-    label: 'Todos',
+    label: 'Task Board',
     labelKey: 'scenes.todos',
     Icon: CalendarClock,
     pinned: false,

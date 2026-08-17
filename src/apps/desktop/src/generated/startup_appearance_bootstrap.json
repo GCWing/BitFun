@@ -5,7 +5,7 @@
   "appearances": [
     {
       "id": "bitfun-light",
-      "bgPrimary": "#f3f3f5",
+      "bgPrimary": "#fafafa",
       "bgSecondary": "#ffffff",
       "bgScene": "#ffffff",
       "isLight": true,

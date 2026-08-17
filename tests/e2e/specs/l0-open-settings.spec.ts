@@ -48,17 +48,23 @@ describe('L0 Settings Panel', () => {
   });
 
   describe('Settings panel interaction', () => {
-    it('should open and close settings panel', async function () {
+    it('should open the settings list and then the settings panel', async function () {
       expect(hasWorkspace).toBe(true);
 
-      console.log('[L0] Opening settings...');
+      console.log('[L0] Opening settings list...');
       const settingsButton = await $('[data-testid="nav-footer-settings-item"]');
       await settingsButton.click();
-      await browser.pause(2000);
+      const settingsMenu = await $('[data-testid="nav-settings-menu"]');
+      await settingsMenu.waitForDisplayed({ timeout: 10000 });
+      expect(await settingsMenu.isDisplayed()).toBe(true);
+
+      const openSettingsItem = await $('[data-testid="nav-settings-open-item"]');
+      await openSettingsItem.click();
 
       // Check for settings scene
       const settingsScene = await $('.bitfun-settings-scene');
-      const sceneExists = await settingsScene.isExisting();
+      await settingsScene.waitForDisplayed({ timeout: 10000 });
+      const sceneExists = await settingsScene.isDisplayed();
 
       console.log('[L0] Settings scene opened:', sceneExists);
       expect(sceneExists).toBe(true);

@@ -6,7 +6,7 @@
     {
       "id": "bitfun-light",
       "mode": "light",
-      "bgPrimary": "#f3f3f5",
+      "bgPrimary": "#fafafa",
       "bgSecondary": "#ffffff",
       "bgScene": "#ffffff",
       "textPrimary": "#1e293b",

@@ -108,10 +108,14 @@ describe('builtin appearance preset output', () => {
     }
   });
 
-  it('keeps near-neutral preset foregrounds on canonical stops', () => {
+  it('keeps approved near-neutral preset stops scoped to their semantic roles', () => {
     const serializedAppearances = JSON.stringify(builtinAppearancePalettes).toLowerCase();
+    const lightAppearance = builtinAppearancePalettes.find(appearance => appearance.id === 'bitfun-light');
 
-    expect(serializedAppearances).not.toContain('#fafafa');
+    expect(lightAppearance?.colors.background.primary).toBe('#fafafa');
+    expect(lightAppearance?.monaco?.colors.background).toBe('#fafafa');
+    expect(lightAppearance?.monaco?.colors.lineHighlight).toBe('#f3f3f5');
+    expect(serializedAppearances.match(/#fafafa/g)).toHaveLength(2);
     expect(serializedAppearances).not.toContain('#e2e6eb');
     expect(serializedAppearances).not.toContain('#f0f2f5');
   });
@@ -149,7 +153,7 @@ describe('builtin appearance preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "954317380f5baa31e8b0155564c72606a76ff6fa6d8a190615120668a8e3d388",
+          "hash": "1d420a9266664694a5668328d2df91309bc263098ad5e7d5a07c106cad760cc3",
           "id": "bitfun-light",
           "type": "light",
         },

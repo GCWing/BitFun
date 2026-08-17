@@ -1,5 +1,5 @@
 {
-  "title": "待辦事項",
+  "title": "任務看板",
   "header": {
     "summary": "共 {{total}} 項 · {{dueSoon}} 項將在 24 小時內執行"
   },

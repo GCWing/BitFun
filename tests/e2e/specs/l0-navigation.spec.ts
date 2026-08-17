@@ -178,15 +178,58 @@ describe('L0 Navigation Panel', () => {
       );
     });
 
-    it('should open assistant management from the item above Mini Apps', async function () {
+    it('should align nested session titles with the active workspace or assistant label', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const activeGroup = await $('[data-testid="nav-workspace-item"][data-workspace-active="true"]');
+      const groupLabel = await activeGroup.$('[data-bf-part="label"]');
+      const sessionLabel = await activeGroup.$(
+        '[data-testid="nav-session-item"][data-session-level="0"] .bitfun-nav-panel__inline-item-label',
+      );
+      await groupLabel.waitForDisplayed({ timeout: 10000 });
+      await sessionLabel.waitForDisplayed({ timeout: 10000 });
+
+      const groupLabelX = await groupLabel.getLocation('x');
+      const sessionLabelX = await sessionLabel.getLocation('x');
+      console.log('[L0] Grouped session alignment:', { groupLabelX, sessionLabelX });
+      expect(Math.abs(sessionLabelX - groupLabelX)).toBeLessThanOrEqual(1);
+      await saveStepScreenshot('l0-navigation-grouped-session-alignment');
+    });
+
+    it('should place Task Board below AI Assistant and open it', async function () {
       expect(hasWorkspace).toBe(true);
 
       const assistantManager = await $('[data-testid="nav-assistant-manager"]');
+      const taskBoard = await $('[data-testid="nav-todos-btn"]');
       const miniApps = await $('.bitfun-nav-panel__miniapp-entry');
       await assistantManager.waitForDisplayed({ timeout: 10000 });
+      await taskBoard.waitForDisplayed({ timeout: 10000 });
       await miniApps.waitForDisplayed({ timeout: 10000 });
 
-      expect(await assistantManager.getLocation('y')).toBeLessThan(await miniApps.getLocation('y'));
+      expect(await assistantManager.getLocation('y')).toBeLessThan(await taskBoard.getLocation('y'));
+      expect(await taskBoard.getLocation('y')).toBeLessThan(await miniApps.getLocation('y'));
+      expect(['任务看板', 'Task Board', '任務看板']).toContain((await taskBoard.getText()).trim());
+      expect(await $('[data-bf-part="footer"] [data-testid="nav-todos-btn"]').isExisting()).toBe(false);
+
+      await taskBoard.click();
+      const todosScene = await $('[data-testid="todos-scene"]');
+      await todosScene.waitForDisplayed({ timeout: 10000 });
+      const taskBoardTitle = await todosScene.$('.bf-todos__title');
+      expect(await taskBoard.getAttribute('aria-pressed')).toBe('true');
+      expect(await todosScene.isDisplayed()).toBe(true);
+      expect(['任务看板', 'Task Board', '任務看板']).toContain((await taskBoardTitle.getText()).trim());
+      await saveStepScreenshot('l0-navigation-task-board');
+    });
+
+    it('should open assistant management from the item above Task Board', async function () {
+      expect(hasWorkspace).toBe(true);
+
+      const assistantManager = await $('[data-testid="nav-assistant-manager"]');
+      const taskBoard = await $('[data-testid="nav-todos-btn"]');
+      await assistantManager.waitForDisplayed({ timeout: 10000 });
+      await taskBoard.waitForDisplayed({ timeout: 10000 });
+
+      expect(await assistantManager.getLocation('y')).toBeLessThan(await taskBoard.getLocation('y'));
 
       await assistantManager.click();
       const assistantScene = await $('[data-bf-scene="assistant"][data-bf-part="root"]');
@@ -198,7 +241,7 @@ describe('L0 Navigation Panel', () => {
       await saveStepScreenshot('l0-navigation-assistant-management');
     });
 
-    it('should expose the consolidated footer controls', async function () {
+    it('should expose the settings utility list without More or Insights', async function () {
       expect(hasWorkspace).toBe(true);
 
       const deviceStatus = await $('[data-testid="nav-footer-device-status"]');
@@ -207,13 +250,28 @@ describe('L0 Navigation Panel', () => {
       expect(await settingsButton.isDisplayed()).toBe(true);
       expect(await $('[data-testid="shell-panel-entry"]').isExisting()).toBe(false);
       expect(await $('[data-testid="browser-panel-entry"]').isExisting()).toBe(false);
+      expect(await $('[data-testid="nav-footer-more-btn"]').isExisting()).toBe(false);
 
-      const moreButton = await $('[data-testid="nav-footer-more-btn"]');
-      await moreButton.click();
-      const notificationItem = await $('[data-testid="notification-button"]');
-      await notificationItem.waitForDisplayed({ timeout: 10000 });
-      expect(await notificationItem.isDisplayed()).toBe(true);
-      await saveStepScreenshot('l0-navigation-footer-consolidated');
+      await settingsButton.click();
+      const settingsMenu = await $('[data-testid="nav-settings-menu"]');
+      await settingsMenu.waitForDisplayed({ timeout: 10000 });
+
+      const expectedItems = [
+        'nav-settings-floating-item',
+        'notification-button',
+        'nav-settings-theme-item',
+        'nav-settings-open-item',
+        'nav-settings-about-item',
+      ];
+      const renderedItems = await settingsMenu.$$('[role="menuitem"]');
+      expect(renderedItems).toHaveLength(expectedItems.length);
+      for (let index = 0; index < expectedItems.length; index += 1) {
+        expect(await renderedItems[index].getAttribute('data-testid')).toBe(expectedItems[index]);
+      }
+
+      const menuText = await settingsMenu.getText();
+      expect(['洞察', 'Insights'].some(label => menuText.includes(label))).toBe(false);
+      await saveStepScreenshot('l0-navigation-settings-utility-list');
 
       const backdrop = await $('.bitfun-nav-panel__footer-backdrop');
       await backdrop.click();

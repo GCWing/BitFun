@@ -1,5 +1,5 @@
 {
-  "title": "Todos",
+  "title": "Task Board",
   "header": {
     "summary": "{{total}} scheduled · {{dueSoon}} due within 24 hours"
   },
