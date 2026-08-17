@@ -733,7 +733,11 @@ function handleCancelled(
 ): void {
   const existingToolItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
   const currentStatus = existingToolItem?.status;
-  const finalStatus = currentStatus === 'confirmed' ? 'confirmed' : 'cancelled';
+  // Annotated so the literal type does not widen to `string` when it lands in
+  // the mutable `updates` object below, which the insert factory then has to
+  // satisfy as a `FlowToolItem`.
+  const finalStatus: FlowToolItem['status'] =
+    currentStatus === 'confirmed' ? 'confirmed' : 'cancelled';
 
   const updates = {
     toolResult: {
