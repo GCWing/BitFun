@@ -1117,6 +1117,21 @@ describe('MessageModule device surface switch', () => {
     expect(mockNotificationError).not.toHaveBeenCalled();
   });
 
+  it('does not re-queue when startDialogTurn was sent and the invoke then fails after a switch', async () => {
+    const { context, switchSurface } = switchingContext('session-accepted');
+    mockStartDialogTurn.mockImplementation(async () => {
+      switchSurface();
+      throw new Error('invoke aborted after transport swap');
+    });
+
+    await sendMessage(context, 'already running', 'session-accepted');
+
+    expect(mockStartDialogTurn).toHaveBeenCalledTimes(1);
+    expect(mockPendingEnqueueForSurface).not.toHaveBeenCalled();
+    expect(context.flowChatStore.abandonOptimisticDialogTurn).not.toHaveBeenCalled();
+    expect(mockNotificationError).not.toHaveBeenCalled();
+  });
+
   it('still reports ordinary failures when the surface did not change', async () => {
     const { context } = switchingContext('session-normal');
     mockStartDialogTurn.mockRejectedValue(new Error('backend exploded'));

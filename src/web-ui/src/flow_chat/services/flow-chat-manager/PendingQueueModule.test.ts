@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { pendingQueueManager } from './PendingQueueModule';
+import {
+  pendingQueueManager,
+  queuedItemDuplicatesLiveTurn,
+} from './PendingQueueModule';
 import {
   LOCAL_SURFACE_ID,
   activateSurface,
@@ -82,5 +85,47 @@ describe('PendingQueueModule', () => {
 
     pendingQueueManager.clearSurface('peer-b');
     activateSurface(LOCAL_SURFACE_ID);
+  });
+
+  it('drops a queued duplicate of a live turn after a surface switch', () => {
+    const sessionId = testSession();
+    pendingQueueManager.enqueue({
+      sessionId,
+      content: '详细分析项目，然后调用 askuserquestion 随便问我几个当前项目相关的问题吧',
+      initialStatus: 'failed',
+    });
+    pendingQueueManager.enqueue({
+      sessionId,
+      content: 'a later follow-up that should stay',
+    });
+
+    const removed = pendingQueueManager.reconcileAgainstLiveTurns(sessionId, [
+      {
+        id: 'dialog_live',
+        status: 'processing',
+        userMessage: {
+          id: 'user-1',
+          content: '详细分析项目，然后调用 askuserquestion 随便问我几个当前项目相关的问题吧',
+          timestamp: Date.now(),
+        },
+      },
+    ]);
+
+    expect(removed).toBe(1);
+    expect(pendingQueueManager.list(sessionId).map(item => item.content)).toEqual([
+      'a later follow-up that should stay',
+    ]);
+    expect(queuedItemDuplicatesLiveTurn(
+      { content: '详细分析项目，然后调用 askuserquestion 随便问我几个当前项目相关的问题吧' },
+      [{
+        id: 'dialog_live',
+        status: 'processing',
+        userMessage: {
+          id: 'user-1',
+          content: '详细分析项目，然后调用 askuserquestion 随便问我几个当前项目相关的问题吧',
+          timestamp: Date.now(),
+        },
+      }],
+    )).toBe(true);
   });
 });

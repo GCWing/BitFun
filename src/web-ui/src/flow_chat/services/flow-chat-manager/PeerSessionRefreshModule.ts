@@ -29,15 +29,49 @@ import {
   SessionExecutionEvent,
   SessionExecutionState,
 } from '../../state-machine/types';
-import type { AnyFlowItem, DialogTurn } from '../../types/flow-chat';
+import type { AnyFlowItem, DialogTurn, Session } from '../../types/flow-chat';
 import { installLiveSessionInteractionMailbox } from '../liveSessionInteractionStore';
 import { agenticEventListener } from '../AgenticEventListener';
+import { pendingQueueManager } from './PendingQueueModule';
 import type { FlowChatContext } from './types';
 
 const log = createLogger('PeerSessionRefresh');
 
 export const PEER_SESSION_REFRESH_INTERVAL_MS = 3000;
 export const PEER_SESSION_STREAM_STALE_MS = 6000;
+
+/**
+ * A session can attach to the host Runtime projection once it has a usable
+ * live shell on this surface.
+ *
+ * `historyState === 'ready'` is the hydrated-from-disk path. Locally created
+ * sessions stay at `'new'` for their whole window — they never pass through
+ * disk hydrate — and after a surface switch they are exactly the sessions
+ * that missed DialogTurnStarted. Treating `'new'` as unready permanently
+ * disables the only repair path: later chunks arrive against an idle machine
+ * and are dropped, and the composer queues follow-up messages behind a turn
+ * that the UI can no longer update.
+ */
+type AttachableSession = Pick<
+  Session,
+  'workspacePath' | 'isTransient' | 'isHistorical' | 'historyState'
+> & { workspacePath: string };
+
+export function isSessionProjectionAttachable(
+  session: Pick<
+    Session,
+    'workspacePath' | 'isTransient' | 'isHistorical' | 'historyState'
+  > | null | undefined,
+): session is AttachableSession {
+  const workspacePath = session?.workspacePath?.trim();
+  return Boolean(
+    session &&
+    workspacePath &&
+    !session.isTransient &&
+    !session.isHistorical &&
+    (session.historyState === 'ready' || session.historyState === 'new'),
+  );
+}
 
 type RefreshRequester = (sessionId?: string) => void;
 let installedRefreshRequester: RefreshRequester | null = null;
@@ -135,8 +169,21 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
   installLiveSessionInteractionMailbox();
   let disposed = false;
   let inFlight = false;
-  let queued = false;
+  const queuedSessionIds = new Set<string | undefined>();
   let immediateTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function enqueueFollowUpRefresh(sessionId?: string): void {
+    queuedSessionIds.add(sessionId);
+  }
+
+  function drainFollowUpRefresh(): void {
+    if (disposed || queuedSessionIds.size === 0) {
+      return;
+    }
+    const next = queuedSessionIds.values().next().value;
+    queuedSessionIds.delete(next);
+    scheduleRefresh(next);
+  }
 
   async function runRefresh(
     requestedSessionId?: string,
@@ -144,7 +191,7 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
   ): Promise<void> {
     if (disposed || inFlight || !isSurfaceReconcileEnabled()) {
       if (inFlight) {
-        queued = true;
+        enqueueFollowUpRefresh(requestedSessionId);
       }
       return;
     }
@@ -162,20 +209,22 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
 
     const state = context.flowChatStore.getState();
     const sessionId = requestedSessionId || state.activeSessionId;
-    if (!sessionId || state.activeSessionId !== sessionId) {
+    // Attach is per (surface, session), not per the tab currently focused.
+    // After a switch, every live session on this surface may have missed
+    // DialogTurnStarted; dropped-event refresh requests name those sessions
+    // explicitly even when they are not active.
+    if (!sessionId) {
       return;
     }
     const session = state.sessions.get(sessionId);
-    const workspacePath = session?.workspacePath?.trim();
-    if (
-      !session ||
-      !workspacePath ||
-      session.isTransient ||
-      session.isHistorical ||
-      session.historyState !== 'ready'
-    ) {
+    if (!isSessionProjectionAttachable(session)) {
       return;
     }
+    const workspacePath = session.workspacePath.trim();
+    pendingQueueManager.reconcileAgainstLiveTurns(
+      sessionId,
+      state.sessions.get(sessionId)?.dialogTurns ?? [],
+    );
 
     const machine = stateMachineManager.get(sessionId);
     const machineState = machine?.getCurrentState() ?? SessionExecutionState.IDLE;
@@ -205,7 +254,10 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         workspacePath,
         {
           replaceRunningSnapshot,
-          requireActiveSession: true,
+          // A background session on this surface still owns its projection.
+          // Requiring the focused tab aborted the dropped-event repair for
+          // every non-active running chat after a multi-session switch.
+          requireActiveSession: false,
           shouldApply: () => {
             if (!isSurfaceReconcileEnabled()) {
               return false;
@@ -218,6 +270,13 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         },
       );
       surfaceScope.assertCurrent('attachRuntimeSession');
+      const restoredSession = context.flowChatStore.getState().sessions.get(sessionId);
+      if (restoredSession) {
+        pendingQueueManager.reconcileAgainstLiveTurns(
+          sessionId,
+          restoredSession.dialogTurns,
+        );
+      }
 
       if (result.runtimeEventSnapshot) {
         if (result.runtimeEventReplayRequired === false) {
@@ -344,10 +403,7 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
         attachment.abort({ discard: !surfaceScope.isCurrent() });
       }
       inFlight = false;
-      if (queued && !disposed) {
-        queued = false;
-        scheduleRefresh();
-      }
+      drainFollowUpRefresh();
     }
   }
 
@@ -355,8 +411,11 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
     if (disposed) {
       return;
     }
-    if (immediateTimer !== null) {
-      clearTimeout(immediateTimer);
+    // Do not replace a pending attach with a later request: two sessions
+    // that drop events in the same tick must both be repaired.
+    if (inFlight || immediateTimer !== null) {
+      enqueueFollowUpRefresh(sessionId);
+      return;
     }
     immediateTimer = setTimeout(() => {
       immediateTimer = null;

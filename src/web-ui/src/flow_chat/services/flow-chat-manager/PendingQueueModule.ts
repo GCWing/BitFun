@@ -13,7 +13,7 @@
  */
 
 import { createLogger } from '@/shared/utils/logger';
-import type { QueuedMessage } from '../../types/flow-chat';
+import type { DialogTurn, QueuedMessage } from '../../types/flow-chat';
 import {
   getActiveSurfaceId,
   onSurfaceActivated,
@@ -29,6 +29,36 @@ const STORAGE_PREFIX = 'flowChat.pendingQueue.';
 // would make a downgrade load encoded peer queues as bogus local sessions.
 const PEER_STORAGE_PREFIX = 'flowChat.peerPendingQueue.v1.';
 const MAX_QUEUE_DEPTH = 20;
+
+const LIVE_TURN_STATUSES = new Set<DialogTurn['status']>([
+  'pending',
+  'image_analyzing',
+  'processing',
+  'finishing',
+]);
+
+function normalizeQueueText(value: string | undefined): string {
+  return value?.trim() ?? '';
+}
+
+export function queuedItemDuplicatesLiveTurn(
+  item: Pick<QueuedMessage, 'content' | 'displayMessage' | 'localDialogTurnId'>,
+  turns: Array<Pick<DialogTurn, 'id' | 'status' | 'userMessage'>>,
+): boolean {
+  const itemTexts = [item.displayMessage, item.content]
+    .map(normalizeQueueText)
+    .filter(text => text.length > 0);
+  return turns.some(turn => {
+    if (!LIVE_TURN_STATUSES.has(turn.status)) {
+      return false;
+    }
+    if (item.localDialogTurnId && item.localDialogTurnId === turn.id) {
+      return true;
+    }
+    const turnText = normalizeQueueText(turn.userMessage?.content);
+    return Boolean(turnText && itemTexts.includes(turnText));
+  });
+}
 
 export interface EnqueueInput {
   sessionId: string;
@@ -212,6 +242,36 @@ class PendingQueueManager {
     this.persist(input.sessionId, surfaceId);
     this.notifySurface(surfaceId, input.sessionId);
     return item;
+  }
+
+  /**
+   * Drop queue items that are the same user message as a turn this surface
+   * is already projecting as live. A device switch must not keep a duplicate
+   * "pending send" of a turn the host is executing.
+   */
+  reconcileAgainstLiveTurns(
+    sessionId: string,
+    turns: Array<Pick<DialogTurn, 'id' | 'status' | 'userMessage'>>,
+    surfaceId = getActiveSurfaceId(),
+  ): number {
+    const key = this.queueKey(sessionId, surfaceId);
+    const items = this.queues.get(key);
+    if (!items || items.length === 0) {
+      return 0;
+    }
+    const next = items.filter(item => !queuedItemDuplicatesLiveTurn(item, turns));
+    const removed = items.length - next.length;
+    if (removed === 0) {
+      return 0;
+    }
+    if (next.length === 0) {
+      this.queues.delete(key);
+    } else {
+      this.queues.set(key, next);
+    }
+    this.persist(sessionId, surfaceId);
+    this.notifySurface(surfaceId, sessionId);
+    return removed;
   }
 
   update(

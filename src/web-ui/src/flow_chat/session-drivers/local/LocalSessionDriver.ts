@@ -430,6 +430,7 @@ export const localSessionDriver: SessionDriver = {
     const projectWorkspacePath = sessionProjectWorkspacePath(updatedSession);
 
     if (acpClientId) {
+      tracker.hostSubmitStarted = true;
       await ACPClientAPI.startDialogTurn({
         sessionId,
         clientId: acpClientId,
@@ -447,6 +448,7 @@ export const localSessionDriver: SessionDriver = {
       context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
     } else {
       try {
+        tracker.hostSubmitStarted = true;
         await agentAPI.startDialogTurn({
           sessionId: sessionId,
           userInput: message,
@@ -470,6 +472,7 @@ export const localSessionDriver: SessionDriver = {
             sessionId: sessionId,
             dialogTurnsCount: updatedSession.dialogTurns.length
           });
+          tracker.hostSubmitStarted = false;
 
           // Lazy import: SessionModule routes lifecycle calls through the
           // driver registry, so a static import would create a module cycle.
@@ -479,6 +482,7 @@ export const localSessionDriver: SessionDriver = {
           await retryCreateBackendSession(context, sessionId);
           surfaceScope.assertCurrent('retry backend session creation');
 
+          tracker.hostSubmitStarted = true;
           await agentAPI.startDialogTurn({
             sessionId: sessionId,
             userInput: message,

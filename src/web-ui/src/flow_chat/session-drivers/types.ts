@@ -99,6 +99,13 @@ export interface TurnTracker {
    * must recover the message rather than assume it is running somewhere.
    */
   hostAcceptedTurn: boolean;
+  /**
+   * Set immediately before `start_dialog_turn` / ACP start is invoked.
+   * The host may accept the turn before the client sees the ACK — a surface
+   * switch that aborts the invoke must not re-queue a message the host is
+   * already executing.
+   */
+  hostSubmitStarted?: boolean;
 }
 
 /**

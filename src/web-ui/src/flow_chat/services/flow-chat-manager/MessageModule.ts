@@ -11,6 +11,7 @@ import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { createLogger } from '@/shared/utils/logger';
 import {
+  getActiveSurfaceId,
   getActiveSurfaceScope,
   isSurfaceChangedError,
   type DeviceSurfaceId,
@@ -19,6 +20,7 @@ import type { FlowChatContext } from './types';
 import { isProjectedSessionEmpty } from '../../utils/flowChatTurnIdentity';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import { pendingQueueManager } from './PendingQueueModule';
+import { isRuntimeSessionAttachmentInFlight } from '@/infrastructure/peer-device/runtimeSessionEventGate';
 import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { i18nService } from '@/infrastructure/i18n';
 import { driverForSession } from '../../session-drivers/registry';
@@ -117,7 +119,9 @@ function recoverSubmissionAfterSurfaceSwitch(
     options?: SendMessageOptions;
   },
 ): void {
-  if (turnTracker.hostAcceptedTurn) {
+  const hostHasTurn =
+    turnTracker.hostAcceptedTurn || turnTracker.hostSubmitStarted === true;
+  if (hostHasTurn) {
     log.info('Device surface switched after the host accepted the turn; it keeps running there', {
       sessionId,
     });
@@ -523,6 +527,9 @@ export async function drainPendingQueue(
   sessionId: string,
   options?: { allowInterruptedRecoveryAbandon?: boolean },
 ): Promise<void> {
+  if (isRuntimeSessionAttachmentInFlight(getActiveSurfaceId(), sessionId)) {
+    return;
+  }
   const machineState = stateMachineManager.getCurrentState(sessionId);
   if (machineState !== SessionExecutionState.IDLE) {
     return;

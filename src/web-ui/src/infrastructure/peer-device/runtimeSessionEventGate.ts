@@ -132,6 +132,13 @@ export function subscribeRuntimeSessionEventGaps(
   return () => gapListeners.delete(listener);
 }
 
+export function isRuntimeSessionAttachmentInFlight(
+  surfaceId: DeviceSurfaceId,
+  sessionId: string,
+): boolean {
+  return attachments.has(attachmentKey(surfaceId, sessionId));
+}
+
 export function beginRuntimeSessionAttachment(
   surfaceId: DeviceSurfaceId,
   sessionId: string,

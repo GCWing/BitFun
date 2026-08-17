@@ -32,11 +32,16 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
      inside that window made the submission resume against a missing session
      and throw `Session lost after adding dialog turn` — before
      `start_dialog_turn`, so the message reached no host at all (regression:
-     2026-08-15). `resetProductSurface` therefore awaits
+     2026-08-15).      `resetProductSurface` therefore awaits
      `waitForInFlightSubmissions` first. `sendMessage` and its driver carry one
      `SurfaceScope`; after every host await, a stale epoch abandons without
      writing into the newly selected container, and an unaccepted message is
-     re-queued onto its original surface. Any new await inside `startTurn`
+     re-queued onto its original surface. Once `start_dialog_turn` has been
+     invoked, the host may already own the Turn before the client sees the
+     ACK — that submission must not be re-queued, and attach must drop any
+     pending-queue item that duplicates a live turn's user message. Drain
+     must not fire while a Runtime attach is resetting the state machine to
+     IDLE. Any new await inside `startTurn`
      widens that window and must keep the same scope checkpoint.
    - **Reconciliation repairs a projection, never guts it.** The wholesale
      replace path (`replaceRunningSnapshot`) skips the forward-progress
@@ -139,9 +144,13 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     `isSurfaceReconcileEnabled()`, **not** on Peer Mode: once a window has
     switched surface, a turn left running on the local device also needs the
     same attach, because its live events were dropped by surface routing while
-    another device was rendered. Attach is requested as soon as active Session
-    hydration becomes ready; the 3s loop is only a liveness retry and an
-    older-Host fallback. The Peer Host must
+    another device was rendered. Attach is requested as soon as a Session on
+    this surface has a usable live projection: `historyState === 'ready'`
+    after disk hydrate, or `historyState === 'new'` for a session created in
+    this window (those never become `ready` via hydrate). The gate is per
+    `(DeviceSurfaceId, SessionId)`, not per the focused tab — a dropped-event
+    refresh must still attach a background session that kept running here.
+    The 3s loop is only a liveness retry and an older-Host fallback. The Peer Host must
     overlay its live in-memory session state on the persisted view; otherwise
     an in-progress turn is normalized as interrupted history and later chunks
     are dropped by the controller state machine. Surface epoch checks reject a

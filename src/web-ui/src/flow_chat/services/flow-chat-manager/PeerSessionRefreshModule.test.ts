@@ -32,6 +32,7 @@ vi.mock('../AgenticEventListener', () => ({
 
 import {
   installPeerSessionRefresh,
+  isSessionProjectionAttachable,
   PEER_SESSION_REFRESH_INTERVAL_MS,
   requestPeerSessionRefresh,
 } from './PeerSessionRefreshModule';
@@ -427,6 +428,257 @@ describe('PeerSessionRefreshModule dead subscription recovery', () => {
     await vi.advanceTimersByTimeAsync(PEER_SESSION_REFRESH_INTERVAL_MS);
 
     expect(ensureLiveSubscription).not.toHaveBeenCalled();
+    cleanup();
+  });
+});
+
+describe('isSessionProjectionAttachable', () => {
+  const base = {
+    workspacePath: '/repo/BitFun',
+    isTransient: false,
+    isHistorical: false,
+    historyState: 'ready' as const,
+  };
+
+  it('accepts a hydrated live session', () => {
+    expect(isSessionProjectionAttachable(base)).toBe(true);
+  });
+
+  it('accepts a locally created session that never left historyState new', () => {
+    expect(isSessionProjectionAttachable({ ...base, historyState: 'new' })).toBe(true);
+  });
+
+  it('rejects metadata-only, hydrating, failed, historical, and transient shells', () => {
+    expect(isSessionProjectionAttachable({ ...base, historyState: 'metadata-only' })).toBe(false);
+    expect(isSessionProjectionAttachable({ ...base, historyState: 'hydrating' })).toBe(false);
+    expect(isSessionProjectionAttachable({ ...base, historyState: 'failed' })).toBe(false);
+    expect(isSessionProjectionAttachable({ ...base, isHistorical: true })).toBe(false);
+    expect(isSessionProjectionAttachable({ ...base, isTransient: true })).toBe(false);
+    expect(isSessionProjectionAttachable({ ...base, workspacePath: '   ' })).toBe(false);
+    expect(isSessionProjectionAttachable(null)).toBe(false);
+  });
+});
+
+describe('PeerSessionRefreshModule attach eligibility after a surface switch', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    peerModeMock.active = true;
+    resetRuntimeSessionEventGateForTest();
+    stateMachineMock.get.mockReturnValue({
+      getCurrentState: () => 'idle',
+      getContext: () => ({ lastUpdateTime: 0, version: 0 }),
+    });
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('attaches a locally created session that is still historyState new', async () => {
+    const refreshPeerSessionSnapshot = vi.fn(async () => ({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+      latestTurnId: 'turn-live',
+      latestTurnStatus: 'processing',
+    }));
+    const state = {
+      activeSessionId: 'session-new',
+      sessions: new Map([
+        ['session-new', {
+          sessionId: 'session-new',
+          workspacePath: '/repo/BitFun',
+          historyState: 'new',
+          isHistorical: false,
+          isTransient: false,
+          dialogTurns: [],
+        }],
+      ]),
+    };
+    const context = {
+      flowChatStore: {
+        getState: () => state,
+        subscribeSelector: vi.fn(() => () => {}),
+        refreshPeerSessionSnapshot,
+      },
+      eventBatcher: { flushNow: vi.fn(), clear: vi.fn() },
+      contentBuffers: new Map(),
+      activeTextItems: new Map(),
+    } as any;
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(refreshPeerSessionSnapshot).toHaveBeenCalledWith(
+      'session-new',
+      '/repo/BitFun',
+      expect.objectContaining({ requireActiveSession: false }),
+    );
+    cleanup();
+  });
+
+  it('does not attach a metadata-only historical shell', async () => {
+    const refreshPeerSessionSnapshot = vi.fn();
+    const state = {
+      activeSessionId: 'session-meta',
+      sessions: new Map([
+        ['session-meta', {
+          sessionId: 'session-meta',
+          workspacePath: '/repo/BitFun',
+          historyState: 'metadata-only',
+          isHistorical: true,
+          isTransient: false,
+        }],
+      ]),
+    };
+    const context = {
+      flowChatStore: {
+        getState: () => state,
+        subscribeSelector: vi.fn(() => () => {}),
+        refreshPeerSessionSnapshot,
+      },
+      eventBatcher: { flushNow: vi.fn(), clear: vi.fn() },
+      contentBuffers: new Map(),
+      activeTextItems: new Map(),
+    } as any;
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(refreshPeerSessionSnapshot).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('attaches a background session named by a dropped-event refresh', async () => {
+    const refreshPeerSessionSnapshot = vi.fn(async () => ({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-bg", phase: Streaming }',
+      latestTurnId: 'turn-bg',
+      latestTurnStatus: 'processing',
+    }));
+    const state = {
+      activeSessionId: 'session-active',
+      sessions: new Map([
+        ['session-active', {
+          sessionId: 'session-active',
+          workspacePath: '/repo/BitFun',
+          historyState: 'new',
+          isHistorical: false,
+          isTransient: false,
+        }],
+        ['session-bg', {
+          sessionId: 'session-bg',
+          workspacePath: '/repo/BitFun',
+          historyState: 'new',
+          isHistorical: false,
+          isTransient: false,
+        }],
+      ]),
+    };
+    const context = {
+      flowChatStore: {
+        getState: () => state,
+        subscribeSelector: vi.fn(() => () => {}),
+        refreshPeerSessionSnapshot,
+      },
+      eventBatcher: { flushNow: vi.fn(), clear: vi.fn() },
+      contentBuffers: new Map(),
+      activeTextItems: new Map(),
+    } as any;
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+    refreshPeerSessionSnapshot.mockClear();
+
+    requestPeerSessionRefresh('session-bg');
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(refreshPeerSessionSnapshot).toHaveBeenCalledWith(
+      'session-bg',
+      '/repo/BitFun',
+      expect.objectContaining({ requireActiveSession: false }),
+    );
+    cleanup();
+  });
+
+  it('repairs a second live session queued while the first attach is in flight', async () => {
+    let releaseFirst: ((value: {
+      applied: boolean;
+      backendState: string;
+      latestTurnId: string;
+      latestTurnStatus: string;
+    }) => void) | undefined;
+    const refreshPeerSessionSnapshot = vi.fn((sessionId: string) => {
+      if (sessionId === 'session-active') {
+        return new Promise(resolve => {
+          releaseFirst = resolve;
+        });
+      }
+      return Promise.resolve({
+        applied: false,
+        backendState: 'Processing { current_turn_id: "turn-bg", phase: Streaming }',
+        latestTurnId: 'turn-bg',
+        latestTurnStatus: 'processing',
+      });
+    });
+    const state = {
+      activeSessionId: 'session-active',
+      sessions: new Map([
+        ['session-active', {
+          sessionId: 'session-active',
+          workspacePath: '/repo/BitFun',
+          historyState: 'new',
+          isHistorical: false,
+          isTransient: false,
+        }],
+        ['session-bg', {
+          sessionId: 'session-bg',
+          workspacePath: '/repo/BitFun',
+          historyState: 'new',
+          isHistorical: false,
+          isTransient: false,
+        }],
+      ]),
+    };
+    const context = {
+      flowChatStore: {
+        getState: () => state,
+        subscribeSelector: vi.fn(() => () => {}),
+        refreshPeerSessionSnapshot,
+      },
+      eventBatcher: { flushNow: vi.fn(), clear: vi.fn() },
+      contentBuffers: new Map(),
+      activeTextItems: new Map(),
+    } as any;
+
+    const cleanup = installPeerSessionRefresh(context);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refreshPeerSessionSnapshot).toHaveBeenCalledTimes(1);
+
+    requestPeerSessionRefresh('session-bg');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refreshPeerSessionSnapshot).toHaveBeenCalledTimes(1);
+
+    releaseFirst?.({
+      applied: false,
+      backendState: 'Processing { current_turn_id: "turn-active", phase: Streaming }',
+      latestTurnId: 'turn-active',
+      latestTurnStatus: 'processing',
+    });
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(refreshPeerSessionSnapshot).toHaveBeenCalledWith(
+      'session-bg',
+      '/repo/BitFun',
+      expect.objectContaining({ requireActiveSession: false }),
+    );
     cleanup();
   });
 });

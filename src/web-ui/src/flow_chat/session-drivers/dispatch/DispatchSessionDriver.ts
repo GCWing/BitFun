@@ -743,6 +743,7 @@ export const dispatchSessionDriver: SessionDriver = {
       label: i18nService.t('flow-chat:chatInput.dispatch.transferInProgress'),
     });
     let response: Awaited<ReturnType<typeof dispatchApi.submit>>;
+    tracker.hostSubmitStarted = true;
     try {
       response = await dispatchApi.submit({
         target: targetRequest,
