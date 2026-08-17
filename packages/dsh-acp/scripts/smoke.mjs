@@ -27,7 +27,8 @@
  * a directory name under `$DSH_HOME/acp-sessions/<project>/` — and `--cwd` must
  * name the workspace it was created in.
  *
- * Usage: `node scripts/smoke.mjs [--mode code] [--load <id>] [--prompt "…"] [--reject] [--cancel-after 3000]`
+ * Usage: `node scripts/smoke.mjs [--mode code] [--model deepseek-official/deepseek-v4]
+ * [--load <id>] [--prompt "…"] [--reject] [--cancel-after 3000]`
  */
 
 import { spawn } from 'node:child_process'
@@ -45,6 +46,7 @@ const { values } = parseArgs({
     prompt: { type: 'string' },
     load: { type: 'string' },
     mode: { type: 'string' },
+    model: { type: 'string' },
     profile: { type: 'string' },
     cwd: { type: 'string' },
     reject: { type: 'boolean' },
@@ -99,8 +101,13 @@ function describe(update) {
 function describeOptions(configOptions) {
   if (configOptions === undefined || configOptions.length === 0) return '(none)'
   return configOptions.map(option => {
+    // A select's values are either flat or grouped by provider; a picker
+    // renders both as one list, so this flattens the grouped form too.
     const values = option.type === 'select'
-      ? option.options.map(value => (value.value === option.currentValue ? `[${value.value}]` : value.value)).join(' ')
+      ? option.options
+        .flatMap(entry => (entry.options === undefined ? [entry] : entry.options))
+        .map(value => (value.value === option.currentValue ? `[${value.value}]` : value.value))
+        .join(' ')
       : String(option.currentValue)
     return `${option.id}(${option.category ?? '-'}): ${values}`
   }).join(' | ')
@@ -133,7 +140,7 @@ try {
     : { sessionId: values.load, ...await client.loadSession({ sessionId: values.load, cwd: WORKSPACE, mcpServers: [] }) }
   const sessionId = session.sessionId
   process.stdout.write(`${values.load === undefined ? 'newSession' : 'loadSession'}: ${sessionId}\n`)
-  process.stdout.write(`modes: ${describeOptions(session.configOptions)}\n`)
+  process.stdout.write(`options: ${describeOptions(session.configOptions)}\n`)
 
   if (values.mode !== undefined) {
     const switched = await client.setSessionConfigOption({
@@ -142,6 +149,17 @@ try {
       value: values.mode,
     })
     process.stdout.write(`mode ${values.mode}: ${describeOptions(switched.configOptions)}\n`)
+  }
+
+  // `--model provider/model` is the composer's model dropdown: unlike the mode
+  // it stays live for the whole session, so this can follow a prompt too.
+  if (values.model !== undefined) {
+    const switched = await client.setSessionConfigOption({
+      sessionId,
+      configId: 'model',
+      value: values.model,
+    })
+    process.stdout.write(`model ${values.model}: ${describeOptions(switched.configOptions)}\n`)
   }
 
   if (values.prompt !== undefined) {

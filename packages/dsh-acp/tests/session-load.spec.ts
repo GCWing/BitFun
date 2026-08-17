@@ -18,17 +18,17 @@ import { PROTOCOL_VERSION, RequestError, type SessionConfigOption } from '@agent
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
-  makeBridgeHarness, textResponse, updatesOfKind, waitForUpdates, type BridgeHarness,
+  makeBridgeHarness, selectOption, textResponse, updatesOfKind, waitForUpdates, type BridgeHarness,
 } from './harness.ts'
 
-/** The one mode option, asserted to be a select so its values can be read. */
+/**
+ * The one mode option. A reopened session publishes a model picker alongside
+ * it, so the mode is read by category rather than by position.
+ */
 function modeOption(configOptions: SessionConfigOption[] | null | undefined): Extract<
   SessionConfigOption, { type: 'select' }
 > {
-  const [option, ...rest] = configOptions ?? []
-  expect(rest).toEqual([])
-  if (option?.type !== 'select') throw new Error(`expected one select option, got ${JSON.stringify(configOptions)}`)
-  return option
+  return selectOption(configOptions, 'mode')
 }
 
 /** The text of every update of one kind, in arrival order. */
