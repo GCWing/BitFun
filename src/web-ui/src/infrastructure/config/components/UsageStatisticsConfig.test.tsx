@@ -19,6 +19,7 @@ vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({
     t: translateMock,
     formatDate: (date: Date | number) => new Date(date).toISOString(),
+    resolvedTimeZone: 'UTC',
   }),
 }));
 
@@ -58,13 +59,37 @@ const SAMPLE_STATS: UsageStatistics = {
   totalCacheWriteTokens: 0,
   totalCacheReportedInputTokens: 4_400_000,
   byModel: [
-    { name: 'deepseek-v4-flash', requests: 47, tokens: 4_800_000, cacheHitRate: 0.95 },
+    {
+      key: 'model-config:deepseek',
+      name: 'deepseek-v4-flash',
+      providerName: 'DeepSeek',
+      attributionStatus: 'resolved',
+      requests: 47,
+      tokens: 4_800_000,
+      cacheHitRate: 0.95,
+    },
   ],
   byGroup: [
-    { name: 'DeepSeek', requests: 47, tokens: 4_800_000, cacheHitRate: 0.95 },
+    {
+      key: 'provider:deepseek',
+      name: 'DeepSeek',
+      providerName: null,
+      attributionStatus: 'resolved',
+      requests: 47,
+      tokens: 4_800_000,
+      cacheHitRate: 0.95,
+    },
   ],
   byEndpoint: [
-    { name: 'api.openbitfun.com/v1/chat/completions', requests: 47, tokens: 4_800_000, cacheHitRate: 0.95 },
+    {
+      key: 'endpoint:api.openbitfun.com/v1/chat/completions',
+      name: 'api.openbitfun.com/v1/chat/completions',
+      providerName: null,
+      attributionStatus: 'resolved',
+      requests: 47,
+      tokens: 4_800_000,
+      cacheHitRate: 0.95,
+    },
   ],
   trend: [
     {
@@ -120,11 +145,10 @@ describe('UsageStatisticsConfig', () => {
     await render();
 
     expect(getStatisticsMock).toHaveBeenCalledTimes(1);
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     expect(getStatisticsMock).toHaveBeenCalledWith({
       timeRange: 'last24Hours',
       granularity: 'hour',
-      timeZone,
+      timeZone: 'UTC',
     });
 
     expect(container.querySelector('[data-bf-part="summary"]')).not.toBeNull();
@@ -135,6 +159,40 @@ describe('UsageStatisticsConfig', () => {
     expect(container.querySelectorAll('[data-bf-part="trendPanel"] svg').length).toBe(1);
     // Hit rate is truncated to two decimals, never rounded up.
     expect(container.textContent).toContain('95.00%');
+  });
+
+  it('keeps same-named models distinct and labels deleted configurations', async () => {
+    getStatisticsMock.mockResolvedValue({
+      ...SAMPLE_STATS,
+      byModel: [
+        {
+          ...SAMPLE_STATS.byModel[0],
+          key: 'model-config:openbitfun',
+          name: 'MiniMax-M3',
+          providerName: 'OpenBitFun',
+        },
+        {
+          ...SAMPLE_STATS.byModel[0],
+          key: 'model-config:minimax',
+          name: 'MiniMax-M3',
+          providerName: 'MiniMax',
+        },
+        {
+          ...SAMPLE_STATS.byModel[0],
+          key: 'missing-config:deleted',
+          name: 'legacy-model',
+          providerName: null,
+          attributionStatus: 'config_missing',
+        },
+      ],
+    });
+
+    await render();
+
+    expect(container.textContent).toContain('OpenBitFun');
+    expect(container.textContent).toContain('MiniMax');
+    expect(container.textContent).toContain('attribution.deletedConfig');
+    expect(container.querySelectorAll('.bitfun-usage-stats__hit-rate-row')).toHaveLength(3);
   });
 
   it('shows the empty state when there are no records', async () => {
@@ -185,7 +243,7 @@ describe('UsageStatisticsConfig', () => {
     expect(getStatisticsMock).toHaveBeenLastCalledWith({
       timeRange: 'thisMonth',
       granularity: 'hour',
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      timeZone: 'UTC',
     });
   });
 

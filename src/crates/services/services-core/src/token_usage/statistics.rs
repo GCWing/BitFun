@@ -25,17 +25,38 @@ pub enum UsageGranularity {
 /// Per-record attribution resolved by the caller.
 #[derive(Debug, Clone)]
 pub struct UsageAttribution {
-    /// Provider group label (e.g. "OpenAI").
-    pub group: String,
-    /// Endpoint label (e.g. "api.openai.com/v1/chat/completions").
-    pub endpoint: String,
+    pub model: UsageDimensionAttribution,
+    pub group: UsageDimensionAttribution,
+    pub endpoint: UsageDimensionAttribution,
+}
+
+/// Whether a usage dimension could be resolved through its persisted model
+/// configuration identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UsageAttributionStatus {
+    Resolved,
+    ConfigMissing,
+    ConfigIdMissing,
+}
+
+/// Stable aggregation identity plus display metadata for one usage dimension.
+#[derive(Debug, Clone)]
+pub struct UsageDimensionAttribution {
+    pub key: String,
+    pub name: String,
+    pub provider_name: Option<String>,
+    pub attribution_status: UsageAttributionStatus,
 }
 
 /// One row of a distribution breakdown (model / group / endpoint).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageStatisticsEntry {
+    pub key: String,
     pub name: String,
+    pub provider_name: Option<String>,
+    pub attribution_status: UsageAttributionStatus,
     pub requests: u32,
     pub tokens: u64,
     /// Cache hit ratio (0.0..=1.0) for this entry when any request reported
@@ -50,9 +71,12 @@ pub struct UsageStatisticsEntry {
 }
 
 impl UsageStatisticsEntry {
-    fn new(name: String) -> Self {
+    fn new(attribution: UsageDimensionAttribution) -> Self {
         Self {
-            name,
+            key: attribution.key,
+            name: attribution.name,
+            provider_name: attribution.provider_name,
+            attribution_status: attribution.attribution_status,
             requests: 0,
             tokens: 0,
             cache_hit_rate: None,
@@ -155,7 +179,7 @@ where
         }
 
         let attribution = attribute(record);
-        accumulate_entry(&mut by_model, record.effective_model_name.clone(), record);
+        accumulate_entry(&mut by_model, attribution.model, record);
         accumulate_entry(&mut by_group, attribution.group, record);
         accumulate_entry(&mut by_endpoint, attribution.endpoint, record);
     }
@@ -181,12 +205,13 @@ where
 
 fn accumulate_entry(
     map: &mut HashMap<String, UsageStatisticsEntry>,
-    name: String,
+    attribution: UsageDimensionAttribution,
     record: &TokenUsageRecord,
 ) {
+    let key = attribution.key.clone();
     let entry = map
-        .entry(name.clone())
-        .or_insert_with(|| UsageStatisticsEntry::new(name));
+        .entry(key)
+        .or_insert_with(|| UsageStatisticsEntry::new(attribution));
     entry.requests += 1;
     entry.tokens += record.total_tokens as u64;
     entry.cached_tokens += record.cached_tokens as u64;
@@ -214,6 +239,7 @@ fn finalize_entries(map: HashMap<String, UsageStatisticsEntry>) -> Vec<UsageStat
             .cmp(&left.tokens)
             .then_with(|| right.requests.cmp(&left.requests))
             .then_with(|| left.name.cmp(&right.name))
+            .then_with(|| left.key.cmp(&right.key))
     });
     entries
 }
@@ -375,7 +401,7 @@ mod tests {
         cached_available: bool,
     ) -> TokenUsageRecord {
         TokenUsageRecord {
-            model_config_id: "config-a".to_string(),
+            model_config_id: format!("config-{model}"),
             effective_model_name: model.to_string(),
             session_id: "session-a".to_string(),
             turn_id: "turn-a".to_string(),
@@ -391,10 +417,36 @@ mod tests {
         }
     }
 
+    fn dimension(
+        key: impl Into<String>,
+        name: impl Into<String>,
+        provider_name: Option<String>,
+    ) -> UsageDimensionAttribution {
+        UsageDimensionAttribution {
+            key: key.into(),
+            name: name.into(),
+            provider_name,
+            attribution_status: UsageAttributionStatus::Resolved,
+        }
+    }
+
     fn attribution() -> impl Fn(&TokenUsageRecord) -> UsageAttribution {
         |record| UsageAttribution {
-            group: format!("provider-of-{}", record.effective_model_name),
-            endpoint: format!("/endpoint-of-{}", record.effective_model_name),
+            model: dimension(
+                record.model_config_id.clone(),
+                record.effective_model_name.clone(),
+                Some(format!("provider-of-{}", record.effective_model_name)),
+            ),
+            group: dimension(
+                format!("group-of-{}", record.effective_model_name),
+                format!("provider-of-{}", record.effective_model_name),
+                None,
+            ),
+            endpoint: dimension(
+                format!("endpoint-of-{}", record.effective_model_name),
+                format!("/endpoint-of-{}", record.effective_model_name),
+                None,
+            ),
         }
     }
 
@@ -446,6 +498,31 @@ mod tests {
 
         assert_eq!(stats.by_group.len(), 2);
         assert_eq!(stats.by_endpoint.len(), 2);
+    }
+
+    #[test]
+    fn same_named_models_with_different_keys_are_not_merged() {
+        let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
+        let first = record("shared-model", t0, 100, 0, 0, 0, false);
+        let mut second = record(
+            "shared-model",
+            t0 + Duration::minutes(1),
+            200,
+            0,
+            0,
+            0,
+            false,
+        );
+        second.model_config_id = "another-config".to_string();
+
+        let stats = aggregate_statistics(&[first, second], UsageGranularity::Hour, attribution());
+
+        assert_eq!(stats.by_model.len(), 2);
+        assert!(stats
+            .by_model
+            .iter()
+            .all(|entry| entry.name == "shared-model"));
+        assert_ne!(stats.by_model[0].key, stats.by_model[1].key);
     }
 
     #[test]

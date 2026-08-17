@@ -47,6 +47,7 @@ export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAP
 export * from './service-api/ReviewPlatformAPI';
 export type {
   TokenUsageStatisticsRequest,
+  UsageAttributionStatus,
   UsageGranularity,
   UsageStatistics,
   UsageStatisticsEntry,
