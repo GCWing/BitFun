@@ -136,6 +136,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
  */
 const HIGH_PRIORITY_COMMANDS = new Set([
   'restore_session_view',
+  'load_session_event_backfill',
   'restore_session_with_turns',
   'restore_session',
   'load_session_turn_window',
@@ -187,6 +188,7 @@ const HIGH_PRIORITY_COMMANDS = new Set([
 const RETRYABLE_READ_COMMANDS = new Set([
   'initialize_workspace_startup_state',
   'restore_session_view',
+  'load_session_event_backfill',
   'restore_session_with_turns',
   'load_session_turn_window',
   'load_session_turns',

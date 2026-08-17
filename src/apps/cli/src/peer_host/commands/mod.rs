@@ -77,6 +77,7 @@ pub(crate) async fn dispatch(
         }
         "load_session_turn_window" => session::load_session_turn_window(state, args).await,
         "load_session_turns" => session::load_session_turns(state, args).await,
+        "load_session_event_backfill" => session::load_session_event_backfill(state, args),
         "restore_session_view" => session::restore_session_view(state, args).await,
         "restore_session_with_turns" => session::restore_session_with_turns(state, args).await,
         "restore_session" => session::restore_session(state, args).await,

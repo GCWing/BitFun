@@ -8,12 +8,12 @@ use serde_json::{json, Value};
 use bitfun_agent_runtime::sdk::{
     AgentSessionModelSelection, AgentSessionModelSelectionUpdateRequest,
     AgentSessionRestoreRequest, AgentSessionRestoreResult, PortErrorKind, RuntimeError,
-    SessionEventProjectionSnapshot,
+    SessionEventBackfill, SessionEventProjectionSnapshot,
 };
 use bitfun_core::agentic::core::Session;
 use bitfun_core::agentic::get_agent_registry;
 use bitfun_core::util::errors::BitFunError;
-use bitfun_events::project_agentic_frontend_event;
+use bitfun_events::{project_agentic_frontend_event, AgenticEvent};
 use bitfun_runtime_ports::{
     AgentSessionArchiveRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
     AgentSessionModeUpdateRequest, AgentSessionRenameRequest, AgentThreadGoalGetRequest,
@@ -39,9 +39,8 @@ fn session_storage_request(request: &Value) -> Result<SessionStoragePathRequest,
     })
 }
 
-fn runtime_event_snapshot_to_json(snapshot: SessionEventProjectionSnapshot) -> Value {
-    let events = snapshot
-        .events
+fn frontend_events(events: Vec<AgenticEvent>) -> Vec<Value> {
+    events
         .into_iter()
         .filter_map(project_agentic_frontend_event)
         .map(|event| {
@@ -50,14 +49,56 @@ fn runtime_event_snapshot_to_json(snapshot: SessionEventProjectionSnapshot) -> V
                 "payload": event.payload,
             })
         })
-        .collect::<Vec<_>>();
+        .collect()
+}
+
+fn runtime_event_snapshot_to_json(snapshot: SessionEventProjectionSnapshot) -> Value {
     json!({
         "sessionId": snapshot.session_id,
         "streamId": snapshot.stream_id,
         "cursor": snapshot.cursor,
         "activeTurnId": snapshot.active_turn_id,
-        "events": events,
+        "events": frontend_events(snapshot.events),
     })
+}
+
+/// Project the incremental catch-up answer in the same event shape the
+/// snapshot uses, so a controller applies both through one path.
+///
+/// A Host with no journal cannot prove contiguity either, so it answers the
+/// same way an aged-out cursor does: take a snapshot.
+fn session_event_backfill_to_json(backfill: Option<SessionEventBackfill>) -> Value {
+    match backfill {
+        Some(SessionEventBackfill::Delta {
+            stream_id,
+            cursor,
+            events,
+        }) => json!({
+            "kind": "delta",
+            "streamId": stream_id,
+            "cursor": cursor,
+            "events": frontend_events(events),
+        }),
+        Some(SessionEventBackfill::SnapshotRequired) | None => json!({
+            "kind": "snapshotRequired",
+        }),
+    }
+}
+
+/// Serve everything a controller missed after the cursor it already applied.
+pub(crate) fn load_session_event_backfill(
+    state: &PeerHostState,
+    args: &Value,
+) -> Result<Value, String> {
+    let request = request_value(args);
+    let session_id = validated_session_id(request)?;
+    let stream_id = get_string(request, "streamId")?;
+    let cursor = request.get("cursor").and_then(Value::as_u64).unwrap_or(0);
+    Ok(session_event_backfill_to_json(
+        state
+            .agent_runtime
+            .session_events_since(&session_id, &stream_id, cursor),
+    ))
 }
 
 pub(super) fn ensure_session_workspace_runtime_ownership(

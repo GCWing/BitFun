@@ -975,6 +975,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "load_session_event_backfill",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "load_session_turn_window",
         RemoteWorkspacePolicy::RemoteRouted,
     ),

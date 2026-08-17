@@ -1255,6 +1255,7 @@ pub async fn run() {
             api::agentic_api::delete_session,
             api::agentic_api::restore_session,
             api::agentic_api::restore_session_view,
+            api::agentic_api::load_session_event_backfill,
             api::agentic_api::load_session_turn_window,
             api::agentic_api::restore_session_with_turns,
             api::agentic_api::reset_memory,

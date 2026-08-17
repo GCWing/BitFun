@@ -162,6 +162,25 @@ export function markRuntimeSessionProjectionStale(
   }
 }
 
+/**
+ * The stream position this Surface/Session has already applied.
+ *
+ * `null` when nothing usable has been observed yet — no live event carried a
+ * cursor, or the position came from a projection marked stale without one. A
+ * caller can only ask the Host for an incremental delta when it can name the
+ * exact cursor it is contiguous with.
+ */
+export function readRuntimeSessionProgress(
+  surfaceId: DeviceSurfaceId,
+  sessionId: string,
+): { streamId: string; cursor: number } | null {
+  const current = progress.get(attachmentKey(surfaceId, sessionId));
+  if (!current || !current.streamId) {
+    return null;
+  }
+  return { streamId: current.streamId, cursor: current.cursor };
+}
+
 export function isRuntimeSessionAttachmentInFlight(
   surfaceId: DeviceSurfaceId,
   sessionId: string,

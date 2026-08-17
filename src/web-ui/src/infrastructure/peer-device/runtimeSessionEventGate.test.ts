@@ -3,6 +3,7 @@ import {
   beginRuntimeSessionAttachment,
   isRuntimeSessionProjectionStale,
   markRuntimeSessionProjectionStale,
+  readRuntimeSessionProgress,
   resetRuntimeSessionEventGateForTest,
   routeRuntimeSessionEvent,
   RUNTIME_EVENT_CURSOR_KEY,
@@ -226,5 +227,27 @@ describe('runtimeSessionEventGate', () => {
     expect(localDelivered).not.toHaveBeenCalled();
     expect(peerDelivered).toHaveBeenCalledTimes(1);
     attachment.abort({ discard: true });
+  });
+
+  it('reports the applied position only once a cursor anchors it', () => {
+    // Nothing observed yet: a caller must not ask the Host for a delta it has
+    // no cursor to be contiguous with.
+    expect(readRuntimeSessionProgress('local', 'session')).toBeNull();
+
+    routeRuntimeSessionEvent(
+      'local',
+      'agentic://text-chunk',
+      payload('session', 'runtime-a', 5, 'a'),
+      () => {},
+    );
+
+    expect(readRuntimeSessionProgress('local', 'session')).toEqual({
+      streamId: 'runtime-a',
+      cursor: 5,
+    });
+
+    // A projection marked stale without ever seeing a cursor stays unanchored.
+    markRuntimeSessionProjectionStale('local', 'other-session');
+    expect(readRuntimeSessionProgress('local', 'other-session')).toBeNull();
   });
 });

@@ -16,11 +16,16 @@ import {
   isSurfaceChangedError,
 } from '@/infrastructure/peer-device/deviceSurface';
 import { isSurfaceReconcileEnabled } from '@/infrastructure/peer-device/deviceSurfaceReconcile';
-import type { SessionRuntimeEventSnapshot } from '@/infrastructure/api/service-api/AgentAPI';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import type {
+  RuntimeProjectedAgenticEvent,
+  SessionRuntimeEventSnapshot,
+} from '@/infrastructure/api/service-api/AgentAPI';
 import {
   beginRuntimeSessionAttachment,
   isRuntimeSessionProjectionStale,
   markRuntimeSessionProjectionStale,
+  readRuntimeSessionProgress,
   subscribeRuntimeSessionEventGaps,
 } from '@/infrastructure/peer-device/runtimeSessionEventGate';
 import { createLogger } from '@/shared/utils/logger';
@@ -226,6 +231,113 @@ export function runtimeProjectionCaughtUp(
   return true;
 }
 
+/**
+ * The Turn a delta ends in, read from the events themselves.
+ *
+ * A delta names no active Turn — it is a stream position, not a projection —
+ * but the caught-up check is per Turn, so take the last one the events mention.
+ */
+function deltaActiveTurnId(events: RuntimeProjectedAgenticEvent[]): string | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const turnId = events[index]?.payload?.turnId;
+    if (typeof turnId === 'string' && turnId) {
+      return turnId;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Repair the projection by applying exactly what was missed.
+ *
+ * This is the ordinary way back to live. The Host knows what it sent after our
+ * cursor, so a gap is answered rather than guessed at: nothing is cleared, no
+ * state machine is reset, and no snapshot has to be judged against painted
+ * content. Returns false when the caller must fall back to the snapshot path —
+ * we have no cursor to be contiguous with, the Host cannot serve one, or the
+ * delta applied but did not land.
+ *
+ * The attachment fence is what makes this safe against the live stream: events
+ * arriving while the request is in flight are queued, then released in order
+ * with the ones the delta already covered dropped by cursor.
+ */
+async function tryIncrementalCatchUp(
+  context: FlowChatContext,
+  surfaceScope: ReturnType<typeof getActiveSurfaceScope>,
+  sessionId: string,
+): Promise<boolean> {
+  const applied = readRuntimeSessionProgress(surfaceScope.surfaceId, sessionId);
+  if (!applied) {
+    return false;
+  }
+
+  const attachment = beginRuntimeSessionAttachment(surfaceScope.surfaceId, sessionId);
+  try {
+    const backfill = await agentAPI.loadSessionEventBackfill(
+      sessionId,
+      applied.streamId,
+      applied.cursor,
+    );
+    surfaceScope.assertCurrent('runtimeSessionBackfill');
+    if (!attachment.isCurrent()) {
+      // A newer attach owns the fence and carries our queue with it.
+      return true;
+    }
+    if (backfill.kind !== 'delta') {
+      // Leave the fence in place: the snapshot path begins its own attachment
+      // and inherits the queued events rather than racing them.
+      return false;
+    }
+
+    for (const event of backfill.events) {
+      surfaceScope.assertCurrent('applyRuntimeSessionBackfill');
+      if (!agenticEventListener.dispatchExternal(event.eventName, event.payload)) {
+        throw new Error('Agentic event listener is unavailable during Runtime catch-up');
+      }
+    }
+    context.eventBatcher.flushNow();
+
+    // Delivery is still not acceptance. If the state machine dropped one of
+    // these, escalate to the snapshot path in this same tick instead of
+    // recording a cursor the screen does not actually reflect.
+    const projectedSession = context.flowChatStore.getState().sessions.get(sessionId);
+    const caughtUp = runtimeProjectionCaughtUp(projectedSession, {
+      sessionId,
+      streamId: backfill.streamId,
+      cursor: backfill.cursor,
+      activeTurnId: deltaActiveTurnId(backfill.events),
+      events: backfill.events,
+    });
+    if (!caughtUp) {
+      markRuntimeSessionProjectionStale(surfaceScope.surfaceId, sessionId);
+      return false;
+    }
+
+    attachment.finish(
+      { streamId: backfill.streamId, cursor: backfill.cursor },
+      { projectionCaughtUp: true },
+    );
+    log.debug('Runtime session projection caught up incrementally', {
+      sessionId,
+      from: applied.cursor,
+      to: backfill.cursor,
+      eventCount: backfill.events.length,
+    });
+    return true;
+  } catch (error) {
+    if (isSurfaceChangedError(error)) {
+      throw error;
+    }
+    // Never strand the queued live events on a failed repair.
+    attachment.abort();
+    log.debug('Incremental catch-up failed; falling back to a snapshot', {
+      sessionId,
+      error,
+    });
+    return false;
+  }
+}
+
 async function alignStateMachineWithSnapshot(
   context: FlowChatContext,
   sessionId: string,
@@ -347,6 +459,24 @@ export function installPeerSessionRefresh(context: FlowChatContext): () => void 
     if (staleOnly && !forceRuntimeReplay && !streamIsStale && !projectionStale) {
       return;
     }
+    inFlight = true;
+    try {
+      // Ask what was missed before rebuilding anything. A repair that applies
+      // the exact events after our cursor cannot drop content, so the snapshot
+      // path below is now the fallback for a cursor the Host can no longer
+      // serve — not the normal way back to live.
+      if (await tryIncrementalCatchUp(context, surfaceScope, sessionId)) {
+        return;
+      }
+    } catch (error) {
+      if (isSurfaceChangedError(error)) {
+        return;
+      }
+      throw error;
+    } finally {
+      inFlight = false;
+    }
+
     const replaceRunningSnapshot =
       forceRuntimeReplay || streamIsStale;
     context.eventBatcher.flushNow();

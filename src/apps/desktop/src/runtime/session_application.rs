@@ -13,8 +13,8 @@ use bitfun_agent_runtime::sdk::{
     AgentLocalCommandTurnRecordRequest, AgentRuntime, AgentSessionArchiveStateRequest,
     AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionLineageRequest,
     AgentSessionLineageSnapshot, AgentSessionRenameRequest, AgentSessionUsageRequest,
-    PortErrorKind, RuntimeError, SessionEventJournal, SessionEventProjectionSnapshot,
-    SessionInteractionSnapshot,
+    PortErrorKind, RuntimeError, SessionEventBackfill, SessionEventJournal,
+    SessionEventProjectionSnapshot, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
 use bitfun_core::agentic::core::Session;
@@ -758,6 +758,20 @@ impl DesktopSessionApplication {
             .restore_session_from_storage_path(&storage_path, session_id, include_internal)
             .await
             .map_err(desktop_core_session_error)
+    }
+
+    /// Incremental catch-up for a client that already applied up to `cursor`.
+    ///
+    /// Workspace-agnostic: the journal belongs to this Runtime Host, not to any
+    /// workspace filesystem, so no session scope is resolved here.
+    pub(crate) fn session_events_since(
+        &self,
+        session_id: &str,
+        stream_id: &str,
+        cursor: u64,
+    ) -> Option<SessionEventBackfill> {
+        self.agent_runtime
+            .session_events_since(session_id, stream_id, cursor)
     }
 
     pub(crate) async fn restore_session_view<F>(
