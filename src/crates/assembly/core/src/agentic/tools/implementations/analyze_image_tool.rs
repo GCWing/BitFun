@@ -153,6 +153,59 @@ impl AnalyzeImageTool {
             }
         }
     }
+
+    /// Persist the vision model call's token usage.
+    ///
+    /// The image understanding call goes straight to `AIClient` instead of the
+    /// round executor, so it never produces a `TokenUsageUpdated` event. Record
+    /// it directly against the global usage store when one is installed.
+    async fn record_token_usage(
+        vision_model: &crate::service::config::types::AIModelConfig,
+        context: &ToolUseContext,
+        response: &crate::util::types::ai::GeminiResponse,
+    ) {
+        let Some(usage) = response.usage.as_ref() else {
+            return;
+        };
+        let Some(service) = crate::service::token_usage::get_global_token_usage_service() else {
+            return;
+        };
+        if let Err(err) = service
+            .record_usage(
+                vision_model.id.clone(),
+                vision_model.model_name.clone(),
+                context.session_id.clone().unwrap_or_default(),
+                context.dialog_turn_id.clone().unwrap_or_default(),
+                usage.prompt_token_count,
+                usage.candidates_token_count,
+                usage.cached_content_token_count,
+                token_details_from_usage(usage),
+                false,
+            )
+            .await
+        {
+            log::warn!("Failed to record image analysis token usage: {}", err);
+        }
+    }
+}
+
+/// Extract provider token details (reasoning / cache read / cache write) into
+/// the same `token_details` shape the round executor persists.
+fn token_details_from_usage(usage: &crate::util::types::ai::GeminiUsage) -> Option<Value> {
+    let mut details = serde_json::Map::new();
+    if let Some(reasoning_tokens) = usage.reasoning_token_count {
+        details.insert("reasoningTokenCount".to_string(), json!(reasoning_tokens));
+    }
+    if let Some(cached_tokens) = usage.cached_content_token_count {
+        details.insert("cachedContentTokenCount".to_string(), json!(cached_tokens));
+    }
+    if let Some(creation_tokens) = usage.cache_creation_token_count {
+        details.insert(
+            "cacheCreationTokenCount".to_string(),
+            json!(creation_tokens),
+        );
+    }
+    (!details.is_empty()).then_some(Value::Object(details))
 }
 
 #[async_trait]
@@ -359,6 +412,10 @@ impl Tool for AnalyzeImageTool {
             .await
             .map_err(|err| BitFunError::service(format!("Image analysis failed: {err}")))?;
         let analysis = response.text.trim().to_string();
+        // `analyze_image` calls the vision model directly through AIClient,
+        // bypassing the round executor's token usage event, so persist the
+        // usage here to keep the statistics page complete.
+        Self::record_token_usage(&vision_model, context, &response).await;
         let summary = analysis
             .lines()
             .find(|line| !line.trim().is_empty())
