@@ -22,6 +22,24 @@ pub enum UsageGranularity {
     Day,
 }
 
+/// Dimension selected by the usage statistics text filter.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UsageStatisticsFilterKind {
+    #[default]
+    All,
+    Provider,
+    Model,
+}
+
+/// Optional text filter applied before usage records are aggregated.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageStatisticsFilter {
+    pub kind: UsageStatisticsFilterKind,
+    pub query: String,
+}
+
 /// Per-record attribution resolved by the caller.
 #[derive(Debug, Clone)]
 pub struct UsageAttribution {

@@ -14,6 +14,21 @@
     "hour": "按小時",
     "day": "按天"
   },
+  "filter": {
+    "kind": {
+      "label": "篩選欄位",
+      "all": "全部",
+      "provider": "供應商",
+      "model": "模型"
+    },
+    "placeholder": "篩選供應商或模型",
+    "inputLabel": "篩選調用統計",
+    "clear": "清除篩選",
+    "empty": {
+      "title": "沒有符合的調用資料",
+      "description": "目前篩選條件下沒有調用記錄。"
+    }
+  },
   "refresh": "重新整理",
   "loading": "正在載入調用統計…",
   "loadFailed": "載入調用統計失敗，請重試。",

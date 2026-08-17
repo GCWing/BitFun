@@ -9,6 +9,7 @@
   // ---------------------------------------------------------------------
   &__filters-bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     margin-bottom: 16px;
@@ -23,6 +24,24 @@
     align-items: center;
     gap: 6px;
     color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &__filter-query {
+    display: flex;
+    flex: 1 1 320px;
+    align-items: center;
+    gap: 6px;
+    min-width: min(260px, 100%);
+  }
+
+  &__filter-select {
+    flex: 0 0 128px;
+    width: 128px;
+  }
+
+  &__filter-input {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   // ---------------------------------------------------------------------

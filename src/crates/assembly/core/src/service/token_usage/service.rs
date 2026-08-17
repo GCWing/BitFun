@@ -8,7 +8,7 @@ use super::types::{
 use crate::infrastructure::PathManager;
 use crate::service::config::types::AIModelConfig;
 use anyhow::Result;
-use bitfun_services_core::token_usage::{UsageGranularity, UsageStatistics};
+use bitfun_services_core::token_usage::{UsageGranularity, UsageStatistics, UsageStatisticsFilter};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -122,9 +122,10 @@ impl TokenUsageService {
         &self,
         query: TokenUsageQuery,
         granularity: UsageGranularity,
+        filter: Option<UsageStatisticsFilter>,
     ) -> Result<UsageStatistics> {
         let time_zone = query.time_zone.clone();
-        let records = self
+        let mut records = self
             .inner
             .query_records(query)
             .await
@@ -137,6 +138,14 @@ impl TokenUsageService {
             .await
             .unwrap_or_default();
         let resolver = UsageAttributionResolver::new(&configs);
+        if let Some(filter) = filter {
+            let normalized_query = filter.query.trim().to_lowercase();
+            if !normalized_query.is_empty() {
+                records.retain(|record| {
+                    resolver.matches_filter(record, filter.kind, &normalized_query)
+                });
+            }
+        }
 
         Ok(
             bitfun_services_core::token_usage::aggregate_statistics_with_time_zone(

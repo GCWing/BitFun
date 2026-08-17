@@ -14,6 +14,21 @@
     "hour": "By Hour",
     "day": "By Day"
   },
+  "filter": {
+    "kind": {
+      "label": "Filter field",
+      "all": "All",
+      "provider": "Provider",
+      "model": "Model"
+    },
+    "placeholder": "Filter providers or models",
+    "inputLabel": "Filter usage statistics",
+    "clear": "Clear filter",
+    "empty": {
+      "title": "No matching usage data",
+      "description": "No calls match the current filter."
+    }
+  },
   "refresh": "Refresh",
   "loading": "Loading usage statistics…",
   "loadFailed": "Failed to load usage statistics. Please try again.",

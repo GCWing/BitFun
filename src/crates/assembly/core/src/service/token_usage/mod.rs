@@ -11,7 +11,7 @@ pub use bitfun_services_core::token_usage::{
     aggregate_statistics, ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery,
     TokenUsageRecord, TokenUsageSummary, UsageAttribution, UsageAttributionStatus,
     UsageDimensionAttribution, UsageGranularity, UsageStatistics, UsageStatisticsEntry,
-    UsageTrendPoint,
+    UsageStatisticsFilter, UsageStatisticsFilterKind, UsageTrendPoint,
 };
 pub use service::{
     get_global_token_usage_service, set_global_token_usage_service, TokenUsageService,
