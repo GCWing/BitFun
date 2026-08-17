@@ -1,8 +1,10 @@
 import { ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ToolFileReference, ToolFileReferenceResolver } from '../../services/ToolFileReferenceResolver';
+import { ActivityGroupPolicy, ActivityRowPlan, ActivityThinkingPart } from '../policy/ActivityGroupPolicy';
 import { ToolCollapseGroup, ToolCollapsePolicy } from '../policy/ToolCollapsePolicy';
 import { CARD, FILE_LINK, GREEN, INK, LINE, MUTED, RED, SOFT } from './Theme';
+import { ThinkingBlock } from './ThinkingBlock';
 import { ToolGlyph } from './ToolGlyphs';
 import { ToolConfirmationPanel, ToolQuestionAnswerPanel } from './ToolInteractionPanels';
 
@@ -45,6 +47,7 @@ interface ToolRenderEntry {
   type: string;
   key: string;
   tool?: ConversationUiToolStatus;
+  thinking?: ActivityThinkingPart;
   tools: ConversationUiToolStatus[];
   readCount: number;
   searchCount: number;
@@ -55,6 +58,8 @@ interface ToolRenderEntry {
 @ComponentV2
 export struct ToolStatusList {
   @Param tools: ConversationUiToolStatus[] = [];
+  /** Reasoning that ran between these tools; folded away with them. */
+  @Param thinkingParts: ActivityThinkingPart[] = [];
   @Param isBusy: boolean = false;
   @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
     (_toolId: string, _updatedInput?: Object) => {};
@@ -72,6 +77,8 @@ export struct ToolStatusList {
       ForEach(this.toolRenderEntries(), (entry: ToolRenderEntry, index: number) => {
         if (entry.type === 'summary') {
           this.CollapsedToolSummary(entry)
+        } else if (entry.thinking) {
+          this.ThinkingRow(entry.thinking)
         } else if (entry.tool) {
           this.ToolRow(entry.tool, index)
         }
@@ -98,6 +105,17 @@ export struct ToolStatusList {
     .padding({ left: 0, right: 0 })
     .onClick(() => {
       this.expanded = !this.expanded;
+    })
+  }
+
+  @Builder
+  ThinkingRow(part: ActivityThinkingPart) {
+    ThinkingBlock({
+      text: part.text,
+      status: part.status,
+      keepExpandedWhenDone: false,
+      streaming: part.streaming,
+      streamKey: part.streamKey
     })
   }
 
@@ -340,11 +358,32 @@ export struct ToolStatusList {
     const groups = this.expanded ?
       ToolCollapsePolicy.expandedGroups(this.tools) :
       ToolCollapsePolicy.collapsedGroups(this.tools);
+    const parts = ActivityGroupPolicy.mergeThinkingParts(this.thinkingParts);
+    // Without a summary row there is nothing to expand, so the reasoning has to
+    // stay on screen or it would be lost.
+    const showThinking = this.expanded || !ActivityGroupPolicy.hasSummaryRow(groups);
     const entries: ToolRenderEntry[] = [];
-    groups.forEach((group: ToolCollapseGroup) => {
-      entries.push(this.entryFromGroup(group));
+    ActivityGroupPolicy.weaveRows(groups, parts, showThinking).forEach((row: ActivityRowPlan) => {
+      if (row.kind === 'thinking') {
+        entries.push(this.thinkingEntry(parts[row.index], row.index));
+        return;
+      }
+      entries.push(this.entryFromGroup(groups[row.index]));
     });
     return entries;
+  }
+
+  private thinkingEntry(part: ActivityThinkingPart, index: number): ToolRenderEntry {
+    return {
+      type: 'thinking',
+      key: `thinking-${index}-${part.beforeToolIndex}-${part.streamKey}`,
+      thinking: part,
+      tools: [],
+      readCount: 0,
+      searchCount: 0,
+      commandCount: 0,
+      otherCount: 0
+    };
   }
 
   private entryFromGroup(group: ToolCollapseGroup): ToolRenderEntry {
@@ -422,23 +461,6 @@ export struct ToolStatusList {
 
   private collapsedSummaryTitle(entry: ToolRenderEntry): string {
     return RemoteI18n.f('chat.toolsRan', `${entry.tools.length}`);
-  }
-
-  private collapsedSummaryDetail(entry: ToolRenderEntry): string {
-    const parts: string[] = [];
-    if (entry.readCount > 0) {
-      parts.push(RemoteI18n.f('chat.toolsReadCount', `${entry.readCount}`));
-    }
-    if (entry.searchCount > 0) {
-      parts.push(RemoteI18n.f('chat.toolsSearchCount', `${entry.searchCount}`));
-    }
-    if (entry.commandCount > 0) {
-      parts.push(RemoteI18n.f('chat.toolsCommandCount', `${entry.commandCount}`));
-    }
-    if (entry.otherCount > 0) {
-      parts.push(RemoteI18n.f('chat.toolsOtherCount', `${entry.otherCount}`));
-    }
-    return parts.join(' · ');
   }
 
   private normalizedToolName(tool: ConversationUiToolStatus): string {

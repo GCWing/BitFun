@@ -14,7 +14,11 @@ import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { AppRoute } from '../main/ets/pages/navigation/AppRouteContract';
 import { ConversationHeaderPolicy } from '../main/ets/pages/policy/ConversationHeaderPolicy';
 import { ThinkingPresentationPolicy } from '../main/ets/pages/policy/ThinkingPresentationPolicy';
-import { ActivityGroupPolicy } from '../main/ets/pages/policy/ActivityGroupPolicy';
+import {
+  ActivityGroupPolicy,
+  ActivityRowPlan,
+  ActivityThinkingPart
+} from '../main/ets/pages/policy/ActivityGroupPolicy';
 import { AssistantProcessLayoutPolicy } from '../main/ets/pages/policy/AssistantProcessLayoutPolicy';
 import { ConversationMessageRenderPolicy } from '../main/ets/pages/policy/ConversationMessageRenderPolicy';
 import { ToolCollapsePolicy } from '../main/ets/pages/policy/ToolCollapsePolicy';
@@ -116,11 +120,59 @@ export default function conversationPresentationUnitTest() {
       expect(ActivityGroupPolicy.thinkingHeaderCount(0)).assertEqual(0);
     });
 
-    it('opens a new group when thinking resumes after a tool has run', 0, () => {
-      expect(ActivityGroupPolicy.startsNewActivityGroup(true, true)).assertTrue();
-      expect(ActivityGroupPolicy.startsNewActivityGroup(true, false)).assertFalse();
-      expect(ActivityGroupPolicy.startsNewActivityGroup(false, true)).assertFalse();
-      expect(ActivityGroupPolicy.startsNewActivityGroup(false, false)).assertFalse();
+    it('merges an uninterrupted stretch of reasoning but keeps it where it happened', 0, () => {
+      const parts = ActivityGroupPolicy.mergeThinkingParts([
+        thinkingPart(0, 'first'),
+        thinkingPart(0, 'still first'),
+        thinkingPart(2, 'after two tools')
+      ]);
+      expect(parts.length).assertEqual(2);
+      expect(parts[0].text).assertEqual('first\n\nstill first');
+      expect(parts[0].beforeToolIndex).assertEqual(0);
+      expect(parts[1].text).assertEqual('after two tools');
+      expect(parts[1].beforeToolIndex).assertEqual(2);
+    });
+
+    it('hides reasoning behind the tool summary and unfolds it in transcript order', 0, () => {
+      const tools = [
+        toolStatus('1', 'Grep', 'completed'),
+        toolStatus('2', 'Read', 'completed'),
+        toolStatus('3', 'ExecCommand', 'completed')
+      ];
+      const parts = ActivityGroupPolicy.mergeThinkingParts([
+        thinkingPart(0, 'before any tool'),
+        thinkingPart(2, 'after two tools')
+      ]);
+
+      const collapsed = ToolCollapsePolicy.collapsedGroups(tools);
+      expect(ActivityGroupPolicy.hasSummaryRow(collapsed)).assertTrue();
+      const collapsedRows = ActivityGroupPolicy.weaveRows(collapsed, parts, false);
+      expect(collapsedRows.length).assertEqual(1);
+      expect(collapsedRows[0].kind).assertEqual('group');
+
+      const expandedRows = ActivityGroupPolicy.weaveRows(
+        ToolCollapsePolicy.expandedGroups(tools),
+        parts,
+        true
+      );
+      expect(rowPlanTrace(expandedRows)).assertEqual('group0 thinking0 group1 group2 thinking1 group3');
+    });
+
+    it('keeps reasoning on screen when a lone tool has no summary to unfold', 0, () => {
+      const groups = ToolCollapsePolicy.collapsedGroups([toolStatus('1', 'Grep', 'completed')]);
+      expect(ActivityGroupPolicy.hasSummaryRow(groups)).assertFalse();
+      const rows = ActivityGroupPolicy.weaveRows(groups, [thinkingPart(0, 'why')], true);
+      expect(rowPlanTrace(rows)).assertEqual('thinking0 group0');
+    });
+
+    it('trails reasoning that came after the last tool', 0, () => {
+      const tools = [toolStatus('1', 'Grep', 'completed'), toolStatus('2', 'Read', 'completed')];
+      const rows = ActivityGroupPolicy.weaveRows(
+        ToolCollapsePolicy.expandedGroups(tools),
+        [thinkingPart(2, 'wrapping up')],
+        true
+      );
+      expect(rowPlanTrace(rows)).assertEqual('group0 group1 group2 thinking0');
     });
   });
 
@@ -501,6 +553,24 @@ export default function conversationPresentationUnitTest() {
       expect(projection.desktopName).assertEqual('Studio');
     });
   });
+}
+
+function thinkingPart(beforeToolIndex: number, text: string): ActivityThinkingPart {
+  return {
+    beforeToolIndex,
+    text,
+    status: 'done',
+    streaming: false,
+    streamKey: `k-${beforeToolIndex}-${text}`
+  };
+}
+
+function rowPlanTrace(rows: ActivityRowPlan[]): string {
+  const parts: string[] = [];
+  rows.forEach((row: ActivityRowPlan) => {
+    parts.push(`${row.kind}${row.index}`);
+  });
+  return parts.join(' ');
 }
 
 function toolStatus(id: string, name: string, status: string): ConversationUiToolStatus {
