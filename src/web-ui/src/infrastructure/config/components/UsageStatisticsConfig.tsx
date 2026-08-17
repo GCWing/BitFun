@@ -90,7 +90,7 @@ const DonutChart: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) 
   let cumulative = 0;
 
   return (
-    <div className="bitfun-usage-stats__donut" data-bf-part="donut">
+    <div className="bitfun-usage-stats__donut">
       <svg viewBox="0 0 140 140" role="img" aria-label={`${totalTokens} tokens`}>
         <circle
           cx="70"
@@ -178,11 +178,7 @@ const DistributionPanel: React.FC<{
   }[kind];
 
   return (
-    <div
-      className="bitfun-usage-stats__panel"
-      data-bf-component="usage-statistics"
-      data-bf-part={kind}
-    >
+    <div className="bitfun-usage-stats__panel">
       <div className="bitfun-usage-stats__panel-title">{t(titleKey)}</div>
       <div className="bitfun-usage-stats__panel-body">
         <DonutChart entries={entries} />
@@ -227,7 +223,7 @@ const ModelCacheHitRatePanel: React.FC<{ entries: UsageStatisticsEntry[] }> = ({
   return (
     <div
       className="bitfun-usage-stats__panel"
-      data-bf-component="usage-statistics"
+      data-bf-component="usage-statistics-config"
       data-bf-part="modelHitRate"
     >
       <div className="bitfun-usage-stats__panel-title">{t('cacheHitRate.title')}</div>
@@ -337,7 +333,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity }) => {
   const hovered = hoverIndex !== null ? points[hoverIndex] : null;
 
   return (
-    <div className="bitfun-usage-stats__trend" data-bf-part="trend">
+    <div className="bitfun-usage-stats__trend">
       <svg
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
         className="bitfun-usage-stats__trend-svg"
@@ -578,7 +574,7 @@ const UsageStatisticsConfig: React.FC = () => {
   return (
     <ConfigPageLayout
       className="bitfun-usage-stats"
-      data-bf-component="usage-statistics"
+      data-bf-component="usage-statistics-config"
       data-bf-part="root"
     >
       <ConfigPageHeader
@@ -587,7 +583,11 @@ const UsageStatisticsConfig: React.FC = () => {
         subtitle={t('subtitle')}
       />
       <ConfigPageContent>
-        <div className="bitfun-usage-stats__filters-bar" data-bf-part="filters">
+        <div
+          className="bitfun-usage-stats__filters-bar"
+          data-bf-component="usage-statistics-config"
+          data-bf-part="filters"
+        >
           <label className="bitfun-usage-stats__filter">
             <CalendarRange size={14} aria-hidden />
             <Select
@@ -626,7 +626,11 @@ const UsageStatisticsConfig: React.FC = () => {
         {loading ? (
           <ConfigPageLoading text={t('loading')} />
         ) : empty ? (
-          <div className="bitfun-usage-stats__empty" data-bf-part="empty">
+          <div
+            className="bitfun-usage-stats__empty"
+            data-bf-component="usage-statistics-config"
+            data-bf-part="empty"
+          >
             <BarChart3 size={26} aria-hidden />
             <div>
               <h4>{t('empty.title')}</h4>
@@ -635,7 +639,11 @@ const UsageStatisticsConfig: React.FC = () => {
           </div>
         ) : stats ? (
           <>
-            <div className="bitfun-usage-stats__summary" data-bf-part="summary">
+            <div
+              className="bitfun-usage-stats__summary"
+              data-bf-component="usage-statistics-config"
+              data-bf-part="summary"
+            >
               {summaryCards.map((card) => (
                 <div className="bitfun-usage-stats__summary-card" key={card.key}>
                   <span className="bitfun-usage-stats__summary-label">{t(card.key)}</span>
@@ -651,13 +659,18 @@ const UsageStatisticsConfig: React.FC = () => {
               ))}
             </div>
 
-            <div className="bitfun-usage-stats__grid" data-bf-part="distributions">
+            <div
+              className="bitfun-usage-stats__grid"
+              data-bf-component="usage-statistics-config"
+              data-bf-part="distributions"
+            >
               <ModelCacheHitRatePanel entries={stats.byModel} />
               <DistributionPanel kind="model" entries={stats.byModel} />
               <DistributionPanel kind="group" entries={stats.byGroup} />
               <DistributionPanel kind="endpoint" entries={stats.byEndpoint} />
               <div
                 className="bitfun-usage-stats__panel bitfun-usage-stats__panel--full"
+                data-bf-component="usage-statistics-config"
                 data-bf-part="trendPanel"
               >
                 <div className="bitfun-usage-stats__panel-title">{t('trend.title')}</div>
