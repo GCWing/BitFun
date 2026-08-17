@@ -23,7 +23,7 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionModelSelectionUpdateRequest, AgentSessionModelUpdateRequest, AgentSubmissionSource,
     AgentTurnCancellationRequest, AgentTurnInterruptionRequest, DialogSteerOutcome,
     PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PermissionReply, PermissionRequest,
-    RuntimeError, SessionEventProjectionSnapshot, SessionInteractionSnapshot,
+    RuntimeError, SessionEventBackfill, SessionEventProjectionSnapshot, SessionInteractionSnapshot,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -621,6 +621,56 @@ fn frontend_event_projection_snapshot(
             })
             .collect(),
     }
+}
+
+/// Incremental catch-up answer, in the same event shape the snapshot uses so a
+/// client applies both through one path.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum FrontendSessionEventBackfill {
+    Delta {
+        stream_id: String,
+        cursor: u64,
+        events: Vec<FrontendProjectedAgenticEvent>,
+        /// Replaying events rebuilds a blocking interaction's card; only the
+        /// mailbox makes it answerable. A catch-up that skipped this left the
+        /// card on screen with no surface able to resolve it.
+        interaction_snapshot: SessionInteractionSnapshot,
+    },
+    SnapshotRequired,
+}
+
+fn session_event_backfill_to_response(
+    backfill: Option<SessionEventBackfill>,
+    interaction_snapshot: SessionInteractionSnapshot,
+) -> serde_json::Value {
+    let projected = match backfill {
+        Some(SessionEventBackfill::Delta {
+            stream_id,
+            cursor,
+            events,
+        }) => FrontendSessionEventBackfill::Delta {
+            stream_id,
+            cursor,
+            interaction_snapshot,
+            events: events
+                .into_iter()
+                .filter_map(bitfun_events::project_agentic_frontend_event)
+                .map(|event| FrontendProjectedAgenticEvent {
+                    event_name: event.event_name,
+                    payload: event.payload,
+                })
+                .collect(),
+        },
+        Some(SessionEventBackfill::SnapshotRequired) | None => {
+            FrontendSessionEventBackfill::SnapshotRequired
+        }
+    };
+    serde_json::to_value(projected).unwrap_or_else(|_| {
+        serde_json::json!({
+            "kind": "snapshotRequired",
+        })
+    })
 }
 
 #[derive(Debug, Default)]
@@ -3647,6 +3697,37 @@ pub async fn restore_session_view(
     .await;
     startup_trace.record_tauri_command_elapsed("restore_session_view", None, started_at);
     result
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadSessionEventBackfillRequest {
+    pub session_id: String,
+    pub stream_id: String,
+    #[serde(default)]
+    pub cursor: u64,
+}
+
+/// Serve everything a client missed after the cursor it already applied.
+///
+/// The journal answers either with a contiguous delta or with
+/// `snapshotRequired`; a Host with no journal cannot prove contiguity and
+/// answers the same way an aged-out cursor does.
+#[tauri::command]
+pub async fn load_session_event_backfill(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: LoadSessionEventBackfillRequest,
+) -> Result<serde_json::Value, String> {
+    Ok(session_event_backfill_to_response(
+        runtime.session_application().session_events_since(
+            &request.session_id,
+            &request.stream_id,
+            request.cursor,
+        ),
+        runtime
+            .session_application()
+            .session_interaction_snapshot(&request.session_id),
+    ))
 }
 
 #[tauri::command]

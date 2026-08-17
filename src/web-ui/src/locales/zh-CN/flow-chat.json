@@ -575,7 +575,8 @@
     }
   },
   "workspaceStrip": {
-    "branchTooltipUnavailable": "非 Git 仓库或当前无分支"
+    "branchTooltipUnavailable": "非 Git 仓库或当前无分支",
+    "branchTooltipUntrusted": "该目录属于其他用户，Git 拒绝读取此仓库。信任该目录后即可看到分支。"
   },
   "context": {
     "title": "上下文",
@@ -1232,6 +1233,7 @@
       "emptyWorkspace": "当前工作区没有可审核的变更",
       "emptyExplicitScope": "请求的文件或目录没有工作区变更",
       "unresolvedTarget": "无法将审核目标准备为有界证据，请打开对应工作区或缩小目标后重试",
+      "repositoryUntrusted": "该目录属于其他用户，Git 拒绝读取此仓库。请在提示中信任该目录后重新启动审核",
       "uncertain": "审核请求可能已经在运行。会话已保留，可安全检查或重试",
       "unknown": "审核启动失败，请重试"
     }

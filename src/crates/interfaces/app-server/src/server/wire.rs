@@ -12,7 +12,8 @@ use bitfun_app_server_protocol::agent::{
 use bitfun_app_server_protocol::config::AgentProfileView;
 use bitfun_app_server_protocol::event::ConfigUpdate;
 use bitfun_app_server_protocol::git::{
-    GitBranch, GitBranchStats, GitFileStatus, GitLinesChanged, GitStatus,
+    GitBranch, GitBranchStats, GitFileStatus, GitLinesChanged, GitStatus, GitTrustReport,
+    GitTrustState,
 };
 use bitfun_app_server_protocol::session::{
     RestoreSessionMessage, RestoreSessionResponse, SessionProcessingPhase, SessionRuntimeState,
@@ -149,6 +150,23 @@ pub(super) fn git_status(value: bitfun_core::service::git::GitStatus) -> GitStat
         current_branch: value.current_branch,
         ahead: value.ahead,
         behind: value.behind,
+    }
+}
+
+pub(super) fn git_trust_report(value: bitfun_core::service::git::GitTrustReport) -> GitTrustReport {
+    GitTrustReport {
+        state: git_trust_state(value.state),
+        repository_path: value.repository_path,
+        detail: value.detail,
+        manual_command: value.manual_command,
+    }
+}
+
+fn git_trust_state(value: bitfun_core::service::git::GitTrustState) -> GitTrustState {
+    match value {
+        bitfun_core::service::git::GitTrustState::Trusted => GitTrustState::Trusted,
+        bitfun_core::service::git::GitTrustState::TrustRequired => GitTrustState::TrustRequired,
+        bitfun_core::service::git::GitTrustState::NotARepository => GitTrustState::NotARepository,
     }
 }
 

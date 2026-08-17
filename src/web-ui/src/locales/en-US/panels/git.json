@@ -424,5 +424,16 @@
     "discardAllChanges": "Warning: This will:\n\n1. Discard all staged changes\n2. Discard all unstaged changes\n3. Delete all untracked files\n\nThis action cannot be undone! Are you sure?",
     "resetToCommit": "Are you sure you want to reset to commit {{hash}}?\n\nThis will move the current branch pointer to this commit.",
     "deleteBranch": "Are you sure you want to delete branch \"{{branch}}\"?"
+  },
+  "trust": {
+    "title": "Trust this repository?",
+    "message": "Git will not read \"{{path}}\" because the folder is owned by another user.\n\nTrusting it adds the folder to your global safe.directory list, so Git will run its configuration and hooks from a tree you do not own. Only continue if you know where this folder came from.",
+    "confirm": "Trust folder",
+    "cancel": "Cancel",
+    "granted": "Git now trusts \"{{path}}\".",
+    "alreadyTrusted": "Git already accepts \"{{path}}\" — nothing left to grant.",
+    "unavailable": "Git ownership trust for \"{{path}}\" could not be granted from here. Grant it on the machine that owns the repository.",
+    "unavailableWithCommand": "Git ownership trust for \"{{path}}\" could not be granted from here. Run this command on the machine that holds the repository:\n\n{{command}}",
+    "required": "Git will not read \"{{path}}\" until you trust its ownership."
   }
 }

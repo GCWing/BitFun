@@ -16,6 +16,7 @@
  */
 
 import { gitAPI } from '@/infrastructure/api';
+import { gitRepositoryUntrustedPath } from '@/infrastructure/api/errors/TauriCommandError';
 import { gitEventService } from '../services/GitEventService';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
@@ -446,7 +447,13 @@ export class GitStateManager {
         }
 
 
-        if (layersToRefresh.includes('basic') || layersToRefresh.includes('status')) {
+        // Only basic/status reaches Git in a way that can observe the ownership
+        // gate. A detailed-only refresh swallows its own failures (branches and
+        // commits fall back to empty arrays), so treating its success as proof
+        // that trust is no longer required would clear a wall nobody retested.
+        const probedTrust =
+          layersToRefresh.includes('basic') || layersToRefresh.includes('status');
+        if (probedTrust) {
           await this.refreshBasicAndStatus(repositoryPath, layersToRefresh);
         }
 
@@ -465,6 +472,7 @@ export class GitStateManager {
           lastRefreshTime: newLastRefreshTime,
           isRefreshing: false,
           refreshingLayers: new Set(),
+          ...(probedTrust ? { repositoryTrustRequired: false } : {}),
         });
 
 
@@ -480,13 +488,50 @@ export class GitStateManager {
       } catch (error) {
         probeOutcome = 'error';
         probeError = error instanceof Error ? error.message : String(error);
-        const errorMessage = error instanceof Error ? error.message : i18nService.t('panels/git:errors.refreshFailed');
+        // The ownership wall reaches here as a stable code, not as prose. Say
+        // what happened instead of showing the raw code to the user.
+        //
+        // The code is produced by whichever executor classified the rejection.
+        // An execution domain that cannot classify still answers the read-only
+        // trust probe, so ask it once before concluding that ownership has
+        // nothing to do with this failure — see `probeRepositoryTrust`.
+        const stablePath = gitRepositoryUntrustedPath(error);
+        const probed = stablePath === undefined
+          ? await this.probeRepositoryTrust(repositoryPath)
+          : undefined;
+        const untrustedPath = stablePath ?? probed?.path;
+        const errorMessage = untrustedPath
+          ? i18nService.t('panels/git:trust.required', { path: untrustedPath })
+          : error instanceof Error
+            ? error.message
+            : i18nService.t('panels/git:errors.refreshFailed');
         log.error('Refresh failed', { repositoryPath, layersToRefresh, error });
 
+        // The flag follows whoever actually reached Git's answer, in both
+        // directions. A probe that answered raises the wall on `trust_required`
+        // and lowers it on anything else: without the lowering half, an
+        // execution domain whose status read can never succeed — the CLI peer
+        // has no `git_get_status` — has no way back out. The user fixes
+        // ownership on the peer, the probe starts reporting `trusted`, and the
+        // panel stays on the Trust screen forever, because the only other thing
+        // that clears the flag is a successful basic/status refresh that will
+        // never come.
+        //
+        // A failure nobody could explain leaves the wall exactly as it was: the
+        // probe threw (a host too old to answer, a dropped SSH connection) and
+        // never reached Git, so it has nothing to say about trust. Clearing on
+        // that would drop a blocked repository back to "not a repository" — the
+        // status read throws before `isRepository` is ever set — and send the
+        // user to initialize one over a repository that is already there.
         this.updateState(repositoryPath, {
           isRefreshing: false,
           refreshingLayers: new Set(),
           error: errorMessage,
+          ...(untrustedPath !== undefined
+            ? { repositoryTrustRequired: true }
+            : probed
+              ? { repositoryTrustRequired: false }
+              : {}),
         });
 
         throw error;
@@ -528,6 +573,38 @@ export class GitStateManager {
   }
 
   /**
+   * Asks the host that owns the repository whether Git is refusing it on
+   * ownership grounds, for a failure that could not say so itself.
+   *
+   * Not every execution domain classifies. The CLI peer implements
+   * `git_get_repository_trust` but not `git_get_status`, so its status refresh
+   * fails with an ordinary "unsupported command" — no stable code, no flag, no
+   * Trust button, and the authorization entry point this feature adds is
+   * unreachable from a controller talking to that peer. One read-only probe
+   * makes it reachable.
+   *
+   * Returns the probe's verdict, or `undefined` when it could not produce one —
+   * a host too old to answer, a transport that failed. Only a verdict may move
+   * the trust flag; a failure we cannot explain must neither be dressed up as
+   * an ownership wall nor be taken as proof that one has come down. The
+   * original error is never replaced by the probe's own.
+   */
+  private async probeRepositoryTrust(
+    repositoryPath: string
+  ): Promise<{ trustRequired: boolean; path?: string } | undefined> {
+    try {
+      const report = await gitAPI.getRepositoryTrust(repositoryPath);
+      if (report.state !== 'trust_required') {
+        return { trustRequired: false };
+      }
+      return { trustRequired: true, path: report.repositoryPath ?? repositoryPath };
+    } catch (error) {
+      log.debug('Git trust probe unavailable after a failed refresh', { repositoryPath, error });
+      return undefined;
+    }
+  }
+
+  /**
    * Refresh basic + status layers.
    */
   private async refreshBasicAndStatus(
@@ -537,9 +614,15 @@ export class GitStateManager {
     try {
       const isRepo = await gitAPI.isGitRepository(repositoryPath);
 
+      // The probe answers `true` for a repository Git refuses on ownership
+      // grounds — local and remote alike — so `false` here really is "no
+      // repository", and clearing the trust flag states a fact rather than
+      // hiding one. The ownership case falls through to the status read below,
+      // whose stable error sets the flag in the caller's catch.
       if (!isRepo) {
         this.updateState(repositoryPath, {
           isRepository: false,
+          repositoryTrustRequired: false,
           currentBranch: null,
           ahead: 0,
           behind: 0,

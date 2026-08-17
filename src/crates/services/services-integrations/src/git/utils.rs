@@ -1,9 +1,10 @@
-pub use super::{
-    build_git_changed_files_args, build_git_diff_args, parse_branch_line, parse_git_log_line,
-};
 /**
  * Git utility functions
  */
+use super::trust;
+pub use super::{
+    build_git_changed_files_args, build_git_diff_args, parse_branch_line, parse_git_log_line,
+};
 use super::{GitCommandOutput, GitError, GitFileStatus};
 use bitfun_services_core::process_manager;
 use git2::{Repository, Status, StatusOptions};
@@ -34,9 +35,30 @@ where
     Ok(bytes)
 }
 
+/// Opens a repository, keeping an ownership rejection distinguishable from a
+/// missing repository.
+pub fn open_repository<P: AsRef<Path>>(path: P) -> Result<Repository, GitError> {
+    let path = path.as_ref();
+    Repository::open(path).map_err(|error| trust::classify_repository_open_error(path, &error))
+}
+
+/// Discovers the repository containing `path`, keeping an ownership rejection
+/// distinguishable from a missing repository.
+pub fn discover_repository<P: AsRef<Path>>(path: P) -> Result<Repository, GitError> {
+    let path = path.as_ref();
+    Repository::discover(path).map_err(|error| trust::classify_repository_open_error(path, &error))
+}
+
 /// Returns whether the given path is a Git repository.
+///
+/// A repository whose owner differs from the current user still is one: Git
+/// only refuses to operate on it. Reporting `false` there would hide the real
+/// reason behind "not a repository" and strip every recovery affordance.
 pub fn is_git_repository<P: AsRef<Path>>(path: P) -> bool {
-    Repository::open(path).is_ok()
+    match open_repository(path) {
+        Ok(_) => true,
+        Err(error) => error.untrusted_repository_path().is_some(),
+    }
 }
 
 /// Returns the repository root directory.
@@ -51,13 +73,18 @@ pub fn get_repository_root<P: AsRef<Path>>(path: P) -> Result<String, GitError> 
         .ancestors()
         .filter(|ancestor| ancestor.join(".git").exists())
     {
-        if Repository::open(root).is_ok() {
-            return Ok(root.to_string_lossy().to_string());
+        // An ownership rejection still identifies a real repository root; the
+        // operation that needs it will fail with the actionable trust error.
+        match open_repository(root) {
+            Ok(_) => return Ok(root.to_string_lossy().to_string()),
+            Err(error) if error.untrusted_repository_path().is_some() => {
+                return Ok(root.to_string_lossy().to_string())
+            }
+            Err(_) => {}
         }
     }
 
-    let repo =
-        Repository::discover(requested).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+    let repo = discover_repository(requested)?;
 
     let workdir = repo
         .workdir()
@@ -254,8 +281,12 @@ pub async fn execute_git_command_raw(
     repo_path: &str,
     args: &[&str],
 ) -> Result<GitCommandOutput, GitError> {
+    // Ownership-trust classification matches Git's English diagnostics, so
+    // every in-product Git call pins the locale instead of inheriting the
+    // user's (possibly localized) one.
     let output = process_manager::create_tokio_command("git")
         .current_dir(repo_path)
+        .env("LC_ALL", "C")
         .args(args)
         .output()
         .await
@@ -284,7 +315,7 @@ pub async fn execute_git_command(repo_path: &str, args: &[&str]) -> Result<Strin
         } else {
             result.stderr
         };
-        Err(GitError::CommandFailed(error))
+        Err(trust::classify_command_failure(repo_path, error))
     }
 }
 
@@ -295,9 +326,25 @@ pub async fn execute_git_readonly_command(
     repo_path: &str,
     args: &[&str],
 ) -> Result<String, GitError> {
+    execute_git_hardened_command_with_env(repo_path, args, &[]).await
+}
+
+/// Runs a Git command under the hardened, non-interactive environment every
+/// in-product probe shares: no optional locks, no terminal prompts, no lazy
+/// fetches, and English diagnostics (`LC_ALL=C`) so [`trust`] can classify the
+/// output regardless of the user's locale. Despite the read-only callers, the
+/// environment itself makes no such promise: the trust module deliberately
+/// reuses it for the confirmed `safe.directory` config write, which needs the
+/// same prompt-free, bounded execution.
+pub(crate) async fn execute_git_hardened_command_with_env(
+    repo_path: &str,
+    args: &[&str],
+    env: &[(&str, &str)],
+) -> Result<String, GitError> {
     let mut command = process_manager::create_tokio_command("git");
     command
         .current_dir(repo_path)
+        .env("LC_ALL", "C")
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_NO_LAZY_FETCH", "1")
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -308,6 +355,9 @@ pub async fn execute_git_readonly_command(
         .kill_on_drop(true)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    for (key, value) in env {
+        command.env(key, value);
+    }
     let mut child = command.spawn().map_err(|error| {
         GitError::CommandFailed(format!("Failed to execute Git inspection: {error}"))
     })?;
@@ -350,11 +400,10 @@ pub async fn execute_git_readonly_command(
     } else {
         let stderr = String::from_utf8_lossy(&stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&stdout).trim().to_string();
-        Err(GitError::CommandFailed(if stderr.is_empty() {
-            stdout
-        } else {
-            stderr
-        }))
+        Err(trust::classify_command_failure(
+            repo_path,
+            if stderr.is_empty() { stdout } else { stderr },
+        ))
     }
 }
 
@@ -363,8 +412,10 @@ pub fn execute_git_command_sync_raw(
     repo_path: &str,
     args: &[&str],
 ) -> Result<GitCommandOutput, GitError> {
+    // English diagnostics, see execute_git_command_raw.
     let output = process_manager::create_command("git")
         .current_dir(repo_path)
+        .env("LC_ALL", "C")
         .args(args)
         .output()
         .map_err(|e| GitError::CommandFailed(format!("Failed to execute git command: {}", e)))?;
@@ -393,6 +444,8 @@ pub fn execute_git_command_sync_with_timeout(
 
     let mut child = process_manager::create_command("git")
         .current_dir(repo_path)
+        // English diagnostics, see execute_git_command_raw.
+        .env("LC_ALL", "C")
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -432,11 +485,10 @@ pub fn execute_git_command_sync_with_timeout(
     }
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Err(GitError::CommandFailed(if stderr.is_empty() {
-        stdout
-    } else {
-        stderr
-    }))
+    Err(trust::classify_command_failure(
+        repo_path,
+        if stderr.is_empty() { stdout } else { stderr },
+    ))
 }
 
 /// Executes a Git command synchronously.
@@ -451,7 +503,7 @@ pub fn execute_git_command_sync(repo_path: &str, args: &[&str]) -> Result<String
         } else {
             result.stderr
         };
-        Err(GitError::CommandFailed(error))
+        Err(trust::classify_command_failure(repo_path, error))
     }
 }
 

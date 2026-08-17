@@ -50,7 +50,7 @@ pub use crate::post_call_hooks::{
     RuntimeHookRegistryBuildError,
 };
 pub use crate::runtime::{
-    attach_session_event_cursor, SessionEventCursor, SessionEventJournal,
+    attach_session_event_cursor, SessionEventBackfill, SessionEventCursor, SessionEventJournal,
     SessionEventProjectionSnapshot, SessionEventProjectionStore, StoredSessionEvents,
     RUNTIME_EVENT_CURSOR_KEY, RUNTIME_EVENT_STREAM_ID_KEY,
 };
@@ -806,6 +806,16 @@ impl AgentRuntime {
         session_id: &str,
     ) -> Option<SessionEventProjectionSnapshot> {
         self.inner.session_event_projection_snapshot(session_id)
+    }
+
+    pub fn session_events_since(
+        &self,
+        session_id: &str,
+        stream_id: &str,
+        cursor: u64,
+    ) -> Option<SessionEventBackfill> {
+        self.inner
+            .session_events_since(session_id, stream_id, cursor)
     }
 
     pub async fn publish_event(&self, event: RuntimeEventEnvelope) -> Result<(), RuntimeError> {

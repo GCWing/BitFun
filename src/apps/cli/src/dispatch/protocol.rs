@@ -25,6 +25,11 @@ pub(crate) struct DispatchWorkspaceProbe {
     pub(crate) exists: bool,
     pub(crate) is_directory: bool,
     pub(crate) is_git_repository: bool,
+    /// Git found the repository but refuses to read it until the current user
+    /// trusts the path. Present only when that is the case, so a controller can
+    /// say why `branch` and `dirty` are missing instead of showing a blank.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) trust_required: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -9,17 +9,39 @@ use bitfun_core::service::git::{
     GitLogParams, GitPullParams, GitPushParams, GitService,
 };
 use bitfun_core::service::git::{
-    GitBranch, GitCommit, GitOperationResult, GitRepository, GitStatus,
+    trust, GitBranch, GitCommit, GitError, GitOperationResult, GitRepository, GitStatus,
+    GitTrustOutcome, GitTrustReport, GitTrustState,
 };
 use bitfun_core::service::remote_ssh::{
-    build_remote_git_command as build_remote_git_command_shared, lookup_remote_connection,
-    normalize_remote_workspace_path,
+    build_remote_git_command as build_remote_git_command_shared, is_remote_path,
+    lookup_remote_connection, normalize_remote_workspace_path,
 };
 use bitfun_core::service::workspace::WorktreeTopologyFreshness;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::State;
+
+/// Flattens a Git service failure into the desktop error string, keeping
+/// ownership rejections machine-recognizable across the command boundary. The
+/// wire form is produced by `trust`, shared with the app-server surface.
+fn git_error_message(context: &str, error: &GitError) -> String {
+    match error.untrusted_repository_path() {
+        Some(repository_path) => trust::untrusted_repository_error_message(repository_path),
+        None => format!("{context}: {error}"),
+    }
+}
+
+/// Same classification for repositories reached over a remote connection, where
+/// only the remote diagnostic text is available.
+fn remote_git_error_message(fallback_path: &str, message: String) -> String {
+    if trust::is_untrusted_repository_message(&message) {
+        let repository_path = trust::untrusted_repository_path_from_message(&message)
+            .unwrap_or_else(|| fallback_path.to_string());
+        return trust::untrusted_repository_error_message(&repository_path);
+    }
+    message
+}
 
 #[derive(Debug, Clone)]
 struct RemoteGitTarget {
@@ -34,12 +56,36 @@ struct RemoteGitOutput {
     exit_code: i32,
 }
 
-async fn resolve_remote_git_target(repository_path: &str) -> Option<RemoteGitTarget> {
-    let entry = lookup_remote_connection(repository_path).await?;
-    Some(RemoteGitTarget {
-        connection_id: entry.connection_id,
-        repository_path: normalize_remote_workspace_path(repository_path),
-    })
+/// Resolves the remote workspace a Git request belongs to, if any.
+///
+/// `Ok(None)` means "this path is on this machine". It must not also mean "this
+/// path belongs to another machine but I could not say which": overlapping
+/// registered roots with no usable connection hint make `lookup_remote_connection`
+/// answer `None` for a path that plainly is remote (`is_remote_path` still says
+/// so), and treating that as local hands the request to the local `GitService`.
+/// For a read that reports a stranger's repository; for `git_trust_repository`
+/// it writes *this* user's global `safe.directory` for a path that lives
+/// somewhere else — a real, wrong, host operation whenever a same-named path
+/// happens to exist here. Remote workspace search already refuses the identical
+/// ambiguity out loud (`search_api::workspace_search_unavailable_message`).
+async fn resolve_remote_git_target(
+    repository_path: &str,
+) -> Result<Option<RemoteGitTarget>, String> {
+    if let Some(entry) = lookup_remote_connection(repository_path).await {
+        return Ok(Some(RemoteGitTarget {
+            connection_id: entry.connection_id,
+            repository_path: normalize_remote_workspace_path(repository_path),
+        }));
+    }
+
+    if is_remote_path(repository_path).await {
+        return Err(format!(
+            "Remote workspace is not registered with BitFun SSH state: no single SSH connection \
+             matches {repository_path}"
+        ));
+    }
+
+    Ok(None)
 }
 
 fn build_remote_git_command(repository_path: &str, args: &[String]) -> String {
@@ -82,7 +128,10 @@ async fn execute_remote_git_success(
         } else {
             output.stderr
         };
-        Err(error.trim().to_string())
+        Err(remote_git_error_message(
+            &target.repository_path,
+            error.trim().to_string(),
+        ))
     }
 }
 
@@ -93,13 +142,7 @@ async fn execute_remote_git_operation(
 ) -> Result<GitOperationResult, String> {
     let output = execute_remote_git_command(state, target, args).await?;
     let success = output.exit_code == 0;
-    let error = (!success).then(|| {
-        if output.stderr.trim().is_empty() {
-            output.stdout.trim().to_string()
-        } else {
-            output.stderr.trim().to_string()
-        }
-    });
+    let error = remote_operation_error(&target.repository_path, &output);
 
     Ok(GitOperationResult {
         success,
@@ -111,6 +154,24 @@ async fn execute_remote_git_operation(
         output: Some(output.stdout),
         duration: None,
     })
+}
+
+/// The failure a remote mutation reports, `None` when it succeeded.
+///
+/// A mutation refused on ownership grounds hits the same wall a read hits, and
+/// has to reach the frontend the same way — through the stable code the trust
+/// recovery flow branches on. Reporting the raw remote diagnostic instead put
+/// `fatal: detected dubious ownership` in front of the user with nothing to do
+/// about it, while the same rejection on a read offered the way out.
+fn remote_operation_error(fallback_path: &str, output: &RemoteGitOutput) -> Option<String> {
+    if output.exit_code == 0 {
+        return None;
+    }
+
+    Some(remote_git_error_message(
+        fallback_path,
+        remote_git_diagnostic(output),
+    ))
 }
 
 fn parse_remote_status_line(
@@ -484,6 +545,169 @@ pub struct GitRemoveWorktreeRequest {
     pub force: Option<bool>,
 }
 
+/// Read-only ownership-trust probe for a repository.
+///
+/// Git refuses to operate on a repository owned by another user until the path
+/// is listed in the protected `safe.directory` configuration. Surfaces call
+/// this to tell that state apart from "not a repository" before offering the
+/// trust decision.
+#[tauri::command]
+pub async fn git_get_repository_trust(
+    state: State<'_, AppState>,
+    request: GitRepositoryRequest,
+) -> Result<GitTrustReport, String> {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
+        return inspect_remote_repository_trust(&state, &target).await;
+    }
+
+    GitService::inspect_trust(&request.repository_path)
+        .await
+        .map_err(|e| {
+            error!(
+                "Failed to inspect Git repository trust: path={}, error={}",
+                request.repository_path, e
+            );
+            git_error_message("Failed to inspect Git repository trust", &e)
+        })
+}
+
+/// Grants ownership trust for a repository after the user confirmed it.
+///
+/// Writes the `safe.directory` exception Git asks for, then re-probes the
+/// repository. A decision that could not be applied here (remote workspace,
+/// read-only configuration) is reported with `state != trusted` and the manual
+/// command, never silently swallowed.
+#[tauri::command]
+pub async fn git_trust_repository(
+    state: State<'_, AppState>,
+    request: GitRepositoryRequest,
+) -> Result<GitTrustOutcome, String> {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
+        let report = inspect_remote_repository_trust(&state, &target).await?;
+        info!(
+            "Git repository trust must be granted on the remote host: path={}",
+            target.repository_path
+        );
+        return Ok(GitTrustOutcome {
+            already_trusted: report.state == GitTrustState::Trusted,
+            state: report.state,
+            repository_path: report.repository_path,
+            added_entries: Vec::new(),
+            detail: report.detail,
+            manual_command: report.manual_command,
+        });
+    }
+
+    let outcome = GitService::trust_repository(&request.repository_path)
+        .await
+        .map_err(|e| {
+            error!(
+                "Failed to trust Git repository: path={}, error={}",
+                request.repository_path, e
+            );
+            git_error_message("Failed to trust Git repository", &e)
+        })?;
+    info!(
+        "Git repository trust decision applied: path={}, state={:?}, added={}",
+        request.repository_path,
+        outcome.state,
+        outcome.added_entries.len()
+    );
+    Ok(outcome)
+}
+
+async fn inspect_remote_repository_trust(
+    state: &AppState,
+    target: &RemoteGitTarget,
+) -> Result<GitTrustReport, String> {
+    let output = execute_remote_git_command(
+        state,
+        target,
+        &["rev-parse".to_string(), "--show-toplevel".to_string()],
+    )
+    .await?;
+
+    if output.exit_code == 0 {
+        // A successful `--show-toplevel` always names the worktree. Empty
+        // output means the transport, not Git, produced this result; calling it
+        // "trusted" would report a repository we never actually saw.
+        // Normalized like every local path, so a remote report and a local one
+        // are comparable and a `safe.directory` entry derived from either has
+        // the same spelling.
+        let Some(repository_path) = trust::normalize_trust_path(&output.stdout) else {
+            return Err(
+                "Failed to inspect Git repository trust on the remote host: git reported success without a repository path"
+                    .to_string(),
+            );
+        };
+        return Ok(GitTrustReport {
+            state: GitTrustState::Trusted,
+            repository_path: Some(repository_path),
+            detail: None,
+            manual_command: None,
+        });
+    }
+
+    let diagnostic = remote_git_diagnostic(&output);
+    if trust::is_untrusted_repository_message(&diagnostic) {
+        let repository_path = trust::untrusted_repository_path_from_message(&diagnostic)
+            .or_else(|| trust::normalize_trust_path(&target.repository_path))
+            .unwrap_or_else(|| target.repository_path.clone());
+        let manual_command = trust::manual_trust_command(&repository_path);
+        return Ok(GitTrustReport {
+            state: GitTrustState::TrustRequired,
+            repository_path: Some(repository_path),
+            detail: Some(diagnostic),
+            manual_command: Some(manual_command),
+        });
+    }
+
+    if trust::is_missing_repository_message(&diagnostic) {
+        return Ok(GitTrustReport {
+            state: GitTrustState::NotARepository,
+            repository_path: trust::normalize_trust_path(&target.repository_path)
+                .or_else(|| Some(target.repository_path.clone())),
+            detail: Some(diagnostic),
+            manual_command: None,
+        });
+    }
+
+    // Anything else — a denied path, a broken `.git`, an SSH wrapper that died
+    // — means the probe could not reach an answer. The local inspection returns
+    // an error there, and so must this one: reporting "not a repository" would
+    // send the user to initialize one over a repository that is already there.
+    Err(format!(
+        "Failed to inspect Git repository trust on the remote host: {}",
+        if diagnostic.is_empty() {
+            format!("git exited with code {}", output.exit_code)
+        } else {
+            diagnostic
+        }
+    ))
+}
+
+/// The remote diagnostic to classify: stderr when Git wrote one, stdout
+/// otherwise (some SSH wrappers merge the streams).
+fn remote_git_diagnostic(output: &RemoteGitOutput) -> String {
+    if output.stderr.trim().is_empty() {
+        output.stdout.trim().to_string()
+    } else {
+        output.stderr.trim().to_string()
+    }
+}
+
+/// Whether a remote `rev-parse --is-inside-work-tree` found a repository.
+///
+/// Mirrors the local [`bitfun_core::service::git::utils::is_git_repository`]:
+/// a repository Git refuses on ownership grounds still *is* one, and answering
+/// `false` there hides the recovery affordance behind "not a repository".
+fn remote_probe_found_repository(output: &RemoteGitOutput) -> bool {
+    if output.exit_code == 0 {
+        return output.stdout.trim() == "true";
+    }
+    trust::is_untrusted_repository_message(&remote_git_diagnostic(output))
+}
+
 #[tauri::command]
 pub async fn git_is_repository(
     state: State<'_, AppState>,
@@ -491,14 +715,14 @@ pub async fn git_is_repository(
     request: GitRepositoryRequest,
 ) -> Result<bool, String> {
     let trace_started = Instant::now();
-    let result = if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    let result = if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         execute_remote_git_command(
             &state,
             &target,
             &["rev-parse".to_string(), "--is-inside-work-tree".to_string()],
         )
         .await
-        .map(|output| output.exit_code == 0 && output.stdout.trim() == "true")
+        .map(|output| remote_probe_found_repository(&output))
     } else {
         GitService::is_repository(&request.repository_path)
             .await
@@ -507,7 +731,7 @@ pub async fn git_is_repository(
                     "Failed to check Git repository: path={}, error={}",
                     request.repository_path, e
                 );
-                format!("Failed to check Git repository: {}", e)
+                git_error_message("Failed to check Git repository", &e)
             })
     };
 
@@ -520,7 +744,7 @@ pub async fn git_get_repository(
     state: State<'_, AppState>,
     request: GitRepositoryRequest,
 ) -> Result<GitRepository, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let current_branch = execute_remote_git_success(
             &state,
             &target,
@@ -573,7 +797,7 @@ pub async fn git_get_repository(
                 "Failed to get Git repository info: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to get Git repository info: {}", e)
+            git_error_message("Failed to get Git repository info", &e)
         })
 }
 
@@ -585,7 +809,7 @@ pub async fn git_get_repository_basic(
 ) -> Result<GitRepository, String> {
     let trace_started = Instant::now();
     let result = async {
-        if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+        if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
             let current_branch = execute_remote_git_success(
                 &state,
                 &target,
@@ -624,7 +848,7 @@ pub async fn git_get_repository_basic(
                         "Failed to get basic Git repository info: path={}, error={}",
                         request.repository_path, e
                     );
-                    format!("Failed to get basic Git repository info: {}", e)
+                    git_error_message("Failed to get basic Git repository info", &e)
                 })
         }
     }
@@ -644,7 +868,7 @@ pub async fn git_resolve_revision(
         return Err("Revision cannot be empty".to_string());
     }
 
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         return execute_remote_git_success(
             &state,
             &target,
@@ -660,7 +884,7 @@ pub async fn git_resolve_revision(
 
     GitService::resolve_revision(&request.repository_path, revision)
         .await
-        .map_err(|e| format!("Failed to resolve Git revision: {}", e))
+        .map_err(|e| git_error_message("Failed to resolve Git revision", &e))
 }
 
 #[tauri::command]
@@ -668,7 +892,7 @@ pub async fn git_get_status(
     state: State<'_, AppState>,
     request: GitRepositoryRequest,
 ) -> Result<GitStatus, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let output = execute_remote_git_success(
             &state,
             &target,
@@ -690,7 +914,7 @@ pub async fn git_get_status(
                 "Failed to get Git status: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to get Git status: {}", e)
+            git_error_message("Failed to get Git status", &e)
         })
 }
 
@@ -700,7 +924,7 @@ pub async fn git_get_branches(
     request: GitBranchesRequest,
 ) -> Result<Vec<GitBranch>, String> {
     let include_remote = request.include_remote.unwrap_or(false);
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mut args = vec![
             "for-each-ref".to_string(),
             "--format=%(if)%(HEAD)%(then)*%(else) %(end)%09%(refname)%09%(refname:short)%09%(upstream:short)%09%(objectname)%09%(committerdate:iso-strict)".to_string(),
@@ -720,7 +944,7 @@ pub async fn git_get_branches(
                 "Failed to get Git branches: path={}, include_remote={}, error={}",
                 request.repository_path, include_remote, e
             );
-            format!("Failed to get Git branches: {}", e)
+            git_error_message("Failed to get Git branches", &e)
         })
 }
 
@@ -730,7 +954,7 @@ pub async fn git_get_enhanced_branches(
     request: GitBranchesRequest,
 ) -> Result<Vec<GitBranch>, String> {
     let include_remote = request.include_remote.unwrap_or(false);
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mut args = vec![
             "for-each-ref".to_string(),
             "--format=%(if)%(HEAD)%(then)*%(else) %(end)%09%(refname)%09%(refname:short)%09%(upstream:short)%09%(objectname)%09%(committerdate:iso-strict)".to_string(),
@@ -750,7 +974,7 @@ pub async fn git_get_enhanced_branches(
                 "Failed to get enhanced Git branches: path={}, include_remote={}, error={}",
                 request.repository_path, include_remote, e
             );
-            format!("Failed to get enhanced Git branches: {}", e)
+            git_error_message("Failed to get enhanced Git branches", &e)
         })
 }
 
@@ -760,7 +984,7 @@ pub async fn git_get_commits(
     request: GitCommitsRequest,
 ) -> Result<Vec<GitCommit>, String> {
     let params = request.params.unwrap_or_default();
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let output = execute_remote_git_success(&state, &target, &git_log_args(&params)).await?;
         return Ok(parse_remote_commits(&output));
     }
@@ -772,7 +996,7 @@ pub async fn git_get_commits(
                 "Failed to get Git commits: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to get Git commits: {}", e)
+            git_error_message("Failed to get Git commits", &e)
         })
 }
 
@@ -781,7 +1005,7 @@ pub async fn git_add_files(
     state: State<'_, AppState>,
     request: GitAddFilesRequest,
 ) -> Result<GitOperationResult, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mut args = vec!["add".to_string()];
         if request.params.all.unwrap_or(false) {
             args.push("-A".to_string());
@@ -800,7 +1024,7 @@ pub async fn git_add_files(
                 "Failed to add files: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to add files: {}", e)
+            git_error_message("Failed to add files", &e)
         })
 }
 
@@ -809,7 +1033,7 @@ pub async fn git_commit(
     state: State<'_, AppState>,
     request: GitCommitRequest,
 ) -> Result<GitOperationResult, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mut args = vec![
             "commit".to_string(),
             "-m".to_string(),
@@ -838,7 +1062,7 @@ pub async fn git_commit(
                 "Failed to commit: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to commit: {}", e)
+            git_error_message("Failed to commit", &e)
         })
 }
 
@@ -847,7 +1071,7 @@ pub async fn git_push(
     state: State<'_, AppState>,
     request: GitPushRequest,
 ) -> Result<GitOperationResult, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mut args = vec!["push".to_string()];
         if request.params.force.unwrap_or(false) {
             args.push("--force".to_string());
@@ -871,7 +1095,7 @@ pub async fn git_push(
                 "Failed to push: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to push: {}", e)
+            git_error_message("Failed to push", &e)
         })
 }
 
@@ -880,7 +1104,7 @@ pub async fn git_pull(
     state: State<'_, AppState>,
     request: GitPullRequest,
 ) -> Result<GitOperationResult, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mut args = vec!["pull".to_string()];
         if request.params.rebase.unwrap_or(false) {
             args.push("--rebase".to_string());
@@ -901,7 +1125,7 @@ pub async fn git_pull(
                 "Failed to pull: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to pull: {}", e)
+            git_error_message("Failed to pull", &e)
         })
 }
 
@@ -910,7 +1134,7 @@ pub async fn git_checkout_branch(
     state: State<'_, AppState>,
     request: GitCheckoutBranchRequest,
 ) -> Result<GitOperationResult, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         return execute_remote_git_operation(
             &state,
             &target,
@@ -926,7 +1150,7 @@ pub async fn git_checkout_branch(
                 "Failed to checkout branch: path={}, branch={}, error={}",
                 request.repository_path, request.branch_name, e
             );
-            format!("Failed to checkout branch: {}", e)
+            git_error_message("Failed to checkout branch", &e)
         })
 }
 
@@ -935,7 +1159,7 @@ pub async fn git_create_branch(
     state: State<'_, AppState>,
     request: GitCreateBranchRequest,
 ) -> Result<GitOperationResult, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mut args = vec![
             "checkout".to_string(),
             "-b".to_string(),
@@ -958,7 +1182,7 @@ pub async fn git_create_branch(
             "Failed to create branch: path={}, branch={}, error={}",
             request.repository_path, request.branch_name, e
         );
-        format!("Failed to create branch: {}", e)
+        git_error_message("Failed to create branch", &e)
     })
 }
 
@@ -968,7 +1192,7 @@ pub async fn git_delete_branch(
     request: GitDeleteBranchRequest,
 ) -> Result<GitOperationResult, String> {
     let force = request.force.unwrap_or(false);
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         return execute_remote_git_operation(
             &state,
             &target,
@@ -988,7 +1212,7 @@ pub async fn git_delete_branch(
                 "Failed to delete branch: path={}, branch={}, force={}, error={}",
                 request.repository_path, request.branch_name, force, e
             );
-            format!("Failed to delete branch: {}", e)
+            git_error_message("Failed to delete branch", &e)
         })
 }
 
@@ -997,7 +1221,7 @@ pub async fn git_get_diff(
     state: State<'_, AppState>,
     request: GitDiffRequest,
 ) -> Result<String, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         return execute_remote_git_success(&state, &target, &build_git_diff_args(&request.params))
             .await;
     }
@@ -1009,7 +1233,7 @@ pub async fn git_get_diff(
                 "Failed to get Git diff: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to get Git diff: {}", e)
+            git_error_message("Failed to get Git diff", &e)
         })
 }
 
@@ -1023,7 +1247,7 @@ pub async fn git_get_changed_files(
         request.repository_path
     );
 
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let output = execute_remote_git_success(
             &state,
             &target,
@@ -1037,7 +1261,7 @@ pub async fn git_get_changed_files(
         .await
         .map_err(|e| {
             error!("Failed to get changed Git files: {}", e);
-            e.to_string()
+            git_error_message("Failed to get changed Git files", &e)
         })
 }
 
@@ -1053,7 +1277,7 @@ pub async fn git_reset_files(
         request.repository_path, staged, request.files
     );
 
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mut args = vec!["restore".to_string()];
         if staged {
             args.push("--staged".to_string());
@@ -1071,7 +1295,7 @@ pub async fn git_reset_files(
             output: Some(output),
             duration: None,
         })
-        .map_err(|e| e.to_string())
+        .map_err(|e| git_error_message("Failed to reset files", &e))
 }
 
 #[tauri::command]
@@ -1084,7 +1308,7 @@ pub async fn git_get_file_content(
         request.file_path, request.commit, request.repository_path
     );
 
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let object_spec = format!(
             "{}:{}",
             request.commit.as_deref().unwrap_or("HEAD"),
@@ -1100,7 +1324,7 @@ pub async fn git_get_file_content(
         request.commit.as_deref(),
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| git_error_message("Failed to get file content", &e))?;
 
     Ok(content)
 }
@@ -1115,7 +1339,7 @@ pub async fn git_reset_to_commit(
         request.commit_hash, request.mode, request.repository_path
     );
 
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mode_flag = match request.mode.as_str() {
             "soft" => "--soft",
             "mixed" => "--mixed",
@@ -1145,7 +1369,7 @@ pub async fn git_reset_to_commit(
             "Failed to reset to commit: path={}, commit={}, mode={}, error={}",
             request.repository_path, request.commit_hash, request.mode, e
         );
-        format!("Failed to reset: {}", e)
+        git_error_message("Failed to reset", &e)
     })
 }
 
@@ -1161,13 +1385,13 @@ pub async fn git_get_graph(
         repository_path, max_count, branch_name
     );
 
-    if resolve_remote_git_target(&repository_path).await.is_some() {
+    if resolve_remote_git_target(&repository_path).await?.is_some() {
         return Err("Git graph is not supported for remote SSH workspaces yet".to_string());
     }
 
     GitService::get_git_graph_for_branch(&repository_path, max_count, branch_name)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| git_error_message("Failed to get Git graph", &e))
 }
 
 #[tauri::command]
@@ -1182,7 +1406,7 @@ pub async fn git_cherry_pick(
         request.commit_hash, request.repository_path, no_commit
     );
 
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         let mut args = vec!["cherry-pick".to_string()];
         if no_commit {
             args.push("-n".to_string());
@@ -1198,7 +1422,7 @@ pub async fn git_cherry_pick(
                 "Failed to cherry-pick: path={}, commit={}, no_commit={}, error={}",
                 request.repository_path, request.commit_hash, no_commit, e
             );
-            format!("Failed to cherry-pick: {}", e)
+            git_error_message("Failed to cherry-pick", &e)
         })
 }
 
@@ -1209,7 +1433,7 @@ pub async fn git_cherry_pick_abort(
 ) -> Result<GitOperationResult, String> {
     info!("Aborting cherry-pick in repo '{}'", request.repository_path);
 
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         return execute_remote_git_operation(
             &state,
             &target,
@@ -1225,7 +1449,7 @@ pub async fn git_cherry_pick_abort(
                 "Failed to abort cherry-pick: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to abort cherry-pick: {}", e)
+            git_error_message("Failed to abort cherry-pick", &e)
         })
 }
 
@@ -1239,7 +1463,7 @@ pub async fn git_cherry_pick_continue(
         request.repository_path
     );
 
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await? {
         return execute_remote_git_operation(
             &state,
             &target,
@@ -1255,7 +1479,7 @@ pub async fn git_cherry_pick_continue(
                 "Failed to continue cherry-pick: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to continue cherry-pick: {}", e)
+            git_error_message("Failed to continue cherry-pick", &e)
         })
 }
 
@@ -1267,7 +1491,7 @@ pub async fn git_list_worktrees(
     info!("Listing worktrees for '{}'", request.repository_path);
 
     if resolve_remote_git_target(&request.repository_path)
-        .await
+        .await?
         .is_some()
     {
         return Err("Git worktrees are not supported for remote SSH workspaces yet".to_string());
@@ -1285,7 +1509,7 @@ pub async fn git_list_worktrees(
                 "Failed to list worktrees: path={}, error={}",
                 request.repository_path, e
             );
-            format!("Failed to list worktrees: {}", e)
+            git_error_message("Failed to list worktrees", &e)
         })
 }
 
@@ -1301,7 +1525,7 @@ pub async fn git_add_worktree(
     );
 
     if resolve_remote_git_target(&request.repository_path)
-        .await
+        .await?
         .is_some()
     {
         return Err("Git worktrees are not supported for remote SSH workspaces yet".to_string());
@@ -1315,7 +1539,7 @@ pub async fn git_add_worktree(
                     "Failed to add worktree: path={}, branch={}, create_branch={}, error={}",
                     request.repository_path, request.branch, create_branch, e
                 );
-                format!("Failed to add worktree: {}", e)
+                git_error_message("Failed to add worktree", &e)
             })?;
     state
         .workspace_service
@@ -1336,7 +1560,7 @@ pub async fn git_remove_worktree(
     );
 
     if resolve_remote_git_target(&request.repository_path)
-        .await
+        .await?
         .is_some()
     {
         return Err("Git worktrees are not supported for remote SSH workspaces yet".to_string());
@@ -1350,7 +1574,7 @@ pub async fn git_remove_worktree(
                     "Failed to remove worktree: path={}, worktree_path={}, force={}, error={}",
                     request.repository_path, request.worktree_path, force, e
                 );
-                format!("Failed to remove worktree: {}", e)
+                git_error_message("Failed to remove worktree", &e)
             })?;
     state
         .workspace_service
@@ -1421,5 +1645,97 @@ pub async fn load_git_repo_history(
     match data {
         Some(data) => Ok(data.repos),
         None => Ok(Vec::new()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn remote_output(stdout: &str, stderr: &str, exit_code: i32) -> RemoteGitOutput {
+        RemoteGitOutput {
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            exit_code,
+        }
+    }
+
+    #[test]
+    fn a_remote_repository_git_refuses_on_ownership_is_still_a_repository() {
+        // Answering `false` here is what sent shared SSH hosts and containers
+        // running under a different uid to the "initialize a repository" page.
+        let output = remote_output(
+            "",
+            "fatal: detected dubious ownership in repository at '/srv/shared/repo'",
+            128,
+        );
+
+        assert!(remote_probe_found_repository(&output));
+    }
+
+    #[test]
+    fn a_remote_path_without_a_repository_is_reported_as_none() {
+        let output = remote_output(
+            "",
+            "fatal: not a git repository (or any parent up to /)",
+            128,
+        );
+
+        assert!(!remote_probe_found_repository(&output));
+    }
+
+    #[test]
+    fn a_remote_worktree_answers_the_probe() {
+        assert!(remote_probe_found_repository(&remote_output(
+            "true\n", "", 0
+        )));
+        assert!(!remote_probe_found_repository(&remote_output(
+            "false\n", "", 0
+        )));
+    }
+
+    #[test]
+    fn a_merged_stream_still_carries_the_ownership_rejection() {
+        // Some SSH wrappers fold stderr into stdout; the diagnostic must be
+        // read from whichever stream carried it.
+        let output = remote_output(
+            "fatal: detected dubious ownership in repository at '/srv/shared/repo'",
+            "",
+            128,
+        );
+
+        assert!(remote_probe_found_repository(&output));
+    }
+
+    #[test]
+    fn a_remote_mutation_refused_on_ownership_carries_the_stable_code() {
+        // Commit, push, checkout and the rest went through a path that reported
+        // the raw diagnostic, so the frontend could not tell this failure from
+        // any other and the user saw Git's prose with no way out — while the
+        // same rejection on a read offered one.
+        let output = remote_output(
+            "",
+            "fatal: detected dubious ownership in repository at '/srv/shared/repo'",
+            128,
+        );
+
+        assert_eq!(
+            remote_operation_error("/srv/shared/other", &output).as_deref(),
+            Some("git_repository_untrusted: /srv/shared/repo")
+        );
+    }
+
+    #[test]
+    fn an_ordinary_remote_mutation_failure_is_reported_as_is() {
+        let output = remote_output("", "error: failed to push some refs", 1);
+
+        assert_eq!(
+            remote_operation_error("/srv/shared/repo", &output).as_deref(),
+            Some("error: failed to push some refs")
+        );
+        assert_eq!(
+            remote_operation_error("/srv/shared/repo", &remote_output("ok\n", "", 0)),
+            None
+        );
     }
 }

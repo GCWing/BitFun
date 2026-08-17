@@ -91,6 +91,23 @@ The configured Docker CLI remains the security boundary. BitFun does not expose
 the Docker daemon over the network or bypass the current user's Docker
 permissions.
 
+## Git ownership trust
+
+Git refuses a repository whose directory is owned by another user until the
+path is listed in the protected `safe.directory` configuration — a common shape
+for shared SSH hosts, bind-mounted trees, and containers that run as a
+different uid. BitFun classifies that refusal as its own state instead of
+reporting "not a repository", so Git-backed surfaces can explain the wall and
+the Review launch fails with a specific reason.
+
+The decision itself belongs to the machine that owns the repository. For a
+remote workspace BitFun reports the state and hands over the exact command
+(`git config --global --add safe.directory "<path>"`) to run on the remote
+host; it never writes the remote user's global Git configuration, and it never
+grants trust implicitly as a fallback of a failed read. The same rule applies
+in Peer Device Mode: the read-only probe answers for a controller, granting is
+refused on the peer host.
+
 ## Upgrade compatibility
 
 Existing SSH profiles remain plain SSH targets because the new `proxyJump` and

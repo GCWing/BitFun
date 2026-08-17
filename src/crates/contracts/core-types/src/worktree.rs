@@ -139,6 +139,10 @@ pub struct WorktreeSummary {
 pub enum WorktreeErrorCode {
     RemoteUnsupported,
     NotGitRepository,
+    /// The repository is there, but Git refuses to read it because the directory
+    /// belongs to another user. Distinct from `NotGitRepository`: nothing is
+    /// missing and nothing needs initializing — the user has to trust the path.
+    RepositoryUntrusted,
     UnbornRepo,
     InvalidBaseRef,
     WorktreeNotFound,
@@ -160,6 +164,7 @@ impl WorktreeErrorCode {
         match self {
             Self::RemoteUnsupported => "remote_unsupported",
             Self::NotGitRepository => "not_git_repository",
+            Self::RepositoryUntrusted => "repository_untrusted",
             Self::UnbornRepo => "unborn_repo",
             Self::InvalidBaseRef => "invalid_base_ref",
             Self::WorktreeNotFound => "worktree_not_found",

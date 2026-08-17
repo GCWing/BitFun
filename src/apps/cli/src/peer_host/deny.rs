@@ -108,14 +108,21 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "speech_append_audio_chunk",
     "speech_finish_input_session",
     "speech_cancel_input_session",
+    // Granting Git ownership trust writes this user's global Git configuration
+    // and tells Git to run hooks from a tree they do not own. That decision
+    // belongs to the person at this machine, so refuse it explicitly rather
+    // than relying on the command being unimplemented here.
+    "git_trust_repository",
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.
 /// Prefix match is applied for `lsp_`, `canvas_`, `editor_`, `ssh_`,
 /// `terminal_`, `search_` unless the command is explicitly allowlisted.
 ///
-/// `git_*` is intentionally not prefix-denied: `git_is_repository` is
-/// implemented; other git commands fall through to the registry miss path.
+/// `git_*` is intentionally not prefix-denied: `git_is_repository` and the
+/// read-only `git_get_repository_trust` are implemented; `git_trust_repository`
+/// is refused as local-only above, and other git commands fall through to the
+/// registry miss path.
 static CLI_UNSUPPORTED_EXACT: &[&str] = &[
     "open_remote_workspace",
     "remote_get_workspace_info",
@@ -202,5 +209,15 @@ mod tests {
         ] {
             assert!(is_local_only_command(command), "{command}");
         }
+    }
+
+    /// Reading why Git refuses a repository is safe to answer for a controller
+    /// and is implemented here; granting the exception writes this user's
+    /// global Git configuration and must be decided at this machine. Being
+    /// unimplemented is not a boundary — say no explicitly.
+    #[test]
+    fn granting_git_ownership_trust_is_refused_on_the_peer() {
+        assert!(is_local_only_command("git_trust_repository"));
+        assert!(!is_local_only_command("git_get_repository_trust"));
     }
 }

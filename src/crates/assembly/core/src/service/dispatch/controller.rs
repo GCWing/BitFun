@@ -7,6 +7,7 @@ use bitfun_services_integrations::remote_ssh::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::service::git::trust;
 use crate::service::worktree::WorktreeService;
 
 use super::baseline::{
@@ -1580,6 +1581,28 @@ pub(super) fn validate_submission_preflight(
     {
         anyhow::bail!("Dispatch workspace is not a Git worktree on the target");
     }
+    // A repository the target's Git refuses on ownership grounds still *is* one,
+    // so the probe answers `isGitRepository: true` and the check above passes.
+    // Submitting anyway creates the record, ships the job, and fails on the
+    // target at the worker's first Git read — far from the person who could act
+    // on it. Nothing here can fix it either: the trust decision belongs to the
+    // machine holding the repository, and this controller cannot write that
+    // host's configuration. Refusing now, by name, is the only honest outcome.
+    if workspace.get("trustRequired").and_then(Value::as_bool) == Some(true) {
+        // The path the *target* reported, not the one this controller asked
+        // about: the probe canonicalizes it, and the command below has to be run
+        // over there.
+        let path = workspace.get("path").and_then(Value::as_str);
+        let remedy = path.map_or_else(
+            || "Add the workspace to that host's `safe.directory` configuration".to_string(),
+            |path| format!("Run `{}` on that host", trust::manual_trust_command(path)),
+        );
+        anyhow::bail!(
+            "Git on the dispatch target refuses '{}': the repository is owned by another user \
+             there. {remedy} and submit again",
+            path.unwrap_or("the dispatch workspace")
+        );
+    }
     let selected_model = if let Some(requested_model) = requested_model
         .map(str::trim)
         .filter(|model| !model.is_empty())
@@ -1715,6 +1738,46 @@ mod tests {
             "availableModels": []
         });
         assert!(validate_submission_preflight(&missing_model, None, None).is_err());
+    }
+
+    /// The target's Git refuses the workspace on ownership grounds. It is still
+    /// a repository, so every readiness field says yes — and the job would be
+    /// submitted only to die at the worker's first Git read on a host nobody is
+    /// watching.
+    #[test]
+    fn submission_preflight_refuses_a_workspace_the_target_does_not_trust() {
+        let untrusted = json!({
+            "workspace": {
+                "path": "/srv/shared/repo",
+                "exists": true,
+                "isDirectory": true,
+                "isGitRepository": true,
+                "trustRequired": true
+            },
+            "modelConfigured": true,
+            "availableModels": ["target-model"],
+            "defaultModel": "target-model"
+        });
+        let error = validate_submission_preflight(&untrusted, None, None)
+            .expect_err("an untrusted target workspace cannot be dispatched to");
+        let message = error.to_string();
+        assert!(message.contains("/srv/shared/repo"), "{message}");
+        // The exact command, shell-quoted by the same helper every other surface
+        // uses — the user has to paste this into a shell on the target.
+        assert!(
+            message.contains("git config --global --add safe.directory /srv/shared/repo"),
+            "{message}"
+        );
+
+        // A target that never reports the field (an older CLI) is unchanged.
+        let legacy = json!({
+            "workspace": { "exists": true, "isDirectory": true, "isGitRepository": true },
+            "modelConfigured": true,
+            "availableModels": ["target-model"],
+            "defaultModel": "target-model"
+        });
+        validate_submission_preflight(&legacy, None, None)
+            .expect("legacy target stays dispatchable");
     }
 
     #[test]

@@ -6,6 +6,7 @@ import {
   resolveSlashCommandReviewTarget,
 } from './targetResolver';
 import { classifyReviewTargetFromFiles } from '@/shared/services/reviewTargetClassifier';
+import { TauriCommandError } from '@/infrastructure/api/errors/TauriCommandError';
 
 const mockGitGetStatus = vi.fn();
 const mockGitGetChangedFiles = vi.fn();
@@ -574,5 +575,31 @@ describe('Deep Review target resolver', () => {
     expect(result.target.files.map((file) => file.normalizedPath)).toContain(
       'src/crates/assembly/core/src/agentic/auth.rs',
     );
+  });
+
+  it('lets an ownership rejection out instead of degrading it to unknown evidence', async () => {
+    const untrusted = new TauriCommandError('Command failed', {
+      command: 'git_get_status',
+      originalError: 'git_repository_untrusted: /workspace',
+    });
+    mockGitGetStatus.mockRejectedValue(untrusted);
+
+    await expect(
+      resolveSlashCommandReviewTarget('review the workspace', '/workspace'),
+    ).rejects.toBe(untrusted);
+
+    const target = classifyReviewTargetFromFiles(['src/lib.rs'], 'session_files');
+    await expect(
+      resolveCurrentFileReviewSnapshot('/workspace', target),
+    ).rejects.toBe(untrusted);
+  });
+
+  it('still degrades an ordinary Git failure into unknown evidence', async () => {
+    mockGitGetStatus.mockRejectedValue(new Error('fatal: not a git repository'));
+
+    const target = classifyReviewTargetFromFiles(['src/lib.rs'], 'session_files');
+    const snapshot = await resolveCurrentFileReviewSnapshot('/workspace', target);
+
+    expect(snapshot.targetEvidence.limitations).toContain('file_scope_target_evidence_failed');
   });
 });

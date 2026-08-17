@@ -18,14 +18,19 @@ pub fn shell_quote_posix(value: &str) -> String {
     }
 }
 
-/// Builds a `git -C <repository_path> --no-pager <args...>` command line for
-/// execution through an SSH channel.
+/// Builds a `LC_ALL=C git -C <repository_path> --no-pager <args...>` command
+/// line for execution through an SSH channel.
+///
+/// The locale pin keeps diagnostics in English: ownership-trust
+/// classification matches Git's wording, and the remote user's locale is
+/// outside the host's control.
 pub fn build_remote_git_command<I, S>(repository_path: &str, args: I) -> String
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
     let mut parts = vec![
+        "LC_ALL=C".to_string(),
         "git".to_string(),
         "-C".to_string(),
         shell_quote_posix(repository_path),
@@ -56,7 +61,7 @@ mod tests {
     fn builds_git_command_with_no_pager() {
         assert_eq!(
             build_remote_git_command("/srv/my repo", ["remote", "-v"]),
-            "git -C '/srv/my repo' --no-pager remote -v"
+            "LC_ALL=C git -C '/srv/my repo' --no-pager remote -v"
         );
     }
 }

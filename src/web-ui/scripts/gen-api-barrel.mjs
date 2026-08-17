@@ -36,6 +36,7 @@ const requiredTypes = [
   'ForkSessionResponse',
   'GitBranch',
   'GitRepositoryPathRequest',
+  'GitTrustReport',
   'ListSessionsResponse',
   'PermissionGrant',
   'PermissionReply',

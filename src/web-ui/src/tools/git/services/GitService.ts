@@ -3,6 +3,10 @@
  */
 
 import { gitAPI } from '@/infrastructure/api';
+import {
+  gitRepositoryUntrustedPath,
+  isGitRepositoryUntrustedError,
+} from '@/infrastructure/api/errors/TauriCommandError';
 import { createLogger } from '@/shared/utils/logger';
 import { measureAsync } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n';
@@ -39,6 +43,24 @@ import {
   GitDiffParams,
   GitLogParams
 } from '../types';
+
+/**
+ * Names the ownership wall behind a failed Git operation, or `undefined` when
+ * that is not what went wrong.
+ *
+ * The rejection reaches a caller as a stable code from two directions: a local
+ * executor throws it, and a remote one returns it in `result.error`. Neither is
+ * a sentence. Passing it through puts `git_repository_untrusted:
+ * /srv/shared/repo` in the panel next to a commit that did not happen, while
+ * the very same wall on a status read names the repository and points at the
+ * way out.
+ */
+export function describeGitTrustFailure(failure: unknown): string | undefined {
+  const repositoryPath = gitRepositoryUntrustedPath(failure);
+  return repositoryPath
+    ? i18nService.t('panels/git:trust.required', { path: repositoryPath })
+    : undefined;
+}
 
 export class GitService {
   private static instance: GitService;
@@ -89,6 +111,45 @@ export class GitService {
   private addToNonGitCache(path: string): void {
     this.nonGitRepositoryCache.add(path);
     this.cacheTimestamps.set(path, Date.now());
+  }
+
+  /**
+   * Records a failed read as "not a repository" — unless Git refused it on
+   * ownership grounds.
+   *
+   * That refusal says the repository is there, and the negative cache is
+   * consulted before the call is even attempted: caching it would keep
+   * returning `null` for minutes, outliving a trust decision the user just
+   * made and hiding the error the recovery flow needs to see.
+   */
+  private cacheFailureAsNonGit(path: string, error: unknown): void {
+    if (isGitRepositoryUntrustedError(error)) {
+      return;
+    }
+    this.addToNonGitCache(path);
+  }
+
+  /** Turns whatever a mutation failed with into something the user can act on. */
+  private describeOperationFailure(failure: unknown, fallbackKey: string): string {
+    const trustFailure = describeGitTrustFailure(failure);
+    if (trustFailure) {
+      return trustFailure;
+    }
+    if (typeof failure === 'string' && failure.trim().length > 0) {
+      return failure;
+    }
+    return failure instanceof Error ? failure.message : i18nService.t(fallbackKey);
+  }
+
+  /** Same translation for a failure the backend returned rather than threw. */
+  private explainOperationResult(
+    result: GitOperationResult,
+    fallbackKey: string
+  ): GitOperationResult {
+    if (result.success || !isGitRepositoryUntrustedError(result.error)) {
+      return result;
+    }
+    return { ...result, error: this.describeOperationFailure(result.error, fallbackKey) };
   }
 
   private removeFromNonGitCache(path: string): void {
@@ -187,7 +248,7 @@ export class GitService {
       return result;
     } catch (error) {
       log.error('Failed to check git repository', error);
-      this.addToNonGitCache(path);
+      this.cacheFailureAsNonGit(path, error);
       return false;
     }
   }
@@ -214,7 +275,7 @@ export class GitService {
       return this.adaptRepository(result.value);
     } catch (error) {
       log.error('Failed to get repository info', error);
-      this.addToNonGitCache(path);
+      this.cacheFailureAsNonGit(path, error);
       return null;
     }
   }
@@ -239,7 +300,7 @@ export class GitService {
       return this.adaptStatus(result);
     } catch (error) {
       log.error('Failed to get git status', error);
-      this.addToNonGitCache(repositoryPath);
+      this.cacheFailureAsNonGit(repositoryPath, error);
       return null;
     }
   }
@@ -270,12 +331,12 @@ export class GitService {
   async addFiles(repositoryPath: string, params: GitAddParams): Promise<GitOperationResult> {
     try {
       const result = await gitAPI.addFiles(repositoryPath, params);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.addFailed');
     } catch (error) {
       log.error('Failed to add files', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.addFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.addFailed')
       };
     }
   }
@@ -287,12 +348,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.commit(repositoryPath, params);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.commitFailed');
     } catch (error) {
       log.error('Failed to commit', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.commitFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.commitFailed')
       };
     }
   }
@@ -304,12 +365,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.push(repositoryPath, params);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.pushFailed');
     } catch (error) {
       log.error('Failed to push', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.pushFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.pushFailed')
       };
     }
   }
@@ -321,12 +382,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.pull(repositoryPath, params);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.pullFailed');
     } catch (error) {
       log.error('Failed to pull', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.pullFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.pullFailed')
       };
     }
   }
@@ -338,12 +399,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.checkoutBranch(repositoryPath, branchName);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.checkoutFailed');
     } catch (error) {
       log.error('Failed to checkout branch', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.checkoutFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.checkoutFailed')
       };
     }
   }
@@ -355,12 +416,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.createBranch(repositoryPath, branchName, startPoint);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.createBranchFailed');
     } catch (error) {
       log.error('Failed to create branch', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.createBranchFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.createBranchFailed')
       };
     }
   }
@@ -372,12 +433,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.deleteBranch(repositoryPath, branchName, force);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.deleteBranchFailed');
     } catch (error) {
       log.error('Failed to delete branch', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.deleteBranchFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.deleteBranchFailed')
       };
     }
   }
@@ -402,12 +463,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.resetFiles(repositoryPath, files, staged);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.resetFilesFailed');
     } catch (error) {
       log.error('Failed to reset files', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.resetFilesFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.resetFilesFailed')
       };
     }
   }
@@ -419,12 +480,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.resetToCommit(repositoryPath, commitHash, mode);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.resetCommitFailed');
     } catch (error) {
       log.error('Failed to reset to commit', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.resetCommitFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.resetCommitFailed')
       };
     }
   }
@@ -463,12 +524,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.cherryPick(repositoryPath, commitHash, noCommit);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.cherryPickFailed');
     } catch (error) {
       log.error('Failed to cherry-pick', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.cherryPickFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.cherryPickFailed')
       };
     }
   }
@@ -480,12 +541,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.cherryPickAbort(repositoryPath);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.cherryPickAbortFailed');
     } catch (error) {
       log.error('Failed to abort cherry-pick', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.cherryPickAbortFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.cherryPickAbortFailed')
       };
     }
   }
@@ -497,12 +558,12 @@ export class GitService {
     try {
       await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.cherryPickContinue(repositoryPath);
-      return result;
+      return this.explainOperationResult(result, 'panels/git:errors.cherryPickContinueFailed');
     } catch (error) {
       log.error('Failed to continue cherry-pick', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : i18nService.t('panels/git:errors.cherryPickContinueFailed')
+        error: this.describeOperationFailure(error, 'panels/git:errors.cherryPickContinueFailed')
       };
     }
   }

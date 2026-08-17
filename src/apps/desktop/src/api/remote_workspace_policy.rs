@@ -799,6 +799,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "git_get_repository_basic",
         RemoteWorkspacePolicy::RemoteRouted,
     ),
+    (
+        "git_get_repository_trust",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
     ("git_get_status", RemoteWorkspacePolicy::RemoteRouted),
     ("git_is_repository", RemoteWorkspacePolicy::RemoteRouted),
     (
@@ -814,6 +818,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("git_reset_files", RemoteWorkspacePolicy::RemoteRouted),
     ("git_reset_to_commit", RemoteWorkspacePolicy::RemoteRouted),
     ("git_resolve_revision", RemoteWorkspacePolicy::RemoteRouted),
+    ("git_trust_repository", RemoteWorkspacePolicy::RemoteRouted),
     ("grant_miniapp_path", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "grant_miniapp_workspace",
@@ -973,6 +978,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     (
         "load_persisted_session_metadata",
         RemoteWorkspacePolicy::LegacyUnaudited,
+    ),
+    (
+        "load_session_event_backfill",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
         "load_session_turn_window",

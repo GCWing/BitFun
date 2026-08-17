@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TauriCommandError } from '@/infrastructure/api/errors/TauriCommandError';
+import { resetGitTrustDecisions } from '@/shared/services/gitTrustService';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import {
   launchPreparedReviewSession,
@@ -21,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   closeBtwSessionInAuxPane: vi.fn(),
   deleteSession: vi.fn(),
   discardLocalSession: vi.fn(),
+  trustRepository: vi.fn(),
+  confirmWarning: vi.fn(),
   sessions: new Map<string, unknown>(),
 }));
 
@@ -28,6 +32,18 @@ vi.mock('@/infrastructure/api', () => ({
   agentAPI: {
     deleteSession: (...args: unknown[]) => mocks.deleteSession(...args),
   },
+  gitAPI: {
+    trustRepository: (...args: unknown[]) => mocks.trustRepository(...args),
+  },
+}));
+
+// Review drives the real trust recovery; only its user-facing edges are stubbed.
+vi.mock('@/component-library/components/ConfirmDialog/confirmService', () => ({
+  confirmWarning: (...args: unknown[]) => mocks.confirmWarning(...args),
+}));
+
+vi.mock('@/shared/notification-system', () => ({
+  notificationService: { warning: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('./DeepReviewService', () => ({
@@ -131,6 +147,7 @@ function targetEvidence() {
 describe('ReviewService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetGitTrustDecisions();
     mocks.sessions.clear();
     mocks.createBtwChildSession.mockResolvedValue({
       childSessionId: 'review-child',
@@ -376,6 +393,48 @@ describe('ReviewService', () => {
       requiresConsent: false,
       runManifest: manifest,
     });
+  });
+
+  it('prepares Review after the user grants ownership trust', async () => {
+    const untrusted = new TauriCommandError('Command failed', {
+      command: 'git_get_status',
+      originalError: 'git_repository_untrusted: D:/workspace/project',
+    });
+    mocks.resolveCurrentFileReviewSnapshot.mockRejectedValueOnce(untrusted);
+    mocks.confirmWarning.mockResolvedValue(true);
+    mocks.trustRepository.mockResolvedValue({
+      state: 'trusted',
+      repositoryPath: 'D:/workspace/project',
+      alreadyTrusted: false,
+      addedEntries: ['D:/workspace/project'],
+      detail: null,
+      manualCommand: null,
+    });
+
+    const prepared = await prepareReviewLaunchFromSessionFiles(['src/small.ts'], {
+      workspacePath: 'D:/workspace/project',
+    });
+
+    expect(prepared.mode).toBe('standard');
+    expect(mocks.trustRepository).toHaveBeenCalledWith('D:/workspace/project');
+    expect(mocks.resolveCurrentFileReviewSnapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it('names the ownership wall when the user does not grant trust', async () => {
+    mocks.resolveCurrentFileReviewSnapshot.mockRejectedValue(
+      new TauriCommandError('Command failed', {
+        command: 'git_get_status',
+        originalError: 'git_repository_untrusted: D:/workspace/project',
+      }),
+    );
+    mocks.confirmWarning.mockResolvedValue(false);
+
+    await expect(prepareReviewLaunchFromSessionFiles(['src/small.ts'], {
+      workspacePath: 'D:/workspace/project',
+    })).rejects.toMatchObject({
+      launchErrorMessageKey: 'deepReviewActionBar.launchError.repositoryUntrusted',
+    });
+    expect(mocks.trustRepository).not.toHaveBeenCalled();
   });
 
   it('blocks remote Git ranges before spending reviewer capacity', async () => {

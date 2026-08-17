@@ -11,6 +11,7 @@ use std::process::Command;
 use anyhow::{anyhow, bail, Context, Result};
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::service::config::{AuthConfig, GlobalConfig};
+use bitfun_core::service::git::trust;
 use serde::de::DeserializeOwned;
 
 use protocol::{
@@ -758,18 +759,23 @@ fn inspect_workspace(workspace_path: &str) -> Result<DispatchWorkspaceProbe> {
     } else {
         path
     };
-    let is_git_repository = is_directory
-        && git_output(&canonical, &["rev-parse", "--is-inside-work-tree"])
-            .is_some_and(|output| output.trim() == "true");
+    let RepositoryProbe {
+        is_git_repository,
+        trust_required,
+    } = is_directory
+        .then(|| classify_repository_probe(git_probe(&canonical, REV_PARSE_INSIDE_WORK_TREE)))
+        .unwrap_or_default();
     let branch = is_git_repository
         .then(|| git_output(&canonical, &["branch", "--show-current"]))
         .flatten()
         .map(|branch| branch.trim().to_string())
         .filter(|branch| !branch.is_empty());
-    let dirty = is_git_repository.then(|| {
-        git_output(&canonical, &["status", "--porcelain"])
-            .is_some_and(|output| !output.trim().is_empty())
-    });
+    // `None`, not `Some(false)`, when the read never landed: a repository we
+    // were not allowed to inspect is not a clean one.
+    let dirty = is_git_repository
+        .then(|| git_output(&canonical, &["status", "--porcelain"]))
+        .flatten()
+        .map(|output| !output.trim().is_empty());
     let (ahead, behind) = if is_git_repository {
         git_output(
             &canonical,
@@ -786,6 +792,7 @@ fn inspect_workspace(workspace_path: &str) -> Result<DispatchWorkspaceProbe> {
         exists,
         is_directory,
         is_git_repository,
+        trust_required: trust_required.then_some(true),
         branch,
         dirty,
         ahead,
@@ -801,16 +808,72 @@ fn parse_ahead_behind(counts: &str) -> Option<(u64, u64)> {
 }
 
 fn git_output(workspace: &Path, args: &[&str]) -> Option<String> {
+    git_probe(workspace, args).ok().map(|probe| probe.stdout)
+}
+
+struct GitProbeOutput {
+    stdout: String,
+    diagnostic: String,
+}
+
+const REV_PARSE_INSIDE_WORK_TREE: &[&str] = &["rev-parse", "--is-inside-work-tree"];
+
+#[derive(Default)]
+struct RepositoryProbe {
+    is_git_repository: bool,
+    trust_required: bool,
+}
+
+/// Reads what a `rev-parse --is-inside-work-tree` probe actually established.
+///
+/// A repository Git refuses on ownership grounds still *is* one. Reporting
+/// `false` — which is what discarding the exit status did — tells a detached
+/// controller there is nothing to review here, and hides the one thing that
+/// would fix it. Same reading as the local and remote probes
+/// (`is_git_repository`, `remote_probe_found_repository`).
+fn classify_repository_probe(result: Result<GitProbeOutput, GitProbeOutput>) -> RepositoryProbe {
+    match result {
+        Ok(output) => RepositoryProbe {
+            is_git_repository: output.stdout.trim() == "true",
+            trust_required: false,
+        },
+        Err(failure) => {
+            let trust_required = trust::is_untrusted_repository_message(&failure.diagnostic);
+            RepositoryProbe {
+                is_git_repository: trust_required,
+                trust_required,
+            }
+        }
+    }
+}
+
+/// Runs one probe command, keeping the diagnostic a failure came with.
+///
+/// `LC_ALL=C` for the same reason every other executor pins it: the classifier
+/// below matches Git's English prose, and a localized host would otherwise make
+/// an ownership rejection unrecognizable.
+fn git_probe(workspace: &Path, args: &[&str]) -> Result<GitProbeOutput, GitProbeOutput> {
     let output = Command::new("git")
+        .env("LC_ALL", "C")
         .arg("-C")
         .arg(workspace)
         .args(args)
-        .output()
-        .ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).to_string())
+        .output();
+    let Ok(output) = output else {
+        return Err(GitProbeOutput {
+            stdout: String::new(),
+            diagnostic: String::new(),
+        });
+    };
+    let probe = GitProbeOutput {
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        diagnostic: String::from_utf8_lossy(&output.stderr).to_string(),
+    };
+    if output.status.success() {
+        Ok(probe)
+    } else {
+        Err(probe)
+    }
 }
 
 fn canonical_workspace(workspace_path: &str) -> Result<PathBuf> {
@@ -894,6 +957,53 @@ fn truncate_chars(value: &str, max_chars: usize) -> String {
 mod tests {
     use super::*;
     use crate::dispatch::protocol::{DispatchApprovalPolicy, DispatchSubmitRequest};
+
+    fn probe_failure(diagnostic: &str) -> Result<GitProbeOutput, GitProbeOutput> {
+        Err(GitProbeOutput {
+            stdout: String::new(),
+            diagnostic: diagnostic.to_string(),
+        })
+    }
+
+    /// A shared host where the workspace belongs to another account is the
+    /// ordinary case for detached dispatch. Answering "not a Git repository"
+    /// there sends the controller looking for a repository that is right where
+    /// it said it was.
+    #[test]
+    fn an_ownership_rejection_still_reports_a_repository() {
+        let probe = classify_repository_probe(probe_failure(
+            "fatal: detected dubious ownership in repository at '/srv/shared/repo'",
+        ));
+
+        assert!(probe.is_git_repository);
+        assert!(probe.trust_required);
+    }
+
+    #[test]
+    fn a_missing_repository_stays_absent_and_needs_no_trust() {
+        let probe = classify_repository_probe(probe_failure(
+            "fatal: not a git repository (or any of the parent directories): .git",
+        ));
+
+        assert!(!probe.is_git_repository);
+        assert!(!probe.trust_required);
+    }
+
+    #[test]
+    fn a_successful_probe_reads_its_answer() {
+        let yes = classify_repository_probe(Ok(GitProbeOutput {
+            stdout: "true\n".to_string(),
+            diagnostic: String::new(),
+        }));
+        assert!(yes.is_git_repository);
+        assert!(!yes.trust_required);
+
+        let no = classify_repository_probe(Ok(GitProbeOutput {
+            stdout: "false\n".to_string(),
+            diagnostic: String::new(),
+        }));
+        assert!(!no.is_git_repository);
+    }
 
     fn test_request(job_id: &str) -> DispatchSubmitRequest {
         DispatchSubmitRequest {

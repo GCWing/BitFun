@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   beginRuntimeSessionAttachment,
+  isRuntimeSessionProjectionStale,
+  markRuntimeSessionProjectionStale,
+  readRuntimeSessionProgress,
   resetRuntimeSessionEventGateForTest,
   routeRuntimeSessionEvent,
   RUNTIME_EVENT_CURSOR_KEY,
@@ -88,6 +91,27 @@ describe('runtimeSessionEventGate', () => {
     attachment.abort({ discard: true });
   });
 
+  it('requires replay after a dropped event even when the live cursor matches', () => {
+    for (const cursor of [1, 2, 3]) {
+      routeRuntimeSessionEvent(
+        'local',
+        'agentic://text-chunk',
+        payload('session', 'runtime-a', cursor, 'live'),
+        vi.fn(),
+      );
+    }
+
+    markRuntimeSessionProjectionStale('local', 'session');
+
+    const attachment = beginRuntimeSessionAttachment('local', 'session');
+    expect(attachment.requiresReplay({ streamId: 'runtime-a', cursor: 3 })).toBe(true);
+    attachment.finish({ streamId: 'runtime-a', cursor: 3 });
+
+    const nextAttachment = beginRuntimeSessionAttachment('local', 'session');
+    expect(nextAttachment.requiresReplay({ streamId: 'runtime-a', cursor: 3 })).toBe(false);
+    nextAttachment.abort({ discard: true });
+  });
+
   it('requires replay after detecting a missing live cursor', () => {
     const gapListener = vi.fn();
     subscribeRuntimeSessionEventGaps(gapListener);
@@ -127,6 +151,61 @@ describe('runtimeSessionEventGate', () => {
     });
   });
 
+  it('keeps the projection dirty when finish cannot prove the UI caught up', () => {
+    for (const cursor of [1, 2, 3]) {
+      routeRuntimeSessionEvent(
+        'local',
+        'agentic://tool-event',
+        payload('session', 'runtime-a', cursor, 'tool'),
+        vi.fn(),
+      );
+    }
+
+    const attachment = beginRuntimeSessionAttachment('local', 'session');
+    attachment.finish(
+      { streamId: 'runtime-a', cursor: 3 },
+      { projectionCaughtUp: false },
+    );
+
+    expect(isRuntimeSessionProjectionStale('local', 'session')).toBe(true);
+    const nextAttachment = beginRuntimeSessionAttachment('local', 'session');
+    expect(nextAttachment.requiresReplay({ streamId: 'runtime-a', cursor: 3 })).toBe(true);
+    nextAttachment.abort({ discard: true });
+  });
+
+  it('transfers an overlapping fence instead of delivering it onto a resetting machine', () => {
+    const delivered: string[] = [];
+    const first = beginRuntimeSessionAttachment('local', 'session');
+    routeRuntimeSessionEvent(
+      'local',
+      'agentic://tool-event',
+      payload('session', 'runtime-a', 4, 'started'),
+      event => delivered.push(event.text),
+    );
+    routeRuntimeSessionEvent(
+      'local',
+      'agentic://tool-event',
+      payload('session', 'runtime-a', 5, 'completed'),
+      event => delivered.push(event.text),
+    );
+
+    const second = beginRuntimeSessionAttachment('local', 'session');
+    expect(first.isCurrent()).toBe(false);
+    expect(second.isCurrent()).toBe(true);
+    expect(delivered).toEqual([]);
+
+    first.finish({ streamId: 'runtime-a', cursor: 5 });
+    expect(delivered).toEqual([]);
+    expect(isRuntimeSessionProjectionStale('local', 'session')).toBe(false);
+
+    second.finish(
+      { streamId: 'runtime-a', cursor: 5 },
+      { projectionCaughtUp: false },
+    );
+    expect(delivered).toEqual([]);
+    expect(isRuntimeSessionProjectionStale('local', 'session')).toBe(true);
+  });
+
   it('isolates identical Session ids on different device Surfaces', () => {
     const localDelivered = vi.fn();
     const peerDelivered = vi.fn();
@@ -148,5 +227,27 @@ describe('runtimeSessionEventGate', () => {
     expect(localDelivered).not.toHaveBeenCalled();
     expect(peerDelivered).toHaveBeenCalledTimes(1);
     attachment.abort({ discard: true });
+  });
+
+  it('reports the applied position only once a cursor anchors it', () => {
+    // Nothing observed yet: a caller must not ask the Host for a delta it has
+    // no cursor to be contiguous with.
+    expect(readRuntimeSessionProgress('local', 'session')).toBeNull();
+
+    routeRuntimeSessionEvent(
+      'local',
+      'agentic://text-chunk',
+      payload('session', 'runtime-a', 5, 'a'),
+      () => {},
+    );
+
+    expect(readRuntimeSessionProgress('local', 'session')).toEqual({
+      streamId: 'runtime-a',
+      cursor: 5,
+    });
+
+    // A projection marked stale without ever seeing a cursor stays unanchored.
+    markRuntimeSessionProjectionStale('local', 'other-session');
+    expect(readRuntimeSessionProgress('local', 'other-session')).toBeNull();
   });
 });

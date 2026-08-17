@@ -1,8 +1,13 @@
+import {
+  gitRepositoryUntrustedPath,
+  isGitRepositoryUntrustedError,
+} from '@/infrastructure/api/errors/TauriCommandError';
 import type {
   ReviewPlatformPullRequestReviewTarget,
   ReviewPlatformRemote,
   ReviewPlatformRepositoryRef,
 } from '@/infrastructure/api/service-api/ReviewPlatformAPI';
+import { withGitRepositoryTrustRecovery } from '@/shared/services/gitTrustService';
 import {
   buildAdaptiveStandardReviewManifest,
   buildPullRequestReviewTargetEvidence,
@@ -44,6 +49,38 @@ function reviewTargetError(
     launchErrorMessageKey: messageKey,
     originalMessage: message,
   });
+}
+
+/**
+ * Prepares a Review target, recovering once from a repository Git refuses to
+ * read because it is owned by another user.
+ *
+ * Preparation is read-only, so replaying it after the user grants trust is
+ * safe. A repository that stays untrusted surfaces as its own launch error
+ * rather than as a generic "target could not be prepared": the user needs to
+ * know a decision is waiting, not that Review is broken.
+ */
+async function prepareWithRepositoryTrust(
+  prepare: () => Promise<PreparedReviewLaunch>,
+): Promise<PreparedReviewLaunch> {
+  try {
+    // Launching Review is one deliberate action, not a call inside a refresh
+    // burst, so it is always worth a prompt — including right after a decline.
+    return await withGitRepositoryTrustRecovery(prepare, { userInitiated: true });
+  } catch (error) {
+    if (!isGitRepositoryUntrustedError(error)) {
+      throw error;
+    }
+    const repositoryPath = gitRepositoryUntrustedPath(error) ?? 'this repository';
+    log.warn('Review target preparation stopped on an untrusted repository', {
+      repositoryPath,
+    });
+    throw reviewTargetError(
+      `Git will not read "${repositoryPath}" because the folder is owned by another user. ` +
+        'Trust the folder when prompted, or add it to safe.directory, then start Review again.',
+      'deepReviewActionBar.launchError.repositoryUntrusted',
+    );
+  }
 }
 
 interface PreparedReviewBase {
@@ -381,23 +418,25 @@ export async function prepareReviewLaunchFromSessionFiles(
   filePaths: string[],
   options: PrepareReviewLaunchOptions = {},
 ): Promise<PreparedReviewLaunch> {
-  const target = classifyReviewTargetFromFiles(filePaths, 'session_files');
-  const snapshot = await resolveCurrentFileReviewSnapshot(
-    options.workspacePath,
-    target,
-    options.remoteConnectionId,
-  );
-  const resolvedTarget = snapshot.target;
-  const changeStats = options.changeStats ?? snapshot.changeStats;
-  const targetEvidence = snapshot.targetEvidence;
-  return prepareFromResolvedTarget({
-    target: resolvedTarget,
-    changeStats,
-    targetEvidence,
-    requestedFiles: includedTargetFiles(resolvedTarget),
-    workspacePath: options.workspacePath,
-    extraContext: options.extraContext,
-    intent: options.intent === 'strict' ? 'strict' : 'review',
+  return prepareWithRepositoryTrust(async () => {
+    const target = classifyReviewTargetFromFiles(filePaths, 'session_files');
+    const snapshot = await resolveCurrentFileReviewSnapshot(
+      options.workspacePath,
+      target,
+      options.remoteConnectionId,
+    );
+    const resolvedTarget = snapshot.target;
+    const changeStats = options.changeStats ?? snapshot.changeStats;
+    const targetEvidence = snapshot.targetEvidence;
+    return prepareFromResolvedTarget({
+      target: resolvedTarget,
+      changeStats,
+      targetEvidence,
+      requestedFiles: includedTargetFiles(resolvedTarget),
+      workspacePath: options.workspacePath,
+      extraContext: options.extraContext,
+      intent: options.intent === 'strict' ? 'strict' : 'review',
+    });
   });
 }
 
@@ -406,21 +445,23 @@ export async function prepareReviewLaunchFromSlashCommand(
   workspacePath?: string,
   remoteConnectionId?: string,
 ): Promise<PreparedReviewLaunch> {
-  const extraContext = getDeepReviewCommandFocus(commandText);
-  const { target, changeStats, targetEvidence } = await resolveSlashCommandReviewTarget(
-    extraContext,
-    workspacePath,
-    remoteConnectionId,
-  );
-  return prepareFromResolvedTarget({
-    target,
-    changeStats,
-    targetEvidence,
-    requestedFiles: includedTargetFiles(target),
-    workspacePath,
-    extraContext,
-    commandText,
-    intent: getReviewSlashCommandIntent(commandText) === 'strict' ? 'strict' : 'review',
+  return prepareWithRepositoryTrust(async () => {
+    const extraContext = getDeepReviewCommandFocus(commandText);
+    const { target, changeStats, targetEvidence } = await resolveSlashCommandReviewTarget(
+      extraContext,
+      workspacePath,
+      remoteConnectionId,
+    );
+    return prepareFromResolvedTarget({
+      target,
+      changeStats,
+      targetEvidence,
+      requestedFiles: includedTargetFiles(target),
+      workspacePath,
+      extraContext,
+      commandText,
+      intent: getReviewSlashCommandIntent(commandText) === 'strict' ? 'strict' : 'review',
+    });
   });
 }
 
@@ -469,7 +510,9 @@ export async function prepareReviewLaunchFromPullRequest(params: {
     (total, file) => total + Math.max(0, file.additions) + Math.max(0, file.deletions),
     0,
   );
-  return prepareFromResolvedTarget({
+  // The provider supplied the evidence, but the manifest build still reads the
+  // local workspace, so the same trust wall can appear here.
+  return prepareWithRepositoryTrust(() => prepareFromResolvedTarget({
     target,
     changeStats: {
       fileCount: params.reviewTarget.files.length,
@@ -480,7 +523,7 @@ export async function prepareReviewLaunchFromPullRequest(params: {
     requestedFiles: includedTargetFiles(target),
     workspacePath: params.workspacePath,
     intent: 'review',
-  });
+  }));
 }
 
 export async function launchPreparedReviewSession(params: {

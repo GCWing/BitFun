@@ -1,9 +1,9 @@
 {
   "schema": "bitfun.appearance.registry",
   "schemaVersion": 1,
-  "generatedFrom": "71fbdbb26757c930eedfef5cfda55ca12e008ae1",
-  "generatedAt": "2026-08-06T15:48:31.702263+00:00",
-  "sourceRevision": "71fbdbb26757c930eedfef5cfda55ca12e008ae1",
+  "generatedFrom": "bc77e2c28c7b847abc175b6307ac18f84a89265a",
+  "generatedAt": "2026-08-16T16:09:40.016459+00:00",
+  "sourceRevision": "bc77e2c28c7b847abc175b6307ac18f84a89265a",
   "sourceDirty": false,
   "sourceTreeHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   "components": [
@@ -2177,6 +2177,23 @@
       "states": []
     },
     {
+      "id": "view-transition-boundary",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "layout",
+          "visualRole": "continuous-surface"
+        },
+        {
+          "id": "view",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
       "id": "chat-input",
       "parts": [
         {
@@ -2257,6 +2274,10 @@
         },
         {
           "id": "commandCurrent",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "commandStatus",
           "propertyProfile": "container"
         },
         {
@@ -2398,6 +2419,7 @@
           "attribute": "data-bf-action",
           "values": [
             "cancel",
+            "continue-interrupted",
             "retry",
             "send",
             "split"
@@ -3754,10 +3776,6 @@
         },
         {
           "id": "error",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "notice",
           "propertyProfile": "container"
         },
         {
@@ -5208,6 +5226,17 @@
       ]
     },
     {
+      "id": "session-usage-modal",
+      "parts": [
+        {
+          "id": "content",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
       "id": "ask-user-question-card",
       "parts": [
         {
@@ -5545,6 +5574,14 @@
           "propertyProfile": "container"
         },
         {
+          "id": "marketBrowse",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "marketResults",
+          "propertyProfile": "container"
+        },
+        {
           "id": "marketGrid",
           "propertyProfile": "container"
         },
@@ -5667,6 +5704,13 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"disabled\"]"
+          }
+        },
+        {
+          "id": "loading",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"loading\"]"
           }
         }
       ]
@@ -6075,19 +6119,31 @@
           "propertyProfile": "container"
         },
         {
-          "id": "badge",
+          "id": "switcher",
           "propertyProfile": "container"
         },
         {
-          "id": "badgeIcon",
+          "id": "switcherLabel",
           "propertyProfile": "container"
         },
         {
-          "id": "badgeLabel",
+          "id": "switcherElsewhere",
           "propertyProfile": "container"
         },
         {
-          "id": "disconnectButton",
+          "id": "switcherMenu",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "switcherItem",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "switcherStatusDot",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "switcherDisconnect",
           "propertyProfile": "container"
         }
       ],
@@ -6126,6 +6182,34 @@
           "selector": {
             "kind": "self",
             "suffix": ":disabled"
+          }
+        },
+        {
+          "id": "remote",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"remote\"]"
+          }
+        },
+        {
+          "id": "local",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"local\"]"
+          }
+        },
+        {
+          "id": "busy",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"busy\"]"
+          }
+        },
+        {
+          "id": "offline",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"offline\"]"
           }
         }
       ]
@@ -6698,6 +6782,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "progressIcon",
+          "propertyProfile": "container"
+        },
+        {
           "id": "progressBar",
           "propertyProfile": "container"
         },
@@ -6901,6 +6989,10 @@
         },
         {
           "id": "meditorPreview",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "meditorFrontmatter",
           "propertyProfile": "container"
         },
         {
@@ -8583,6 +8675,7 @@
             "code",
             "cowork",
             "assistant",
+            "todos",
             "extensions",
             "agents",
             "skills"
@@ -9505,6 +9598,67 @@
       ]
     },
     {
+      "id": "localized-datetime-field",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "error",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"error\"]"
+          }
+        }
+      ]
+    },
+    {
+      "id": "datetime-picker",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "head",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "grid",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "day",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "foot",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "selected",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"selected\"]"
+          }
+        },
+        {
+          "id": "today",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"today\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "flexible-panel",
       "parts": [
         {
@@ -9686,6 +9840,13 @@
             "kind": "self",
             "suffix": "[data-bf-state~=\"minimized\"]"
           }
+        },
+        {
+          "id": "hidden",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"hidden\"]"
+          }
         }
       ]
     },
@@ -9748,11 +9909,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "handoffOverlay",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "handoffContent",
+          "id": "tailSpacer",
           "propertyProfile": "container"
         }
       ],
@@ -10024,6 +10181,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "unavailableWarning",
+          "propertyProfile": "container"
+        },
+        {
           "id": "generated",
           "propertyProfile": "container"
         },
@@ -10197,6 +10358,26 @@
         {
           "id": "ecosystemState",
           "propertyProfile": "container"
+        },
+        {
+          "id": "application",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "appAttention",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "applicationToggle",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "hooksSection",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "hooksSummary",
+          "propertyProfile": "container"
         }
       ],
       "facets": [],
@@ -10259,6 +10440,14 @@
         },
         {
           "id": "remoteList",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "hiddenRemoteList",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "hiddenRemoteRow",
           "propertyProfile": "container"
         },
         {
@@ -10593,6 +10782,13 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"muted\"]"
+          }
+        },
+        {
+          "id": "stale",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"stale\"]"
           }
         }
       ]
@@ -11217,6 +11413,11 @@
           "visualRole": "control"
         },
         {
+          "id": "itemUnseen",
+          "propertyProfile": "paint",
+          "visualRole": "decoration"
+        },
+        {
           "id": "highlight",
           "propertyProfile": "paint",
           "visualRole": "decoration"
@@ -11436,6 +11637,14 @@
           "propertyProfile": "container"
         },
         {
+          "id": "currentDirectoryName",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "parentDirectoryPath",
+          "propertyProfile": "container"
+        },
+        {
           "id": "footer",
           "propertyProfile": "container"
         }
@@ -11454,6 +11663,13 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"loading\"]"
+          }
+        },
+        {
+          "id": "error",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"error\"]"
           }
         }
       ]
@@ -12024,6 +12240,10 @@
         },
         {
           "id": "content",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "notice",
           "propertyProfile": "container"
         },
         {
@@ -12969,7 +13189,19 @@
           "propertyProfile": "container"
         },
         {
+          "id": "permissionOptionRow",
+          "propertyProfile": "container"
+        },
+        {
           "id": "permissionOption",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "permissionOptionTrailing",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "permissionOptionNextTurn",
           "propertyProfile": "container"
         },
         {
@@ -12991,6 +13223,13 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"selected\"]"
+          }
+        },
+        {
+          "id": "armed",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"armed\"]"
           }
         }
       ]
@@ -14695,52 +14934,6 @@
       ]
     },
     {
-      "id": "user-message",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "inlineContent",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "footer",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "timestamp",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "snapshotAction",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "collapsed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"collapsed\"]"
-          }
-        }
-      ]
-    },
-    {
       "id": "tool-card",
       "parts": [
         {
@@ -15733,6 +15926,52 @@
       ]
     },
     {
+      "id": "run-code-tool-card",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "expanded",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "section",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "label",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "output",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "error",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "expanded",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"expanded\"]"
+          }
+        },
+        {
+          "id": "failed",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"failed\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "acp-plan-panel",
       "parts": [
         {
@@ -16236,40 +16475,6 @@
       "states": []
     },
     {
-      "id": "snapshot-rollback-button",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "outcome",
-          "attribute": "data-bf-outcome",
-          "values": [
-            "idle",
-            "current",
-            "success",
-            "error"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
-          }
-        }
-      ]
-    },
-    {
       "id": "smart-recommendations",
       "parts": [
         {
@@ -16306,136 +16511,6 @@
         }
       ],
       "facets": [],
-      "states": [
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "sticky-task-indicator",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "gradient",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "button",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "icon",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "arrow",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "visible",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"visible\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "turn-history-panel",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "loading",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "empty",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "header",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "count",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "list",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "item",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemHeader",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "files",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "filesList",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "time",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "current",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"current\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "turn-rollback-button",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "mode",
-          "attribute": "data-bf-mode",
-          "values": [
-            "current",
-            "action"
-          ]
-        }
-      ],
       "states": [
         {
           "id": "loading",
@@ -17201,6 +17276,7 @@
             "hidden",
             "repository",
             "not-repository",
+            "trust-required",
             "loading"
           ]
         }
@@ -17875,6 +17951,157 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"inactive\"]"
+          }
+        }
+      ]
+    },
+    {
+      "id": "todos",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "header",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "headerActions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "panes",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "listPane",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "rows",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "row",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "rowTime",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "rowBody",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "rowBadge",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "rowError",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "rowActions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "inactive",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "empty",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "calendarPane",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "calendar",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "calendarHead",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "calendarNav",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "calendarGrid",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "calendarCell",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "dayDetail",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "editor",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "editorHead",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "editorGrid",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "editorActions",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "field",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "warning",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": [
+        {
+          "id": "selected",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"selected\"]"
+          }
+        },
+        {
+          "id": "today",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"today\"]"
+          }
+        },
+        {
+          "id": "outside",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"outside\"]"
+          }
+        },
+        {
+          "id": "overdue",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"overdue\"]"
+          }
+        },
+        {
+          "id": "disabled",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"disabled\"]"
           }
         }
       ]

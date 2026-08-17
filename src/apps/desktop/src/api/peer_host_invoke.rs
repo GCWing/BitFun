@@ -140,6 +140,11 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "speech_append_audio_chunk",
     "speech_finish_input_session",
     "speech_cancel_input_session",
+    // Granting Git ownership trust writes to the peer user's global Git
+    // configuration and tells Git to run hooks from a tree they do not own.
+    // That decision stays with the person at that machine; a controller can
+    // still read `git_get_repository_trust` and relay the manual command.
+    "git_trust_repository",
 ];
 
 static PENDING: OnceLock<Mutex<HashMap<String, oneshot::Sender<HostInvokeBridgeResult>>>> =
@@ -516,6 +521,15 @@ mod tests {
         ] {
             assert!(is_local_only_command(command), "{command}");
         }
+    }
+
+    /// Reading why Git refuses a repository is safe to answer for a
+    /// controller; granting the exception writes this user's global Git
+    /// configuration and must be decided at this machine.
+    #[test]
+    fn granting_git_ownership_trust_is_refused_on_the_peer() {
+        assert!(is_local_only_command("git_trust_repository"));
+        assert!(!is_local_only_command("git_get_repository_trust"));
     }
 
     #[test]

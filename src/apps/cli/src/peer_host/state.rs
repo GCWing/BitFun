@@ -3,7 +3,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use bitfun_agent_runtime::sdk::PermissionRequest;
 use bitfun_agent_runtime::sdk::{AgentRuntime, SessionEventJournal};
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::filesystem::FileSystemService;
@@ -402,14 +401,6 @@ impl PeerTurnTracker {
                 None => inner.started.iter().any(|key| key.session_id == session_id),
             })
             .unwrap_or(false)
-    }
-
-    pub(crate) fn owns_permission_request(&self, request: &PermissionRequest) -> bool {
-        self.owns(&request.session_id, None)
-            || request
-                .delegation
-                .as_ref()
-                .is_some_and(|delegation| self.owns(&delegation.parent_session_id, None))
     }
 
     pub(crate) fn mark_started(&self, key: &PeerTurnKey) -> bool {
@@ -1080,11 +1071,6 @@ pub(crate) fn peer_host_state() -> Result<&'static PeerHostState, String> {
 mod tests {
     use std::collections::HashSet;
 
-    use bitfun_agent_runtime::sdk::{
-        PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
-        PermissionRequestSourceKind,
-    };
-
     use super::{aggregate_cancellation_results, PeerTurnKey, PeerTurnTracker};
 
     fn register_background_child(
@@ -1099,33 +1085,6 @@ mod tests {
         assert!(tracker
             .register_linked_child(parent, child, &tool_call_id)
             .expect("register background child"));
-    }
-
-    fn permission_request(session_id: &str, parent_session_id: Option<&str>) -> PermissionRequest {
-        PermissionRequest {
-            request_id: format!("request-{session_id}"),
-            round_id: format!("synthetic:request-{session_id}"),
-            order: 0,
-            tool_call_id: Some("tool-call".to_string()),
-            project_path: None,
-            project_id: "project".to_string(),
-            session_id: session_id.to_string(),
-            agent_id: "Explore".to_string(),
-            action: "read".to_string(),
-            resources: vec!["README.md".to_string()],
-            save_resources: Vec::new(),
-            source: PermissionRequestSource {
-                kind: PermissionRequestSourceKind::ToolCall,
-                identity: "Read".to_string(),
-            },
-            delegation: parent_session_id.map(|parent_session_id| PermissionDelegationContext {
-                parent_session_id: parent_session_id.to_string(),
-                parent_dialog_turn_id: Some("parent-turn".to_string()),
-                parent_tool_call_id: "parent-task".to_string(),
-                subagent_type: "Explore".to_string(),
-            }),
-            display_metadata: serde_json::Map::new(),
-        }
     }
 
     #[test]
@@ -1156,23 +1115,6 @@ mod tests {
             vec![turn.clone()]
         );
         assert!(tracker.register_root(turn).is_err());
-    }
-
-    #[test]
-    fn permission_ownership_includes_delegated_child_requests_without_leaking_unrelated_sessions() {
-        let tracker = PeerTurnTracker::new();
-        tracker.mark_event_stream_ready();
-        let root = PeerTurnKey::new("parent-session", "parent-turn");
-        tracker.register_root(root.clone()).expect("register root");
-        assert!(tracker.mark_started(&root));
-
-        assert!(tracker.owns_permission_request(&permission_request("parent-session", None)));
-        assert!(tracker
-            .owns_permission_request(
-                &permission_request("child-session", Some("parent-session"),)
-            ));
-        assert!(!tracker
-            .owns_permission_request(&permission_request("other-child", Some("other-parent"),)));
     }
 
     #[test]

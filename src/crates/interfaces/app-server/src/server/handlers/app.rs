@@ -158,7 +158,12 @@ fn registered_capabilities(
         ),
         (
             "git",
-            vec!["git/isRepository", "git/getStatus", "git/getBranches"],
+            vec![
+                "git/isRepository",
+                "git/getStatus",
+                "git/getBranches",
+                "git/getRepositoryTrust",
+            ],
         ),
         (
             "config",

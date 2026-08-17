@@ -57,6 +57,7 @@ export interface WorktreeProjectSummary {
 export type WorktreeErrorCode =
   | 'remote_unsupported'
   | 'not_git_repository'
+  | 'repository_untrusted'
   | 'unborn_repo'
   | 'invalid_base_ref'
   | 'worktree_not_found'
@@ -124,6 +125,7 @@ export interface WorktreeSessionBindingResult {
 const WORKTREE_ERROR_CODES = new Set<WorktreeErrorCode>([
   'remote_unsupported',
   'not_git_repository',
+  'repository_untrusted',
   'unborn_repo',
   'invalid_base_ref',
   'worktree_not_found',

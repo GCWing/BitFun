@@ -11,6 +11,7 @@ import { gitAPI } from '@/infrastructure/api';
 import { useNotification } from '@/shared/notification-system';
 import type { GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
 import { i18nService } from '@/infrastructure/i18n';
+import { describeGitTrustFailure } from '../../services/GitService';
 import { createLogger } from '@/shared/utils/logger';
 import './GitBranchHistoryView.scss';
 
@@ -121,7 +122,9 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
       setCommits(parsedCommits);
     } catch (err) {
       log.error('Failed to load commit history', { repositoryPath, branchName, error: err });
-      setError(err instanceof Error ? err.message : String(err));
+      setError(
+        describeGitTrustFailure(err) ?? (err instanceof Error ? err.message : String(err))
+      );
     } finally {
       setLoading(false);
     }
@@ -236,12 +239,21 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
         if (result.success) {
           successHashes.push(hash);
         } else {
-          failedHashes.push({ hash, error: result.error || t('branchHistory.cherryPickFailed') });
+          // This panel reaches the backend directly, so it owns the same
+          // translation the service layer does: the ownership rejection arrives
+          // as a stable code, and showing it verbatim tells the user nothing.
+          const error =
+            describeGitTrustFailure(result.error) ??
+            result.error ??
+            t('branchHistory.cherryPickFailed');
+          failedHashes.push({ hash, error });
 
           break;
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : t('branchHistory.cherryPickOperationFailed');
+        const errorMsg =
+          describeGitTrustFailure(err) ??
+          (err instanceof Error ? err.message : t('branchHistory.cherryPickOperationFailed'));
         failedHashes.push({ hash, error: errorMsg });
         break;
       }

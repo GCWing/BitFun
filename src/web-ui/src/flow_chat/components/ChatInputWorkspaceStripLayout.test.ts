@@ -216,8 +216,14 @@ describe('status track layout', () => {
     expect(component).toContain(
       "import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';",
     );
+    expect(component).toContain('<DispatchTargetPicker');
+    // One Git probe decides both controls, so they can never disagree about
+    // whether the workspace is a repository. A repository Git refuses to read
+    // for ownership reasons counts: `isRepository` only turns true after a
+    // status call that rejection blocks, and hiding the controls there would
+    // hide the very state the user has to act on.
     expect(component).toContain(
-      'const isGitWorkspace = isRepository || isWorktree || worktreeEnabled;',
+      'const isGitWorkspace = isRepository || repositoryTrustRequired || isWorktree || worktreeEnabled;',
     );
     expect(component).toContain('const showWorktreeToggle = !!worktreeControl && isGitWorkspace;');
     expect(component).toContain('const showDispatchPicker = !!dispatchControl;');

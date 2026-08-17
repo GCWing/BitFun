@@ -575,7 +575,8 @@
     }
   },
   "workspaceStrip": {
-    "branchTooltipUnavailable": "Not a git repository or no current branch"
+    "branchTooltipUnavailable": "Not a git repository or no current branch",
+    "branchTooltipUntrusted": "Git will not read this repository because the folder is owned by another user. Trust the folder to see the branch."
   },
   "context": {
     "title": "Context",
@@ -1232,6 +1233,7 @@
       "emptyWorkspace": "There are no workspace changes to review.",
       "emptyExplicitScope": "The requested files or directories contain no workspace changes.",
       "unresolvedTarget": "The Review target could not be prepared as bounded evidence. Open its workspace or narrow the target and try again.",
+      "repositoryUntrusted": "Git will not read this repository because the folder is owned by another user. Trust the folder when prompted, then start Review again.",
       "uncertain": "The Review request may already be running. Its session was preserved so you can inspect or retry it safely.",
       "unknown": "Review launch failed. Please retry."
     }

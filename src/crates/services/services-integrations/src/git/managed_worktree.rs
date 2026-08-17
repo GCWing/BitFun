@@ -1,6 +1,6 @@
 use super::service::GitService;
 use super::types::{GitLocalChangeSummary, GitWorktreeInfo};
-use super::utils::execute_git_command;
+use super::utils::{execute_git_command, open_repository};
 use super::GitError;
 use bitfun_services_core::process_manager;
 use git2::Repository;
@@ -384,8 +384,7 @@ impl GitService {
         worktree_path: P,
     ) -> Result<bool, GitError> {
         let worktree_path = worktree_path.as_ref();
-        let repository = Repository::open(worktree_path)
-            .map_err(|error| GitError::RepositoryNotFound(error.to_string()))?;
+        let repository = open_repository(worktree_path)?;
         if repository.head().ok().is_some_and(|head| head.is_branch()) {
             return Ok(false);
         }

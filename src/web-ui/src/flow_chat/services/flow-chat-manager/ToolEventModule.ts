@@ -6,11 +6,12 @@
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { extractFilePathFromJsonBuffer, parsePartialJson, splitFilePathAndContent } from '../../../shared/utils/partialJsonParser';
 import { createLogger } from '@/shared/utils/logger';
-import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from './types';
+import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn, ModelRound } from './types';
 import { immediateSaveDialogTurn } from './PersistenceModule';
 import { applyPendingAcpPermissionForTool } from './AcpPermissionToolCardModule';
 import { normalizeParamsPartialFragment } from '../EventBatcher';
 import { effectiveToolInvocation } from '../../utils/toolInvocationIdentity';
+import { requestRuntimeProjectionRepair } from './PeerSessionRefreshModule';
 import type {
   CancelledToolEvent,
   CompletedToolEvent,
@@ -28,6 +29,73 @@ import type {
 
 const log = createLogger('ToolEventModule');
 const pendingTerminalSessionIds = new Map<string, string>();
+const TERMINAL_TOOL_STATUSES = new Set<FlowToolItem['status']>([
+  'completed',
+  'error',
+  'cancelled',
+  'rejected',
+]);
+
+function isTerminalToolStatus(status: FlowToolItem['status'] | undefined): boolean {
+  return status !== undefined && TERMINAL_TOOL_STATUSES.has(status);
+}
+
+function resolveToolRoundId(dialogTurn: DialogTurn, roundId: string): string | undefined {
+  if (dialogTurn.modelRounds.some(round => round.id === roundId)) {
+    return roundId;
+  }
+  return dialogTurn.modelRounds.at(-1)?.id;
+}
+
+function ensureToolRoundId(
+  store: FlowChatStore,
+  sessionId: string,
+  turnId: string,
+  dialogTurn: DialogTurn,
+  roundId: string,
+): string | undefined {
+  if (dialogTurn.modelRounds.some(round => round.id === roundId)) {
+    return roundId;
+  }
+  if (roundId) {
+    const created: ModelRound = {
+      id: roundId,
+      index: dialogTurn.modelRounds.length,
+      items: [],
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+      startTime: Date.now(),
+    };
+    store.addModelRound(sessionId, turnId, created);
+    return roundId;
+  }
+  return resolveToolRoundId(dialogTurn, roundId);
+}
+
+function applyToolItemUpdateOrInsert(
+  store: FlowChatStore,
+  sessionId: string,
+  turnId: string,
+  dialogTurn: DialogTurn,
+  roundId: string,
+  toolId: string,
+  updates: Record<string, unknown>,
+  createItem: () => FlowToolItem,
+): void {
+  if (store.findToolItem(sessionId, turnId, toolId)) {
+    if (!store.updateModelRoundItem(sessionId, turnId, toolId, updates as any)) {
+      requestRuntimeProjectionRepair(sessionId);
+    }
+    return;
+  }
+  const targetRoundId = ensureToolRoundId(store, sessionId, turnId, dialogTurn, roundId);
+  if (!targetRoundId) {
+    requestRuntimeProjectionRepair(sessionId);
+    return;
+  }
+  store.addModelRoundItem(sessionId, turnId, createItem(), targetRoundId);
+}
 
 interface ToolTerminalReadyEvent {
   tool_use_id: string;
@@ -54,12 +122,14 @@ export function processToolEvent(
   const session = state.sessions.get(sessionId);
   
   if (!session) {
+    requestRuntimeProjectionRepair(sessionId);
     log.debug('Session not found (processToolEvent)', { sessionId });
     return;
   }
 
   const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
+    requestRuntimeProjectionRepair(sessionId);
     log.debug('Dialog turn not found (processToolEvent)', { turnId });
     return;
   }
@@ -95,25 +165,25 @@ export function processToolEvent(
     
     case 'Completed': {
       flushPendingBatchedEvents(context);
-      handleCompleted(context, store, sessionId, turnId, toolEvent, options, onTodoWriteResult);
+      handleCompleted(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent, options, onTodoWriteResult);
       break;
     }
     
     case 'Failed': {
       flushPendingBatchedEvents(context);
-      handleFailed(context, store, sessionId, turnId, toolEvent);
+      handleFailed(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent);
       break;
     }
     
     case 'Cancelled': {
       flushPendingBatchedEvents(context);
-      handleCancelled(context, store, sessionId, turnId, toolEvent);
+      handleCancelled(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent);
       break;
     }
 
     case 'Rejected': {
       flushPendingBatchedEvents(context);
-      handleRejected(context, store, sessionId, turnId, toolEvent);
+      handleRejected(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent);
       break;
     }
     
@@ -129,6 +199,10 @@ export function processToolEvent(
     }
 
     case 'Streaming': {
+      const existing = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
+      if (isTerminalToolStatus(existing?.status)) {
+        break;
+      }
       updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
         status: 'streaming',
         isParamsStreaming: false,
@@ -387,8 +461,9 @@ function handleEarlyDetected(
     attemptIndex,
   };
 
-  const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);
-  if (!targetRound) {
+  const targetRoundId = ensureToolRoundId(store, sessionId, turnId, dialogTurn, roundId);
+  if (!targetRoundId) {
+    requestRuntimeProjectionRepair(sessionId);
     log.error('Tool EarlyDetected event references missing round (backend bug)', {
       sessionId,
       turnId,
@@ -399,7 +474,7 @@ function handleEarlyDetected(
     return;
   }
 
-  store.addModelRoundItem(sessionId, turnId, preparingToolItem, roundId);
+  store.addModelRoundItem(sessionId, turnId, preparingToolItem, targetRoundId);
   applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
 }
 
@@ -425,7 +500,7 @@ function handleQueued(
   toolEvent: QueuedToolEvent
 ): void {
   const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
-  if (existingItem && existingItem.type === 'tool') {
+  if (existingItem && existingItem.type === 'tool' && !isTerminalToolStatus(existingItem.status)) {
     updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
       status: 'queued',
     });
@@ -442,7 +517,7 @@ function handleWaiting(
   toolEvent: WaitingToolEvent
 ): void {
   const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
-  if (existingItem && existingItem.type === 'tool') {
+  if (existingItem && existingItem.type === 'tool' && !isTerminalToolStatus(existingItem.status)) {
     updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
       status: 'waiting',
     });
@@ -474,12 +549,17 @@ function handleStarted(
   };
 
   if (existingItem) {
+    const keepTerminalStatus = isTerminalToolStatus(existingItem.status);
     store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
       toolName: toolEvent.tool_name,
       toolCall: toolCallData,
-      status: 'running',
-      isParamsStreaming: false,
-      partialParams: undefined,
+      ...(keepTerminalStatus
+        ? {}
+        : {
+            status: 'running',
+            isParamsStreaming: false,
+            partialParams: undefined,
+          }),
       attemptId,
       attemptIndex,
     } as any);
@@ -500,12 +580,13 @@ function handleStarted(
       attemptIndex,
     };
 
-    const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);
-    if (targetRound) {
-      store.addModelRoundItem(sessionId, turnId, toolItem, roundId);
+    const targetRoundId = ensureToolRoundId(store, sessionId, turnId, dialogTurn, roundId);
+    if (targetRoundId) {
+      store.addModelRoundItem(sessionId, turnId, toolItem, targetRoundId);
       pendingTerminalSessionIds.delete(toolEvent.tool_id);
       applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
     } else {
+      requestRuntimeProjectionRepair(sessionId);
       log.error('Tool Started event references missing round (backend bug)', {
         sessionId,
         turnId,
@@ -525,6 +606,8 @@ function handleCompleted(
   store: FlowChatStore,
   sessionId: string,
   turnId: string,
+  roundId: string,
+  dialogTurn: DialogTurn,
   toolEvent: CompletedToolEvent,
   options?: ToolEventOptions,
   onTodoWriteResult?: (sessionId: string, turnId: string, result: any) => void
@@ -554,7 +637,26 @@ function handleCompleted(
     executionMs: toolEvent.execution_ms
   };
 
-  store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, updates as any);
+  applyToolItemUpdateOrInsert(
+    store,
+    sessionId,
+    turnId,
+    dialogTurn,
+    roundId,
+    toolEvent.tool_id,
+    updates,
+    () => ({
+      id: toolEvent.tool_id,
+      type: 'tool',
+      toolName: toolEvent.tool_name,
+      toolCall: {
+        input: {},
+        id: toolEvent.tool_id,
+      },
+      timestamp: Date.now(),
+      ...updates,
+    }),
+  );
 
   store.clearSessionNeedsAttention(sessionId);
 
@@ -569,16 +671,18 @@ function handleFailed(
   store: FlowChatStore,
   sessionId: string,
   turnId: string,
+  roundId: string,
+  dialogTurn: DialogTurn,
   toolEvent: FailedToolEvent
 ): void {
-  store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
+  const updates = {
     toolResult: {
       result: null,
       success: false,
       error: toolEvent.error,
       duration_ms: toolEvent.duration_ms
     },
-    status: 'error',
+    status: 'error' as const,
     requiresConfirmation: false,
     acpPermission: undefined,
     endTime: Date.now(),
@@ -587,7 +691,28 @@ function handleFailed(
     preflightMs: toolEvent.preflight_ms,
     confirmationWaitMs: toolEvent.confirmation_wait_ms,
     executionMs: toolEvent.execution_ms
-  } as any);
+  };
+
+  applyToolItemUpdateOrInsert(
+    store,
+    sessionId,
+    turnId,
+    dialogTurn,
+    roundId,
+    toolEvent.tool_id,
+    updates,
+    () => ({
+      id: toolEvent.tool_id,
+      type: 'tool',
+      toolName: toolEvent.tool_name,
+      toolCall: {
+        input: {},
+        id: toolEvent.tool_id,
+      },
+      timestamp: Date.now(),
+      ...updates,
+    }),
+  );
 
   store.clearSessionNeedsAttention(sessionId);
 
@@ -602,13 +727,19 @@ function handleCancelled(
   store: FlowChatStore,
   sessionId: string,
   turnId: string,
+  roundId: string,
+  dialogTurn: DialogTurn,
   toolEvent: CancelledToolEvent
 ): void {
   const existingToolItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
   const currentStatus = existingToolItem?.status;
-  const finalStatus = currentStatus === 'confirmed' ? 'confirmed' : 'cancelled';
+  // Annotated so the literal type does not widen to `string` when it lands in
+  // the mutable `updates` object below, which the insert factory then has to
+  // satisfy as a `FlowToolItem`.
+  const finalStatus: FlowToolItem['status'] =
+    currentStatus === 'confirmed' ? 'confirmed' : 'cancelled';
 
-  store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
+  const updates = {
     toolResult: {
       result: null,
       success: false,
@@ -624,7 +755,28 @@ function handleCancelled(
     preflightMs: toolEvent.preflight_ms,
     confirmationWaitMs: toolEvent.confirmation_wait_ms,
     executionMs: toolEvent.execution_ms
-  } as any);
+  };
+
+  applyToolItemUpdateOrInsert(
+    store,
+    sessionId,
+    turnId,
+    dialogTurn,
+    roundId,
+    toolEvent.tool_id,
+    updates,
+    () => ({
+      id: toolEvent.tool_id,
+      type: 'tool',
+      toolName: toolEvent.tool_name,
+      toolCall: {
+        input: {},
+        id: toolEvent.tool_id,
+      },
+      timestamp: Date.now(),
+      ...updates,
+    }),
+  );
 
   store.clearSessionNeedsAttention(sessionId);
 
@@ -639,21 +791,44 @@ function handleRejected(
   store: FlowChatStore,
   sessionId: string,
   turnId: string,
+  roundId: string,
+  dialogTurn: DialogTurn,
   toolEvent: RejectedToolEvent
 ): void {
-  store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
+  const updates = {
     toolResult: {
       result: null,
       success: false,
       error: 'User rejected operation',
     },
-    status: 'rejected',
+    status: 'rejected' as const,
     userConfirmed: false,
     requiresConfirmation: false,
     acpPermission: undefined,
     isParamsStreaming: false,
     endTime: Date.now(),
-  } as any);
+  };
+
+  applyToolItemUpdateOrInsert(
+    store,
+    sessionId,
+    turnId,
+    dialogTurn,
+    roundId,
+    toolEvent.tool_id,
+    updates,
+    () => ({
+      id: toolEvent.tool_id,
+      type: 'tool',
+      toolName: toolEvent.tool_name,
+      toolCall: {
+        input: {},
+        id: toolEvent.tool_id,
+      },
+      timestamp: Date.now(),
+      ...updates,
+    }),
+  );
 
   store.clearSessionNeedsAttention(sessionId);
 
@@ -669,6 +844,11 @@ function handleConfirmationNeeded(
   turnId: string,
   toolEvent: ConfirmationNeededToolEvent
 ): void {
+  const existing = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
+  if (isTerminalToolStatus(existing?.status)) {
+    return;
+  }
+
   store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
     toolName: toolEvent.tool_name,
     toolCall: {

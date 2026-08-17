@@ -2815,6 +2815,7 @@ mod dual_backend_behavior_tests {
                 session_id: session_id.into(),
                 session_name: session_name.into(),
                 agent_type: agent_type.into(),
+                execution_profile: Default::default(),
                 model_id: None,
                 reasoning_preset: None,
                 last_user_dialog_agent_type: None,
@@ -3603,6 +3604,7 @@ mod dual_backend_behavior_tests {
         let create_request = AgentSessionCreateRequest {
             session_name: "remote-unsupported-session".to_string(),
             agent_type: "agentic".to_string(),
+            execution_profile: Default::default(),
             workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),
             project_workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),
             execution_target: Some(SessionExecutionTarget::local(

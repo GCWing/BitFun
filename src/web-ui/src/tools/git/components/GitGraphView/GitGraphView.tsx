@@ -16,6 +16,7 @@ import {
 import { i18nService } from '@/infrastructure/i18n';
 import { useAppearance } from '@/infrastructure/appearance';
 import { createLogger } from '@/shared/utils/logger';
+import { describeGitTrustFailure } from '../../services/GitService';
 import './GitGraphView.scss';
 
 const log = createLogger('GitGraphView');
@@ -68,7 +69,11 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
       setGraphData(data);
     } catch (err) {
       log.error('Failed to load graph data', { repositoryPath, maxCount, error: err });
-      setError(err instanceof Error ? err.message : String(err));
+      // The wall reaches this panel as a stable code. Shown raw it reads as
+      // machine noise, and this view has no Trust button of its own.
+      setError(
+        describeGitTrustFailure(err) ?? (err instanceof Error ? err.message : String(err))
+      );
     } finally {
       setLoading(false);
     }

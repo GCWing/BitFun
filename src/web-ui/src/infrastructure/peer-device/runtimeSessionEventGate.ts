@@ -1,65 +1,43 @@
 /**
- * Cursor fence for attaching a UI Surface to a running Runtime Session.
+ * Transport-side adapter onto a Session's ordered stream.
  *
- * A restore request and the live event stream race by definition. While the
- * Runtime snapshot is in flight, live events for that Surface/Session are held
- * here. Snapshot replay establishes the state at `cursor`; finishing the
- * attachment drops already-covered events and releases only newer ones.
+ * Contract: [`docs/architecture/session-projection.md`](../../../../../docs/architecture/session-projection.md).
+ *
+ * This module used to own its own copy of the stream position, its own gap
+ * flag, and its own fence. All three now live on `SessionStream`, the single
+ * owner of what has been applied for one `(surface, session)`. What remains
+ * here is the transport concern: reading the reserved cursor keys off a
+ * delivery envelope, and stripping them before product listeners see them.
  */
 
+import type { DeviceSurfaceId } from './deviceSurface';
 import {
-  surfaceScopedKey,
-  type DeviceSurfaceId,
-} from './deviceSurface';
+  peekSessionStream,
+  resetSessionStreamsForTest,
+  sessionStream,
+  type SessionStreamRead,
+} from '@/flow_chat/session-stream/SessionStream';
+import {
+  isRuntimePosition,
+  type RuntimePosition,
+} from '@/flow_chat/session-stream/position';
 
 /** Keep in sync with the Rust `SessionEventJournal` delivery-envelope keys. */
 export const RUNTIME_EVENT_STREAM_ID_KEY = '__bitfunRuntimeStreamId';
 export const RUNTIME_EVENT_CURSOR_KEY = '__bitfunRuntimeEventCursor';
 
-interface QueuedRuntimeEvent {
-  sequence: number;
-  streamId?: string;
-  cursor?: number;
-  deliver: () => void;
-}
-
-interface RuntimeSessionAttachment {
-  generation: number;
-  queued: QueuedRuntimeEvent[];
-}
-
-interface RuntimeSessionProgress {
-  streamId: string;
-  cursor: number;
-  hasGap: boolean;
-}
-
-const attachments = new Map<string, RuntimeSessionAttachment>();
-const progress = new Map<string, RuntimeSessionProgress>();
 const gapListeners = new Set<(surfaceId: DeviceSurfaceId, sessionId: string) => void>();
-let nextGeneration = 0;
-let nextSequence = 0;
 
-function attachmentKey(surfaceId: DeviceSurfaceId, sessionId: string): string {
-  return surfaceScopedKey(surfaceId, 'runtime-session-attachment', sessionId);
-}
-
-function readEventMetadata(payload: unknown): {
-  streamId?: string;
-  cursor?: number;
-} {
+function readEventPosition(payload: unknown): RuntimePosition | null {
   if (!payload || typeof payload !== 'object') {
-    return {};
+    return null;
   }
   const record = payload as Record<string, unknown>;
-  const streamId = record[RUNTIME_EVENT_STREAM_ID_KEY];
-  const cursor = record[RUNTIME_EVENT_CURSOR_KEY];
-  return {
-    ...(typeof streamId === 'string' && streamId ? { streamId } : {}),
-    ...(typeof cursor === 'number' && Number.isSafeInteger(cursor) && cursor >= 0
-      ? { cursor }
-      : {}),
+  const candidate = {
+    streamId: record[RUNTIME_EVENT_STREAM_ID_KEY],
+    cursor: record[RUNTIME_EVENT_CURSOR_KEY],
   };
+  return isRuntimePosition(candidate) ? candidate : null;
 }
 
 function stripEventMetadata<T>(payload: T): T {
@@ -81,47 +59,19 @@ function stripEventMetadata<T>(payload: T): T {
   return productPayload as T;
 }
 
-function advanceProgress(
-  key: string,
-  metadata: { streamId?: string; cursor?: number },
-): boolean {
-  if (metadata.streamId === undefined || metadata.cursor === undefined) {
-    return false;
-  }
-  const current = progress.get(key);
-  if (!current || current.streamId !== metadata.streamId) {
-    const hasGap = metadata.cursor > 1;
-    progress.set(key, {
-      streamId: metadata.streamId,
-      cursor: metadata.cursor,
-      hasGap,
-    });
-    return hasGap;
-  }
-  if (metadata.cursor > current.cursor) {
-    const detectedGap = !current.hasGap && metadata.cursor > current.cursor + 1;
-    progress.set(key, {
-      streamId: current.streamId,
-      cursor: metadata.cursor,
-      hasGap: current.hasGap || detectedGap,
-    });
-    return detectedGap;
-  }
-  return false;
-}
-
-function drain(events: QueuedRuntimeEvent[], shouldDeliver: (event: QueuedRuntimeEvent) => boolean) {
-  events.sort((left, right) => left.sequence - right.sequence);
-  for (const event of events) {
-    if (shouldDeliver(event)) {
-      event.deliver();
-    }
+function notifyGap(surfaceId: DeviceSurfaceId, sessionId: string): void {
+  for (const listener of gapListeners) {
+    listener(surfaceId, sessionId);
   }
 }
 
 export interface RuntimeSessionAttachmentHandle {
+  isCurrent(): boolean;
   requiresReplay(snapshot: { streamId: string; cursor: number }): boolean;
-  finish(snapshot: { streamId: string; cursor: number }): void;
+  finish(
+    snapshot: { streamId: string; cursor: number },
+    options?: { projectionCaughtUp?: boolean },
+  ): void;
   abort(options?: { discard?: boolean }): void;
 }
 
@@ -132,74 +82,103 @@ export function subscribeRuntimeSessionEventGaps(
   return () => gapListeners.delete(listener);
 }
 
+/**
+ * Report that the painter refused content the stream admitted.
+ *
+ * Delivery is not acceptance: a TextChunk or ToolEvent the state machine drops
+ * still advanced the position, so without this the position would claim a
+ * screen state that never happened. Recording it as a gap routes the repair
+ * through the same path a lost event uses.
+ */
+export function markRuntimeSessionProjectionStale(
+  surfaceId: DeviceSurfaceId,
+  sessionId: string,
+): void {
+  const stream = sessionStream(surfaceId, sessionId);
+  if (stream.hasGap()) {
+    return;
+  }
+  stream.markProjectionBehind();
+  notifyGap(surfaceId, sessionId);
+}
+
+export function isRuntimeSessionProjectionStale(
+  surfaceId: DeviceSurfaceId,
+  sessionId: string,
+): boolean {
+  return peekSessionStream(surfaceId, sessionId)?.hasGap() === true;
+}
+
+/**
+ * The position this Surface/Session has applied, or `null` when nothing
+ * positioned has been seen — a caller can only ask a Host for a delta when it
+ * can name the exact position it is contiguous with.
+ */
+export function readRuntimeSessionProgress(
+  surfaceId: DeviceSurfaceId,
+  sessionId: string,
+): RuntimePosition | null {
+  return peekSessionStream(surfaceId, sessionId)?.appliedPosition() ?? null;
+}
+
+const inFlightReads = new Map<string, SessionStreamRead>();
+
+function readKey(surfaceId: DeviceSurfaceId, sessionId: string): string {
+  return JSON.stringify([surfaceId, sessionId]);
+}
+
 export function isRuntimeSessionAttachmentInFlight(
   surfaceId: DeviceSurfaceId,
   sessionId: string,
 ): boolean {
-  return attachments.has(attachmentKey(surfaceId, sessionId));
+  return inFlightReads.get(readKey(surfaceId, sessionId))?.isCurrent() === true;
 }
 
 export function beginRuntimeSessionAttachment(
   surfaceId: DeviceSurfaceId,
   sessionId: string,
 ): RuntimeSessionAttachmentHandle {
-  const key = attachmentKey(surfaceId, sessionId);
-  const previous = attachments.get(key);
-  if (previous) {
-    attachments.delete(key);
-    // Overlapping attachment is not expected, but live events must never be
-    // silently lost if a newer reconciliation supersedes an older one.
-    drain(previous.queued, () => true);
-  }
-
-  const generation = ++nextGeneration;
-  const attachment: RuntimeSessionAttachment = { generation, queued: [] };
-  attachments.set(key, attachment);
-
-  const takeOwnedQueue = (): QueuedRuntimeEvent[] | null => {
-    const current = attachments.get(key);
-    if (!current || current.generation !== generation) {
-      return null;
-    }
-    attachments.delete(key);
-    return current.queued;
-  };
+  const stream = sessionStream(surfaceId, sessionId);
+  const read = stream.beginRead();
+  inFlightReads.set(readKey(surfaceId, sessionId), read);
 
   return {
+    isCurrent: () => read.isCurrent(),
     requiresReplay(snapshot) {
-      const current = progress.get(key);
-      return (
-        !current ||
-        current.streamId !== snapshot.streamId ||
-        current.hasGap ||
-        current.cursor < snapshot.cursor
-      );
-    },
-    finish(snapshot) {
-      const queued = takeOwnedQueue();
-      if (!queued) {
-        return;
+      // Under the contract this is ordering, not inspection: replay when the
+      // snapshot reaches past what is applied, when it belongs to another
+      // Runtime process, or when the painter reported it fell behind.
+      const applied = stream.appliedPosition();
+      if (stream.hasGap() || !applied) {
+        return true;
       }
-      progress.set(key, { ...snapshot, hasGap: false });
-      drain(queued, event => (
-        event.streamId !== snapshot.streamId ||
-        event.cursor === undefined ||
-        event.cursor > snapshot.cursor
-      ));
+      return applied.streamId !== snapshot.streamId || applied.cursor < snapshot.cursor;
+    },
+    finish(snapshot, options) {
+      read.settle(isRuntimePosition(snapshot) ? snapshot : null);
+      if (options?.projectionCaughtUp === false) {
+        // Mark only. Notifying here would schedule a repair for a read that
+        // just ran, and the caller reports it through
+        // `markRuntimeSessionProjectionStale` — which dedupes against this
+        // same flag and correctly stays silent.
+        stream.markProjectionBehind();
+      }
     },
     abort(options) {
-      const queued = takeOwnedQueue();
-      if (!queued || options?.discard === true) {
+      if (options?.discard === true) {
+        // Held writes belong to whichever read supersedes this one; releasing
+        // them here would apply them against a projection it is rebuilding.
+        read.settle(null);
         return;
       }
-      drain(queued, () => true);
+      read.abandon();
     },
   };
 }
 
 /**
- * Route one already surface-selected transport event through an in-flight
- * Session attachment. Product listeners never see the reserved cursor keys.
+ * Route one already surface-selected transport event through its Session
+ * stream. Product listeners never see the reserved cursor keys.
  */
 export function routeRuntimeSessionEvent<T>(
   surfaceId: DeviceSurfaceId,
@@ -222,34 +201,26 @@ export function routeRuntimeSessionEvent<T>(
     return;
   }
 
-  const attachment = attachments.get(attachmentKey(surfaceId, sessionId));
-  const key = attachmentKey(surfaceId, sessionId);
-  const metadata = readEventMetadata(payload);
-  const deliverWithProgress = (): void => {
-    const gapDetected = advanceProgress(key, metadata);
+  const stream = sessionStream(surfaceId, sessionId);
+  const hadGap = stream.hasGap();
+  const admission = stream.offer(
+    eventName,
+    payload,
+    readEventPosition(payload),
+    () => deliver(productPayload),
+  );
+  if (admission === 'apply') {
     deliver(productPayload);
-    if (gapDetected) {
-      for (const listener of gapListeners) {
-        listener(surfaceId, sessionId);
-      }
-    }
-  };
-  if (!attachment) {
-    deliverWithProgress();
-    return;
   }
-
-  attachment.queued.push({
-    sequence: ++nextSequence,
-    ...metadata,
-    deliver: deliverWithProgress,
-  });
+  if (!hadGap && stream.hasGap()) {
+    notifyGap(surfaceId, sessionId);
+  }
 }
 
 export function resetRuntimeSessionEventGateForTest(): void {
-  attachments.clear();
-  progress.clear();
   gapListeners.clear();
-  nextGeneration = 0;
-  nextSequence = 0;
+  inFlightReads.clear();
+  // Positions live on the streams now, so clearing only this module's maps
+  // would leak applied state between tests.
+  resetSessionStreamsForTest();
 }

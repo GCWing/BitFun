@@ -18,6 +18,7 @@ import type {
   ForkSessionResponse,
   GitBranch,
   GitRepositoryPathRequest,
+  GitTrustReport,
   ListSessionsResponse,
   PermissionGrant,
   PermissionReply,
@@ -160,6 +161,15 @@ export const AGENT_COMMAND_SCHEMA = {
     method: 'git/getBranches',
     request: null as unknown as GitRepositoryPathRequest,
     response: null as unknown as { branches: GitBranch[] },
+  },
+  // Read-only. `git_trust_repository` is deliberately absent: granting writes
+  // the Server Host user's global Git configuration, which is not a decision a
+  // browser client gets to make. The probe is what lets this transport still
+  // name the repository and hand over the manual command.
+  git_get_repository_trust: {
+    method: 'git/getRepositoryTrust',
+    request: null as unknown as GitRepositoryPathRequest,
+    response: null as unknown as GitTrustReport,
   },
   // Config service surface. The agent-profile and
   // model-config reads reach the global config singletons the Desktop host

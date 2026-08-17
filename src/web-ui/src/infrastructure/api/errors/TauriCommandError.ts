@@ -104,15 +104,22 @@ const SESSION_IN_USE_PREFIX = 'session_in_use:';
 const OUTCOME_UNKNOWN_PREFIX = 'outcome_unknown:';
 const NOT_AVAILABLE_PREFIX = 'not_available:';
 const HARNESS_PROFILE_LOCKED_PREFIX = 'harness_profile_locked:';
+const GIT_REPOSITORY_UNTRUSTED_PREFIX = 'git_repository_untrusted:';
 
-function hasStableErrorPrefix(error: unknown, prefix: string): boolean {
+/** Returns the payload carried after a stable error prefix, if present. */
+function stableErrorPayload(error: unknown, prefix: string): string | undefined {
   const pending: unknown[] = [error];
   const seen = new Set<object>();
 
-  for (let inspected = 0; pending.length > 0 && inspected < 12; inspected += 1) {
+  // The budget bounds a hostile or deeply nested payload. It counts only nodes
+  // that could carry the code — absent fields are never queued, so a wrapper
+  // that fills two of its five slots does not spend the budget on the other
+  // three and truncate the walk before the code is reached.
+  for (let inspected = 0; pending.length > 0 && inspected < 24; inspected += 1) {
     const current = pending.shift();
     if (typeof current === 'string') {
-      if (current.trimStart().startsWith(prefix)) return true;
+      const trimmed = current.trimStart();
+      if (trimmed.startsWith(prefix)) return trimmed.slice(prefix.length).trim();
       continue;
     }
     if (!current || typeof current !== 'object' || seen.has(current)) continue;
@@ -120,19 +127,29 @@ function hasStableErrorPrefix(error: unknown, prefix: string): boolean {
 
     const candidate = current as {
       message?: unknown;
+      data?: unknown;
       originalError?: unknown;
       context?: { originalError?: unknown };
       details?: { originalError?: unknown };
     };
-    pending.push(
+    for (const next of [
       candidate.message,
+      // Web mode reaches the host over JSON-RPC, where the code rides in the
+      // error `data` and `message` is the generic protocol phrase.
+      candidate.data,
       candidate.originalError,
       candidate.context?.originalError,
       candidate.details?.originalError,
-    );
+    ]) {
+      if (next !== undefined && next !== null) pending.push(next);
+    }
   }
 
-  return false;
+  return undefined;
+}
+
+function hasStableErrorPrefix(error: unknown, prefix: string): boolean {
+  return stableErrorPayload(error, prefix) !== undefined;
 }
 
 function hasStableErrorCode(error: unknown, code: string): boolean {
@@ -184,4 +201,18 @@ export function isNotAvailableError(error: unknown): boolean {
 /** Identifies a Session whose Harness became immutable after its first Turn. */
 export function isHarnessProfileLockedError(error: unknown): boolean {
   return hasStableErrorCode(error, HARNESS_PROFILE_LOCKED_PREFIX);
+}
+
+/**
+ * Identifies a repository Git refuses to read because it is owned by another
+ * user. The repository still exists: the user can grant ownership trust.
+ */
+export function isGitRepositoryUntrustedError(error: unknown): boolean {
+  return hasStableErrorPrefix(error, GIT_REPOSITORY_UNTRUSTED_PREFIX);
+}
+
+/** Repository path Git rejected, as reported by the backend. */
+export function gitRepositoryUntrustedPath(error: unknown): string | undefined {
+  const payload = stableErrorPayload(error, GIT_REPOSITORY_UNTRUSTED_PREFIX);
+  return payload ? payload : undefined;
 }

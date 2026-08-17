@@ -3,6 +3,34 @@
 Controller-side React/transport layer for Peer Device Mode. Architecture:
 [`docs/architecture/peer-device-mode.md`](../../../../../docs/architecture/peer-device-mode.md).
 
+## Migrating to the Session Projection contract
+
+The invariants below are pairwise rules between writers that carry no shared
+position. They are being replaced by one contract —
+[`docs/architecture/session-projection.md`](../../../../../docs/architecture/session-projection.md)
+— under which a write is admitted by its position in the order rather than by
+what it would do to painted content. **This list shrinking is the measure of
+that migration**; a change that adds a rule here is going the wrong way.
+
+Already owned by the contract (`flow_chat/session-stream/`):
+
+- The stream position, the delivery gap, and the attach fence in invariant 12.
+  `runtimeSessionEventGate` is now an adapter over `SessionStream`, not a
+  second owner of that state.
+- Surface-scoped Session identity in invariant 0: a stream is keyed by
+  `(DeviceSurfaceId, SessionId)` by construction.
+
+Also owned: which read may write a Turn. `replaceRunningSnapshot` is gone —
+the persisted record (snapshot merge *and* disk hydrate) may not write the Turn
+the runtime stream owns, and the Host's declared executing Turn is part of that
+ownership. `snapshotDropsProjectedTurnContent` and
+`isRunningSnapshotForwardProgress` survive inside `persistedReadMayReplaceTurn`
+for the two gaps the contract does not yet close (a Host with no runtime
+projection, and a partial history read); see the contract doc before touching
+them.
+
+Still to migrate, in order: the interaction mailbox, then history positions.
+
 ## Invariants (do not regress)
 
 0. **A surface switch is a view change, not a teardown.** Attachments and the
@@ -158,6 +186,25 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     projection; their persisted snapshot must still never overwrite newer live
     content.
 
+    **Delivery is not acceptance, and persist is not the current Turn.** A
+    live event that the state machine drops still advances the gate cursor.
+    Mark that projection stale so the next attach replays the journal instead
+    of treating the cursor as current and leaving in-progress tool cards
+    frozen. `finish()` may cover live events only after replay (or an
+    equivalent apply) proves the painted tools/text have caught up with the
+    Host journal — a matching cursor is not that proof. Overlapping attach
+    transfers the fence instead of draining it onto a state machine that is
+    about to reset. A 3s `staleOnly` tick, a hidden document, or a
+    `FINISHING` machine must not skip repair while `hasGap` is set; TextChunk
+    heartbeats are not evidence that a dropped ToolEnd was applied.
+    `loadSessionHistory` and `refreshPeerSessionSnapshot` both read
+    `runtimeEventSnapshot`: the persisted checkpoint of an executing Turn is
+    only identity, never the painted rounds. A session-object identity change
+    during restore must still return the journal — hiding it used to abort
+    attach and freeze the receiver while the Host kept streaming.
+    A CLI Peer Host still filters Host-local turns with `owns()`; that is a
+    CLI Host limitation, not a reason for a Desktop receiver to freeze.
+
     **The subscription and the attach loop must never be able to disable each
     other.** The agentic subscription is this window's only live view of a
     running Turn, and a surface switch tears it down. Rebuilding it used to be
@@ -211,6 +258,15 @@ Controller-side React/transport layer for Peer Device Mode. Architecture:
     fallback. Targeted rollback is separately capability-gated and never falls
     back to a controller-local or numeric rollback path. Never include catalog
     preview text in Peer request/response logs.
+
+15. **Git ownership trust is read on the peer, granted at the machine.**
+    `git_get_repository_trust` is a read-only probe and routes to the peer
+    host. `git_trust_repository` writes the peer user's global Git
+    configuration (`safe.directory`) and tells Git to run hooks from a tree
+    they do not own, so it is denied on both the desktop and CLI peer hosts.
+    Keep it out of the FE `LOCAL_ONLY` set: running it on the controller would
+    write an exception for a path that only exists on the peer. A controller
+    surfaces the probe's `manualCommand` instead.
 
 ## Related account-login guards
 

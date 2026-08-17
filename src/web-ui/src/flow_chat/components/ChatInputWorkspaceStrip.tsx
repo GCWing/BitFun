@@ -172,7 +172,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const trimmedPath = repositoryPath.trim();
   const label = workspaceLabel.trim();
 
-  const { currentBranch, isRepository, refreshBasic } = useGitState({
+  const { currentBranch, isRepository, repositoryTrustRequired, refreshBasic } = useGitState({
     repositoryPath: trimmedPath,
     layers: ['basic'],
     isActive: !deferPassiveGitRefresh,
@@ -205,7 +205,12 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   // useful breadcrumb for every workspace. In a plain folder the picker stays
   // visible and locked, so the strip does not lose its middle breadcrumb or
   // accidentally offer an unsupported remote action.
-  const isGitWorkspace = isRepository || isWorktree || worktreeEnabled;
+  //
+  // A repository Git refuses to read for ownership reasons is still a
+  // repository: `isRepository` only turns true after a status call the
+  // ownership gate blocks, so leaving it out would hide the Git controls on
+  // exactly the workspace whose problem the user has to act on.
+  const isGitWorkspace = isRepository || repositoryTrustRequired || isWorktree || worktreeEnabled;
   const showWorktreeToggle = !!worktreeControl && isGitWorkspace;
   const showDispatchPicker = !!dispatchControl;
   const dispatchPickerLocked = !!dispatchControl && (dispatchControl.locked || !isGitWorkspace);
@@ -277,8 +282,13 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       dispatchBranch
         || (isRepository && currentBranch?.trim()
         ? currentBranch.trim()
+        // "Not a Git repository" is the wrong answer for a repository Git
+        // refused to read: the branch is unknown because the directory is owned
+        // by someone else, and that is a state the user can clear.
+        : repositoryTrustRequired
+        ? t('workspaceStrip.branchTooltipUntrusted')
         : t('workspaceStrip.branchTooltipUnavailable')),
-    [currentBranch, dispatchBranch, isRepository, t],
+    [currentBranch, dispatchBranch, isRepository, repositoryTrustRequired, t],
   );
 
   const hasContextRail = !!label || showDispatchPicker || showGoal;

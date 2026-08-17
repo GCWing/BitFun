@@ -56,7 +56,7 @@ use bitfun_runtime_ports::{PermissionReply, PermissionReplySource, PermissionReq
 #[path = "session_event_journal.rs"]
 mod session_event_journal;
 pub use session_event_journal::{
-    attach_session_event_cursor, SessionEventCursor, SessionEventJournal,
+    attach_session_event_cursor, SessionEventBackfill, SessionEventCursor, SessionEventJournal,
     SessionEventProjectionSnapshot, SessionEventProjectionStore, StoredSessionEvents,
     RUNTIME_EVENT_CURSOR_KEY, RUNTIME_EVENT_STREAM_ID_KEY,
 };
@@ -923,6 +923,22 @@ impl AgentRuntime {
         self.session_event_journal
             .as_ref()
             .map(|journal| journal.snapshot(session_id))
+    }
+
+    /// Incremental catch-up for a client that already applied up to `cursor`.
+    ///
+    /// Prefer this over a snapshot when a client detects a delivery gap: it
+    /// returns only what was missed, so a live projection is repaired instead
+    /// of rebuilt.
+    pub fn session_events_since(
+        &self,
+        session_id: &str,
+        stream_id: &str,
+        cursor: u64,
+    ) -> Option<SessionEventBackfill> {
+        self.session_event_journal
+            .as_ref()
+            .map(|journal| journal.events_since(session_id, stream_id, cursor))
     }
 
     pub fn permission_request_dialog_turn_id(

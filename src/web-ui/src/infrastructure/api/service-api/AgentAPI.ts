@@ -203,6 +203,28 @@ export interface SessionRuntimeEventSnapshot {
   events: RuntimeProjectedAgenticEvent[];
 }
 
+/**
+ * Everything this client missed after the cursor it already applied.
+ *
+ * `delta` is contiguous: apply the events in order and the projection is
+ * repaired in place. `snapshotRequired` means the Host cannot prove
+ * contiguity — the cursor aged out of its replay window, it belongs to an
+ * older Runtime process, or the Host keeps no journal at all.
+ */
+export type SessionEventBackfill =
+  | {
+      kind: 'delta';
+      streamId: string;
+      cursor: number;
+      events: RuntimeProjectedAgenticEvent[];
+      /**
+       * Replaying events rebuilds a blocking interaction's card; only the
+       * mailbox makes it answerable.
+       */
+      interactionSnapshot?: SessionInteractionSnapshot | null;
+    }
+  | { kind: 'snapshotRequired' };
+
 export type PermissionRequestEvent =
   | { event: 'asked'; request: PermissionRequest }
   | { event: 'replied'; requestId: string; reply: { reply: PermissionReplyKind }; source: string }
@@ -1091,6 +1113,24 @@ export class AgentAPI {
       });
     } catch (error) {
       throw createTauriCommandError('restore_session_view', error, { sessionId, workspacePath });
+    }
+  }
+
+  async loadSessionEventBackfill(
+    sessionId: string,
+    streamId: string,
+    cursor: number,
+  ): Promise<SessionEventBackfill> {
+    try {
+      return await api.invoke<SessionEventBackfill>('load_session_event_backfill', {
+        request: { sessionId, streamId, cursor },
+      });
+    } catch (error) {
+      throw createTauriCommandError('load_session_event_backfill', error, {
+        sessionId,
+        streamId,
+        cursor,
+      });
     }
   }
 

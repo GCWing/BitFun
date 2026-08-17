@@ -240,6 +240,7 @@ export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
     refreshDetailed,
 
     isRepository: state?.isRepository ?? false,
+    repositoryTrustRequired: state?.repositoryTrustRequired ?? false,
     currentBranch: state?.currentBranch ?? null,
     ahead: state?.ahead ?? 0,
     behind: state?.behind ?? 0,

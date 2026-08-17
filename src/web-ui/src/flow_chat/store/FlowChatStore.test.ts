@@ -1657,6 +1657,167 @@ describe('FlowChatStore historical session hydration state', () => {
     );
   });
 
+  it('does not paint a lagging persist of the current Turn when the Runtime journal is present', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
+        turnCount: 1,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 0,
+        sessionId: 'history-1',
+        timestamp: 1,
+        userMessage: { id: 'user-live', content: 'analyze the project', timestamp: 1 },
+        modelRounds: [{
+          id: 'round-live',
+          turnId: 'turn-live',
+          roundIndex: 0,
+          timestamp: 1,
+          textItems: [],
+          toolItems: [{
+            id: 'read-readme',
+            toolName: 'Read',
+            status: 'running',
+            timestamp: 2,
+            toolCall: { id: 'read-readme', input: { path: 'README.md' } },
+          }],
+          thinkingItems: [],
+          startTime: 1,
+          status: 'streaming',
+        }],
+        startTime: 1,
+        status: 'inprogress',
+      }],
+      runtimeEventSnapshot: {
+        sessionId: 'history-1',
+        streamId: 'runtime-a',
+        cursor: 40,
+        activeTurnId: 'turn-live',
+        events: [{
+          eventName: 'agentic://dialog-turn-started',
+          payload: { sessionId: 'history-1', turnId: 'turn-live' },
+        }],
+      },
+      contextRestoreState: 'pending',
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('history-1', '/Users/host/project');
+
+    expect(flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0]).toMatchObject({
+      id: 'turn-live',
+      status: 'pending',
+      modelRounds: [],
+    });
+  });
+
+  it('does not let a lagging history load overwrite a live current-Turn projection', async () => {
+    peerModeFlagMock.active = true;
+    const liveTurn = {
+      id: 'turn-live',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-live', content: 'analyze the project', timestamp: 1 },
+      modelRounds: [{
+        id: 'round-live',
+        index: 0,
+        items: [{
+          id: 'read-readme',
+          type: 'tool' as const,
+          toolName: 'Read',
+          status: 'completed' as const,
+          timestamp: 2,
+          toolCall: { id: 'read-readme', input: { path: 'README.md' } },
+          toolResult: { success: true },
+        }],
+        isStreaming: true,
+        isComplete: false,
+        status: 'streaming' as const,
+        startTime: 2,
+      }],
+      status: 'processing' as const,
+      startTime: 1,
+    };
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          workspacePath: '/Users/host/project',
+          historyState: 'ready',
+          dialogTurns: [liveTurn],
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
+        turnCount: 1,
+        createdAt: 1,
+      },
+      turns: [{
+        turnId: 'turn-live',
+        turnIndex: 0,
+        sessionId: 'history-1',
+        timestamp: 1,
+        userMessage: { id: 'user-live', content: 'analyze the project', timestamp: 1 },
+        modelRounds: [{
+          id: 'round-live',
+          turnId: 'turn-live',
+          roundIndex: 0,
+          timestamp: 1,
+          textItems: [],
+          toolItems: [{
+            id: 'read-readme',
+            toolName: 'Read',
+            status: 'running',
+            timestamp: 2,
+            toolCall: { id: 'read-readme', input: { path: 'README.md' } },
+          }],
+          thinkingItems: [],
+          startTime: 1,
+          status: 'streaming',
+        }],
+        startTime: 1,
+        status: 'inprogress',
+      }],
+      runtimeEventSnapshot: {
+        sessionId: 'history-1',
+        streamId: 'runtime-a',
+        cursor: 40,
+        activeTurnId: 'turn-live',
+        events: [],
+      },
+      contextRestoreState: 'pending',
+    });
+
+    await flowChatStore.loadSessionHistory('history-1', '/Users/host/project');
+
+    expect(
+      flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0].modelRounds[0].items[0],
+    ).toMatchObject({
+      id: 'read-readme',
+      status: 'completed',
+    });
+  });
+
   it('re-attaches a missed AskUserQuestion mailbox without restarting the running turn', async () => {
     peerModeFlagMock.active = true;
     const pendingQuestion = {
@@ -2051,6 +2212,109 @@ describe('FlowChatStore historical session hydration state', () => {
       flowChatStore.getState().sessions.get('history-1')
         ?.dialogTurns[0].modelRounds[0].items[0],
     ).toMatchObject({ id: 'live-text', content: 'already rendered' });
+  });
+
+  it('still returns the Runtime journal when a live update wins the restore race', async () => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockImplementationOnce(async () => {
+      flowChatStore.setState(prev => {
+        const current = prev.sessions.get('history-1');
+        if (!current) {
+          return prev;
+        }
+        return {
+          ...prev,
+          sessions: new Map([
+            ['history-1', {
+              ...current,
+              currentTokenUsage: {
+                inputTokens: 1,
+                outputTokens: 1,
+                totalTokens: 2,
+                timestamp: 2,
+              },
+            }],
+          ]),
+        };
+      });
+      return {
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
+          turnCount: 1,
+          createdAt: 1,
+        },
+        turns: [{
+          turnId: 'turn-live',
+          turnIndex: 0,
+          sessionId: 'history-1',
+          timestamp: 1,
+          userMessage: { id: 'user-live', content: 'keep streaming', timestamp: 1 },
+          modelRounds: [],
+          startTime: 1,
+          status: 'inprogress',
+        }],
+        runtimeEventSnapshot: {
+          sessionId: 'history-1',
+          streamId: 'runtime-a',
+          cursor: 20,
+          activeTurnId: 'turn-live',
+          events: [{
+            eventName: 'agentic://text-chunk',
+            payload: { sessionId: 'history-1', turnId: 'turn-live', text: 'host' },
+          }],
+        },
+        contextRestoreState: 'pending',
+      };
+    });
+    const liveTurn = {
+      id: 'turn-live',
+      sessionId: 'history-1',
+      userMessage: { id: 'user-live', content: 'keep streaming', timestamp: 1 },
+      modelRounds: [{
+        id: 'round-live',
+        index: 0,
+        items: [{
+          id: 'read-readme',
+          type: 'tool' as const,
+          toolName: 'Read',
+          status: 'running' as const,
+          timestamp: 2,
+        }],
+        isStreaming: true,
+        isComplete: false,
+        status: 'streaming' as const,
+        startTime: 2,
+      }],
+      status: 'processing' as const,
+      startTime: 1,
+    };
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          workspacePath: '/Users/host/project',
+          historyState: 'ready',
+          dialogTurns: [liveTurn],
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    const result = await flowChatStore.refreshPeerSessionSnapshot(
+      'history-1',
+      '/Users/host/project',
+      { shouldReplayRuntimeSnapshot: () => true },
+    );
+
+    expect(result.runtimeEventSnapshot).toMatchObject({
+      streamId: 'runtime-a',
+      cursor: 20,
+      activeTurnId: 'turn-live',
+    });
+    expect(result.runtimeEventReplayRequired).toBe(true);
   });
 
   it('advances a running Peer turn from a newer persisted checkpoint', async () => {

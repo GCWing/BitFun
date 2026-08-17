@@ -83,7 +83,7 @@ import {
   clearRuntimeStatus,
   scheduleModelResponseStatus,
 } from './RuntimeStatusModule';
-import { requestPeerSessionRefresh } from './PeerSessionRefreshModule';
+import { requestRuntimeProjectionRepair } from './PeerSessionRefreshModule';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import {
   optimisticTurnAdoptionKey,
@@ -197,7 +197,7 @@ function logDroppedDataEvent(
   turnId: string | null,
   details: Record<string, unknown>
 ): void {
-  requestPeerSessionRefresh(sessionId);
+  requestRuntimeProjectionRepair(sessionId);
   log.debug('Dropped agentic data event', {
     eventName,
     sessionId,
@@ -257,6 +257,29 @@ function recoverIdleLatestTurnDataEvent(
     eventName,
   });
   return true;
+}
+
+function isRecoveringIdleTurn(
+  sessionId: string,
+  turnId: string | null,
+  currentState: SessionExecutionState,
+  currentDialogTurnId: string | null,
+): boolean {
+  if (
+    currentState !== SessionExecutionState.IDLE ||
+    !turnId ||
+    currentDialogTurnId !== turnId
+  ) {
+    return false;
+  }
+
+  const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
+  const latestTurn = session?.dialogTurns[session.dialogTurns.length - 1];
+  return Boolean(
+    latestTurn &&
+    latestTurn.id === turnId &&
+    RECOVERABLE_IDLE_TURN_STATUSES.has(latestTurn.status)
+  );
 }
 
 function handleDeepReviewQueueStateChanged(event: DeepReviewQueueStateChangedEvent): void {
@@ -683,6 +706,10 @@ export function shouldProcessEvent(
       currentState,
       context.currentDialogTurnId,
     )) {
+      return true;
+    }
+
+    if (isRecoveringIdleTurn(sessionId, turnId, currentState, context.currentDialogTurnId)) {
       return true;
     }
 
@@ -1832,7 +1859,7 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
 
   const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
-    requestPeerSessionRefresh(sessionId);
+    requestRuntimeProjectionRepair(sessionId);
     log.debug('Dialog turn not found', { turnId });
     return;
   }
@@ -2010,7 +2037,7 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
 
   const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
-    requestPeerSessionRefresh(sessionId);
+    requestRuntimeProjectionRepair(sessionId);
     log.debug('Dialog turn not found (model round start)', { turnId });
     return;
   }
