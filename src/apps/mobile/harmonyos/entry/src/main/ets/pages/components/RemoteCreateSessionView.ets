@@ -333,8 +333,6 @@ export struct RemoteCreateSessionView {
           SymbolGlyph($r('sys.symbol.xmark'))
             .fontSize(16)
             .fontColor([MUTED])
-            .width(20)
-            .height(20)
         }
         .width(44)
         .height(44)

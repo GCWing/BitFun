@@ -220,8 +220,6 @@ export struct ComposerBar {
             SymbolGlyph($r('sys.symbol.xmark'))
               .fontSize(15)
               .fontColor([MUTED])
-              .width(18)
-              .height(18)
           }
           .width(32)
           .height(32)

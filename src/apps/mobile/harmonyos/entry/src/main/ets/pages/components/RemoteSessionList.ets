@@ -237,19 +237,18 @@ export struct RemoteSessionList {
               .layoutWeight(1)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
-            if (this.isWorkspaceCollapsed(project.path)) {
-              SymbolGlyph($r('sys.symbol.chevron_right'))
+            // The Stack keeps the 18vp slot stable across both states; the
+            // glyph stays unsized because a chevron_right is drawn against
+            // the left edge of any box forced wider than its natural,
+            // half-width advance box.
+            Stack({ alignContent: Alignment.Center }) {
+              SymbolGlyph(this.isWorkspaceCollapsed(project.path) ?
+                $r('sys.symbol.chevron_right') : $r('sys.symbol.chevron_down'))
                 .fontSize(14)
                 .fontColor([MUTED])
-                .width(18)
-                .height(18)
-            } else {
-              SymbolGlyph($r('sys.symbol.chevron_down'))
-                .fontSize(14)
-                .fontColor([MUTED])
-                .width(18)
-                .height(18)
             }
+            .width(18)
+            .height(18)
             if (project.path.length > 0) {
               SymbolGlyph($r('sys.symbol.square_and_pencil'))
                 .fontSize(18)
@@ -346,19 +345,14 @@ export struct RemoteSessionList {
             .fontSize(14)
             .fontWeight(FontWeight.Medium)
             .fontColor(MUTED)
-          if (this.chatsCollapsed) {
-            SymbolGlyph($r('sys.symbol.chevron_right'))
+          Stack({ alignContent: Alignment.Center }) {
+            SymbolGlyph(this.chatsCollapsed ?
+              $r('sys.symbol.chevron_right') : $r('sys.symbol.chevron_down'))
               .fontSize(14)
               .fontColor([MUTED])
-              .width(18)
-              .height(18)
-          } else {
-            SymbolGlyph($r('sys.symbol.chevron_down'))
-              .fontSize(14)
-              .fontColor([MUTED])
-              .width(18)
-              .height(18)
           }
+          .width(18)
+          .height(18)
         }
         .onClick(() => {
           this.chatsCollapsed = !this.chatsCollapsed;
@@ -368,8 +362,6 @@ export struct RemoteSessionList {
           SymbolGlyph($r('sys.symbol.square_and_pencil'))
             .fontSize(18)
             .fontColor([MUTED])
-            .width(22)
-            .height(22)
             .opacity(0.52)
         }
         .width(40)
