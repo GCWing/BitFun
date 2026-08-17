@@ -70,6 +70,12 @@ export interface SidebarPresentationActions {
   readonly close: () => void;
   readonly newChat: () => void;
   readonly enterCode: () => void;
+  /**
+   * Pair with or pick a desktop. Distinct from `enterCode`, which only moves
+   * the visible surface to Remote: a row labelled "connect a desktop" has to
+   * open the connect sheet, or it navigates to a placeholder and stops there.
+   */
+  readonly connectDesktop: () => void;
   readonly settings: () => void;
   readonly openAccount: () => void;
   readonly openSession: (session: RemoteSession) => void;
@@ -128,7 +134,8 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       selectWorkspace: () => {}, draftChanged: () => {}, voiceInput: () => {}, selectModel: () => {}, send: () => {}
     },
     onSidebar: {
-      close: () => {}, newChat: () => {}, enterCode: () => {}, settings: () => {}, openAccount: () => {},
+      close: () => {}, newChat: () => {}, enterCode: () => {}, connectDesktop: () => {},
+      settings: () => {}, openAccount: () => {},
       openSession: () => {}, archive: () => {}, exportSession: () => {}, deleteSession: () => {}
     },
     onSettings: {

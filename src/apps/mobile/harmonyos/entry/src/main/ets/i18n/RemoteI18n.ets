@@ -106,7 +106,7 @@ const ZH_CN_MESSAGES: [string, string][] = [
   ['sidebar.workspaces', '工作区'],
   ['sidebar.workspacesOffline', '未连接'],
   ['sidebar.connectDesktop', '连接电脑'],
-  ['sidebar.addWorkspace', '添加工作区'],
+  ['sidebar.addConnection', '添加连接'],
   ['sidebar.newInWorkspace', '在此工作区新建'],
   ['sidebar.emptyWorkspaces', '这台电脑还没有工作区'],
   ['sidebar.moreSessions', '还有 {0} 个会话'],

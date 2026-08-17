@@ -306,6 +306,13 @@ export default function conversationPresentationUnitTest() {
       expect(RemoteI18n.t('sidebar.recent')).assertEqual('sidebar.recent');
     });
 
+    it('labels the workspace-header plus by the connection it adds, not a workspace it cannot create', 0, () => {
+      // Workspaces come from the desktop; the phone has no create-workspace
+      // call. The button opens the connect sheet, so that is what it says.
+      expect(RemoteI18n.t('sidebar.addConnection')).assertEqual('添加连接');
+      expect(RemoteI18n.t('sidebar.addWorkspace')).assertEqual('sidebar.addWorkspace');
+    });
+
     it('does not keep leftover pending-copy keys that claim general chat is unavailable', 0, () => {
       expect(RemoteI18n.t('chatHome.generalPending')).assertEqual('chatHome.generalPending');
       expect(RemoteI18n.t('chatHome.generalAdvicePending')).assertEqual('chatHome.generalAdvicePending');

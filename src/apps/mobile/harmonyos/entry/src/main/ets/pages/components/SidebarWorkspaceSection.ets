@@ -43,6 +43,11 @@ export struct SidebarWorkspaceSection {
   @Event onSessionActions: (session: RemoteSession) => void = (_session: RemoteSession) => {};
   @Event onCreateInWorkspace: (path: string) => void = (_path: string) => {};
   @Event onOpenWorkspace: (path: string) => void = (_path: string) => {};
+  /**
+   * Opens the connect sheet. Not "go to the remote surface": there is nothing
+   * to go to while offline, and a row reading "connect a desktop" that lands on
+   * an empty placeholder is the same as a row that does nothing.
+   */
   @Event onConnect: () => void = () => {};
   @Local collapsedPaths: string[] = [];
   @Local expandedSessionPaths: string[] = [];
@@ -94,7 +99,10 @@ export struct SidebarWorkspaceSection {
       }
       .width(32)
       .height(32)
-      .accessibilityText(RemoteI18n.t('sidebar.addWorkspace'))
+      // Workspaces are whatever the desktop reports; the phone cannot create
+      // one. So this "+" adds a *connection*, and says so — labelling it "add
+      // workspace" would promise a capability that does not exist.
+      .accessibilityText(RemoteI18n.t('sidebar.addConnection'))
       .onClick(() => {
         this.onConnect();
       })
@@ -304,8 +312,18 @@ export struct SidebarWorkspaceSection {
     return this.projectionCache.get(inputs);
   }
 
+  /**
+   * Only workspaces that are somewhere you can go.
+   *
+   * `syncRemotePageSummary` seeds the current workspace with the placeholder
+   * name 「未连接」 and no path, and the projection turns any named current
+   * workspace into an entry. On the Remote surface that never showed, because
+   * you only got there connected; in the sidebar it is on screen from launch,
+   * so a reconnecting phone with no workspace data yet listed a folder called
+   * 「未连接」 that opens nothing.
+   */
   private workspaceEntries(): RecentWorkspaceEntry[] {
-    return this.projection().projects;
+    return this.projection().projects.filter((entry: RecentWorkspaceEntry) => entry.path.length > 0);
   }
 
   private visibleWorkspaceEntries(): RecentWorkspaceEntry[] {
