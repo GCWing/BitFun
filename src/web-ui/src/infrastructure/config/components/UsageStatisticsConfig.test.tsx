@@ -16,7 +16,10 @@ vi.mock('@/infrastructure/api', () => ({
 }));
 
 vi.mock('@/infrastructure/i18n', () => ({
-  useI18n: () => ({ t: translateMock }),
+  useI18n: () => ({
+    t: translateMock,
+    formatDate: (date: Date | number) => new Date(date).toISOString(),
+  }),
 }));
 
 vi.mock('@/component-library', () => ({
@@ -117,9 +120,11 @@ describe('UsageStatisticsConfig', () => {
     await render();
 
     expect(getStatisticsMock).toHaveBeenCalledTimes(1);
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     expect(getStatisticsMock).toHaveBeenCalledWith({
       timeRange: 'last24Hours',
       granularity: 'hour',
+      timeZone,
     });
 
     expect(container.querySelector('[data-bf-part="summary"]')).not.toBeNull();
@@ -180,6 +185,7 @@ describe('UsageStatisticsConfig', () => {
     expect(getStatisticsMock).toHaveBeenLastCalledWith({
       timeRange: 'thisMonth',
       granularity: 'hour',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     });
   });
 

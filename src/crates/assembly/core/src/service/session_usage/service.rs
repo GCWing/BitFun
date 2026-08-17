@@ -98,6 +98,7 @@ fn token_usage_query(request: &SessionUsageReportRequest) -> TokenUsageQuery {
         // the exact parent/child session set separately and scans history once.
         session_id: None,
         time_range: TimeRange::All,
+        time_zone: None,
         limit: None,
         offset: None,
         include_subagent: request.include_hidden_subagents,

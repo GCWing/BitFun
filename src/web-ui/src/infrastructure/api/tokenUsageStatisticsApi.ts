@@ -18,6 +18,8 @@ export interface TokenUsageStatisticsRequest {
   /** ISO timestamp; required when timeRange === 'custom'. */
   start?: string;
   end?: string;
+  /** IANA time zone used for local-calendar ranges and trend buckets. */
+  timeZone?: string;
   includeSubagent?: boolean;
 }
 
@@ -30,7 +32,7 @@ export interface UsageStatisticsEntry {
 }
 
 export interface UsageTrendPoint {
-  /** Bucket start (ISO timestamp, UTC). */
+  /** Bucket start as an ISO timestamp; alignment uses the requested time zone. */
   bucket: string;
   inputTokens: number;
   outputTokens: number;
