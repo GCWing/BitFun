@@ -181,8 +181,15 @@ fn accumulate_entry(
 fn finalize_entries(map: HashMap<String, UsageStatisticsEntry>) -> Vec<UsageStatisticsEntry> {
     let mut entries = map.into_values().collect::<Vec<_>>();
     for entry in &mut entries {
-        entry.cache_hit_rate = (entry.reported_input_tokens > 0)
-            .then(|| entry.cached_tokens as f64 / entry.reported_input_tokens as f64);
+        entry.cache_hit_rate = if entry.reported_input_tokens == 0 {
+            None
+        } else if entry.cached_tokens == entry.reported_input_tokens {
+            // Exact full cache hit: represent as exactly 1.0 so the UI never
+            // shows 99.99...% for a mathematically complete hit.
+            Some(1.0)
+        } else {
+            Some(entry.cached_tokens as f64 / entry.reported_input_tokens as f64)
+        };
     }
     entries.sort_by(|left, right| {
         right
@@ -426,6 +433,19 @@ mod tests {
         let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
         assert_eq!(stats.by_model[0].cache_hit_rate, None);
         assert_eq!(stats.total_cache_reported_input_tokens, 0);
+    }
+
+    #[test]
+    fn exact_full_cache_hit_is_reported_as_exactly_one() {
+        let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
+        // cached == input on a single request: mathematically a 100% hit.
+        let records = vec![record("model-a", t0, 1000, 0, 1000, 0, true)];
+        let stats = aggregate_statistics(&records, UsageGranularity::Hour, attribution());
+        assert_eq!(stats.by_model[0].cache_hit_rate, Some(1.0));
+        assert_eq!(
+            stats.total_cached_tokens,
+            stats.total_cache_reported_input_tokens
+        );
     }
 
     #[test]

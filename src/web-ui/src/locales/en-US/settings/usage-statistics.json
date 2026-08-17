@@ -32,6 +32,9 @@
     "byGroup": "Group Usage Distribution",
     "byEndpoint": "Endpoint Distribution"
   },
+  "cacheHitRate": {
+    "title": "Model Cache Hit Rate"
+  },
   "trend": {
     "title": "Token Usage Trend",
     "legend": {
@@ -47,7 +50,6 @@
     "group": "Group",
     "endpoint": "Endpoint",
     "requests": "Requests",
-    "tokens": "Token",
-    "cacheHitRate": "Cache Hit Rate"
+    "tokens": "Token"
   }
 }
