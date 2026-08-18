@@ -84,6 +84,7 @@ export interface CreateSessionOptions {
   title: string;
   instruction: string;
   modelId?: string;
+  workspacePath?: string;
 }
 
 export type RemotePermissionMode = 'ask' | 'auto' | 'full_access';

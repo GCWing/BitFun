@@ -118,7 +118,8 @@ export class RemoteSessionViewModel {
     agentType: string,
     instruction: string,
     onRouteChat: (sessionId: string) => void,
-    modelId: string
+    modelId: string,
+    workspacePath: string = ''
   ): Promise<SessionSummary | undefined> {
     return await this.sessions.create(
       agentType,
@@ -138,13 +139,13 @@ export class RemoteSessionViewModel {
         await this.refreshSessions();
       },
       instruction,
-      modelId
+      modelId,
+      workspacePath
     );
   }
 
   async createSessionInWorkspace(
     path: string,
-    currentPath: string,
     instruction: string = '',
     agentType: string = 'code',
     onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat,
@@ -154,30 +155,12 @@ export class RemoteSessionViewModel {
       return;
     }
     const previousSession: SessionSummary = this.copySession(this.pageState.activeSession);
-    const previousWorkspacePath = currentPath;
     this.beginSessionCreation(onRouteChat);
     let created: SessionSummary | undefined;
     try {
-      if (path.length > 0 && path !== currentPath) {
-        await this.hooks.onSelectWorkspace(path);
-        // Workspace selection clears page discovery state. Creation still owns
-        // the detail pane until the create command resolves.
-        this.pageState.setConversationLoading(true);
-      }
-      if (path.length === 0 || path === currentPath) {
-        created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId);
-      } else if (this.pageState.workspacePath === path) {
-        created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId);
-      }
+      created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId, path);
       if (!created) {
-        if (this.pageState.workspacePath === previousWorkspacePath) {
-          this.restoreAfterFailedCreation(previousSession, onRouteChat);
-        } else {
-          this.pageState.clearActiveSession();
-          this.hooks.onResetTimeline('');
-          this.hooks.onKnownStateReset();
-          this.hooks.onRouteHome();
-        }
+        this.restoreAfterFailedCreation(previousSession, onRouteChat);
       }
     } finally {
       this.pageState.setConversationLoading(false);

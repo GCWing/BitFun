@@ -219,7 +219,6 @@ export class RemoteCreateFlowController {
       if (context.workspacePath.length > 0) {
         await runtime.sessions.createSessionInWorkspace(
           context.workspacePath,
-          this.remote.workspacePath,
           instruction,
           context.agentType,
           undefined,
@@ -276,7 +275,6 @@ export class RemoteCreateFlowController {
     runtime.filePreview.close();
     await runtime.sessions.createSessionInWorkspace(
       path,
-      this.remote.workspacePath,
       '',
       agentType,
       inPlace ? (sessionId: string): void => this.navigateInPlace(sessionId) :

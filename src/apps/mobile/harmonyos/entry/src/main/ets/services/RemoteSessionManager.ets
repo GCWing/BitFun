@@ -219,7 +219,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
   }
 
   async createSession(options: CreateSessionOptions): Promise<SessionSummary> {
-    const workspacePath = this.workspace?.path || '';
+    const workspacePath = options.workspacePath?.trim() || this.workspace?.path || '';
     const command = RemoteCommandFactory.createSession(options, workspacePath);
     const response = await this.send<CreateSessionResponse>(command);
     const sessionId = response.session_id || response.id || '';
