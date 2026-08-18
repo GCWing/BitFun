@@ -1,4 +1,4 @@
-import { RemoteSession } from '../model/RemoteModels';
+import { RecentWorkspaceEntry, RemoteSession } from '../model/RemoteModels';
 import { RemoteLogger } from './RemoteLogger';
 
 /** A device's session list as it was last shown. */
@@ -14,6 +14,10 @@ export interface RemoteSessionListStore {
   /** The list for whichever device was written last, for a cold start. */
   loadLastList(): Promise<RemoteSessionListSlice>;
   saveList(deviceKey: string, sessions: RemoteSession[], hasMore: boolean): Promise<void>;
+  /** Same row as [saveList], but does not move the cold-start last-device pointer. */
+  saveObservedList(deviceKey: string, sessions: RemoteSession[], hasMore: boolean): Promise<void>;
+  loadWorkspaces(deviceKey: string): Promise<RecentWorkspaceEntry[]>;
+  saveWorkspaces(deviceKey: string, workspaces: RecentWorkspaceEntry[]): Promise<void>;
   clearAll(): Promise<void>;
 }
 

@@ -6,6 +6,7 @@ import {
   RemoteSession
 } from '../model/RemoteModels';
 import { RemoteI18n } from '../i18n/RemoteI18n';
+import { remoteSessionIdentity } from './RemoteSessionIdentity';
 import { TranscriptIntegrityPolicy } from './TranscriptIntegrityPolicy';
 
 export class RemoteUiState {
@@ -97,13 +98,14 @@ export class RemoteUiState {
   static mergeSessions(current: RemoteSession[], incoming: RemoteSession[]): RemoteSession[] {
     const seen = new Set<string>();
     current.forEach((item: RemoteSession) => {
-      seen.add(item.id);
+      seen.add(remoteSessionIdentity(item));
     });
     const merged = current.slice();
     incoming.forEach((item: RemoteSession) => {
-      if (!seen.has(item.id)) {
+      const key = remoteSessionIdentity(item);
+      if (!seen.has(key)) {
         merged.push(item);
-        seen.add(item.id);
+        seen.add(key);
       }
     });
     return merged;
@@ -123,7 +125,10 @@ export class RemoteUiState {
         createdAt: item.createdAt,
         messageCount: item.messageCount,
         workspacePath: item.workspacePath,
-        workspaceName: item.workspaceName
+        workspaceName: item.workspaceName,
+        pinned: item.pinned,
+        titleGenerated: item.titleGenerated,
+        deviceId: item.deviceId
       };
       return updated;
     });

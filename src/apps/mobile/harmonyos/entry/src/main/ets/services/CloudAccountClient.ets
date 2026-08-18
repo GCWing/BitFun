@@ -45,6 +45,13 @@ export interface CloudAccountSession {
   masterKey: Uint8Array;
 }
 
+/** The live account client plus the session it is currently signed in with. */
+export interface CloudAccountBinding {
+  client: CloudAccountClient;
+  relayUrl: string;
+  session: CloudAccountSession;
+}
+
 export interface CloudAccountDevice {
   deviceId: string;
   deviceName: string;

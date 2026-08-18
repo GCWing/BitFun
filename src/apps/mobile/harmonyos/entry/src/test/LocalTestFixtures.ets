@@ -849,7 +849,9 @@ export class FakeRemoteSessionClient implements RemoteSessionClient {
   }
 
   async createSession(options: CreateSessionOptions): Promise<SessionSummary> {
-    this.createRequests.push(`${options.agentType}:${options.title}:${options.instruction}`);
+    this.createRequests.push(
+      `${options.agentType}:${options.title}:${options.instruction}:${options.workspacePath || ''}`
+    );
     if (this.shouldFailCreate) {
       throw new Error('Expected session create failure.');
     }
@@ -1062,6 +1064,7 @@ export async function readyRemoteChatCache(
 
 export class FakeRemoteSessionListStore implements RemoteSessionListStore {
   readonly lists: Map<string, RemoteSessionListSlice> = new Map<string, RemoteSessionListSlice>();
+  readonly workspaces: Map<string, RecentWorkspaceEntry[]> = new Map<string, RecentWorkspaceEntry[]>();
   lastDeviceKey: string = '';
   saveCount: number = 0;
   clearCount: number = 0;
@@ -1092,10 +1095,28 @@ export class FakeRemoteSessionListStore implements RemoteSessionListStore {
     this.lastDeviceKey = deviceKey;
   }
 
+  async saveObservedList(deviceKey: string, sessions: RemoteSession[], hasMore: boolean): Promise<void> {
+    this.failIfNeeded();
+    this.saveCount += 1;
+    this.lists.set(deviceKey, { sessions: sessions.slice(), hasMore });
+  }
+
+  async loadWorkspaces(deviceKey: string): Promise<RecentWorkspaceEntry[]> {
+    this.failIfNeeded();
+    const entries = this.workspaces.get(deviceKey);
+    return entries ? entries.slice() : [];
+  }
+
+  async saveWorkspaces(deviceKey: string, workspaces: RecentWorkspaceEntry[]): Promise<void> {
+    this.failIfNeeded();
+    this.workspaces.set(deviceKey, workspaces.slice());
+  }
+
   async clearAll(): Promise<void> {
     this.failIfNeeded();
     this.clearCount += 1;
     this.lists.clear();
+    this.workspaces.clear();
     this.lastDeviceKey = '';
   }
 
