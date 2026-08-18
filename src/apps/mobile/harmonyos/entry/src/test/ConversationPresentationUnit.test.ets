@@ -354,11 +354,11 @@ export default function conversationPresentationUnitTest() {
 
     it('names the sidebar by what things are, not by where they run', 0, () => {
       // The sidebar used to ask "local or remote" before it would show anything.
-      // It now stacks a conversation timeline over a set of workspaces, so the
+      // It now stacks a conversation timeline over account devices, so the
       // labels name those two kinds rather than an execution location, and the
       // local/remote pair the switcher needed is gone.
       expect(RemoteI18n.t('sidebar.conversations')).assertEqual('最近对话');
-      expect(RemoteI18n.t('sidebar.workspaces')).assertEqual('工作区');
+      expect(RemoteI18n.t('sidebar.devices')).assertEqual('设备');
       expect(RemoteI18n.t('sidebar.connectDesktop')).assertEqual('连接电脑');
       expect(RemoteI18n.t('sidebar.local')).assertEqual('sidebar.local');
       expect(RemoteI18n.t('sidebar.code')).assertEqual('sidebar.code');

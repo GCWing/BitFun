@@ -36,6 +36,7 @@ import { RemoteChatLocalRdbStore } from '../../services/RemoteChatLocalRdbStore'
 import { RemoteChatPollingLifecycleController, RemoteChatPollingSnapshot } from '../../services/RemoteChatPollingLifecycleController';
 import { RemoteFileDownloadController } from '../../services/RemoteFileDownloadController';
 import { FilePreviewController } from '../viewmodel/FilePreviewController';
+import { DeviceDirectoryViewModel } from '../viewmodel/DeviceDirectoryViewModel';
 import { SettingsController } from '../viewmodel/SettingsController';
 import { ConversationController } from '../viewmodel/ConversationController';
 import { RemoteLogger } from '../../services/RemoteLogger';
@@ -75,6 +76,7 @@ import {
 } from '../viewmodel/RemoteConnectionController';
 import { ConversationIntentDispatcher } from '../actions/ConversationIntentDispatcher';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
+import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
 import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
 import { WatchProvisionState } from '../state/WatchProvisionState';
@@ -134,6 +136,7 @@ export abstract class AppRootRuntimeComposition {
   abstract reconnectActiveRemote(): Promise<void>;
   abstract selectAssistant(path: string): Promise<void>;
   abstract selectWorkspace(path: string): Promise<void>;
+  abstract selectWorkspaceOnDevice(path: string, deviceId?: string): Promise<void>;
   abstract showVoiceInputError(message: string): void;
   abstract stopVoiceInput(showStatus: boolean): Promise<void>;
   abstract toggleVoiceInput(): Promise<void>;
@@ -160,6 +163,7 @@ export abstract class AppRootRuntimeComposition {
     );
   readonly generalChatPageState: GeneralChatPageState = new GeneralChatPageState();
   readonly remotePageState: RemotePageState = new RemotePageState();
+  readonly deviceDirectoryState: DeviceDirectoryState = new DeviceDirectoryState();
   readonly remoteCreateState: RemoteCreateSessionState = new RemoteCreateSessionState();
   readonly watchProvisionState: WatchProvisionState = new WatchProvisionState();
   private readonly watchProvisionPort: WatchProvisionPort = {
@@ -253,9 +257,10 @@ export abstract class AppRootRuntimeComposition {
       new RemoteChatLocalRdbStore(),
       (): string => this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId
     );
+  readonly remoteSessionListStore: RemoteSessionListRdbStore = new RemoteSessionListRdbStore();
   readonly remoteSessionListCache: RemoteSessionListCache =
     new RemoteSessionListCache(
-      new RemoteSessionListRdbStore(),
+      this.remoteSessionListStore,
       (): string => this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId
     );
   // Both caches hold what one account saw on one desktop, so they are dropped
@@ -692,9 +697,29 @@ export abstract class AppRootRuntimeComposition {
           navigateRemoteHome: (): void => this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome),
           loadRecentWorkspaces: async (): Promise<void> => {
             await this.remoteWorkspaceViewModel.loadRecentWorkspacesInBackground();
+          },
+          onAccountDevices: (devices: CloudAccountDevice[]): void => {
+            this.deviceDirectoryViewModel.syncDevices(devices);
+          },
+          onBeforeControlTargetChange: (): void => {
+            this.captureLiveControlTarget();
+          },
+          onControlTargetChanged: (): void => {
+            this.captureLiveControlTarget();
           }
         }
       }
+    );
+  readonly deviceDirectoryViewModel: DeviceDirectoryViewModel =
+    new DeviceDirectoryViewModel(
+      this.deviceDirectoryState,
+      {
+        credentials: () => this.settingsController.activeCloudAccount(),
+        activeDeviceId: (): string => {
+          return this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
+        }
+      },
+      this.remoteSessionListStore
     );
   readonly conversationController: ConversationController =
     new ConversationController(
@@ -796,7 +821,9 @@ export abstract class AppRootRuntimeComposition {
       refresh: (): void => { this.remoteSessionViewModel.refreshSessions(); },
       showWorkspaces: (): void => { this.remoteWorkspaceViewModel.toggleRecentWorkspaces(); },
       showAssistants: (): void => { this.remoteWorkspaceViewModel.toggleAssistants(); },
-      selectWorkspace: (path: string): void => { this.selectWorkspace(path); },
+      selectWorkspace: (path: string, deviceId?: string): void => {
+        void this.selectWorkspaceOnDevice(path, deviceId);
+      },
       selectAssistant: (path: string): void => { this.selectAssistant(path); },
       cancelWorkspace: (): void => this.remotePageState.setWorkspacePickerVisible(false),
       cancelAssistant: (): void => this.remotePageState.setAssistantPickerVisible(false),
@@ -811,11 +838,17 @@ export abstract class AppRootRuntimeComposition {
         this.conversationController.createRemoteSession(agentType, true);
       },
       createAssistant: (): void => { this.conversationController.openRemoteCreateSession(); },
-      createInWorkspace: (path: string, agentType: string): void => {
-        this.conversationController.createRemoteSessionInWorkspace(path, agentType);
+      createInWorkspace: (path: string, agentType: string, deviceId?: string): void => {
+        this.conversationController.createRemoteSessionInWorkspace(path, agentType, false, deviceId);
       },
-      createInWorkspaceInPlace: (path: string, agentType: string): void => {
-        this.conversationController.createRemoteSessionInWorkspace(path, agentType, true);
+      createInWorkspaceInPlace: (path: string, agentType: string, deviceId?: string): void => {
+        this.conversationController.createRemoteSessionInWorkspace(path, agentType, true, deviceId);
+      },
+      toggleDirectoryDevice: (deviceId: string): void => {
+        void this.deviceDirectoryViewModel.toggleDevice(deviceId);
+      },
+      retryDirectoryDevice: (deviceId: string): void => {
+        void this.deviceDirectoryViewModel.retryDevice(deviceId);
       },
       openSession: (session: RemoteSession): void => this.conversationController.openHomeSession(session),
       openSessionInPlace: (session: RemoteSession): void => this.conversationController.openHomeSession(session, true),
@@ -899,6 +932,15 @@ export abstract class AppRootRuntimeComposition {
     generalStatus: (): string => this.conversationController.generalChatHomeStatusText()
   };
   readonly navigationStack: NavPathStack = this.appShellViewModel.navigationStack;
+
+  private captureLiveControlTarget(): void {
+    const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
+    this.deviceDirectoryViewModel.captureLive(
+      deviceId,
+      this.remotePageState.recentWorkspaces,
+      this.remotePageState.sessions
+    );
+  }
 
   enterCodeEntry(): void {
     this.enterRemoteSurface();

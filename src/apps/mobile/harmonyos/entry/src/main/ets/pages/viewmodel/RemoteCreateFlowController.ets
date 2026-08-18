@@ -266,13 +266,42 @@ export class RemoteCreateFlowController {
     }
   }
 
+  async ensureRemoteControlTarget(deviceId?: string): Promise<void> {
+    const target = (deviceId || '').trim();
+    if (target.length === 0) {
+      return;
+    }
+    const runtime = requireRemoteRuntime(this.remoteRuntime);
+    const activeId = this.remote.controlTargetDeviceId || this.remote.desktopId;
+    if (target === activeId && this.remote.connectionState === 'connected') {
+      return;
+    }
+    this.remote.setStatusText(RemoteI18n.t('remote.settings.deviceConnecting'));
+    try {
+      let device = runtime.settings.knownAccountDevice(target);
+      if (!device) {
+        device = (await runtime.settings.listCloudAccountDevices())
+          .find((item: CloudAccountDevice): boolean => item.deviceId === target);
+      }
+      if (!device) {
+        throw new Error(RemoteI18n.t('remote.settings.deviceUnavailable'));
+      }
+      await runtime.settings.selectCloudAccountDevice(device, false);
+    } catch (err) {
+      this.remote.setLoadingHome(false);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async createRemoteSessionInWorkspace(
     path: string,
     agentType: string = 'code',
-    inPlace: boolean = false
+    inPlace: boolean = false,
+    deviceId: string = ''
   ): Promise<void> {
     const runtime = requireRemoteRuntime(this.remoteRuntime);
     runtime.filePreview.close();
+    await this.ensureRemoteControlTarget(deviceId);
     await runtime.sessions.createSessionInWorkspace(
       path,
       '',
@@ -285,12 +314,21 @@ export class RemoteCreateFlowController {
   async openRemoteSession(item: RemoteSession, inPlace: boolean = false): Promise<void> {
     const runtime = requireRemoteRuntime(this.remoteRuntime);
     runtime.filePreview.close();
-    await runtime.sessions.openSession(
-      item,
-      this.remote.workspacePath,
-      inPlace ? (sessionId: string): void => this.navigateInPlace(sessionId) :
-        (sessionId: string): void => this.navigateCreated(sessionId)
-    );
+    this.remote.setPendingSessionId(item.id);
+    try {
+      await this.ensureRemoteControlTarget(item.deviceId);
+      await runtime.sessions.openSession(
+        item,
+        this.remote.workspacePath,
+        inPlace ? (sessionId: string): void => this.navigateInPlace(sessionId) :
+          (sessionId: string): void => this.navigateCreated(sessionId)
+      );
+    } catch (err) {
+      this.remote.setPendingSessionId('');
+      this.remote.setLoadingHome(false);
+      RemoteLogger.warn(`open remote session failed session=${item.id}: ${String(err)}`);
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
   }
 
   applyRemoteActiveSession(session: SessionSummary): void {

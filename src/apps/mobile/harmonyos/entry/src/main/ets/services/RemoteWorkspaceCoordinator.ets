@@ -1,18 +1,11 @@
 import { AssistantEntry, RecentWorkspaceEntry, RemoteSession, WorkspaceInfo } from '../model/RemoteModels';
+import {
+  CONCURRENT_WORKSPACE_LISTINGS,
+  mapInConcurrentBatches,
+  mergeUniqueSessions
+} from './ConcurrentWorkspaceListing';
 import { RemoteWorkspaceDataSource } from './RemoteWorkspaceRepository';
 import { RemoteLogger } from './RemoteLogger';
-
-/**
- * How many workspaces are listed at once during cross-workspace discovery.
- *
- * Each listing is one round trip to the desktop over the relay, and a phone
- * that has been used for a while has twenty-odd recent workspaces: done one
- * after another that is five seconds of the session list rearranging itself
- * behind the user. Kept small because these run alongside the polling that
- * drives an open conversation, and a burst wide enough to crowd it out would
- * trade a slow list for a slow chat.
- */
-const CONCURRENT_WORKSPACE_LISTINGS: number = 4;
 
 /** Coordinates workspace/assistant selection and cross-workspace session discovery. */
 export class RemoteWorkspaceCoordinator {
@@ -46,21 +39,12 @@ export class RemoteWorkspaceCoordinator {
    * batch changes how long this takes and nothing about what it returns.
    */
   async sessionsForWorkspaces(paths: string[]): Promise<RemoteSession[]> {
-    const all: RemoteSession[] = [];
-    for (let start = 0; start < paths.length; start += CONCURRENT_WORKSPACE_LISTINGS) {
-      const batch: string[] = paths.slice(start, start + CONCURRENT_WORKSPACE_LISTINGS);
-      const listings: RemoteSession[][] = await Promise.all(
-        batch.map((path: string): Promise<RemoteSession[]> => this.sessionsForWorkspace(path))
-      );
-      listings.forEach((sessions: RemoteSession[]) => {
-        sessions.forEach((item: RemoteSession) => {
-          if (!all.some((existing: RemoteSession) => existing.id === item.id)) {
-            all.push(item);
-          }
-        });
-      });
-    }
-    return all;
+    const listings = await mapInConcurrentBatches(
+      paths,
+      (path: string): Promise<RemoteSession[]> => this.sessionsForWorkspace(path),
+      CONCURRENT_WORKSPACE_LISTINGS
+    );
+    return mergeUniqueSessions(listings);
   }
 
   /** One workspace's sessions, or none when that workspace cannot be read. */

@@ -54,6 +54,8 @@ export interface RemoteSession {
   workspaceName?: string;
   pinned?: boolean;
   titleGenerated?: boolean;
+  /** Stamped by the phone after mapping; the wire payload has no device id. */
+  deviceId?: string;
 }
 
 export interface ChatMessage {

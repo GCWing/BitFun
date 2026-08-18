@@ -2396,6 +2396,29 @@ export default function remoteControllersUnitTest() {
       session('gone-1', 'Archived', 'code', '/workspace/bitfun', 'archived')
     ];
 
+    it('does not invent a workspace group from a name without a path', 0, () => {
+      const named = inputs([]);
+      named.workspaceName = 'BitFun';
+      named.workspacePath = '';
+      named.recentWorkspaces = [];
+      const projection = SessionListProjector.project(named);
+      expect(projection.projects.length).assertEqual(0);
+    });
+
+    it('does not turn a disconnected placeholder into a workspace group', 0, () => {
+      const disconnected = inputs([
+        session('code-1', 'Cached', 'code', '/workspace/bitfun')
+      ]);
+      disconnected.workspaceName = '未连接';
+      disconnected.workspacePath = '';
+      disconnected.recentWorkspaces = [
+        { path: '/workspace/bitfun', name: 'BitFun', lastOpened: '', workspaceKind: 'normal' }
+      ];
+      const projection = SessionListProjector.project(disconnected);
+      expect(projection.projects.map((item: RecentWorkspaceEntry) => item.name).join(','))
+        .assertEqual('BitFun');
+    });
+
     it('splits chats from project sessions in one pass', 0, () => {
       const projection = SessionListProjector.project(inputs(all));
       expect(projection.filtered.length).assertEqual(4);

@@ -1,5 +1,12 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CloudAccountDevice, CloudAccountRequestError, CloudAccountSession, CloudAccountClient } from '../../services/CloudAccountClient';
+import { stampRemoteSessionsDevice } from '../../services/RemoteSessionIdentity';
+import {
+  CloudAccountBinding,
+  CloudAccountClient,
+  CloudAccountDevice,
+  CloudAccountRequestError,
+  CloudAccountSession
+} from '../../services/CloudAccountClient';
 import { CloudAccountSessionStore, PersistedCloudAccountSession } from '../../services/CloudAccountSessionStore';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { Encoding } from '../../services/Encoding';
@@ -40,6 +47,10 @@ export interface CloudAccountSettingsHooks {
   readonly closeConnectSheet: () => void;
   readonly navigateRemoteHome: () => void;
   readonly loadRecentWorkspaces: () => Promise<void>;
+  readonly onAccountDevices: (devices: CloudAccountDevice[]) => void;
+  /** Snapshot the outgoing live device before teardown clears its lists. */
+  readonly onBeforeControlTargetChange: () => void;
+  readonly onControlTargetChanged: () => void;
 }
 
 export interface CloudAccountSettingsDependencies {
@@ -58,6 +69,7 @@ export class SettingsController {
   private readonly cloud?: CloudAccountSettingsDependencies;
   private cloudSession?: CloudAccountSession;
   private cloudRelayUrl: string = '';
+  private accountDevices: CloudAccountDevice[] = [];
 
   constructor(
     store: GeneralChatConfigStore,
@@ -272,10 +284,26 @@ export class SettingsController {
     await this.refreshModelCatalog();
     await cloud.sessionStore.clear();
     await cloud.hooks.clearCachedRemoteData();
+    this.accountDevices = [];
+    cloud.hooks.onAccountDevices([]);
     cloud.remoteState.setAccountUserId('');
     cloud.remoteState.setAccountUsername('');
     cloud.remoteState.clearControlTarget();
     RemoteLogger.info('cloud account logout success');
+  }
+
+  activeCloudAccount(): CloudAccountBinding | undefined {
+    const cloud = this.cloud;
+    const session = this.cloudSession;
+    if (!cloud || !session || this.cloudRelayUrl.length === 0) {
+      return undefined;
+    }
+    const binding: CloudAccountBinding = {
+      client: cloud.client,
+      relayUrl: this.cloudRelayUrl,
+      session
+    };
+    return binding;
   }
 
   async listCloudAccountDevices(): Promise<CloudAccountDevice[]> {
@@ -285,7 +313,10 @@ export class SettingsController {
       return [];
     }
     try {
-      return await cloud.client.listDevices(this.cloudRelayUrl, session, cloud.hooks.deviceId());
+      const devices = await cloud.client.listDevices(this.cloudRelayUrl, session, cloud.hooks.deviceId());
+      this.accountDevices = devices;
+      cloud.hooks.onAccountDevices(devices);
+      return devices;
     } catch (err) {
       if (err instanceof CloudAccountRequestError && err.statusCode === 401) {
         await this.expireCloudAccountSession();
@@ -297,6 +328,14 @@ export class SettingsController {
       }
       throw new Error(err instanceof Error ? err.message : RemoteI18n.t('remote.settings.deviceLoadFailed'));
     }
+  }
+
+  knownAccountDevice(deviceId: string): CloudAccountDevice | undefined {
+    const target = deviceId.trim();
+    if (target.length === 0) {
+      return undefined;
+    }
+    return this.accountDevices.find((item: CloudAccountDevice): boolean => item.deviceId === target);
   }
 
   async getRemotePermissionMode(): Promise<RemotePermissionMode> {
@@ -421,7 +460,11 @@ export class SettingsController {
         initialSync.workspace.gitBranch,
         initialSync.workspace.workspaceKind || 'normal'
       );
-      cloud.remoteState.setSessions(initialSync.sessions, initialSync.hasMoreSessions);
+      cloud.remoteState.setSessions(
+        stampRemoteSessionsDevice(initialSync.sessions, deviceId),
+        initialSync.hasMoreSessions
+      );
+      cloud.hooks.onControlTargetChanged();
       cloud.remoteState.setAuthenticatedUserId(initialSync.authenticatedUserId);
       cloud.remoteState.setConnectionState('connected');
       cloud.remoteState.setStatusText(RemoteI18n.t('connection.connected'));
@@ -563,6 +606,7 @@ export class SettingsController {
     cloud.hooks.invalidatePreview();
     this.cloudSession = undefined;
     this.cloudRelayUrl = '';
+    this.accountDevices = [];
     await cloud.sessionStore.clear();
     cloud.remoteState.setAccountUserId('');
     cloud.remoteState.setAccountUsername('');
@@ -573,6 +617,7 @@ export class SettingsController {
 
   private prepareAccountDeviceConnection(): void {
     const cloud = this.requireCloud();
+    cloud.hooks.onBeforeControlTargetChange();
     cloud.hooks.invalidatePreview();
     cloud.hooks.invalidateRemoteActivity();
     cloud.hooks.invalidateRemoteConnection();
