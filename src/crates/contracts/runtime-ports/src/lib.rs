@@ -15,12 +15,19 @@ pub use bitfun_core_types::{
 
 #[cfg(feature = "workspace-ports")]
 mod local_workspace_snapshot;
+mod agentic_decision_port;
 #[cfg(feature = "permission")]
 mod permission;
 #[cfg(feature = "plugin-runtime")]
 mod plugin;
 #[cfg(feature = "script-tool-runtime")]
 mod script_tool;
+pub use agentic_decision_port::{
+    classify_agentic_decision_route, AgenticDecisionIntent, AgenticDecisionLineage,
+    AgenticDecisionPolicyResult, AgenticDecisionPortProjection, AgenticDecisionPortRequest,
+    AgenticDecisionRouteClass, AgenticDecisionShadowStatus, AgenticDecisionSurface,
+    AgenticDecisionTargetKind, AGENTIC_DECISION_PORT_ADAPTER_VERSION,
+};
 #[cfg(feature = "permission")]
 pub use bitfun_product_domains::tool_permissions::{
     deserialize_optional_permission_mode, resolve_child_permission_policy, resolve_permission_mode,

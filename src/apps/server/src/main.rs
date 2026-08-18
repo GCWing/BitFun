@@ -159,10 +159,10 @@ async fn main() -> Result<()> {
         })
         .collect::<Result<Vec<_>>>()?;
 
-    // This is a narrow controller/observer capability. It deliberately does
-    // not initialize the Server Host's dormant Agent Runtime: authoritative
-    // sessions and execution stay inside the target-side `bitfun dispatch`
-    // worker.
+    // This dispatch state is a narrow controller/observer capability. It does
+    // not create a second Agent Runtime: browser WebSocket sessions use the
+    // shared in-process runtime initialized above, while detached dispatch
+    // execution stays inside the target-side `bitfun dispatch` worker.
     let path_manager = Arc::new(bitfun_core::infrastructure::PathManager::new()?);
     let ssh_data_dir = dirs::data_local_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not resolve the local data directory"))?
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn agent_bootstrap_reuses_core_ownership_without_activating_the_http_shell() {
+    fn agent_bootstrap_reuses_core_ownership_without_creating_a_parallel_runtime() {
         let bootstrap = include_str!("bootstrap.rs");
         assert!(bootstrap.contains("CoreRuntimeOwnership::embedded"));
         let coordinator = bootstrap
@@ -292,12 +292,16 @@ mod tests {
             .next()
             .expect("Server production entrypoint");
         assert!(
-            !main_source.contains("bootstrap::initialize"),
-            "the current read-only HTTP shell must not silently start an Agent Runtime"
+            main_source.contains("let server_state = bootstrap::initialize("),
+            "the Server Host must initialize the shared Agent Runtime used by WebSocket app-server sessions"
         );
         assert!(
-            main_source.contains("DispatchHostState"),
-            "the lightweight Server Host should expose dispatch without booting an Agent Runtime"
+            main_source.contains("let bitfun_app_server = app_server::build("),
+            "the Server Host must build the in-process app-server from the initialized runtime"
+        );
+        assert!(
+            main_source.contains(".layer(axum::Extension(bitfun_app_server))"),
+            "the Server Host must expose the initialized app-server to WebSocket routes"
         );
     }
 }
