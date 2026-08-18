@@ -16,9 +16,11 @@ const mocks = vi.hoisted(() => ({
   scrollToOffset: vi.fn(),
   cancelAim: vi.fn(),
   setVisibleTurnInfo: vi.fn(),
+  handleViewportResize: vi.fn(),
   enterFollowOutput: vi.fn(),
   exitFollowOutput: vi.fn(),
   handleUserScrollIntent: vi.fn(),
+  handleFollowScroll: vi.fn(),
   /**
    * The two answers to "does follow own the viewport", which the real hook
    * gives at two different moments: `isFollowingOutput` is a render value, and
@@ -50,6 +52,7 @@ const BOTTOM_INSET = 168;
  * supplied: the scroller's own box, and where a user message sits inside it.
  */
 function fakeLayout(options: {
+  clientWidth?: number;
   clientHeight: number;
   /** A function where the range has to grow, as it does when history arrives. */
   scrollHeight: number | (() => number);
@@ -58,11 +61,14 @@ function fakeLayout(options: {
   const readScrollHeight = typeof options.scrollHeight === 'function'
     ? options.scrollHeight
     : () => options.scrollHeight as number;
-  const originals = (['clientHeight', 'scrollHeight'] as const).map(name => {
+  const originals = (['clientWidth', 'clientHeight', 'scrollHeight'] as const).map(name => {
     const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, name);
     Object.defineProperty(HTMLElement.prototype, name, {
       configurable: true,
-      get: () => (name === 'clientHeight' ? options.clientHeight : readScrollHeight()),
+      get: () => {
+        if (name === 'clientWidth') return options.clientWidth ?? 1000;
+        return name === 'clientHeight' ? options.clientHeight : readScrollHeight();
+      },
     });
     return [name, descriptor] as const;
   });
@@ -183,8 +189,8 @@ vi.mock('./useFlowChatFollowOutput', () => ({
         mocks.handleUserScrollIntent();
       },
       handleTurnsRolledBack: vi.fn(),
-      handleScroll: vi.fn(),
-      handleViewportResize: vi.fn(),
+      handleScroll: mocks.handleFollowScroll,
+      handleViewportResize: mocks.handleViewportResize,
       // Follow owns nothing here, which is what the real hook returns when
       // `isFollowingOutput` is false.
       getFollowTargetScrollTop: () => null,
@@ -231,6 +237,31 @@ describe('VirtualMessageList natural scroll contract', () => {
   let root: Root;
   let animationFrames: Map<number, FrameRequestCallback>;
   let nextAnimationFrameId: number;
+  let resizeObservers: TestResizeObserver[];
+
+  class TestResizeObserver {
+    readonly targets = new Set<Element>();
+
+    constructor(private readonly callback: ResizeObserverCallback) {
+      resizeObservers.push(this);
+    }
+
+    observe(target: Element) {
+      this.targets.add(target);
+    }
+
+    unobserve(target: Element) {
+      this.targets.delete(target);
+    }
+
+    disconnect() {
+      this.targets.clear();
+    }
+
+    notify() {
+      this.callback([], this as unknown as ResizeObserver);
+    }
+  }
 
   /**
    * Run the opening reveal to its end, which is what mounting a transcript
@@ -264,6 +295,7 @@ describe('VirtualMessageList natural scroll contract', () => {
     root = createRoot(container);
     animationFrames = new Map();
     nextAnimationFrameId = 0;
+    resizeObservers = [];
     mocks.items = [
       userMessage('turn-1', 'message-1', 'First'),
       userMessage('turn-2', 'message-2', 'Second'),
@@ -277,17 +309,16 @@ describe('VirtualMessageList natural scroll contract', () => {
     mocks.scrollItemIntoView.mockReset();
     mocks.scrollToOffset.mockReset();
     mocks.cancelAim.mockReset();
+    mocks.handleViewportResize.mockReset();
     mocks.enterFollowOutput.mockReset();
     mocks.exitFollowOutput.mockReset();
     mocks.handleUserScrollIntent.mockReset();
+    mocks.handleFollowScroll.mockReset();
     mocks.scheduleFollowToLatest.mockReset();
     mocks.viewportOwner = null;
     mocks.setVisibleTurnInfo.mockReset();
     mocks.renderItemMetadata = true;
-    vi.stubGlobal('ResizeObserver', class {
-      observe() {}
-      disconnect() {}
-    });
+    vi.stubGlobal('ResizeObserver', TestResizeObserver);
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       nextAnimationFrameId += 1;
       animationFrames.set(nextAnimationFrameId, callback);
@@ -315,10 +346,12 @@ describe('VirtualMessageList natural scroll contract', () => {
     // The session opens on the end of *real content*, which is above this
     // reservation. Nothing aligns to the last item any more: the end of the
     // scroll range is reserved blank, and opening there is opening on nothing.
-    const originalClientHeight = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'clientHeight',
-    );
+    const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
+    const originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 1000,
+    });
     Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
       configurable: true,
       get: () => 600,
@@ -341,6 +374,69 @@ describe('VirtualMessageList natural scroll contract', () => {
       } else {
         delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientHeight;
       }
+      if (originalClientWidth) {
+        Object.defineProperty(HTMLElement.prototype, 'clientWidth', originalClientWidth);
+      } else {
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth;
+      }
+    }
+  });
+
+  it('suspends viewport writers until the frame after a minimized zero-size sample resumes', () => {
+    const layout = {
+      clientWidth: 1000,
+      clientHeight: 600,
+      scrollHeight: 3000,
+      turnTopFromScrollerTop: 500,
+    };
+    const restoreLayout = fakeLayout(layout);
+    try {
+      act(() => root.render(<VirtualMessageList />));
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      const observer = resizeObservers.find(candidate => candidate.targets.has(scroller));
+      expect(observer).toBeDefined();
+      if (!observer) throw new Error('Expected a ResizeObserver for the FlowChat scroller');
+      const spacer = container.querySelector<HTMLElement>('.message-list-tail-spacer')!;
+      const spacerBeforeMinimize = spacer.style.height;
+
+      mocks.handleViewportResize.mockClear();
+      mocks.scheduleFollowToLatest.mockClear();
+      mocks.setVisibleTurnInfo.mockClear();
+      animationFrames.clear();
+
+      layout.clientWidth = 390;
+      layout.clientHeight = 0;
+      act(() => observer.notify());
+
+      expect(mocks.handleViewportResize).not.toHaveBeenCalled();
+      expect(mocks.scheduleFollowToLatest).not.toHaveBeenCalled();
+      expect(mocks.setVisibleTurnInfo).not.toHaveBeenCalled();
+      expect(spacer.style.height).toBe(spacerBeforeMinimize);
+      expect(animationFrames.size).toBe(0);
+
+      act(() => scroller.dispatchEvent(new Event('scroll')));
+      expect(mocks.handleFollowScroll).not.toHaveBeenCalled();
+
+      layout.clientWidth = 1000;
+      layout.clientHeight = 700;
+      act(() => observer.notify());
+
+      // The first positive rectangle is still part of host recovery. Treating
+      // it as a normal resize replays zero-height scroll events as a tail
+      // follow or measurement correction before the old reading position can
+      // be restored.
+      expect(mocks.handleViewportResize).not.toHaveBeenCalled();
+      expect(mocks.scheduleFollowToLatest).not.toHaveBeenCalled();
+
+      const [resume] = [...animationFrames.values()];
+      expect(resume).toBeDefined();
+      if (!resume) throw new Error('Expected a deferred viewport recovery frame');
+      act(() => resume(16));
+
+      expect(mocks.handleViewportResize).not.toHaveBeenCalled();
+      expect(mocks.scheduleFollowToLatest).toHaveBeenCalledTimes(1);
+    } finally {
+      restoreLayout();
     }
   });
 

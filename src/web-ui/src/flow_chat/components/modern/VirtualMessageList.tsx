@@ -56,7 +56,10 @@ import {
   tailSpacerPxForViewport,
   turnTopAlignmentEntersReservedBlank,
 } from './flowChatTailFollow';
-import { useFlowChatVirtualizer } from './useFlowChatVirtualizer';
+import {
+  isUsableFlowChatViewportRect,
+  useFlowChatVirtualizer,
+} from './useFlowChatVirtualizer';
 import { useFlowChatViewportOwner } from './useFlowChatViewportOwner';
 import {
   ONE_SHOT_NAVIGATION_HOLD_MS,
@@ -411,7 +414,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const [viewportHeightPx, setViewportHeightPx] = useState(0);
   const [viewportWidthPx, setViewportWidthPx] = useState(0);
   /** Last scroller box the resize observer saw, to tell it apart from a content change. */
-  const observedViewportBoxRef = useRef({ width: 0, height: 0 });
+  const observedViewportBoxRef = useRef<{ width: number; height: number } | null>(null);
+  /** Native minimization withdraws the scroller without unmounting the session. */
+  const isViewportSuspendedRef = useRef(false);
+  const suspendedViewportScrollTopRef = useRef<number | null>(null);
+  const viewportResumeFrameRef = useRef<number | null>(null);
   /** Remaining resize callbacks over which to keep a resting viewport at the end. */
   const tailRealignCallbacksRef = useRef(0);
   /** Synchronous mirror of `isAtBottom`, read by a resize for the pre-resize answer. */
@@ -495,6 +502,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         .map(([groupId, expanded]) => `${groupId}:${expanded ? 1 : 0}`)
         .join(','),
     ].join('|'),
+    isViewportSuspended: () => isViewportSuspendedRef.current,
     scrollPaddingStartPx: FLOWCHAT_TURN_TOP_GAP_PX,
     writeViewport: viewportOwner.write,
     shiftViewport: viewportOwner.shift,
@@ -643,6 +651,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     virtualItemCount: virtualItems.length,
     isStreaming: isStreamingOutput,
     isViewportActive,
+    isViewportSuspended: () => isViewportSuspendedRef.current,
     scrollerRef: scrollerElementRef,
     getTailSpacerPx,
     scrollToContentEnd,
@@ -701,7 +710,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
    * follow-output — see `flowChatViewportOwnership.ts`.
    */
   const isViewportOwnedElsewhere = useCallback(() => (
-    !viewportOwner.canShift() || isOpeningViewport()
+    isViewportSuspendedRef.current || !viewportOwner.canShift() || isOpeningViewport()
   ), [isOpeningViewport, viewportOwner]);
 
   const shiftAnchorCorrection = useCallback((byPx: number) => {
@@ -755,6 +764,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     if (!scroller) return;
     const previousScrollHeightPx = previousScrollHeightRef.current;
     previousScrollHeightRef.current = scroller.scrollHeight;
+    if (isViewportSuspendedRef.current) return;
     if (previousFirstKey === null || previousFirstKey === nextFirstKey) return;
     // Absent means the head was trimmed rather than extended, and there is no
     // prepended height to account for.
@@ -1154,6 +1164,72 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     updateIsAtBottom();
   }, [isFollowingOutput, updateIsAtBottom]);
 
+  const resumeSuspendedViewport = useCallback(() => {
+    viewportResumeFrameRef.current = null;
+    if (!isViewportSuspendedRef.current) return;
+
+    isViewportSuspendedRef.current = false;
+    const suspendedScrollTopPx = suspendedViewportScrollTopRef.current;
+    suspendedViewportScrollTopRef.current = null;
+    const scrollTopBeforeRecoveryPx = scrollerElementRef.current?.scrollTop ?? null;
+    const wasFollowingOutput = isFollowingOutputNow();
+    let restoredAnchor = false;
+    let restoredScrollTopFallback = false;
+
+    if (!wasFollowingOutput) {
+      restoredAnchor = viewportAnchor.restoreAnchorAfterViewportResume();
+      if (!restoredAnchor && suspendedScrollTopPx !== null) {
+        viewportOwner.write({
+          owner: 'layout-correction',
+          topPx: suspendedScrollTopPx,
+        });
+        restoredScrollTopFallback = true;
+      }
+      viewportAnchor.openSettleWindow();
+    }
+
+    traceViewport({
+      location: 'viewport.hostResumeRecovered',
+      message: 'native host viewport recovery completed',
+      data: () => {
+        const scroller = scrollerElementRef.current;
+        return {
+          wasFollowingOutput,
+          restoredAnchor,
+          restoredScrollTopFallback,
+          suspendedScrollTopPx: suspendedScrollTopPx === null
+            ? null
+            : roundViewportPx(suspendedScrollTopPx),
+          scrollTopBeforeRecoveryPx: scrollTopBeforeRecoveryPx === null
+            ? null
+            : roundViewportPx(scrollTopBeforeRecoveryPx),
+          scrollTopAfterRecoveryPx: scroller ? roundViewportPx(scroller.scrollTop) : null,
+          viewportBox: scroller
+            ? { width: scroller.clientWidth, height: scroller.clientHeight }
+            : null,
+        };
+      },
+    });
+
+    scheduleFollowToLatest();
+    scheduleVisibleTurnInfoUpdate();
+    updateIsAtBottom();
+  }, [
+    isFollowingOutputNow,
+    scheduleFollowToLatest,
+    scheduleVisibleTurnInfoUpdate,
+    updateIsAtBottom,
+    viewportAnchor,
+    viewportOwner,
+  ]);
+
+  useEffect(() => () => {
+    if (viewportResumeFrameRef.current !== null) {
+      cancelAnimationFrame(viewportResumeFrameRef.current);
+      viewportResumeFrameRef.current = null;
+    }
+  }, []);
+
   /*
    * A rollback removed Turns from the session, so the transcript ends somewhere
    * it did not a moment ago — and the Turn follow-output was pinning may be one
@@ -1176,6 +1252,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   useEffect(() => {
     if (!scrollerElement) return;
     const handleNativeScroll = () => {
+      if (isViewportSuspendedRef.current) return;
       /*
        * A scroll under a scrollbar press is the one case where a plain scroll
        * event does carry intent — the press is what qualifies it. Left
@@ -1243,6 +1320,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollerElement,
     updateIsAtBottom,
     viewportAnchor,
+    viewportOwner,
   ]);
 
   useEffect(() => {
@@ -1253,6 +1331,64 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         height: scrollerElement.clientHeight,
       };
       /*
+       * A minimized WebView2 window reports a zero-height scroller while the
+       * document remains visible. That is suspension, not a layout request:
+       * accepting it would collapse the tail spacer, empty the virtual window,
+       * clear the visible Turn and run a full-height scroll correction. Keep
+       * every downstream owner on the last usable box until layout returns.
+       */
+      if (!isUsableFlowChatViewportRect(nextViewportBox)) {
+        if (!isViewportSuspendedRef.current) {
+          isViewportSuspendedRef.current = true;
+          suspendedViewportScrollTopRef.current = scrollerElement.scrollTop;
+          tailRealignCallbacksRef.current = 0;
+          traceViewport({
+            location: 'viewport.hostSuspended',
+            message: 'native host withdrew the viewport from layout',
+            data: () => ({
+              receivedViewportBox: nextViewportBox,
+              lastUsableViewportBox: observedViewportBoxRef.current,
+              scrollTopPx: roundViewportPx(scrollerElement.scrollTop),
+              scrollHeightPx: roundViewportPx(scrollerElement.scrollHeight),
+              renderedRowCount: scrollerElement.querySelectorAll('[data-virtual-index]').length,
+              tailSpacerPx: roundViewportPx(tailSpacerPxRef.current),
+              isAtTail: isAtTailRef.current,
+              viewportOwner: viewportOwner.currentOwner(),
+            }),
+          });
+        }
+        if (viewportResumeFrameRef.current !== null) {
+          cancelAnimationFrame(viewportResumeFrameRef.current);
+          viewportResumeFrameRef.current = null;
+        }
+        return;
+      }
+      const isResumingSuspendedViewport = isViewportSuspendedRef.current;
+      if (isResumingSuspendedViewport) {
+        traceViewport({
+          location: 'viewport.hostResumeDetected',
+          message: 'native host returned viewport geometry',
+          data: () => ({
+            recoveredViewportBox: nextViewportBox,
+            lastUsableViewportBox: observedViewportBoxRef.current,
+            suspendedScrollTopPx: suspendedViewportScrollTopRef.current === null
+              ? null
+              : roundViewportPx(suspendedViewportScrollTopRef.current),
+            scrollTopPx: roundViewportPx(scrollerElement.scrollTop),
+            scrollHeightPx: roundViewportPx(scrollerElement.scrollHeight),
+            renderedRowCount: scrollerElement.querySelectorAll('[data-virtual-index]').length,
+            tailSpacerPx: roundViewportPx(tailSpacerPxRef.current),
+          }),
+        });
+        observedViewportBoxRef.current = nextViewportBox;
+        setViewportHeightPx(nextViewportBox.height);
+        setViewportWidthPx(nextViewportBox.width);
+        if (viewportResumeFrameRef.current === null) {
+          viewportResumeFrameRef.current = requestAnimationFrame(resumeSuspendedViewport);
+        }
+        return;
+      }
+      /*
        * This observer watches the content too. Content growth moves the follow
        * target away from a resting viewport and can never strand it, so only a
        * change to the scroller's own box opens the re-alignment window — a
@@ -1260,10 +1396,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
        * end directly, and both keep settling for a few callbacks afterwards.
        */
       const previousViewportBox = observedViewportBoxRef.current;
-      const viewportBoxChanged = nextViewportBox.width !== previousViewportBox.width
-        || nextViewportBox.height !== previousViewportBox.height;
+      const viewportBoxChanged = previousViewportBox !== null && (
+        nextViewportBox.width !== previousViewportBox.width
+        || nextViewportBox.height !== previousViewportBox.height
+      );
+      observedViewportBoxRef.current = nextViewportBox;
       if (viewportBoxChanged) {
-        observedViewportBoxRef.current = nextViewportBox;
         tailRealignCallbacksRef.current = TAIL_REALIGN_RESIZE_CALLBACKS;
       }
       setViewportHeightPx(nextViewportBox.height);
@@ -1314,11 +1452,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     return () => observer.disconnect();
   }, [
     handleViewportResize,
+    resumeSuspendedViewport,
     scheduleFollowToLatest,
     scheduleVisibleTurnInfoUpdate,
     scrollerElement,
     updateIsAtBottom,
     viewportAnchor,
+    viewportOwner,
   ]);
 
   /**
@@ -1965,12 +2105,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       if (!scroller.hasAttribute('tabindex')) {
         scroller.tabIndex = -1;
       }
-      setViewportHeightPx(scroller.clientHeight);
-      // Seed the box so the observer's first callback is not read as a resize.
-      observedViewportBoxRef.current = {
+      const initialViewportBox = {
         width: scroller.clientWidth,
         height: scroller.clientHeight,
       };
+      if (isUsableFlowChatViewportRect(initialViewportBox)) {
+        setViewportHeightPx(initialViewportBox.height);
+        setViewportWidthPx(initialViewportBox.width);
+        // Seed the box so the observer's first callback is not read as a resize.
+        observedViewportBoxRef.current = initialViewportBox;
+      }
     }
   }, []);
 
