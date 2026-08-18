@@ -1,6 +1,7 @@
 import { relationalStore } from '@kit.ArkData';
 import { ChatMessage, RemoteSession } from '../../model/RemoteModels';
 import { Encoding } from '../Encoding';
+import { OhosError } from '../OhosError';
 import { GeneralChatLocalStore } from './GeneralChatPort';
 
 const STORE_CONFIG: relationalStore.StoreConfig = {
@@ -22,123 +23,167 @@ export class GeneralChatLocalRdbStore implements GeneralChatLocalStore {
   private store?: relationalStore.RdbStore;
 
   async init(context: Context): Promise<void> {
-    this.store = await relationalStore.getRdbStore(context, STORE_CONFIG);
-    await this.store.executeSql(CREATE_SESSIONS_SQL);
-    await this.store.executeSql(CREATE_MESSAGES_SQL);
-    await this.store.executeSql(CREATE_DRAFTS_SQL);
-    await this.store.executeSql(
-      'CREATE INDEX IF NOT EXISTS idx_general_chat_messages_session ' +
-      'ON general_chat_messages(session_id, sort_order)'
-    );
+    try {
+      this.store = await relationalStore.getRdbStore(context, STORE_CONFIG);
+      await this.store.executeSql(CREATE_SESSIONS_SQL);
+      await this.store.executeSql(CREATE_MESSAGES_SQL);
+      await this.store.executeSql(CREATE_DRAFTS_SQL);
+      await this.store.executeSql(
+        'CREATE INDEX IF NOT EXISTS idx_general_chat_messages_session ' +
+        'ON general_chat_messages(session_id, sort_order)'
+      );
+    } catch (err) {
+      throw OhosError.wrap('general chat store init', err);
+    }
   }
 
   async listSessions(): Promise<RemoteSession[]> {
-    const store = this.requireStore();
-    const result = await store.querySql(
-      'SELECT payload FROM general_chat_sessions ORDER BY updated_at DESC'
-    );
-    const sessions: RemoteSession[] = [];
     try {
-      const payloadColumn = result.getColumnIndex('payload');
-      while (result.goToNextRow()) {
-        sessions.push(Encoding.parseJsonObject<RemoteSession>(result.getString(payloadColumn)));
+      const store = this.requireStore();
+      const result = await store.querySql(
+        'SELECT payload FROM general_chat_sessions ORDER BY updated_at DESC'
+      );
+      const sessions: RemoteSession[] = [];
+      try {
+        const payloadColumn = result.getColumnIndex('payload');
+        while (result.goToNextRow()) {
+          sessions.push(Encoding.parseJsonObject<RemoteSession>(result.getString(payloadColumn)));
+        }
+      } finally {
+        GeneralChatLocalRdbStore.closeResult(result);
       }
-    } finally {
-      result.close();
+      return sessions;
+    } catch (err) {
+      throw OhosError.wrap('general chat list sessions', err);
     }
-    return sessions;
   }
 
   async loadMessages(sessionId: string): Promise<ChatMessage[]> {
-    const store = this.requireStore();
-    const result = await store.querySql(
-      'SELECT payload FROM general_chat_messages WHERE session_id = ? ORDER BY sort_order ASC',
-      [sessionId]
-    );
-    const messages: ChatMessage[] = [];
     try {
-      const payloadColumn = result.getColumnIndex('payload');
-      while (result.goToNextRow()) {
-        messages.push(Encoding.parseJsonObject<ChatMessage>(result.getString(payloadColumn)));
+      const store = this.requireStore();
+      const result = await store.querySql(
+        'SELECT payload FROM general_chat_messages WHERE session_id = ? ORDER BY sort_order ASC',
+        [sessionId]
+      );
+      const messages: ChatMessage[] = [];
+      try {
+        const payloadColumn = result.getColumnIndex('payload');
+        while (result.goToNextRow()) {
+          messages.push(Encoding.parseJsonObject<ChatMessage>(result.getString(payloadColumn)));
+        }
+      } finally {
+        GeneralChatLocalRdbStore.closeResult(result);
       }
-    } finally {
-      result.close();
+      return messages;
+    } catch (err) {
+      throw OhosError.wrap('general chat load messages', err);
     }
-    return messages;
   }
 
   async upsertSession(session: RemoteSession): Promise<void> {
-    const values: relationalStore.ValuesBucket = {
-      id: session.id,
-      updated_at: session.updatedAt,
-      payload: JSON.stringify(session)
-    };
-    await this.requireStore().insert(
-      'general_chat_sessions',
-      values,
-      relationalStore.ConflictResolution.ON_CONFLICT_REPLACE
-    );
-  }
-
-  async replaceMessages(sessionId: string, messages: ChatMessage[]): Promise<void> {
-    const store = this.requireStore();
-    await store.executeSql('DELETE FROM general_chat_messages WHERE session_id = ?', [sessionId]);
-    for (let index = 0; index < messages.length; index++) {
-      const message = messages[index];
+    try {
       const values: relationalStore.ValuesBucket = {
-        id: message.id,
-        session_id: sessionId,
-        sort_order: index,
-        payload: JSON.stringify(message)
+        id: session.id,
+        updated_at: session.updatedAt,
+        payload: JSON.stringify(session)
       };
-      await store.insert(
-        'general_chat_messages',
+      await this.requireStore().insert(
+        'general_chat_sessions',
         values,
         relationalStore.ConflictResolution.ON_CONFLICT_REPLACE
       );
+    } catch (err) {
+      throw OhosError.wrap('general chat upsert session', err);
+    }
+  }
+
+  async replaceMessages(sessionId: string, messages: ChatMessage[]): Promise<void> {
+    try {
+      const store = this.requireStore();
+      await store.executeSql('DELETE FROM general_chat_messages WHERE session_id = ?', [sessionId]);
+      for (let index = 0; index < messages.length; index++) {
+        const message = messages[index];
+        const values: relationalStore.ValuesBucket = {
+          id: message.id,
+          session_id: sessionId,
+          sort_order: index,
+          payload: JSON.stringify(message)
+        };
+        await store.insert(
+          'general_chat_messages',
+          values,
+          relationalStore.ConflictResolution.ON_CONFLICT_REPLACE
+        );
+      }
+    } catch (err) {
+      throw OhosError.wrap('general chat replace messages', err);
     }
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    const store = this.requireStore();
-    await store.executeSql('DELETE FROM general_chat_messages WHERE session_id = ?', [sessionId]);
-    await store.executeSql('DELETE FROM general_chat_drafts WHERE draft_id = ?', [sessionId]);
-    await store.executeSql('DELETE FROM general_chat_sessions WHERE id = ?', [sessionId]);
+    try {
+      const store = this.requireStore();
+      await store.executeSql('DELETE FROM general_chat_messages WHERE session_id = ?', [sessionId]);
+      await store.executeSql('DELETE FROM general_chat_drafts WHERE draft_id = ?', [sessionId]);
+      await store.executeSql('DELETE FROM general_chat_sessions WHERE id = ?', [sessionId]);
+    } catch (err) {
+      throw OhosError.wrap('general chat delete session', err);
+    }
   }
 
   async loadDraft(draftId: string): Promise<string> {
-    const result = await this.requireStore().querySql(
-      'SELECT text FROM general_chat_drafts WHERE draft_id = ?',
-      [draftId]
-    );
     try {
-      if (!result.goToNextRow()) {
-        return '';
+      const result = await this.requireStore().querySql(
+        'SELECT text FROM general_chat_drafts WHERE draft_id = ?',
+        [draftId]
+      );
+      try {
+        if (!result.goToNextRow()) {
+          return '';
+        }
+        return result.getString(result.getColumnIndex('text'));
+      } finally {
+        GeneralChatLocalRdbStore.closeResult(result);
       }
-      return result.getString(result.getColumnIndex('text'));
-    } finally {
-      result.close();
+    } catch (err) {
+      throw OhosError.wrap('general chat load draft', err);
     }
   }
 
   async saveDraft(draftId: string, text: string): Promise<void> {
-    const values: relationalStore.ValuesBucket = {
-      draft_id: draftId,
-      text,
-      updated_at: new Date().toISOString()
-    };
-    await this.requireStore().insert(
-      'general_chat_drafts',
-      values,
-      relationalStore.ConflictResolution.ON_CONFLICT_REPLACE
-    );
+    try {
+      const values: relationalStore.ValuesBucket = {
+        draft_id: draftId,
+        text,
+        updated_at: new Date().toISOString()
+      };
+      await this.requireStore().insert(
+        'general_chat_drafts',
+        values,
+        relationalStore.ConflictResolution.ON_CONFLICT_REPLACE
+      );
+    } catch (err) {
+      throw OhosError.wrap('general chat save draft', err);
+    }
   }
 
   async deleteDraft(draftId: string): Promise<void> {
-    await this.requireStore().executeSql(
-      'DELETE FROM general_chat_drafts WHERE draft_id = ?',
-      [draftId]
-    );
+    try {
+      await this.requireStore().executeSql(
+        'DELETE FROM general_chat_drafts WHERE draft_id = ?',
+        [draftId]
+      );
+    } catch (err) {
+      throw OhosError.wrap('general chat delete draft', err);
+    }
+  }
+
+  private static closeResult(result: relationalStore.ResultSet): void {
+    try {
+      result.close();
+    } catch (err) {
+      throw OhosError.wrap('general chat close cursor', err);
+    }
   }
 
   private requireStore(): relationalStore.RdbStore {

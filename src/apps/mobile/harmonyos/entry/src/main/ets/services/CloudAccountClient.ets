@@ -2,6 +2,7 @@ import { http } from '@kit.NetworkKit';
 import { CloudAccountCrypto, CloudAccountKdfParams } from './CloudAccountCrypto';
 import { Encoding } from './Encoding';
 import { HarmonyRemoteCryptoCipher } from './RemoteCrypto';
+import { OhosError } from './OhosError';
 import { RemoteLogger } from './RemoteLogger';
 import { RemoteI18n } from '../i18n/RemoteI18n';
 import { CommandStatusResponse, EncryptedPayload, RemoteCommand } from '../model/RemoteModels';
@@ -377,6 +378,8 @@ export class CloudAccountClient {
         throw new CloudAccountRequestError(message, response.responseCode);
       }
       return JSON.parse(text) as T;
+    } catch (err) {
+      throw OhosError.wrap('relay request', err);
     } finally {
       request.destroy();
     }

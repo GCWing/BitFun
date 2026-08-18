@@ -1,5 +1,6 @@
 import { preferences } from '@kit.ArkData';
 import { Encoding } from './Encoding';
+import { OhosError } from './OhosError';
 import { RemoteModelPreferenceStore } from './RemoteModelController';
 
 const STORE_NAME = 'bitfun_remote_identity';
@@ -22,7 +23,11 @@ export class MobileIdentityStore implements RemoteModelPreferenceStore {
   private preferences?: preferences.Preferences;
 
   async init(context: Context): Promise<MobileIdentitySnapshot> {
-    this.preferences = await preferences.getPreferences(context, STORE_NAME);
+    try {
+      this.preferences = await preferences.getPreferences(context, STORE_NAME);
+    } catch (err) {
+      throw OhosError.wrap('mobile identity init', err);
+    }
     const existingInstallId = await this.getString(INSTALL_ID_KEY);
     const installId = existingInstallId || Encoding.randomId('harmony');
     if (!existingInstallId) {
@@ -70,31 +75,47 @@ export class MobileIdentityStore implements RemoteModelPreferenceStore {
     if (!this.preferences) {
       return '';
     }
-    const value = await this.preferences.get(key, '');
-    return typeof value === 'string' ? value : '';
+    try {
+      const value = await this.preferences.get(key, '');
+      return typeof value === 'string' ? value : '';
+    } catch (err) {
+      throw OhosError.wrap('mobile identity get string', err);
+    }
   }
 
   private async getNumber(key: string): Promise<number> {
     if (!this.preferences) {
       return 0;
     }
-    const value = await this.preferences.get(key, 0);
-    return typeof value === 'number' ? value : Number(value || 0);
+    try {
+      const value = await this.preferences.get(key, 0);
+      return typeof value === 'number' ? value : Number(value || 0);
+    } catch (err) {
+      throw OhosError.wrap('mobile identity get number', err);
+    }
   }
 
   private async putString(key: string, value: string): Promise<void> {
     if (!this.preferences) {
       return;
     }
-    await this.preferences.put(key, value);
-    await this.preferences.flush();
+    try {
+      await this.preferences.put(key, value);
+      await this.preferences.flush();
+    } catch (err) {
+      throw OhosError.wrap('mobile identity put string', err);
+    }
   }
 
   private async putNumber(key: string, value: number): Promise<void> {
     if (!this.preferences) {
       return;
     }
-    await this.preferences.put(key, value);
-    await this.preferences.flush();
+    try {
+      await this.preferences.put(key, value);
+      await this.preferences.flush();
+    } catch (err) {
+      throw OhosError.wrap('mobile identity put number', err);
+    }
   }
 }
