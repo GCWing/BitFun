@@ -53,6 +53,13 @@ vi.mock('@/component-library', () => ({
     children: React.ReactNode;
     isOpen: boolean;
   }) => (isOpen ? <div role="dialog" aria-modal="true" aria-label={ariaLabel}>{children}</div> : null),
+  PopupCloseButton: ({
+    'aria-label': ariaLabel,
+    onClick,
+  }: {
+    'aria-label': string;
+    onClick?: () => void;
+  }) => <button type="button" aria-label={ariaLabel} onClick={onClick} />,
 }));
 
 let JSDOMCtor: (new (

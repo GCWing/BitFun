@@ -11,7 +11,7 @@ export const buttonAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     {
       id: 'variant',
       attribute: 'data-bf-variant',
-      values: ['primary', 'secondary', 'ghost', 'dashed', 'danger', 'success', 'accent', 'ai'],
+      values: ['primary', 'inverse', 'secondary', 'ghost', 'dashed', 'danger', 'success', 'accent', 'ai'],
     },
     {
       id: 'size',

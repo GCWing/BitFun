@@ -1,6 +1,7 @@
 {
   "title": "任務看板",
   "header": {
+    "subtitle": "規劃、管理與執行你的待辦任務",
     "summary": "共 {{total}} 項 · {{dueSoon}} 項將在 24 小時內執行"
   },
   "actions": {
@@ -11,9 +12,16 @@
     "toggleEnabled": "切換啟用狀態"
   },
   "list": {
-    "title": "24 小時內",
+    "title": "待執行任務",
+    "countTitle": "待執行任務（{{total}}）",
     "hint": "一天內即將執行的任務，依時間先後排列。",
-    "empty": "未來 24 小時內沒有待執行的任務。"
+    "empty": "目前還沒有待執行任務。"
+  },
+  "overview": {
+    "title": "計畫概覽",
+    "unit": "項",
+    "total": "待執行任務",
+    "dueSoon": "未來 24 小時待執行"
   },
   "calendar": {
     "title": "更晚",
@@ -69,9 +77,27 @@
     "title": "沒有後續執行（{{total}}）"
   },
   "editor": {
-    "createTitle": "新增待辦",
+    "createTitle": "建立待辦",
     "editTitle": "編輯待辦",
+    "createDescription": "建立一項待辦任務，BitFun 將在排定時間自動執行。",
+    "editDescription": "調整任務資訊與 BitFun 的執行方式。",
     "noWorkspace": "請先開啟一個工作區：定時執行需要有執行的位置。",
+    "sections": {
+      "information": "任務資訊",
+      "prompt": "提示詞"
+    },
+    "enabled": {
+      "title": "啟用任務",
+      "description": "開啟後，任務將在排定時間自動執行。"
+    },
+    "smartExecution": {
+      "title": "智慧執行",
+      "description": "BitFun 會在排定時間使用所選 Agent 與工作區內容執行任務。"
+    },
+    "advanced": {
+      "title": "進階設定（選填）",
+      "empty": "單次任務目前不需要額外設定。"
+    },
     "fields": {
       "name": "名稱",
       "agentType": "Agent 類型",

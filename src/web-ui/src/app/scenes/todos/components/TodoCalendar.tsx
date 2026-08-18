@@ -8,8 +8,6 @@
  */
 
 import React, { useMemo } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { IconButton, Button } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import {
   buildMonthGrid,
@@ -27,7 +25,6 @@ export interface TodoCalendarProps {
   monthAnchorMs: number;
   selectedDayKey: string | null;
   nowMs: number;
-  onMonthChange: (monthAnchorMs: number) => void;
   onSelectDay: (dayKey: string | null) => void;
 }
 
@@ -36,7 +33,6 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
   monthAnchorMs,
   selectedDayKey,
   nowMs,
-  onMonthChange,
   onSelectDay,
 }) => {
   const { t, formatDate } = useI18n('scenes/todos');
@@ -48,19 +44,12 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
   const anchorMonth = anchorDate.getMonth();
   const todayKey = localDayKey(nowMs);
 
-  const monthLabel = formatDate(anchorDate, { year: 'numeric', month: 'long' });
-
   // Weekday headers are derived from the grid so they follow the active locale
   // instead of a hard-coded English list.
   const weekdayLabels = useMemo(
     () => grid.slice(0, 7).map((day) => formatDate(day, { weekday: 'short' })),
     [formatDate, grid],
   );
-
-  const shiftMonth = (delta: number) => {
-    const shifted = new Date(anchorDate.getFullYear(), anchorMonth + delta, 1);
-    onMonthChange(shifted.getTime());
-  };
 
   return (
     <section
@@ -74,39 +63,6 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
         <div className="bf-todos__calendar-heading">
           <h3 className="bf-todos__pane-title">{t('calendar.title')}</h3>
           <p className="bf-todos__pane-hint">{t('calendar.hint')}</p>
-        </div>
-        <div className="bf-todos__calendar-nav" data-bf-scene="todos" data-bf-part="calendarNav">
-          <IconButton
-            type="button"
-            size="xs"
-            aria-label={t('calendar.previousMonth')}
-            tooltip={t('calendar.previousMonth')}
-            onClick={() => shiftMonth(-1)}
-            data-testid="todos-calendar-prev"
-          >
-            <ChevronLeft size={14} />
-          </IconButton>
-          <span className="bf-todos__calendar-month" data-testid="todos-calendar-month">{monthLabel}</span>
-          <IconButton
-            type="button"
-            size="xs"
-            aria-label={t('calendar.nextMonth')}
-            tooltip={t('calendar.nextMonth')}
-            onClick={() => shiftMonth(1)}
-            data-testid="todos-calendar-next"
-          >
-            <ChevronRight size={14} />
-          </IconButton>
-          <Button
-            size="small"
-            variant="ghost"
-            onClick={() => {
-              const today = new Date(nowMs);
-              onMonthChange(new Date(today.getFullYear(), today.getMonth(), 1).getTime());
-            }}
-          >
-            {t('calendar.today')}
-          </Button>
         </div>
       </header>
 

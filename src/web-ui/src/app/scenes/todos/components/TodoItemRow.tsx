@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { CalendarClock, Pencil, Trash2 } from 'lucide-react';
 import { IconButton, Switch } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import type { CronJob } from '@/infrastructure/api';
@@ -89,11 +89,8 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
         }
       }}
     >
-      <div className="bf-todos__row-time" data-bf-scene="todos" data-bf-part="rowTime">
-        <span className="bf-todos__row-clock">{timeLabel ?? '—'}</span>
-        {relativeLabel ? (
-          <span className="bf-todos__row-relative">{relativeLabel}</span>
-        ) : null}
+      <div className="bf-todos__row-icon" data-bf-scene="todos" data-bf-part="rowIcon">
+        <CalendarClock size={19} aria-hidden="true" />
       </div>
 
       <div className="bf-todos__row-body" data-bf-scene="todos" data-bf-part="rowBody">
@@ -128,6 +125,12 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
           <span>{formatScheduleSummary(job.schedule, t, formatDate)}</span>
           <span className="bf-todos__row-meta-sep" aria-hidden="true">·</span>
           <span>{formatJobTargetLabel(job, t)}</span>
+          {relativeLabel ? (
+            <>
+              <span className="bf-todos__row-meta-sep" aria-hidden="true">·</span>
+              <span title={timeLabel ?? undefined}>{relativeLabel}</span>
+            </>
+          ) : null}
         </div>
         {job.state.lastError ? (
           <p className="bf-todos__row-error" data-bf-scene="todos" data-bf-part="rowError">
@@ -149,25 +152,27 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
           aria-label={t('actions.toggleEnabled')}
           onChange={(event) => onToggleEnabled(job, event.currentTarget.checked)}
         />
-        <IconButton
-          type="button"
-          size="xs"
-          aria-label={t('actions.edit')}
-          tooltip={t('actions.edit')}
-          onClick={() => onEdit(job)}
-        >
-          <Pencil size={13} />
-        </IconButton>
-        <IconButton
-          type="button"
-          size="xs"
-          variant="danger"
-          aria-label={t('actions.delete')}
-          tooltip={t('actions.delete')}
-          onClick={() => onDelete(job)}
-        >
-          <Trash2 size={13} />
-        </IconButton>
+        <div className="bf-todos__row-action-buttons">
+          <IconButton
+            type="button"
+            size="xs"
+            aria-label={t('actions.edit')}
+            tooltip={t('actions.edit')}
+            onClick={() => onEdit(job)}
+          >
+            <Pencil size={13} />
+          </IconButton>
+          <IconButton
+            type="button"
+            size="xs"
+            variant="danger"
+            aria-label={t('actions.delete')}
+            tooltip={t('actions.delete')}
+            onClick={() => onDelete(job)}
+          >
+            <Trash2 size={13} />
+          </IconButton>
+        </div>
       </div>
     </div>
   );

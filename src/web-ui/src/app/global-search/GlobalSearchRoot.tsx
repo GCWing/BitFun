@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -120,7 +121,26 @@ function resultVariant(group: GlobalSearchGroupId): 'action' | 'entity' | 'stand
   return 'standard';
 }
 
-const GlobalSearchRoot: React.FC = () => {
+export interface GlobalSearchContentProps {
+  /** Suspend provider work while the owning surface is not active. */
+  active?: boolean;
+  /** Focus the query field when this surface is mounted. */
+  autoFocus?: boolean;
+  /** Query supplied by the owning entry point. */
+  initialQuery?: string;
+  /** Runs before a result is activated, for example to dismiss a modal. */
+  onBeforeActivate?: () => void;
+  /** Adapts the shared search content to its host surface. */
+  variant?: 'modal' | 'embedded';
+}
+
+export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
+  active = true,
+  autoFocus = false,
+  initialQuery = '',
+  onBeforeActivate,
+  variant = 'embedded',
+}) => {
   const { t: tCommon } = useI18n('common');
   const { t: tSettings } = useI18n('settings');
   const {
@@ -130,17 +150,17 @@ const GlobalSearchRoot: React.FC = () => {
   } = useWorkspaceContext();
   const selectAssistantWorkspace = useMyAgentStore((state) => state.setSelectedAssistantWorkspaceId);
   const openAssistant = useNurseryStore((state) => state.openAssistant);
-  const open = useGlobalSearchStore((state) => state.open);
-  const initialQuery = useGlobalSearchStore((state) => state.initialQuery);
-  const closeSearch = useGlobalSearchStore((state) => state.closeSearch);
-  const toggleSearch = useGlobalSearchStore((state) => state.toggleSearch);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [scope, setScope] = useState<GlobalSearchScope>('all');
   const [snapshot, setSnapshot] = useState<GlobalSearchSnapshot>(EMPTY_SNAPSHOT);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drilldownGroup, setDrilldownGroup] = useState<GlobalSearchDrilldownGroupId | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const generatedId = useId().replace(/:/g, '');
+  const instanceId = `global-search-${generatedId || 'content'}`;
+  const resultsId = `${instanceId}-results`;
+  const testIdPrefix = variant === 'modal' ? 'global-search' : 'embedded-global-search';
   const providers = useSyncExternalStore(
     globalSearchRegistry.subscribe,
     globalSearchRegistry.getSnapshot,
@@ -152,44 +172,19 @@ const GlobalSearchRoot: React.FC = () => {
     getGlobalSearchShortcutLabel,
   );
 
-  useShortcut(
-    GLOBAL_SEARCH_SHORTCUT.id,
-    GLOBAL_SEARCH_SHORTCUT.config,
-    toggleSearch,
-    { priority: 20, description: GLOBAL_SEARCH_SHORTCUT.descriptionKey },
-  );
-
   useEffect(() => {
-    const handleSecondaryShortcut = (event: KeyboardEvent) => {
-      if (
-        !event.altKey
-        || event.ctrlKey
-        || event.metaKey
-        || event.shiftKey
-        || event.key.toLocaleLowerCase() !== 'f'
-      ) {
-        return;
-      }
-      event.preventDefault();
-      toggleSearch();
-    };
-    document.addEventListener('keydown', handleSecondaryShortcut);
-    return () => document.removeEventListener('keydown', handleSecondaryShortcut);
-  }, [toggleSearch]);
-
-  useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     setQuery(initialQuery);
     setScope('all');
     setActiveId(null);
     setDrilldownGroup(null);
     setSnapshot(EMPTY_SNAPSHOT);
-  }, [initialQuery, open]);
+  }, [active, initialQuery]);
 
   const parsedQuery = useMemo(() => parseGlobalSearchQuery(query, scope), [query, scope]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     const controller = new AbortController();
     const delay = parsedQuery.query ? SEARCH_DEBOUNCE_MS : 0;
     const timer = window.setTimeout(() => {
@@ -215,8 +210,8 @@ const GlobalSearchRoot: React.FC = () => {
       controller.abort();
     };
   }, [
+    active,
     currentWorkspace,
-    open,
     openedWorkspacesList,
     parsedQuery.query,
     parsedQuery.scope,
@@ -257,7 +252,7 @@ const GlobalSearchRoot: React.FC = () => {
   }, [activeId]);
 
   const activateItem = useCallback(async (item: GlobalSearchItem) => {
-    closeSearch();
+    onBeforeActivate?.();
     try {
       await activateGlobalSearchTarget(item.target, {
         setActiveWorkspace,
@@ -273,7 +268,7 @@ const GlobalSearchRoot: React.FC = () => {
       });
       notificationService.error(tCommon('nav.search.errors.activationFailed'), { duration: 5000 });
     }
-  }, [closeSearch, openAssistant, selectAssistantWorkspace, setActiveWorkspace, tCommon]);
+  }, [onBeforeActivate, openAssistant, selectAssistantWorkspace, setActiveWorkspace, tCommon]);
 
   const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
@@ -336,21 +331,13 @@ const GlobalSearchRoot: React.FC = () => {
     : tCommon('nav.search.empty');
 
   return (
-    <Modal
-      isOpen={open}
-      onClose={closeSearch}
-      size="xlarge"
-      showCloseButton={false}
-      overlayClassName="global-search-overlay"
-      contentClassName="global-search-modal-content"
-      ariaLabel={tCommon('nav.search.dialogLabel')}
-      testId="global-search-dialog"
-    >
       <div
-        className="global-search"
+        className={`global-search global-search--${variant}`}
         data-bf-component="global-search"
         data-bf-part="root"
+        data-search-surface={variant}
         data-search-view={drilldownGroup ?? 'overview'}
+        data-testid={variant === 'embedded' ? 'embedded-global-search' : undefined}
         onKeyDownCapture={handleRootKeyDownCapture}
       >
         <header className="global-search__header">
@@ -370,10 +357,10 @@ const GlobalSearchRoot: React.FC = () => {
               role="combobox"
               aria-autocomplete="list"
               aria-expanded="true"
-              aria-controls="global-search-results"
-              aria-activedescendant={activeId ? `global-search-option-${activeId}` : undefined}
+              aria-controls={resultsId}
+              aria-activedescendant={activeId ? `${instanceId}-option-${activeId}` : undefined}
               maxLength={SEARCH_QUERY_MAX_LENGTH}
-              autoFocus
+              autoFocus={autoFocus}
             />
             {query ? (
               <button
@@ -388,9 +375,9 @@ const GlobalSearchRoot: React.FC = () => {
               >
                 <X size={14} aria-hidden="true" />
               </button>
-            ) : (
+            ) : variant === 'modal' ? (
               <kbd className="global-search__shortcut" aria-hidden="true">{searchShortcutLabel}</kbd>
-            )}
+            ) : null}
           </div>
 
           <div className="global-search__scope-bar" data-bf-component="global-search" data-bf-part="scopeBar">
@@ -420,7 +407,7 @@ const GlobalSearchRoot: React.FC = () => {
 
         <div
           ref={listRef}
-          id="global-search-results"
+          id={resultsId}
           className="global-search__results"
           role="listbox"
           aria-label={tCommon('nav.search.resultsLabel')}
@@ -436,7 +423,7 @@ const GlobalSearchRoot: React.FC = () => {
           ) : resultPresentation.groups.map((groupView) => {
             const groupId = groupView.id;
             const groupItems = groupView.items;
-            const labelId = `global-search-group-${groupId}`;
+            const labelId = `${instanceId}-group-${groupId}`;
             const defaultActionGroup = groupId === 'actions' && !parsedQuery.query;
             const groupLabel = defaultActionGroup
               ? tCommon('nav.search.groups.frequentActions')
@@ -452,8 +439,8 @@ const GlobalSearchRoot: React.FC = () => {
                 data-bf-part="group"
                 data-search-group={groupId}
                 data-testid={groupDetailPage
-                  ? `global-search-group-page-${groupId}`
-                  : `global-search-group-${groupId}`}
+                  ? `${testIdPrefix}-group-page-${groupId}`
+                  : `${testIdPrefix}-group-${groupId}`}
               >
                 {groupDetailPage ? (
                   <div className="global-search__detail-header">
@@ -462,7 +449,7 @@ const GlobalSearchRoot: React.FC = () => {
                       className="global-search__detail-back"
                       onClick={closeGroupDetails}
                       aria-label={tCommon('nav.search.backToOverview')}
-                      data-testid="global-search-group-back"
+                      data-testid={`${testIdPrefix}-group-back`}
                     >
                       <ChevronLeft size={15} strokeWidth={1.8} aria-hidden="true" />
                       <span>{tCommon('nav.search.back')}</span>
@@ -487,7 +474,7 @@ const GlobalSearchRoot: React.FC = () => {
                             group: groupLabel,
                             count: groupView.totalCount,
                           })}
-                          data-testid={`global-search-group-drilldown-${groupId}`}
+                          data-testid={`${testIdPrefix}-group-drilldown-${groupId}`}
                         >
                           <span>{tCommon('nav.search.resultCount', { count: groupView.totalCount })}</span>
                           <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" />
@@ -509,7 +496,7 @@ const GlobalSearchRoot: React.FC = () => {
                     return (
                       <button
                         key={item.id}
-                        id={`global-search-option-${item.id}`}
+                        id={`${instanceId}-option-${item.id}`}
                         data-search-result-id={item.id}
                         type="button"
                         role="option"
@@ -559,7 +546,7 @@ const GlobalSearchRoot: React.FC = () => {
             <span
               className="global-search__footer-status"
               role="status"
-              data-testid="global-search-partial-status"
+              data-testid={`${testIdPrefix}-partial-status`}
             >
               {tCommon('nav.search.partialUnavailable')}
             </span>
@@ -567,10 +554,68 @@ const GlobalSearchRoot: React.FC = () => {
           <span className="global-search__footer-keys" aria-hidden="true">
             <kbd>↑↓</kbd> {tCommon('nav.search.footer.navigate')}
             <kbd>↵</kbd> {tCommon('nav.search.footer.open')}
-            <kbd>Esc</kbd> {tCommon(drilldownGroup ? 'nav.search.footer.back' : 'nav.search.footer.close')}
+            {variant === 'modal' || drilldownGroup ? (
+              <>
+                <kbd>Esc</kbd>{' '}
+                {tCommon(drilldownGroup ? 'nav.search.footer.back' : 'nav.search.footer.close')}
+              </>
+            ) : null}
           </span>
         </footer>
       </div>
+  );
+};
+
+const GlobalSearchRoot: React.FC = () => {
+  const { t: tCommon } = useI18n('common');
+  const open = useGlobalSearchStore((state) => state.open);
+  const initialQuery = useGlobalSearchStore((state) => state.initialQuery);
+  const closeSearch = useGlobalSearchStore((state) => state.closeSearch);
+  const toggleSearch = useGlobalSearchStore((state) => state.toggleSearch);
+
+  useShortcut(
+    GLOBAL_SEARCH_SHORTCUT.id,
+    GLOBAL_SEARCH_SHORTCUT.config,
+    toggleSearch,
+    { priority: 20, description: GLOBAL_SEARCH_SHORTCUT.descriptionKey },
+  );
+
+  useEffect(() => {
+    const handleSecondaryShortcut = (event: KeyboardEvent) => {
+      if (
+        !event.altKey
+        || event.ctrlKey
+        || event.metaKey
+        || event.shiftKey
+        || event.key.toLocaleLowerCase() !== 'f'
+      ) {
+        return;
+      }
+      event.preventDefault();
+      toggleSearch();
+    };
+    document.addEventListener('keydown', handleSecondaryShortcut);
+    return () => document.removeEventListener('keydown', handleSecondaryShortcut);
+  }, [toggleSearch]);
+
+  return (
+    <Modal
+      isOpen={open}
+      onClose={closeSearch}
+      size="xlarge"
+      showCloseButton={false}
+      overlayClassName="global-search-overlay"
+      contentClassName="global-search-modal-content"
+      ariaLabel={tCommon('nav.search.dialogLabel')}
+      testId="global-search-dialog"
+    >
+      <GlobalSearchContent
+        active={open}
+        autoFocus
+        initialQuery={initialQuery}
+        onBeforeActivate={closeSearch}
+        variant="modal"
+      />
     </Modal>
   );
 };

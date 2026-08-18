@@ -6,9 +6,10 @@ import {
 } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
+import { useMiniAppActivity } from '@/app/scenes/miniapps/hooks/useMiniAppActivity';
 import { renderMiniAppIcon, getMiniAppIconGradient } from '@/app/scenes/miniapps/utils/miniAppIcons';
 
-const MAX_VISIBLE_RUNNING_APPS = 3;
+const MAX_VISIBLE_ACTIVE_APPS = 3;
 
 interface MiniAppEntryProps {
   isActive: boolean;
@@ -24,17 +25,13 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
   onOpenMiniApp,
 }) => {
   const { t } = useI18n('common');
-  const apps = useMiniAppStore((state) => state.apps);
-  const runningWorkerIds = useMiniAppStore((state) => state.runningWorkerIds);
+  const activities = useMiniAppActivity();
   const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
   const customizingIdSet = useMemo(() => new Set(customizingAppIds), [customizingAppIds]);
   const hasCustomizingApps = customizingAppIds.length > 0;
 
-  const runningApps = useMemo(() => {
-    const appMap = new Map(apps.map((app) => [app.id, app]));
-    const list = runningWorkerIds
-      .map((id) => appMap.get(id))
-      .filter((app): app is NonNullable<typeof app> => !!app);
+  const activeApps = useMemo(() => {
+    const list = activities.map((activity) => activity.app);
 
     if (!activeMiniAppId) {
       return list;
@@ -45,10 +42,10 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
       if (b.id === activeMiniAppId) return 1;
       return 0;
     });
-  }, [activeMiniAppId, apps, runningWorkerIds]);
+  }, [activeMiniAppId, activities]);
 
-  const visibleApps = runningApps.slice(0, MAX_VISIBLE_RUNNING_APPS);
-  const overflowCount = Math.max(0, runningApps.length - visibleApps.length);
+  const visibleApps = activeApps.slice(0, MAX_VISIBLE_ACTIVE_APPS);
+  const overflowCount = Math.max(0, activeApps.length - visibleApps.length);
 
   return (
     <div className="bitfun-nav-panel__miniapp-entry-wrap">
@@ -56,7 +53,7 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
         className={[
           'bitfun-nav-panel__miniapp-entry',
           isActive && 'is-active',
-          runningApps.length > 0 && 'has-running-apps',
+          activeApps.length > 0 && 'has-running-apps',
           hasCustomizingApps && 'has-customizing-apps',
         ].filter(Boolean).join(' ')}
         onClick={onOpenMiniApps}
@@ -103,6 +100,8 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
                       role="button"
                       tabIndex={0}
                       aria-label={app.name}
+                      data-testid="nav-miniapp-activity-item"
+                      data-miniapp-id={app.id}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();

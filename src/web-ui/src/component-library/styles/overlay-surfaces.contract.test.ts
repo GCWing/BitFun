@@ -177,6 +177,14 @@ describe('overlay surface contracts', () => {
     expect(aboutAppearance).not.toContain("{ id: 'root', visualRole: 'dialog'");
   });
 
+  it('keeps the Modal close inset on the header shell', () => {
+    const modalStyles = readSource('component-library/components/Modal/Modal.scss');
+
+    expect(modalStyles).toContain('padding-inline-end: var(--modal-close-edge-gutter);');
+    expect(modalStyles).toContain('margin-block: var(--modal-close-edge-gutter);');
+    expect(modalStyles).not.toContain('margin-inline-end: var(--modal-close-edge-gutter);');
+  });
+
   it('keeps About styles limited to rendered content without redundant visual branches', () => {
     const aboutStyles = readSource('app/components/AboutDialog/AboutDialog.scss');
     const aboutSource = readSource('app/components/AboutDialog/AboutDialog.tsx');
@@ -189,6 +197,8 @@ describe('overlay surface contracts', () => {
 
     expect([...new Set(styleClasses)].filter(className => !sourceClasses.has(className)))
       .toEqual([]);
+    expect(aboutSource).not.toContain('titleExtra=');
+    expect(aboutSource).not.toContain('about-header-logo');
     expect(aboutStyles).not.toContain('bitfun-about-dialog__dependencies-');
     expect(aboutStyles).not.toContain('bitfun-about-dialog__dependency-');
   });

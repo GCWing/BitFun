@@ -9,41 +9,49 @@ function readSibling(filename: string): string {
   ).replace(/\r\n/g, '\n');
 }
 
-describe('Nursery gallery panda presentation', () => {
-  it('layers a dedicated wink frame over the stable panda avatar', () => {
+describe('Nursery gallery presentation', () => {
+  it('uses the curated assistant artwork without loading the unused source pack', () => {
     const source = readSibling('./NurseryGallery.tsx');
 
-    expect(source).toContain('src="/panda_1.png"');
-    expect(source).toContain('src="/panda_wink.png"');
-    expect(source).toContain('nursery-defaults__avatar-image--wink');
+    expect(source).toContain('src="/assets/assistant/defaults-illustration.webp"');
+    expect(source).toContain('src="/assets/assistant/gallery-companion.webp"');
+    expect(source).not.toContain('/panda_1.png');
+    expect(source).not.toContain('/panda_wink.png');
   });
 
-  it('keeps the wink local to the panda and disables it for reduced motion', () => {
+  it('keeps the gallery surface white and collapses the decorative column responsively', () => {
     const stylesheet = readSibling('./NurseryView.scss');
-    const reducedMotionStart = stylesheet.indexOf('@media (prefers-reduced-motion: reduce)');
-    const reducedMotionEnd = stylesheet.indexOf('// ── Responsive', reducedMotionStart);
-    const reducedMotionSection = stylesheet.slice(reducedMotionStart, reducedMotionEnd);
 
     expect(stylesheet).toMatch(
-      /\.nursery-defaults__avatar:hover \.nursery-defaults__avatar-art[\s\S]*nursery-panda-wink-tilt/,
+      /\.nursery-gallery \{\s+background: var\(--bf-appearance-token-color-static-white\);/,
     );
-    expect(stylesheet).toContain('@keyframes nursery-panda-wink-frame');
-    expect(stylesheet).toMatch(/&--wink \{\s+opacity: 0;/);
-    expect(reducedMotionSection).toContain('.nursery-defaults__avatar-art');
-    expect(reducedMotionSection).toContain('.nursery-defaults__avatar-image--wink');
-    expect(reducedMotionSection).toContain('animation: none;');
+    expect(stylesheet).toContain('.nursery-gallery__assistant-showcase--with-companion');
+    expect(stylesheet).toContain('grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));');
+    expect(stylesheet).toMatch(
+      /@media \(max-width: 1100px\)[\s\S]*\.nursery-gallery__companion \{\s+display: none;/,
+    );
   });
 
   it('keeps assistant card content and actions in bounded regions', () => {
+    const source = readSibling('./AssistantCard.tsx');
     const stylesheet = readSibling('./NurseryView.scss');
     const cardStart = stylesheet.indexOf('.assistant-card {');
     const cardEnd = stylesheet.indexOf('// ── Sub-page chrome', cardStart);
     const cardSection = stylesheet.slice(cardStart, cardEnd);
 
     expect(cardSection).toContain('&__main {');
-    expect(cardSection).toContain('padding: $size-gap-4;');
-    expect(cardSection).toContain('padding: 6px $size-gap-3;');
-    expect(cardSection).toContain('border-top: 1px solid var(--bf-appearance-token-border-subtle);');
+    expect(cardSection).toContain('min-height: 168px;');
+    expect(cardSection).toContain('padding: $size-gap-3 14px;');
+    expect(cardSection).toContain('min-height: 52px;');
+    expect(cardSection).toContain('--assistant-card-start-bg: var(--bf-appearance-token-element-bg-base);');
+    expect(cardSection).toContain('background: var(--assistant-card-start-bg);');
+    expect(cardSection).toContain('background: var(--assistant-card-inverse-bg);');
+    expect(cardSection).toContain('&__session-actions {');
+    expect(cardSection).toContain('border-top: 1px solid var(--bf-appearance-token-color-overlay-black-12);');
+    expect(cardSection).not.toContain('min-height: clamp(310px, 23.8vw, 366px);');
     expect(cardSection).not.toContain('height: 100%;');
+    expect(source).toContain('className="assistant-card__configure"');
+    expect(source).toContain('className="assistant-card__session-actions"');
+    expect(source).not.toContain('className="assistant-card__body"');
   });
 });

@@ -1,6 +1,7 @@
 {
   "title": "任务看板",
   "header": {
+    "subtitle": "规划、管理与执行你的待办任务",
     "summary": "共 {{total}} 项 · {{dueSoon}} 项将在 24 小时内执行"
   },
   "actions": {
@@ -11,9 +12,16 @@
     "toggleEnabled": "切换启用状态"
   },
   "list": {
-    "title": "24 小时内",
+    "title": "待执行任务",
+    "countTitle": "待执行任务（{{total}}）",
     "hint": "一天内将要执行的任务，按时间先后排列。",
-    "empty": "未来 24 小时内没有待执行的任务。"
+    "empty": "还没有待执行任务。"
+  },
+  "overview": {
+    "title": "计划概览",
+    "unit": "项",
+    "total": "待执行任务",
+    "dueSoon": "未来 24 小时待执行"
   },
   "calendar": {
     "title": "更晚",
@@ -69,9 +77,27 @@
     "title": "没有后续执行（{{total}}）"
   },
   "editor": {
-    "createTitle": "新建待办",
+    "createTitle": "创建待办",
     "editTitle": "编辑待办",
+    "createDescription": "创建一项待办任务，BitFun 将在计划时间自动执行。",
+    "editDescription": "调整任务信息与 BitFun 的执行方式。",
     "noWorkspace": "请先打开一个工作区：定时执行需要有运行的位置。",
+    "sections": {
+      "information": "任务信息",
+      "prompt": "提示词"
+    },
+    "enabled": {
+      "title": "启用任务",
+      "description": "开启后，任务将在计划时间自动执行。"
+    },
+    "smartExecution": {
+      "title": "智能执行",
+      "description": "BitFun 会在计划时间使用所选 Agent 和工作区上下文执行任务。"
+    },
+    "advanced": {
+      "title": "高级设置（可选）",
+      "empty": "单次任务当前不需要额外设置。"
+    },
     "fields": {
       "name": "名称",
       "agentType": "Agent 类型",

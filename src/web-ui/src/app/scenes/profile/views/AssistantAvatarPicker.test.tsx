@@ -124,10 +124,39 @@ describe('AssistantAvatarPicker', () => {
 
     const trigger = container.querySelector('.acp-avatar-picker__trigger') as HTMLButtonElement;
     act(() => trigger.click());
-    const officialOption = document.querySelector<HTMLButtonElement>('.acp-avatar-picker__option.is-official');
+    const officialOptions = document.querySelectorAll<HTMLButtonElement>('.acp-avatar-picker__option.is-official');
+    const officialOption = officialOptions[0];
     act(() => officialOption?.click());
 
-    expect(onPresetChange).toHaveBeenCalledWith('signal-pulse');
+    expect(officialOptions).toHaveLength(2);
+    expect(officialOption.querySelector('img')?.getAttribute('src'))
+      .toBe('/assets/assistant/claw-avatar.webp');
+    expect(onPresetChange).toHaveBeenCalledWith('claw');
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('shows a legacy preset value as its corresponding new Claw avatar', () => {
+    act(() => {
+      root.render(
+        <AssistantAvatarPicker
+          value="🧭"
+          presetValue="orbit-nova"
+          saveStatus="idle"
+          onChange={vi.fn()}
+          onPresetChange={vi.fn()}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector('.acp-avatar-picker__trigger') as HTMLButtonElement;
+    expect(trigger.querySelector('img')?.getAttribute('src'))
+      .toBe('/assets/assistant/claw-avatar-alt.webp');
+    act(() => trigger.click());
+
+    const selectedOption = document.querySelector<HTMLButtonElement>(
+      '.acp-avatar-picker__option.is-official.is-selected',
+    );
+    expect(selectedOption?.querySelector('img')?.getAttribute('src'))
+      .toBe('/assets/assistant/claw-avatar-alt.webp');
   });
 });

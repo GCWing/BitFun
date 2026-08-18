@@ -6,13 +6,13 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { GitBranch, Plus, X } from 'lucide-react';
+import { GitBranch, Plus } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import {
-  IconButton,
   Button,
   Input,
   Checkbox,
+  PopupCloseButton,
   PresenceBoundary,
   PRESENCE_BOUNDARY_MIN_EXIT_MS,
 } from '@/component-library';
@@ -205,17 +205,14 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
       onClick={onClose}
     >
       <div data-bf-component="branch-select-modal" data-bf-part="root" className="branch-select-dialog" onClick={(e) => e.stopPropagation()}>
-        <IconButton 
+        <PopupCloseButton
           className="branch-select-dialog__close"
           data-bf-component="branch-select-modal"
           data-bf-part="close"
-          variant="ghost"
-          size="xs"
           onClick={onClose}
           tooltip={tCommon('actions.close')}
-        >
-          <X size={14} />
-        </IconButton>
+          aria-label={tCommon('actions.close')}
+        />
 
         <div data-bf-component="branch-select-modal" data-bf-part="header" className="branch-select-dialog__header">
           <h2 className="branch-select-dialog__title">{retainedDisplay.title}</h2>

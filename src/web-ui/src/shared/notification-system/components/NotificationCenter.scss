@@ -4,6 +4,7 @@
 
 
 .notification-center {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 620px;
@@ -16,7 +17,8 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    padding: 0 $size-gap-4;
+    padding-block: 0;
+    padding-inline: $size-gap-4 0;
     border-bottom: 1px solid var(--bf-appearance-token-border-base);
     background: var(--bf-appearance-token-color-bg-primary);
     height: 40px;
@@ -38,7 +40,15 @@
     align-items: center;
     gap: 2px;
     flex-shrink: 0;
-    margin-left: auto;
+    margin-inline-start: auto;
+    padding-inline-end: 40px;
+  }
+
+  &__close {
+    position: absolute;
+    inset-block-start: 4px;
+    inset-inline-end: 4px;
+    z-index: 1;
   }
 
   &__header-button {

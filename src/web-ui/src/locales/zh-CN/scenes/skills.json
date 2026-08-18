@@ -28,7 +28,9 @@
   },
   "installed": {
     "titleAll": "已安装技能",
+    "titleListAll": "全部技能",
     "subtitleAll": "管理所有已安装的用户级和项目级技能",
+    "titleBuiltin": "内置技能",
     "titleUser": "用户级技能",
     "subtitleUser": "全局安装的用户级技能",
     "titleProject": "项目级技能",
@@ -37,7 +39,7 @@
   "toolbar": {
     "searchPlaceholder": "搜索技能...",
     "addTooltip": "添加技能",
-    "hideDuplicates": "重复项"
+    "hideDuplicates": "隐藏重复项"
   },
   "filters": {
     "all": "全部",
@@ -204,6 +206,12 @@
     "retry": "重试",
     "desktopUnavailable": "请在桌面端管理技能。",
     "remoteUnavailable": "远程连接时暂不支持管理技能。",
+    "columns": {
+      "source": "来源",
+      "level": "级别",
+      "status": "状态",
+      "actions": "操作"
+    },
     "empty": {
       "noMatch": "没有找到匹配的技能",
       "noSkills": "还没有配置任何技能"

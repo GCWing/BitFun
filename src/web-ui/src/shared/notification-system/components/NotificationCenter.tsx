@@ -1,8 +1,8 @@
  
 
 import React, { useState, useMemo } from 'react';
-import { X, CheckCheck, Trash2, XCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { Search, Modal } from '@/component-library';
+import { CheckCheck, Trash2, XCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Search, Modal, PopupCloseButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
 import { notificationService } from '../services/NotificationService';
@@ -368,27 +368,32 @@ export const NotificationCenter: React.FC = () => {
           <h2 className="notification-center__title">{t('components:notificationCenter.title')}</h2>
           <div className="notification-center__header-actions">
             <button
+              type="button"
               className="notification-center__header-button"
               onClick={handleMarkAllRead}
               title={t('components:notificationCenter.actions.markAllRead')}
+              aria-label={t('components:notificationCenter.actions.markAllRead')}
             >
               <CheckCheck size={16} />
             </button>
             <button
+              type="button"
               className="notification-center__header-button"
               onClick={handleClearAll}
               title={t('components:notificationCenter.actions.clearAll')}
+              aria-label={t('components:notificationCenter.actions.clearAll')}
             >
               <Trash2 size={16} />
             </button>
-            <button
-              className="notification-center__header-button"
+            <PopupCloseButton
+              className="notification-center__close"
               onClick={handleClose}
               title={t('common:actions.close')}
+              aria-label={t('common:actions.close')}
               data-testid="notification-center-close-btn"
-            >
-              <X size={16} />
-            </button>
+              data-bf-component="notification"
+              data-bf-part="centerClose"
+            />
           </div>
         </div>
 

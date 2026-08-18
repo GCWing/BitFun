@@ -3,9 +3,18 @@
   "subtitle": "即時生成的小應用，開啟就能用，也能繼續迭代。",
   "searchPlaceholder": "搜尋小應用...",
   "importFromFolder": "從資料夾匯入",
+  "importAction": "匯入小應用",
+  "importMenuLabel": "選擇匯入方式",
+  "creationMode": {
+    "action": "使用創造模式建立",
+    "unavailableTitle": "創造模式暫未開放",
+    "unavailableMessage": "創造模式仍在開發中，目前還不能用它建立小應用。",
+    "acknowledge": "知道了"
+  },
   "running": "已啟動",
   "allApps": "全部應用",
   "noRunningApps": "暫無運行中的應用",
+  "stopFailed": "無法停止「{{name}}」，其背景程序可能仍在執行：{{error}}",
   "all": "全部",
   "count": "{{count}} 個",
   "empty": {
@@ -19,6 +28,67 @@
     "delete": "刪除"
   },
   "detail": {
+    "source": {
+      "builtin": "內置應用",
+      "market": "市場應用",
+      "installed": "已安裝應用"
+    },
+    "highlights": "功能亮點",
+    "activity": {
+      "running": "應用正在運行"
+    },
+    "status": {
+      "installed": "應用已安裝，開啟即可使用",
+      "running": "應用正在運行，可直接返回繼續使用",
+      "customizing": "正在定制；當前版本仍可正常使用"
+    },
+    "capabilities": {
+      "ai": {
+        "title": "AI 協作",
+        "description": "可按需調用 AI 或 Agent 完成任務"
+      },
+      "workspace": {
+        "title": "工作區協同",
+        "description": "可在授權範圍內讀取或修改工作區"
+      },
+      "export": {
+        "title": "文稿渲染",
+        "description": "支持由桌面端渲染演示內容"
+      },
+      "shell": {
+        "title": "命令能力",
+        "description": "可運行已授權命令：{{commands}}"
+      },
+      "network": {
+        "title": "受控聯網",
+        "description": "可訪問 {{count}} 個已授權網域"
+      },
+      "worker": {
+        "title": "後台任務",
+        "description": "可運行應用自己的後台邏輯"
+      },
+      "storage": {
+        "title": "本地保存",
+        "description": "數據保存在應用專屬空間"
+      },
+      "desktop": {
+        "title": "桌面協作",
+        "description": "可使用 {{count}} 項已授權桌面能力"
+      },
+      "surface": {
+        "title": "專屬界面",
+        "description": "在獨立界面中完成這項工作"
+      },
+      "controlled": {
+        "title": "權限受控",
+        "description": "僅使用清單中聲明的宿主能力"
+      },
+      "instant": {
+        "title": "開啟即用",
+        "description": "無需額外配置即可啟動"
+      }
+    },
+    "start": "啟動",
     "stop": "停止",
     "delete": "刪除",
     "open": "開啟"

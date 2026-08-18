@@ -42,7 +42,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 18px;
+    padding-block: 14px;
+    padding-inline: 18px 14px;
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
@@ -53,7 +54,6 @@
     color: var(--bf-appearance-token-color-text-primary);
   }
 
-  &__close-btn,
   &__tool-btn {
     display: inline-flex;
     align-items: center;

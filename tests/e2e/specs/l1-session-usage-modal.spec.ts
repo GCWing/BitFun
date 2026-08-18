@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { expectPopupCloseContract } from '../helpers/popup-close-contract';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -155,6 +156,7 @@ describe('L1 Session usage modal', () => {
     expect(text).toContain('查看全部 8 项');
     expect(text).not.toContain('部分数据可用');
     expect(toolRows).toHaveLength(3);
+    await expectPopupCloseContract('[data-testid="session-usage-modal"]');
   });
 
   it('captures the settled desktop WebView state for visual comparison', async () => {

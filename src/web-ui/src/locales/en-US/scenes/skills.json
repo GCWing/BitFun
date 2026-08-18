@@ -28,7 +28,9 @@
   },
   "installed": {
     "titleAll": "Installed Skills",
+    "titleListAll": "All Skills",
     "subtitleAll": "Manage all installed user-level and project-level skills",
+    "titleBuiltin": "Built-in Skills",
     "titleUser": "User Skills",
     "subtitleUser": "Globally installed user-level skills",
     "titleProject": "Project Skills",
@@ -37,7 +39,7 @@
   "toolbar": {
     "searchPlaceholder": "Search skills...",
     "addTooltip": "Add Skill",
-    "hideDuplicates": "Duplicates"
+    "hideDuplicates": "Hide duplicates"
   },
   "filters": {
     "all": "All",
@@ -204,6 +206,12 @@
     "retry": "Retry",
     "desktopUnavailable": "Manage skills in Desktop.",
     "remoteUnavailable": "Skill management is unavailable during a remote connection.",
+    "columns": {
+      "source": "Source",
+      "level": "Level",
+      "status": "Status",
+      "actions": "Actions"
+    },
     "empty": {
       "noMatch": "No matching skills found",
       "noSkills": "No skills configured yet"

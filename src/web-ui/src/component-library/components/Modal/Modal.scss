@@ -60,6 +60,8 @@ $modal-edge-gutter-sm: 10px;
 .modal {
   @include surfaces.dialog-surface;
 
+  --modal-close-edge-gutter: #{$modal-edge-gutter};
+
   position: relative;
   display: flex;
   flex-direction: column;
@@ -91,6 +93,12 @@ $modal-edge-gutter-sm: 10px;
     max-height: calc(100vh - 48px);
   }
 
+  &--xxlarge {
+    width: min(960px, 100%);
+    max-width: min(960px, 100%);
+    max-height: calc(100vh - 48px);
+  }
+
 
   &--draggable {
     cursor: default;
@@ -103,21 +111,29 @@ $modal-edge-gutter-sm: 10px;
 
   &__header-shell {
     position: relative;
+    display: flex;
+    align-items: stretch;
     flex-shrink: 0;
+    min-width: 0;
+    padding-inline-end: var(--modal-close-edge-gutter);
 
     &--close-only {
-      min-height: 34px;
+      min-height: 32px;
+    }
+
+    &--with-header {
+      border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     }
   }
 
   &__header {
-    flex-shrink: 0;
     display: flex;
+    flex: 1 1 auto;
     align-items: center;
     justify-content: flex-start;
     gap: 6px;
+    min-width: 0;
     padding: 6px $modal-edge-gutter;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     background: transparent;
 
     &--draggable {
@@ -133,10 +149,6 @@ $modal-edge-gutter-sm: 10px;
     &--empty {
       min-height: 34px;
     }
-  }
-
-  &.modal--with-close .modal__header:has(.modal__title-group) {
-    padding-inline-end: calc(#{$modal-edge-gutter} + 22px + 8px);
   }
 
   &__title-group {
@@ -164,51 +176,10 @@ $modal-edge-gutter-sm: 10px;
 
 
   &__close {
-    position: absolute;
-    top: 0;
-    right: $modal-edge-gutter;
-    bottom: 0;
+    align-self: flex-start;
+    margin-block: var(--modal-close-edge-gutter);
+    margin-inline-start: auto;
     z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    margin: auto 0;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    color: var(--bf-appearance-token-color-text-muted);
-    cursor: pointer;
-    transform: scale(1);
-    transition:
-      background-color var(--bf-appearance-token-motion-fast) ease,
-      border-color var(--bf-appearance-token-motion-fast) ease,
-      color var(--bf-appearance-token-motion-fast) ease,
-      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
-    outline: none;
-
-    svg {
-      display: block;
-      width: 12px;
-      height: 12px;
-    }
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-subtle);
-      border-color: var(--bf-appearance-token-border-subtle);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:active {
-      transform: scale(0.97);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: 2px;
-    }
   }
 
 
@@ -332,11 +303,6 @@ $modal-edge-gutter-sm: 10px;
     background-color: var(--bf-appearance-token-element-bg-subtle);
   }
 
-  .modal__close:hover {
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border-color: var(--bf-appearance-token-border-subtle);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -352,9 +318,6 @@ $modal-edge-gutter-sm: 10px;
     animation: modal-overlay-exit var(--bf-appearance-token-motion-fast) ease both;
   }
 
-  .modal__close:active {
-    transform: none;
-  }
 }
 
 
@@ -373,14 +336,6 @@ $modal-edge-gutter-sm: 10px;
 
     &__header {
       padding: 12px $modal-edge-gutter-sm;
-    }
-
-    &.modal--with-close .modal__header:has(.modal__title-group) {
-      padding-inline-end: calc(#{$modal-edge-gutter-sm} + 22px + 10px);
-    }
-
-    &__close {
-      right: $modal-edge-gutter-sm;
     }
 
     &__title {

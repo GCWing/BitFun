@@ -1,8 +1,8 @@
 /**
  * SceneViewport — renders the active scene component.
  *
- * All tabs are mounted but only the active one is visible,
- * preserving state across tab switches.
+ * All visible tabs and retained background scenes are mounted, but only the
+ * active tab is visible, preserving state across tab switches and auto-eviction.
  *
  * 'welcome' is a proper scene tab; it auto-closes when any other
  * scene is explicitly opened.
@@ -86,6 +86,7 @@ interface SceneViewportProps {
 const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering = false }) => {
   const {
     openTabs,
+    retainedScenes,
     activeTabId,
     navigationMotion,
     navigationSequence,
@@ -124,6 +125,11 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
   const renderedTabIds: RenderedSceneId[] = openTabs.length === 0
     ? [EMPTY_SCENE_ID]
     : openTabs.map(tab => tab.id);
+  for (const scene of retainedScenes) {
+    if (!renderedTabIds.includes(scene.id)) {
+      renderedTabIds.push(scene.id);
+    }
+  }
   if (outgoingTabId && !renderedTabIds.includes(outgoingTabId)) {
     renderedTabIds.push(outgoingTabId);
   }

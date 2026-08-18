@@ -15,12 +15,11 @@ import {
   Search,
   TestTube,
   Wrench,
-  X,
   type LucideIcon,
 } from 'lucide-react';
 import { recommendationRegistry } from './RecommendationRegistry';
 import { RecommendationAction, RecommendationContext } from './types';
-import { Tooltip } from '@/component-library';
+import { PopupCloseButton } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './SmartRecommendations.scss';
 
@@ -122,16 +121,14 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
     <div data-bf-component="smart-recommendations" data-bf-part="root" className={`bitfun-smart-recommendations ${className}`}>
       <div data-bf-component="smart-recommendations" data-bf-part="header" className="bitfun-smart-recommendations__header">
         <span data-bf-component="smart-recommendations" data-bf-part="title" className="bitfun-smart-recommendations__title">{t('smartRecommendations.title')}</span>
-        <Tooltip content={t('smartRecommendations.close')}>
-          <button
-            data-bf-component="smart-recommendations"
-            data-bf-part="close"
-            className="bitfun-smart-recommendations__close"
-            onClick={handleClose}
-          >
-            <X size={16} />
-          </button>
-        </Tooltip>
+        <PopupCloseButton
+          data-bf-component="smart-recommendations"
+          data-bf-part="close"
+          className="bitfun-smart-recommendations__close"
+          onClick={handleClose}
+          tooltip={t('smartRecommendations.close')}
+          aria-label={t('smartRecommendations.close')}
+        />
       </div>
 
       <div data-bf-component="smart-recommendations" data-bf-part="actions" className="bitfun-smart-recommendations__actions">

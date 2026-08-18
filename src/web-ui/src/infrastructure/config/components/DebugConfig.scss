@@ -35,7 +35,7 @@
     width: 100%;
   }
 
-  /** Modal header reset: match `.modal__close` size + hover/active */
+  /** Compact title action; intentionally less prominent than the popup dismiss control. */
   &__modal-reset-icon.icon-btn {
     width: 22px !important;
     height: 22px !important;

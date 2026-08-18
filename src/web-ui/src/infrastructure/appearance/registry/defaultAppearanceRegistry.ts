@@ -4,6 +4,7 @@ import { inputAppearanceDescriptor } from '@/component-library/components/Input/
 import { modalAppearanceDescriptor } from '@/component-library/components/Modal/appearance';
 import { tooltipAppearanceDescriptor } from '@/component-library/components/Tooltip/appearance';
 import { iconButtonAppearanceDescriptor } from '@/component-library/components/IconButton/appearance';
+import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
 import { checkboxAppearanceDescriptor } from '@/component-library/components/Checkbox/appearance';
 import { switchAppearanceDescriptor } from '@/component-library/components/Switch/appearance';
 import { textareaAppearanceDescriptor } from '@/component-library/components/Textarea/appearance';
@@ -220,6 +221,7 @@ import { terminalEditModalAppearanceDescriptor } from '@/app/components/panels/T
 import { galleryLayoutAppearanceDescriptor } from '@/app/components/GalleryLayout/GalleryLayout.appearance';
 import { skillCardAppearanceDescriptor } from '@/app/scenes/skills/components/SkillCard.appearance';
 import { miniAppCardAppearanceDescriptor } from '@/app/scenes/miniapps/components/MiniAppCard.appearance';
+import { miniAppDetailModalAppearanceDescriptor } from '@/app/scenes/miniapps/components/MiniAppDetailModal.appearance';
 import { agentCardAppearanceDescriptor } from '@/app/scenes/agents/components/AgentCard.appearance';
 import { coreAgentCardAppearanceDescriptor } from '@/app/scenes/agents/components/CoreAgentCard.appearance';
 import { agentCapabilityTooltipAppearanceDescriptor } from '@/app/scenes/agents/components/AgentCapabilityTooltip.appearance';
@@ -293,6 +295,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(modalAppearanceDescriptor)
     .registerComponent(tooltipAppearanceDescriptor)
     .registerComponent(iconButtonAppearanceDescriptor)
+    .registerComponent(popupCloseButtonAppearanceDescriptor)
     .registerComponent(checkboxAppearanceDescriptor)
     .registerComponent(switchAppearanceDescriptor)
     .registerComponent(textareaAppearanceDescriptor)
@@ -401,6 +404,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(galleryLayoutAppearanceDescriptor)
     .registerComponent(skillCardAppearanceDescriptor)
     .registerComponent(miniAppCardAppearanceDescriptor)
+    .registerComponent(miniAppDetailModalAppearanceDescriptor)
     .registerComponent(agentCardAppearanceDescriptor)
     .registerComponent(coreAgentCardAppearanceDescriptor)
     .registerComponent(agentCapabilityTooltipAppearanceDescriptor)

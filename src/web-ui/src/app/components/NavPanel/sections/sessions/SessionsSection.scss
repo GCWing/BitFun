@@ -61,6 +61,7 @@
     color: var(--bf-appearance-token-color-text-muted);
     padding: 4px $size-gap-1;
     font-style: italic;
+    text-align: center;
 
     &.is-assistant {
       display: flex;
@@ -562,6 +563,7 @@
   &__inline-toggle {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
     height: 22px;
     padding: 0 $size-gap-1;

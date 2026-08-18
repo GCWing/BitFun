@@ -70,39 +70,17 @@
 
 .branch-select-dialog__close {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
   z-index: 10;
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--bf-appearance-token-color-text-muted);
-  cursor: pointer;
-  padding: 5px;
-  border-radius: 5px;
-  transition:
-    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
-    background-color 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  
-  &:hover {
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-  
-  &:active {
-    transform: scale(0.92);
-  }
 }
 
 // ==================== Header Area ====================
 
 .branch-select-dialog__header {
   flex-shrink: 0;
-  padding: 16px 20px 12px;
+  padding-block: 16px 12px;
+  padding-inline: 20px 48px;
   border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 }
 

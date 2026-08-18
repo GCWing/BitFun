@@ -1,12 +1,22 @@
 /**
  * Create / edit form for a Todo.
  *
- * Unlike the per-workspace scheduled-jobs editor, the Todos scene is global, so
- * this form owns a workspace picker: a job cannot be scheduled without knowing
- * which workspace it runs in.
+ * The form is rendered inside the Task Board's dedicated editor dialog. The
+ * board is global, so the form owns a workspace picker: a job cannot be
+ * scheduled without knowing which workspace it runs in.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Bot,
+  CalendarClock,
+  ChevronDown,
+  ClipboardList,
+  Clock3,
+  Folder,
+  RefreshCw,
+  Sparkles,
+} from 'lucide-react';
 import { Button, Input, Select, Switch, Textarea } from '@/component-library';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
@@ -70,6 +80,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
 }) => {
   const { t } = useI18n(['scenes/todos', 'common', 'shared']);
   const [availableModes, setAvailableModes] = useState<ModeInfo[]>([]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const selectedWorkspace = useMemo(
     () => workspaceOptions.find((option) => option.value === selectedWorkspaceId)?.workspace ?? null,
@@ -144,259 +155,402 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
     [onValidationErrorsChange],
   );
 
+  const handleScheduleKindChange = useCallback((value: string | number | (string | number)[]) => {
+    const scheduleKind = value as ScheduleKind;
+    onValidationErrorsChange((current) => ({
+      ...current,
+      at: false,
+      everyValue: false,
+      cronExpr: false,
+    }));
+    onDraftChange((current) => ({
+      ...current,
+      scheduleKind,
+      at: scheduleKind === 'at' && !current.at.trim()
+        ? getCurrentLocalDateTimeInput()
+        : current.at,
+    }));
+  }, [onDraftChange, onValidationErrorsChange]);
+
+  const title = isEditing ? t('editor.editTitle') : t('editor.createTitle');
+
   return (
-    <section
+    <form
       className="bf-todos__editor"
-      aria-label={isEditing ? t('editor.editTitle') : t('editor.createTitle')}
+      aria-label={title}
       data-bf-scene="todos"
       data-bf-part="editor"
       data-testid="todos-editor"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave();
+      }}
     >
-      <header className="bf-todos__editor-head" data-bf-scene="todos" data-bf-part="editorHead">
-        <h3 className="bf-todos__editor-title">
-          {isEditing ? t('editor.editTitle') : t('editor.createTitle')}
-        </h3>
+      <header
+        className="bf-todos__editor-intro"
+        data-bf-scene="todos"
+        data-bf-part="editorIntro"
+      >
+        <span className="bf-todos__editor-intro-icon" aria-hidden="true">
+          <CalendarClock size={24} strokeWidth={1.8} />
+        </span>
+        <div className="bf-todos__editor-intro-copy">
+          <h2 className="bf-todos__editor-title">{title}</h2>
+          <p className="bf-todos__editor-description">
+            {isEditing ? t('editor.editDescription') : t('editor.createDescription')}
+          </p>
+        </div>
       </header>
 
-      <div className="bf-todos__editor-grid" data-bf-scene="todos" data-bf-part="editorGrid">
-        <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-          <span className="bf-todos__field-label">{t('editor.fields.name')}</span>
-          <Input
-            size="small"
-            value={draft.name}
-            error={validationErrors.name}
-            placeholder={t('editor.placeholders.name')}
-            onChange={(event) => {
-              const name = event.currentTarget.value;
-              clearError('name');
-              updateDraft({ name });
-            }}
-            data-testid="todos-editor-name"
-          />
-        </label>
+      <div
+        className="bf-todos__editor-body"
+        data-bf-scene="todos"
+        data-bf-part="editorBody"
+      >
+        <section
+          className="bf-todos__editor-section"
+          aria-labelledby="todos-editor-information-title"
+          data-bf-scene="todos"
+          data-bf-part="editorSection"
+        >
+          <h3 id="todos-editor-information-title" className="bf-todos__editor-section-title">
+            {t('editor.sections.information')}
+          </h3>
 
-        <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-          <span className="bf-todos__field-label">{t('shared:features.workspace')}</span>
-          <Select
-            size="small"
-            options={workspaceSelectOptions}
-            value={selectedWorkspaceId}
-            searchable
-            placeholder={t('editor.placeholders.workspace')}
-            onChange={(value) => onSelectedWorkspaceIdChange(String(value))}
-            renderOption={(option) => (
-              <div className="bf-todos__workspace-option">
-                <span className="bf-todos__workspace-option-label">{option.label}</span>
-                {option.description ? (
-                  <span className="bf-todos__workspace-option-path">{option.description}</span>
-                ) : null}
+          <div className="bf-todos__editor-grid" data-bf-scene="todos" data-bf-part="editorGrid">
+            <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
+              <span className="bf-todos__field-label">
+                <ClipboardList size={16} aria-hidden="true" />
+                {t('editor.fields.name')}
+              </span>
+              <Input
+                size="medium"
+                className="bf-todos__field-control"
+                value={draft.name}
+                error={validationErrors.name}
+                aria-label={t('editor.fields.name')}
+                placeholder={t('editor.placeholders.name')}
+                onChange={(event) => {
+                  const name = event.currentTarget.value;
+                  clearError('name');
+                  updateDraft({ name });
+                }}
+                data-testid="todos-editor-name"
+              />
+            </div>
+
+            <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
+              <span className="bf-todos__field-label">
+                <Folder size={16} aria-hidden="true" />
+                {t('shared:features.workspace')}
+              </span>
+              <Select
+                size="medium"
+                className="bf-todos__field-control"
+                options={workspaceSelectOptions}
+                value={selectedWorkspaceId}
+                searchable
+                placeholder={t('editor.placeholders.workspace')}
+                triggerAriaLabel={t('shared:features.workspace')}
+                onChange={(value) => onSelectedWorkspaceIdChange(String(value))}
+                renderOption={(option) => (
+                  <div className="bf-todos__workspace-option">
+                    <span className="bf-todos__workspace-option-label">{option.label}</span>
+                    {option.description ? (
+                      <span className="bf-todos__workspace-option-path">{option.description}</span>
+                    ) : null}
+                  </div>
+                )}
+              />
+            </div>
+
+            {boundSessionId ? (
+              <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
+                <span className="bf-todos__field-label">
+                  <Bot size={16} aria-hidden="true" />
+                  {t('editor.fields.runsIn')}
+                </span>
+                <span className="bf-todos__field-static" title={boundSessionId}>
+                  {t('target.existingSession')}
+                </span>
               </div>
-            )}
-          />
-        </label>
-
-        {boundSessionId ? (
-          <div className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-            <span className="bf-todos__field-label">{t('editor.fields.runsIn')}</span>
-            <span className="bf-todos__field-static" title={boundSessionId}>
-              {t('target.existingSession')}
-            </span>
-            <span className="bf-todos__field-note">{t('editor.hints.boundSession')}</span>
-          </div>
-        ) : (
-          <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-            <span className="bf-todos__field-label">{t('editor.fields.agentType')}</span>
-            <Select
-              size="small"
-              options={agentTypeOptions}
-              value={draft.agentType}
-              error={validationErrors.agentType}
-              disabled={isAssistantWorkspace}
-              placeholder={t('editor.placeholders.agentType')}
-              onChange={(value) => {
-                clearError('agentType');
-                updateDraft({ agentType: String(value) });
-              }}
-            />
-          </label>
-        )}
-
-        <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-          <span className="bf-todos__field-label">{t('editor.fields.scheduleKind')}</span>
-          <Select
-            size="small"
-            value={draft.scheduleKind}
-            options={[
-              { value: 'at', label: t('schedule.kinds.at') },
-              { value: 'every', label: t('schedule.kinds.every') },
-              { value: 'cron', label: t('schedule.kinds.cron') },
-            ]}
-            onChange={(value) => {
-              const scheduleKind = value as ScheduleKind;
-              onValidationErrorsChange((current) => ({
-                ...current,
-                at: false,
-                everyValue: false,
-                cronExpr: false,
-              }));
-              onDraftChange((current) => ({
-                ...current,
-                scheduleKind,
-                at: scheduleKind === 'at' && !current.at.trim()
-                  ? getCurrentLocalDateTimeInput()
-                  : current.at,
-              }));
-            }}
-            data-testid="todos-editor-schedule-kind"
-          />
-        </label>
-
-        {draft.scheduleKind === 'at' ? (
-          <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-            <span className="bf-todos__field-label">{t('editor.fields.at')}</span>
-            <LocalizedDateTimeField
-              value={draft.at}
-              error={validationErrors.at}
-              onChange={(at) => {
-                clearError('at');
-                // Re-enable a Todo that was left off after its time passed.
-                onDraftChange((current) => ({
-                  ...current,
-                  at,
-                  enabled: !current.enabled && isFutureLocalDateTimeInput(at) ? true : current.enabled,
-                }));
-              }}
-            />
-          </label>
-        ) : null}
-
-        {draft.scheduleKind === 'every' ? (
-          <>
-            <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-              <span className="bf-todos__field-label">{t('editor.fields.every')}</span>
-              <div className="bf-todos__interval">
-                <Input
-                  size="small"
-                  type="number"
-                  value={draft.everyValue}
-                  error={validationErrors.everyValue}
-                  placeholder="1"
-                  onChange={(event) => {
-                    const everyValue = event.currentTarget.value;
-                    clearError('everyValue');
-                    updateDraft({ everyValue });
+            ) : (
+              <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
+                <span className="bf-todos__field-label">
+                  <Bot size={16} aria-hidden="true" />
+                  {t('editor.fields.agentType')}
+                </span>
+                <Select
+                  size="medium"
+                  className="bf-todos__field-control"
+                  options={agentTypeOptions}
+                  value={draft.agentType}
+                  error={validationErrors.agentType}
+                  disabled={isAssistantWorkspace}
+                  placeholder={t('editor.placeholders.agentType')}
+                  triggerAriaLabel={t('editor.fields.agentType')}
+                  onChange={(value) => {
+                    clearError('agentType');
+                    updateDraft({ agentType: String(value) });
                   }}
                 />
-                <Select
-                  size="small"
-                  value={draft.everyUnit}
-                  options={INTERVAL_UNIT_OPTIONS.map((unit) => ({
-                    value: unit,
-                    label: t(`schedule.intervalUnits.${unit}`),
-                  }))}
-                  onChange={(value) => updateDraft({ everyUnit: value as IntervalUnit })}
-                />
               </div>
-            </label>
-            <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-              <span className="bf-todos__field-label">{t('editor.fields.anchor')}</span>
-              <LocalizedDateTimeField
-                value={draft.anchorMs}
-                aria-label={t('editor.fields.anchor')}
-                onChange={(anchorMs) => updateDraft({ anchorMs })}
-              />
-            </label>
-          </>
-        ) : null}
+            )}
 
-        {draft.scheduleKind === 'cron' ? (
-          <>
-            <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-              <span className="bf-todos__field-label">{t('editor.fields.cronExpr')}</span>
-              <Input
-                size="small"
-                value={draft.expr}
-                error={validationErrors.cronExpr}
-                placeholder="0 8 * * *"
-                onChange={(event) => {
-                  const expr = event.currentTarget.value;
-                  clearError('cronExpr');
-                  updateDraft({ expr });
-                }}
+            <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
+              <span className="bf-todos__field-label">
+                <RefreshCw size={16} aria-hidden="true" />
+                {t('editor.fields.scheduleKind')}
+              </span>
+              <Select
+                size="medium"
+                className="bf-todos__field-control"
+                value={draft.scheduleKind}
+                options={[
+                  { value: 'at', label: t('schedule.kinds.at') },
+                  { value: 'every', label: t('schedule.kinds.every') },
+                  { value: 'cron', label: t('schedule.kinds.cron') },
+                ]}
+                triggerAriaLabel={t('editor.fields.scheduleKind')}
+                onChange={handleScheduleKindChange}
+                data-testid="todos-editor-schedule-kind"
               />
-              <span className="bf-todos__field-note">{t('editor.hints.cronExpr')}</span>
-            </label>
-            <label className="bf-todos__field" data-bf-scene="todos" data-bf-part="field">
-              <span className="bf-todos__field-label">{t('editor.fields.timezone')}</span>
-              <Input
-                size="small"
-                value={draft.tz}
-                placeholder={t('editor.placeholders.timezone')}
-                onChange={(event) => updateDraft({ tz: event.currentTarget.value })}
-              />
-            </label>
-          </>
-        ) : null}
+            </div>
 
-        <div
-          className="bf-todos__field bf-todos__field--toggle"
+            <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
+              <span className="bf-todos__field-label">
+                <Clock3 size={16} aria-hidden="true" />
+                {draft.scheduleKind === 'at'
+                  ? t('editor.fields.at')
+                  : draft.scheduleKind === 'every'
+                    ? t('editor.fields.every')
+                    : t('editor.fields.cronExpr')}
+              </span>
+
+              {draft.scheduleKind === 'at' ? (
+                <LocalizedDateTimeField
+                  className="bf-todos__field-control bf-todos__field-control--datetime"
+                  value={draft.at}
+                  error={validationErrors.at}
+                  aria-label={t('editor.fields.at')}
+                  onChange={(at) => {
+                    clearError('at');
+                    // Re-enable a Todo that was left off after its time passed.
+                    onDraftChange((current) => ({
+                      ...current,
+                      at,
+                      enabled: !current.enabled && isFutureLocalDateTimeInput(at)
+                        ? true
+                        : current.enabled,
+                    }));
+                  }}
+                />
+              ) : null}
+
+              {draft.scheduleKind === 'every' ? (
+                <div className="bf-todos__interval">
+                  <Input
+                    size="medium"
+                    className="bf-todos__field-control"
+                    type="number"
+                    value={draft.everyValue}
+                    error={validationErrors.everyValue}
+                    min="1"
+                    aria-label={t('editor.fields.every')}
+                    placeholder="1"
+                    onChange={(event) => {
+                      const everyValue = event.currentTarget.value;
+                      clearError('everyValue');
+                      updateDraft({ everyValue });
+                    }}
+                  />
+                  <Select
+                    size="medium"
+                    className="bf-todos__field-control"
+                    value={draft.everyUnit}
+                    options={INTERVAL_UNIT_OPTIONS.map((unit) => ({
+                      value: unit,
+                      label: t(`schedule.intervalUnits.${unit}`),
+                    }))}
+                    triggerAriaLabel={t('editor.fields.every')}
+                    onChange={(value) => updateDraft({ everyUnit: value as IntervalUnit })}
+                  />
+                </div>
+              ) : null}
+
+              {draft.scheduleKind === 'cron' ? (
+                <Input
+                  size="medium"
+                  className="bf-todos__field-control"
+                  value={draft.expr}
+                  error={validationErrors.cronExpr}
+                  aria-label={t('editor.fields.cronExpr')}
+                  placeholder="0 8 * * *"
+                  onChange={(event) => {
+                    const expr = event.currentTarget.value;
+                    clearError('cronExpr');
+                    updateDraft({ expr });
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+
+          <div
+            className="bf-todos__editor-runtime"
+            data-bf-scene="todos"
+            data-bf-part="editorRuntime"
+          >
+            <Switch
+              size="medium"
+              className="bf-todos__editor-enable"
+              checked={draft.enabled}
+              label={t('editor.enabled.title')}
+              description={t('editor.enabled.description')}
+              aria-label={t('editor.enabled.title')}
+              onChange={(event) => updateDraft({ enabled: event.currentTarget.checked })}
+            />
+            <span className="bf-todos__editor-runtime-divider" aria-hidden="true" />
+            <div className="bf-todos__editor-smart">
+              <span className="bf-todos__editor-smart-icon" aria-hidden="true">
+                <Sparkles size={16} strokeWidth={1.7} />
+              </span>
+              <span className="bf-todos__editor-smart-copy">
+                <strong>{t('editor.smartExecution.title')}</strong>
+                <span>{t('editor.smartExecution.description')}</span>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section
+          className="bf-todos__editor-section"
+          aria-labelledby="todos-editor-prompt-title"
           data-bf-scene="todos"
-          data-bf-part="field"
+          data-bf-part="editorSection"
         >
-          <span className="bf-todos__field-label">{t('editor.fields.enabled')}</span>
-          <Switch
-            size="small"
-            checked={draft.enabled}
-            aria-label={t('editor.fields.enabled')}
-            onChange={(event) => updateDraft({ enabled: event.currentTarget.checked })}
+          <h3 id="todos-editor-prompt-title" className="bf-todos__editor-section-title">
+            {t('editor.sections.prompt')}
+          </h3>
+          <Textarea
+            className="bf-todos__editor-prompt"
+            value={draft.text}
+            error={validationErrors.text}
+            showCount
+            rows={5}
+            maxLength={1000}
+            aria-label={t('editor.fields.prompt')}
+            placeholder={t('editor.placeholders.prompt')}
+            onChange={(event) => {
+              const text = event.currentTarget.value;
+              clearError('text');
+              updateDraft({ text });
+            }}
+            data-testid="todos-editor-prompt"
           />
-        </div>
+        </section>
+
+        <section
+          className="bf-todos__editor-advanced"
+          data-bf-scene="todos"
+          data-bf-part="editorAdvanced"
+        >
+          <button
+            type="button"
+            className="bf-todos__editor-advanced-trigger"
+            aria-expanded={advancedOpen}
+            aria-controls="todos-editor-advanced-panel"
+            onClick={() => setAdvancedOpen((open) => !open)}
+            data-testid="todos-editor-advanced-toggle"
+          >
+            <span>{t('editor.advanced.title')}</span>
+            <ChevronDown size={16} aria-hidden="true" />
+          </button>
+
+          {advancedOpen ? (
+            <div id="todos-editor-advanced-panel" className="bf-todos__editor-advanced-panel">
+              {draft.scheduleKind === 'every' ? (
+                <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
+                  <span className="bf-todos__field-label">
+                    <Clock3 size={16} aria-hidden="true" />
+                    {t('editor.fields.anchor')}
+                  </span>
+                  <LocalizedDateTimeField
+                    className="bf-todos__field-control bf-todos__field-control--datetime"
+                    value={draft.anchorMs}
+                    aria-label={t('editor.fields.anchor')}
+                    onChange={(anchorMs) => updateDraft({ anchorMs })}
+                  />
+                  <span className="bf-todos__field-note">{t('editor.placeholders.anchor')}</span>
+                </div>
+              ) : null}
+
+              {draft.scheduleKind === 'cron' ? (
+                <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
+                  <span className="bf-todos__field-label">
+                    <Clock3 size={16} aria-hidden="true" />
+                    {t('editor.fields.timezone')}
+                  </span>
+                  <Input
+                    size="medium"
+                    className="bf-todos__field-control"
+                    value={draft.tz}
+                    aria-label={t('editor.fields.timezone')}
+                    placeholder={t('editor.placeholders.timezone')}
+                    onChange={(event) => updateDraft({ tz: event.currentTarget.value })}
+                  />
+                  <span className="bf-todos__field-note">{t('editor.hints.cronExpr')}</span>
+                </div>
+              ) : null}
+
+              {boundSessionId ? (
+                <p className="bf-todos__editor-advanced-note">
+                  {t('editor.hints.boundSession')}
+                </p>
+              ) : null}
+
+              {draft.scheduleKind === 'at' && !boundSessionId ? (
+                <p className="bf-todos__editor-advanced-note">
+                  {t('editor.advanced.empty')}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
+        {workspaceOptions.length === 0 ? (
+          <p className="bf-todos__warning" data-bf-scene="todos" data-bf-part="warning">
+            {t('editor.noWorkspace')}
+          </p>
+        ) : null}
       </div>
 
-      <label
-        className="bf-todos__field bf-todos__field--prompt"
+      <footer
+        className="bf-todos__editor-actions"
         data-bf-scene="todos"
-        data-bf-part="field"
+        data-bf-part="editorActions"
       >
-        <span className="bf-todos__field-label">{t('editor.fields.prompt')}</span>
-        <Textarea
-          value={draft.text}
-          error={validationErrors.text}
-          autoResize
-          showCount
-          maxLength={4000}
-          placeholder={t('editor.placeholders.prompt')}
-          onChange={(event) => {
-            const text = event.currentTarget.value;
-            clearError('text');
-            updateDraft({ text });
-          }}
-          data-testid="todos-editor-prompt"
-        />
-      </label>
-
-      {workspaceOptions.length === 0 ? (
-        <p className="bf-todos__warning" data-bf-scene="todos" data-bf-part="warning">
-          {t('editor.noWorkspace')}
-        </p>
-      ) : null}
-
-      <div className="bf-todos__editor-actions" data-bf-scene="todos" data-bf-part="editorActions">
-        <Button size="small" variant="ghost" onClick={onCancel}>
+        <Button
+          type="button"
+          size="medium"
+          variant="secondary"
+          onClick={onCancel}
+          disabled={saving}
+        >
           {t('common:nav.scheduledJobs.actions.cancel')}
         </Button>
         <Button
-          size="small"
-          variant="primary"
-          onClick={onSave}
+          type="submit"
+          size="medium"
+          variant="inverse"
           isLoading={saving}
           disabled={workspaceOptions.length === 0 || !selectedWorkspaceId}
           data-testid="todos-editor-save"
         >
           {isEditing ? t('editor.actions.save') : t('editor.actions.create')}
         </Button>
-      </div>
-    </section>
+      </footer>
+    </form>
   );
 };
 

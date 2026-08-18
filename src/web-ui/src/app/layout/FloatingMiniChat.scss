@@ -300,56 +300,10 @@ $panel-height: 680px;
   height: 40px;
   display: flex;
   align-items: center;
-  padding: 0 $size-gap-2;
+  padding-block: 0;
+  padding-inline: $size-gap-2 $size-gap-1;
   gap: 4px;
   border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-}
-
-.bitfun-fmc__header-btn {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-muted);
-  border-radius: 6px;
-  cursor: pointer;
-  transition:
-    transform 120ms $fmc-ease,
-    background 120ms ease,
-    color 120ms ease;
-
-  &:hover {
-    background: var(--bf-appearance-token-element-bg-base);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
-  &:active {
-    transform: scale(0.92);
-  }
-
-  &--confirm {
-    color: var(--bf-appearance-token-color-success);
-    &:hover { background: var(--bf-appearance-token-color-success-bg); }
-  }
-
-  &--reject {
-    color: var(--bf-appearance-token-color-error);
-    &:hover { background: var(--bf-appearance-token-color-error-bg); }
-  }
-
-  &--stop {
-    color: var(--bf-appearance-token-color-error);
-    &:hover { background: var(--bf-appearance-token-color-error-bg); }
-  }
-
-  &--close:hover {
-    background: var(--bf-appearance-token-color-error-bg);
-    color: var(--bf-appearance-token-color-error);
-  }
 }
 
 .bitfun-fmc__miniapp-session-icon {

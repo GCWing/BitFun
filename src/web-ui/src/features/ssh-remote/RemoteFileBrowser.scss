@@ -43,7 +43,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px;
+    padding-block: 16px;
+    padding-inline: 20px 16px;
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     flex-shrink: 0;
 
@@ -52,28 +53,6 @@
       font-weight: 600;
       color: var(--bf-appearance-token-color-text-primary);
       margin: 0;
-    }
-  }
-
-  &__close-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    color: var(--bf-appearance-token-color-text-muted);
-    cursor: pointer;
-    transition:
-      background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 
@@ -614,7 +593,6 @@
     animation: none;
   }
 
-  .remote-file-browser__close-btn,
   .remote-file-browser__breadcrumb-btn,
   .remote-file-browser__toolbar-btn,
   .remote-file-browser__context-menu-item {

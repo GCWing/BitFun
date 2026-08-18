@@ -1,5 +1,5 @@
 /**
- * Mini App scene store — app catalog + lifecycle state.
+ * Mini App store — app catalog + worker and customization state.
  */
 import { create } from 'zustand';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -146,8 +146,6 @@ export interface MiniAppComposerClaim {
 interface MiniAppState {
   apps: MiniAppMeta[];
   loading: boolean;
-  /** App IDs whose scenes are currently open in the viewport. */
-  openedAppIds: string[];
   /** App IDs whose JS workers are currently running. */
   runningWorkerIds: string[];
   /** App IDs with an active customization surface in the MiniApp tab. */
@@ -168,8 +166,6 @@ interface MiniAppState {
   setMarketOrigins: (origins: Record<string, InstalledMarketOrigin>) => void;
   /** Records the origin of a single app right after a market install/update. */
   setMarketOrigin: (appId: string, origin: InstalledMarketOrigin) => void;
-  openApp: (id: string) => void;
-  closeApp: (id: string) => void;
   setRunningWorkerIds: (ids: string[]) => void;
   markWorkerRunning: (id: string) => void;
   markWorkerStopped: (id: string) => void;
@@ -187,7 +183,6 @@ interface MiniAppState {
 export const useMiniAppStore = create<MiniAppState>((set) => ({
   apps: [],
   loading: false,
-  openedAppIds: [],
   runningWorkerIds: [],
   customizingAppIds: [],
   composerClaims: {},
@@ -198,7 +193,6 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
       const validIds = new Set(apps.map((app) => app.id));
       return {
         apps,
-        openedAppIds: state.openedAppIds.filter((id) => validIds.has(id)),
         runningWorkerIds: state.runningWorkerIds.filter((id) => validIds.has(id)),
         customizingAppIds: state.customizingAppIds.filter((id) => validIds.has(id)),
         composerClaims: Object.fromEntries(
@@ -224,18 +218,6 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
   setMarketOrigin: (appId, origin) =>
     set((state) => ({ marketOrigins: { ...state.marketOrigins, [appId]: origin } })),
 
-  openApp: (id) =>
-    set((state) =>
-      state.openedAppIds.includes(id) ? state : { openedAppIds: [...state.openedAppIds, id] }
-    ),
-  closeApp: (id) =>
-    set((state) => {
-      const { [id]: _removed, ...composerClaims } = state.composerClaims;
-      return {
-        openedAppIds: state.openedAppIds.filter((value) => value !== id),
-        composerClaims,
-      };
-    }),
   setRunningWorkerIds: (ids) => set({ runningWorkerIds: Array.from(new Set(ids)) }),
   markWorkerRunning: (id) =>
     set((state) =>

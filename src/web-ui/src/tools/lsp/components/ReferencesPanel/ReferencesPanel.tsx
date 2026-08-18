@@ -4,9 +4,9 @@
 
 import React, { useCallback, useMemo } from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import { FileText, X, ChevronRight } from 'lucide-react';
+import { FileText, ChevronRight } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
-import { IconButton } from '@/component-library';
+import { PopupCloseButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './ReferencesPanel.scss';
 
@@ -55,7 +55,7 @@ export const ReferencesPanel: React.FC<ReferencesPanelProps> = ({
   onReferenceClick,
   maxHeight = 400,
 }) => {
-  const { t } = useI18n('tools');
+  const { t } = useI18n(['tools', 'common']);
   const groupedReferences = useMemo(() => {
     const groups = new Map<string, GroupedReferences>();
 
@@ -132,16 +132,13 @@ export const ReferencesPanel: React.FC<ReferencesPanelProps> = ({
             <FileText size={16} />
             <span>{t('lsp.referencesPanel.emptyTitle')}</span>
           </div>
-          <IconButton 
+          <PopupCloseButton
             className="references-panel__close" 
             data-bf-component="references-panel"
             data-bf-part="close"
             onClick={onClose}
-            size="small"
-            variant="ghost"
-          >
-            <X size={16} />
-          </IconButton>
+            aria-label={t('common:actions.close')}
+          />
         </div>
         <div data-bf-component="references-panel" data-bf-part="empty" className="references-panel__empty">
           {symbolName
@@ -164,16 +161,13 @@ export const ReferencesPanel: React.FC<ReferencesPanelProps> = ({
             <span className="references-panel__count">({references.length})</span>
           </span>
         </div>
-        <IconButton 
+        <PopupCloseButton
           className="references-panel__close" 
           data-bf-component="references-panel"
           data-bf-part="close"
           onClick={onClose}
-          size="small"
-          variant="ghost"
-        >
-          <X size={16} />
-        </IconButton>
+          aria-label={t('common:actions.close')}
+        />
       </div>
 
       <div data-bf-component="references-panel" data-bf-part="content" className="references-panel__content">

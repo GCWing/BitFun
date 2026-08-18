@@ -14,6 +14,7 @@ export const sshRemoteAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'browserOverlay' },
     { id: 'browser' },
     { id: 'browserHeader' },
+    { id: 'browserClose' },
     { id: 'breadcrumb' },
     { id: 'toolbar' },
     { id: 'content' },

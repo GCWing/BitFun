@@ -36,8 +36,6 @@ interface MiniAppSceneProps {
 }
 
 const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
-  const openApp = useMiniAppStore((state) => state.openApp);
-  const closeApp = useMiniAppStore((state) => state.closeApp);
   const markCustomizationActive = useMiniAppStore((state) => state.markCustomizationActive);
   const markCustomizationIdle = useMiniAppStore((state) => state.markCustomizationIdle);
   const { current: appearance } = useAppearance();
@@ -59,12 +57,8 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   } | null>(null);
 
   useEffect(() => {
-    openApp(appId);
-    return () => {
-      closeApp(appId);
-      markCustomizationIdle(appId);
-    };
-  }, [appId, openApp, closeApp, markCustomizationIdle]);
+    return () => markCustomizationIdle(appId);
+  }, [appId, markCustomizationIdle]);
 
   useEffect(() => {
     setCustomizePreview(null);
@@ -155,6 +149,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   return (
     <div
       className="miniapp-scene"
+      data-miniapp-id={appId}
       data-bf-scene="miniapp"
       data-bf-part="root"
       data-bf-state={customizeOpen ? 'customizing' : undefined}

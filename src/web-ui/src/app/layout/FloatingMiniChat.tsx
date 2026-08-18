@@ -11,7 +11,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, X } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { flowChatStore } from '../../flow_chat/store/FlowChatStore';
 import { syncSessionToModernStore } from '../../flow_chat/services/storeSync';
 import ChatPane from '@/app/scenes/session/ChatPane';
@@ -19,7 +19,7 @@ import type {
   ChatInputRegistration,
   ChatInputSubmission,
 } from '@/flow_chat/components/chatInputRegistration';
-import { Tooltip } from '@/component-library';
+import { PopupCloseButton } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { SessionMenu, useFlowChatSessions } from '../../flow_chat/components/session-menu';
 import { useSceneStore } from '@/app/stores/sceneStore';
@@ -578,11 +578,14 @@ export const FloatingMiniChat: React.FC = () => {
           {/* Tool confirmation and stop controls come from the reused session
               surface (permission panel above ChatInput, ChatInput stop button),
               so the header only owns bubble chrome. */}
-          <Tooltip content={t('planner.cancel')}>
-            <button type="button" data-bf-component="floating-mini-chat" data-bf-part="headerAction" className="bitfun-fmc__header-btn bitfun-fmc__header-btn--close" onClick={handleClose}>
-              <X size={14} />
-            </button>
-          </Tooltip>
+          <PopupCloseButton
+            data-bf-component="floating-mini-chat"
+            data-bf-part="headerAction"
+            className="bitfun-fmc__close"
+            onClick={handleClose}
+            tooltip={t('session.close')}
+            aria-label={t('session.close')}
+          />
         </div>
 
         {/* Main window session surface, reused as-is. Only mounted while the
