@@ -106,8 +106,8 @@ but not a second visible movement.
 
 **Turn navigation never scrolls into the reserved blank to top-align a Turn.** A
 Turn whose top lies past the content end is stopped at the content end instead,
-which is where the tail rests. The blank belongs to follow-output — `pin-turn-top`
-holds it for output that is arriving, and nothing arrives under a Turn the user
+which is where the tail rests. The blank belongs to follow-output's passive
+new-Turn reveal, and nothing arrives under a Turn the user
 navigated to. There is no "is this the last Turn" test and no measurement of
 what lies below it: a Turn with a viewport of content under it has its top above
 the content end already, so the clamp does not bind and the final Turns of a
@@ -119,8 +119,8 @@ message**, not at the message itself. The first Turn already sits below that gap
 for free, because `.message-list-header` occupies it at the head of the scroll
 content; every other Turn used to land flat on the top edge, and the two read as
 different alignments. The header renders at the same constant so they cannot
-drift. Both the one-shot scroll and the offset the follow loop re-asserts every
-frame carry it — if only one did, they would fight.
+drift. This remains a Turn-navigation contract; new-Turn reveal no longer asks
+for or re-asserts a Turn-top offset.
 
 **A gesture preempts a navigation still in flight, and ends it.** The library's
 re-aim keeps computing for up to 5s after the aim that started it, recomputing

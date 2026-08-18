@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   isFollowingOutput: false,
   followsNow: false,
   scheduleFollowToLatest: vi.fn(),
+  revealNewTurnTail: null as null | ((turnId: string) => boolean),
   /**
    * The register the list built, reached through the hook it hands it to.
    *
@@ -172,8 +173,10 @@ vi.mock('../../store/chatInputStateStore', () => ({
 vi.mock('./useFlowChatFollowOutput', () => ({
   useFlowChatFollowOutput: (options: {
     viewportOwner: { claim: (owner: string) => boolean };
+    revealNewTurnTail: (turnId: string) => boolean;
   }) => {
     mocks.viewportOwner = options.viewportOwner;
+    mocks.revealNewTurnTail = options.revealNewTurnTail;
     return {
       isFollowingOutput: mocks.isFollowingOutput,
       enterFollowOutput: mocks.enterFollowOutput,
@@ -315,6 +318,7 @@ describe('VirtualMessageList natural scroll contract', () => {
     mocks.handleUserScrollIntent.mockReset();
     mocks.handleFollowScroll.mockReset();
     mocks.scheduleFollowToLatest.mockReset();
+    mocks.revealNewTurnTail = null;
     mocks.viewportOwner = null;
     mocks.setVisibleTurnInfo.mockReset();
     mocks.renderItemMetadata = true;
@@ -342,7 +346,7 @@ describe('VirtualMessageList natural scroll contract', () => {
     expect(footer?.style.minHeight).toBe('168px');
   });
 
-  it('reserves a tail spacer sized from the viewport and nothing else', () => {
+  it('reserves a tail spacer from the viewport and input-stack inset', () => {
     // The session opens on the end of *real content*, which is above this
     // reservation. Nothing aligns to the last item any more: the end of the
     // scroll range is reserved blank, and opening there is opening on nothing.
@@ -379,6 +383,25 @@ describe('VirtualMessageList natural scroll contract', () => {
       } else {
         delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth;
       }
+    }
+  });
+
+  it('reveals a rendered new Turn at the physical bottom through the viewport register', () => {
+    const restoreLayout = fakeLayout({
+      clientHeight: 600,
+      scrollHeight: 1400,
+      turnTopFromScrollerTop: 500,
+    });
+    try {
+      act(() => root.render(<VirtualMessageList />));
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.scrollTop = 100;
+
+      expect(mocks.revealNewTurnTail?.('turn-2')).toBe(true);
+      expect(scroller.scrollTop).toBe(800);
+      expect(mocks.scrollToOffset).not.toHaveBeenCalled();
+    } finally {
+      restoreLayout();
     }
   });
 
@@ -708,7 +731,10 @@ describe('VirtualMessageList natural scroll contract', () => {
        * where the reserved blank begins — which, since
        * paging happens only while scrolling up, it then does every time.
        */
-      const contentEndPx = 1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600;
+       const contentEndPx = Math.min(
+         100,
+         1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600,
+       );
       withGrowingRange({ scrollHeightPx: 900, growthPx: 100, scrollTopPx: 0 }, scroller => {
         prependOlderTurns(3);
         expect(scroller.scrollTop).toBe(contentEndPx);

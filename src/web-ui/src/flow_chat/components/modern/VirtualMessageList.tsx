@@ -606,19 +606,26 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollToContentEndThroughVirtualizer(behavior === 'smooth' ? 'smooth' : 'auto');
   }, [readContentEndScrollTop, scrollToContentEndThroughVirtualizer, viewportOwner]);
 
-  const scrollTurnToTop = useCallback((turnId: string) => {
+  const revealNewTurnTail = useCallback((turnId: string) => {
     const targetIndex = virtualItems.findIndex(item => (
       item.turnId === turnId && item.type === 'user-message'
     ));
     if (targetIndex < 0) return false;
-    // Follow-output's answer to a new Turn, not a navigation: it is the same
-    // continuous writer, and a pin it cannot hold is not a pin.
-    virtualizer.scrollItemIntoView(targetIndex, { align: 'start', owner: 'follow-output' });
-    return true;
-  }, [virtualItems, virtualizer]);
+    const scroller = scrollerElementRef.current;
+    if (!scroller) return false;
 
-  // Must agree with `scrollTurnToTop` down to the pixel: this is the offset the
-  // follow loop re-asserts every frame, so a disagreement is a fight.
+    // This placement is intentionally one-shot. Streaming growth then consumes
+    // the resident blank without a re-aim moving historical content upward.
+    virtualizer.measureRenderedItems();
+    return viewportOwner.write({
+      topPx: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+      behavior: 'auto',
+      owner: 'follow-output',
+    });
+  }, [viewportOwner, virtualItems, virtualizer]);
+
+  // Turn navigation still needs the rendered top offset independently of the
+  // new-Turn reveal, which targets the physical bottom only once.
   const resolveTurnTopScrollTop = useCallback((turnId: string) => {
     const scroller = scrollerElementRef.current;
     const element = getRenderedUserMessageElement(turnId);
@@ -655,8 +662,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollerRef: scrollerElementRef,
     getTailSpacerPx,
     scrollToContentEnd,
-    scrollTurnToTop,
-    resolveTurnTopScrollTop,
+    revealNewTurnTail,
     isOpeningViewport,
     viewportOwner,
     viewportId,

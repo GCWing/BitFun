@@ -16,9 +16,9 @@ each missing what the other had.
 
 | Test | Contract it holds |
 |---|---|
-| `flowChatTailFollow.test.ts` | the follow target, `pin-turn-top`, `hold-tail` |
+| `flowChatTailFollow.test.ts` | the three-quarter reservation and `hold-tail` geometry |
 | `flowChatCollapseMotion.test.ts` | collapse does not move earlier content |
-| `useFlowChatFollowOutput.test.tsx` | the frame loop, user-controlled blank, resize realign |
+| `useFlowChatFollowOutput.test.tsx` | one-shot new-Turn reveal, frame loop, blank crossing, resize realign |
 | `../../tool-cards/useToolCardHeightContract.test.tsx` | tool cards reflow rather than compensate |
 | `flowChatHistoryBoundary.test.ts` | the screenful lead, and the latch's own predicate |
 | `flowChatLiveTailWindow.test.ts` | "does the transcript still reach the newest Turn" |
@@ -52,35 +52,34 @@ group does not renumber the others.
    most visible symptom if the estimate ever regresses.
 4. Session switching and history paging do not restore stale footer height.
 
-### Submitting and pinning
+### Submitting and revealing
 
-1. A newly submitted Turn opens at the viewport top with room below it.
-2. Send a one-line message and let it pin. It must come to rest at the top with
-   the same small gap above it as the very first Turn of the session, and the
-   pin must hold steady rather than creeping down — a pinned offset past the
-   end of the scroll range is clamped, and the follow loop will rewrite it
-   every frame.
-3. Scroll down into the blank and let go right after submitting a short Turn:
-   it returns that Turn to the viewport top, not to the content end.
+1. A newly submitted Turn performs one physical-bottom placement, exposing the
+   full resident spacer while leaving at least one quarter of the transcript
+   visible above the input footer.
+2. Send a one-line message and leave the short response alone. The viewport must
+   remain at that reveal position; no frame loop may creep toward the content end.
+3. While the answer grows but has not filled the blank, history stays visually
+   fixed and the blank shrinks. When output reaches the viewport bottom, follow
+   starts without a snap and subsequent growth follows normally.
 4. Send a message from the live tail, and again while parked deep in history.
-   Both must end with the new Turn at the viewport top; the second also has to
+   Both must reveal the new live tail; the second also has to
    leave the history window to get there.
-5. Send a message, let it pin, then roll it back from its own message actions.
+5. Send a message, let it reveal, then roll it back from its own message actions.
    The transcript must come to rest with the surviving last Turn at the
-   *bottom* — not with it pinned to the top, which is what reading the
-   truncation as an arrival used to do.
+   *content end*, not at the old reveal position.
 6. Roll a Turn back from further up a transcript, having scrolled to reach it.
    The surviving last Turn must end at the bottom here too — scrolling to reach
    the button hands the viewport to the reader, and the answer has to run
    anyway. Leaving it to the anchor is what showed Turns 2..6 of an 8-Turn
    session with the new last Turn's answer below the fold.
 7. Edit a message and rerun it. There must be one movement, not two — the
-   truncation is silent and the rerun's Turn pins as usual.
+   truncation is silent and the rerun's Turn reveals as usual.
 
 ### Streaming and follow
 
-1. Streaming follows the tail until the user scrolls, and the pinned Turn hands
-   off once its answer overflows the viewport.
+1. A new-Turn reveal stays fixed until output consumes its blank, then hands off
+   to ordinary tail following.
 2. With output streaming, scroll up and hold still. Follow must not write while
    the gesture is recent, and must resume once it goes quiet.
 3. Jump to latest from a screen or two up is animated rather than an instant
@@ -121,12 +120,13 @@ group does not renumber the others.
    opens.
 4. Wheel down into the reserved blank and stop. The transcript must remain
    still and the jump-to-latest affordance must stay available.
-5. With a short Turn pinned, scroll up and jump to latest. The explicit jump
-   must still return to the pin rather than the physical bottom of the spacer.
+5. Trigger the delayed jump-to-latest that accompanies live-tail restoration
+   while a short Turn reveal is active. It must be a no-op and must not replace
+   the reveal with a content-end scroll.
 
 ### Output catching up with a reader in the blank
 
-1. Send a message so a short Turn pins with blank below it, then wheel up a
+1. Send a message so its one-shot reveal has blank below it, then wheel up a
    little — far enough to leave the tail, not far enough to push the blank off
    screen — and take your hand off. As the answer grows past the bottom edge the
    transcript must resume following, easing rather than snapping, and the
@@ -147,8 +147,8 @@ group does not renumber the others.
 
 1. Drag the scrollbar to the very bottom. The screen must not be entirely
    blank: the last Turn and the input clearance stay visible above the
-   reservation. Repeat with the composer expanded, which is where the reserve
-   falls back to the hold-gap floor.
+   reservation. Repeat with the composer expanded, which consumes the spacer
+   before the three-quarter cap can be exceeded.
 2. Drag the scrollbar, without touching the wheel first, down into the reserved
    blank and let go: it must stay there. Then drag it while output streams: the
    transcript must follow the thumb without the frame loop fighting it. A press
@@ -168,7 +168,7 @@ group does not renumber the others.
 1. Open a session long enough to be `isPartial` — the loaded tail is shorter
    than the viewport, so it pages older Turns in on its own. No jump-to-latest
    bar should appear, and streaming output should be followed. Then send a
-   message: it must appear immediately and pin to the viewport top, with the
+   message: it must appear immediately in the one-shot tail reveal, with the
    history above neither moving nor reloading.
 2. Scroll up to a junction. **One** page loads, the Turn under the cursor stays
    where it is, and paging stops until the head is reached again. Then keep
