@@ -1,6 +1,7 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
 import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
+import { LanguageSettingsPanel } from './LanguageSettingsPanel';
 import { ModelServiceSettingsPanel } from './ModelServiceSettingsPanel';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
 
@@ -20,6 +21,7 @@ export struct SettingsSheet {
   @Param deviceId: string = '';
   @Event onClose: () => void = () => {};
   @Event onOpenAccount: () => void = () => {};
+  @Event onSetLanguage: (language: string) => Promise<void> = async (_language: string) => {};
   @Event onSaveGeneralChatConfig: (
     apiUrl: string,
     apiKey: string,
@@ -42,12 +44,14 @@ export struct SettingsSheet {
     _modelName: string,
     _clearApiKey: boolean
   ) => '';
+  @Local showLanguage: boolean = false;
   @Local showModelService: boolean = false;
   @Local savedGeneralChatApiUrl: string = '';
   @Local savedGeneralChatModelName: string = '';
   @Local savedGeneralChatHasApiKey: boolean = false;
 
   aboutToAppear(): void {
+    this.showLanguage = false;
     this.showModelService = false;
     this.syncGeneralChatConfig(this.generalChatApiUrl, this.generalChatModelName, this.hasGeneralChatApiKey);
   }
@@ -64,6 +68,9 @@ export struct SettingsSheet {
             .margin({ bottom: 30 })
 
           this.AccountEntry()
+
+          this.SectionTitle(RemoteI18n.t('settings.language.section'))
+          this.LanguageCard()
 
           this.SectionTitle(RemoteI18n.t('settings.modelService.section'))
           this.ModelServiceCard()
@@ -94,6 +101,10 @@ export struct SettingsSheet {
       .onClick(() => {
         this.onClose();
       })
+
+      if (this.showLanguage) {
+        this.LanguagePanel()
+      }
 
       if (this.showModelService) {
         this.ModelServicePanel()
@@ -137,6 +148,26 @@ export struct SettingsSheet {
   }
 
   @Builder
+  LanguageCard() {
+    Column() {
+      this.SettingsRow(
+        RemoteI18n.t('settings.language.title'),
+        RemoteI18n.nativeName(),
+        true,
+        () => {
+          this.showLanguage = true;
+        },
+        $r('sys.symbol.textformat')
+      )
+    }
+    .width('100%')
+    .padding({ top: 5, bottom: 5 })
+    .backgroundColor(CARD)
+    .borderRadius(8)
+    .margin({ bottom: 24 })
+  }
+
+  @Builder
   ModelServiceCard() {
     Column() {
       this.SettingsRow(
@@ -145,7 +176,8 @@ export struct SettingsSheet {
         true,
         () => {
           this.showModelService = true;
-        }
+        },
+        $r('sys.symbol.square_grid_2x2')
       )
     }
     .width('100%')
@@ -192,9 +224,9 @@ export struct SettingsSheet {
   }
 
   @Builder
-  SettingsRow(title: string, value: string, showChevron: boolean, action: () => void) {
+  SettingsRow(title: string, value: string, showChevron: boolean, action: () => void, icon: Resource) {
     Row({ space: 16 }) {
-      SymbolGlyph($r('sys.symbol.square_grid_2x2'))
+      SymbolGlyph(icon)
         .fontSize(20)
         .fontColor([MUTED])
         .width(23)
@@ -221,6 +253,19 @@ export struct SettingsSheet {
     .padding({ left: 18, right: 18 })
     .alignItems(VerticalAlign.Center)
     .onClick(action)
+  }
+
+  @Builder
+  LanguagePanel() {
+    LanguageSettingsPanel({
+      selectedLanguage: RemoteI18n.language(),
+      onClose: () => {
+        this.showLanguage = false;
+      },
+      onSelect: (language: string) => {
+        return this.onSetLanguage(language);
+      }
+    })
   }
 
   @Builder

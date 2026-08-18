@@ -31,6 +31,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   async aboutToAppear(): Promise<void> {
+    await this.localeController.initialize(this.host.context());
     this.syncRemotePageSummary();
     await this.remoteChatCache.init(this.host.context());
     await this.remoteSessionListCache.init(this.host.context());

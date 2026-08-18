@@ -9,8 +9,10 @@ import {
   WorkspaceInfo
 } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
+import { LocalePreferenceStore } from '../../services/LocalePreferenceStore';
 import { ClipboardService } from '../../services/ClipboardService';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
+import { ConnectionStatusPresenter } from '../../services/ConnectionStatusPresenter';
 import { ImagePickerService } from '../../services/ImagePickerService';
 import {
   GeneralChatConfigSnapshot,
@@ -21,6 +23,7 @@ import { GeneralChatCommandController } from '../../services/general-chat/Genera
 import { GeneralChatController } from '../../services/general-chat/GeneralChatController';
 import { GeneralChatDraftController } from '../../services/general-chat/GeneralChatDraftController';
 import { GeneralChatDraftLifecycleController } from '../../services/general-chat/GeneralChatDraftLifecycleController';
+import { GeneralChatServiceStatus } from '../../services/general-chat/GeneralChatServiceState';
 import { GeneralChatStreamLifecycleController } from '../../services/general-chat/GeneralChatStreamLifecycleController';
 import {
   GeneralChatSendResult,
@@ -38,6 +41,7 @@ import { RemoteFileDownloadController } from '../../services/RemoteFileDownloadC
 import { FilePreviewController } from '../viewmodel/FilePreviewController';
 import { DeviceDirectoryViewModel } from '../viewmodel/DeviceDirectoryViewModel';
 import { SettingsController } from '../viewmodel/SettingsController';
+import { LocaleController } from '../viewmodel/LocaleController';
 import { ConversationController } from '../viewmodel/ConversationController';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteModelController } from '../../services/RemoteModelController';
@@ -231,6 +235,7 @@ export abstract class AppRootRuntimeComposition {
       failure: '', desktopReported: false
     };
   }
+  readonly localePreferenceStore: LocalePreferenceStore = new LocalePreferenceStore();
   readonly generalChatConfigStore: GeneralChatConfigStore = new GeneralChatConfigStore();
   readonly generalChatController: GeneralChatController =
     GeneralChatController.createDefault(this.generalChatConfigStore);
@@ -391,6 +396,15 @@ export abstract class AppRootRuntimeComposition {
   remoteWorkspaceSessions: RemoteSession[] = [];
   readonly appShellViewModel: AppShellViewModel = new AppShellViewModel();
   readonly appShellState: AppShellState = this.appShellViewModel.state;
+  readonly localeController: LocaleController = new LocaleController(
+    this.localePreferenceStore,
+    {
+      onLanguageChanged: (_language: string): void => {
+        this.appShellState.setLocaleRevision(RemoteI18n.revision());
+        this.refreshLocalizedRuntimeCopy();
+      }
+    }
+  );
   readonly voiceInputLifecycleController: VoiceInputLifecycleController =
     new VoiceInputLifecycleController(
       this.voiceInputService,
@@ -910,7 +924,10 @@ export abstract class AppRootRuntimeComposition {
       testGeneral: async (url: string, key: string, model: string, clear: boolean): Promise<string> =>
         this.settingsController.test(url, key, model, clear),
       saveGeneral: async (url: string, key: string, model: string, clear: boolean): Promise<string> =>
-        this.settingsController.save(url, key, model, clear)
+        this.settingsController.save(url, key, model, clear),
+      setLanguage: async (language: string): Promise<void> => {
+        await this.localeController.setLanguage(language);
+      }
     },
     onConnect: {
       back: (): void => this.appShellState.setConnectSheetVisible(false),
@@ -981,6 +998,36 @@ export abstract class AppRootRuntimeComposition {
     if (opened) {
       this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
     }
+  }
+
+  refreshLocalizedRuntimeCopy(): void {
+    this.remotePageState.setStatusText(RemoteI18n.retranslateKnown(
+      this.remotePageState.statusText,
+      [
+        ConnectionStatusPresenter.labelKey(this.remotePageState.connectionState),
+        'status.restoringConnection',
+        'status.waitingConnection',
+        'status.notConnected'
+      ]
+    ));
+    this.remotePageState.setError(RemoteI18n.retranslate(this.remotePageState.sessionErrorText));
+    this.remotePageState.setWorkspace(
+      RemoteI18n.retranslateKnown(this.remotePageState.workspaceName, ['status.notConnected']),
+      this.remotePageState.workspacePath,
+      this.remotePageState.assistantId,
+      this.remotePageState.workspaceBranch,
+      this.remotePageState.workspaceKind
+    );
+    this.remotePageState.setDownloadStatus(
+      this.remotePageState.downloadingFilePath,
+      this.remotePageState.downloadedFilePath,
+      RemoteI18n.retranslate(this.remotePageState.fileDownloadStatus)
+    );
+    this.generalChatPageState.setStatus(GeneralChatServiceStatus.userMessage(
+      this.generalChatPageState.serviceState,
+      RemoteI18n.retranslate(this.generalChatPageState.statusText)
+    ));
+    this.filePreviewState.errorText = RemoteI18n.retranslate(this.filePreviewState.errorText);
   }
 
   handleDetectedRemoteUrl(url: string): string {

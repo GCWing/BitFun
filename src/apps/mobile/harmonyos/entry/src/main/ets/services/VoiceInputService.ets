@@ -37,10 +37,10 @@ export class VoiceInputService {
       await this.ensureMicrophonePermission(context);
       this.sessionId = Encoding.randomId('voice');
       this.engine = await speechRecognizer.createEngine({
-        language: 'zh-CN',
+        language: RemoteI18n.speechLanguage(),
         online: 1,
         extraParams: {
-          locate: 'CN',
+          locate: RemoteI18n.speechLocate(),
           recognizerMode: 'short'
         }
       });

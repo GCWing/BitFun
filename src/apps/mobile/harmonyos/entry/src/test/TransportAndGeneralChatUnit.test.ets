@@ -597,30 +597,34 @@ export default function transportAndGeneralChatUnitTest() {
     const now = Date.parse('2026-06-10T12:00:00.000Z');
 
     it('formats recent timestamps as just now', 0, () => {
-      expect(TimeFormat.relative('2026-06-10T11:59:45.000Z', now)).assertEqual('刚刚');
+      expect(TimeFormat.relative('2026-06-10T11:59:45.000Z', now)).assertEqual(RemoteI18n.t('time.justNow'));
     });
 
     it('formats minute and hour relative timestamps', 0, () => {
-      expect(TimeFormat.relative('2026-06-10T11:42:00.000Z', now)).assertEqual('18 分钟前');
-      expect(TimeFormat.relative('2026-06-10T09:00:00.000Z', now)).assertEqual('3 小时前');
+      expect(TimeFormat.relative('2026-06-10T11:42:00.000Z', now)).assertEqual(RemoteI18n.f('time.minutesAgo', '18'));
+      expect(TimeFormat.relative('2026-06-10T09:00:00.000Z', now)).assertEqual(RemoteI18n.f('time.hoursAgo', '3'));
     });
 
     it('formats older timestamps as days or dates', 0, () => {
-      expect(TimeFormat.relative('2026-06-08T12:00:00.000Z', now)).assertEqual('2 天前');
-      expect(TimeFormat.relative('2026-05-30T12:00:00.000Z', now)).assertEqual('2026-05-30');
+      expect(TimeFormat.relative('2026-06-08T12:00:00.000Z', now)).assertEqual(RemoteI18n.f('time.daysAgo', '2'));
+      expect(TimeFormat.relative('2026-05-30T12:00:00.000Z', now)).assertEqual(RemoteI18n.formatAbsoluteDate(
+        Date.parse('2026-05-30T12:00:00.000Z')
+      ));
     });
 
     it('does not show invalid timestamps as just now', 0, () => {
-      expect(TimeFormat.relative('', now)).assertEqual('时间未知');
-      expect(TimeFormat.relative('not-a-date', now)).assertEqual('时间未知');
+      expect(TimeFormat.relative('', now)).assertEqual(RemoteI18n.t('time.unknown'));
+      expect(TimeFormat.relative('not-a-date', now)).assertEqual(RemoteI18n.t('time.unknown'));
     });
 
     it('formats numeric timestamps and future timestamps safely', 0, () => {
-      expect(TimeFormat.relative('1781091720', now)).assertEqual('18 分钟前');
+      expect(TimeFormat.relative('1781091720', now)).assertEqual(RemoteI18n.f('time.minutesAgo', '18'));
       expect(TimeFormat.timestampMs('1781091720000')).assertEqual(now - 18 * 60 * 1000);
       expect(TimeFormat.timestampMs('1781091720000000')).assertEqual(now - 18 * 60 * 1000);
       expect(TimeFormat.timestampMs('1781091720000000000')).assertEqual(now - 18 * 60 * 1000);
-      expect(TimeFormat.relative('2026-06-12T12:00:00.000Z', now)).assertEqual('2026-06-12');
+      expect(TimeFormat.relative('2026-06-12T12:00:00.000Z', now)).assertEqual(RemoteI18n.formatAbsoluteDate(
+        Date.parse('2026-06-12T12:00:00.000Z')
+      ));
     });
   });
 

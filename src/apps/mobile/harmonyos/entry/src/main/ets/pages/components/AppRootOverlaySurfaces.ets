@@ -145,6 +145,7 @@ export struct AppSettingsSurface {
         onOpenAccount: this.actions.onSettings.openAccount,
         onTestGeneralChatConfig: this.actions.onSettings.testGeneral,
         onSaveGeneralChatConfig: this.actions.onSettings.saveGeneral,
+        onSetLanguage: this.actions.onSettings.setLanguage,
         onClose: this.actions.onSettings.close
       })
     }

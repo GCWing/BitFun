@@ -30,6 +30,11 @@ export class AppShellState {
    * versus wide reads it from here.
    */
   @Trace wideLayout: boolean = false;
+  /**
+   * Bumped when the in-app locale changes so shell consumers that already
+   * observe this object rebuild even if they do not call RemoteI18n.t().
+   */
+  @Trace localeRevision: number = 0;
   private accountReturnMode: string = '';
 
   setSidebarVisible(visible: boolean): void {
@@ -38,6 +43,10 @@ export class AppShellState {
 
   setWideLayout(wide: boolean): void {
     this.wideLayout = wide;
+  }
+
+  setLocaleRevision(revision: number): void {
+    this.localeRevision = revision;
   }
 
   setSettingsVisible(visible: boolean): void {
