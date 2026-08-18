@@ -21,7 +21,9 @@ import { randomUUID } from 'node:crypto'
 import { isAbsolute } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import Schema from '@deepseek-ai/schemastery'
-import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
+import {
+  createUserMessage, errorChain, type LlmModelInfo, type LlmProviderInfo,
+} from '@deepseek-ai/dsh-llm'
 import {
   AgentSideConnection,
   ndJsonStream,
@@ -401,7 +403,7 @@ export function apply(ctx: Context, config: AcpConfig): void {
 
   /**
    * The session's model picker: the harness's model catalog as one `select`
-   * config option, grouped by provider.
+   * config option, grouped by provider, one row per model.
    *
    * Unlike the mode, the model is switchable for the whole life of a session —
    * a mid-conversation switch changes only which model answers the next step,
@@ -409,6 +411,13 @@ export function apply(ctx: Context, config: AcpConfig): void {
    * may accept ids it does not advertise), so the model in force is offered
    * even when it is not listed: a picker whose current value is missing from
    * its own options renders blank.
+   *
+   * A model reachable through two providers is listed once. The harness's own
+   * DeepSeek adapter and a pi-ai profile pointed at the same account are both
+   * routes to the same models, and a user who configured the second in dsh gets
+   * every model twice — same name, same vendor, nothing to choose between. The
+   * provider carrying the session's current model owns those rows, so the list
+   * stays on the route the session is actually running.
    * @param record - the session.
    * @returns the one option, or nothing when no model can be named.
    */
@@ -417,18 +426,41 @@ export function apply(ctx: Context, config: AcpConfig): void {
     const current = currentModel(record)
     if (current === undefined) return []
     const currentValue = modelValue(current.provider, current.model)
-    const groups: SessionConfigSelectGroup[] = []
+
+    const listed: { provider: LlmProviderInfo; models: LlmModelInfo[] }[] = []
     for (const provider of llm.listProviders()) {
       // One unreachable provider costs its own entries, not the whole picker.
       const models = await llm.listModels(provider.id).catch((error: unknown) => {
         logger.warn(`acp: cannot list models for "${provider.id}": ${String(error)}`)
         return []
       })
-      const values: SessionConfigSelectOption[] = models.map(model => ({
-        value: modelValue(provider.id, model.id),
-        name: model.name,
-        ...model.description === undefined ? {} : { description: model.description },
-      }))
+      listed.push({ provider, models })
+    }
+
+    // Which provider each model id is listed under. Seeded with the session's
+    // own route so the model in force keeps its provider even when that
+    // provider's listing failed, then filled current-provider-first so a
+    // duplicated catalog collapses onto the route already in use.
+    const owner = new Map<string, string>([[current.model, current.provider]])
+    const byCurrentFirst = [
+      ...listed.filter(entry => entry.provider.id === current.provider),
+      ...listed.filter(entry => entry.provider.id !== current.provider),
+    ]
+    for (const { provider, models } of byCurrentFirst) {
+      for (const model of models) {
+        if (!owner.has(model.id)) owner.set(model.id, provider.id)
+      }
+    }
+
+    const groups: SessionConfigSelectGroup[] = []
+    for (const { provider, models } of listed) {
+      const values: SessionConfigSelectOption[] = models
+        .filter(model => owner.get(model.id) === provider.id)
+        .map(model => ({
+          value: modelValue(provider.id, model.id),
+          name: model.name,
+          ...model.description === undefined ? {} : { description: model.description },
+        }))
       if (provider.id === current.provider && !values.some(value => value.value === currentValue)) {
         values.push({ value: currentValue, name: current.model })
       }
