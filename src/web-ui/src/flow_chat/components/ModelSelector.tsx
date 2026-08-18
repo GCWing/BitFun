@@ -47,6 +47,7 @@ import {
 } from '../utils/tokenUsageDisplay';
 import { createLogger } from '@/shared/utils/logger';
 import { getModelSelectorDropdownLayout } from './modelSelectorDropdownPosition';
+import { AcpModeSelector } from './AcpModeSelector';
 import { ReasoningPresetSelector } from './ReasoningPresetSelector';
 import {
   getRecentReasoningPreset,
@@ -1397,10 +1398,21 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       ? (acpMode.option.options.find(candidate => candidate.value === acpMode.currentValue)?.name
         ?? acpMode.currentValue)
       : '';
-    const acpModeOnly = acpAvailableModels.length === 0 && acpMode !== null;
-    const acpBaseTooltip = acpModeOnly
-      ? (acpMode?.option.description ?? `${acpMode?.option.name ?? ''}: ${acpModeLabel}`)
-      : getModelTooltipText(acpCurrentModel, acpClientId ? `${acpClientId} ACP` : 'ACP');
+    // The mode has a trigger of its own now. What is left here is the model
+    // list and the fast-mode switch, so this picker only appears when the agent
+    // published one of them — a mode-only agent shows the mode picker alone.
+    const showModelTrigger = acpAvailableModels.length > 0 || acpFastMode !== null;
+    let acpBaseTooltip: string;
+    if (acpAvailableModels.length > 0) {
+      acpBaseTooltip = getModelTooltipText(acpCurrentModel, acpClientId ? `${acpClientId} ACP` : 'ACP');
+    } else if (showModelTrigger) {
+      acpBaseTooltip = t('modelSelector.fastMode');
+    } else {
+      acpBaseTooltip = acpMode?.option.description ?? `${acpMode?.option.name ?? ''}: ${acpModeLabel}`;
+    }
+    const acpDropdownTitle = acpAvailableModels.length > 0
+      ? 'ACP model'
+      : t('modelSelector.fastMode');
     const acpTooltip = buildContextUsageTooltip({
       baseTooltip: acpBaseTooltip,
       usage: {
@@ -1410,12 +1422,24 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       },
       t,
     });
+    // Whichever trigger is on screen carries the context readout; with no model
+    // trigger it rides along on the mode one instead of disappearing.
+    const contextUsageBadge = tokenPercentage > 0 ? (
+      <span
+        className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`}
+        data-bf-component="model-selector"
+        data-bf-part="contextUsage"
+      >
+        · {tokenPercentage}%
+      </span>
+    ) : null;
 
     return (
       <div data-bf-component="model-selector" data-bf-part="root" data-bf-state={dropdownOpen ? 'open' : undefined}
         ref={dropdownRef}
         className={`bitfun-model-selector ${className}`}
       >
+        {showModelTrigger && (
         <Tooltip content={acpTooltip} disabled={dropdownOpen}>
           <button
             ref={triggerRef}
@@ -1441,19 +1465,30 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             disabled={disabled || loading}
            data-bf-component="model-selector" data-bf-part="trigger" data-bf-state={dropdownOpen ? 'open' : undefined}>
             <span className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
-              {acpModeOnly ? acpModeLabel : getModelDisplayLabel(acpCurrentModel, currentAcpModelId)}
+              {acpAvailableModels.length > 0
+                ? getModelDisplayLabel(acpCurrentModel, currentAcpModelId)
+                : t('modelSelector.fastMode')}
             </span>
             {acpFastMode?.enabled && (
               <Zap size={9} className="bitfun-model-selector__fast-icon" />
             )}
-            {tokenPercentage > 0 && (
-              <span className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`} data-bf-component="model-selector" data-bf-part="contextUsage">
-                · {tokenPercentage}%
-              </span>
-            )}
+            {contextUsageBadge}
             <ChevronDown size={10} className="bitfun-model-selector__chevron" />
           </button>
         </Tooltip>
+        )}
+
+        {acpMode && (
+          <AcpModeSelector
+            mode={acpMode}
+            clientId={acpClientId ?? undefined}
+            disabled={disabled}
+            loading={loading}
+            dropdownPlacement={dropdownPlacement}
+            onSelect={handleSelectAcpMode}
+            {...(showModelTrigger ? {} : { tooltip: acpTooltip, trailing: contextUsageBadge })}
+          />
+        )}
 
         {acpReasoning ? (
           <ReasoningPresetSelector
@@ -1466,6 +1501,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           />
         ) : null}
 
+        {showModelTrigger && (
         <PresenceBoundary active={dropdownOpen}>
           {createPortal(
             <div
@@ -1482,11 +1518,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             aria-hidden={!dropdownOpen}
             {...(!dropdownOpen ? { inert: '' } : {})}
             role="menu"
-            aria-label={acpModeOnly ? t('modelSelector.acpMode') : 'ACP model'}
+            aria-label={acpDropdownTitle}
             onKeyDown={handleDropdownKeyDown}
           >
             <div className="bitfun-model-selector__dropdown-header" data-bf-component="model-selector" data-bf-part="dropdownHeader">
-              <span>{acpModeOnly ? t('modelSelector.acpMode') : 'ACP model'}</span>
+              <span>{acpDropdownTitle}</span>
               <span className="bitfun-model-selector__dropdown-hint">
                 {acpClientId}
               </span>
@@ -1531,64 +1567,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </div>
             )}
 
-            {acpMode && (
-              <>
-                {acpAvailableModels.length > 0 && (
-                  <>
-                    <div className="bitfun-model-selector__divider" />
-                    <div className="bitfun-model-selector__dropdown-header" data-bf-component="model-selector" data-bf-part="dropdownHeader">
-                      <span>{t('modelSelector.acpMode')}</span>
-                    </div>
-                  </>
-                )}
-                <div className="bitfun-model-selector__list" data-bf-component="model-selector" data-bf-part="list">
-                  {acpMode.option.options.map(candidate => {
-                    const isSelected = acpMode.currentValue === candidate.value;
-                    // The row stays one line; what a mode does — or why it can no
-                    // longer change — is hover-only.
-                    const hint = acpMode.locked
-                      ? (acpMode.option.description ?? t('modelSelector.acpModeLocked'))
-                      : (candidate.description ?? candidate.name);
-
-                    return (
-                      <Tooltip
-                        key={candidate.value}
-                        content={hint}
-                        placement="right"
-                      >
-                        <button
-                          type="button"
-                          role="menuitemradio"
-                          aria-checked={isSelected}
-                          data-testid="chat-acp-mode-option"
-                          data-mode-value={candidate.value}
-                          data-selected={isSelected ? 'true' : 'false'}
-                          disabled={acpMode.locked || loading}
-                          className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
-                          data-bf-component="model-selector"
-                          data-bf-part="option"
-                          data-bf-state={isSelected ? 'selected' : undefined}
-                          onClick={() => { void handleSelectAcpMode(candidate.value); }}
-                        >
-                          <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
-                            <span className="bitfun-model-selector__option-name">
-                              {candidate.name}
-                            </span>
-                          </div>
-                          {isSelected && (
-                            <Check size={14} className="bitfun-model-selector__option-check" />
-                          )}
-                        </button>
-                      </Tooltip>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-
             {acpFastMode && (
               <>
-                <div className="bitfun-model-selector__divider" />
+                {acpAvailableModels.length > 0 && (
+                  <div className="bitfun-model-selector__divider" />
+                )}
                 <div className="bitfun-model-selector__config-row" data-bf-component="model-selector" data-bf-part="configRow">
                   <div className="bitfun-model-selector__config-copy">
                     <span className="bitfun-model-selector__config-name">
@@ -1612,6 +1595,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             getAppearanceOverlayHost()
           )}
         </PresenceBoundary>
+        )}
       </div>
     );
   }
